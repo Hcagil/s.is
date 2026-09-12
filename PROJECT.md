@@ -16,7 +16,7 @@ SIS — Stay In Sync is an Android/iOS messaging application for a closed friend
 ## Technical decisions
 
 - Flutter/Dart mobile client; managed Supabase Auth, PostgreSQL, and Realtime.
-- Containerized Android build environment; native macOS/Xcode for iOS.
+- Docker for all development/tooling, including Android builds, tests, migrations and signing; no new workstation tool installations. iOS later requires a separate Mac/hosted macOS environment with Xcode.
 - Validate Android first; iOS follows when build/test resources are available, using email-code login only.
 - Start within free service limits; paid services require a separate decision. Store account costs are separate.
 - Private GitHub repository and GitHub Actions; manually build/upload pilot releases to Google Play closed testing.

@@ -4,7 +4,13 @@ Status: configuration prepared; image build and Android SDK compatibility not ye
 
 ## Prerequisites
 
-Linux x86-64, Docker with Compose, Git, internet access, and sufficient storage for SDK/build caches. Clone this repository and run commands from its root.
+Linux x86-64, existing Docker with Compose, internet access, and sufficient storage for images/volumes. Work from this checkout; existing host Git may be used but no new host development tools are to be installed. Report missing Docker access instead of installing it automatically.
+
+## Host installation policy
+
+Run all development commands inside Docker, including Flutter/Dart, Android SDK/ADB, Java/Gradle, Supabase CLI, dependency installation, tests, migrations and signing. Add missing tools to the relevant image/service, not the workstation. Keep source/output in the checkout and SDK/dependency caches in Docker images or volumes. Local Supabase means containerized CLI and services.
+
+Device testing requires an authorized test phone and an explicit container connection; do not install host ADB or silently alter USB/daemon settings. Report unavailable device checks. iOS remains a later macOS/Xcode task on a separate Mac or hosted macOS runner.
 
 ## Container setup
 

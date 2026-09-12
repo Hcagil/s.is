@@ -1,0 +1,21 @@
+services:
+  flutter:
+    platform: linux/amd64
+    build:
+      context: ./docker
+      args:
+        LOCAL_UID: ${LOCAL_UID:-1000}
+        LOCAL_GID: ${LOCAL_GID:-1000}
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - android-sdk:/opt/android-sdk
+      - pub-cache:/home/ubuntu/.pub-cache
+      - gradle-cache:/home/ubuntu/.gradle
+    stdin_open: true
+    tty: true
+
+volumes:
+  android-sdk:
+  pub-cache:
+  gradle-cache:

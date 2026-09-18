@@ -25,7 +25,7 @@ docker compose run --rm flutter flutter doctor -v
 
 Review Android licenses interactively. Tools run in Docker; generated source files remain in the checkout. Dependency caches persist in volumes. Avoid `down -v` during routine shutdown.
 
-The reviewed license receipts in `docker/android-licenses` let CI install the pinned SDK packages without automating license acceptance. Re-run the interactive review and update those receipts whenever the Android license terms or SDK pins change.
+The reviewed license receipts in `docker/android-licenses` let CI install the pinned SDK packages without automating license acceptance. Android platforms 35/36, build-tools 36.0.0, NDK 28.2.13676358 and CMake 3.22.1 are included because the current Flutter/plugin build requires them. Re-run the interactive review and update those receipts whenever the Android license terms or SDK pins change.
 
 ## Local Supabase
 
@@ -41,6 +41,19 @@ docker compose run --rm supabase stop
 ```
 
 The current pins are Supabase CLI 2.117.0, Node 22.20.0 and Docker CLI 29.8.0. Update them deliberately and replay the migrations/tests before committing a pin change.
+
+## App runtime configuration
+
+Supply client configuration at build/run time; do not commit a values file. The Android OAuth callback must be registered as `sis://login-callback` in Supabase and supplied unchanged as `AUTH_REDIRECT_URI`.
+
+```bash
+docker compose run --rm flutter flutter run \
+  --dart-define=SUPABASE_URL=https://PROJECT_REF.supabase.co \
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=VALUE \
+  --dart-define=AUTH_REDIRECT_URI=sis://login-callback
+```
+
+The publishable client key may be embedded in the app; never provide a service-role key. Auth sessions are persisted with platform secure storage.
 
 Missing Chrome, Android Studio, or Linux desktop tooling is acceptable for Android CLI builds. Resolve Android toolchain errors before scaffolding. Additional SDK/NDK packages may be required by the generated app.
 

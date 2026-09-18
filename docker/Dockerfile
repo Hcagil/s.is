@@ -38,8 +38,10 @@ RUN git clone --depth 1 --branch "${FLUTTER_VERSION}" \
 COPY --chown=ubuntu:ubuntu android-licenses/ /opt/android-sdk/licenses/
 RUN sdkmanager \
     'build-tools;36.0.0' \
+    'cmake;3.22.1' \
     'ndk;28.2.13676358' \
     'platform-tools' \
+    'platforms;android-35' \
     'platforms;android-36'
 RUN flutter config --no-analytics && flutter precache --android
 WORKDIR /workspace

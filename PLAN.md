@@ -1,11 +1,11 @@
 # Development plan
 
-Status: Stage 1 in progress. The `0.1.0-dev.1+1` scaffold and in-memory chat passed a fresh Docker image build, format, analysis, three tests and debug APK build on 2026-09-18. The CI configuration no longer depends on a pre-populated Android SDK volume; an actual GitHub-hosted run, documentation-only path and physical Android launch remain unverified. Server-backed implementation has not started.
+Status: Stage 1 remains open for remote CI and device evidence. The `0.1.0-dev.1+1` scaffold and in-memory chat passed a fresh Docker image build, format, analysis, three tests and debug APK build on 2026-09-18. Step 2 has started: the containerized Supabase CLI, clean migration replay, schema lint and 12 identity/authorization database tests pass locally. The GitHub-hosted application, documentation-only and database paths and physical Android launch remain unverified.
 
 ## Next implementation actions
 
 - Finish stage 1 by running the existing CI remotely to verify application-change checks and the documentation-only skip path, then launch it on an authorized Android device. The equivalent application checks pass locally from a fresh image without the SDK volume, but only an actual GitHub-hosted run proves the workflow. Record remote-run and device evidence or the specific access blockers; preserve the existing scaffold.
-- Continue with [implementation step 2](docs/IMPLEMENTATION.md#2-identity-and-server-authorization): containerized Supabase tooling, migrations/RLS and identity. Request the permanent Android application ID, Supabase runtime configuration, Google OAuth setup and an authorized test device together; keep credentials and device details outside tracked files. Continue independent work while external inputs are missing, keeping unverified checks open.
+- Continue [implementation step 2](docs/IMPLEMENTATION.md#2-identity-and-server-authorization) with Flutter runtime configuration, Google login/setup-required/access-denied states and the remaining authorized screens. The private allowlist, active-session watermark, profile RLS and database tests are implemented. Request the permanent Android application ID, Supabase runtime configuration, Google OAuth setup and an authorized test device together; keep credentials and device details outside tracked files. Continue independent work while external inputs are missing, keeping unverified checks open.
 - Complete implementation steps 3–4, then the step 5 validation/handoff checklist before pilot acceptance. These implementation steps cover roadmap stages 1–4 below; implementation step 5 is validation, not the E2EE roadmap stage.
 
 ## Delivery stages

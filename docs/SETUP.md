@@ -27,6 +27,21 @@ Review Android licenses interactively. Tools run in Docker; generated source fil
 
 The reviewed license receipts in `docker/android-licenses` let CI install the pinned SDK packages without automating license acceptance. Re-run the interactive review and update those receipts whenever the Android license terms or SDK pins change.
 
+## Local Supabase
+
+The pinned Supabase CLI and Docker CLI run in the `supabase` tooling container. It uses the existing host Docker daemon only to manage the local development services; do not expose their ports beyond the development machine.
+
+```bash
+docker compose build supabase
+docker compose run --rm supabase db start
+docker compose run --rm supabase db reset
+docker compose run --rm supabase db lint --level error
+docker compose run --rm supabase test db
+docker compose run --rm supabase stop
+```
+
+The current pins are Supabase CLI 2.117.0, Node 22.20.0 and Docker CLI 29.8.0. Update them deliberately and replay the migrations/tests before committing a pin change.
+
 Missing Chrome, Android Studio, or Linux desktop tooling is acceptable for Android CLI builds. Resolve Android toolchain errors before scaffolding. Additional SDK/NDK packages may be required by the generated app.
 
 Commit generated source files and synchronize before editing from another checkout. Exclude credentials, local configuration, and build artifacts. Use macOS/Xcode for iOS builds.

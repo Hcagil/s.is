@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       app: ${{ steps.filter.outputs.app }}
+      database: ${{ steps.filter.outputs.database }}
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -29,6 +30,10 @@ jobs:
             app:
               - '**'
               - '!**/*.md'
+            database:
+              - 'compose.yaml'
+              - 'docker/Supabase.Dockerfile'
+              - 'supabase/**'
 
   documentation:
     name: Documentation check
@@ -67,3 +72,20 @@ jobs:
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter test
       - name: Build debug APK
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter build apk --debug
+
+  database:
+    name: Database checks
+    needs: changes
+    if: needs.changes.outputs.database == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build Supabase tooling image
+        run: docker compose build supabase
+      - name: Start local database and replay migrations
+        run: docker compose run --rm supabase db start
+      - name: Lint database
+        run: docker compose run --rm supabase db lint --level error
+      - name: Test database
+        run: docker compose run --rm supabase test db

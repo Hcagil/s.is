@@ -15,6 +15,19 @@ services:
     stdin_open: true
     tty: true
 
+  supabase:
+    build:
+      context: ./docker
+      dockerfile: Supabase.Dockerfile
+    working_dir: ${PWD}
+    environment:
+      SUPABASE_SERVICES_HOSTNAME: host.docker.internal
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:${PWD}
+
 volumes:
   android-sdk:
   pub-cache:

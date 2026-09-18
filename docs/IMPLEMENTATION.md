@@ -6,6 +6,8 @@ Deliver the working Android text pilot, following steps 1–5 below consecutivel
 
 Read `AGENTS.md` once, then this file. Consult [PROJECT.md](../PROJECT.md) for scope, [ARCHITECTURE.md](../ARCHITECTURE.md) for design, [PLAN.md](../PLAN.md) for releases, and [SETUP.md](SETUP.md) for Docker commands. Read only the relevant section and directly related implementation files. Do not scan the repository, dump lockfiles or repeatedly summarize these documents.
 
+On resumption, read the status and next implementation actions in [PLAN.md](../PLAN.md#next-implementation-actions), verify them against the current files, and resume the first incomplete work. Follow its [live-release sequence](../PLAN.md#first-live-release-and-iteration): CI starts in the foundation; the validated text pilot precedes E2EE/media/iOS; public store production is a separate decision. Step 5 below validates the text pilot and must not be confused with roadmap stage 5 (E2EE).
+
 Preserve unrelated edits and existing documentation/configuration. Do not regenerate an existing app. For an empty app, scaffold in a temporary directory and copy only required Android/Flutter files into the repository root. Use project name `sis`, display name `SIS` and English text. Start a new scaffold at `0.1.0-dev.1+1`; never reset an existing version/build number.
 
 ## Fixed implementation defaults

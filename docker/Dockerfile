@@ -18,21 +18,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglu1-mesa clang cmake ninja-build pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
+RUN groupmod -g "${LOCAL_GID}" ubuntu \
+    && usermod -u "${LOCAL_UID}" -g "${LOCAL_GID}" ubuntu \
+    && mkdir -p /opt/flutter /opt/android-sdk/cmdline-tools \
+        /home/ubuntu/.pub-cache /home/ubuntu/.gradle \
+    && chown -R ubuntu:ubuntu /opt/flutter /opt/android-sdk /home/ubuntu
+
+USER ubuntu
 RUN git clone --depth 1 --branch "${FLUTTER_VERSION}" \
     https://github.com/flutter/flutter.git /opt/flutter \
-    && mkdir -p /opt/android-sdk/cmdline-tools \
     && curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_TOOLS_VERSION}_latest.zip" -o /tmp/android-tools.zip \
     && echo '4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583  /tmp/android-tools.zip' | sha256sum -c - \
     && unzip -q /tmp/android-tools.zip -d /opt/android-sdk/cmdline-tools \
     && mv /opt/android-sdk/cmdline-tools/cmdline-tools /opt/android-sdk/cmdline-tools/latest \
     && rm /tmp/android-tools.zip
 
-RUN groupmod -g "${LOCAL_GID}" ubuntu \
-    && usermod -u "${LOCAL_UID}" -g "${LOCAL_GID}" ubuntu \
-    && mkdir -p /home/ubuntu/.pub-cache /home/ubuntu/.gradle \
-    && chown -R ubuntu:ubuntu /opt/flutter /opt/android-sdk /home/ubuntu
-
-USER ubuntu
+# Receipts produced by the required interactive license review. Do not replace
+# these with an automated `sdkmanager --licenses` acceptance step.
+COPY --chown=ubuntu:ubuntu android-licenses/ /opt/android-sdk/licenses/
+RUN sdkmanager \
+    'build-tools;36.0.0' \
+    'ndk;28.2.13676358' \
+    'platform-tools' \
+    'platforms;android-36'
 RUN flutter config --no-analytics && flutter precache --android
 WORKDIR /workspace
 CMD ["flutter", "doctor", "-v"]

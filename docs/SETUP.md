@@ -1,6 +1,6 @@
 # Development setup
 
-Status: configuration prepared; image build and Android SDK compatibility not yet verified.
+Status: A fresh Docker image build, Android toolchain, format, analysis, tests and debug APK build were verified locally on 2026-09-18 with the current pins. Remote CI and device connection remain unverified. The image includes the SDK packages and license receipts produced by the interactive review so a fresh CI runner does not depend on a pre-populated SDK volume. See [PLAN.md](../PLAN.md) for remaining work.
 
 ## Prerequisites
 
@@ -24,6 +24,8 @@ docker compose run --rm flutter flutter doctor -v
 ```
 
 Review Android licenses interactively. Tools run in Docker; generated source files remain in the checkout. Dependency caches persist in volumes. Avoid `down -v` during routine shutdown.
+
+The reviewed license receipts in `docker/android-licenses` let CI install the pinned SDK packages without automating license acceptance. Re-run the interactive review and update those receipts whenever the Android license terms or SDK pins change.
 
 Missing Chrome, Android Studio, or Linux desktop tooling is acceptable for Android CLI builds. Resolve Android toolchain errors before scaffolding. Additional SDK/NDK packages may be required by the generated app.
 

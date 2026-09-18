@@ -2,7 +2,7 @@
 
 An Android/iOS messaging application built with Flutter and Supabase.
 
-Status: planning and build configuration; application implementation pending.
+Status: Android pre-alpha foundation implemented; server-backed application work is pending.
 
 - [Project specification](PROJECT.md)
 - [Architecture](ARCHITECTURE.md)

@@ -6,6 +6,7 @@
 key.properties
 **/local.properties
 **/.dart_tool/
+.flutter-plugins-dependencies
 **/build/
 **/.gradle/
 **/ephemeral/
@@ -17,3 +18,4 @@ __pycache__/
 .codex/
 .private/
 *.local.md
+.ci-cache/

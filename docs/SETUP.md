@@ -10,7 +10,25 @@ Linux x86-64, existing Docker with Compose, internet access, and sufficient stor
 
 Run all development commands inside Docker, including Flutter/Dart, Android SDK/ADB, Java/Gradle, Supabase CLI, dependency installation, tests, migrations and signing. Add missing tools to the relevant image/service, not the workstation. Keep source/output in the checkout and SDK/dependency caches in Docker images or volumes. Local Supabase means containerized CLI and services.
 
-Device testing requires an authorized test phone and an explicit container connection; do not install host ADB or silently alter USB/daemon settings. Report unavailable device checks. iOS remains a later macOS/Xcode task on a separate Mac or hosted macOS runner.
+Initial device setup requires an authorized test phone and an explicit container connection; do not install host ADB or silently alter USB/daemon settings. Finish this cable-based verification once, then use Google Play for routine installation/updates according to [PLAN D1–D4](../PLAN.md#delivery-transition-decision--2026-09-19). ADB remains available for targeted debugging. Report unavailable device checks. iOS remains a later macOS/Xcode task on a separate Mac or hosted macOS runner.
+
+## Device setup completion
+
+- Obtain the authorized phone, enable USB debugging and approve the connection on the phone. Configure only the required container/device access explicitly; `compose.yaml` currently has no device mapping. Do not add privileged mode or blanket device access as a workaround.
+- Verify containerized ADB detects an authorized device, install/launch the configured current build, and test Google login/callback once OAuth is configured. Record success or the precise blocker in PLAN D1, without serial numbers, account emails or other personal device details.
+- After Play bootstrap, install the Play version and validate the next update with the cable disconnected. Do not assume a debug-signed local installation can be upgraded by Play: package/signing compatibility must be checked first. If replacement requires uninstalling local test data, explain the impact and obtain permission before removal. Android updates require compatible signing identity; see [app signing](https://developer.android.com/studio/publish/app-signing).
+
+## Google Play delivery bootstrap
+
+These are pending setup tasks, not completed configuration. Gather missing owner inputs together and continue independent pipeline work while access is unavailable.
+
+1. Confirm Play Console account/app access for `com.esd.sis`, the developer's internal tester account/opt-in access and applicable account/app requirements. Keep tester lists and private access links outside tracked files. Internal developer testing may begin before the full text pilot; closed testing remains gated by pilot acceptance.
+2. Configure Play App Signing and a protected upload key. Replace the debug signing fallback in `android/app/build.gradle.kts` for release builds; never upload a debug-signed release. Arrange secure key backup and restore access. Confirm build-time Supabase configuration and test the existing OAuth callback in the Play-installed app.
+3. Complete initial Console setup, required declarations and the first signed AAB upload/install. The publishing API updates an existing app and does not replace initial Console bootstrap or legal consents; see [publishing API prerequisites](https://developers.google.com/android-publisher/edits). This one-time manual step does not make recurring releases manual.
+4. Enable the Google Play Developer API and configure a publishing service account with only required app/testing permissions. Store publishing credentials and upload-key material/passwords in protected GitHub configuration, available only to trusted release jobs. Never put them in the client, logs, source or retained artifacts. See [API access setup](https://developers.google.com/android-publisher/getting_started).
+5. Configure the central [supported-version range](../PLAN.md#supported-android-versions), then implement and enable the [automated pipeline contract](../PLAN.md#automated-pipeline-contract). Verify a second, higher-version build reaches the internal track while the previous supported build remains usable; then voluntarily update the Play-installed app without USB. Record the allowed range, workflow/build/track results and physical checks in PLAN D2–D4; an upload alone is not delivery completion.
+
+For closed-test promotion, finish text-pilot validation, blocking/reporting, account deletion, truthful privacy/retention and applicable store disclosures, owner-provided contact/deletion URL and backup/restore procedure. Internal distribution does not waive applicable Play requirements. Verify current Console requirements at execution time; public production is a separate decision.
 
 ## Container setup
 

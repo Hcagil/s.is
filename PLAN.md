@@ -1,12 +1,29 @@
 # Development plan
 
-Status: Stage 1 remains open for remote CI and device evidence. Step 2 is in progress: containerized Supabase checks and 12 identity/authorization database tests pass; Flutter runtime configuration, secure session storage, Google OAuth initiation, session activation/access states and the authorized navigation shell pass analysis, five tests and a debug APK build on 2026-09-18. The permanent Android application ID is `com.esd.sis`; real OAuth/server integration, GitHub-hosted CI paths and physical Android launch remain unverified.
+Status reviewed 2026-09-19: Stage 1 remains open for remote CI and device evidence. Step 2 is in progress: containerized Supabase checks and 12 identity/authorization database tests passed; Flutter runtime configuration, secure session storage, Google OAuth initiation, session activation/access states and the authorized navigation shell passed analysis, five tests and a debug APK build on 2026-09-18. These are previously recorded results, not new test runs. The permanent Android application ID is `com.esd.sis`, version `0.1.0-dev.1+1`. Real OAuth/server integration, GitHub-hosted CI paths and physical Android launch remain unverified. Direct/group messaging is not implemented. The existing workflow validates changes only; release builds still use debug signing, and no Play delivery workflow exists.
 
 ## Next implementation actions
 
-- Finish stage 1 by running the existing CI remotely to verify application-change checks and the documentation-only skip path, then launch it on an authorized Android device. The equivalent application checks pass locally from a fresh image without the SDK volume, but only an actual GitHub-hosted run proves the workflow. Record remote-run and device evidence or the specific access blockers; preserve the existing scaffold.
-- Continue [implementation step 2](docs/IMPLEMENTATION.md#2-identity-and-server-authorization) by applying the migrations to the configured Supabase project, completing Google OAuth, then running server-backed member and access-loss integration checks. The application ID, Supabase URL and publishable key are resolved; Google OAuth setup and an authorized test device remain external inputs. Keep credentials and device details outside tracked files and continue independent work while those inputs are missing.
-- Complete implementation steps 3–4, then the step 5 validation/handoff checklist before pilot acceptance. These implementation steps cover roadmap stages 1–4 below; implementation step 5 is validation, not the E2EE roadmap stage.
+1. Finish the foundation evidence and one-time cable/device work in D1 below; preserve the existing scaffold. Run the existing CI remotely for application, documentation-only and database changes. Local checks cannot establish GitHub-hosted workflow success.
+2. Make the delivery transition D2–D4 the next infrastructure milestone, before adding direct/group messaging. Continue [implementation step 2](docs/IMPLEMENTATION.md#2-identity-and-server-authorization) alongside it: apply migrations to the configured Supabase project, complete Google OAuth, and verify server-backed member/access-loss behavior. The application ID, Supabase URL and publishable key are resolved; OAuth, device and Play access still need verification. Continue independent work when external inputs are missing.
+3. After the delivery transition, resume the first incomplete application step: finish identity, then implementation steps 3–4 and the step 5 validation/handoff checklist. These cover roadmap stages 1–4; implementation step 5 is validation, not the E2EE roadmap stage. Use Play for subsequent routine phone updates.
+
+## Delivery transition decision — 2026-09-19
+
+Accepted direction: finish the outstanding cable-based phone setup/validation, then use Google Play Store for installation and updates, backed by an automated GitHub Actions pipeline. This supersedes the previous manual-only pilot upload and deferred publishing-automation decisions. This documentation revision records the plan; D1–D4 are pending and no upload or workflow activation has occurred.
+
+Execution defaults: use **internal testing** for developer/device verification while the app is incomplete; use **closed testing** for the friend pilot after its functional/readiness gates. Public production remains a separate decision. Internal testing does not count as pilot acceptance. Google supports internal tests during development; see [Play testing tracks](https://support.google.com/googleplay/android-developer/answer/9845334?hl=en).
+
+| Order / status | Work | Completion evidence |
+| --- | --- | --- |
+| D1 — pending | Verify remote CI and finish one-time authorized USB/containerized ADB setup. Install/launch the current build; verify Google login/callback once OAuth is configured. | Actual CI run results for each change path; phone launch/login result or a precise remaining blocker. Do not record device identifiers or credentials. |
+| D2 — pending | Complete Play Console bootstrap for `com.esd.sis`, internal tester access, Play App Signing/upload key, release signing, runtime configuration and publishing API access. Follow [setup prerequisites](docs/SETUP.md#google-play-delivery-bootstrap). | A correctly signed initial AAB accepted through Play Console and installed by the authorized tester from Play; required account/setup tasks resolved. |
+| D3 — pending | Extend the existing Docker/GitHub Actions setup with the automated delivery contract and supported-version policy below. | A successful remote run tied to a commit and increasing build number uploads a signed AAB to the internal track; failed checks and PRs cannot publish. Supported older builds remain allowed. |
+| D4 — pending | Disconnect the cable and deliver a second version through the pipeline. Verify the previous supported build still works, then choose to update it through Google Play. | Both build numbers, allowed range, workflow result, Play availability and physical install/update/login checks recorded here. Verify retained server data remains accessible; do not invent messaging checks before messaging exists. |
+
+After D4, close the routine cable-installation phase. Keep ADB only for targeted debugging when needed; do not repeat USB setup for every feature or substitute wireless ADB/manual APK sharing for the agreed Play update channel. Physical-device checks remain required. An uploaded AAB alone does not prove that Play made it available or that the phone updated; Play processing and device update settings may delay delivery.
+
+AI handoff rule: start at the first incomplete D item and application step above. Record concise evidence/blockers in this file, distinguish decisions from implemented/verified work, and never reset completed work. Do not reopen the Play/automation direction unless the owner changes it or a concrete blocker requires a new decision.
 
 ## Delivery stages
 
@@ -15,19 +32,19 @@ Status: Stage 1 remains open for remote CI and device evidence. Step 2 is in pro
 | 1. Pre-alpha foundation | Validate Docker, Flutter scaffold, mock chat, basic CI | Analysis, tests, APK build, Android launch |
 | 2. Identity | Google login, email allowlist, member directory, migrations/RLS | Unauthorized access, phone replacement, prior-session revocation |
 | 3. Direct chat | Send, conversation list, history, reconnect | Multiple accounts, retry deduplication, history recovery |
-| 4. Android text pilot | Groups, multiple admins, earlier history, manual Play closed-test upload | Membership/revocation, fresh installs, core flows, network interruption, store readiness |
+| 4. Android text pilot | Groups, multiple admins, earlier history, pipeline promotion to Play closed testing | Membership/revocation, fresh installs, core flows, network interruption, store readiness |
 | 5. E2EE | New encrypted messages alongside legacy history | Recovery without old phone, group key access, mixed history and client compatibility |
 | 6. Media | E2EE photo/video sharing | Upload/download, playback, interruption and quota handling |
 | Conditional: iOS | Email-code login, native build, platform compatibility | Begin when resources are available; iPhone and cross-platform checks |
 
-Follow [implementation instructions](docs/IMPLEMENTATION.md) for stages 1–4. Include blocking/reporting, account deletion and verified retention/privacy disclosures before store distribution. Add notifications and richer CI/CD after the small text pilot as needed; public store release is separate.
+Follow [implementation instructions](docs/IMPLEMENTATION.md) for stages 1–4. Include blocking/reporting, account deletion and verified retention/privacy disclosures before closed-test pilot distribution. Developer-only internal testing may precede those features, subject to applicable Play requirements and truthful disclosures. Delivery automation starts in D2–D4; notifications remain deferred. Public store release is separate.
 
 ## First live release and iteration
 
-- Establish CI during the foundation and extend its checks as features arrive. The first live target is a small, complete Android text pilot; E2EE, media and iOS are not prerequisites for it.
-- First real-user use means the allowlisted friend group using managed Supabase through Google Play closed testing, after roadmap stage 4 and implementation step 5 checks. Before distribution, resolve permanent identifiers, signing, privacy/retention and account-deletion disclosures, and the backup/restore procedure. A mock chat or successful APK build alone does not meet this gate.
-- The initial pipeline automates validation and debug builds. Pilot release AAB builds/signing run in Docker; store upload is manual and requires an explicit release request. Completing a development milestone does not authorize a tag, publication or paid service.
-- After the pilot, prioritize user feedback, fixes and stability, then separately scoped E2EE and media releases; iOS depends on macOS resources. Expand delivery automation when needed. Public Google Play production is a separate scope/readiness decision with no scheduled roadmap stage; do not equate closed testing with public production or require every later feature before considering it.
+- Establish CI during the foundation, then finish D1–D4 to distribute development updates through Play internal testing. The first friend-pilot target remains a small, complete Android text pilot; E2EE, media and iOS are not prerequisites for it.
+- First friend-group use means allowlisted users on managed Supabase through Google Play closed testing, after roadmap stage 4 and implementation step 5 checks. Before that distribution, resolve signing, privacy/retention and account-deletion disclosures, and the backup/restore procedure. A mock chat or successful APK build alone does not meet this gate.
+- Build/sign release AABs in Docker and automate recurring Play uploads. Initial Console setup/upload is a one-time bootstrap. Once publishing is configured and enabled for internal testing, eligible updates follow the pipeline without a separate manual upload or per-build approval. Closed-test promotion is explicitly initiated after pilot gates pass; it reuses the tested artifact. Paid services and public production remain separate decisions.
+- After the pilot, prioritize user feedback, fixes and stability, then separately scoped E2EE and media releases; iOS depends on macOS resources. Public Google Play production has no scheduled roadmap stage; do not equate closed testing with production or require every later feature before considering it.
 
 ## Versioning
 
@@ -35,15 +52,33 @@ Follow [implementation instructions](docs/IMPLEMENTATION.md) for stages 1–4. I
 - These are development milestones, not major releases. Beta requires the agreed release scope to be complete; RC requires release checks to pass; `1.0.0` requires agreed stability and compatibility criteria.
 - Use immutable release tags, matching source versions and increasing platform build numbers. Define platform-specific version mapping before distribution. See [SemVer](https://semver.org/spec/v2.0.0.html).
 
-## Initial pipeline
+## Supported Android versions
+
+Decision added 2026-09-19: users may keep any version in the allowed range. Publishing a new version must not force supported users onto the newest version. Pipeline automation distributes updates; installation remains subject to the user's choice and Play update settings.
+
+- Maintain a centrally managed policy, independent of the latest release: inclusive integer bounds `min_supported_build` and `max_supported_build`, compared with Android `versionCode`. Use `versionName` for display, never lexical version comparisons. `latest_build` is informational and must not become the minimum automatically.
+- Any installed build within the range retains normal login and implemented application flows. An optional update notice must be dismissible; no blocking latest-version prompt for a supported build.
+- Below the minimum, require a supported build, not an exact latest-version match. Above the maximum, show an unsupported-version state with retry/support guidance; do not automatically downgrade, uninstall or erase data. Policy-fetch errors are configuration/network failures, not proof that the installed version is unsupported.
+- Before publishing a new build, validate `1 <= min_supported_build <= max_supported_build` and extend the maximum to include it after compatibility checks. Preserve the minimum and previously supported builds. Raising the minimum or narrowing the range requires a separate explicit compatibility decision with a recorded reason; it is never a side effect of a release.
+- Example: allowed builds `10–14`, latest `14`: builds `10`, `12` and `14` work without a forced update. Publishing `15` normally extends the range to `10–15`; it does not change the minimum to `15`. These numbers are illustrative, not current project configuration.
+- Release checks cover both inclusive boundaries, a supported older build, builds outside the range and policy-fetch failure. Confirm publishing a newer build leaves the older supported build usable. Backend/API/schema changes must remain compatible with every supported build; complete any deliberate support-window change separately before deploying an incompatible change.
+
+## Automated pipeline contract
+
+Current implementation: `.github/workflows/ci.yml` runs validation/debug builds only. The following delivery behavior is agreed next work, not an existing capability.
 
 - Private GitHub repository; short-lived `x/*` branches → PR checks → squash merge into `main`.
 - GitHub-hosted Ubuntu runner with the existing Docker build environment; pin tools and cache dependencies.
 - On PRs and `main`: format check, analysis, relevant unit/widget tests and Android debug build. Documentation-only changes receive lightweight checks.
 - When database/schema policies change: Supabase CLI migration and RLS tests against an isolated local instance. Never use pilot data in CI.
-- Manually build/sign the release AAB and upload to Google Play closed testing; the initial CI needs no deployment or signing credentials.
-- Defer fastlane, automated publishing, hosted staging and macOS CI. Future publishing remains manually initiated; never deploy from a PR.
+- After D2 bootstrap, an eligible application/release-configuration push to protected `main` must pass checks for that exact commit, then automatically build/sign a release AAB and upload it to Play **internal testing**. Documentation-only changes never build/sign/publish; database-only changes run their checks without triggering an app release unless client/release files also changed.
+- PR jobs have no signing/publishing secrets and never deploy. Keep publication in a separate trusted job/workflow with access restricted to the selected app/testing tracks. Serialize publishing to avoid concurrent uploads/Play edits. Failed checks, absent configuration or signing errors stop publication; never fall back to debug signing.
+- Keep `com.esd.sis`, configure the upload key and Play App Signing, and supply runtime configuration securely. Define an increasing Android `versionCode` above previously uploaded builds across tracks; retries must not reuse a code for a different artifact. Record commit, version/build, artifact checksum, workflow result and Play track/status without secrets. Store credentials in protected GitHub configuration, never source or artifacts.
+- Validate the [supported-version policy](#supported-android-versions) before upload: the candidate must be inside the allowed range and earlier supported builds must still work. Record the range with release evidence. Do not automatically raise the minimum or equate latest release with minimum supported version. Any policy update uses the trusted delivery path, not PR validation.
+- After the pilot gates pass, explicitly initiated closed-test promotion uses the already tested build; uploading/promoting is automated. Public production is excluded. Manual recovery may rerun delivery for a verified commit; never publish arbitrary PR code or silently roll back live data.
+- A successful upload is distinct from Play availability and phone verification. Validate fresh Play install and an upgrade from a previous Play build without USB. Resolve applicable Console requirements rather than treating review delays as pipeline success.
+- Never run managed-Supabase migrations or alter pilot user data from validation/app publishing. A supported-version policy update is permitted as scoped release configuration in the trusted delivery path only. Coordinate required backward-compatible migrations separately before shipping dependent clients. Hosted staging, macOS CI and fastlane remain deferred unless the active delivery work demonstrates a need.
 
 ## Remaining planning
 
-Before store distribution, confirm retention/privacy policy, backups, supported-device checks and release identifiers. E2EE recovery is a release gate for the E2EE milestone, not a blocker for the server-readable text pilot.
+Before closed-test pilot distribution, confirm retention/privacy policy, backups, supported-device checks and release identifiers. E2EE recovery is a release gate for the E2EE milestone, not a blocker for the server-readable text pilot.

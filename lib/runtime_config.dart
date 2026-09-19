@@ -2,7 +2,7 @@ class RuntimeConfig {
   const RuntimeConfig({
     required this.supabaseUrl,
     required this.supabasePublishableKey,
-    required this.authRedirectUri,
+    required this.googleWebClientId,
   });
 
   factory RuntimeConfig.fromEnvironment() {
@@ -11,23 +11,20 @@ class RuntimeConfig {
       supabasePublishableKey: String.fromEnvironment(
         'SUPABASE_PUBLISHABLE_KEY',
       ),
-      authRedirectUri: String.fromEnvironment('AUTH_REDIRECT_URI'),
+      googleWebClientId: String.fromEnvironment('GOOGLE_WEB_CLIENT_ID'),
     );
   }
 
   final String supabaseUrl;
   final String supabasePublishableKey;
-  final String authRedirectUri;
+  final String googleWebClientId;
 
   bool get isComplete {
     final apiUri = Uri.tryParse(supabaseUrl);
-    final redirectUri = Uri.tryParse(authRedirectUri);
     return supabasePublishableKey.isNotEmpty &&
         apiUri != null &&
         (apiUri.scheme == 'https' || apiUri.scheme == 'http') &&
         apiUri.host.isNotEmpty &&
-        redirectUri != null &&
-        redirectUri.scheme == 'sis' &&
-        redirectUri.host == 'login-callback';
+        googleWebClientId.endsWith('.apps.googleusercontent.com');
   }
 }

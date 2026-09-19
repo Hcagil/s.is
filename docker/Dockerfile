@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN groupmod -g "${LOCAL_GID}" ubuntu \
     && usermod -u "${LOCAL_UID}" -g "${LOCAL_GID}" ubuntu \
     && mkdir -p /opt/flutter /opt/android-sdk/cmdline-tools \
-        /home/ubuntu/.pub-cache /home/ubuntu/.gradle \
+        /home/ubuntu/.android /home/ubuntu/.pub-cache /home/ubuntu/.gradle \
     && chown -R ubuntu:ubuntu /opt/flutter /opt/android-sdk /home/ubuntu
 
 USER ubuntu

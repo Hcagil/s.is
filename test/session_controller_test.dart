@@ -13,7 +13,7 @@ void main() {
       loadMemberProfiles: () async => const [
         MemberProfile(userId: 'member-id', displayName: 'Maya'),
       ],
-      startGoogleSignIn: () async {},
+      startGoogleSignIn: () async => true,
       performSignOut: () async {},
     );
 
@@ -34,7 +34,7 @@ void main() {
       loadMemberProfiles: () async => const [
         MemberProfile(userId: 'member-id', displayName: 'Maya'),
       ],
-      startGoogleSignIn: () async {},
+      startGoogleSignIn: () async => true,
       performSignOut: () async {},
     );
     await Future<void>.delayed(Duration.zero);
@@ -44,6 +44,25 @@ void main() {
 
     expect(controller.status, SessionStatus.signedOut);
     expect(controller.members, isEmpty);
+    controller.dispose();
+    await authChanges.close();
+  });
+
+  test('returns to signed out when Google sign-in is canceled', () async {
+    final authChanges = StreamController<bool>();
+    final controller = SessionController.connected(
+      initiallySignedIn: false,
+      signedInChanges: authChanges.stream,
+      activateSession: () async => true,
+      loadMemberProfiles: () async => const [],
+      startGoogleSignIn: () async => false,
+      performSignOut: () async {},
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    await controller.signIn();
+
+    expect(controller.status, SessionStatus.signedOut);
     controller.dispose();
     await authChanges.close();
   });

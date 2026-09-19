@@ -15,7 +15,7 @@ Initial device setup requires an authorized test phone and an explicit container
 ## Device setup completion
 
 - Obtain the authorized phone, enable USB debugging and approve the connection on the phone. Configure only the required container/device access explicitly; `compose.yaml` currently has no device mapping. Do not add privileged mode or blanket device access as a workaround.
-- Verify containerized ADB detects an authorized device, install/launch the configured current build, and test Google login/callback once OAuth is configured. Record success or the precise blocker in PLAN D1, without serial numbers, account emails or other personal device details.
+- Verify containerized ADB detects an authorized device, install/launch the configured current build, and test native Google account sign-in once OAuth is configured. Record success or the precise blocker in PLAN D1, without serial numbers, account emails or other personal device details.
 - After Play bootstrap, install the Play version and validate the next update with the cable disconnected. Do not assume a debug-signed local installation can be upgraded by Play: package/signing compatibility must be checked first. If replacement requires uninstalling local test data, explain the impact and obtain permission before removal. Android updates require compatible signing identity; see [app signing](https://developer.android.com/studio/publish/app-signing).
 
 ## Google Play delivery bootstrap
@@ -62,13 +62,13 @@ The current pins are Supabase CLI 2.117.0, Node 22.20.0 and Docker CLI 29.8.0. U
 
 ## App runtime configuration
 
-Supply client configuration at build/run time; do not commit a values file. The Android OAuth callback must be registered as `sis://login-callback` in Supabase and supplied unchanged as `AUTH_REDIRECT_URI`.
+Supply client configuration at build/run time; do not commit a values file. `GOOGLE_WEB_CLIENT_ID` is the Web OAuth client ID also configured for the Supabase Google provider. Register an Android OAuth client for package `com.esd.sis` and each signing certificate SHA-1 used to test or distribute the app.
 
 ```bash
 docker compose run --rm flutter flutter run \
   --dart-define=SUPABASE_URL=https://PROJECT_REF.supabase.co \
   --dart-define=SUPABASE_PUBLISHABLE_KEY=VALUE \
-  --dart-define=AUTH_REDIRECT_URI=sis://login-callback
+  --dart-define=GOOGLE_WEB_CLIENT_ID=VALUE
 ```
 
 The publishable client key may be embedded in the app; never provide a service-role key. Auth sessions are persisted with platform secure storage.

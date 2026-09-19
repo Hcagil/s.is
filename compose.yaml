@@ -9,6 +9,7 @@ services:
     working_dir: /workspace
     volumes:
       - .:/workspace
+      - android-home:/home/ubuntu/.android
       - android-sdk:/opt/android-sdk
       - pub-cache:/home/ubuntu/.pub-cache
       - gradle-cache:/home/ubuntu/.gradle
@@ -29,6 +30,7 @@ services:
       - .:${PWD}
 
 volumes:
+  android-home:
   android-sdk:
   pub-cache:
   gradle-cache:

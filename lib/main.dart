@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'runtime_config.dart';
@@ -23,6 +24,8 @@ Future<void> main() async {
       ),
     );
     final client = Supabase.instance.client;
+    final googleSignIn = GoogleSignIn.instance;
+    await googleSignIn.initialize(serverClientId: config.googleWebClientId);
     runApp(
       SisApp(
         controller: SessionController.connected(
@@ -49,13 +52,37 @@ Future<void> main() async {
                 .toList(growable: false);
           },
           startGoogleSignIn: () async {
-            await client.auth.signInWithOAuth(
-              OAuthProvider.google,
-              redirectTo: config.authRedirectUri,
-              authScreenLaunchMode: LaunchMode.externalApplication,
+            const scopes = ['https://www.googleapis.com/auth/userinfo.email'];
+            late final GoogleSignInAccount googleUser;
+            try {
+              googleUser = await googleSignIn.authenticate(scopeHint: scopes);
+            } on GoogleSignInException catch (error) {
+              if (error.code == GoogleSignInExceptionCode.canceled ||
+                  error.code == GoogleSignInExceptionCode.interrupted) {
+                return false;
+              }
+              rethrow;
+            }
+            final idToken = googleUser.authentication.idToken;
+            if (idToken == null) {
+              throw const AuthException('Google did not return an ID token.');
+            }
+            final authorization =
+                await googleUser.authorizationClient.authorizationForScopes(
+                  scopes,
+                ) ??
+                await googleUser.authorizationClient.authorizeScopes(scopes);
+            await client.auth.signInWithIdToken(
+              provider: OAuthProvider.google,
+              idToken: idToken,
+              accessToken: authorization.accessToken,
             );
+            return true;
           },
-          performSignOut: client.auth.signOut,
+          performSignOut: () async {
+            await googleSignIn.signOut();
+            await client.auth.signOut();
+          },
         ),
       ),
     );
@@ -116,7 +143,7 @@ class _SessionGate extends StatelessWidget {
         title: 'Setup required',
         message:
             'Build with SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, and '
-            'AUTH_REDIRECT_URI to connect SIS.',
+            'GOOGLE_WEB_CLIENT_ID to connect SIS.',
       ),
       SessionStatus.signedOut => _ActionScreen(
         icon: Icons.forum_outlined,

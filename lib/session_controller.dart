@@ -46,7 +46,7 @@ class SessionController extends ChangeNotifier {
   SessionStatus _status;
   final Future<bool> Function()? activateSession;
   final Future<List<MemberProfile>> Function()? loadMemberProfiles;
-  final Future<void> Function()? startGoogleSignIn;
+  final Future<bool> Function()? startGoogleSignIn;
   final Future<void> Function()? performSignOut;
   StreamSubscription<bool>? _authSubscription;
   List<MemberProfile> _members = const [];
@@ -59,7 +59,9 @@ class SessionController extends ChangeNotifier {
   Future<void> signIn() async {
     _setStatus(SessionStatus.loading);
     try {
-      await startGoogleSignIn!();
+      if (!await startGoogleSignIn!()) {
+        _setStatus(SessionStatus.signedOut);
+      }
     } catch (_) {
       _setStatus(SessionStatus.error);
     }

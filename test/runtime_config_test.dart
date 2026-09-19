@@ -6,7 +6,7 @@ void main() {
     const config = RuntimeConfig(
       supabaseUrl: 'https://example.supabase.co',
       supabasePublishableKey: 'publishable-key',
-      authRedirectUri: 'sis://login-callback',
+      googleWebClientId: 'web-client.apps.googleusercontent.com',
     );
 
     expect(config.isComplete, isTrue);
@@ -16,15 +16,15 @@ void main() {
     const missing = RuntimeConfig(
       supabaseUrl: '',
       supabasePublishableKey: '',
-      authRedirectUri: '',
+      googleWebClientId: '',
     );
-    const wrongRedirect = RuntimeConfig(
+    const wrongClientId = RuntimeConfig(
       supabaseUrl: 'https://example.supabase.co',
       supabasePublishableKey: 'publishable-key',
-      authRedirectUri: 'other://callback',
+      googleWebClientId: 'not-a-google-client',
     );
 
     expect(missing.isComplete, isFalse);
-    expect(wrongRedirect.isComplete, isFalse);
+    expect(wrongClientId.isComplete, isFalse);
   });
 }

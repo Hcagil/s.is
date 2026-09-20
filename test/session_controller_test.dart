@@ -66,4 +66,52 @@ void main() {
     controller.dispose();
     await authChanges.close();
   });
+
+  test('records the reason when Google sign-in is canceled', () async {
+    final authChanges = StreamController<bool>();
+    final controller = SessionController.connected(
+      initiallySignedIn: false,
+      signedInChanges: authChanges.stream,
+      activateSession: () async => true,
+      loadMemberProfiles: () async => const [],
+      startGoogleSignIn: () async => throw const SignInFailure(
+        reason: 'Google sign-in canceled: no credentials',
+        userCanceled: true,
+      ),
+      performSignOut: () async {},
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    await controller.signIn();
+
+    expect(controller.status, SessionStatus.signedOut);
+    expect(controller.signInFailure, 'Google sign-in canceled: no credentials');
+    controller.dispose();
+    await authChanges.close();
+  });
+
+  test('records the reason and shows an error for other failures', () async {
+    final authChanges = StreamController<bool>();
+    final controller = SessionController.connected(
+      initiallySignedIn: false,
+      signedInChanges: authChanges.stream,
+      activateSession: () async => true,
+      loadMemberProfiles: () async => const [],
+      startGoogleSignIn: () async => throw const SignInFailure(
+        reason: 'Supabase rejected the Google token: bad audience',
+      ),
+      performSignOut: () async {},
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    await controller.signIn();
+
+    expect(controller.status, SessionStatus.error);
+    expect(
+      controller.signInFailure,
+      'Supabase rejected the Google token: bad audience',
+    );
+    controller.dispose();
+    await authChanges.close();
+  });
 }

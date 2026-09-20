@@ -4,6 +4,17 @@ import 'package:flutter/foundation.dart';
 
 enum SessionStatus { setupRequired, signedOut, loading, allowed, denied, error }
 
+/// A sign-in attempt that did not complete, with the reason kept for display.
+class SignInFailure implements Exception {
+  const SignInFailure({required this.reason, this.userCanceled = false});
+
+  final String reason;
+  final bool userCanceled;
+
+  @override
+  String toString() => reason;
+}
+
 @immutable
 class MemberProfile {
   const MemberProfile({required this.userId, required this.displayName});
@@ -51,18 +62,27 @@ class SessionController extends ChangeNotifier {
   StreamSubscription<bool>? _authSubscription;
   List<MemberProfile> _members = const [];
   int _revision = 0;
+  String? _signInFailure;
 
   SessionStatus get status => _status;
   List<MemberProfile> get members => _members;
   bool get canRetry => activateSession != null;
+  String? get signInFailure => _signInFailure;
 
   Future<void> signIn() async {
+    _signInFailure = null;
     _setStatus(SessionStatus.loading);
     try {
       if (!await startGoogleSignIn!()) {
         _setStatus(SessionStatus.signedOut);
       }
-    } catch (_) {
+    } on SignInFailure catch (failure) {
+      _signInFailure = failure.reason;
+      _setStatus(
+        failure.userCanceled ? SessionStatus.signedOut : SessionStatus.error,
+      );
+    } catch (error) {
+      _signInFailure = error.toString();
       _setStatus(SessionStatus.error);
     }
   }

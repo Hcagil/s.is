@@ -57,26 +57,41 @@ Future<void> main() async {
             try {
               googleUser = await googleSignIn.authenticate(scopeHint: scopes);
             } on GoogleSignInException catch (error) {
-              if (error.code == GoogleSignInExceptionCode.canceled ||
-                  error.code == GoogleSignInExceptionCode.interrupted) {
-                return false;
-              }
-              rethrow;
+              // Surface the provider's own reason: a Credential Manager
+              // "cancellation" after account selection usually means the
+              // Android OAuth client/SHA-1 is not registered.
+              final canceled =
+                  error.code == GoogleSignInExceptionCode.canceled ||
+                  error.code == GoogleSignInExceptionCode.interrupted;
+              throw SignInFailure(
+                reason:
+                    'Google sign-in ${error.code.name}: '
+                    '${error.description ?? 'no details'}',
+                userCanceled: canceled,
+              );
             }
             final idToken = googleUser.authentication.idToken;
             if (idToken == null) {
-              throw const AuthException('Google did not return an ID token.');
+              throw const SignInFailure(
+                reason: 'Google did not return an ID token.',
+              );
             }
             final authorization =
                 await googleUser.authorizationClient.authorizationForScopes(
                   scopes,
                 ) ??
                 await googleUser.authorizationClient.authorizeScopes(scopes);
-            await client.auth.signInWithIdToken(
-              provider: OAuthProvider.google,
-              idToken: idToken,
-              accessToken: authorization.accessToken,
-            );
+            try {
+              await client.auth.signInWithIdToken(
+                provider: OAuthProvider.google,
+                idToken: idToken,
+                accessToken: authorization.accessToken,
+              );
+            } on AuthException catch (error) {
+              throw SignInFailure(
+                reason: 'Supabase rejected the Google token: ${error.message}',
+              );
+            }
             return true;
           },
           performSignOut: () async {
@@ -148,7 +163,10 @@ class _SessionGate extends StatelessWidget {
       SessionStatus.signedOut => _ActionScreen(
         icon: Icons.forum_outlined,
         title: 'Stay in sync',
-        message: 'Sign in with an approved Google account.',
+        message: controller.signInFailure == null
+            ? 'Sign in with an approved Google account.'
+            : 'Sign in with an approved Google account.\n\n'
+                  '${controller.signInFailure}',
         actionLabel: 'Continue with Google',
         onPressed: controller.signIn,
       ),
@@ -168,7 +186,10 @@ class _SessionGate extends StatelessWidget {
             ? _ActionScreen(
                 icon: Icons.cloud_off_outlined,
                 title: 'Could not connect',
-                message: 'Check your connection and try again.',
+                message: controller.signInFailure == null
+                    ? 'Check your connection and try again.'
+                    : 'Check your connection and try again.\n\n'
+                          '${controller.signInFailure}',
                 actionLabel: 'Try again',
                 onPressed: controller.retry,
               )

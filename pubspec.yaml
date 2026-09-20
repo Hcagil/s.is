@@ -1,7 +1,7 @@
 name: sis
 description: "SIS — Stay In Sync."
 publish_to: 'none'
-version: 0.1.0-dev.1+1
+version: 0.1.0-dev.2+2
 
 environment:
   sdk: ^3.13.2

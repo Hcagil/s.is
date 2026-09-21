@@ -27,8 +27,10 @@ All are `security definer` with `set search_path = ''`.
 - `app_private.has_app_access()` — allowed **and** the JWT's `session_id`
   equals the user's active session.
 - `public.activate_session()` — RPC called by the app after sign-in.
-  Atomically records the JWT's `session_id` as the active one **only if it is
-  newer** than the stored one and the user is allowed. Returns `true` when
+  Atomically records the JWT's `session_id` as the active one **only if that
+  session was created later** (per `auth.sessions.created_at`) than the stored
+  one and the user is allowed. Token refreshes keep the session, so a replaced
+  device can never re-claim access by refreshing. Returns `true` when
   this device now holds the active session.
 
 Consequence: one active device per user; tokens from a replaced device can
@@ -57,4 +59,6 @@ exist only in GitHub Actions secrets and in the maintainer's offline backup.
 - **Allow a member:** add a migration `supabase/migrations/<ts>_allow_<name>.sql` containing `insert into app_private.allowlist(email) values ('person@example.com') on conflict do nothing;`. Merge to `main`; the release workflow applies it.
 - **Revoke a member:** a migration deleting the row. Their next request fails `has_app_access()`; the app shows *Access denied*.
 - **Lost or stolen phone:** the member signs in on another device; `activate_session()` makes it the only active device. No admin action needed.
+- Allowlist emails are stored lower-case and trimmed (a check constraint enforces it); the JWT email is normalised the same way before comparison.
+- **Every new `public` table** must `enable row level security` and `revoke all ... from anon` — Supabase's default privileges grant `anon` access to new tables otherwise.
 - **Never** grant `anon` or `authenticated` anything on `app_private`; never disable RLS on a `public` table.

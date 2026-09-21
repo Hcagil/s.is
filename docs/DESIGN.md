@@ -98,7 +98,8 @@ Postgres Row Level Security is the only authority. The client is untrusted.
 
 - `app_private` — not exposed through the API and revoked from `anon` and
   `authenticated`; RLS enabled as well.
-  - `allowlist(email citext primary key, added_at)`
+  - `allowlist(email text primary key, added_at)` — stored lower-case/trimmed;
+    compared against the normalised JWT email
   - `active_sessions(user_id primary key, session_id, activated_at)`
 - `public` — RLS enabled on every table; policies use the helpers below.
   - `profiles(user_id pk → auth.users, display_name, created_at)` — created by
@@ -117,8 +118,10 @@ All are `security definer` with `set search_path = ''`.
 - `app_private.has_app_access()` — allowed **and** the JWT's `session_id`
   equals the user's active session.
 - `public.activate_session()` — RPC called by the app after sign-in.
-  Atomically records the JWT's `session_id` as the active one **only if it is
-  newer** than the stored one and the user is allowed. Returns `true` when
+  Atomically records the JWT's `session_id` as the active one **only if that
+  session was created later** (per `auth.sessions.created_at`) than the stored
+  one and the user is allowed. Token refreshes keep the session, so a replaced
+  device can never re-claim access by refreshing. Returns `true` when
   this device now holds the active session.
 
 Consequence: one active device per user; tokens from a replaced device can

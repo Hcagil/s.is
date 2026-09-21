@@ -1,0 +1,6 @@
+services:
+  flutter:
+    volumes: !override
+      - .:/workspace
+      - ./.ci-cache/pub:/home/ubuntu/.pub-cache
+      - ./.ci-cache/gradle:/home/ubuntu/.gradle

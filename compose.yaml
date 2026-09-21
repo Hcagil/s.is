@@ -9,13 +9,28 @@ services:
     working_dir: /workspace
     volumes:
       - .:/workspace
+      - android-home:/home/ubuntu/.android
       - android-sdk:/opt/android-sdk
       - pub-cache:/home/ubuntu/.pub-cache
       - gradle-cache:/home/ubuntu/.gradle
     stdin_open: true
     tty: true
 
+  supabase:
+    build:
+      context: ./docker
+      dockerfile: Supabase.Dockerfile
+    working_dir: ${PWD}
+    environment:
+      SUPABASE_SERVICES_HOSTNAME: host.docker.internal
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:${PWD}
+
 volumes:
+  android-home:
   android-sdk:
   pub-cache:
   gradle-cache:

@@ -6,6 +6,7 @@
 key.properties
 **/local.properties
 **/.dart_tool/
+.flutter-plugins-dependencies
 **/build/
 **/.gradle/
 **/ephemeral/
@@ -17,3 +18,14 @@ __pycache__/
 .codex/
 .private/
 *.local.md
+.ci-cache/
+
+# Local maintainer notes and working state; never tracked.
+.orchestra/
+
+# IDE
+.idea/
+*.iml
+
+# Browser-automation artefacts (local only)
+.playwright-mcp/

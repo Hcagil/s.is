@@ -26,3 +26,6 @@ __pycache__/
 # IDE
 .idea/
 *.iml
+
+# Browser-automation artefacts (local only)
+.playwright-mcp/

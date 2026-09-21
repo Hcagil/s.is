@@ -55,3 +55,25 @@ continuous delivery to the internal track; typed names and commit titles make
 history self-documenting and let release notes be generated. Git-flow style
 `develop`/`release` branches were rejected as unnecessary ceremony for a small
 team shipping every merge.
+
+## 2026-09-21 — `main` is protected
+
+**Branch protection is enabled on `main`**: the three CI contexts must pass,
+branches must be up to date before merging, history stays linear, and force
+pushes and deletions are refused. Reason: `main` publishes to Google Play on
+every push, so the pull-request gate has to be enforced by the platform rather
+than by convention — the first release merged while checks were still running,
+which is exactly the gap this closes. Administrators are deliberately not
+included, so the owner can still land an emergency fix.
+
+## 2026-09-21 — Android OAuth clients are registered from the downloaded certificate
+
+**The signing fingerprints used to register Android OAuth clients are taken
+from the certificate archive downloaded from Play Console, hashed locally —
+never read off the console page.** The App signing page renders SHA-1 and
+SHA-256 side by side, and the first twenty bytes of a SHA-256 are
+indistinguishable from a SHA-1 by shape, which produced two wrong
+registrations and a sign-in failure (`[16] Account reauth failed`) before the
+real deployment certificate (`deployment_cert.der`) was identified. Play App
+Signing also ships hybrid classical and post-quantum certificates whose
+fingerprints are *not* the app's signing identity.

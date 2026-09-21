@@ -29,3 +29,12 @@ __pycache__/
 
 # Browser-automation artefacts (local only)
 .playwright-mcp/
+# AI agent instruction files and tooling state: local only, never tracked.
+# The repository must read as a normal production project.
+/CLAUDE.md
+/AGENTS.md
+/GEMINI.md
+/.cursorrules
+/skills-lock.json
+skill-observations/
+skill-updates/

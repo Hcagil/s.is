@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
+import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
 import '../domain/conversation.dart';
 import 'message_screen.dart';
@@ -44,7 +45,7 @@ class ConversationList extends ConsumerWidget {
 }
 
 Future<void> _startChat(BuildContext context, WidgetRef ref) async {
-  final picked = await showModalBottomSheet<String>(
+  final picked = await showModalBottomSheet<Member>(
     context: context,
     builder: (_) => const _MemberPicker(),
   );
@@ -52,11 +53,11 @@ Future<void> _startChat(BuildContext context, WidgetRef ref) async {
 
   final result = await ref
       .read(conversationListProvider.notifier)
-      .startWith(picked);
+      .startWith(picked.userId);
   if (!context.mounted) return;
   switch (result) {
     case Ok(:final value):
-      await openConversation(context, ref, value);
+      await openConversation(context, ref, value, title: picked.displayName);
     case Err(:final failure):
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(failure.message)));
@@ -82,7 +83,7 @@ class _MemberPicker extends ConsumerWidget {
                 key: ValueKey('member-${m.userId}'),
                 leading: const CircleAvatar(child: Icon(Icons.person_outline)),
                 title: Text(m.displayName),
-                onTap: () => Navigator.of(context).pop(m.userId),
+                onTap: () => Navigator.of(context).pop(m),
               ),
           ],
         ),
@@ -114,7 +115,12 @@ class _ConversationTile extends ConsumerWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-      onTap: () => openConversation(context, ref, conversation.id),
+      onTap: () => openConversation(
+        context,
+        ref,
+        conversation.id,
+        title: conversation.other.displayName,
+      ),
     );
   }
 }

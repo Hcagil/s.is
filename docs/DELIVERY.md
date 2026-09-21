@@ -73,5 +73,10 @@ Android pipeline blocks it.
 - **Ship:** merge a pull request into `main`. Nothing else. Watch *Actions → Release*; the Play Console *Internal testing* track shows the new build within minutes. Phones receive it as a flexible in-app update.
 - **versionCode** is `run_number + 100` of the Release workflow — never edit it by hand, never reuse one. `versionName` is edited in `pubspec.yaml` when a milestone changes (0.1.0 → 0.2.0).
 - **Raise the minimum supported build** only when an older build would break against the current backend: a migration `update public.app_config set min_supported_build = <code> where id = 1;` with the reason in a SQL comment, plus a DECISIONS entry. Every migration must remain compatible with all builds ≥ the current minimum.
+- **Register a signing fingerprint with Google:** download the certificate
+  archive from Play Console → Test and release → Setup → App signing, then hash
+  it locally (`deployment_cert.der` is the app's signing identity). Do not copy
+  fingerprints from the page: SHA-256 and SHA-1 are shown together and are easy
+  to confuse.
 - **Rotate a secret:** update it in GitHub → Settings → Secrets; re-run the last Release workflow. Signing material also exists in the maintainer's offline backup.
 - **Roll back:** Play Console → Internal testing → promote the previous release; then fix forward on `main`. Never rewrite `main` history.

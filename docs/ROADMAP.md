@@ -13,6 +13,6 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 
 | Version | Status |
 |---|---|
-| v0.1 | in delivery — code complete, awaiting first automated release |
-| v0.2 | planned |
+| v0.1 | **done** 2026-09-21 — build 103 on the Play internal track; sign-in, allowlist and single-active-device verified on a Play-installed device; a merged change reached the device with no cable |
+| v0.2 | next — 1:1 text chat. First stable version. |
 | v0.3 | planned |

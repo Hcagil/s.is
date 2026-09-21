@@ -27,16 +27,17 @@ Future<void> main() async {
         localStorage: SecureSessionStorage(),
       ),
     );
-    await GoogleSignIn.instance.initialize(
-      serverClientId: config.googleWebClientId,
-    );
     final client = Supabase.instance.client;
     runApp(
       ProviderScope(
         overrides: [
           runtimeConfigProvider.overrideWithValue(config),
           authRepositoryProvider.overrideWithValue(
-            SupabaseAuthRepository(client, GoogleSignIn.instance),
+            SupabaseAuthRepository(
+              client,
+              GoogleSignIn.instance,
+              googleWebClientId: config.googleWebClientId,
+            ),
           ),
           updateRepositoryProvider.overrideWithValue(
             PlayUpdateRepository(client),

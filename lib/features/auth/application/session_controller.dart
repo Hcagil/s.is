@@ -83,6 +83,7 @@ class SessionController extends AsyncNotifier<SessionState> {
 
   Future<void> signOut() async {
     _revision++;
+    _lastSignedIn = false;
     try {
       await ref.read(authRepositoryProvider).signOut();
     } finally {

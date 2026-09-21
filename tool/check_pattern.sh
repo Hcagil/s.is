@@ -2,7 +2,7 @@
 # Layer rules from docs/ARCHITECTURE.md. Exit 1 on any violation.
 set -euo pipefail
 LIB_DIR="${LIB_DIR:-lib}"
-SDKS='package:(supabase_flutter|supabase|google_sign_in|in_app_update|package_info_plus|flutter_secure_storage)/'
+SDKS='package:(supabase_flutter|supabase|google_sign_in|in_app_update|package_info_plus|flutter_secure_storage|url_launcher)/'
 FAILFLAG=$(mktemp); trap 'rm -f "$FAILFLAG"' EXIT
 report() { echo "PATTERN VIOLATION: $1"; echo 1 > "$FAILFLAG"; }
 # Rule 1: presentation never imports SDKs or data/

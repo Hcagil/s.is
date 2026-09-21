@@ -7,10 +7,16 @@ import '../domain/member.dart';
 
 /// [AuthRepository] backed by Google native sign-in and Supabase Auth.
 final class SupabaseAuthRepository implements AuthRepository {
-  SupabaseAuthRepository(this._client, this._google);
+  SupabaseAuthRepository(
+    this._client,
+    this._google, {
+    required this.googleWebClientId,
+  });
 
   final SupabaseClient _client;
   final GoogleSignIn _google;
+  final String googleWebClientId;
+  bool _googleReady = false;
 
   static const _scopes = ['https://www.googleapis.com/auth/userinfo.email'];
 
@@ -25,6 +31,12 @@ final class SupabaseAuthRepository implements AuthRepository {
   Future<Result<void>> signInWithGoogle() async {
     final GoogleSignInAccount user;
     try {
+      // Initialised lazily so a missing Play Services only breaks sign-in,
+      // never the whole app for an already signed-in member.
+      if (!_googleReady) {
+        await _google.initialize(serverClientId: googleWebClientId);
+        _googleReady = true;
+      }
       user = await _google.authenticate(scopeHint: _scopes);
     } on GoogleSignInException catch (e) {
       // A Credential Manager "cancellation" after account selection usually
@@ -38,6 +50,8 @@ final class SupabaseAuthRepository implements AuthRepository {
           userCanceled: canceled,
         ),
       );
+    } catch (e) {
+      return Err(ProviderFailure('Google sign-in unavailable: $e'));
     }
     final idToken = user.authentication.idToken;
     if (idToken == null) {
@@ -103,6 +117,12 @@ final class SupabaseAuthRepository implements AuthRepository {
     } catch (_) {}
     try {
       await _client.auth.signOut();
-    } catch (_) {}
+    } catch (_) {
+      // gotrue rethrows network errors before clearing the stored session;
+      // make sure this device forgets it regardless.
+      try {
+        await _client.auth.signOut(scope: SignOutScope.local);
+      } catch (_) {}
+    }
   }
 }

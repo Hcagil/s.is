@@ -19,12 +19,15 @@ final updateControllerProvider =
 class UpdateController extends AsyncNotifier<UpdateState> {
   @override
   Future<UpdateState> build() async {
-    // The policy row is readable only by an active member, so re-evaluate
-    // whenever the session state changes.
-    final session = await ref.watch(sessionControllerProvider.future);
+    // The policy row is readable only by an active member. Rebuild only when
+    // that flips, not on every session transition (a dismissed banner stays
+    // dismissed; the blocking screen never flickers through loading).
+    final allowed = ref.watch(
+      sessionControllerProvider.select((s) => s.value is Allowed),
+    );
     final repo = ref.read(updateRepositoryProvider);
     final installed = await repo.installedBuild();
-    if (session is Allowed) {
+    if (allowed) {
       // A failed policy fetch never blocks anyone: treat the minimum as 0.
       final min = switch (await repo.minSupportedBuild()) {
         Ok(:final value) => value,

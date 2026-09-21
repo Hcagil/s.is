@@ -24,8 +24,11 @@ ProviderContainer make(FakeUpdate f, {bool signedIn = true}) =>
       ],
     );
 
-Future<UpdateState> settle(ProviderContainer c) =>
-    c.read(updateControllerProvider.future);
+Future<UpdateState> settle(ProviderContainer c) async {
+  await c.read(sessionControllerProvider.future);
+  await Future<void>.delayed(Duration.zero);
+  return c.read(updateControllerProvider.future);
+}
 
 void main() {
   test('no update, supported → idle', () async {

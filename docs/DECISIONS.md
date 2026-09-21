@@ -77,3 +77,29 @@ registrations and a sign-in failure (`[16] Account reauth failed`) before the
 real deployment certificate (`deployment_cert.der`) was identified. Play App
 Signing also ships hybrid classical and post-quantum certificates whose
 fingerprints are *not* the app's signing identity.
+
+## 2026-09-22 — Chat schema: membership is server-authored
+
+**Conversations and membership have no client write policy.** The only way a
+conversation comes into existence is the `public.start_direct_conversation()`
+RPC, which writes both membership rows itself and refuses any counterpart that
+is not a confirmed, allowlisted user. Reason: a client that could insert its
+own `conversation_members` row could add itself to any conversation, so the
+read policies would be guarding a door with the hinges exposed.
+
+**A 1:1 pair is unique by construction.** `conversations.direct_key` holds the
+two user ids in sorted order under a unique index, and the RPC inserts with
+`on conflict do nothing`. Reason: two devices opening the same chat at the same
+moment must converge on one conversation rather than forking the history; a
+lookup-then-insert would race. v0.3 group conversations carry a null
+`direct_key`, which the unique index ignores.
+
+**Chat access is `has_app_access()` AND membership, on every policy.** Reason:
+one gate, uniformly applied — losing the active session revokes chat at the
+same instant it revokes everything else, and Realtime re-checks the same select
+policy per subscriber rather than becoming a second, weaker authority.
+
+**Messages cannot be edited or deleted in v0.2.** No update or delete policy
+exists, and the grants are `select` and `insert` only. Reason: editing is not
+in scope for the first stable version, and an absent policy is a stronger
+guarantee than a permissive one nobody calls yet.

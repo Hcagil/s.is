@@ -99,8 +99,8 @@ Postgres Row Level Security is the only authority. The client is untrusted.
 - `app_private` — not exposed through the API and revoked from `anon` and
   `authenticated`; RLS enabled as well.
   - `allowlist(email text primary key, added_at)` — stored lower-case/trimmed;
-    compared against the normalised JWT email
-  - `active_sessions(user_id primary key, session_id, activated_at)`
+    compared against the normalised, confirmed `auth.users` email
+  - `active_sessions(user_id primary key, session_id uuid, session_created_at)`
 - `public` — RLS enabled on every table; policies use the helpers below.
   - `profiles(user_id pk → auth.users, display_name, created_at)` — created by
     a trigger on `auth.users` insert.
@@ -114,7 +114,9 @@ Postgres Row Level Security is the only authority. The client is untrusted.
 
 All are `security definer` with `set search_path = ''`.
 
-- `app_private.is_allowed_user()` — the JWT's email is on the allowlist.
+- `app_private.is_allowed_user()` — the caller's **confirmed** `auth.users`
+  email (normalised) is on the allowlist. JWT claims are never trusted for
+  authorisation.
 - `app_private.has_app_access()` — allowed **and** the JWT's `session_id`
   equals the user's active session.
 - `public.activate_session()` — RPC called by the app after sign-in.

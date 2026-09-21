@@ -9,7 +9,7 @@ Postgres Row Level Security is the only authority. The client is untrusted.
 - `app_private` — not exposed through the API and revoked from `anon` and
   `authenticated`; RLS enabled as well.
   - `allowlist(email citext primary key, added_at)`
-  - `active_sessions(user_id primary key, session_id, activated_at)`
+  - `active_sessions(user_id primary key, session_id uuid, session_created_at)`
 - `public` — RLS enabled on every table; policies use the helpers below.
   - `profiles(user_id pk → auth.users, display_name, created_at)` — created by
     a trigger on `auth.users` insert.
@@ -23,7 +23,9 @@ Postgres Row Level Security is the only authority. The client is untrusted.
 
 All are `security definer` with `set search_path = ''`.
 
-- `app_private.is_allowed_user()` — the JWT's email is on the allowlist.
+- `app_private.is_allowed_user()` — the caller's **confirmed** `auth.users`
+  email (normalised) is on the allowlist. JWT claims are never trusted for
+  authorisation.
 - `app_private.has_app_access()` — allowed **and** the JWT's `session_id`
   equals the user's active session.
 - `public.activate_session()` — RPC called by the app after sign-in.
@@ -59,6 +61,7 @@ exist only in GitHub Actions secrets and in the maintainer's offline backup.
 - **Allow a member:** add a migration `supabase/migrations/<ts>_allow_<name>.sql` containing `insert into app_private.allowlist(email) values ('person@example.com') on conflict do nothing;`. Merge to `main`; the release workflow applies it.
 - **Revoke a member:** a migration deleting the row. Their next request fails `has_app_access()`; the app shows *Access denied*.
 - **Lost or stolen phone:** the member signs in on another device; `activate_session()` makes it the only active device. No admin action needed.
-- Allowlist emails are stored lower-case and trimmed (a check constraint enforces it); the JWT email is normalised the same way before comparison.
-- **Every new `public` table** must `enable row level security` and `revoke all ... from anon` — Supabase's default privileges grant `anon` access to new tables otherwise.
+- Allowlist emails are stored lower-case and trimmed (a check constraint enforces it) and compared against the confirmed `auth.users` email, normalised the same way. JWT claims are never used for authorisation.
+- **Every new `public` table** must `enable row level security` and `revoke all ... from anon, authenticated`, then grant only what policies allow — Supabase's default privileges grant both roles full access to new tables, and RLS does not cover `TRUNCATE`.
+- Profiles are readable by every active member (a contact list); this is intentional.
 - **Never** grant `anon` or `authenticated` anything on `app_private`; never disable RLS on a `public` table.

@@ -105,5 +105,11 @@ jobs:
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml build flutter
       # Skipped by the ordinary `flutter test` run; this is the only job with a
       # database for them to talk to.
+      #
+      # --concurrency=1: these suites share one backend. Run in parallel they
+      # contend for a single Realtime container and one suite's subscriptions
+      # starve the other's, which showed up as a different Realtime test timing
+      # out on each run. They are integration tests against shared state; they
+      # are not parallel-safe by nature.
       - name: Repository integration tests
-        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter test --run-skipped --tags integration test/integration
+        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration

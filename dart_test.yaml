@@ -1,7 +1,11 @@
 # Integration tests talk to a running local Supabase stack, so they are skipped
 # by the ordinary `flutter test` run (and by the Android CI job, which has no
 # database). The Database CI job runs them explicitly:
-#   flutter test --run-skipped --tags integration test/integration
+#   flutter test --run-skipped --tags integration --concurrency=1 test/integration
+#
+# --concurrency=1 because they share one Supabase stack: run in parallel the
+# suites contend for a single Realtime container and evict each other's
+# sessions.
 tags:
   integration:
     skip: "needs a running local Supabase stack"

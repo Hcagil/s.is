@@ -147,8 +147,9 @@ void main() {
     final body = 'realtime ${DateTime.now().microsecondsSinceEpoch}';
     // Resolves only once the server has joined us, so no sleep is needed and
     // the send below cannot race the subscription.
-    final stream = await bob.incoming(conversationId);
-    final received = stream
+    final opened = await bob.incoming(conversationId);
+    expect(opened, isA<Ok<Stream<Message>>>(), reason: 'subscription refused');
+    final received = (opened as Ok<Stream<Message>>).value
         .firstWhere((m) => m.body == body)
         .timeout(const Duration(seconds: 20));
 

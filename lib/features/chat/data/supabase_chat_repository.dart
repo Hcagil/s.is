@@ -167,7 +167,7 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   @override
-  Future<Stream<Message>> incoming(String conversationId) async {
+  Future<Result<Stream<Message>>> incoming(String conversationId) async {
     final channel = _client.channel('messages:$conversationId');
     final controller = StreamController<Message>();
     final subscribed = Completer<void>();
@@ -197,10 +197,30 @@ final class SupabaseChatRepository implements ChatRepository {
         });
     controller.onCancel = () async => _client.removeChannel(channel);
 
-    // A dead subscription must fail loudly rather than hang the screen.
-    await subscribed.future.timeout(const Duration(seconds: 15));
+    try {
+      // A dead subscription must fail loudly rather than hang the screen.
+      await subscribed.future.timeout(const Duration(seconds: 15));
+    } catch (e) {
+      // An unreachable server throws an SDK type (WebSocketChannelException,
+      // SocketException, TimeoutException). Left unmapped it would be printed
+      // on screen verbatim.
+      //
+      // Tear down WITHOUT awaiting: removeChannel sends an unsubscribe over
+      // the same dead socket and waits for a reply that never arrives, so
+      // awaiting it here would hang the very failure path that exists to stop
+      // the screen hanging.
+      unawaited(() async {
+        try {
+          await controller.close();
+        } catch (_) {}
+        try {
+          await _client.removeChannel(channel);
+        } catch (_) {}
+      }());
+      return Err(_asFailure(e));
+    }
     // The controller buffers anything that lands before the caller listens.
-    return controller.stream;
+    return Ok(controller.stream);
   }
 
   @override

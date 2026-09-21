@@ -29,7 +29,10 @@ abstract interface class ChatRepository {
 
   /// Messages arriving in [conversationId] after subscription.
   ///
-  /// The future completes only once the server has confirmed the subscription.
+  /// The result arrives only once the server has confirmed the subscription,
+  /// or as [Err] when the connection cannot be established at all — the same
+  /// contract as every other call here, so an unreachable server reaches the
+  /// screen as a reason rather than as a raw SDK exception.
   /// Realtime delivers nothing that happened before that moment, so a caller
   /// must await this BEFORE its initial [messages] read — otherwise a message
   /// sent in between is missed by the subscription and already too late for
@@ -37,7 +40,7 @@ abstract interface class ChatRepository {
   ///
   /// Realtime delivery is a convenience, not an authority: the server
   /// re-checks the read policy for every subscriber.
-  Future<Stream<Message>> incoming(String conversationId);
+  Future<Result<Stream<Message>>> incoming(String conversationId);
 
   /// The id of the 1:1 conversation with [otherUserId], creating it when it does
   /// not exist yet. Calling twice returns the same conversation.

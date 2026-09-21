@@ -5,6 +5,7 @@ import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
+import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../support/fakes.dart';
@@ -15,11 +16,13 @@ const config = RuntimeConfig(
   googleWebClientId: 'c',
 );
 
-Widget app(FakeAuth a, FakeUpdate u) => ProviderScope(
+Widget app(FakeAuth a, FakeUpdate u, [FakeChat? c]) => ProviderScope(
   overrides: [
     runtimeConfigProvider.overrideWithValue(config),
     authRepositoryProvider.overrideWithValue(a),
     updateRepositoryProvider.overrideWithValue(u),
+    // The home of an allowed member is the conversation list.
+    chatRepositoryProvider.overrideWithValue(c ?? FakeChat()),
   ],
   child: const SisApp(),
 );
@@ -45,10 +48,14 @@ void main() {
     await t.pumpAndSettle();
     expect(find.textContaining('not currently approved'), findsOneWidget);
   });
-  testWidgets('allowed shows greeting', (t) async {
+  testWidgets('allowed reaches the conversation list', (t) async {
     await t.pumpWidget(app(FakeAuth(session: true), FakeUpdate()));
     await t.pumpAndSettle();
-    expect(find.text('Welcome back, Maya'), findsOneWidget);
+    expect(find.text('New chat'), findsOneWidget);
+    // The member is still identified, now in the overflow menu.
+    await t.tap(find.byKey(const ValueKey('home-menu')));
+    await t.pumpAndSettle();
+    expect(find.text('Sign out (Maya)'), findsOneWidget);
   });
   testWidgets('update required hides the app', (t) async {
     await t.pumpWidget(
@@ -56,7 +63,7 @@ void main() {
     );
     await t.pumpAndSettle();
     expect(find.text('Update required'), findsOneWidget);
-    expect(find.text('Welcome back, Maya'), findsNothing);
+    expect(find.text('New chat'), findsNothing);
   });
   testWidgets('flexible update shows a dismissible banner', (t) async {
     await t.pumpWidget(

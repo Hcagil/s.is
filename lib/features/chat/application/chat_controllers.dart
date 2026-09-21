@@ -104,7 +104,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     // subscription: Realtime replays nothing, so a message sent before that
     // moment would be missed here AND be too late for the read below.
     // Anything arriving during the read is buffered and reconciled by id.
-    final stream = await repo.incoming(conversationId);
+    final stream = switch (await repo.incoming(conversationId)) {
+      Ok(:final value) => value,
+      Err(:final failure) => throw failure,
+    };
     final buffered = <Message>[];
     var loaded = false;
     final sub = stream.listen((message) {

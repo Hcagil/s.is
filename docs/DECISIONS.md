@@ -32,7 +32,9 @@ everything after it.
 
 **Updates are never forced** except below a server-side minimum supported
 build, raised only by a recorded decision. In-app updates use Play's flexible
-mode. Reason: minimise update prompts for users.
+mode. Reason: minimise update prompts for users. The server stores only the
+minimum supported build; the latest available build is not stored because
+Google Play already reports it to the app.
 
 **Architecture pattern: layered feature modules with Riverpod**, enforced by a
 mechanical import check in CI; violations are rewritten, not exempted.

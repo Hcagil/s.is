@@ -1,7 +1,7 @@
 name: sis
-description: "SIS — Stay In Sync."
+description: SIS — private chat by ESD.
 publish_to: 'none'
-version: 0.1.0-dev.1+1
+version: 0.1.0
 
 environment:
   sdk: ^3.13.2
@@ -9,8 +9,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_riverpod: ^3.4.3
   flutter_secure_storage: ^11.2.0
   google_sign_in: ^7.2.0
+  in_app_update: ^5.0.0
+  package_info_plus: ^10.2.1
   supabase_flutter: ^2.17.2
 
 dev_dependencies:

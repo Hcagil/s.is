@@ -103,9 +103,9 @@ Postgres Row Level Security is the only authority. The client is untrusted.
 - `public` — RLS enabled on every table; policies use the helpers below.
   - `profiles(user_id pk → auth.users, display_name, created_at)` — created by
     a trigger on `auth.users` insert.
-  - `app_config(id = 1, min_supported_build int, latest_build int)` — single
-    row, readable by any authenticated user, writable only by the service
-    role.
+  - `app_config(id = 1, min_supported_build int)` — single row, readable by
+    any authenticated user, never writable from the client. The latest
+    available build is not stored: Google Play reports it to the app.
   - v0.2: `conversations`, `conversation_members`, `messages`.
   - v0.3: group fields on `conversations`.
 
@@ -151,8 +151,7 @@ exist only in GitHub Actions secrets and in the maintainer's offline backup.
 - Otherwise, if Play reports a newer version → **flexible** in-app update:
   dismissible banner, background download, install on tap. No repeated
   prompts.
-- Publishing a build sets `latest_build`; it never changes
-  `min_supported_build`.
+- Publishing a build never changes `min_supported_build`.
 - Migrations must remain compatible with every build ≥ `min_supported_build`.
 
 ## 6. Delivery pipeline
@@ -181,15 +180,15 @@ generated from it. Branches are deleted after merge.
 
 `release.yml`, in order:
 
-1. `versionCode` = GitHub run number (monotonic, never reused);
-   `versionName` from `pubspec.yaml`.
+1. `versionCode` = GitHub Actions run number **+ 100** (monotonic, never
+   reused; the offset keeps codes above builds published before the pipeline
+   existed). `versionName` from `pubspec.yaml`.
 2. Build a signed release AAB with the upload key from secrets.
 3. Apply pending migrations to the Supabase project (schema goes forward
    before the app does).
 4. Upload the AAB to the Play **internal** track via the Play Developer API
    using a service account with release permission only.
-5. Set `app_config.latest_build` to the new `versionCode`.
-6. Tag the commit `v<versionName>+<versionCode>` and publish release notes.
+5. Tag the commit `v<versionName>+<versionCode>` and publish release notes.
 
 Validation jobs never hold publishing or signing secrets and never mutate
 cloud state. Failed checks and pull requests cannot publish.

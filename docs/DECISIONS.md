@@ -103,3 +103,21 @@ policy per subscriber rather than becoming a second, weaker authority.
 exists, and the grants are `select` and `insert` only. Reason: editing is not
 in scope for the first stable version, and an absent policy is a stronger
 guarantee than a permissive one nobody calls yet.
+
+**The insert grant on `messages` is column-level.** Only `conversation_id`,
+`sender_id` and `body` are grantable; `id` and `created_at` are left to their
+defaults. Reason: a table-wide grant lets a member choose `created_at`, and
+because the history is ordered by it and messages can never be edited or
+deleted, a back-dated row would pin itself to the top of the other party's
+conversation permanently. RLS constrains which rows you may write, not which
+columns — so the column list is the part that closes this.
+
+**Realtime publishes inserts only.** `supabase_realtime` is set to
+`publish = 'insert'` rather than the default insert/update/delete/truncate.
+Reason: `realtime.apply_rls` evaluates row-level security for INSERT and
+UPDATE but delivers DELETE to every subscriber of the table without consulting
+RLS at all. Messages are insert-only, so the only deletes are cascades from
+account or conversation removal — but those would still fan row ids out to
+people who cannot read the conversation. Publishing inserts only closes the
+path instead of recording it as an accepted exception. This is the one place
+where Realtime would otherwise have been a weaker authority than RLS.

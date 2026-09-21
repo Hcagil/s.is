@@ -68,7 +68,11 @@ create policy messages_send on public.messages for insert to authenticated
               and app_private.is_member(conversation_id));
 
 grant select on public.conversations, public.conversation_members, public.messages to authenticated;
-grant insert on public.messages to authenticated;
+-- Column-level on purpose. A table-wide insert grant would let a member choose
+-- id and created_at, and since messages can never be edited or deleted, a
+-- back-dated created_at would pin a message to the top of the other party's
+-- history permanently. Withholding the columns makes the defaults authoritative.
+grant insert (conversation_id, sender_id, body) on public.messages to authenticated;
 
 -- Starting a chat -----------------------------------------------------------
 -- Conversations and membership have no client write policy at all: a client
@@ -109,11 +113,16 @@ revoke all on function public.start_direct_conversation(uuid) from public, anon;
 grant execute on function public.start_direct_conversation(uuid) to authenticated;
 
 -- Realtime ------------------------------------------------------------------
--- Realtime re-checks the select policy per subscriber; it is a delivery
--- mechanism, never the authority.
+-- Realtime re-checks the select policy per subscriber for INSERT and UPDATE,
+-- but realtime.apply_rls delivers DELETE to every subscriber of the table
+-- without evaluating RLS at all. Messages are insert-only in v0.2, so the only
+-- deletes are cascades from account or conversation removal -- but those would
+-- still fan a row id out to people who cannot read the conversation. Publishing
+-- inserts only closes that path rather than documenting it as an exception.
 do $$
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    execute 'alter publication supabase_realtime set (publish = ''insert'')';
     execute 'alter publication supabase_realtime add table public.messages';
   end if;
 end $$;

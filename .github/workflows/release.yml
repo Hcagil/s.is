@@ -2,7 +2,7 @@ name: Release
 on:
   push:
     branches: [main]
-    paths-ignore: ['docs/**', '*.md']   # documentation-only merges do not publish a build
+    paths-ignore: ['docs/**', '**/*.md']   # documentation-only merges do not publish a build
 concurrency: { group: release, cancel-in-progress: false }
 permissions:
   contents: write

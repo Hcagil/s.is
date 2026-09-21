@@ -107,3 +107,39 @@ class SetupRequiredScreen extends StatelessWidget {
     );
   }
 }
+
+/// Bootstrap failed before any session existed; restarting is the only way out.
+class StartupFailedScreen extends StatelessWidget {
+  const StartupFailedScreen(this.reason, {super.key});
+
+  final String reason;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  'Could not start SIS',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Restart the app. If it keeps failing, reinstall it.\n\n$reason',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

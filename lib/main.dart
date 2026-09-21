@@ -18,30 +18,41 @@ Future<void> main() async {
     runApp(const ProviderScope(child: SisApp()));
     return;
   } // SessionController yields SetupRequired
-  await Supabase.initialize(
-    url: config.supabaseUrl,
-    publishableKey: config.supabasePublishableKey,
-    authOptions: const FlutterAuthClientOptions(
-      authFlowType: AuthFlowType.pkce,
-      localStorage: SecureSessionStorage(),
-    ),
-  );
-  await GoogleSignIn.instance.initialize(
-    serverClientId: config.googleWebClientId,
-  );
-  final client = Supabase.instance.client;
-  runApp(
-    ProviderScope(
-      overrides: [
-        runtimeConfigProvider.overrideWithValue(config),
-        authRepositoryProvider.overrideWithValue(
-          SupabaseAuthRepository(client, GoogleSignIn.instance),
-        ),
-        updateRepositoryProvider.overrideWithValue(
-          PlayUpdateRepository(client),
-        ),
-      ],
-      child: const SisApp(),
-    ),
-  );
+  try {
+    await Supabase.initialize(
+      url: config.supabaseUrl,
+      publishableKey: config.supabasePublishableKey,
+      authOptions: const FlutterAuthClientOptions(
+        authFlowType: AuthFlowType.pkce,
+        localStorage: SecureSessionStorage(),
+      ),
+    );
+    await GoogleSignIn.instance.initialize(
+      serverClientId: config.googleWebClientId,
+    );
+    final client = Supabase.instance.client;
+    runApp(
+      ProviderScope(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(config),
+          authRepositoryProvider.overrideWithValue(
+            SupabaseAuthRepository(client, GoogleSignIn.instance),
+          ),
+          updateRepositoryProvider.overrideWithValue(
+            PlayUpdateRepository(client),
+          ),
+        ],
+        child: const SisApp(),
+      ),
+    );
+  } catch (e) {
+    // Malformed config or a broken secure store must show a reason, not a
+    // blank screen.
+    runApp(
+      ProviderScope(
+        overrides: [startupErrorProvider.overrideWithValue('$e')],
+        child: const SisApp(),
+      ),
+    );
+  }
 }

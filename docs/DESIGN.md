@@ -105,7 +105,7 @@ Postgres Row Level Security is the only authority. The client is untrusted.
   - `profiles(user_id pk → auth.users, display_name, created_at)` — created by
     a trigger on `auth.users` insert.
   - `app_config(id = 1, min_supported_build int)` — single row, readable by
-    any authenticated user, never writable from the client. The latest
+    active members, never writable from the client. The latest
     available build is not stored: Google Play reports it to the app.
   - v0.2: `conversations`, `conversation_members`, `messages`.
   - v0.3: group fields on `conversations`.

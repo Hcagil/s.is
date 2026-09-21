@@ -52,6 +52,8 @@ class FakeUpdate implements UpdateRepository {
   Result<int> min;
   Result<int?> play;
   final calls = <String>[];
+  bool failFlexible = false;
+  bool failImmediate = false;
 
   @override
   Future<int> installedBuild() async => installed;
@@ -60,9 +62,19 @@ class FakeUpdate implements UpdateRepository {
   @override
   Future<Result<int?>> availablePlayBuild() async => play;
   @override
-  Future<void> startFlexibleUpdate() async => calls.add('flexible');
+  Future<void> startFlexibleUpdate() async {
+    calls.add('flexible');
+    if (failFlexible) throw StateError('declined');
+  }
+
   @override
   Future<void> completeFlexibleUpdate() async => calls.add('complete');
   @override
-  Future<void> startImmediateUpdate() async => calls.add('immediate');
+  Future<void> startImmediateUpdate() async {
+    calls.add('immediate');
+    if (failImmediate) throw StateError('unavailable');
+  }
+
+  @override
+  Future<void> openStoreListing() async => calls.add('store');
 }

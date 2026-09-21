@@ -89,12 +89,20 @@ final class SupabaseAuthRepository implements AuthRepository {
       );
     } on PostgrestException catch (e) {
       return Err(NetworkFailure(e.message));
+    } catch (e) {
+      // Network failures surface as ClientException, not PostgrestException.
+      return Err(NetworkFailure('$e'));
     }
   }
 
   @override
   Future<void> signOut() async {
-    await _google.signOut();
-    await _client.auth.signOut();
+    // Best effort: the caller clears local state regardless of the outcome.
+    try {
+      await _google.signOut();
+    } catch (_) {}
+    try {
+      await _client.auth.signOut();
+    } catch (_) {}
   }
 }

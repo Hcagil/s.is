@@ -17,4 +17,7 @@ abstract interface class UpdateRepository {
 
   /// Immediate (blocking) update — used only below the minimum supported build.
   Future<void> startImmediateUpdate();
+
+  /// Opens the Play listing; the fallback when an in-app update cannot start.
+  Future<void> openStoreListing();
 }

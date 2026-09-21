@@ -10,6 +10,9 @@ import '../features/update/application/update_controller.dart';
 import '../features/update/domain/update_state.dart';
 import '../features/update/presentation/update_required_screen.dart';
 
+/// Set by main() when bootstrap itself fails; the gate shows the reason.
+final startupErrorProvider = Provider<String?>((_) => null);
+
 /// Root widget: theme plus the session gate.
 class SisApp extends StatelessWidget {
   const SisApp({super.key});
@@ -42,6 +45,9 @@ class SessionGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final startupError = ref.watch(startupErrorProvider);
+    if (startupError != null) return StartupFailedScreen(startupError);
+
     final update = ref.watch(updateControllerProvider).value;
     if (update case UpdateRequired(:final installed, :final minimum)) {
       return UpdateRequiredScreen(installed: installed, minimum: minimum);
@@ -62,6 +68,10 @@ class SessionGate extends ConsumerWidget {
         onRetry: notifier.retry,
       ),
       AsyncData(value: Allowed(:final member)) => HomeScreen(member: member),
+      AsyncError(:final error) => StatusScreen.error(
+        '$error',
+        onRetry: notifier.retry,
+      ),
       _ => const Scaffold(body: Center(child: CircularProgressIndicator())),
     };
   }

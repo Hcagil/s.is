@@ -18,8 +18,10 @@ final sessionControllerProvider =
       SessionController.new,
     );
 
+/// Session state machine; every failure carries a reason for the screen.
 class SessionController extends AsyncNotifier<SessionState> {
   int _revision = 0; // discards results of superseded refreshes
+  bool? _lastSignedIn; // the auth stream replays the current session
 
   @override
   Future<SessionState> build() async {
@@ -27,11 +29,17 @@ class SessionController extends AsyncNotifier<SessionState> {
       return const SetupRequired();
     }
     final repo = ref.read(authRepositoryProvider);
-    final sub = repo.signedInChanges.listen(
-      (signedIn) => unawaited(_refresh(signedIn)),
-    );
+    _lastSignedIn = repo.hasSession;
+    final sub = repo.signedInChanges.listen((signedIn) {
+      if (signedIn == _lastSignedIn) return;
+      _lastSignedIn = signedIn;
+      unawaited(_refresh(signedIn));
+    });
     ref.onDispose(sub.cancel);
-    return _resolve(repo.hasSession);
+    final rev = ++_revision;
+    final next = await _resolve(repo.hasSession);
+    if (rev != _revision) return state.value ?? next;
+    return next;
   }
 
   Future<SessionState> _resolve(bool signedIn) async {
@@ -54,14 +62,14 @@ class SessionController extends AsyncNotifier<SessionState> {
     final rev = ++_revision;
     state = const AsyncData(SessionLoading());
     final next = await _resolve(signedIn);
-    if (rev == _revision) {
-      state = AsyncData(next);
-    }
+    if (!ref.mounted || rev != _revision) return;
+    state = AsyncData(next);
   }
 
   Future<void> signIn() async {
     state = const AsyncData(SessionLoading());
     final r = await ref.read(authRepositoryProvider).signInWithGoogle();
+    if (!ref.mounted) return;
     if (r is Err) {
       final f = r.failure;
       state = AsyncData(
@@ -75,8 +83,11 @@ class SessionController extends AsyncNotifier<SessionState> {
 
   Future<void> signOut() async {
     _revision++;
-    await ref.read(authRepositoryProvider).signOut();
-    state = const AsyncData(SignedOut());
+    try {
+      await ref.read(authRepositoryProvider).signOut();
+    } finally {
+      if (ref.mounted) state = const AsyncData(SignedOut());
+    }
   }
 
   Future<void> retry() => _refresh(ref.read(authRepositoryProvider).hasSession);

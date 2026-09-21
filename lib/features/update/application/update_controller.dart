@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
+import '../../auth/application/session_controller.dart';
+import '../../auth/domain/session_state.dart';
 import '../domain/update_repository.dart';
 import '../domain/update_state.dart';
 
@@ -17,15 +19,20 @@ final updateControllerProvider =
 class UpdateController extends AsyncNotifier<UpdateState> {
   @override
   Future<UpdateState> build() async {
+    // The policy row is readable only by an active member, so re-evaluate
+    // whenever the session state changes.
+    final session = await ref.watch(sessionControllerProvider.future);
     final repo = ref.read(updateRepositoryProvider);
     final installed = await repo.installedBuild();
-    // A failed policy fetch never blocks anyone: treat the minimum as 0.
-    final min = switch (await repo.minSupportedBuild()) {
-      Ok(:final value) => value,
-      Err() => 0,
-    };
-    if (installed < min) {
-      return UpdateRequired(installed: installed, minimum: min);
+    if (session is Allowed) {
+      // A failed policy fetch never blocks anyone: treat the minimum as 0.
+      final min = switch (await repo.minSupportedBuild()) {
+        Ok(:final value) => value,
+        Err() => 0,
+      };
+      if (installed < min) {
+        return UpdateRequired(installed: installed, minimum: min);
+      }
     }
     return switch (await repo.availablePlayBuild()) {
       Ok(value: final v?) when v > installed => UpdateAvailableFlexible(v),
@@ -34,16 +41,39 @@ class UpdateController extends AsyncNotifier<UpdateState> {
   }
 
   Future<void> download() async {
+    final current = state.value;
     state = const AsyncData(UpdateDownloading());
-    await ref.read(updateRepositoryProvider).startFlexibleUpdate();
-    state = const AsyncData(UpdateReadyToInstall());
+    try {
+      await ref.read(updateRepositoryProvider).startFlexibleUpdate();
+      if (!ref.mounted) return;
+      state = const AsyncData(UpdateReadyToInstall());
+    } catch (_) {
+      // Declined or unavailable: return to the offer, never stay "downloading".
+      if (!ref.mounted) return;
+      state = AsyncData(
+        current is UpdateAvailableFlexible ? current : const UpdateIdle(),
+      );
+    }
   }
 
-  Future<void> install() =>
-      ref.read(updateRepositoryProvider).completeFlexibleUpdate();
+  Future<void> install() async {
+    try {
+      await ref.read(updateRepositoryProvider).completeFlexibleUpdate();
+    } catch (_) {
+      if (!ref.mounted) return;
+      state = const AsyncData(UpdateIdle());
+    }
+  }
 
   void dismiss() => state = const AsyncData(UpdateIdle());
 
-  Future<void> updateNow() =>
-      ref.read(updateRepositoryProvider).startImmediateUpdate();
+  Future<void> updateNow() async {
+    final repo = ref.read(updateRepositoryProvider);
+    try {
+      await repo.startImmediateUpdate();
+    } catch (_) {
+      // Play cannot run an immediate update here: send the user to the listing.
+      await repo.openStoreListing();
+    }
+  }
 }

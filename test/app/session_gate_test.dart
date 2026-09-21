@@ -81,4 +81,23 @@ void main() {
     expect(find.textContaining('boom'), findsOneWidget);
     expect(find.text('Try again'), findsOneWidget);
   });
+
+  testWidgets('incomplete config shows setup required without any backend', (
+    t,
+  ) async {
+    await t.pumpWidget(const ProviderScope(overrides: [], child: SisApp()));
+    await t.pumpAndSettle();
+    expect(find.text('Setup required'), findsOneWidget);
+  });
+
+  testWidgets('finished download shows restart', (t) async {
+    await t.pumpWidget(
+      app(FakeAuth(session: true), FakeUpdate(play: const Ok(107))),
+    );
+    await t.pumpAndSettle();
+    await t.tap(find.text('Update'));
+    await t.pumpAndSettle();
+    expect(find.text('Ready to install'), findsOneWidget);
+    expect(find.text('Restart'), findsOneWidget);
+  });
 }

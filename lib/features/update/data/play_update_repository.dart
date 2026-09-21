@@ -1,6 +1,7 @@
 import 'package:in_app_update/in_app_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/failure.dart';
 import '../domain/update_repository.dart';
@@ -11,9 +12,12 @@ final class PlayUpdateRepository implements UpdateRepository {
 
   final SupabaseClient _client;
 
+  static const _package = 'com.esd.sis';
+
   @override
   Future<int> installedBuild() async =>
-      int.tryParse((await PackageInfo.fromPlatform()).buildNumber) ?? 0;
+      // An unparsable build number must never block anyone.
+      int.tryParse((await PackageInfo.fromPlatform()).buildNumber) ?? (1 << 30);
 
   @override
   Future<Result<int>> minSupportedBuild() async {
@@ -53,4 +57,19 @@ final class PlayUpdateRepository implements UpdateRepository {
 
   @override
   Future<void> startImmediateUpdate() => InAppUpdate.performImmediateUpdate();
+
+  @override
+  Future<void> openStoreListing() async {
+    const web = 'https://play.google.com/store/apps/details?id=$_package';
+    try {
+      final opened = await launchUrl(
+        Uri.parse('market://details?id=$_package'),
+        mode: LaunchMode.externalApplication,
+      );
+      if (opened) return;
+    } catch (_) {
+      // No Play app to handle market://; fall through to the web listing.
+    }
+    await launchUrl(Uri.parse(web), mode: LaunchMode.externalApplication);
+  }
 }

@@ -1,5 +1,5 @@
 begin;
-select plan(17);
+select plan(21);
 
 -- fixtures ---------------------------------------------------------------
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
@@ -42,6 +42,8 @@ select is((select min_supported_build from public.app_config), 1, 'app_config re
 select throws_ok($$insert into public.app_config(id, min_supported_build) values (2, 1)$$, '42501', null, 'active user cannot write app_config');
 select throws_ok($$truncate public.profiles$$, '42501', null, 'active user cannot truncate profiles');
 select throws_ok($$select * from app_private.allowlist$$, '42501', null, 'app_private is unreachable');
+select throws_ok($$select * from app_private.active_sessions$$, '42501', null, 'active_sessions is unreachable');
+select throws_ok($$truncate public.app_config$$, '42501', null, 'active user cannot truncate app_config');
 reset role;
 
 -- 4 sessions that are not the caller's own never activate
@@ -59,6 +61,13 @@ reset role;
 select test_as('00000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111');
 select is((select count(*) from public.profiles), 0::bigint, 'replaced device loses access');
 select is(public.activate_session(), false, 'older session cannot re-claim even with a fresh token');
+reset role;
+
+-- 5b sign-out / admin revocation: the active session disappears from auth.sessions
+delete from auth.sessions where id = '22222222-2222-2222-2222-222222222222';
+select test_as('00000000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222');
+select is((select count(*) from public.profiles), 0::bigint, 'revoked session loses access immediately');
+select is(public.activate_session(), false, 'revoked session cannot re-activate');
 reset role;
 
 -- 6 the signup trigger never aborts a signup

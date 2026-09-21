@@ -65,9 +65,13 @@ language sql stable security definer set search_path = '' as $$
 $$;
 create or replace function app_private.has_app_access() returns boolean
 language sql stable security definer set search_path = '' as $$
+  -- The session must still exist in auth.sessions: sign-out or admin
+  -- revocation takes effect immediately, not at access-token expiry.
   select app_private.is_allowed_user()
-     and exists (select 1 from app_private.active_sessions s
-                 where s.user_id = auth.uid() and s.session_id = app_private.jwt_session_id())
+     and exists (select 1
+                   from app_private.active_sessions s
+                   join auth.sessions x on x.id = s.session_id and x.user_id = s.user_id
+                  where s.user_id = auth.uid() and s.session_id = app_private.jwt_session_id())
 $$;
 revoke all on function app_private.jwt_session_id() from public, anon, authenticated;
 revoke all on function app_private.is_allowed_user() from public, anon;
@@ -105,6 +109,7 @@ language sql immutable set search_path = '' as $$
     nullif(split_part(coalesce(u.email, ''), '@', 1), ''),
     'User'), 80)
 $$;
+revoke all on function app_private.display_name_for(auth.users) from public, anon, authenticated;
 create or replace function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin

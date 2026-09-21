@@ -141,12 +141,19 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   }
 
   /// Sends [body] to the open conversation. The [Err] reason is shown by the
-  /// composer; the message itself arrives through Realtime.
-  Future<Result<void>> send(String body) async {
+  /// composer.
+  ///
+  /// The stored message is appended as soon as the server returns it, rather
+  /// than waiting for the Realtime echo: a sender must see their own message
+  /// even when the subscription is slow or gone. The echo is then discarded
+  /// by the id check in [_append].
+  Future<Result<Message>> send(String body) async {
     final conversationId = ref.read(openConversationProvider);
     if (conversationId == null) return const Err(DeniedFailure());
-    return ref
+    final result = await ref
         .read(chatRepositoryProvider)
         .send(conversationId: conversationId, body: body);
+    if (result case Ok(:final value)) _append(value);
+    return result;
   }
 }

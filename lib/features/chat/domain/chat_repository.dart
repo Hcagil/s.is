@@ -20,9 +20,13 @@ abstract interface class ChatRepository {
   /// Messages in [conversationId], oldest first.
   Future<Result<List<Message>>> messages(String conversationId);
 
-  /// Sends [body] to [conversationId]. The sender is the signed-in member;
-  /// the server assigns the id and the timestamp.
-  Future<Result<void>> send({
+  /// Sends [body] to [conversationId] and returns the stored message.
+  ///
+  /// The sender is the signed-in member; the server assigns the id and the
+  /// timestamp, and returns the row it wrote. Returning it matters: a sender
+  /// must never depend on the Realtime echo to see their own message, or a
+  /// slow or dropped subscription means they send into silence.
+  Future<Result<Message>> send({
     required String conversationId,
     required String body,
   });

@@ -89,7 +89,7 @@ class FakeChat implements ChatRepository {
   List<Message> initial;
   Result<List<Conversation>>? conversationsResult;
   Result<List<Message>>? messagesResult;
-  Result<void> sendResult = const Ok(null);
+  Result<Message>? sendResult;
   Result<String> startResult = const Ok('c-new');
 
   /// When set, messages() waits on it, so a test can deliver a Realtime
@@ -122,12 +122,21 @@ class FakeChat implements ChatRepository {
   }
 
   @override
-  Future<Result<void>> send({
+  Future<Result<Message>> send({
     required String conversationId,
     required String body,
   }) async {
     sent.add(body);
-    return sendResult;
+    return sendResult ??
+        Ok(
+          Message(
+            id: 'sent-${sent.length}',
+            conversationId: conversationId,
+            senderId: 'me',
+            body: body.trim(),
+            createdAt: DateTime.now(),
+          ),
+        );
   }
 
   @override
@@ -167,7 +176,7 @@ class ChatFake implements ChatRepository {
   Result<List<Member>> membersResult = const Ok(<Member>[]);
   Result<List<Conversation>> conversationsResult = const Ok(<Conversation>[]);
   Result<List<Message>> messagesResult = const Ok(<Message>[]);
-  Result<void> sendResult = const Ok(null);
+  Result<Message>? sendResult;
   Result<String> startResult = const Ok('c-new');
 
   /// Call names in the order they were made, e.g. `incoming:c1`.
@@ -225,13 +234,22 @@ class ChatFake implements ChatRepository {
   }
 
   @override
-  Future<Result<void>> send({
+  Future<Result<Message>> send({
     required String conversationId,
     required String body,
   }) async {
     await _tick('send:$conversationId');
     sent.add((conversationId: conversationId, body: body));
-    return sendResult;
+    return sendResult ??
+        Ok(
+          Message(
+            id: 'sent-${sent.length}',
+            conversationId: conversationId,
+            senderId: 'me',
+            body: body.trim(),
+            createdAt: DateTime.now(),
+          ),
+        );
   }
 
   /// When set, incoming() reports a connection that cannot be established.

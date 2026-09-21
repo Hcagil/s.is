@@ -142,7 +142,7 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   @override
-  Future<Result<void>> send({
+  Future<Result<Message>> send({
     required String conversationId,
     required String body,
   }) async {
@@ -154,13 +154,18 @@ final class SupabaseChatRepository implements ChatRepository {
     }
     try {
       // id and created_at are withheld by the column-level grant; the server
-      // assigns both.
-      await _client.from('messages').insert({
-        'conversation_id': conversationId,
-        'sender_id': me,
-        'body': trimmed,
-      });
-      return const Ok(null);
+      // assigns both, and returns the row so the caller need not wait for the
+      // Realtime echo to display it.
+      final row = await _client
+          .from('messages')
+          .insert({
+            'conversation_id': conversationId,
+            'sender_id': me,
+            'body': trimmed,
+          })
+          .select('id, conversation_id, sender_id, body, created_at')
+          .single();
+      return Ok(_toMessage(row));
     } catch (e) {
       return Err(_asFailure(e));
     }

@@ -76,8 +76,16 @@ select throws_ok(
 select throws_ok($$update public.messages set body = 'edited'$$, '42501', null, 'messages cannot be edited');
 select throws_ok($$delete from public.messages$$, '42501', null, 'messages cannot be deleted');
 reset role;
--- captured with RLS bypassed, so the non-member below attacks a real id
-create temp table _conv as select id from public.conversations;
+-- Captured with RLS bypassed, so the non-member below attacks a real id.
+-- Scoped to ann's conversation on purpose: this database is not necessarily
+-- empty (the integration tests leave their own rows behind), and an unscoped
+-- select here returns more than one row.
+create temp table _conv as
+  select c.id from public.conversations c
+   where exists (
+     select 1 from public.conversation_members m
+      where m.conversation_id = c.id
+        and m.user_id = '00000000-0000-0000-0000-0000000000a1');
 grant select on _conv to authenticated;
 
 -- 3 bob, the other member, sees the conversation and the message ------------

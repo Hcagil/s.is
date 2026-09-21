@@ -91,11 +91,14 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     if (conversationId == null) return const [];
 
     final repo = ref.read(chatRepositoryProvider);
-    // Subscribing before the read means a message sent between the two is
-    // buffered rather than lost; ids reconcile it with what the read returns.
+    // Awaited first, and it resolves only once the server has confirmed the
+    // subscription: Realtime replays nothing, so a message sent before that
+    // moment would be missed here AND be too late for the read below.
+    // Anything arriving during the read is buffered and reconciled by id.
+    final stream = await repo.incoming(conversationId);
     final buffered = <Message>[];
     var loaded = false;
-    final sub = repo.incoming(conversationId).listen((message) {
+    final sub = stream.listen((message) {
       if (!loaded) {
         buffered.add(message);
         return;

@@ -144,3 +144,29 @@ than shipping a spinner.
 
 This did not affect v0.1: `SessionController.build` maps every failure to a
 `SessionState` and never throws, so no provider there was ever retried.
+
+## 2026-09-22 — Repositories are covered by integration tests, not mocks
+
+**`data/` repositories are tested against a real local Supabase stack
+(`test/integration/`, tagged `integration` and skipped by the ordinary test
+run), not against a mocked SDK.** Reason: a repository is almost entirely
+query shaping — column names, RPC parameter names, row casts. A mock asserts
+that the code calls the SDK the way it was written, which passes just as
+happily when the query is wrong. The failure it is meant to catch would
+otherwise appear only on a device.
+
+The test signs in with a password, which exists only locally — the hosted
+project has Google as its single provider — against allowlist rows seeded by
+`supabase/seed.sql`, which runs on `db reset` and never on `db push`.
+
+It earned its place immediately: it caught that Realtime delivers nothing that
+happened before a subscription is established, so the original `incoming()`,
+which returned as soon as `subscribe()` was called, had a window where a
+message was missed by both the subscription and the initial read. `incoming()`
+now returns a future that completes only once the server confirms the join,
+and the controller awaits it before reading. No unit test could have found
+that, because the fake was always ready.
+
+The `database` CI filter was widened to `lib/features/**/data/**` and
+`test/integration/**` so a Dart-only change to a repository still runs the job
+that owns these tests.

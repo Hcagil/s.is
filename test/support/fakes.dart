@@ -124,7 +124,7 @@ class FakeChat implements ChatRepository {
   }
 
   @override
-  Stream<Message> incoming(String conversationId) {
+  Future<Stream<Message>> incoming(String conversationId) async {
     subscriptions++;
     return _incoming.stream.transform(
       StreamTransformer<Message, Message>.fromHandlers(

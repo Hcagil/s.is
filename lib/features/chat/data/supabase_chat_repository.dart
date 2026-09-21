@@ -144,32 +144,39 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   @override
-  Stream<Message> incoming(String conversationId) {
+  Future<Stream<Message>> incoming(String conversationId) async {
     final channel = _client.channel('messages:$conversationId');
-    late final StreamController<Message> controller;
-    controller = StreamController<Message>(
-      onListen: () {
-        channel
-            .onPostgresChanges(
-              event: PostgresChangeEvent.insert,
-              schema: 'public',
-              table: 'messages',
-              filter: PostgresChangeFilter(
-                type: PostgresChangeFilterType.eq,
-                column: 'conversation_id',
-                value: conversationId,
-              ),
-              callback: (payload) {
-                if (controller.isClosed) return;
-                controller.add(_toMessage(payload.newRecord));
-              },
-            )
-            .subscribe();
-      },
-      onCancel: () async {
-        await _client.removeChannel(channel);
-      },
-    );
+    final controller = StreamController<Message>();
+    final subscribed = Completer<void>();
+
+    channel
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'conversation_id',
+            value: conversationId,
+          ),
+          callback: (payload) {
+            if (controller.isClosed) return;
+            controller.add(_toMessage(payload.newRecord));
+          },
+        )
+        .subscribe((status, error) {
+          if (subscribed.isCompleted) return;
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            subscribed.complete();
+          } else if (error != null) {
+            subscribed.completeError(error);
+          }
+        });
+    controller.onCancel = () async => _client.removeChannel(channel);
+
+    // A dead subscription must fail loudly rather than hang the screen.
+    await subscribed.future.timeout(const Duration(seconds: 15));
+    // The controller buffers anything that lands before the caller listens.
     return controller.stream;
   }
 

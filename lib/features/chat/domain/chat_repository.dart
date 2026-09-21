@@ -23,9 +23,15 @@ abstract interface class ChatRepository {
 
   /// Messages arriving in [conversationId] after subscription.
   ///
-  /// Realtime delivery is a convenience, not an authority: the server re-checks
-  /// the read policy for every subscriber.
-  Stream<Message> incoming(String conversationId);
+  /// The future completes only once the server has confirmed the subscription.
+  /// Realtime delivers nothing that happened before that moment, so a caller
+  /// must await this BEFORE its initial [messages] read — otherwise a message
+  /// sent in between is missed by the subscription and already too late for
+  /// the read.
+  ///
+  /// Realtime delivery is a convenience, not an authority: the server
+  /// re-checks the read policy for every subscriber.
+  Future<Stream<Message>> incoming(String conversationId);
 
   /// The id of the 1:1 conversation with [otherUserId], creating it when it does
   /// not exist yet. Calling twice returns the same conversation.

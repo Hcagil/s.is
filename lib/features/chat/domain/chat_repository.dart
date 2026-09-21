@@ -1,4 +1,5 @@
 import '../../../core/failure.dart';
+import '../../auth/domain/member.dart';
 import 'conversation.dart';
 import 'message.dart';
 
@@ -8,6 +9,11 @@ import 'message.dart';
 /// only while it holds the active session and is a member. A repository never
 /// throws — a refusal arrives as [Err] with a typed [Failure].
 abstract interface class ChatRepository {
+  /// Everyone else who can sign in, so a first conversation can be started.
+  /// Without this there is no way to reach [startDirectConversation], which
+  /// needs another member's id.
+  Future<Result<List<Member>>> members();
+
   /// Conversations the signed-in member belongs to, most recent first.
   Future<Result<List<Conversation>>> conversations();
 

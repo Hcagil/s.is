@@ -34,6 +34,29 @@ final class SupabaseChatRepository implements ChatRepository {
   };
 
   @override
+  Future<Result<List<Member>>> members() async {
+    final me = _uid;
+    if (me == null) return const Err(DeniedFailure());
+    try {
+      // profiles is readable by any active member; RLS keeps it to the group.
+      final rows = await _client
+          .from('profiles')
+          .select('user_id, display_name')
+          .neq('user_id', me)
+          .order('display_name');
+      return Ok([
+        for (final row in rows)
+          Member(
+            userId: row['user_id'] as String,
+            displayName: row['display_name'] as String,
+          ),
+      ]);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
   Future<Result<List<Conversation>>> conversations() async {
     final me = _uid;
     if (me == null) return const Err(DeniedFailure());

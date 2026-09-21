@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
+import '../../auth/domain/member.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
 import '../domain/message.dart';
@@ -71,6 +72,14 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     return result;
   }
 }
+
+/// Everyone else who can sign in — the picker for starting a first chat.
+final membersProvider = FutureProvider<List<Member>>((ref) async {
+  return switch (await ref.read(chatRepositoryProvider).members()) {
+    Ok(:final value) => value,
+    Err(:final failure) => throw failure,
+  };
+}, retry: _never);
 
 final messagesProvider =
     AsyncNotifierProvider<MessagesController, List<Message>>(

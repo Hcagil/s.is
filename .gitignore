@@ -19,3 +19,6 @@ __pycache__/
 .private/
 *.local.md
 .ci-cache/
+
+# Local maintainer notes and working state; never tracked.
+.orchestra/

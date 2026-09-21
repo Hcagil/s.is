@@ -4,6 +4,9 @@ import 'dart:async';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/auth_repository.dart';
 import 'package:sis/features/auth/domain/member.dart';
+import 'package:sis/features/chat/domain/chat_repository.dart';
+import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/update/domain/update_repository.dart';
 
 class FakeAuth implements AuthRepository {
@@ -77,4 +80,64 @@ class FakeUpdate implements UpdateRepository {
 
   @override
   Future<void> openStoreListing() async => calls.add('store');
+}
+
+class FakeChat implements ChatRepository {
+  FakeChat({this.list = const [], this.initial = const []});
+
+  List<Conversation> list;
+  List<Message> initial;
+  Result<List<Conversation>>? conversationsResult;
+  Result<List<Message>>? messagesResult;
+  Result<void> sendResult = const Ok(null);
+  Result<String> startResult = const Ok('c-new');
+
+  /// When set, messages() waits on it, so a test can deliver a Realtime
+  /// message while the initial read is still in flight.
+  Completer<void>? gate;
+
+  final sent = <String>[];
+  final started = <String>[];
+  int subscriptions = 0;
+  final _incoming = StreamController<Message>.broadcast();
+
+  /// Pushes a message as if Realtime delivered it.
+  void deliver(Message m) => _incoming.add(m);
+
+  @override
+  Future<Result<List<Conversation>>> conversations() async =>
+      conversationsResult ?? Ok(list);
+
+  @override
+  Future<Result<List<Message>>> messages(String conversationId) async {
+    if (gate != null) await gate!.future;
+    return messagesResult ?? Ok(initial);
+  }
+
+  @override
+  Future<Result<void>> send({
+    required String conversationId,
+    required String body,
+  }) async {
+    sent.add(body);
+    return sendResult;
+  }
+
+  @override
+  Stream<Message> incoming(String conversationId) {
+    subscriptions++;
+    return _incoming.stream.transform(
+      StreamTransformer<Message, Message>.fromHandlers(
+        handleData: (m, sink) {
+          if (m.conversationId == conversationId) sink.add(m);
+        },
+      ),
+    );
+  }
+
+  @override
+  Future<Result<String>> startDirectConversation(String otherUserId) async {
+    started.add(otherUserId);
+    return startResult;
+  }
 }

@@ -8,7 +8,15 @@ Private chat by ESD. Android now, iOS next.
 
 ## Develop
 
-Everything runs in Docker; no SDK is installed on the workstation.
+**Every development command runs in a container. Nothing is installed on
+the workstation** — not Flutter, Dart, Java, Gradle, the Android SDK, ADB or
+the Supabase CLI. The images in `docker/` are the whole toolchain, and CI
+builds from the same images, so a check that passes here passes there.
+
+If something appears to need a tool that is not in an image, add it to the
+image and rebuild — never install it on the host. A host installation drifts
+from CI, is invisible to every other machine, and turns a reproducible build
+into "works on mine".
 
 ```bash
 export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)

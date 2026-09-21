@@ -48,7 +48,7 @@ void main() {
   testWidgets('allowed shows greeting', (t) async {
     await t.pumpWidget(app(FakeAuth(session: true), FakeUpdate()));
     await t.pumpAndSettle();
-    expect(find.text('Welcome, Maya'), findsOneWidget);
+    expect(find.text('Welcome back, Maya'), findsOneWidget);
   });
   testWidgets('update required hides the app', (t) async {
     await t.pumpWidget(
@@ -56,7 +56,7 @@ void main() {
     );
     await t.pumpAndSettle();
     expect(find.text('Update required'), findsOneWidget);
-    expect(find.text('Welcome, Maya'), findsNothing);
+    expect(find.text('Welcome back, Maya'), findsNothing);
   });
   testWidgets('flexible update shows a dismissible banner', (t) async {
     await t.pumpWidget(

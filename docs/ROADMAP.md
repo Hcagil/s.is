@@ -13,6 +13,6 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 
 | Version | Status |
 |---|---|
-| v0.1 | in development |
+| v0.1 | in delivery — code complete, awaiting first automated release |
 | v0.2 | planned |
 | v0.3 | planned |

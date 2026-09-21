@@ -1,0 +1,61 @@
+name: Release
+on:
+  push:
+    branches: [main]
+concurrency: { group: release, cancel-in-progress: false }
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: play-internal
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compute version
+        id: v
+        run: |
+          echo "code=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_OUTPUT"
+          echo "name=$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)" >> "$GITHUB_OUTPUT"
+      - name: Build toolchain image
+        run: LOCAL_UID=1001 LOCAL_GID=1001 docker compose build flutter
+      - name: Restore signing key
+        run: |
+          mkdir -p .private && echo "${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}" | base64 -d > .private/upload-keystore.jks
+      - name: Build signed AAB
+        env:
+          ANDROID_UPLOAD_KEYSTORE: /workspace/.private/upload-keystore.jks
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+        run: |
+          docker compose run --rm -T \
+            -e ANDROID_UPLOAD_KEYSTORE -e ANDROID_UPLOAD_KEY_ALIAS -e ANDROID_UPLOAD_STORE_PASSWORD -e ANDROID_UPLOAD_KEY_PASSWORD \
+            flutter flutter build appbundle --release \
+              --build-number=${{ steps.v.outputs.code }} --build-name=${{ steps.v.outputs.name }} \
+              --dart-define=SUPABASE_URL=${{ vars.SUPABASE_URL }} \
+              --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ vars.SUPABASE_PUBLISHABLE_KEY }} \
+              --dart-define=GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }}
+      - name: Apply database migrations (schema goes forward first)
+        uses: supabase/setup-cli@v3
+        with: { version: 2.117.0 }
+      - run: supabase link --project-ref "$SUPABASE_PROJECT_REF" && supabase db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      - name: Upload to Play internal track
+        uses: r0adkll/upload-google-play@v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.esd.sis
+          releaseFiles: build/app/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
+      - name: Tag
+        run: |
+          git tag "v${{ steps.v.outputs.name }}+${{ steps.v.outputs.code }}" && git push origin --tags
+      - name: Remove signing key
+        if: always()
+        run: rm -f .private/upload-keystore.jks

@@ -64,6 +64,9 @@ jobs:
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml build
       - name: Resolve dependencies
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter pub get
+      - name: Layer rules
+        run: tool/check_pattern.sh
+
       - name: Check formatting
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter dart format --output=none --set-exit-if-changed lib test
       - name: Analyze

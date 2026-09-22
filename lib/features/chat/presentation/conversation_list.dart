@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
+import '../../auth/application/session_controller.dart';
+import '../../auth/domain/session_state.dart';
+import '../domain/message.dart';
 import '../application/chat_controllers.dart';
 import '../domain/conversation.dart';
 import 'message_screen.dart';
@@ -241,6 +244,12 @@ class _ConversationTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Whose messages are "mine" comes from the session, as on the message
+    // screen.
+    final me = switch (ref.watch(sessionControllerProvider).value) {
+      Allowed(:final member) => member.userId,
+      _ => null,
+    };
     return ListTile(
       key: ValueKey('conversation-${conversation.id}'),
       leading: CircleAvatar(
@@ -252,9 +261,20 @@ class _ConversationTile extends ConsumerWidget {
       subtitle: conversation.lastMessage == null
           ? const Text('No messages yet')
           : Text(
-              conversation.lastMessage!,
+              conversation.lastSenderId != null &&
+                      conversation.lastSenderId == me
+                  ? 'You: ${conversation.lastMessage}'
+                  : conversation.lastMessage!,
+              key: ValueKey('preview-${conversation.id}'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+            ),
+      trailing: conversation.lastMessageAt == null
+          ? null
+          : Text(
+              previewTime(conversation.lastMessageAt!, DateTime.now()),
+              key: ValueKey('preview-time-${conversation.id}'),
+              style: Theme.of(context).textTheme.bodySmall,
             ),
       onTap: () => openConversation(
         context,

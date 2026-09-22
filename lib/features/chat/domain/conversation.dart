@@ -1,4 +1,5 @@
 import '../../auth/domain/member.dart';
+import 'message.dart';
 
 /// A conversation as the conversation list needs it.
 ///
@@ -13,6 +14,7 @@ final class Conversation {
     this.other,
     this.lastMessage,
     this.lastMessageAt,
+    this.lastSenderId,
   });
 
   final String id;
@@ -26,6 +28,19 @@ final class Conversation {
   /// Preview of the most recent message, or null when nothing has been sent.
   final String? lastMessage;
   final DateTime? lastMessageAt;
+
+  /// Who wrote [lastMessage], so the list can say "You:".
+  final String? lastSenderId;
+
+  /// The same conversation with a newer message as its preview.
+  Conversation withPreview(Message message) => Conversation(
+    id: id,
+    title: title,
+    other: other,
+    lastMessage: previewText(message),
+    lastMessageAt: message.createdAt,
+    lastSenderId: message.senderId,
+  );
 
   bool get isGroup => title != null;
 

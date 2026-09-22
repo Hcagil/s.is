@@ -141,6 +141,11 @@ class FakeChat implements ChatRepository {
         );
   }
 
+  // Mechanical stub so the tree compiles; the test writer owns its shape.
+  @override
+  Future<Result<Stream<Message>>> incomingAll() async =>
+      Ok(const Stream<Message>.empty());
+
   @override
   Future<Result<Stream<Message>>> incoming(String conversationId) async {
     subscriptions++;
@@ -356,6 +361,11 @@ class ChatFake implements ChatRepository {
 
   /// When set, incoming() reports a connection that cannot be established.
   Result<Stream<Message>>? incomingResult;
+
+  // Mechanical stub so the tree compiles; the test writer owns its shape.
+  @override
+  Future<Result<Stream<Message>>> incomingAll() async =>
+      Ok(const Stream<Message>.empty());
 
   @override
   Future<Result<Stream<Message>>> incoming(String conversationId) async {

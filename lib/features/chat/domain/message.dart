@@ -14,6 +14,25 @@ bool isSendableBody(String body) {
   return trimmed.isNotEmpty && trimmed.length <= maxMessageLength;
 }
 
+/// The one-line preview of a message in the conversation list. An image sent
+/// without a caption has an empty body, which would read as "no messages".
+String previewText(Message message) => message.body.isNotEmpty
+    ? message.body
+    : (message.hasAttachment ? 'Photo' : '');
+
+/// The time shown next to a preview: the clock time today, the date before.
+String previewTime(DateTime at, DateTime now) {
+  String two(int v) => v.toString().padLeft(2, '0');
+  final local = at.toLocal();
+  final today = now.toLocal();
+  if (local.year == today.year &&
+      local.month == today.month &&
+      local.day == today.day) {
+    return '${two(local.hour)}:${two(local.minute)}';
+  }
+  return '${two(local.day)}.${two(local.month)}.${local.year % 100}';
+}
+
 /// One message in a conversation.
 final class Message {
   const Message({

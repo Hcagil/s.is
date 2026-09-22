@@ -50,8 +50,65 @@ final conversationListProvider =
 /// The conversation list. Failures surface as [AsyncError] carrying the
 /// [Failure], so the screen always has a reason to show.
 class ConversationListController extends AsyncNotifier<List<Conversation>> {
+  /// Kept current by a Realtime subscription to every conversation the member
+  /// belongs to. Subscribing happens BEFORE the first read and anything that
+  /// arrives in between is buffered, the same way the message screen does it,
+  /// so a message sent during the load is not lost.
+  ///
+  /// A subscription that cannot be established does not fail the list: the
+  /// list still loads, and returning from a conversation refreshes it.
   @override
-  Future<List<Conversation>> build() => _load();
+  Future<List<Conversation>> build() async {
+    final buffered = <Message>[];
+    var loaded = false;
+    final opened = await ref.read(chatRepositoryProvider).incomingAll();
+    if (opened case Ok(:final value)) {
+      final sub = value.listen((message) {
+        if (!loaded) {
+          buffered.add(message);
+        } else {
+          _apply(message);
+        }
+      });
+      ref.onDispose(sub.cancel);
+    }
+    var list = await _load();
+    loaded = true;
+    for (final message in buffered) {
+      list = _withMessage(list, message) ?? list;
+    }
+    return list;
+  }
+
+  /// Moves [message] into its conversation's preview. A message for a
+  /// conversation the list has never seen means someone started one with
+  /// this member, so the list is re-read rather than guessed at.
+  void _apply(Message message) {
+    final current = state.value;
+    if (current == null) return;
+    final next = _withMessage(current, message);
+    if (next == null) {
+      reloadQuietly();
+    } else {
+      state = AsyncData(next);
+    }
+  }
+
+  /// [list] with [message] as its conversation's preview, newest first; null
+  /// when the conversation is not in [list]. An older message never replaces
+  /// a newer preview, so a late or repeated delivery is harmless.
+  static List<Conversation>? _withMessage(
+    List<Conversation> list,
+    Message message,
+  ) {
+    final index = list.indexWhere((c) => c.id == message.conversationId);
+    if (index < 0) return null;
+    final existing = list[index];
+    final at = existing.lastMessageAt;
+    if (at != null && at.isAfter(message.createdAt)) return list;
+    final updated = [...list]..removeAt(index);
+    return [existing.withPreview(message), ...updated];
+  }
 
   Future<List<Conversation>> _load() async {
     return switch (await ref.read(chatRepositoryProvider).conversations()) {
@@ -63,6 +120,15 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   Future<void> refresh() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(_load);
+  }
+
+  /// Re-reads without showing a spinner: the list on screen stays while the
+  /// new one loads. A failed background re-read keeps the list as it was
+  /// rather than replacing something correct with an error the member did
+  /// not ask for; the explicit [refresh] still reports failures.
+  Future<void> reloadQuietly() async {
+    final next = await AsyncValue.guard(_load);
+    if (next is AsyncData<List<Conversation>> && ref.mounted) state = next;
   }
 
   /// Opens the 1:1 conversation with [otherUserId], creating it if needed.

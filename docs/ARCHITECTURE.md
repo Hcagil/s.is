@@ -14,7 +14,10 @@ lib/
   features/<feature>/
     domain/               immutable models + repository interfaces (pure Dart)
     data/                 repository implementations — the ONLY layer importing
-                          supabase_flutter, google_sign_in, in_app_update
+                          an SDK. tool/check_pattern.sh holds the list and is
+                          the authority: supabase_flutter, supabase,
+                          google_sign_in, in_app_update, package_info_plus,
+                          flutter_secure_storage, url_launcher, image_picker
     application/          Riverpod Notifiers: state machines; import domain only
     presentation/         widgets: watch state, call notifiers, render
 ```
@@ -31,10 +34,18 @@ inside `chat`.
 3. Only `data/` imports SDKs. Every repository implements a `domain/`
    interface so controllers are tested with fakes.
 4. Every Notifier has a unit test. Every RLS policy has a pgTAP test. Every
-   `data/` repository has an integration test that runs against a real local
-   Supabase — repositories are query shaping over an SDK, which a fake cannot
-   check: a wrong column name or a renamed RPC parameter passes every unit
-   test and fails on a device.
+   repository that **queries our own database** has an integration test against
+   a real local Supabase — such a repository is query shaping over an SDK, and
+   a fake cannot check it: a wrong column name or a renamed RPC parameter
+   passes every unit test and fails on a device.
+
+   Repositories that wrap a *third party* — Google sign-in, the Play update
+   API, the platform photo picker, the OS keystore — have no integration test,
+   because there is nothing to run them against locally. `SupabaseChatRepository`
+   is covered; `SupabaseAuthRepository`, `PlayUpdateRepository`,
+   `ImagePickerAttachmentSource` and `SecureSessionStorage` are not, and are
+   verified on a device instead. Keep those classes thin for that reason: logic
+   that could be tested belongs in `domain/`.
 
 `tool/check_pattern.sh` enforces rules 1–3 by import analysis; it runs in CI
 and blocks the merge on any violation. Violations are fixed by rewriting the
@@ -43,8 +54,9 @@ offending code to the pattern, not by exempting it.
 ### Errors
 
 Repositories return `Result<T>` with typed `Failure`s
-(`network`, `denied`, `provider(reason)`, `configuration`), never raw
-exceptions. Notifiers map failures to explicit screen states. Every failure
+(`network`, `denied`, `provider(reason)`), never raw exceptions. An
+incomplete runtime configuration is not one of them: it is a screen state
+(`SetupRequired`), reached before any repository exists. Notifiers map failures to explicit screen states. Every failure
 state shows its reason on screen; there are no silent returns to a previous
 screen.
 

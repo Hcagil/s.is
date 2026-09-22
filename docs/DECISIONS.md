@@ -106,7 +106,9 @@ guarantee than a permissive one nobody calls yet.
 
 **The insert grant on `messages` is column-level.** Only `conversation_id`,
 `sender_id` and `body` are grantable; `id` and `created_at` are left to their
-defaults. Reason: a table-wide grant lets a member choose `created_at`, and
+defaults. *(Amended 2026-09-22: `attachment_path` was added to the grantable
+columns when attachments shipped. `id` and `created_at` remain server-assigned,
+which is the point of the decision.)* Reason: a table-wide grant lets a member choose `created_at`, and
 because the history is ordered by it and messages can never be edited or
 deleted, a back-dated row would pin itself to the top of the other party's
 conversation permanently. RLS constrains which rows you may write, not which
@@ -197,3 +199,57 @@ screen did not gate anything. Android native sign-in requesting only
 accounts could authenticate while the OAuth consent screen was in Testing with
 zero test users. Do not rely on consent-screen publishing status as an access
 control.
+
+## 2026-09-22 — Groups, attachments and push: the decisions behind them
+
+Recorded after the fact; three merges shipped without an entry, which this
+corrects.
+
+**A conversation is a group when it has a title.** A 1:1 keeps its unique
+`direct_key` and a null title; a group has a null `direct_key`, which the
+unique index ignores. Reason: one table, one membership model, and the same
+people may hold several differently named groups without colliding with their
+1:1. Nothing about an existing 1:1 changed, so builds from v0.2 kept working.
+
+**`start_group_conversation` fails the whole call if any invitee is not a
+member.** Reason: the alternative is silently creating a smaller group than
+was asked for, which nobody notices until someone wonders why they never saw a
+conversation. A refusal is visible; a missing person is not.
+
+**Display names are editable through a column-level grant, not an RPC.** Only
+`display_name` is grantable and the policy pins the row to `auth.uid()`.
+Reason: the same shape as the `messages` insert grant — the column list, not
+the policy, is what stops another column being rewritten.
+
+**An attachment's storage key begins with its conversation id.** The storage
+policies read that first segment back and ask the same membership question the
+table policies ask. Reason: a separate storage rule would be a second access
+control system that drifts out of step with the first, and the drift is only
+discovered when they disagree.
+
+**The upload happens before the message insert.** Reason: the pair cannot be
+atomic. Failing this way leaves an orphaned object that nothing references and
+nobody sees; the other order leaves a message pointing at an object that was
+never stored, which is visible and broken.
+
+**`messages_body_check` now requires text OR an attachment.** Reason: an image
+needs no caption. A wholly empty message is still refused.
+
+**One push token per member, replaced on registration.** Reason: the
+single-active-device rule, extended to notifications — a replaced phone must
+stop being notified at the moment it stops being able to read what it would be
+notified about. Registration also drops the same token held by anyone else,
+because a token identifies a handset rather than a person.
+
+**`forget_device_token` does not require `has_app_access()`.** Reason: a member
+whose device was just replaced has already lost access, and must still be able
+to silence that device. Gating it would strand notifications on a phone that
+can no longer open them.
+
+**Anything that decides access must re-check `auth.sessions`.**
+`app_private.active_sessions` cascades from `auth.users`, not from
+`auth.sessions`, so a row there outlives the session it names. The push target
+list trusted it alone and would have handed a revoked phone the message body
+for a conversation it can no longer read. `has_app_access()` had this right
+from v0.1; the defect was a new path not reusing it. New code paths re-derive
+the gate, never approximate it.

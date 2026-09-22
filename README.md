@@ -26,8 +26,22 @@ docker compose run --rm flutter dart format --output=none --set-exit-if-changed 
 docker compose run --rm flutter flutter analyze
 docker compose run --rm flutter flutter test
 tool/check_pattern.sh
-docker compose run --rm supabase supabase db start
-docker compose run --rm supabase supabase test db
+docker compose run --rm flutter flutter build apk --debug
+docker compose run --rm supabase start
+docker compose run --rm supabase test db
+docker compose run --rm supabase db lint --level error
+```
+
+The image's entrypoint is already `supabase`, so the command is
+`run --rm supabase start`, not `run --rm supabase supabase start`.
+
+`start`, not `db start`: the integration tests need the API, auth and Realtime
+services, not only Postgres. They are skipped by the ordinary `flutter test`
+and run explicitly, after a probe that waits for Realtime to actually deliver:
+
+```bash
+docker compose run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart
+docker compose run --rm flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration
 ```
 
 Run on a device with the three public compile-time defines:

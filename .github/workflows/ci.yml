@@ -27,9 +27,24 @@ jobs:
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         with:
           filters: |
+            # Positive patterns only. dorny/paths-filter ORs its rules, so a
+            # leading '**' matches every file INCLUDING .md and a later
+            # '!**/*.md' can never subtract from it -- the old filter was
+            # always true, which built an APK for every docs-only PR and made
+            # the Documentation check unreachable.
             app:
-              - '**'
-              - '!**/*.md'
+              - 'lib/**'
+              - 'test/**'
+              - 'android/**'
+              - 'tool/**'
+              - 'docker/**'
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - 'analysis_options.yaml'
+              - 'dart_test.yaml'
+              - 'compose.yaml'
+              - '.github/workflows/**'
+              - '.github/compose.ci.yaml'
             database:
               - 'compose.yaml'
               - 'docker/Supabase.Dockerfile'

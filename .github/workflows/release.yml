@@ -3,7 +3,9 @@ on:
   push:
     branches: [main]
     # Changes that cannot affect the artefact or the database do not publish a build.
-    paths-ignore: ['docs/**', '**/*.md', '.gitignore', '.gitattributes', '.github/ISSUE_TEMPLATE/**']
+    # .github/** is ignored too: editing a workflow cannot change the artefact
+    # or the database, and publishing for it burns a versionCode.
+    paths-ignore: ['docs/**', '**/*.md', '.gitignore', '.gitattributes', '.github/**']
 concurrency: { group: release, cancel-in-progress: false }
 permissions:
   contents: write

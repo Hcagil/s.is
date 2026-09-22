@@ -17,8 +17,8 @@ rules the code is held to. Decisions and their dates are in
   minimum supported build, which is raised only by an explicit, recorded
   decision.
 
-Out of scope until explicitly scheduled: push notifications, media, end-to-end
-encryption, web, analytics, monetisation, public sign-up.
+Out of scope until explicitly scheduled: iOS, end-to-end encryption, web,
+analytics, monetisation, public sign-up.
 
 ## 2. System shape
 
@@ -53,7 +53,7 @@ lib/
   features/<feature>/
     domain/               immutable models + repository interfaces (pure Dart)
     data/                 repository implementations — the ONLY layer importing
-                          supabase_flutter, google_sign_in, in_app_update
+                          an SDK; tool/check_pattern.sh holds the list
     application/          Riverpod Notifiers: state machines; import domain only
     presentation/         widgets: watch state, call notifiers, render
 ```
@@ -78,8 +78,9 @@ offending code to the pattern, not by exempting it.
 ### Errors
 
 Repositories return `Result<T>` with typed `Failure`s
-(`network`, `denied`, `provider(reason)`, `configuration`), never raw
-exceptions. Notifiers map failures to explicit screen states. Every failure
+(`network`, `denied`, `provider(reason)`), never raw exceptions. An
+incomplete runtime configuration is not one of them: it is a screen state
+(`SetupRequired`), reached before any repository exists. Notifiers map failures to explicit screen states. Every failure
 state shows its reason on screen; there are no silent returns to a previous
 screen.
 
@@ -108,7 +109,14 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     active members, never writable from the client. The latest
     available build is not stored: Google Play reports it to the app.
   - v0.2: `conversations`, `conversation_members`, `messages`.
-  - v0.3: group fields on `conversations`.
+  - v0.3: `conversations.title` — a conversation is a group when it has one;
+    a 1:1 keeps its unique `direct_key` and a null title.
+  - later: `messages.attachment_path` and a private `attachments` storage
+    bucket keyed `<conversation_id>/<file>`, so the storage policy asks the
+    same membership question the table policies ask.
+- `app_private` also holds `device_tokens` for push — private, one row per
+  member, replaced rather than accumulated so a device stops being notified
+  when it stops being able to read.
 
 ### Helpers and the access gate
 
@@ -232,8 +240,8 @@ Android pipeline blocks it.
 
 ```
 README.md          docs/DESIGN.md (this)   docs/DECISIONS.md   docs/DELIVERY.md
-docs/SECURITY.md   docs/ROADMAP.md         docs/lessons/       tool/check_pattern.sh
-lib/  test/  supabase/{migrations,tests}/  android/  ios/  docker/  .github/workflows/
+docs/SECURITY.md   docs/ROADMAP.md         tool/check_pattern.sh
+lib/  test/  supabase/{migrations,tests,functions}/  android/  docker/  .github/workflows/
 ```
 
 Development tooling runs in Docker (`docker/`, `compose.yaml`); no SDKs are

@@ -26,13 +26,6 @@ final class ProviderFailure extends Failure {
   final bool userCanceled;
 }
 
-final class ConfigurationFailure extends Failure {
-  const ConfigurationFailure(this.message);
-
-  @override
-  final String message;
-}
-
 sealed class Result<T> {
   const Result();
 }

@@ -253,3 +253,34 @@ list trusted it alone and would have handed a revoked phone the message body
 for a conversation it can no longer read. `has_app_access()` had this right
 from v0.1; the defect was a new path not reusing it. New code paths re-derive
 the gate, never approximate it.
+
+## 2026-09-23 — Member tags and a first-run name screen
+
+**Every member has a unique tag, generated at sign-up and editable.** Display
+names are not unique, so two members called the same thing could not be told
+apart in a picker. The tag is derived from the name (lower-case, Turkish and
+Latin diacritics folded, `Hayrullah Çağıl` → `hayrullah_cagil`) so nobody is
+ever without one, and the member may change it on the first-run screen or in
+Settings. Format `^[a-z][a-z0-9_]{2,19}$`, enforced by a check constraint and a
+unique index.
+
+**The sign-up trigger still never aborts a sign-up.** Generating a unique value
+inside it is exactly the kind of change that could: two same-name sign-ups at
+once, or a generator bug producing an out-of-format tag. Both a
+`unique_violation` and a `check_violation` fall back to a tag built from the
+user id, which is unique because the id is. Tests caught the generator bug this
+guards against — a 20-character name starting with a digit became 21
+characters once prefixed — before it could fail a production migration.
+
+**Availability is checked with definer rights, and is advisory.** The unique
+index counts every account, including allowlist-denied ones whose profiles RLS
+hides, so an RLS-scoped lookup would call a taken tag free. The index remains
+the authority: a tag claimed between the check and the save is refused there,
+with a reason.
+
+**The first-run screen shows once, including to existing members.** Tags are
+new, and there is no other prompt to see or choose one. Skipping keeps the
+Google name and the generated tag.
+
+**Renaming moved from the chat feature to a profile feature.** One owner of
+profile writes; two paths to the same column would drift.

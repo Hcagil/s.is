@@ -4,21 +4,21 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
-import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Groups and display names through the real stack.
+/// Groups through the real stack.
 ///
 /// The widget and controller tests prove the controllers behave with a fake
 /// underneath them. They cannot prove that `start_group_conversation` takes
 /// the arguments the repository sends, that row-level security lets all three
-/// members in and keeps a fourth out, or that a rename one member makes is
-/// what another member reads. Every provider here is backed by
-/// [SupabaseChatRepository] against a running local Supabase.
+/// members in and keeps a fourth out. Every provider here is backed by
+/// [SupabaseChatRepository] against a running local Supabase. Display names
+/// and tags moved to the profile feature in v0.4; the rename coverage that
+/// lived here is in profile_integration_test.dart.
 ///
 /// Requires `docker compose run --rm supabase start`. Uses its own seeded
 /// accounts: signing in claims the active device, so sharing a pair with
@@ -278,61 +278,7 @@ void main() {
     expect((result as Err<String>).failure.message, isNotEmpty);
   });
 
-  test('a rename by one member is what another member reads', () async {
-    final name = 'Ivy ${nonce()}';
-    final container = containerFor(ivy);
-    await container.read(conversationListProvider.future);
-
-    final result = await container
-        .read(conversationListProvider.notifier)
-        .setDisplayName(name);
-    expect(
-      result,
-      isA<Ok<void>>(),
-      reason: result is Err<void>
-          ? 'the update was refused: ${result.failure.message}'
-          : '',
-    );
-
-    // Ivy's own picker, re-read after the invalidation the controller does.
-    final members = await containerFor(hank).read(membersProvider.future);
-    final seen = members.firstWhere(
-      (m) => m.userId == ivy.userId,
-      orElse: () => fail('ivy vanished from the member list'),
-    );
-    expect(
-      seen.displayName,
-      name,
-      reason: 'another member still reads the old display name',
-    );
-  });
-
-  // The database enforces 1..80 with a check constraint (pgTAP proves that);
-  // here the only question is that an over-long name is refused SOMEWHERE and
-  // that nothing is left half-written when it is.
-  test('an over-long display name changes nothing', () async {
-    final container = containerFor(ivy);
-    final before = (await containerFor(hank).read(membersProvider.future))
-        .firstWhere((m) => m.userId == ivy.userId)
-        .displayName;
-
-    final result = await container
-        .read(conversationListProvider.notifier)
-        .setDisplayName('z' * 81);
-
-    expect(
-      result,
-      isA<Err<void>>(),
-      reason: 'an over-long display name was accepted',
-    );
-    expect((result as Err<void>).failure.message, isNotEmpty);
-    final after = (await containerFor(hank).read(membersProvider.future))
-        .firstWhere((m) => m.userId == ivy.userId)
-        .displayName;
-    expect(after, before, reason: 'a refused rename changed the name anyway');
-  });
-
-  test('a broken connection refuses both calls with a reason', () async {
+  test('a broken connection refuses the call with a reason', () async {
     final container = containerFor(offline);
 
     final group = await container
@@ -340,50 +286,5 @@ void main() {
         .startGroup(title: 'Offline', memberIds: [ivy.userId]);
     expect(group, isA<Err<String>>());
     expect((group as Err<String>).failure.message, isNotEmpty);
-
-    final renamed = await container
-        .read(conversationListProvider.notifier)
-        .setDisplayName('Never arrives');
-    expect(renamed, isA<Err<void>>());
-    expect((renamed as Err<void>).failure.message, isNotEmpty);
-  });
-
-  test('a member cannot be renamed by anyone else', () async {
-    // The repository offers no way to rename another member, so the attempt
-    // has to be made underneath it: the grant and the policy are what refuse
-    // it, not the Dart API.
-    final before = (await containerFor(hank).read(membersProvider.future))
-        .firstWhere((m) => m.userId == ivy.userId)
-        .displayName;
-
-    final rows = await kim.client
-        .from('profiles')
-        .update({'display_name': 'Owned by kim'})
-        .eq('user_id', ivy.userId)
-        .select();
-
-    expect(rows, isEmpty, reason: 'another member rewrote ivy\'s profile');
-    final after = (await containerFor(hank).read(membersProvider.future))
-        .firstWhere((m) => m.userId == ivy.userId)
-        .displayName;
-    expect(after, before);
-  });
-
-  test('no column but display_name may be written', () async {
-    await expectLater(
-      ivy.client
-          .from('profiles')
-          .update({'user_id': hank.userId})
-          .eq('user_id', ivy.userId),
-      throwsA(isA<PostgrestException>()),
-      reason: 'a member moved their profile to another account',
-    );
-
-    final members = await containerFor(hank).read(membersProvider.future);
-    expect(
-      members.map((Member m) => m.userId),
-      contains(ivy.userId),
-      reason: 'ivy\'s profile no longer belongs to ivy',
-    );
   });
 }

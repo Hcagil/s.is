@@ -172,19 +172,6 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     }
     return result;
   }
-
-  /// Renames the signed-in member. The conversation list and the member picker
-  /// both read profiles, so both are refreshed.
-  Future<Result<void>> setDisplayName(String displayName) async {
-    final result = await ref
-        .read(chatRepositoryProvider)
-        .setDisplayName(displayName);
-    if (result is Ok<void>) {
-      ref.invalidate(membersProvider);
-      await refresh();
-    }
-    return result;
-  }
 }
 
 /// Everyone else who can sign in — the picker for starting a first chat.

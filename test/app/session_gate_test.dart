@@ -6,6 +6,9 @@ import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/profile/application/profile_controller.dart';
+import 'package:sis/features/profile/domain/own_profile.dart';
+import 'package:sis/features/profile/presentation/onboarding_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../support/fakes.dart';
@@ -16,15 +19,29 @@ const config = RuntimeConfig(
   googleWebClientId: 'c',
 );
 
-Widget app(FakeAuth a, FakeUpdate u, [FakeChat? c]) => ProviderScope(
-  overrides: [
-    runtimeConfigProvider.overrideWithValue(config),
-    authRepositoryProvider.overrideWithValue(a),
-    updateRepositoryProvider.overrideWithValue(u),
-    // The home of an allowed member is the conversation list.
-    chatRepositoryProvider.overrideWithValue(c ?? FakeChat()),
-  ],
-  child: const SisApp(),
+Widget app(FakeAuth a, FakeUpdate u, [FakeChat? c, ProfileFake? p]) =>
+    ProviderScope(
+      overrides: [
+        runtimeConfigProvider.overrideWithValue(config),
+        authRepositoryProvider.overrideWithValue(a),
+        updateRepositoryProvider.overrideWithValue(u),
+        // The home of an allowed member is the conversation list.
+        chatRepositoryProvider.overrideWithValue(c ?? FakeChat()),
+        // Every allowed member's profile is read before home is shown.
+        profileRepositoryProvider.overrideWithValue(p ?? ProfileFake()),
+      ],
+      child: const SisApp(),
+    );
+
+const newcomer = OwnProfile(
+  userId: 'u1',
+  displayName: 'Maya Google',
+  tag: 'maya_google',
+  onboardingDone: false,
+);
+
+final retryButton = find.textContaining(
+  RegExp('retry|try again', caseSensitive: false),
 );
 
 void main() {
@@ -52,10 +69,155 @@ void main() {
     await t.pumpWidget(app(FakeAuth(session: true), FakeUpdate()));
     await t.pumpAndSettle();
     expect(find.text('New chat'), findsOneWidget);
+    expect(find.byType(OnboardingScreen), findsNothing);
     // The member is still identified, now in the overflow menu.
     await t.tap(find.byKey(const ValueKey('home-menu')));
     await t.pumpAndSettle();
+    expect(find.byKey(const ValueKey('menu-sign-out')), findsOneWidget);
     expect(find.text('Sign out (Maya)'), findsOneWidget);
+  });
+
+  group('onboarding', () {
+    testWidgets('a member who has not onboarded sees onboarding, not home', (
+      t,
+    ) async {
+      final p = ProfileFake(profile: newcomer);
+      await t.pumpWidget(app(FakeAuth(session: true), FakeUpdate(), null, p));
+      await t.pumpAndSettle();
+
+      expect(find.byType(OnboardingScreen), findsOneWidget);
+      expect(find.text('New chat'), findsNothing);
+      // The generated name and tag are offered, not a blank form.
+      expect(find.text('Maya Google'), findsWidgets);
+      expect(find.text('maya_google'), findsWidgets);
+    });
+
+    testWidgets('skipping goes home and keeps the Google name and tag', (
+      t,
+    ) async {
+      final p = ProfileFake(profile: newcomer);
+      await t.pumpWidget(app(FakeAuth(session: true), FakeUpdate(), null, p));
+      await t.pumpAndSettle();
+
+      await t.tap(find.byKey(const ValueKey('onboarding-skip')));
+      await t.pumpAndSettle();
+
+      expect(find.text('New chat'), findsOneWidget);
+      expect(find.byType(OnboardingScreen), findsNothing);
+      expect(p.saves, hasLength(1));
+      expect(p.profile.onboardingDone, isTrue);
+      expect(p.profile.displayName, 'Maya Google');
+      expect(p.profile.tag, 'maya_google');
+    });
+
+    testWidgets('continuing saves name, tag and the flag, then goes home', (
+      t,
+    ) async {
+      final p = ProfileFake(profile: newcomer);
+      await t.pumpWidget(app(FakeAuth(session: true), FakeUpdate(), null, p));
+      await t.pumpAndSettle();
+
+      await t.enterText(find.byKey(const ValueKey('profile-name')), 'Maya R');
+      await t.enterText(find.byKey(const ValueKey('profile-tag')), 'maya_r');
+      await t.pump(const Duration(milliseconds: 600));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('profile-submit')));
+      await t.pumpAndSettle();
+
+      expect(find.text('New chat'), findsOneWidget);
+      expect(p.saves, hasLength(1), reason: 'not one statement');
+      final s = p.saves.single;
+      expect(
+        (s.displayName, s.tag, s.onboardingDone),
+        ('Maya R', 'maya_r', true),
+      );
+      // Home names the member by the profile just saved, not by the Google
+      // account the session started with ("Maya").
+      await t.tap(find.byKey(const ValueKey('home-menu')));
+      await t.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('menu-sign-out')),
+          matching: find.textContaining('Maya R'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Maya Google'), findsNothing);
+    });
+
+    testWidgets('a refused continue stays on onboarding with the reason', (
+      t,
+    ) async {
+      final p = ProfileFake(profile: newcomer);
+      await t.pumpWidget(app(FakeAuth(session: true), FakeUpdate(), null, p));
+      await t.pumpAndSettle();
+
+      await t.enterText(find.byKey(const ValueKey('profile-tag')), 'maya');
+      await t.pump(const Duration(milliseconds: 600));
+      await t.pumpAndSettle();
+      p.claimByOther('maya'); // someone else got there first
+      await t.tap(find.byKey(const ValueKey('profile-submit')));
+      await t.pumpAndSettle();
+
+      expect(find.byType(OnboardingScreen), findsOneWidget);
+      expect(find.text('New chat'), findsNothing);
+      expect(
+        find.textContaining('That tag was just taken by someone.'),
+        findsOneWidget,
+      );
+      expect(p.profile.onboardingDone, isFalse);
+    });
+
+    testWidgets('a failed skip stays on onboarding with the reason', (t) async {
+      final p = ProfileFake(profile: newcomer)
+        ..saveResult = const Err(NetworkFailure('no route to host'));
+      await t.pumpWidget(app(FakeAuth(session: true), FakeUpdate(), null, p));
+      await t.pumpAndSettle();
+
+      await t.tap(find.byKey(const ValueKey('onboarding-skip')));
+      await t.pumpAndSettle();
+
+      expect(find.byType(OnboardingScreen), findsOneWidget);
+      expect(find.textContaining('no route to host'), findsOneWidget);
+      await t.pumpAndSettle(const Duration(seconds: 6));
+    });
+
+    testWidgets('a profile that cannot be read shows why, and retry works', (
+      t,
+    ) async {
+      final p = ProfileFake(profile: newcomer)
+        ..loadResult = const Err(NetworkFailure('no route to host'));
+      await t.pumpWidget(app(FakeAuth(session: true), FakeUpdate(), null, p));
+      await t.pumpAndSettle();
+
+      expect(find.textContaining('no route to host'), findsOneWidget);
+      expect(find.text('New chat'), findsNothing);
+      expect(find.byType(OnboardingScreen), findsNothing);
+      expect(retryButton, findsOneWidget);
+
+      p.loadResult = null;
+      await t.tap(retryButton);
+      await t.pumpAndSettle();
+      expect(find.byType(OnboardingScreen), findsOneWidget);
+    });
+
+    testWidgets('home is not shown while the profile is still loading', (
+      t,
+    ) async {
+      final p = ProfileFake(profile: newcomer)..holdLoad();
+      await t.pumpWidget(app(FakeAuth(session: true), FakeUpdate(), null, p));
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 100));
+
+      expect(
+        find.text('New chat'),
+        findsNothing,
+        reason: 'home flashed before we knew onboarding was due',
+      );
+      p.releaseLoad();
+      await t.pumpAndSettle();
+      expect(find.byType(OnboardingScreen), findsOneWidget);
+    });
   });
   testWidgets('update required hides the app', (t) async {
     await t.pumpWidget(

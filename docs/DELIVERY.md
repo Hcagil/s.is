@@ -80,3 +80,34 @@ Android pipeline blocks it.
   to confuse.
 - **Rotate a secret:** update it in GitHub → Settings → Secrets; re-run the last Release workflow. Signing material also exists in the maintainer's offline backup.
 - **Roll back:** Play Console → Internal testing → promote the previous release; then fix forward on `main`. Never rewrite `main` history.
+
+## Push notifications (not yet live)
+
+The database half is in place and tested: `app_private.device_tokens`,
+`register_device_token`, `forget_device_token`, and
+`app_private.push_targets_for_message` with the `public.push_targets` wrapper
+the notifier calls on the service-role key.
+
+`supabase/functions/notify-on-message/` is written but **not deployed**, and
+the app has no push client, because both need a Firebase project that does not
+exist yet. Adding `firebase_messaging` before `android/app/google-services.json`
+exists would break the Android build and therefore the release workflow.
+
+To finish it:
+
+1. Create a Firebase project and add an Android app for `com.esd.sis`.
+   Download `google-services.json` into `android/app/` — it is not a secret,
+   but it is not committed either; add it to the release workflow as a secret
+   file, alongside the signing key.
+2. In that project, create a service account with the **Firebase Cloud
+   Messaging API** role and download its JSON key.
+3. `supabase secrets set FCM_SERVICE_ACCOUNT="$(cat key.json)"`, then
+   `supabase functions deploy notify-on-message`.
+4. Add a database webhook on `insert` into `public.messages` pointing at the
+   function.
+5. Add `firebase_messaging` to the app, register the token on sign-in with
+   `register_device_token`, and clear it on sign-out with
+   `forget_device_token`.
+
+Step 5 is deliberately last: until steps 1-4 exist, a push client can only
+fail, and the Android build cannot even compile without step 1.

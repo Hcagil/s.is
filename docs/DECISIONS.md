@@ -170,3 +170,30 @@ that, because the fake was always ready.
 The `database` CI filter was widened to `lib/features/**/data/**` and
 `test/integration/**` so a Dart-only change to a repository still runs the job
 that owns these tests.
+
+## 2026-09-22 — Profiles are visible only for allowlisted accounts
+
+**`profiles_read` now requires the profile's own account to be allowlisted, not
+just the reader to have app access.** Reason: anyone who completes Google
+sign-in gets an `auth.users` row and the signup trigger creates a profile,
+even though the allowlist then denies them everything else. A production
+database therefore accumulates profiles for people who are not members. Seven
+appeared on 2026-09-21 from Google Play's automated pre-launch testing of the
+internal-track build.
+
+That was harmless until v0.2: the member picker reads `profiles` to offer
+someone to chat with, so those names would have been listed to real members.
+The same policy also let any active member enumerate every account that had
+ever signed in.
+
+`app_private.is_allowed(uuid)` answers the allowlist question for an arbitrary
+row; `is_allowed_user()` becomes a thin wrapper over it for the caller, so the
+sign-in gate is unchanged.
+
+Note what this does **not** change: the allowlist was always the real gate and
+it held throughout — none of those accounts ever had data access. The consent
+screen did not gate anything. Android native sign-in requesting only
+`openid email profile` does not go through it, which is why arbitrary Google
+accounts could authenticate while the OAuth consent screen was in Testing with
+zero test users. Do not rely on consent-screen publishing status as an access
+control.

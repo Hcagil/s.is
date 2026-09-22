@@ -1,9 +1,11 @@
 // Hand-written fakes shared by controller and widget tests.
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/auth_repository.dart';
 import 'package:sis/features/auth/domain/member.dart';
+import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -198,6 +200,66 @@ class FakeChat implements ChatRepository {
     }
     return const Ok(null);
   }
+
+  /// Every image handed to [sendImage], with the caption it was sent with.
+  final sentImages =
+      <({String conversationId, PickedImage image, String body})>[];
+
+  /// Every path [attachmentUrl] was asked to sign, in order.
+  final urlRequests = <String>[];
+
+  /// Keys this fake has actually stored. A path it never stored cannot be
+  /// signed, exactly as the bucket refuses to sign an object the caller may
+  /// not read. Seed it with [store] when a test invents history.
+  final storedObjects = <String>{};
+  void store(String path) => storedObjects.add(path);
+
+  /// Force an outcome. Left null both calls answer like the real thing: the
+  /// upload refuses what the bucket and the check constraint refuse, and a
+  /// URL is issued only for a stored key.
+  Result<Message>? sendImageResult;
+  Result<Uri>? attachmentUrlResult;
+
+  int _imageSeq = 0;
+
+  @override
+  Future<Result<Message>> sendImage({
+    required String conversationId,
+    required PickedImage image,
+    String body = '',
+  }) async {
+    sentImages.add((conversationId: conversationId, image: image, body: body));
+    if (sendImageResult case final forced?) return forced;
+    if (rejectUpload(image, body) case final refused?) return refused;
+    final path = '$conversationId/${++_imageSeq}.${image.extension}';
+    storedObjects.add(path);
+    return Ok(
+      Message(
+        id: 'img-$_imageSeq',
+        conversationId: conversationId,
+        senderId: 'me',
+        body: body.trim(),
+        createdAt: DateTime.now(),
+        attachmentPath: path,
+      ),
+    );
+  }
+
+  @override
+  Future<Result<Uri>> attachmentUrl(String attachmentPath) async {
+    urlRequests.add(attachmentPath);
+    if (attachmentUrlResult case final forced?) return forced;
+    if (!storedObjects.contains(attachmentPath)) {
+      return const Err(DeniedFailure());
+    }
+    // Shaped like the real one: single use, expires, and not guessable.
+    return Ok(
+      Uri.parse(
+        'https://storage.test/object/sign/attachments/$attachmentPath'
+        '?token=fake&expires=3600',
+      ),
+    );
+  }
 }
 
 /// A chat repository written from the [ChatRepository] contract, for the
@@ -364,5 +426,140 @@ class ChatFake implements ChatRepository {
       return const Err(ProviderFailure('a display name is 1 to 80 characters'));
     }
     return const Ok(null);
+  }
+
+  /// Every image handed to [sendImage], with the caption it was sent with.
+  final sentImages =
+      <({String conversationId, PickedImage image, String body})>[];
+
+  /// Every path [attachmentUrl] was asked to sign, in order.
+  final urlRequests = <String>[];
+
+  /// Keys this fake has actually stored. A path it never stored cannot be
+  /// signed, exactly as the bucket refuses to sign an object the caller may
+  /// not read. Seed it with [store] when a test invents history.
+  final storedObjects = <String>{};
+  void store(String path) => storedObjects.add(path);
+
+  /// Force an outcome. Left null both calls answer like the real thing: the
+  /// upload refuses what the bucket and the check constraint refuse, and a
+  /// URL is issued only for a stored key.
+  Result<Message>? sendImageResult;
+  Result<Uri>? attachmentUrlResult;
+
+  int _imageSeq = 0;
+
+  @override
+  Future<Result<Message>> sendImage({
+    required String conversationId,
+    required PickedImage image,
+    String body = '',
+  }) async {
+    await _tick('sendImage:$conversationId');
+    sentImages.add((conversationId: conversationId, image: image, body: body));
+    if (sendImageResult case final forced?) return forced;
+    if (rejectUpload(image, body) case final refused?) return refused;
+    final path = '$conversationId/${++_imageSeq}.${image.extension}';
+    storedObjects.add(path);
+    return Ok(
+      Message(
+        id: 'img-$_imageSeq',
+        conversationId: conversationId,
+        senderId: 'me',
+        body: body.trim(),
+        createdAt: DateTime.now(),
+        attachmentPath: path,
+      ),
+    );
+  }
+
+  @override
+  Future<Result<Uri>> attachmentUrl(String attachmentPath) async {
+    await _tick('attachmentUrl:$attachmentPath');
+    urlRequests.add(attachmentPath);
+    if (attachmentUrlResult case final forced?) return forced;
+    if (!storedObjects.contains(attachmentPath)) {
+      return const Err(DeniedFailure());
+    }
+    // Shaped like the real one: single use, expires, and not guessable.
+    return Ok(
+      Uri.parse(
+        'https://storage.test/object/sign/attachments/$attachmentPath'
+        '?token=fake&expires=3600',
+      ),
+    );
+  }
+}
+
+/// The refusals the storage bucket and the `messages` check constraint make.
+///
+/// Kept in one place so both fakes refuse exactly what the database refuses;
+/// a fake that accepts everything is how an unvalidated upload ships green.
+const attachmentMimeTypes = {
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+};
+const attachmentSizeLimit = 10 * 1024 * 1024;
+
+Err<Message>? rejectUpload(PickedImage image, String body) {
+  if (image.bytes.isEmpty) {
+    return const Err(ProviderFailure('the image is empty'));
+  }
+  if (image.bytes.length > attachmentSizeLimit) {
+    return const Err(ProviderFailure('the image is larger than 10 MB'));
+  }
+  if (!attachmentMimeTypes.contains(image.contentType)) {
+    return Err(ProviderFailure('${image.contentType} is not an image type'));
+  }
+  if (body.trim().length > maxMessageLength) {
+    return const Err(ProviderFailure('the caption is too long'));
+  }
+  return null;
+}
+
+/// A 1x1 PNG: real bytes a real decoder accepts, which a made-up list is not.
+final pngBytes = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+);
+
+PickedImage pickedPng({String contentType = 'image/png'}) =>
+    PickedImage(bytes: pngBytes, contentType: contentType, extension: 'png');
+
+/// A picker written from the [AttachmentSource] contract.
+///
+/// Every outcome a real picker has, including the two that are easy to forget:
+/// the member backs out (null, and NOT a failure), and the platform throws.
+/// Picking is never instant, so every outcome is delayed by [latency] —
+/// code that assumes the sheet returns synchronously fails here.
+class PickerFake implements AttachmentSource {
+  PickerFake.returns(PickedImage image, {this.latency = Duration.zero})
+    : _image = image,
+      _error = null;
+
+  /// The member opened the sheet and backed out.
+  PickerFake.cancels({this.latency = Duration.zero})
+    : _image = null,
+      _error = null;
+
+  /// The platform channel failed — no permission, no camera, no gallery.
+  PickerFake.throwsError(Object error, {this.latency = Duration.zero})
+    : _image = null,
+      _error = error;
+
+  final PickedImage? _image;
+  final Object? _error;
+  final Duration latency;
+
+  /// How many times the member opened the picker.
+  int calls = 0;
+
+  @override
+  Future<PickedImage?> pickImage() async {
+    calls++;
+    if (latency > Duration.zero) await Future<void>.delayed(latency);
+    if (_error case final error?) throw error;
+    return _image;
   }
 }

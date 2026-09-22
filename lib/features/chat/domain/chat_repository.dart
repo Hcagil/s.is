@@ -1,5 +1,6 @@
 import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
+import 'attachment.dart';
 import 'conversation.dart';
 import 'message.dart';
 
@@ -63,4 +64,23 @@ abstract interface class ChatRepository {
 
   /// Changes the signed-in member's own display name.
   Future<Result<void>> setDisplayName(String displayName);
+
+  /// Uploads [image] into [conversationId] and sends it, with an optional
+  /// caption in [body].
+  ///
+  /// The upload and the message are not atomic: an upload that succeeds and a
+  /// message that then fails leaves an orphaned object, which is invisible
+  /// (nothing references it) and cheap. The reverse -- a message pointing at
+  /// an object that was never stored -- would be visible and broken, so the
+  /// upload happens first.
+  Future<Result<Message>> sendImage({
+    required String conversationId,
+    required PickedImage image,
+    String body,
+  });
+
+  /// A short-lived URL for [attachmentPath], issued only to a member of the
+  /// conversation the path names. The bucket is private; there is no public
+  /// URL for an attachment.
+  Future<Result<Uri>> attachmentUrl(String attachmentPath);
 }

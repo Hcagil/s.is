@@ -71,6 +71,33 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     }
     return result;
   }
+
+  /// Creates a group and shows it in the list.
+  Future<Result<String>> startGroup({
+    required String title,
+    required List<String> memberIds,
+  }) async {
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .startGroupConversation(title: title, memberIds: memberIds);
+    if (result is Ok<String>) {
+      await refresh();
+    }
+    return result;
+  }
+
+  /// Renames the signed-in member. The conversation list and the member picker
+  /// both read profiles, so both are refreshed.
+  Future<Result<void>> setDisplayName(String displayName) async {
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .setDisplayName(displayName);
+    if (result is Ok<void>) {
+      ref.invalidate(membersProvider);
+      await refresh();
+    }
+    return result;
+  }
 }
 
 /// Everyone else who can sign in — the picker for starting a first chat.

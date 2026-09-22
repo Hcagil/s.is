@@ -67,18 +67,34 @@ final class SupabaseChatRepository implements ChatRepository {
           .from('conversation_members')
           .select('conversation_id, user_id');
 
+      // Titles distinguish a group from a 1:1; RLS scopes this to the
+      // caller's own conversations, same as the membership rows.
+      final conversationRows = await _client
+          .from('conversations')
+          .select('id, title');
+      final titleById = {
+        for (final row in conversationRows)
+          row['id'] as String: row['title'] as String?,
+      };
+
       final otherByConversation = <String, String>{};
       for (final row in memberRows) {
         final userId = row['user_id'] as String;
         if (userId == me) continue;
         otherByConversation[row['conversation_id'] as String] = userId;
       }
-      if (otherByConversation.isEmpty) return const Ok([]);
+      // A group is listed by its title, so it needs no "other" member; only
+      // 1:1 conversations do.
+      final conversationIds = {...titleById.keys, ...otherByConversation.keys};
+      if (conversationIds.isEmpty) return const Ok([]);
 
-      final profileRows = await _client
-          .from('profiles')
-          .select('user_id, display_name')
-          .inFilter('user_id', otherByConversation.values.toSet().toList());
+      final others = otherByConversation.values.toSet().toList();
+      final profileRows = others.isEmpty
+          ? const <Map<String, dynamic>>[]
+          : await _client
+                .from('profiles')
+                .select('user_id, display_name')
+                .inFilter('user_id', others);
       final nameByUser = {
         for (final row in profileRows)
           row['user_id'] as String: row['display_name'] as String,
@@ -102,15 +118,19 @@ final class SupabaseChatRepository implements ChatRepository {
       }
 
       final conversations = [
-        for (final entry in otherByConversation.entries)
+        for (final id in conversationIds)
           Conversation(
-            id: entry.key,
-            other: Member(
-              userId: entry.value,
-              displayName: nameByUser[entry.value] ?? 'Member',
-            ),
-            lastMessage: previewBy[entry.key]?.body,
-            lastMessageAt: previewBy[entry.key]?.at,
+            id: id,
+            title: titleById[id],
+            other: titleById[id] != null || otherByConversation[id] == null
+                ? null
+                : Member(
+                    userId: otherByConversation[id]!,
+                    displayName:
+                        nameByUser[otherByConversation[id]!] ?? 'Member',
+                  ),
+            lastMessage: previewBy[id]?.body,
+            lastMessageAt: previewBy[id]?.at,
           ),
       ];
       // Conversations with no messages yet sort last.
@@ -242,6 +262,44 @@ final class SupabaseChatRepository implements ChatRepository {
         return const Err(DeniedFailure());
       }
       return Ok(id);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<String>> startGroupConversation({
+    required String title,
+    required List<String> memberIds,
+  }) async {
+    try {
+      final id = await _client.rpc(
+        'start_group_conversation',
+        params: {'title': title.trim(), 'members': memberIds},
+      );
+      if (id is! String) return const Err(DeniedFailure());
+      return Ok(id);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<void>> setDisplayName(String displayName) async {
+    final me = _uid;
+    if (me == null) return const Err(DeniedFailure());
+    final trimmed = displayName.trim();
+    if (trimmed.isEmpty || trimmed.length > 80) {
+      return const Err(DeniedFailure());
+    }
+    try {
+      // Only display_name is grantable on this table, so nothing else on the
+      // row can be rewritten even if this call asked to.
+      await _client
+          .from('profiles')
+          .update({'display_name': trimmed})
+          .eq('user_id', me);
+      return const Ok(null);
     } catch (e) {
       return Err(_asFailure(e));
     }

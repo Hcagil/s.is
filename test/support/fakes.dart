@@ -158,6 +158,26 @@ class FakeChat implements ChatRepository {
     started.add(otherUserId);
     return startResult;
   }
+
+  final groups = <({String title, List<String> memberIds})>[];
+  Result<String> groupResult = const Ok('g-new');
+  final renames = <String>[];
+  Result<void> renameResult = const Ok(null);
+
+  @override
+  Future<Result<String>> startGroupConversation({
+    required String title,
+    required List<String> memberIds,
+  }) async {
+    groups.add((title: title, memberIds: memberIds));
+    return groupResult;
+  }
+
+  @override
+  Future<Result<void>> setDisplayName(String displayName) async {
+    renames.add(displayName);
+    return renameResult;
+  }
 }
 
 /// A chat repository written from the [ChatRepository] contract, for the
@@ -273,5 +293,27 @@ class ChatFake implements ChatRepository {
     await _tick('start:$otherUserId');
     started.add(otherUserId);
     return startResult;
+  }
+
+  final groups = <({String title, List<String> memberIds})>[];
+  Result<String> groupResult = const Ok('g-new');
+  final renames = <String>[];
+  Result<void> renameResult = const Ok(null);
+
+  @override
+  Future<Result<String>> startGroupConversation({
+    required String title,
+    required List<String> memberIds,
+  }) async {
+    await _tick('group:$title');
+    groups.add((title: title, memberIds: memberIds));
+    return groupResult;
+  }
+
+  @override
+  Future<Result<void>> setDisplayName(String displayName) async {
+    await _tick('rename:$displayName');
+    renames.add(displayName);
+    return renameResult;
   }
 }

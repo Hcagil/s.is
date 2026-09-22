@@ -129,8 +129,8 @@ void main() {
       (c) => c.id == conversationId,
       orElse: () => fail('the real conversation is missing from the list'),
     );
-    expect(row.other.userId, dan.userId);
-    expect(row.other.displayName, isNotEmpty);
+    expect(row.other!.userId, dan.userId);
+    expect(row.other!.displayName, isNotEmpty);
     expect(row.lastMessage, isNotNull, reason: 'the preview column must load');
   });
 

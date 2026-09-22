@@ -19,11 +19,8 @@ final class SupabaseChatRepository implements ChatRepository {
 
   final SupabaseClient _client;
 
-  /// How far back the conversation list looks for previews in one query.
-  // ponytail: a single bounded read instead of one query per conversation.
-  // If a member ever has more conversations than this covers, move the preview
-  // into a view or an RPC with DISTINCT ON rather than raising the number.
-  static const _previewScan = 200;
+  /// How many messages one conversation screen holds.
+  static const _historyLimit = 500;
 
   String? get _uid => _client.auth.currentUser?.id;
 
@@ -102,21 +99,25 @@ final class SupabaseChatRepository implements ChatRepository {
       };
 
       // Newest first, so the first row seen for a conversation is its preview.
+      // One row per conversation, from a view that does the DISTINCT ON in the
+      // database. A bounded scan across all conversations used to lose the
+      // preview of a quiet one as soon as enough newer messages existed
+      // elsewhere, which rendered as "No messages yet" on a conversation that
+      // had messages.
       final recent = await _client
-          .from('messages')
-          .select('conversation_id, body, created_at')
-          .order('created_at', ascending: false)
-          .limit(_previewScan);
-      final previewBy = <String, ({String body, DateTime at})>{};
-      for (final row in recent) {
-        previewBy.putIfAbsent(
-          row['conversation_id'] as String,
-          () => (
-            body: row['body'] as String,
+          .from('conversation_previews')
+          .select('conversation_id, body, created_at, attachment_path');
+      final previewBy = <String, ({String body, DateTime at})>{
+        for (final row in recent)
+          row['conversation_id'] as String: (
+            // An image may be sent without a caption, and an empty preview
+            // would read as "no messages" while hiding a real one.
+            body: (row['body'] as String).isNotEmpty
+                ? row['body'] as String
+                : (row['attachment_path'] == null ? '' : 'Photo'),
             at: DateTime.parse(row['created_at'] as String),
           ),
-        );
-      }
+      };
 
       final conversations = [
         for (final id in conversationIds)
@@ -157,11 +158,18 @@ final class SupabaseChatRepository implements ChatRepository {
             'id, conversation_id, sender_id, body, created_at, attachment_path',
           )
           .eq('conversation_id', conversationId)
-          // ascending is EXPLICIT: postgrest-dart's `order` defaults to
-          // descending, so the bare call returned newest-first while this
-          // method documents oldest-first.
-          .order('created_at', ascending: true);
-      return Ok(rows.map(_toMessage).toList());
+          // Read NEWEST-first with a cap, then reverse. PostgREST truncates a
+          // response at max_rows, and an ascending read would silently drop
+          // the most recent messages -- a conversation frozen in the past,
+          // which reads as working. Dropping the oldest is the honest
+          // truncation.
+          .order('created_at', ascending: false)
+          .limit(_historyLimit);
+      // The interface documents oldest-first, which is also what the screen
+      // renders.
+      // ponytail: one bounded page. If a conversation outgrows it, add
+      // backward paging keyed on created_at rather than raising the cap.
+      return Ok(rows.reversed.map(_toMessage).toList());
     } catch (e) {
       return Err(_asFailure(e));
     }

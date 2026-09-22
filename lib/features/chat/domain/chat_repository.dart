@@ -49,4 +49,18 @@ abstract interface class ChatRepository {
   /// The id of the 1:1 conversation with [otherUserId], creating it when it does
   /// not exist yet. Calling twice returns the same conversation.
   Future<Result<String>> startDirectConversation(String otherUserId);
+
+  /// Creates a group named [title] with [memberIds] plus the caller.
+  ///
+  /// Unlike [startDirectConversation] this always creates a new conversation:
+  /// the same people may share several differently named groups. The call
+  /// fails whole if any invitee is not a member, rather than quietly creating
+  /// a smaller group than was asked for.
+  Future<Result<String>> startGroupConversation({
+    required String title,
+    required List<String> memberIds,
+  });
+
+  /// Changes the signed-in member's own display name.
+  Future<Result<void>> setDisplayName(String displayName);
 }

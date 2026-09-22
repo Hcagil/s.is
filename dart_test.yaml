@@ -9,3 +9,7 @@
 tags:
   integration:
     skip: "needs a running local Supabase stack"
+  # A readiness probe for Realtime, not a test. CI runs it once before the
+  # integration suites; it never belongs in the ordinary run.
+  warmup:
+    skip: "readiness probe; run explicitly before the integration suites"

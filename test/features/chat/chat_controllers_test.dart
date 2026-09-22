@@ -40,7 +40,7 @@ void main() {
       );
       final c = make(fake);
       final list = await c.read(conversationListProvider.future);
-      expect(list.single.other.displayName, 'Bob');
+      expect(list.single.other!.displayName, 'Bob');
     });
 
     test('a failure surfaces its reason, not a silent empty list', () async {

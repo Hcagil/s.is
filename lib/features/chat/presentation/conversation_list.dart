@@ -35,10 +35,25 @@ class ConversationList extends ConsumerWidget {
         ),
         _ => const Center(child: CircularProgressIndicator()),
       },
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _startChat(context, ref),
-        icon: const Icon(Icons.edit_outlined),
-        label: const Text('New chat'),
+      floatingActionButton: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.extended(
+            key: const ValueKey('new-group'),
+            heroTag: 'new-group',
+            onPressed: () => _startGroup(context, ref),
+            icon: const Icon(Icons.groups_outlined),
+            label: const Text('New group'),
+          ),
+          const SizedBox(width: 12),
+          FloatingActionButton.extended(
+            key: const ValueKey('new-chat'),
+            heroTag: 'new-chat',
+            onPressed: () => _startChat(context, ref),
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('New chat'),
+          ),
+        ],
       ),
     );
   }
@@ -61,6 +76,128 @@ Future<void> _startChat(BuildContext context, WidgetRef ref) async {
     case Err(:final failure):
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(failure.message)));
+  }
+}
+
+Future<void> _startGroup(BuildContext context, WidgetRef ref) async {
+  final picked =
+      await showModalBottomSheet<({String title, List<Member> members})>(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) => const _GroupComposer(),
+      );
+  if (picked == null || !context.mounted) return;
+
+  final result = await ref
+      .read(conversationListProvider.notifier)
+      .startGroup(
+        title: picked.title,
+        memberIds: [for (final m in picked.members) m.userId],
+      );
+  if (!context.mounted) return;
+  switch (result) {
+    case Ok(:final value):
+      await openConversation(context, ref, value, title: picked.title);
+    case Err(:final failure):
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(failure.message)));
+  }
+}
+
+/// Title plus at least one other member. Both are required, so the button
+/// stays disabled rather than letting the server refuse the call.
+class _GroupComposer extends ConsumerStatefulWidget {
+  const _GroupComposer();
+
+  @override
+  ConsumerState<_GroupComposer> createState() => _GroupComposerState();
+}
+
+class _GroupComposerState extends ConsumerState<_GroupComposer> {
+  final _title = TextEditingController();
+  final _chosen = <Member>{};
+
+  @override
+  void dispose() {
+    _title.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final members = ref.watch(membersProvider);
+    final ready = _title.text.trim().isNotEmpty && _chosen.isNotEmpty;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              key: const ValueKey('group-title'),
+              controller: _title,
+              maxLength: 80,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: 'Group name',
+                counterText: '',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Flexible(
+              child: switch (members) {
+                AsyncData(:final value) when value.isEmpty => const ListTile(
+                  title: Text('Nobody else has signed in yet'),
+                ),
+                AsyncData(:final value) => ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final m in value)
+                      CheckboxListTile(
+                        key: ValueKey('group-member-${m.userId}'),
+                        value: _chosen.any((c) => c.userId == m.userId),
+                        title: Text(m.displayName),
+                        onChanged: (on) => setState(() {
+                          if (on ?? false) {
+                            _chosen.add(m);
+                          } else {
+                            _chosen.removeWhere((c) => c.userId == m.userId);
+                          }
+                        }),
+                      ),
+                  ],
+                ),
+                AsyncError(:final error) => ListTile(
+                  title: Text(reasonOf(error)),
+                ),
+                _ => const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              },
+            ),
+            const SizedBox(height: 8),
+            FilledButton(
+              key: const ValueKey('group-create'),
+              onPressed: ready
+                  ? () => Navigator.of(context).pop((
+                      title: _title.text.trim(),
+                      members: _chosen.toList(),
+                    ))
+                  : null,
+              child: const Text('Create group'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -106,8 +243,12 @@ class _ConversationTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return ListTile(
       key: ValueKey('conversation-${conversation.id}'),
-      leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-      title: Text(conversation.other.displayName),
+      leading: CircleAvatar(
+        child: Icon(
+          conversation.isGroup ? Icons.groups_outlined : Icons.person_outline,
+        ),
+      ),
+      title: Text(conversation.label),
       subtitle: conversation.lastMessage == null
           ? const Text('No messages yet')
           : Text(
@@ -119,7 +260,7 @@ class _ConversationTile extends ConsumerWidget {
         context,
         ref,
         conversation.id,
-        title: conversation.other.displayName,
+        title: conversation.label,
       ),
     );
   }

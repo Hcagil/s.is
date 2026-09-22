@@ -158,6 +158,46 @@ class FakeChat implements ChatRepository {
     started.add(otherUserId);
     return startResult;
   }
+
+  /// Every group asked for, in order, exactly as the caller passed it.
+  final groups = <({String title, List<String> memberIds})>[];
+
+  /// Forces the outcome. Left null the fake answers like the RPC: it refuses
+  /// what the database refuses, and a group is NEVER reused — every accepted
+  /// call returns a new id.
+  Result<String>? groupResult;
+  int _groupSeq = 0;
+
+  final renames = <String>[];
+  Result<void>? renameResult;
+
+  @override
+  Future<Result<String>> startGroupConversation({
+    required String title,
+    required List<String> memberIds,
+  }) async {
+    groups.add((title: title, memberIds: List.unmodifiable(memberIds)));
+    if (groupResult case final forced?) return forced;
+    final trimmed = title.trim();
+    if (trimmed.isEmpty || trimmed.length > 80) {
+      return const Err(ProviderFailure('a group needs a name'));
+    }
+    if (memberIds.isEmpty) {
+      return const Err(ProviderFailure('a group needs another member'));
+    }
+    return Ok('g${++_groupSeq}');
+  }
+
+  @override
+  Future<Result<void>> setDisplayName(String displayName) async {
+    renames.add(displayName);
+    if (renameResult case final forced?) return forced;
+    final trimmed = displayName.trim();
+    if (trimmed.isEmpty || trimmed.length > 80) {
+      return const Err(ProviderFailure('a display name is 1 to 80 characters'));
+    }
+    return const Ok(null);
+  }
 }
 
 /// A chat repository written from the [ChatRepository] contract, for the
@@ -273,5 +313,56 @@ class ChatFake implements ChatRepository {
     await _tick('start:$otherUserId');
     started.add(otherUserId);
     return startResult;
+  }
+
+  /// Every group asked for, in order, exactly as the caller passed it —
+  /// including a caller that lists itself or the same invitee twice.
+  final groups = <({String title, List<String> memberIds})>[];
+
+  /// Forces the outcome. Left null the fake answers like the RPC: the same
+  /// refusals the database makes, and a NEW conversation every time, because
+  /// unlike a 1:1 a group is never reused. An accepted group also joins
+  /// [conversationsResult], so a list that does not re-read cannot fake it.
+  Result<String>? groupResult;
+  int _groupSeq = 0;
+
+  final renames = <String>[];
+  Result<void>? renameResult;
+
+  @override
+  Future<Result<String>> startGroupConversation({
+    required String title,
+    required List<String> memberIds,
+  }) async {
+    await _tick('group:$title');
+    groups.add((title: title, memberIds: List.unmodifiable(memberIds)));
+    if (groupResult case final forced?) return forced;
+    final trimmed = title.trim();
+    if (trimmed.isEmpty || trimmed.length > 80) {
+      return const Err(ProviderFailure('a group needs a name'));
+    }
+    if (memberIds.isEmpty) {
+      return const Err(ProviderFailure('a group needs another member'));
+    }
+    final id = 'g${++_groupSeq}';
+    if (conversationsResult case Ok(value: final existing)) {
+      conversationsResult = Ok([
+        Conversation(id: id, title: trimmed),
+        ...existing,
+      ]);
+    }
+    return Ok(id);
+  }
+
+  @override
+  Future<Result<void>> setDisplayName(String displayName) async {
+    await _tick('rename:$displayName');
+    renames.add(displayName);
+    if (renameResult case final forced?) return forced;
+    final trimmed = displayName.trim();
+    if (trimmed.isEmpty || trimmed.length > 80) {
+      return const Err(ProviderFailure('a display name is 1 to 80 characters'));
+    }
+    return const Ok(null);
   }
 }

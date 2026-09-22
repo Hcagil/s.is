@@ -111,5 +111,12 @@ jobs:
       # starve the other's, which showed up as a different Realtime test timing
       # out on each run. They are integration tests against shared state; they
       # are not parallel-safe by nature.
+      # Realtime accepts a subscription and reports "subscribed" before its
+      # replication pipeline delivers anything, so the first suite to run
+      # would time out on a message published into a pipeline nobody was
+      # reading yet. This blocks until it genuinely delivers once -- a
+      # readiness gate, not a longer timeout.
+      - name: Wait until Realtime delivers
+        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart
       - name: Repository integration tests
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration

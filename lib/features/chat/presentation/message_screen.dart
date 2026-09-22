@@ -21,6 +21,9 @@ Future<void> openConversation(
     context,
   ).push(MaterialPageRoute<void>(builder: (_) => MessageScreen(title: title)));
   ref.read(openConversationProvider.notifier).close();
+  // The list is also kept live by Realtime; this re-read is the fallback when
+  // that subscription could not be established.
+  await ref.read(conversationListProvider.notifier).reloadQuietly();
 }
 
 /// The open conversation: its messages, and a composer.

@@ -106,8 +106,10 @@ final class SupabaseChatRepository implements ChatRepository {
       // had messages.
       final recent = await _client
           .from('conversation_previews')
-          .select('conversation_id, body, created_at, attachment_path');
-      final previewBy = <String, ({String body, DateTime at})>{
+          .select(
+            'conversation_id, body, created_at, attachment_path, sender_id',
+          );
+      final previewBy = <String, ({String body, DateTime at, String sender})>{
         for (final row in recent)
           row['conversation_id'] as String: (
             // An image may be sent without a caption, and an empty preview
@@ -116,6 +118,7 @@ final class SupabaseChatRepository implements ChatRepository {
                 ? row['body'] as String
                 : (row['attachment_path'] == null ? '' : 'Photo'),
             at: DateTime.parse(row['created_at'] as String),
+            sender: row['sender_id'] as String,
           ),
       };
 
@@ -133,6 +136,7 @@ final class SupabaseChatRepository implements ChatRepository {
                   ),
             lastMessage: previewBy[id]?.body,
             lastMessageAt: previewBy[id]?.at,
+            lastSenderId: previewBy[id]?.sender,
           ),
       ];
       // Conversations with no messages yet sort last.
@@ -208,8 +212,27 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   @override
-  Future<Result<Stream<Message>>> incoming(String conversationId) async {
-    final channel = _client.channel('messages:$conversationId');
+  Future<Result<Stream<Message>>> incoming(String conversationId) => _inserts(
+    'messages:$conversationId',
+    PostgresChangeFilter(
+      type: PostgresChangeFilterType.eq,
+      column: 'conversation_id',
+      value: conversationId,
+    ),
+  );
+
+  @override
+  Future<Result<Stream<Message>>> incomingAll() =>
+      _inserts('messages:all', null);
+
+  /// Subscribes to message inserts on [topic], optionally narrowed by
+  /// [filter]. Without a filter every insert the caller may SELECT arrives:
+  /// Realtime re-checks the read policy per subscriber.
+  Future<Result<Stream<Message>>> _inserts(
+    String topic,
+    PostgresChangeFilter? filter,
+  ) async {
+    final channel = _client.channel(topic);
     final controller = StreamController<Message>();
     final subscribed = Completer<void>();
 
@@ -218,11 +241,7 @@ final class SupabaseChatRepository implements ChatRepository {
           event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'messages',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'conversation_id',
-            value: conversationId,
-          ),
+          filter: filter,
           callback: (payload) {
             if (controller.isClosed) return;
             controller.add(_toMessage(payload.newRecord));

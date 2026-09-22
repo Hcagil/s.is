@@ -91,8 +91,11 @@ jobs:
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter dart format --output=none --set-exit-if-changed lib test
       - name: Analyze
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter analyze
+      # A non-UTC zone on purpose: the container defaults to UTC, where a test
+      # of local-time formatting passes whether or not the code converts to
+      # local time at all. POSIX form, so no tzdata is needed.
       - name: Test
-        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter test
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -e TZ=JST-9 flutter flutter test
       - name: Build debug APK
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter build apk --debug
 

@@ -102,9 +102,25 @@ class FakeChat implements ChatRepository {
   final started = <String>[];
   int subscriptions = 0;
   final _incoming = StreamController<Message>.broadcast();
+  final _all = StreamController<Message>.broadcast();
 
-  /// Pushes a message as if Realtime delivered it.
-  void deliver(Message m) => _incoming.add(m);
+  /// Pushes a message as if Realtime delivered it: to the conversation's own
+  /// subscription AND to every list-wide one, as one insert reaches both.
+  void deliver(Message m) {
+    _incoming.add(m);
+    _all.add(m);
+  }
+
+  /// When set, incomingAll() reports a subscription that could not be made.
+  Result<Stream<Message>>? incomingAllResult;
+
+  /// When set, incomingAll() is not confirmed until it completes.
+  Completer<void>? allGate;
+
+  /// When set, conversations() waits on it: the list read held in flight.
+  Completer<void>? listGate;
+  int allSubscriptions = 0;
+  int listReads = 0;
 
   List<Member> memberList = const [];
   Result<List<Member>>? membersResult;
@@ -114,8 +130,11 @@ class FakeChat implements ChatRepository {
       membersResult ?? Ok(memberList);
 
   @override
-  Future<Result<List<Conversation>>> conversations() async =>
-      conversationsResult ?? Ok(list);
+  Future<Result<List<Conversation>>> conversations() async {
+    listReads++;
+    if (listGate != null) await listGate!.future;
+    return conversationsResult ?? Ok(list);
+  }
 
   @override
   Future<Result<List<Message>>> messages(String conversationId) async {
@@ -139,6 +158,14 @@ class FakeChat implements ChatRepository {
             createdAt: DateTime.now(),
           ),
         );
+  }
+
+  @override
+  Future<Result<Stream<Message>>> incomingAll() async {
+    if (allGate != null) await allGate!.future;
+    if (incomingAllResult case final failed?) return failed;
+    allSubscriptions++;
+    return Ok(_all.stream);
   }
 
   @override
@@ -309,7 +336,32 @@ class ChatFake implements ChatRepository {
 
   /// Delivers [m] the way Realtime would: to a live subscription only.
   /// Anything sent while nobody is listening is gone, exactly as on the wire.
-  void deliver(Message m) => _streams[m.conversationId]?.add(m);
+  /// One insert reaches the conversation's own subscription and every
+  /// list-wide one ([incomingAll]) alike.
+  void deliver(Message m) {
+    _streams[m.conversationId]?.add(m);
+    _all?.add(m);
+  }
+
+  Completer<void>? _subscribeAll;
+  Completer<void>? _readList;
+  StreamController<Message>? _all;
+  int allSubscriptions = 0;
+  int canceledAllSubscriptions = 0;
+
+  /// The list-wide subscription is not confirmed until [confirmAllSubscription].
+  void holdAllSubscription() => _subscribeAll = Completer<void>();
+  void confirmAllSubscription() {
+    _subscribeAll?.complete();
+    _subscribeAll = null;
+  }
+
+  /// Leaves the next [conversations] read in flight until [releaseList].
+  void holdList() => _readList = Completer<void>();
+  void releaseList() {
+    _readList?.complete();
+    _readList = null;
+  }
 
   Future<void> _tick(String call) async {
     calls.add(call);
@@ -324,8 +376,13 @@ class ChatFake implements ChatRepository {
 
   @override
   Future<Result<List<Conversation>>> conversations() async {
+    // The answer is the database as it stood when the query ran; anything
+    // that changes while the read is held open is not in it.
+    final snapshot = conversationsResult;
     await _tick('conversations');
-    return conversationsResult;
+    final held = _readList;
+    if (held != null) await held.future;
+    return snapshot;
   }
 
   @override
@@ -356,6 +413,22 @@ class ChatFake implements ChatRepository {
 
   /// When set, incoming() reports a connection that cannot be established.
   Result<Stream<Message>>? incomingResult;
+
+  /// When set, incomingAll() reports a subscription that cannot be made.
+  Result<Stream<Message>>? incomingAllResult;
+
+  @override
+  Future<Result<Stream<Message>>> incomingAll() async {
+    await _tick('incomingAll');
+    final held = _subscribeAll;
+    if (held != null) await held.future;
+    if (incomingAllResult case final failed?) return failed;
+    allSubscriptions++;
+    final controller = _all ??= StreamController<Message>.broadcast(
+      onCancel: () => canceledAllSubscriptions++,
+    );
+    return Ok(controller.stream);
+  }
 
   @override
   Future<Result<Stream<Message>>> incoming(String conversationId) async {

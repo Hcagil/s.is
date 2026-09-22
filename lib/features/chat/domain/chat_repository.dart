@@ -47,6 +47,11 @@ abstract interface class ChatRepository {
   /// re-checks the read policy for every subscriber.
   Future<Result<Stream<Message>>> incoming(String conversationId);
 
+  /// Messages arriving in ANY conversation the member belongs to, for keeping
+  /// the conversation list current. Row-level security decides which inserts
+  /// reach this subscriber; nothing here filters for authorisation.
+  Future<Result<Stream<Message>>> incomingAll();
+
   /// The id of the 1:1 conversation with [otherUserId], creating it when it does
   /// not exist yet. Calling twice returns the same conversation.
   Future<Result<String>> startDirectConversation(String otherUserId);

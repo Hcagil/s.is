@@ -26,6 +26,10 @@
 --      not a member, so the storage policies can only stop him on the
 --      conversation in the object key -- an outsider would fail
 --      has_app_access() first and prove nothing about that clause)
+--   rose/sam/tess   test/integration/live_list_integration_test.dart
+--     (rose's list is kept live while sam writes; tess is allowlisted and
+--      active and talks to sam, but is never in a conversation with rose, so
+--      only row-level security can keep rose's messages from her stream)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -43,5 +47,8 @@ insert into app_private.allowlist(email) values
   ('noah@integration.test'),
   ('olive@integration.test'),
   ('pete@integration.test'),
-  ('quinn@integration.test')
+  ('quinn@integration.test'),
+  ('rose@integration.test'),
+  ('sam@integration.test'),
+  ('tess@integration.test')
 on conflict do nothing;

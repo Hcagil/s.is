@@ -30,7 +30,7 @@ String previewTime(DateTime at, DateTime now) {
       local.day == today.day) {
     return '${two(local.hour)}:${two(local.minute)}';
   }
-  return '${two(local.day)}.${two(local.month)}.${local.year % 100}';
+  return '${two(local.day)}.${two(local.month)}.${two(local.year % 100)}';
 }
 
 /// One message in a conversation.

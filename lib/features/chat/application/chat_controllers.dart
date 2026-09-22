@@ -63,21 +63,34 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     var loaded = false;
     final opened = await ref.read(chatRepositoryProvider).incomingAll();
     if (opened case Ok(:final value)) {
-      final sub = value.listen((message) {
-        if (!loaded) {
-          buffered.add(message);
-        } else {
-          _apply(message);
-        }
-      });
+      final sub = value.listen(
+        (message) {
+          if (!loaded) {
+            buffered.add(message);
+          } else {
+            _apply(message);
+          }
+        },
+        // A dropped subscription only stops live updates; the re-read on
+        // returning from a conversation still keeps the list current.
+        onError: (Object _) {},
+      );
       ref.onDispose(sub.cancel);
     }
     var list = await _load();
     loaded = true;
+    var unknown = false;
     for (final message in buffered) {
-      list = _withMessage(list, message) ?? list;
+      final next = _withMessage(list, message);
+      if (next == null) {
+        unknown = true;
+      } else {
+        list = next;
+      }
     }
-    return list;
+    // A buffered message for a conversation the first read did not contain
+    // means one was started during the load: read again rather than drop it.
+    return unknown ? await _load() : list;
   }
 
   /// Moves [message] into its conversation's preview. A message for a
@@ -105,7 +118,11 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     if (index < 0) return null;
     final existing = list[index];
     final at = existing.lastMessageAt;
-    if (at != null && at.isAfter(message.createdAt)) return list;
+    // Not newer than the current preview -- a late delivery, or the same
+    // message delivered twice -- leaves the list exactly as it was. Using
+    // "older" here instead would let a duplicate move its conversation above
+    // one with a genuinely newer message.
+    if (at != null && !message.createdAt.isAfter(at)) return list;
     final updated = [...list]..removeAt(index);
     return [existing.withPreview(message), ...updated];
   }

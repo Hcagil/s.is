@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/auth_repository.dart';
 import 'package:sis/features/auth/domain/member.dart';
+import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -198,6 +199,35 @@ class FakeChat implements ChatRepository {
     }
     return const Ok(null);
   }
+
+  // Mechanical stubs so the tree compiles; the test writer owns their shape.
+  final sentImages = <({String conversationId, String body})>[];
+  Result<Message>? sendImageResult;
+  Result<Uri> attachmentUrlResult = Ok(Uri.parse('https://example.test/a.jpg'));
+
+  @override
+  Future<Result<Message>> sendImage({
+    required String conversationId,
+    required PickedImage image,
+    String body = '',
+  }) async {
+    sentImages.add((conversationId: conversationId, body: body));
+    return sendImageResult ??
+        Ok(
+          Message(
+            id: 'img-${sentImages.length}',
+            conversationId: conversationId,
+            senderId: 'me',
+            body: body.trim(),
+            createdAt: DateTime.now(),
+            attachmentPath: '$conversationId/fake.jpg',
+          ),
+        );
+  }
+
+  @override
+  Future<Result<Uri>> attachmentUrl(String attachmentPath) async =>
+      attachmentUrlResult;
 }
 
 /// A chat repository written from the [ChatRepository] contract, for the
@@ -365,4 +395,33 @@ class ChatFake implements ChatRepository {
     }
     return const Ok(null);
   }
+
+  // Mechanical stubs so the tree compiles; the test writer owns their shape.
+  final sentImages = <({String conversationId, String body})>[];
+  Result<Message>? sendImageResult;
+  Result<Uri> attachmentUrlResult = Ok(Uri.parse('https://example.test/a.jpg'));
+
+  @override
+  Future<Result<Message>> sendImage({
+    required String conversationId,
+    required PickedImage image,
+    String body = '',
+  }) async {
+    sentImages.add((conversationId: conversationId, body: body));
+    return sendImageResult ??
+        Ok(
+          Message(
+            id: 'img-${sentImages.length}',
+            conversationId: conversationId,
+            senderId: 'me',
+            body: body.trim(),
+            createdAt: DateTime.now(),
+            attachmentPath: '$conversationId/fake.jpg',
+          ),
+        );
+  }
+
+  @override
+  Future<Result<Uri>> attachmentUrl(String attachmentPath) async =>
+      attachmentUrlResult;
 }

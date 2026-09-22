@@ -109,6 +109,63 @@ class _Bubble extends StatelessWidget {
   }
 }
 
+/// An attachment, fetched through a signed URL issued only to a member.
+///
+/// The URL is short-lived, so it is resolved when the bubble is built rather
+/// than stored with the message.
+class _Attachment extends ConsumerStatefulWidget {
+  const _Attachment(this.path);
+
+  final String path;
+
+  @override
+  ConsumerState<_Attachment> createState() => _AttachmentState();
+}
+
+class _AttachmentState extends ConsumerState<_Attachment> {
+  late final Future<Result<Uri>> _url = ref
+      .read(messagesProvider.notifier)
+      .attachmentUrl(widget.path);
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 260, maxWidth: 280),
+        child: FutureBuilder<Result<Uri>>(
+          future: _url,
+          builder: (context, snapshot) => switch (snapshot.data) {
+            Ok(:final value) => Image.network(
+              value.toString(),
+              key: const ValueKey('attachment-image'),
+              fit: BoxFit.cover,
+              errorBuilder: (context, _, _) => _failed('Image unavailable'),
+            ),
+            Err(:final failure) => _failed(failure.message),
+            _ => const SizedBox(
+              height: 120,
+              width: 180,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _failed(String reason) => Container(
+    height: 96,
+    width: 180,
+    alignment: Alignment.center,
+    color: Theme.of(context).colorScheme.surfaceContainerHigh,
+    child: Padding(
+      padding: const EdgeInsets.all(8),
+      child: Text(reason, textAlign: TextAlign.center),
+    ),
+  );
+}
+
 class _Composer extends ConsumerStatefulWidget {
   const _Composer();
 
@@ -144,12 +201,39 @@ class _ComposerState extends ConsumerState<_Composer> {
     }
   }
 
+  /// Picks and sends an image, with whatever is typed as its caption.
+  Future<void> _attach() async {
+    if (_sending) return;
+    setState(() => _sending = true);
+    final result = await ref
+        .read(messagesProvider.notifier)
+        .sendImage(body: _controller.text);
+    if (!mounted) return;
+    setState(() => _sending = false);
+    // null means the member backed out of the picker: not a failure.
+    switch (result) {
+      case null:
+        return;
+      case Ok():
+        _controller.clear();
+      case Err(:final failure):
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(failure.message)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
       child: Row(
         children: [
+          IconButton(
+            key: const ValueKey('composer-attach'),
+            onPressed: _sending ? null : _attach,
+            icon: const Icon(Icons.image_outlined),
+            tooltip: 'Send a photo',
+          ),
           Expanded(
             child: TextField(
               key: const ValueKey('composer-field'),

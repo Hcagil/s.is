@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/sis_app.dart';
@@ -9,6 +10,7 @@ import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
+import 'features/chat/data/image_picker_attachment_source.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
 import 'features/update/application/update_controller.dart';
 import 'features/update/data/play_update_repository.dart';
@@ -46,6 +48,9 @@ Future<void> main() async {
           ),
           chatRepositoryProvider.overrideWithValue(
             SupabaseChatRepository(client),
+          ),
+          attachmentSourceProvider.overrideWithValue(
+            ImagePickerAttachmentSource(ImagePicker()),
           ),
         ],
         child: const SisApp(),

@@ -20,6 +20,7 @@ final class Message {
     required this.senderId,
     required this.body,
     required this.createdAt,
+    this.attachmentPath,
   });
 
   final String id;
@@ -27,6 +28,11 @@ final class Message {
   final String senderId;
   final String body;
   final DateTime createdAt;
+
+  /// Storage key of an attached image, or null for a text-only message.
+  final String? attachmentPath;
+
+  bool get hasAttachment => attachmentPath != null;
 
   /// Whether [userId] wrote this message; decides which side it is drawn on.
   bool isFrom(String userId) => senderId == userId;

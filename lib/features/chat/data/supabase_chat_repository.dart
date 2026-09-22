@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
+import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
 import '../domain/message.dart';
@@ -152,7 +153,9 @@ final class SupabaseChatRepository implements ChatRepository {
     try {
       final rows = await _client
           .from('messages')
-          .select('id, conversation_id, sender_id, body, created_at')
+          .select(
+            'id, conversation_id, sender_id, body, created_at, attachment_path',
+          )
           .eq('conversation_id', conversationId)
           // ascending is EXPLICIT: postgrest-dart's `order` defaults to
           // descending, so the bare call returned newest-first while this
@@ -186,7 +189,9 @@ final class SupabaseChatRepository implements ChatRepository {
             'sender_id': me,
             'body': trimmed,
           })
-          .select('id, conversation_id, sender_id, body, created_at')
+          .select(
+            'id, conversation_id, sender_id, body, created_at, attachment_path',
+          )
           .single();
       return Ok(_toMessage(row));
     } catch (e) {
@@ -305,11 +310,65 @@ final class SupabaseChatRepository implements ChatRepository {
     }
   }
 
+  @override
+  Future<Result<Message>> sendImage({
+    required String conversationId,
+    required PickedImage image,
+    String body = '',
+  }) async {
+    final me = _uid;
+    if (me == null) return const Err(DeniedFailure());
+    try {
+      // The conversation id is the FIRST path segment on purpose: the storage
+      // policy reads it back and asks the same membership question the table
+      // policies ask, instead of inventing a second rule that could drift.
+      final path =
+          '$conversationId/${DateTime.now().microsecondsSinceEpoch}'
+          '-${me.substring(0, 8)}.${image.extension}';
+      await _client.storage
+          .from('attachments')
+          .uploadBinary(
+            path,
+            image.bytes,
+            fileOptions: FileOptions(contentType: image.contentType),
+          );
+
+      final row = await _client
+          .from('messages')
+          .insert({
+            'conversation_id': conversationId,
+            'sender_id': me,
+            'body': body.trim(),
+            'attachment_path': path,
+          })
+          .select(
+            'id, conversation_id, sender_id, body, created_at, attachment_path',
+          )
+          .single();
+      return Ok(_toMessage(row));
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<Uri>> attachmentUrl(String attachmentPath) async {
+    try {
+      final signed = await _client.storage
+          .from('attachments')
+          .createSignedUrl(attachmentPath, 3600);
+      return Ok(Uri.parse(signed));
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
   Message _toMessage(Map<String, dynamic> row) => Message(
     id: row['id'] as String,
     conversationId: row['conversation_id'] as String,
     senderId: row['sender_id'] as String,
     body: row['body'] as String,
     createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
+    attachmentPath: row['attachment_path'] as String?,
   );
 }

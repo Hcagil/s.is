@@ -4,11 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
+import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
 import '../domain/message.dart';
 
 final chatRepositoryProvider = Provider<ChatRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+final attachmentSourceProvider = Provider<AttachmentSource>(
   (_) => throw UnimplementedError('override in main'),
 );
 
@@ -166,6 +170,35 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     if (current.any((m) => m.id == message.id)) return;
     state = AsyncData([...current, message]);
   }
+
+  /// Lets the member choose an image and sends it with an optional [body].
+  ///
+  /// Returns null when they back out of the picker — not a failure, and the
+  /// composer must not report one.
+  Future<Result<Message>?> sendImage({String body = ''}) async {
+    final conversationId = ref.read(openConversationProvider);
+    if (conversationId == null) return const Err(DeniedFailure());
+
+    final PickedImage? image;
+    try {
+      image = await ref.read(attachmentSourceProvider).pickImage();
+    } catch (e) {
+      // A picker that throws must read as a reason on screen, like any other
+      // platform failure.
+      return Err(ProviderFailure('Could not open the photo picker: $e'));
+    }
+    if (image == null) return null;
+
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .sendImage(conversationId: conversationId, image: image, body: body);
+    if (result case Ok(:final value)) _append(value);
+    return result;
+  }
+
+  /// A short-lived URL for an attachment, or an [Err] with its reason.
+  Future<Result<Uri>> attachmentUrl(String path) =>
+      ref.read(chatRepositoryProvider).attachmentUrl(path);
 
   /// Sends [body] to the open conversation. The [Err] reason is shown by the
   /// composer.

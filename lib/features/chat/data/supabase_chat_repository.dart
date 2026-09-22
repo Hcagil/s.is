@@ -134,7 +134,10 @@ final class SupabaseChatRepository implements ChatRepository {
           .from('messages')
           .select('id, conversation_id, sender_id, body, created_at')
           .eq('conversation_id', conversationId)
-          .order('created_at');
+          // ascending is EXPLICIT: postgrest-dart's `order` defaults to
+          // descending, so the bare call returned newest-first while this
+          // method documents oldest-first.
+          .order('created_at', ascending: true);
       return Ok(rows.map(_toMessage).toList());
     } catch (e) {
       return Err(_asFailure(e));

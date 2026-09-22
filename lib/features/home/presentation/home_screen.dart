@@ -14,33 +14,10 @@ Future<void> _rename(
   WidgetRef ref,
   String current,
 ) async {
-  final controller = TextEditingController(text: current);
   final name = await showDialog<String>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Display name'),
-      content: TextField(
-        key: const ValueKey('display-name-field'),
-        controller: controller,
-        autofocus: true,
-        maxLength: 80,
-        decoration: const InputDecoration(counterText: ''),
-        onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          key: const ValueKey('display-name-save'),
-          onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-          child: const Text('Save'),
-        ),
-      ],
-    ),
+    builder: (_) => _RenameDialog(current: current),
   );
-  controller.dispose();
   if (name == null || name.isEmpty || !context.mounted) return;
 
   final result = await ref
@@ -50,6 +27,59 @@ Future<void> _rename(
   if (result case Err(:final failure)) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(failure.message)));
+  }
+}
+
+/// Owns its own controller.
+///
+/// showDialog's future completes when the route is popped, but the dialog
+/// keeps rendering through its exit animation — so disposing the controller
+/// at the call site leaves the still-mounted TextField rebuilding against a
+/// disposed controller. A State disposes after the route is gone.
+class _RenameDialog extends StatefulWidget {
+  const _RenameDialog({required this.current});
+
+  final String current;
+
+  @override
+  State<_RenameDialog> createState() => _RenameDialogState();
+}
+
+class _RenameDialogState extends State<_RenameDialog> {
+  late final _controller = TextEditingController(text: widget.current);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() => Navigator.of(context).pop(_controller.text.trim());
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Display name'),
+      content: TextField(
+        key: const ValueKey('display-name-field'),
+        controller: _controller,
+        autofocus: true,
+        maxLength: 80,
+        decoration: const InputDecoration(counterText: ''),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('display-name-save'),
+          onPressed: _submit,
+          child: const Text('Save'),
+        ),
+      ],
+    );
   }
 }
 

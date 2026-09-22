@@ -13,6 +13,10 @@
 --   erin/frank/grace test/integration/device_change_test.dart
 --     (that suite signs erin in twice on purpose -- it is the device change --
 --      and needs two counterparties to prove history spans every conversation)
+--   hank/ivy/jack/kim test/integration/group_chat_integration_test.dart
+--     (three of them form the group; kim is allowlisted and active but is
+--      never invited, so she tests the membership half of the policies
+--      rather than the app-access half a stranger would fail first)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -20,5 +24,9 @@ insert into app_private.allowlist(email) values
   ('dan@integration.test'),
   ('erin@integration.test'),
   ('frank@integration.test'),
-  ('grace@integration.test')
+  ('grace@integration.test'),
+  ('hank@integration.test'),
+  ('ivy@integration.test'),
+  ('jack@integration.test'),
+  ('kim@integration.test')
 on conflict do nothing;

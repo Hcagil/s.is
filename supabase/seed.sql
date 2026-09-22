@@ -17,6 +17,11 @@
 --     (three of them form the group; kim is allowlisted and active but is
 --      never invited, so she tests the membership half of the policies
 --      rather than the app-access half a stranger would fail first)
+--   liam/mia/noah   test/integration/attachment_integration_test.dart
+--     (liam and mia exchange the image; noah is allowlisted and active but
+--      not a member, so the storage policies can only stop him on the
+--      conversation in the object key -- an outsider would fail
+--      has_app_access() first and prove nothing about that clause)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -28,5 +33,8 @@ insert into app_private.allowlist(email) values
   ('hank@integration.test'),
   ('ivy@integration.test'),
   ('jack@integration.test'),
-  ('kim@integration.test')
+  ('kim@integration.test'),
+  ('liam@integration.test'),
+  ('mia@integration.test'),
+  ('noah@integration.test')
 on conflict do nothing;

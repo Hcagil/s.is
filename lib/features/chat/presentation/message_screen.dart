@@ -98,11 +98,26 @@ class _Bubble extends StatelessWidget {
               : scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Text(
-          message.body,
-          style: TextStyle(
-            color: mine ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (message.hasAttachment) _Attachment(message.attachmentPath!),
+            // An image may be sent without a caption, so an empty body must
+            // render nothing at all rather than an empty line.
+            if (message.body.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(top: message.hasAttachment ? 8 : 0),
+                child: Text(
+                  message.body,
+                  style: TextStyle(
+                    color: mine
+                        ? scheme.onPrimaryContainer
+                        : scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

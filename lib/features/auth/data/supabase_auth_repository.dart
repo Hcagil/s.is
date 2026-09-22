@@ -92,13 +92,14 @@ final class SupabaseAuthRepository implements AuthRepository {
     try {
       final row = await _client
           .from('profiles')
-          .select('user_id, display_name')
+          .select('user_id, display_name, tag')
           .eq('user_id', uid)
           .single();
       return Ok(
         Member(
           userId: row['user_id'] as String,
           displayName: row['display_name'] as String,
+          tag: row['tag'] as String?,
         ),
       );
     } on PostgrestException catch (e) {

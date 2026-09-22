@@ -39,7 +39,7 @@ final class SupabaseChatRepository implements ChatRepository {
       // profiles is readable by any active member; RLS keeps it to the group.
       final rows = await _client
           .from('profiles')
-          .select('user_id, display_name')
+          .select('user_id, display_name, tag')
           .neq('user_id', me)
           .order('display_name');
       return Ok([
@@ -47,6 +47,7 @@ final class SupabaseChatRepository implements ChatRepository {
           Member(
             userId: row['user_id'] as String,
             displayName: row['display_name'] as String,
+            tag: row['tag'] as String?,
           ),
       ]);
     } catch (e) {
@@ -311,27 +312,6 @@ final class SupabaseChatRepository implements ChatRepository {
       );
       if (id is! String) return const Err(DeniedFailure());
       return Ok(id);
-    } catch (e) {
-      return Err(_asFailure(e));
-    }
-  }
-
-  @override
-  Future<Result<void>> setDisplayName(String displayName) async {
-    final me = _uid;
-    if (me == null) return const Err(DeniedFailure());
-    final trimmed = displayName.trim();
-    if (trimmed.isEmpty || trimmed.length > 80) {
-      return const Err(DeniedFailure());
-    }
-    try {
-      // Only display_name is grantable on this table, so nothing else on the
-      // row can be rewritten even if this call asked to.
-      await _client
-          .from('profiles')
-          .update({'display_name': trimmed})
-          .eq('user_id', me);
-      return const Ok(null);
     } catch (e) {
       return Err(_asFailure(e));
     }

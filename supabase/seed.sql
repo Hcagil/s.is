@@ -50,5 +50,8 @@ insert into app_private.allowlist(email) values
   ('quinn@integration.test'),
   ('rose@integration.test'),
   ('sam@integration.test'),
-  ('tess@integration.test')
+  ('tess@integration.test'),
+  ('vera@integration.test'),
+  ('walt@integration.test'),
+  ('xena@integration.test')
 on conflict do nothing;

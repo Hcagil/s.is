@@ -1,5 +1,8 @@
 // ConversationListController against a fake repository: what it asks for,
 // what it returns, and what it re-reads afterwards. The SDK is never here.
+//
+// Renaming left the chat feature in v0.4; its controller tests live in
+// test/features/profile/profile_controller_test.dart.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
@@ -99,64 +102,6 @@ void main() {
       expect((result as Err<String>).failure.message, isNotEmpty);
       final state = c.read(conversationListProvider);
       expect(state.hasError, isFalse, reason: 'a refusal emptied the list');
-      expect(state.requireValue.map((x) => x.id), ['c1']);
-    });
-  });
-
-  group('setDisplayName', () {
-    test('sends the name, then re-reads the members and the list', () async {
-      final fake = ChatFake()
-        ..conversationsResult = const Ok([withBob])
-        ..membersResult = const Ok([bob]);
-      final c = make(fake);
-      // Both are on screen at once on the home screen: the picker must not go
-      // on showing the old name after a rename.
-      c.listen(conversationListProvider, (_, _) {});
-      c.listen(membersProvider, (_, _) {});
-      await c.read(conversationListProvider.future);
-      await c.read(membersProvider.future);
-      expect(count(fake, 'members'), 1);
-
-      final result = await c
-          .read(conversationListProvider.notifier)
-          .setDisplayName('Maya R');
-
-      expect(result, isA<Ok<void>>());
-      expect(fake.renames, ['Maya R']);
-      await c.read(membersProvider.future);
-      expect(
-        count(fake, 'members'),
-        2,
-        reason: 'the member picker was not invalidated after a rename',
-      );
-      expect(
-        count(fake, 'conversations'),
-        2,
-        reason: 'the conversation list still shows the old name',
-      );
-    });
-
-    test('a refusal comes back with its reason and keeps the list', () async {
-      final fake = ChatFake()
-        ..conversationsResult = const Ok([withBob])
-        ..renameResult = const Err(
-          ProviderFailure('a display name is 1 to 80 characters'),
-        );
-      final c = make(fake);
-      c.listen(conversationListProvider, (_, _) {});
-      await c.read(conversationListProvider.future);
-
-      final result = await c
-          .read(conversationListProvider.notifier)
-          .setDisplayName('');
-
-      expect(result, isA<Err<void>>());
-      expect(
-        (result as Err<void>).failure.message,
-        'a display name is 1 to 80 characters',
-      );
-      final state = c.read(conversationListProvider);
-      expect(state.hasError, isFalse);
       expect(state.requireValue.map((x) => x.id), ['c1']);
     });
   });

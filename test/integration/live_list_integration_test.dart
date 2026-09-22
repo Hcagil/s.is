@@ -111,8 +111,6 @@ class _RealtimeDown implements ChatRepository {
     required List<String> memberIds,
   }) => live.startGroupConversation(title: title, memberIds: memberIds);
   @override
-  Future<Result<void>> setDisplayName(String name) => live.setDisplayName(name);
-  @override
   Future<Result<Message>> sendImage({
     required String conversationId,
     required PickedImage image,

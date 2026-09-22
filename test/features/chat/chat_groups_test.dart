@@ -1,7 +1,8 @@
-// Widget tests for the v0.3 presentation contract: the group composer, a
-// conversation list that labels a group by its title, and the display-name
-// dialog. Written from the contract — what a member sees and what the
-// repository is asked for — never from how the widgets are built.
+// Widget tests for the v0.3 presentation contract: the group composer and a
+// conversation list that labels a group by its title. Written from the
+// contract — what a member sees and what the repository is asked for — never
+// from how the widgets are built. Renaming moved to the profile feature in
+// v0.4 and is tested under test/features/profile/.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,7 +14,6 @@ import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/presentation/conversation_list.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
-import 'package:sis/features/home/presentation/home_screen.dart';
 
 import '../../support/fakes.dart';
 
@@ -79,25 +79,6 @@ Future<void> tapCreate(WidgetTester tester) async {
     warnIfMissed: false,
   );
   await tester.pumpAndSettle();
-}
-
-/// Opens the display-name dialog from the home menu.
-Future<ProviderContainer> openRename(WidgetTester tester, ChatFake chat) async {
-  final container = await pump(
-    tester,
-    chat,
-    home: const HomeScreen(member: me),
-  );
-  await tester.tap(find.byKey(const ValueKey('home-menu')));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('Change display name'));
-  await tester.pumpAndSettle();
-  expect(
-    find.byKey(const ValueKey('display-name-field')),
-    findsOneWidget,
-    reason: 'the display-name dialog did not open',
-  );
-  return container;
 }
 
 void expectNoRawException(WidgetTester tester) {
@@ -269,68 +250,52 @@ void main() {
     });
   });
 
-  group('display name', () {
-    testWidgets('saving sends the new name and closes the dialog', (
-      tester,
-    ) async {
-      final chat = ChatFake();
-      await openRename(tester, chat);
+  // Display names are not unique; the tag is what tells two Bobs apart, so
+  // both pickers must show it under the name.
+  group('member pickers show the tag', () {
+    const bobA = Member(userId: 'u2', displayName: 'Bob', tag: 'bob_a');
+    const bobB = Member(userId: 'u3', displayName: 'Bob', tag: 'bob_b');
+    const untagged = Member(userId: 'u4', displayName: 'Old client');
 
-      await tester.enterText(
-        find.byKey(const ValueKey('display-name-field')),
-        'Maya R',
-      );
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('display-name-save')));
+    Finder under(String key, String text) => find.descendant(
+      of: find.byKey(ValueKey(key)),
+      matching: find.text(text),
+    );
+
+    testWidgets('new chat', (tester) async {
+      final chat = ChatFake()..membersResult = const Ok([bobA, bobB, untagged]);
+      await pump(tester, chat);
+      await tester.tap(find.text('New chat'));
       await tester.pumpAndSettle();
 
-      expect(chat.renames, ['Maya R']);
+      expect(under('member-u2', '@bob_a'), findsOneWidget);
+      expect(under('member-u3', '@bob_b'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('display-name-field')),
+        find.descendant(
+          of: find.byKey(const ValueKey('member-u4')),
+          matching: find.textContaining('@'),
+        ),
         findsNothing,
-        reason: 'the dialog stayed open after a successful rename',
+        reason: 'a member without a tag was shown a made-up one',
       );
-      await tester.pumpAndSettle(const Duration(seconds: 6));
     });
 
-    testWidgets('cancelling sends nothing', (tester) async {
+    testWidgets('new group', (tester) async {
       final chat = ChatFake();
-      await openRename(tester, chat);
-
-      await tester.enterText(
-        find.byKey(const ValueKey('display-name-field')),
-        'Maya R',
-      );
-      await tester.pump();
-      await tester.tap(find.text('Cancel'));
+      await pump(tester, chat);
+      chat.membersResult = const Ok([bobA, bobB, untagged]);
+      await tester.tap(find.byKey(const ValueKey('new-group')));
       await tester.pumpAndSettle();
 
-      expect(chat.renames, isEmpty, reason: 'a cancelled rename was sent');
-      expect(find.byKey(const ValueKey('display-name-field')), findsNothing);
-    });
-
-    testWidgets('a refused rename shows the reason on screen', (tester) async {
-      final chat = ChatFake()
-        ..renameResult = const Err(
-          ProviderFailure('a display name is 1 to 80 characters'),
-        );
-      await openRename(tester, chat);
-
-      await tester.enterText(
-        find.byKey(const ValueKey('display-name-field')),
-        'Maya R',
-      );
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('display-name-save')));
-      await tester.pumpAndSettle();
-
+      expect(under('group-member-u2', '@bob_a'), findsOneWidget);
+      expect(under('group-member-u3', '@bob_b'), findsOneWidget);
       expect(
-        find.textContaining('a display name is 1 to 80 characters'),
-        findsAtLeastNWidgets(1),
-        reason: 'a refused rename failed silently',
+        find.descendant(
+          of: find.byKey(const ValueKey('group-member-u4')),
+          matching: find.textContaining('@'),
+        ),
+        findsNothing,
       );
-      expectNoRawException(tester);
-      await tester.pumpAndSettle(const Duration(seconds: 6));
     });
   });
 }

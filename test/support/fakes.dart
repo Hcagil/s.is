@@ -9,6 +9,8 @@ import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/profile/domain/own_profile.dart';
+import 'package:sis/features/profile/domain/profile_repository.dart';
 import 'package:sis/features/update/domain/update_repository.dart';
 
 class FakeAuth implements AuthRepository {
@@ -197,9 +199,6 @@ class FakeChat implements ChatRepository {
   Result<String>? groupResult;
   int _groupSeq = 0;
 
-  final renames = <String>[];
-  Result<void>? renameResult;
-
   @override
   Future<Result<String>> startGroupConversation({
     required String title,
@@ -215,17 +214,6 @@ class FakeChat implements ChatRepository {
       return const Err(ProviderFailure('a group needs another member'));
     }
     return Ok('g${++_groupSeq}');
-  }
-
-  @override
-  Future<Result<void>> setDisplayName(String displayName) async {
-    renames.add(displayName);
-    if (renameResult case final forced?) return forced;
-    final trimmed = displayName.trim();
-    if (trimmed.isEmpty || trimmed.length > 80) {
-      return const Err(ProviderFailure('a display name is 1 to 80 characters'));
-    }
-    return const Ok(null);
   }
 
   /// Every image handed to [sendImage], with the caption it was sent with.
@@ -461,9 +449,6 @@ class ChatFake implements ChatRepository {
   Result<String>? groupResult;
   int _groupSeq = 0;
 
-  final renames = <String>[];
-  Result<void>? renameResult;
-
   @override
   Future<Result<String>> startGroupConversation({
     required String title,
@@ -487,18 +472,6 @@ class ChatFake implements ChatRepository {
       ]);
     }
     return Ok(id);
-  }
-
-  @override
-  Future<Result<void>> setDisplayName(String displayName) async {
-    await _tick('rename:$displayName');
-    renames.add(displayName);
-    if (renameResult case final forced?) return forced;
-    final trimmed = displayName.trim();
-    if (trimmed.isEmpty || trimmed.length > 80) {
-      return const Err(ProviderFailure('a display name is 1 to 80 characters'));
-    }
-    return const Ok(null);
   }
 
   /// Every image handed to [sendImage], with the caption it was sent with.
@@ -634,5 +607,138 @@ class PickerFake implements AttachmentSource {
     if (latency > Duration.zero) await Future<void>.delayed(latency);
     if (_error case final error?) throw error;
     return _image;
+  }
+}
+
+/// The shape the `profiles.tag` check constraint accepts.
+final dbTagPattern = RegExp(r'^[a-z][a-z0-9_]{2,19}$');
+
+/// A profile repository written from the [ProfileRepository] contract.
+///
+/// It answers like the database, not like the form: it refuses a tag the
+/// check constraint refuses, a tag another account holds (the unique index,
+/// 23505), and a display name outside 1..80. Every call is asynchronous, a
+/// load, a save, or any single availability check can be held in flight and
+/// released out of order, and another member can claim a tag between a check
+/// and a save — the race the unique index exists for.
+class ProfileFake implements ProfileRepository {
+  ProfileFake({
+    OwnProfile? profile,
+    Iterable<String> takenByOthers = const [],
+    this.latency = Duration.zero,
+  }) : profile =
+           profile ??
+           const OwnProfile(
+             userId: 'u1',
+             displayName: 'Maya',
+             tag: 'maya',
+             onboardingDone: true,
+           ),
+       takenByOthers = {...takenByOthers};
+
+  /// The row as the database holds it now.
+  OwnProfile profile;
+
+  /// Tags other accounts hold — including accounts RLS hides from the caller.
+  final Set<String> takenByOthers;
+  final Duration latency;
+
+  /// Force an outcome; left null the fake answers from its own state.
+  Result<OwnProfile>? loadResult;
+  Result<OwnProfile>? saveResult;
+  Result<bool>? availabilityResult;
+
+  /// Call names in order: `load`, `save`, `check:<tag>`.
+  final calls = <String>[];
+  final saves = <({String? displayName, String? tag, bool? onboardingDone})>[];
+  List<String> get checks => [
+    for (final c in calls)
+      if (c.startsWith('check:')) c.substring(6),
+  ];
+
+  /// Another member claims [tag] — e.g. between this member's check and save.
+  void claimByOther(String tag) => takenByOthers.add(tag);
+
+  Completer<void>? _load;
+  Completer<void>? _save;
+  final _held = <String, Completer<void>>{};
+  final _holdTags = <String>{};
+
+  void holdLoad() => _load = Completer<void>();
+  void releaseLoad() {
+    _load?.complete();
+    _load = null;
+  }
+
+  void holdSave() => _save = Completer<void>();
+  void releaseSave() {
+    _save?.complete();
+    _save = null;
+  }
+
+  /// The next availability check for [tag] stays in flight until
+  /// [releaseCheck]. Its answer is the database as it stood when it was asked.
+  void holdCheck(String tag) => _holdTags.add(tag);
+  void releaseCheck(String tag) => _held.remove(tag)?.complete();
+
+  Future<void> _tick(String call) async {
+    calls.add(call);
+    if (latency > Duration.zero) await Future<void>.delayed(latency);
+  }
+
+  @override
+  Future<Result<OwnProfile>> load() async {
+    await _tick('load');
+    final held = _load;
+    if (held != null) await held.future;
+    return loadResult ?? Ok(profile);
+  }
+
+  @override
+  Future<Result<OwnProfile>> save({
+    String? displayName,
+    String? tag,
+    bool? onboardingDone,
+  }) async {
+    await _tick('save');
+    saves.add((
+      displayName: displayName,
+      tag: tag,
+      onboardingDone: onboardingDone,
+    ));
+    final held = _save;
+    if (held != null) await held.future;
+    if (saveResult case final forced?) return forced;
+    if (displayName != null &&
+        (displayName.trim().isEmpty || displayName.length > 80)) {
+      return const Err(ProviderFailure('That name or tag is not allowed.'));
+    }
+    if (tag != null && !dbTagPattern.hasMatch(tag)) {
+      return const Err(ProviderFailure('That name or tag is not allowed.'));
+    }
+    if (tag != null && takenByOthers.contains(tag)) {
+      return const Err(ProviderFailure('That tag was just taken by someone.'));
+    }
+    // One statement: every field lands, or none does.
+    profile = OwnProfile(
+      userId: profile.userId,
+      displayName: displayName ?? profile.displayName,
+      tag: tag ?? profile.tag,
+      onboardingDone: onboardingDone ?? profile.onboardingDone,
+    );
+    return Ok(profile);
+  }
+
+  @override
+  Future<Result<bool>> isTagAvailable(String tag) async {
+    final answer =
+        dbTagPattern.hasMatch(tag) &&
+        (tag == profile.tag || !takenByOthers.contains(tag));
+    await _tick('check:$tag');
+    if (_holdTags.remove(tag)) {
+      final gate = _held[tag] = Completer<void>();
+      await gate.future;
+    }
+    return availabilityResult ?? Ok(answer);
   }
 }

@@ -167,6 +167,7 @@ class _GroupComposerState extends ConsumerState<_GroupComposer> {
                         key: ValueKey('group-member-${m.userId}'),
                         value: _chosen.any((c) => c.userId == m.userId),
                         title: Text(m.displayName),
+                        subtitle: m.tag == null ? null : Text('@${m.tag}'),
                         onChanged: (on) => setState(() {
                           if (on ?? false) {
                             _chosen.add(m);
@@ -223,6 +224,7 @@ class _MemberPicker extends ConsumerWidget {
                 key: ValueKey('member-${m.userId}'),
                 leading: const CircleAvatar(child: Icon(Icons.person_outline)),
                 title: Text(m.displayName),
+                subtitle: m.tag == null ? null : Text('@${m.tag}'),
                 onTap: () => Navigator.of(context).pop(m),
               ),
           ],

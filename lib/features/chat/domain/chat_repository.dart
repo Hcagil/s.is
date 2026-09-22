@@ -67,9 +67,6 @@ abstract interface class ChatRepository {
     required List<String> memberIds,
   });
 
-  /// Changes the signed-in member's own display name.
-  Future<Result<void>> setDisplayName(String displayName);
-
   /// Uploads [image] into [conversationId] and sends it, with an optional
   /// caption in [body].
   ///

@@ -19,12 +19,6 @@ final class SupabaseChatRepository implements ChatRepository {
 
   final SupabaseClient _client;
 
-  /// How far back the conversation list looks for previews in one query.
-  // ponytail: a single bounded read instead of one query per conversation.
-  // If a member ever has more conversations than this covers, move the preview
-  // into a view or an RPC with DISTINCT ON rather than raising the number.
-  static const _previewScan = 200;
-
   /// How many messages one conversation screen holds.
   static const _historyLimit = 500;
 
@@ -105,26 +99,25 @@ final class SupabaseChatRepository implements ChatRepository {
       };
 
       // Newest first, so the first row seen for a conversation is its preview.
+      // One row per conversation, from a view that does the DISTINCT ON in the
+      // database. A bounded scan across all conversations used to lose the
+      // preview of a quiet one as soon as enough newer messages existed
+      // elsewhere, which rendered as "No messages yet" on a conversation that
+      // had messages.
       final recent = await _client
-          .from('messages')
-          .select('conversation_id, body, created_at, attachment_path')
-          .order('created_at', ascending: false)
-          .limit(_previewScan);
-      final previewBy = <String, ({String body, DateTime at})>{};
-      for (final row in recent) {
-        final body = row['body'] as String;
-        previewBy.putIfAbsent(
-          row['conversation_id'] as String,
-          () => (
+          .from('conversation_previews')
+          .select('conversation_id, body, created_at, attachment_path');
+      final previewBy = <String, ({String body, DateTime at})>{
+        for (final row in recent)
+          row['conversation_id'] as String: (
             // An image may be sent without a caption, and an empty preview
             // would read as "no messages" while hiding a real one.
-            body: body.isNotEmpty
-                ? body
+            body: (row['body'] as String).isNotEmpty
+                ? row['body'] as String
                 : (row['attachment_path'] == null ? '' : 'Photo'),
             at: DateTime.parse(row['created_at'] as String),
           ),
-        );
-      }
+      };
 
       final conversations = [
         for (final id in conversationIds)

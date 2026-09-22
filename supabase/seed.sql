@@ -17,6 +17,10 @@
 --     (three of them form the group; kim is allowlisted and active but is
 --      never invited, so she tests the membership half of the policies
 --      rather than the app-access half a stranger would fail first)
+--   olive/pete/quinn test/integration/chat_preview_and_paging_test.dart
+--     (olive talks to pete and to quinn: the pete thread carries the previews,
+--      the quinn thread is started and never written to, so a conversation
+--      with no messages at all is a real row rather than an assumption)
 --   liam/mia/noah   test/integration/attachment_integration_test.dart
 --     (liam and mia exchange the image; noah is allowlisted and active but
 --      not a member, so the storage policies can only stop him on the
@@ -36,5 +40,8 @@ insert into app_private.allowlist(email) values
   ('kim@integration.test'),
   ('liam@integration.test'),
   ('mia@integration.test'),
-  ('noah@integration.test')
+  ('noah@integration.test'),
+  ('olive@integration.test'),
+  ('pete@integration.test'),
+  ('quinn@integration.test')
 on conflict do nothing;

@@ -4,6 +4,9 @@ import 'dart:async';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/auth_repository.dart';
 import 'package:sis/features/auth/domain/member.dart';
+import 'package:sis/features/chat/domain/chat_repository.dart';
+import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/update/domain/update_repository.dart';
 
 class FakeAuth implements AuthRepository {
@@ -77,4 +80,198 @@ class FakeUpdate implements UpdateRepository {
 
   @override
   Future<void> openStoreListing() async => calls.add('store');
+}
+
+class FakeChat implements ChatRepository {
+  FakeChat({this.list = const [], this.initial = const []});
+
+  List<Conversation> list;
+  List<Message> initial;
+  Result<List<Conversation>>? conversationsResult;
+  Result<List<Message>>? messagesResult;
+  Result<Message>? sendResult;
+  Result<String> startResult = const Ok('c-new');
+
+  /// When set, messages() waits on it, so a test can deliver a Realtime
+  /// message while the initial read is still in flight.
+  Completer<void>? gate;
+
+  final sent = <String>[];
+  final started = <String>[];
+  int subscriptions = 0;
+  final _incoming = StreamController<Message>.broadcast();
+
+  /// Pushes a message as if Realtime delivered it.
+  void deliver(Message m) => _incoming.add(m);
+
+  List<Member> memberList = const [];
+  Result<List<Member>>? membersResult;
+
+  @override
+  Future<Result<List<Member>>> members() async =>
+      membersResult ?? Ok(memberList);
+
+  @override
+  Future<Result<List<Conversation>>> conversations() async =>
+      conversationsResult ?? Ok(list);
+
+  @override
+  Future<Result<List<Message>>> messages(String conversationId) async {
+    if (gate != null) await gate!.future;
+    return messagesResult ?? Ok(initial);
+  }
+
+  @override
+  Future<Result<Message>> send({
+    required String conversationId,
+    required String body,
+  }) async {
+    sent.add(body);
+    return sendResult ??
+        Ok(
+          Message(
+            id: 'sent-${sent.length}',
+            conversationId: conversationId,
+            senderId: 'me',
+            body: body.trim(),
+            createdAt: DateTime.now(),
+          ),
+        );
+  }
+
+  @override
+  Future<Result<Stream<Message>>> incoming(String conversationId) async {
+    subscriptions++;
+    return Ok(
+      _incoming.stream.transform(
+        StreamTransformer<Message, Message>.fromHandlers(
+          handleData: (m, sink) {
+            if (m.conversationId == conversationId) sink.add(m);
+          },
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<Result<String>> startDirectConversation(String otherUserId) async {
+    started.add(otherUserId);
+    return startResult;
+  }
+}
+
+/// A chat repository written from the [ChatRepository] contract, for the
+/// widget and controller tests that must survive inconvenient reality.
+///
+/// Deliberately not a convenience stub: a subscription is not confirmed until
+/// the test confirms it, a read can be held open while other things happen,
+/// Realtime delivers only to a live subscription, and every call is recorded
+/// in order so "subscribe before you read" can be checked.
+class ChatFake implements ChatRepository {
+  ChatFake({this.latency = Duration.zero});
+
+  /// Every call takes at least this long; nothing here is ever synchronous.
+  final Duration latency;
+
+  Result<List<Member>> membersResult = const Ok(<Member>[]);
+  Result<List<Conversation>> conversationsResult = const Ok(<Conversation>[]);
+  Result<List<Message>> messagesResult = const Ok(<Message>[]);
+  Result<Message>? sendResult;
+  Result<String> startResult = const Ok('c-new');
+
+  /// Call names in the order they were made, e.g. `incoming:c1`.
+  final calls = <String>[];
+  final sent = <({String conversationId, String body})>[];
+  final started = <String>[];
+  int subscriptions = 0;
+  int canceledSubscriptions = 0;
+
+  Completer<void>? _read;
+  Completer<void>? _subscribe;
+  final _streams = <String, StreamController<Message>>{};
+
+  /// Leaves the next [messages] read in flight until [releaseMessages].
+  void holdMessages() => _read = Completer<void>();
+  void releaseMessages() {
+    _read?.complete();
+    _read = null;
+  }
+
+  /// The server has not confirmed the subscription yet. Realtime is never
+  /// instantly ready, and code that assumes it is must fail here.
+  void holdSubscription() => _subscribe = Completer<void>();
+  void confirmSubscription() {
+    _subscribe?.complete();
+    _subscribe = null;
+  }
+
+  /// Delivers [m] the way Realtime would: to a live subscription only.
+  /// Anything sent while nobody is listening is gone, exactly as on the wire.
+  void deliver(Message m) => _streams[m.conversationId]?.add(m);
+
+  Future<void> _tick(String call) async {
+    calls.add(call);
+    if (latency > Duration.zero) await Future<void>.delayed(latency);
+  }
+
+  @override
+  Future<Result<List<Member>>> members() async {
+    await _tick('members');
+    return membersResult;
+  }
+
+  @override
+  Future<Result<List<Conversation>>> conversations() async {
+    await _tick('conversations');
+    return conversationsResult;
+  }
+
+  @override
+  Future<Result<List<Message>>> messages(String conversationId) async {
+    await _tick('messages:$conversationId');
+    if (_read != null) await _read!.future;
+    return messagesResult;
+  }
+
+  @override
+  Future<Result<Message>> send({
+    required String conversationId,
+    required String body,
+  }) async {
+    await _tick('send:$conversationId');
+    sent.add((conversationId: conversationId, body: body));
+    return sendResult ??
+        Ok(
+          Message(
+            id: 'sent-${sent.length}',
+            conversationId: conversationId,
+            senderId: 'me',
+            body: body.trim(),
+            createdAt: DateTime.now(),
+          ),
+        );
+  }
+
+  /// When set, incoming() reports a connection that cannot be established.
+  Result<Stream<Message>>? incomingResult;
+
+  @override
+  Future<Result<Stream<Message>>> incoming(String conversationId) async {
+    await _tick('incoming:$conversationId');
+    if (_subscribe != null) await _subscribe!.future;
+    if (incomingResult case final failed?) return failed;
+    subscriptions++;
+    final controller = _streams[conversationId] ??=
+        StreamController<Message>.broadcast(
+          onCancel: () => canceledSubscriptions++,
+        );
+    return Ok(controller.stream);
+  }
+
+  @override
+  Future<Result<String>> startDirectConversation(String otherUserId) async {
+    await _tick('start:$otherUserId');
+    started.add(otherUserId);
+    return startResult;
+  }
 }

@@ -8,6 +8,8 @@ import 'core/runtime_config.dart';
 import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
+import 'features/chat/application/chat_controllers.dart';
+import 'features/chat/data/supabase_chat_repository.dart';
 import 'features/update/application/update_controller.dart';
 import 'features/update/data/play_update_repository.dart';
 
@@ -41,6 +43,9 @@ Future<void> main() async {
           ),
           updateRepositoryProvider.overrideWithValue(
             PlayUpdateRepository(client),
+          ),
+          chatRepositoryProvider.overrideWithValue(
+            SupabaseChatRepository(client),
           ),
         ],
         child: const SisApp(),

@@ -30,7 +30,11 @@ inside `chat`.
    Flutter widgets, no SDKs.
 3. Only `data/` imports SDKs. Every repository implements a `domain/`
    interface so controllers are tested with fakes.
-4. Every Notifier has a unit test. Every RLS policy has a pgTAP test.
+4. Every Notifier has a unit test. Every RLS policy has a pgTAP test. Every
+   `data/` repository has an integration test that runs against a real local
+   Supabase — repositories are query shaping over an SDK, which a fake cannot
+   check: a wrong column name or a renamed RPC parameter passes every unit
+   test and fails on a device.
 
 `tool/check_pattern.sh` enforces rules 1–3 by import analysis; it runs in CI
 and blocks the merge on any violation. Violations are fixed by rewriting the

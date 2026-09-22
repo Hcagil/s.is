@@ -34,6 +34,11 @@ jobs:
               - 'compose.yaml'
               - 'docker/Supabase.Dockerfile'
               - 'supabase/**'
+              # The integration tests exercise the data layer against a real
+              # database, so changes there have to run this job too.
+              - 'test/integration/**'
+              - 'lib/features/**/data/**'
+              - 'dart_test.yaml'
 
   documentation:
     name: Documentation check
@@ -86,9 +91,25 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Build Supabase tooling image
         run: docker compose build supabase
-      - name: Start local database and replay migrations
-        run: docker compose run --rm supabase db start
+      # `start`, not `db start`: the integration tests need the API, auth and
+      # Realtime services, not only Postgres.
+      - name: Start Supabase and replay migrations
+        run: docker compose run --rm supabase start
       - name: Lint database
         run: docker compose run --rm supabase db lint --level error
       - name: Test database
         run: docker compose run --rm supabase test db
+      - name: Prepare cache directories
+        run: mkdir -p .ci-cache/pub .ci-cache/gradle
+      - name: Build development image
+        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml build flutter
+      # Skipped by the ordinary `flutter test` run; this is the only job with a
+      # database for them to talk to.
+      #
+      # --concurrency=1: these suites share one backend. Run in parallel they
+      # contend for a single Realtime container and one suite's subscriptions
+      # starve the other's, which showed up as a different Realtime test timing
+      # out on each run. They are integration tests against shared state; they
+      # are not parallel-safe by nature.
+      - name: Repository integration tests
+        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration

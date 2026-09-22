@@ -1,0 +1,52 @@
+import '../../../core/failure.dart';
+import '../../auth/domain/member.dart';
+import 'conversation.dart';
+import 'message.dart';
+
+/// Chat boundary; the only way the app reaches conversations and messages.
+///
+/// Every call is subject to row-level security: the caller sees a conversation
+/// only while it holds the active session and is a member. A repository never
+/// throws — a refusal arrives as [Err] with a typed [Failure].
+abstract interface class ChatRepository {
+  /// Everyone else who can sign in, so a first conversation can be started.
+  /// Without this there is no way to reach [startDirectConversation], which
+  /// needs another member's id.
+  Future<Result<List<Member>>> members();
+
+  /// Conversations the signed-in member belongs to, most recent first.
+  Future<Result<List<Conversation>>> conversations();
+
+  /// Messages in [conversationId], oldest first.
+  Future<Result<List<Message>>> messages(String conversationId);
+
+  /// Sends [body] to [conversationId] and returns the stored message.
+  ///
+  /// The sender is the signed-in member; the server assigns the id and the
+  /// timestamp, and returns the row it wrote. Returning it matters: a sender
+  /// must never depend on the Realtime echo to see their own message, or a
+  /// slow or dropped subscription means they send into silence.
+  Future<Result<Message>> send({
+    required String conversationId,
+    required String body,
+  });
+
+  /// Messages arriving in [conversationId] after subscription.
+  ///
+  /// The result arrives only once the server has confirmed the subscription,
+  /// or as [Err] when the connection cannot be established at all — the same
+  /// contract as every other call here, so an unreachable server reaches the
+  /// screen as a reason rather than as a raw SDK exception.
+  /// Realtime delivers nothing that happened before that moment, so a caller
+  /// must await this BEFORE its initial [messages] read — otherwise a message
+  /// sent in between is missed by the subscription and already too late for
+  /// the read.
+  ///
+  /// Realtime delivery is a convenience, not an authority: the server
+  /// re-checks the read policy for every subscriber.
+  Future<Result<Stream<Message>>> incoming(String conversationId);
+
+  /// The id of the 1:1 conversation with [otherUserId], creating it when it does
+  /// not exist yet. Calling twice returns the same conversation.
+  Future<Result<String>> startDirectConversation(String otherUserId);
+}

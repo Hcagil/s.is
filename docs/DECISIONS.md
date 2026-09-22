@@ -121,3 +121,52 @@ account or conversation removal — but those would still fan row ids out to
 people who cannot read the conversation. Publishing inserts only closes the
 path instead of recording it as an accepted exception. This is the one place
 where Realtime would otherwise have been a weaker authority than RLS.
+
+## 2026-09-22 — Riverpod's automatic retry is off for chat providers
+
+**`conversationListProvider` and `messagesProvider` pass `retry` a function
+that always returns null, disabling Riverpod 3's automatic retry of a failed
+build.** Reason: with retry enabled, a provider whose build fails does not
+settle on `AsyncError`. It stays `isLoading: true, hasError: true` while it
+retries, so the screen shows a spinner forever and never the reason — which
+`docs/ARCHITECTURE.md` explicitly forbids ("every failure state shows its
+reason on screen; there are no silent returns"). An endless spinner is a
+silent failure wearing a different hat.
+
+It is also wrong on the merits for this app's most likely failure: a
+`DeniedFailure` is the database refusing under RLS, and no number of retries
+turns a refusal into data.
+
+Recovery is explicit instead — `refresh()` on the list, and reopening a
+conversation for messages. The controller tests assert `isLoading` is false on
+a failed load, so a future change that re-enables retry fails the suite rather
+than shipping a spinner.
+
+This did not affect v0.1: `SessionController.build` maps every failure to a
+`SessionState` and never throws, so no provider there was ever retried.
+
+## 2026-09-22 — Repositories are covered by integration tests, not mocks
+
+**`data/` repositories are tested against a real local Supabase stack
+(`test/integration/`, tagged `integration` and skipped by the ordinary test
+run), not against a mocked SDK.** Reason: a repository is almost entirely
+query shaping — column names, RPC parameter names, row casts. A mock asserts
+that the code calls the SDK the way it was written, which passes just as
+happily when the query is wrong. The failure it is meant to catch would
+otherwise appear only on a device.
+
+The test signs in with a password, which exists only locally — the hosted
+project has Google as its single provider — against allowlist rows seeded by
+`supabase/seed.sql`, which runs on `db reset` and never on `db push`.
+
+It earned its place immediately: it caught that Realtime delivers nothing that
+happened before a subscription is established, so the original `incoming()`,
+which returned as soon as `subscribe()` was called, had a window where a
+message was missed by both the subscription and the initial read. `incoming()`
+now returns a future that completes only once the server confirms the join,
+and the controller awaits it before reading. No unit test could have found
+that, because the fake was always ready.
+
+The `database` CI filter was widened to `lib/features/**/data/**` and
+`test/integration/**` so a Dart-only change to a repository still runs the job
+that owns these tests.

@@ -19,7 +19,7 @@ Future<void> openPhotoViewer(
 class PhotoViewer extends StatefulWidget {
   const PhotoViewer({super.key, required this.paths, this.initialIndex = 0});
 
-  /// Attachment storage paths, oldest first.
+  /// Attachment storage paths, in the order the caller shows them.
   final List<String> paths;
   final int initialIndex;
 

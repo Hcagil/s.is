@@ -5,7 +5,7 @@ import '../../../app/brand.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
-import '../../chat/domain/initials.dart';
+import '../../chat/presentation/person_avatar.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../update/application/update_controller.dart';
 import '../application/profile_controller.dart';
@@ -102,17 +102,10 @@ class SettingsScreen extends StatelessWidget {
               horizontal: 16,
               vertical: 8,
             ),
-            leading: CircleAvatar(
+            leading: PersonAvatar(
+              label: profile.displayName,
+              seed: profile.userId,
               radius: 28,
-              backgroundColor: personTint(context, profile.userId),
-              child: Text(
-                initialsOf(profile.displayName),
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: personTint(context, profile.userId, ink: true),
-                ),
-              ),
             ),
             title: Text(
               profile.displayName,

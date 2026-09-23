@@ -257,7 +257,7 @@ installed on the workstation. `.private/` and `.orchestra/` are local-only.
 | v0.4 | Live chat list; tags and first-run name screen; settings; online and typing status | A new member picks a name and tag, and two members see each other online and typing |
 | v0.5 | Design foundation: shared Realtime join/teardown; the name (SIS = Stay In Sync); the Nocturne theme, Sync S logo, launcher icon, branded header | Every existing screen wears the design and the new icon is on the phone |
 | v0.6 | Unread counts; sender names in groups; last seen (switchable, server-enforced); settings sub-pages | A member sees what is unread and who said what in a group |
-| v0.7 | User and group profile pages | Tapping a chat title or a sender opens their profile |
+| v0.7 | User and group profile pages; tappable links; full-screen photo viewer | Tapping a 1:1 chat title or a group member opens their profile |
 | v0.8 | Push notifications; global, per-user and per-chat notification settings | A message arrives as a notification on a closed app |
 | v0.9 | Own media sheet and fast media | A photo appears at once for the sender and as a blurred preview first for receivers |
 | after v0.9 | iOS | scheduled after v0.9 |

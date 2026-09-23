@@ -165,6 +165,20 @@ class FakeChat implements ChatRepository {
   Future<Result<List<Member>>> members() async =>
       membersResult ?? Ok(memberList);
 
+  Result<List<Member>> conversationMembersResult = const Ok(<Member>[]);
+  Result<List<Message>> sharedMediaResult = const Ok(<Message>[]);
+  Result<List<Message>> sharedLinksResult = const Ok(<Message>[]);
+
+  @override
+  Future<Result<List<Member>>> conversationMembers(String id) async =>
+      conversationMembersResult;
+  @override
+  Future<Result<List<Message>>> sharedMedia(String id) async =>
+      sharedMediaResult;
+  @override
+  Future<Result<List<Message>>> sharedLinks(String id) async =>
+      sharedLinksResult;
+
   @override
   Future<Result<List<Conversation>>> conversations() async {
     listReads++;
@@ -378,6 +392,7 @@ class ChatFake implements ChatRepository {
   /// list-wide one ([incomingAll]) alike.
   void deliver(Message m) {
     if (self != null) _store(m);
+    history[m.conversationId]?.add(m);
     _streams[m.conversationId]?.add(m);
     _all?.add(m);
   }
@@ -483,7 +498,78 @@ class ChatFake implements ChatRepository {
   @override
   Future<Result<List<Member>>> members() async {
     await _tick('members');
+    final held = _people;
+    if (held != null) await held.future;
     return membersResult;
+  }
+
+  /// Who is in each conversation, as conversation_members joined to profiles
+  /// holds it. A conversation the caller is not in has no entry and reads as
+  /// empty -- row-level security hides rows, it does not raise.
+  final roster = <String, List<Member>>{};
+
+  /// Each conversation's history, oldest first, as the table holds it. When a
+  /// conversation has an entry, [messages] answers from it (and [deliver]
+  /// appends to it), so two conversations can hold different messages.
+  final history = <String, List<Message>>{};
+
+  /// Force an outcome; left null each read answers from [roster]/[history]
+  /// with the contract's filter, order and cap.
+  Result<List<Member>>? conversationMembersResult;
+  Result<List<Message>>? sharedMediaResult;
+  Result<List<Message>>? sharedLinksResult;
+
+  Completer<void>? _people;
+  Completer<void>? _shared;
+
+  /// [members] and [conversationMembers] stay in flight until [releasePeople].
+  void holdPeople() => _people = Completer<void>();
+  void releasePeople() {
+    _people?.complete();
+    _people = null;
+  }
+
+  /// [sharedMedia] and [sharedLinks] stay in flight until [releaseShared].
+  void holdShared() => _shared = Completer<void>();
+  void releaseShared() {
+    _shared?.complete();
+    _shared = null;
+  }
+
+  static final _webAddress = RegExp(r'https?://|www\.', caseSensitive: false);
+
+  List<Message> _newest(String id, bool Function(Message) keep) =>
+      [...(history[id] ?? const <Message>[]).where(keep)].reversed
+          .take(500)
+          .toList();
+
+  @override
+  Future<Result<List<Member>>> conversationMembers(String id) async {
+    await _tick('conversationMembers:$id');
+    final held = _people;
+    if (held != null) await held.future;
+    if (conversationMembersResult case final forced?) return forced;
+    return Ok(
+      [...?roster[id]]..sort((a, b) => a.displayName.compareTo(b.displayName)),
+    );
+  }
+
+  @override
+  Future<Result<List<Message>>> sharedMedia(String id) async {
+    await _tick('sharedMedia:$id');
+    final held = _shared;
+    if (held != null) await held.future;
+    if (sharedMediaResult case final forced?) return forced;
+    return Ok(_newest(id, (m) => m.hasAttachment));
+  }
+
+  @override
+  Future<Result<List<Message>>> sharedLinks(String id) async {
+    await _tick('sharedLinks:$id');
+    final held = _shared;
+    if (held != null) await held.future;
+    if (sharedLinksResult case final forced?) return forced;
+    return Ok(_newest(id, (m) => _webAddress.hasMatch(m.body)));
   }
 
   @override
@@ -501,6 +587,7 @@ class ChatFake implements ChatRepository {
   Future<Result<List<Message>>> messages(String conversationId) async {
     await _tick('messages:$conversationId');
     if (_read != null) await _read!.future;
+    if (history[conversationId] case final rows?) return Ok(List.of(rows));
     return messagesResult;
   }
 

@@ -22,6 +22,17 @@ abstract interface class ChatRepository {
   /// now. Only the member's own place moves; nobody else can see it.
   Future<Result<void>> markRead(String conversationId);
 
+  /// Everyone in [conversationId], the caller included, by display name.
+  Future<Result<List<Member>>> conversationMembers(String conversationId);
+
+  /// Messages with a photo in [conversationId], newest first, capped like
+  /// [messages].
+  Future<Result<List<Message>>> sharedMedia(String conversationId);
+
+  /// Messages whose text contains a web address, newest first, capped like
+  /// [messages]. Which part is the link is the caller's to extract.
+  Future<Result<List<Message>>> sharedLinks(String conversationId);
+
   /// Messages in [conversationId], oldest first.
   Future<Result<List<Message>>> messages(String conversationId);
 

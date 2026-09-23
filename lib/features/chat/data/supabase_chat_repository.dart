@@ -169,6 +169,73 @@ final class SupabaseChatRepository implements ChatRepository {
     }
   }
 
+  static const _messageColumns =
+      'id, conversation_id, sender_id, body, created_at, attachment_path';
+
+  @override
+  Future<Result<List<Member>>> conversationMembers(
+    String conversationId,
+  ) async {
+    try {
+      // RLS returns these rows only to a member of the conversation.
+      final rows = await _client
+          .from('conversation_members')
+          .select('user_id')
+          .eq('conversation_id', conversationId);
+      final ids = [for (final r in rows) r['user_id'] as String];
+      if (ids.isEmpty) return const Ok([]);
+      final profiles = await _client
+          .from('profiles')
+          .select('user_id, display_name, tag')
+          .inFilter('user_id', ids)
+          .order('display_name', ascending: true);
+      return Ok([
+        for (final p in profiles)
+          Member(
+            userId: p['user_id'] as String,
+            displayName: p['display_name'] as String,
+            tag: p['tag'] as String?,
+          ),
+      ]);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<List<Message>>> sharedMedia(String conversationId) async {
+    try {
+      final rows = await _client
+          .from('messages')
+          .select(_messageColumns)
+          .eq('conversation_id', conversationId)
+          .not('attachment_path', 'is', null)
+          // Newest first with a cap: what is lost is the oldest.
+          .order('created_at', ascending: false)
+          .limit(_historyLimit);
+      return Ok(rows.map(_toMessage).toList());
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<List<Message>>> sharedLinks(String conversationId) async {
+    try {
+      // A coarse filter in the database; linkSegments decides what a link is.
+      final rows = await _client
+          .from('messages')
+          .select(_messageColumns)
+          .eq('conversation_id', conversationId)
+          .or('body.ilike.*http://*,body.ilike.*https://*,body.ilike.*www.*')
+          .order('created_at', ascending: false)
+          .limit(_historyLimit);
+      return Ok(rows.map(_toMessage).toList());
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
   @override
   Future<Result<void>> markRead(String conversationId) async {
     try {

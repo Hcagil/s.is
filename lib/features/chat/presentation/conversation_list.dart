@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/brand.dart';
-
 import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
 import '../../auth/application/session_controller.dart';
@@ -11,8 +9,8 @@ import '../domain/message.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
 import '../domain/conversation.dart';
-import '../domain/initials.dart';
 import 'message_screen.dart';
+import 'person_avatar.dart';
 
 /// Reason text for any failure, so a screen never shows a bare exception.
 String reasonOf(Object error) =>
@@ -238,7 +236,7 @@ class _MemberPicker extends ConsumerWidget {
             for (final m in value)
               ListTile(
                 key: ValueKey('member-${m.userId}'),
-                leading: _Avatar(
+                leading: PersonAvatar(
                   label: m.displayName,
                   seed: m.userId,
                   online: false,
@@ -278,7 +276,7 @@ class _ConversationTile extends ConsumerWidget {
     return ListTile(
       key: ValueKey('conversation-${conversation.id}'),
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-      leading: _Avatar(
+      leading: PersonAvatar(
         label: conversation.label,
         // A person keeps one tint everywhere; a group has its own.
         seed: conversation.other?.userId ?? conversation.id,
@@ -365,61 +363,6 @@ class _ConversationTile extends ConsumerWidget {
         otherUserId: conversation.other?.userId,
         group: conversation.isGroup,
       ),
-    );
-  }
-}
-
-/// Initials in a circle, tinted per person, with a brand dot when online.
-class _Avatar extends StatelessWidget {
-  const _Avatar({
-    required this.label,
-    required this.seed,
-    required this.online,
-    required this.dotKey,
-  });
-
-  final String label;
-
-  /// Picks the tint, so a person keeps one colour everywhere.
-  final String seed;
-  final bool online;
-  final Key dotKey;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final avatar = CircleAvatar(
-      radius: 24,
-      backgroundColor: personTint(context, seed),
-      child: Text(
-        initialsOf(label),
-        style: TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 16,
-          color: personTint(context, seed, ink: true),
-        ),
-      ),
-    );
-    if (!online) return avatar;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        avatar,
-        Positioned(
-          right: -1,
-          bottom: -1,
-          child: Container(
-            key: dotKey,
-            width: 14,
-            height: 14,
-            decoration: BoxDecoration(
-              color: scheme.primary,
-              shape: BoxShape.circle,
-              border: Border.all(color: scheme.surface, width: 2.5),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

@@ -47,6 +47,9 @@
 --     (jude signs out and kara signs in on the SAME client, as one phone
 --      does; lena is in a conversation with each of them, so each has a
 --      list the other must never be shown)
+--   fern/gus/hugo/ines test/integration/profile_pages_integration_test.dart
+--     (fern, gus and hugo share groups and a 1:1; ines is allowlisted and
+--      active but in none of them, so only membership can hide their rows)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -82,5 +85,9 @@ insert into app_private.allowlist(email) values
   ('mona@integration.test'),
   ('jude@integration.test'),
   ('kara@integration.test'),
-  ('lena@integration.test')
+  ('lena@integration.test'),
+  ('fern@integration.test'),
+  ('gus@integration.test'),
+  ('hugo@integration.test'),
+  ('ines@integration.test')
 on conflict do nothing;

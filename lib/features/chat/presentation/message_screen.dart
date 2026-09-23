@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/brand.dart';
+import '../../../app/theme.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
@@ -84,42 +86,47 @@ class MessageScreen extends ConsumerWidget {
               Text(
                 status,
                 key: const ValueKey('conversation-status'),
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
           ],
         ),
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: switch (messages) {
-                AsyncData(:final value) when value.isEmpty => const Center(
-                  child: Text('No messages yet. Say something.'),
-                ),
-                AsyncData(:final value) => ListView.builder(
-                  // Newest at the bottom, which is where the composer is.
-                  reverse: true,
-                  itemCount: value.length,
-                  itemBuilder: (context, i) {
-                    final message = value[value.length - 1 - i];
-                    return _Bubble(
-                      message,
-                      mine: me != null && message.isFrom(me),
-                    );
-                  },
-                ),
-                AsyncError(:final error) => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Text(reasonOf(error), textAlign: TextAlign.center),
+      body: SisGlow(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: switch (messages) {
+                  AsyncData(:final value) when value.isEmpty => const Center(
+                    child: Text('No messages yet. Say something.'),
                   ),
-                ),
-                _ => const Center(child: CircularProgressIndicator()),
-              },
-            ),
-            const _Composer(),
-          ],
+                  AsyncData(:final value) => ListView.builder(
+                    // Newest at the bottom, which is where the composer is.
+                    reverse: true,
+                    itemCount: value.length,
+                    itemBuilder: (context, i) {
+                      final message = value[value.length - 1 - i];
+                      return _Bubble(
+                        message,
+                        mine: me != null && message.isFrom(me),
+                      );
+                    },
+                  ),
+                  AsyncError(:final error) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Text(reasonOf(error), textAlign: TextAlign.center),
+                    ),
+                  ),
+                  _ => const Center(child: CircularProgressIndicator()),
+                },
+              ),
+              const _Composer(),
+            ],
+          ),
         ),
       ),
     );
@@ -134,19 +141,26 @@ class _Bubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final brand = SisBrand.of(context);
+    // Square-ish corner on the sender's side marks whose bubble it is.
+    const r = Radius.circular(8);
+    const tail = Radius.circular(3);
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         key: ValueKey('message-${message.id}'),
         constraints: const BoxConstraints(maxWidth: 320),
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: mine
-              ? scheme.primaryContainer
-              : scheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
+          color: mine ? null : brand.theirs,
+          gradient: mine ? brand.gradient : null,
+          borderRadius: BorderRadius.only(
+            topLeft: r,
+            topRight: r,
+            bottomLeft: mine ? r : tail,
+            bottomRight: mine ? tail : r,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,9 +175,8 @@ class _Bubble extends StatelessWidget {
                 child: Text(
                   message.body,
                   style: TextStyle(
-                    color: mine
-                        ? scheme.onPrimaryContainer
-                        : scheme.onSurfaceVariant,
+                    fontSize: 15,
+                    color: mine ? Colors.white : brand.text,
                   ),
                 ),
               ),
@@ -195,7 +208,7 @@ class _AttachmentState extends ConsumerState<_Attachment> {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(6),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 260, maxWidth: 280),
         child: FutureBuilder<Result<Uri>>(
@@ -289,14 +302,20 @@ class _ComposerState extends ConsumerState<_Composer> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: Theme.of(context).colorScheme.outline),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(6, 8, 10, 12),
       child: Row(
         children: [
           IconButton(
             key: const ValueKey('composer-attach'),
             onPressed: _sending ? null : _attach,
-            icon: const Icon(Icons.image_outlined),
+            icon: const Icon(Icons.attach_file_rounded),
             tooltip: 'Send a photo',
           ),
           Expanded(
@@ -317,7 +336,6 @@ class _ComposerState extends ConsumerState<_Composer> {
               decoration: const InputDecoration(
                 hintText: 'Message',
                 counterText: '',
-                border: OutlineInputBorder(),
               ),
             ),
           ),
@@ -325,7 +343,7 @@ class _ComposerState extends ConsumerState<_Composer> {
           IconButton.filled(
             key: const ValueKey('composer-send'),
             onPressed: _sending ? null : _send,
-            icon: const Icon(Icons.send),
+            icon: const Icon(Icons.arrow_upward_rounded),
           ),
         ],
       ),

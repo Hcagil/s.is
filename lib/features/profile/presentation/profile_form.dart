@@ -134,7 +134,6 @@ class _ProfileFormState extends ConsumerState<ProfileForm> {
             helperText: 'Shown to other members. Need not be unique.',
             errorText: nameProblem,
             counterText: '',
-            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 16),
@@ -151,7 +150,6 @@ class _ProfileFormState extends ConsumerState<ProfileForm> {
                 _tagMessage ?? 'Unique. Letters, digits and _; 3 to 20.',
             errorText: tagIsBad ? _tagMessage : null,
             counterText: '',
-            border: const OutlineInputBorder(),
           ),
         ),
         if (_error != null) ...[

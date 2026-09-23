@@ -1,0 +1,12 @@
+# Launcher icon, generated from tool/icon/ (rendered by tool/render_icons_test.dart).
+# Regenerate: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: tool/icon/full.png
+  min_sdk_android: 21
+  adaptive_icon_background: tool/icon/background.png
+  adaptive_icon_foreground: tool/icon/foreground.png
+  # The foreground is already drawn inside the 66/108 safe zone.
+  adaptive_icon_foreground_inset: 0
+  adaptive_icon_monochrome: tool/icon/monochrome.png

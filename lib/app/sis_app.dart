@@ -13,6 +13,7 @@ import '../features/profile/presentation/onboarding_screen.dart';
 import '../features/update/application/update_controller.dart';
 import '../features/update/domain/update_state.dart';
 import '../features/update/presentation/update_required_screen.dart';
+import 'theme.dart';
 
 /// Set by main() when bootstrap itself fails; the gate shows the reason.
 final startupErrorProvider = Provider<String?>((_) => null);
@@ -27,17 +28,8 @@ class SisApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'SIS',
       themeMode: ThemeMode.system,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.indigo,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      theme: sisTheme(Brightness.light),
+      darkTheme: sisTheme(Brightness.dark),
       home: const SessionGate(),
     );
   }

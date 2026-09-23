@@ -324,3 +324,33 @@ convenient one, and `tool/check_pattern.sh` rule 5 fails CI on an awaited
 Side effects of unifying: chat subscriptions now fail on `channelError` and
 `timedOut` statuses immediately instead of waiting out the 15-second timeout,
 and cancelling a chat stream no longer waits on the unsubscribe reply.
+
+## 2026-09-23 — The name, the look and the logo
+
+**SIS means "Stay In Sync"**, written "SIS". The owner required an English
+meaning; the acronym says what the app does, and the capitals avoid "sis"
+being read as slang for "sister". The launcher label is unchanged.
+
+**The design is Nocturne** (DESIGN.md §10), chosen from four clickable
+directions: sleek, ink violet, precise; Manrope for the interface, Sora for the
+wordmark; your own messages on a gradient; live signals (online, typing) in
+the brand violet rather than the conventional green. Corners were rounded up
+from 4px after the owner's review. The three-stop "prism" gradient, borrowed
+from another direction, is reserved for the logo and wordmark so it stays
+special.
+
+**The logo is the Sync S**: an S made of two arrows chasing each other. Six
+typeset letterforms (a big S with a small s in front) were rejected before
+ten drawn marks were shown; typeset marks depend on a font's licence and
+metrics, and none read as ours.
+
+**One painter draws the logo everywhere.** `SisLogoPainter` renders it in the
+app and, through `tool/render_icons_test.dart`, the launcher icon layers that
+`flutter_launcher_icons` turns into every Android density, the adaptive icon
+and the Android 13 themed (monochrome) icon. No SVG dependency, no separate
+artwork file to fall out of step.
+
+**Fonts are bundled, not fetched.** A runtime font download would show a
+fallback face first and leak a request to Google on every cold start. Manrope
+and Sora are OFL; their licences ship with them and appear on the app's
+licence page.

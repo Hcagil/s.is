@@ -254,9 +254,53 @@ installed on the workstation. `.private/` and `.orchestra/` are local-only.
 | v0.1 | Google sign-in, allowlist gate, home screen, update policy, **full pipeline** | A merged change reaches a phone through Play with no cable |
 | v0.2 | 1:1 text chat with Realtime | Two devices exchange messages; one remote update has landed — first stable version |
 | v0.3 | Groups; display names | Group of three chats |
-| later | Push, media, iOS, E2EE | scheduled individually |
+| v0.4 | Live chat list; tags and first-run name screen; settings; online and typing status | A new member picks a name and tag, and two members see each other online and typing |
+| v0.5 | Design foundation: shared Realtime join/teardown; the name (SIS = Stay In Sync); the Nocturne theme, Sync S logo, launcher icon, branded header | Every existing screen wears the design and the new icon is on the phone |
+| v0.6 | Unread counts; sender names in groups; last seen (switchable, server-enforced); settings sub-pages | A member sees what is unread and who said what in a group |
+| v0.7 | User and group profile pages | Tapping a chat title or a sender opens their profile |
+| v0.8 | Push notifications; global, per-user and per-chat notification settings | A message arrives as a notification on a closed app |
+| v0.9 | Own media sheet and fast media | A photo appears at once for the sender and as a blurred preview first for receivers |
+| after v0.9 | iOS | scheduled after v0.9 |
+| later | E2EE | scheduled individually |
 
-## 10. Risks
+## 10. Visual design
+
+Chosen 2026-09-23 (DECISIONS). **SIS means "Stay In Sync"**, written "SIS".
+The design direction is **Nocturne**: sleek, ink violet, precise.
+
+| Token | Light | Dark |
+|---|---|---|
+| background | `#F5F4FA` | `#0D0B22` |
+| surface | `#FFFFFF` | `#151334` |
+| surface, raised | `#ECEBF5` | `#1D1A42` |
+| text | `#13112B` | `#ECEAFB` |
+| muted text | `#65627F` | `#9A96C0` |
+| line | `#DEDCEB` | `#25224B` |
+| brand (live signals: online, typing) | `#5B4CF0` | `#7B6BFF` |
+| brand, deep (gradient start) | `#2F3FD1` | `#3D4BE8` |
+| danger | `#D23F57` | `#FF7B8E` |
+| prism (logo, wordmark only) | `#2E36D9` → `#6D35E8` → `#B23FD0` | `#4450FF` → `#8B5CFF` → `#C45BE6` |
+
+- **Type:** Manrope (400–800) for the interface; Sora 800 for the "SIS"
+  wordmark. Both are bundled (OFL), never fetched at runtime.
+- **Shapes:** bubbles and inputs 8px, with a 3px corner on the sender's side;
+  buttons and cards 12px; floating buttons and sheets 16px; badges, switches
+  and avatars fully round.
+- **Colour use:** your own bubbles and filled buttons carry the brand
+  gradient; the other side's bubbles are plain surface. The three-stop prism
+  gradient is reserved for the logo and wordmark. Conversations and sign-in
+  sit on a faint glow of the brand colour.
+- **Logo:** the Sync S, an S made of two arrows chasing each other, gradient
+  over white on an ink ground. One painter (`lib/app/brand.dart`) draws it in
+  the app and renders the launcher icon (`tool/render_icons_test.dart` →
+  `tool/icon/` → `flutter_launcher_icons`), so the two cannot drift.
+- **Header:** logo and wordmark side by side above the chat list.
+- **Avatars:** initials in circles, tinted per person within the palette's
+  blue–violet range.
+
+The code holds these values in `lib/app/theme.dart`; change them here first.
+
+## 11. Risks
 
 - **Play processing delay** — an uploaded build can take minutes to hours to
   appear; the pipeline reports the upload, the phone confirms delivery.

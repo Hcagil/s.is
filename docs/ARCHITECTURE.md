@@ -9,7 +9,9 @@ hand-wired `ChangeNotifier`s (no enforceable boundaries).
 ```
 lib/
   main.dart               bootstrap only: config → ProviderScope → App
-  app/                    MaterialApp, theme, top-level routing
+  app/                    MaterialApp, theme (theme.dart), brand widgets
+                          (brand.dart: logo, wordmark, glow) that any
+                          presentation/ may import, top-level routing
   core/                   RuntimeConfig, Failure types, Result — no widgets, no SDKs
   data/                   SDK helpers shared by more than one feature's data/
                           layer (realtime_channels.dart); same rules as data/

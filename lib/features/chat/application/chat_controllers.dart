@@ -355,24 +355,24 @@ Future<T> _value<T>(Future<Result<T>> call) async => switch (await call) {
 
 /// Who is in a conversation, for its group page.
 final conversationMembersProvider = FutureProvider.autoDispose
-    .family<List<Member>, String>(
-      (ref, id) =>
-          _value(ref.read(chatRepositoryProvider).conversationMembers(id)),
-      retry: _never,
-    );
+    .family<List<Member>, String>((ref, id) {
+      // Per account: what a member may read depends on who "you" are.
+      ref.watch(currentUserIdProvider);
+      return _value(ref.read(chatRepositoryProvider).conversationMembers(id));
+    }, retry: _never);
 
 /// A conversation's photos, newest first.
 final sharedMediaProvider = FutureProvider.autoDispose
-    .family<List<Message>, String>(
-      (ref, id) => _value(ref.read(chatRepositoryProvider).sharedMedia(id)),
-      retry: _never,
-    );
+    .family<List<Message>, String>((ref, id) {
+      ref.watch(currentUserIdProvider);
+      return _value(ref.read(chatRepositoryProvider).sharedMedia(id));
+    }, retry: _never);
 
 /// A conversation's links, newest first.
 final sharedLinksProvider = FutureProvider.autoDispose
-    .family<List<SharedLink>, String>(
-      (ref, id) async => sharedLinksIn(
+    .family<List<SharedLink>, String>((ref, id) async {
+      ref.watch(currentUserIdProvider);
+      return sharedLinksIn(
         await _value(ref.read(chatRepositoryProvider).sharedLinks(id)),
-      ),
-      retry: _never,
-    );
+      );
+    }, retry: _never);

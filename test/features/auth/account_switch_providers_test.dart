@@ -16,6 +16,7 @@ import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 
@@ -347,6 +348,191 @@ void main() {
 
       expect(
         p.chat.calls.where((c) => c.startsWith('attachmentUrl:$path')).length,
+        callsBefore,
+        reason: 'asked the repository again for the same account',
+      );
+    });
+  });
+
+  // 'c-ac' is heybana and deniz only -- cagilhay is not a member, so reads
+  // of it as cagilhay come back as nothing, the same way RLS answers a
+  // query row-level security would refuse: not an error, just no rows.
+  const conversationId = 'c-ac';
+
+  group('conversationMembersProvider', () {
+    testWidgets("is the new account's answer, asked again on switch", (
+      t,
+    ) async {
+      final p = await signedInAsHeybana(t);
+      p.c.listen(conversationMembersProvider(conversationId), (_, _) {});
+      await settle(t);
+      expect(
+        ids(
+          p.c.read(conversationMembersProvider(conversationId)).requireValue,
+          (m) => m.userId,
+        ),
+        {heybana, deniz},
+      );
+      expect(
+        p.chat.calls,
+        contains('conversationMembers:$conversationId as $heybana'),
+      );
+
+      await switchTo(t, p, cagilhay);
+      await settle(t);
+      expect(
+        p.c.read(conversationMembersProvider(conversationId)).requireValue,
+        isEmpty,
+        reason: 'cagilhay is not a member of this conversation',
+      );
+      expect(
+        p.chat.calls,
+        contains('conversationMembers:$conversationId as $cagilhay'),
+      );
+    });
+
+    testWidgets('a recheck of the same account does not ask again', (t) async {
+      final p = await signedInAsHeybana(t);
+      p.c.listen(conversationMembersProvider(conversationId), (_, _) {});
+      await settle(t);
+      final callsBefore = p.chat.calls
+          .where((c) => c.startsWith('conversationMembers:$conversationId'))
+          .length;
+      expect(callsBefore, 1, reason: 'setup');
+
+      await run(t, p.c.read(sessionControllerProvider.notifier).retry());
+      expect(p.c.read(sessionControllerProvider).value, isA<Allowed>());
+
+      expect(
+        p.chat.calls
+            .where((c) => c.startsWith('conversationMembers:$conversationId'))
+            .length,
+        callsBefore,
+        reason: 'asked the repository again for the same account',
+      );
+    });
+  });
+
+  group('sharedMediaProvider', () {
+    testWidgets("is the new account's answer, asked again on switch", (
+      t,
+    ) async {
+      final p = await signedInAsHeybana(t);
+      p.backend.rooms
+          .firstWhere((r) => r.id == conversationId)
+          .messages
+          .add(
+            Message(
+              id: 'seed-photo',
+              conversationId: conversationId,
+              senderId: heybana,
+              body: '',
+              createdAt: DateTime.utc(2026, 9, 24, 6, 30),
+              attachmentPath: 'att/seed.jpg',
+            ),
+          );
+      p.c.listen(sharedMediaProvider(conversationId), (_, _) {});
+      await settle(t);
+      expect(
+        p.c.read(sharedMediaProvider(conversationId)).requireValue.single.id,
+        'seed-photo',
+      );
+      expect(p.chat.calls, contains('sharedMedia:$conversationId as $heybana'));
+
+      await switchTo(t, p, cagilhay);
+      await settle(t);
+      expect(
+        p.c.read(sharedMediaProvider(conversationId)).requireValue,
+        isEmpty,
+        reason: 'cagilhay is not a member of this conversation',
+      );
+      expect(
+        p.chat.calls,
+        contains('sharedMedia:$conversationId as $cagilhay'),
+      );
+    });
+
+    testWidgets('a recheck of the same account does not ask again', (t) async {
+      final p = await signedInAsHeybana(t);
+      p.c.listen(sharedMediaProvider(conversationId), (_, _) {});
+      await settle(t);
+      final callsBefore = p.chat.calls
+          .where((c) => c.startsWith('sharedMedia:$conversationId'))
+          .length;
+      expect(callsBefore, 1, reason: 'setup');
+
+      await run(t, p.c.read(sessionControllerProvider.notifier).retry());
+      expect(p.c.read(sessionControllerProvider).value, isA<Allowed>());
+
+      expect(
+        p.chat.calls
+            .where((c) => c.startsWith('sharedMedia:$conversationId'))
+            .length,
+        callsBefore,
+        reason: 'asked the repository again for the same account',
+      );
+    });
+  });
+
+  group('sharedLinksProvider', () {
+    testWidgets("is the new account's answer, asked again on switch", (
+      t,
+    ) async {
+      final p = await signedInAsHeybana(t);
+      p.backend.rooms
+          .firstWhere((r) => r.id == conversationId)
+          .messages
+          .add(
+            Message(
+              id: 'seed-link',
+              conversationId: conversationId,
+              senderId: heybana,
+              body: 'see https://example.com/x',
+              createdAt: DateTime.utc(2026, 9, 24, 6, 30),
+            ),
+          );
+      p.c.listen(sharedLinksProvider(conversationId), (_, _) {});
+      await settle(t);
+      expect(
+        p.c
+            .read(sharedLinksProvider(conversationId))
+            .requireValue
+            .single
+            .link
+            .toString(),
+        'https://example.com/x',
+      );
+      expect(p.chat.calls, contains('sharedLinks:$conversationId as $heybana'));
+
+      await switchTo(t, p, cagilhay);
+      await settle(t);
+      expect(
+        p.c.read(sharedLinksProvider(conversationId)).requireValue,
+        isEmpty,
+        reason: 'cagilhay is not a member of this conversation',
+      );
+      expect(
+        p.chat.calls,
+        contains('sharedLinks:$conversationId as $cagilhay'),
+      );
+    });
+
+    testWidgets('a recheck of the same account does not ask again', (t) async {
+      final p = await signedInAsHeybana(t);
+      p.c.listen(sharedLinksProvider(conversationId), (_, _) {});
+      await settle(t);
+      final callsBefore = p.chat.calls
+          .where((c) => c.startsWith('sharedLinks:$conversationId'))
+          .length;
+      expect(callsBefore, 1, reason: 'setup');
+
+      await run(t, p.c.read(sessionControllerProvider.notifier).retry());
+      expect(p.c.read(sessionControllerProvider).value, isA<Allowed>());
+
+      expect(
+        p.chat.calls
+            .where((c) => c.startsWith('sharedLinks:$conversationId'))
+            .length,
         callsBefore,
         reason: 'asked the repository again for the same account',
       );

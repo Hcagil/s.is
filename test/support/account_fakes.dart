@@ -15,6 +15,7 @@ import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/presence/domain/presence_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
@@ -231,6 +232,29 @@ class SessionChat implements ChatRepository {
   Future<Result<List<Message>>> messages(String conversationId) async {
     final who = await _as('messages:$conversationId');
     return Ok([...?_roomFor(conversationId, who)?.messages]);
+  }
+
+  @override
+  Future<Result<List<Member>>> conversationMembers(
+    String conversationId,
+  ) async {
+    final who = await _as('conversationMembers:$conversationId');
+    final r = _roomFor(conversationId, who);
+    return Ok([...?r?.members.map(backend.memberOf)]);
+  }
+
+  @override
+  Future<Result<List<Message>>> sharedMedia(String conversationId) async {
+    final who = await _as('sharedMedia:$conversationId');
+    final r = _roomFor(conversationId, who);
+    return Ok([...?r?.messages.where((m) => m.hasAttachment)]);
+  }
+
+  @override
+  Future<Result<List<Message>>> sharedLinks(String conversationId) async {
+    final who = await _as('sharedLinks:$conversationId');
+    final r = _roomFor(conversationId, who);
+    return Ok([...?r?.messages.where((m) => extractLinks(m.body).isNotEmpty)]);
   }
 
   @override

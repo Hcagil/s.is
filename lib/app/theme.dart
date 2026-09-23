@@ -133,7 +133,10 @@ ThemeData sisTheme(Brightness brightness) {
     ),
     listTileTheme: ListTileThemeData(
       iconColor: t.muted,
-      subtitleTextStyle: text.bodyMedium?.copyWith(color: t.muted, fontSize: 14),
+      subtitleTextStyle: text.bodyMedium?.copyWith(
+        color: t.muted,
+        fontSize: 14,
+      ),
     ),
     switchTheme: SwitchThemeData(
       trackOutlineColor: WidgetStateProperty.all(Colors.transparent),

@@ -5,7 +5,22 @@ import '../../../core/failure.dart';
 import '../application/profile_controller.dart';
 import 'profile_form.dart';
 
-/// Account settings: display name and tag.
+Future<void> _setSharing(
+  BuildContext context,
+  WidgetRef ref, {
+  bool? presence,
+  bool? typing,
+}) async {
+  final result = await ref
+      .read(ownProfileProvider.notifier)
+      .setSharing(presence: presence, typing: typing);
+  if (result case Err(:final failure) when context.mounted) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(failure.message)));
+  }
+}
+
+/// Account settings: display name, tag, and what others can see.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -37,6 +52,22 @@ class SettingsScreen extends ConsumerWidget {
                   }
                   return result;
                 },
+              ),
+              const SizedBox(height: 32),
+              Text('Privacy', style: Theme.of(context).textTheme.titleMedium),
+              SwitchListTile(
+                key: const ValueKey('share-presence'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Show when I am online'),
+                value: value.sharePresence,
+                onChanged: (on) => _setSharing(context, ref, presence: on),
+              ),
+              SwitchListTile(
+                key: const ValueKey('share-typing'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Show when I am typing'),
+                value: value.shareTyping,
+                onChanged: (on) => _setSharing(context, ref, typing: on),
               ),
             ],
           ),

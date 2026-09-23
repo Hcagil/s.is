@@ -6,6 +6,7 @@ import '../../auth/domain/member.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../domain/message.dart';
+import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
 import '../domain/conversation.dart';
 import 'message_screen.dart';
@@ -75,7 +76,13 @@ Future<void> _startChat(BuildContext context, WidgetRef ref) async {
   if (!context.mounted) return;
   switch (result) {
     case Ok(:final value):
-      await openConversation(context, ref, value, title: picked.displayName);
+      await openConversation(
+        context,
+        ref,
+        value,
+        title: picked.displayName,
+        otherUserId: picked.userId,
+      );
     case Err(:final failure):
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(failure.message)));
@@ -254,10 +261,14 @@ class _ConversationTile extends ConsumerWidget {
     };
     return ListTile(
       key: ValueKey('conversation-${conversation.id}'),
-      leading: CircleAvatar(
-        child: Icon(
-          conversation.isGroup ? Icons.groups_outlined : Icons.person_outline,
-        ),
+      leading: _Avatar(
+        group: conversation.isGroup,
+        online:
+            conversation.other != null &&
+            ref
+                .watch(onlineMembersProvider)
+                .contains(conversation.other!.userId),
+        dotKey: ValueKey('online-${conversation.id}'),
       ),
       title: Text(conversation.label),
       subtitle: conversation.lastMessage == null
@@ -283,7 +294,52 @@ class _ConversationTile extends ConsumerWidget {
         ref,
         conversation.id,
         title: conversation.label,
+        otherUserId: conversation.other?.userId,
       ),
+    );
+  }
+}
+
+/// An avatar with a green dot when the member is online.
+class _Avatar extends StatelessWidget {
+  const _Avatar({
+    required this.group,
+    required this.online,
+    required this.dotKey,
+  });
+
+  final bool group;
+  final bool online;
+  final Key dotKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final avatar = CircleAvatar(
+      child: Icon(group ? Icons.groups_outlined : Icons.person_outline),
+    );
+    if (!online) return avatar;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        avatar,
+        Positioned(
+          right: -1,
+          bottom: -1,
+          child: Container(
+            key: dotKey,
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: Colors.green,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Theme.of(context).colorScheme.surface,
+                width: 2,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

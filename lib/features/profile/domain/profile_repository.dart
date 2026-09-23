@@ -13,6 +13,8 @@ abstract interface class ProfileRepository {
     String? displayName,
     String? tag,
     bool? onboardingDone,
+    bool? sharePresence,
+    bool? shareTyping,
   });
 
   /// Whether [tag] is free for this member (their own current tag counts as

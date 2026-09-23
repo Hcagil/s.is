@@ -5,6 +5,8 @@ final class OwnProfile {
     required this.displayName,
     required this.tag,
     required this.onboardingDone,
+    this.sharePresence = true,
+    this.shareTyping = true,
   });
 
   final String userId;
@@ -16,6 +18,13 @@ final class OwnProfile {
 
   /// False until the member has seen the name-and-tag screen once.
   final bool onboardingDone;
+
+  /// Whether others may see this member online. Stored on the profile so it
+  /// follows the account to a new phone, and enforced by the server.
+  final bool sharePresence;
+
+  /// Whether others may see this member typing. Same storage and enforcement.
+  final bool shareTyping;
 }
 
 /// Longest display name the database accepts.

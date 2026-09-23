@@ -10,7 +10,11 @@ import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
+import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/domain/chat_repository.dart';
+import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/presentation/settings_screen.dart';
@@ -31,7 +35,13 @@ const maya = OwnProfile(
   onboardingDone: true,
 );
 
-Future<void> pumpApp(WidgetTester t, ProfileFake p, {FakeAuth? auth}) async {
+Future<void> pumpApp(
+  WidgetTester t,
+  ProfileFake p, {
+  FakeAuth? auth,
+  PresenceFake? presence,
+  ChatRepository? chat,
+}) async {
   await t.pumpWidget(
     ProviderScope(
       overrides: [
@@ -40,7 +50,10 @@ Future<void> pumpApp(WidgetTester t, ProfileFake p, {FakeAuth? auth}) async {
           auth ?? FakeAuth(session: true),
         ),
         updateRepositoryProvider.overrideWithValue(FakeUpdate()),
-        chatRepositoryProvider.overrideWithValue(FakeChat()),
+        chatRepositoryProvider.overrideWithValue(chat ?? FakeChat()),
+        presenceRepositoryProvider.overrideWithValue(
+          presence ?? PresenceFake(),
+        ),
         profileRepositoryProvider.overrideWithValue(p),
       ],
       child: const SisApp(),
@@ -222,5 +235,110 @@ void main() {
       reason: 'the previous member\'s profile survived sign-out',
     );
     expect(find.textContaining('Maya Profile'), findsNothing);
+  });
+
+  group('sharing switches', () {
+    bool switchOn(WidgetTester t, String key) => t
+        .widget<Switch>(
+          find.descendant(
+            of: find.byKey(ValueKey(key)),
+            matching: find.byType(Switch),
+            matchRoot: true,
+          ),
+        )
+        .value;
+
+    Future<void> flip(WidgetTester t, String key) async {
+      await t.ensureVisible(find.byKey(ValueKey(key)));
+      await t.tap(find.byKey(ValueKey(key)));
+      await t.pumpAndSettle();
+    }
+
+    OwnProfile sharing({required bool presence, required bool typing}) =>
+        OwnProfile(
+          userId: maya.userId,
+          displayName: maya.displayName,
+          tag: maya.tag,
+          onboardingDone: true,
+          sharePresence: presence,
+          shareTyping: typing,
+        );
+
+    testWidgets('the switches show what the profile holds', (t) async {
+      await pumpApp(
+        t,
+        ProfileFake(profile: sharing(presence: false, typing: true)),
+      );
+      await openSettings(t);
+      expect(switchOn(t, 'share-presence'), isFalse);
+      expect(switchOn(t, 'share-typing'), isTrue);
+    });
+
+    testWidgets('turning online status off saves only that, and the app '
+        'rejoins hidden', (t) async {
+      final p = ProfileFake(profile: maya);
+      final presence = PresenceFake();
+      // A 1:1 on the list: its tile is what watches who is online.
+      final chat = ChatFake()
+        ..conversationsResult = const Ok([
+          Conversation(
+            id: 'c1',
+            other: Member(userId: 'u2', displayName: 'Bob'),
+          ),
+        ]);
+      await pumpApp(t, p, presence: presence, chat: chat);
+      expect(presence.announcing, hasLength(1));
+      await openSettings(t);
+
+      await flip(t, 'share-presence');
+
+      final s = p.saves.single;
+      expect((s.sharePresence, s.shareTyping), (false, null));
+      expect(s.displayName, isNull);
+      expect(s.tag, isNull);
+      expect(p.profile.sharePresence, isFalse);
+      expect(switchOn(t, 'share-presence'), isFalse);
+      expect(
+        presence.announcing,
+        isEmpty,
+        reason: 'the member still announced after opting out',
+      );
+
+      // Home rejoins, hidden, once it is on screen again.
+      await t.pageBack();
+      await t.pumpAndSettle();
+      expect(presence.calls.last, 'online:hidden');
+      expect(presence.live, hasLength(1));
+      expect(presence.announcing, isEmpty);
+    });
+
+    testWidgets('turning typing off saves only that', (t) async {
+      final p = ProfileFake(profile: maya);
+      await pumpApp(t, p);
+      await openSettings(t);
+
+      await flip(t, 'share-typing');
+
+      final s = p.saves.single;
+      expect((s.sharePresence, s.shareTyping), (null, false));
+      expect(p.profile.shareTyping, isFalse);
+      expect(switchOn(t, 'share-typing'), isFalse);
+    });
+
+    testWidgets('a refused change keeps the stored value and says why', (
+      t,
+    ) async {
+      final p = ProfileFake(profile: maya)
+        ..saveResult = const Err(NetworkFailure('the network is unreachable'));
+      await pumpApp(t, p);
+      await openSettings(t);
+
+      await flip(t, 'share-presence');
+
+      expect(p.saves, hasLength(1));
+      expect(switchOn(t, 'share-presence'), isTrue);
+      expect(find.textContaining('the network is unreachable'), findsWidgets);
+      await t.pumpAndSettle(const Duration(seconds: 6));
+    });
   });
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
+import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
 import '../domain/message.dart';
 import 'conversation_list.dart';
@@ -15,22 +16,46 @@ Future<void> openConversation(
   WidgetRef ref,
   String conversationId, {
   String? title,
+  String? otherUserId,
 }) async {
   ref.read(openConversationProvider.notifier).open(conversationId);
-  await Navigator.of(
-    context,
-  ).push(MaterialPageRoute<void>(builder: (_) => MessageScreen(title: title)));
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => MessageScreen(title: title, otherUserId: otherUserId),
+    ),
+  );
   ref.read(openConversationProvider.notifier).close();
   // The list is also kept live by Realtime; this re-read is the fallback when
   // that subscription could not be established.
   await ref.read(conversationListProvider.notifier).reloadQuietly();
 }
 
+/// "typing…" beats "online"; in a group, who is typing by name.
+String? _status(WidgetRef ref, String? other) {
+  final typing = ref.watch(typingProvider);
+  if (typing.isNotEmpty) {
+    if (typing.length > 1) return '${typing.length} people are typing…';
+    final names = {
+      for (final m in ref.watch(membersProvider).value ?? const []) m.userId: m,
+    };
+    final who = names[typing.first]?.displayName;
+    return who == null ? 'typing…' : '$who is typing…';
+  }
+  if (other != null && ref.watch(onlineMembersProvider).contains(other)) {
+    return 'online';
+  }
+  return null;
+}
+
 /// The open conversation: its messages, and a composer.
 class MessageScreen extends ConsumerWidget {
-  const MessageScreen({super.key, this.title});
+  const MessageScreen({super.key, this.title, this.otherUserId});
 
   final String? title;
+
+  /// The other member of a 1:1, whose online status the header shows. Null
+  /// for a group, where the header shows only who is typing.
+  final String? otherUserId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -40,8 +65,30 @@ class MessageScreen extends ConsumerWidget {
       Allowed(:final member) => member.userId,
       _ => null,
     };
+    // A message from someone ends their "typing…" at once rather than
+    // leaving it over the message they just sent.
+    ref.listen(messagesProvider, (previous, next) {
+      final latest = next.value;
+      if (latest == null || latest.isEmpty) return;
+      if (previous?.value?.lastOrNull?.id == latest.last.id) return;
+      ref.read(typingProvider.notifier).messageFrom(latest.last.senderId);
+    });
+    final status = _status(ref, otherUserId);
     return Scaffold(
-      appBar: AppBar(title: Text(title ?? 'Conversation')),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title ?? 'Conversation'),
+            if (status != null)
+              Text(
+                status,
+                key: const ValueKey('conversation-status'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+          ],
+        ),
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -261,6 +308,12 @@ class _ComposerState extends ConsumerState<_Composer> {
               maxLines: 4,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _send(),
+              // Throttled, and silent when the member does not share typing.
+              onChanged: (text) {
+                if (text.isNotEmpty) {
+                  ref.read(typingProvider.notifier).signalTyping();
+                }
+              },
               decoration: const InputDecoration(
                 hintText: 'Message',
                 counterText: '',

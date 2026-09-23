@@ -72,6 +72,12 @@ access and must still be able to stop that device receiving notifications;
 gating it on `has_app_access()` would strand notifications on a phone that can
 no longer open them.
 
+Presence and typing use **private** Realtime channels. RLS on
+`realtime.messages` opens exactly two topics — `presence:members` and
+`typing:<conversation id>` — to active members (and conversation members for
+typing), and the send side also requires the member's own sharing switch to be
+on. Any other private topic is refused.
+
 Realtime publishes **inserts only**: `realtime.apply_rls` evaluates row-level
 security for INSERT and UPDATE but delivers DELETE to every subscriber of the
 table without consulting it.

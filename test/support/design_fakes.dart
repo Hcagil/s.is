@@ -105,6 +105,25 @@ class DesignChat implements ChatRepository {
   @override
   Future<Result<List<Conversation>>> conversations() async => Ok(list);
   @override
+  Future<Result<void>> markRead(String conversationId) async {
+    list = [
+      for (final c in list)
+        if (c.id != conversationId)
+          c
+        else
+          Conversation(
+            id: c.id,
+            title: c.title,
+            other: c.other,
+            lastMessage: c.lastMessage,
+            lastMessageAt: c.lastMessageAt,
+            lastSenderId: c.lastSenderId,
+          ),
+    ];
+    return const Ok(null);
+  }
+
+  @override
   Future<Result<List<Message>>> messages(String conversationId) async =>
       Ok(history[conversationId] ?? const []);
 

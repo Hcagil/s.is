@@ -58,3 +58,9 @@ final class Message {
   /// Whether [userId] wrote this message; decides which side it is drawn on.
   bool isFrom(String userId) => senderId == userId;
 }
+
+/// Whether [messages] (oldest first) at [index] starts a run: the first
+/// message, or one whose sender differs from the message before it. A group
+/// conversation names the sender only at the start of each run.
+bool startsRun(List<Message> messages, int index) =>
+    index == 0 || messages[index - 1].senderId != messages[index].senderId;

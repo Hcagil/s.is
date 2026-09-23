@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/brand.dart';
+
 import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
 import '../../auth/application/session_controller.dart';
@@ -109,7 +111,13 @@ Future<void> _startGroup(BuildContext context, WidgetRef ref) async {
   if (!context.mounted) return;
   switch (result) {
     case Ok(:final value):
-      await openConversation(context, ref, value, title: picked.title);
+      await openConversation(
+        context,
+        ref,
+        value,
+        title: picked.title,
+        group: true,
+      );
     case Err(:final failure):
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(failure.message)));
@@ -265,12 +273,15 @@ class _ConversationTile extends ConsumerWidget {
       Allowed(:final member) => member.userId,
       _ => null,
     };
+    final scheme = Theme.of(context).colorScheme;
+    final unread = conversation.unread > 0;
     return ListTile(
       key: ValueKey('conversation-${conversation.id}'),
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
       leading: _Avatar(
         label: conversation.label,
-        seed: conversation.id,
+        // A person keeps one tint everywhere; a group has its own.
+        seed: conversation.other?.userId ?? conversation.id,
         online:
             conversation.other != null &&
             ref
@@ -280,7 +291,9 @@ class _ConversationTile extends ConsumerWidget {
       ),
       title: Text(
         conversation.label,
-        style: const TextStyle(fontWeight: FontWeight.w700),
+        style: TextStyle(
+          fontWeight: unread ? FontWeight.w800 : FontWeight.w700,
+        ),
       ),
       subtitle: conversation.lastMessage == null
           ? const Text('No messages yet')
@@ -292,13 +305,57 @@ class _ConversationTile extends ConsumerWidget {
               key: ValueKey('preview-${conversation.id}'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              style: unread
+                  ? TextStyle(
+                      color: scheme.onSurface,
+                      fontWeight: FontWeight.w600,
+                    )
+                  : null,
             ),
       trailing: conversation.lastMessageAt == null
           ? null
-          : Text(
-              previewTime(conversation.lastMessageAt!, DateTime.now()),
-              key: ValueKey('preview-time-${conversation.id}'),
-              style: Theme.of(context).textTheme.bodySmall,
+          : Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  previewTime(conversation.lastMessageAt!, DateTime.now()),
+                  key: ValueKey('preview-time-${conversation.id}'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: unread ? scheme.primary : null,
+                    fontWeight: unread ? FontWeight.w700 : null,
+                  ),
+                ),
+                if (unread) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    key: ValueKey('unread-${conversation.id}'),
+                    // No `alignment`: an aligned Container grows to all the
+                    // width it is offered, and a ListTile trailing is offered
+                    // the whole row. Sized by its text, at least round.
+                    constraints: const BoxConstraints(minWidth: 20),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: scheme.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      conversation.unread > 99
+                          ? '99+'
+                          : '${conversation.unread}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: scheme.onPrimary,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
       onTap: () => openConversation(
         context,
@@ -306,6 +363,7 @@ class _ConversationTile extends ConsumerWidget {
         conversation.id,
         title: conversation.label,
         otherUserId: conversation.other?.userId,
+        group: conversation.isGroup,
       ),
     );
   }
@@ -330,28 +388,15 @@ class _Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final dark = scheme.brightness == Brightness.dark;
-    // Hues 222..301: blues through violets, the palette's own range.
-    final hue = 222.0 + seed.codeUnits.fold<int>(0, (a, c) => a + c) % 80;
     final avatar = CircleAvatar(
       radius: 24,
-      backgroundColor: HSLColor.fromAHSL(
-        1,
-        hue,
-        dark ? .38 : .70,
-        dark ? .24 : .92,
-      ).toColor(),
+      backgroundColor: personTint(context, seed),
       child: Text(
         initialsOf(label),
         style: TextStyle(
           fontWeight: FontWeight.w700,
           fontSize: 16,
-          color: HSLColor.fromAHSL(
-            1,
-            hue,
-            dark ? .80 : .50,
-            dark ? .84 : .34,
-          ).toColor(),
+          color: personTint(context, seed, ink: true),
         ),
       ),
     );

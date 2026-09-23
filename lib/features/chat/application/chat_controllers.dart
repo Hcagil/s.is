@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
+import '../../auth/application/session_controller.dart';
 import '../../auth/domain/member.dart';
+import '../../auth/domain/session_state.dart';
 import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
@@ -109,11 +111,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
 
   /// [list] with [message] as its conversation's preview, newest first; null
   /// when the conversation is not in [list]. An older message never replaces
-  /// a newer preview, so a late or repeated delivery is harmless.
-  static List<Conversation>? _withMessage(
-    List<Conversation> list,
-    Message message,
-  ) {
+  /// a newer preview, so a late or repeated delivery is harmless -- and is
+  /// never counted as unread twice.
+  List<Conversation>? _withMessage(List<Conversation> list, Message message) {
     final index = list.indexWhere((c) => c.id == message.conversationId);
     if (index < 0) return null;
     final existing = list[index];
@@ -124,7 +124,32 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     // one with a genuinely newer message.
     if (at != null && !message.createdAt.isAfter(at)) return list;
     final updated = [...list]..removeAt(index);
-    return [existing.withPreview(message), ...updated];
+    // Unread: someone else's message, in a conversation not on screen.
+    final me = switch (ref.read(sessionControllerProvider).value) {
+      Allowed(:final member) => member.userId,
+      _ => null,
+    };
+    final counts =
+        message.senderId != me &&
+        ref.read(openConversationProvider) != message.conversationId;
+    return [existing.withPreview(message, counts: counts), ...updated];
+  }
+
+  /// Marks [conversationId] read on the server, then clears its count here.
+  /// A failure leaves the count as it was: better a stale badge than a
+  /// conversation that looks read and is not.
+  Future<void> markRead(String conversationId) async {
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .markRead(conversationId);
+    // Checked before touching state: the list can be disposed while the call
+    // is in flight, and reading state then throws.
+    if (result is! Ok || !ref.mounted) return;
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData([
+      for (final c in current) c.id == conversationId ? c.read() : c,
+    ]);
   }
 
   Future<List<Conversation>> _load() async {
@@ -217,6 +242,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         return;
       }
       _append(message);
+      // Open on screen means read; tell the server so the count stays zero.
+      if (!message.isFrom(_me ?? '')) {
+        ref.read(conversationListProvider.notifier).markRead(conversationId);
+      }
     });
     ref.onDispose(sub.cancel);
 
@@ -233,6 +262,11 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         return merged;
     }
   }
+
+  String? get _me => switch (ref.read(sessionControllerProvider).value) {
+    Allowed(:final member) => member.userId,
+    _ => null,
+  };
 
   void _append(Message message) {
     final current = state.value;

@@ -187,3 +187,15 @@ class SisGlow extends StatelessWidget {
     );
   }
 }
+
+/// One tint per person, from a stable [seed] (their user id), within the
+/// palette's blue-to-violet range (hues 222-301). [ink] is the readable
+/// foreground for the same person: the avatar's initials, their name in a
+/// group.
+Color personTint(BuildContext context, String seed, {bool ink = false}) {
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  final hue = 222.0 + seed.codeUnits.fold<int>(0, (a, c) => a + c) % 80;
+  return ink
+      ? HSLColor.fromAHSL(1, hue, dark ? .80 : .50, dark ? .84 : .34).toColor()
+      : HSLColor.fromAHSL(1, hue, dark ? .38 : .70, dark ? .24 : .92).toColor();
+}

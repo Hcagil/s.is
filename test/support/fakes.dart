@@ -139,6 +139,16 @@ class FakeChat implements ChatRepository {
     return conversationsResult ?? Ok(list);
   }
 
+  /// Every conversation [markRead] was called for, in order.
+  final markedRead = <String>[];
+  Result<void> markReadResult = const Ok(null);
+
+  @override
+  Future<Result<void>> markRead(String conversationId) async {
+    markedRead.add(conversationId);
+    return markReadResult;
+  }
+
   @override
   Future<Result<List<Message>>> messages(String conversationId) async {
     if (gate != null) await gate!.future;
@@ -286,10 +296,16 @@ class FakeChat implements ChatRepository {
 /// Realtime delivers only to a live subscription, and every call is recorded
 /// in order so "subscribe before you read" can be checked.
 class ChatFake implements ChatRepository {
-  ChatFake({this.latency = Duration.zero});
+  ChatFake({this.latency = Duration.zero, this.self});
 
   /// Every call takes at least this long; nothing here is ever synchronous.
   final Duration latency;
+
+  /// The signed-in member, as the server knows them. When set, [deliver] also
+  /// writes to the "database" behind [conversations], the way an insert
+  /// does: the preview moves, and every member but the sender has one more
+  /// unread. Left null the database is whatever [conversationsResult] says.
+  final String? self;
 
   Result<List<Member>> membersResult = const Ok(<Member>[]);
   Result<List<Conversation>> conversationsResult = const Ok(<Conversation>[]);
@@ -328,8 +344,82 @@ class ChatFake implements ChatRepository {
   /// One insert reaches the conversation's own subscription and every
   /// list-wide one ([incomingAll]) alike.
   void deliver(Message m) {
+    if (self != null) _store(m);
     _streams[m.conversationId]?.add(m);
     _all?.add(m);
+  }
+
+  void _store(Message m) {
+    final current = conversationsResult;
+    if (current is! Ok<List<Conversation>>) return;
+    final rows = [
+      for (final c in current.value)
+        if (c.id != m.conversationId)
+          c
+        else
+          Conversation(
+            id: c.id,
+            title: c.title,
+            other: c.other,
+            lastMessage: m.body,
+            lastMessageAt: m.createdAt,
+            lastSenderId: m.senderId,
+            unread: m.senderId == self ? c.unread : c.unread + 1,
+          ),
+    ];
+    rows.sort((a, b) {
+      final x = a.lastMessageAt, y = b.lastMessageAt;
+      if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1;
+      return y.compareTo(x);
+    });
+    conversationsResult = Ok(rows);
+  }
+
+  /// Every conversation [markRead] was called for, in order.
+  final markedRead = <String>[];
+
+  /// Forces the outcome. Left null the fake answers like the RPC: a
+  /// conversation the member is not in is refused, and otherwise only this
+  /// member's count goes to zero -- which the next [conversations] reflects.
+  Result<void>? markReadResult;
+
+  Completer<void>? _markRead;
+
+  /// Leaves the next [markRead] in flight until [releaseMarkRead]: the screen
+  /// can be gone, and the list disposed, before the server answers.
+  void holdMarkRead() => _markRead = Completer<void>();
+  void releaseMarkRead() {
+    _markRead?.complete();
+    _markRead = null;
+  }
+
+  @override
+  Future<Result<void>> markRead(String conversationId) async {
+    await _tick('markRead:$conversationId');
+    markedRead.add(conversationId);
+    final held = _markRead;
+    if (held != null) await held.future;
+    if (markReadResult case final forced?) return forced;
+    final current = conversationsResult;
+    if (current is! Ok<List<Conversation>>) return const Ok(null);
+    if (!current.value.any((c) => c.id == conversationId)) {
+      return const Err(DeniedFailure());
+    }
+    conversationsResult = Ok([
+      for (final c in current.value)
+        if (c.id != conversationId)
+          c
+        else
+          Conversation(
+            id: c.id,
+            title: c.title,
+            other: c.other,
+            lastMessage: c.lastMessage,
+            lastMessageAt: c.lastMessageAt,
+            lastSenderId: c.lastSenderId,
+          ),
+    ]);
+    return const Ok(null);
   }
 
   Completer<void>? _subscribeAll;

@@ -94,6 +94,8 @@ class _RealtimeDown implements ChatRepository {
   @override
   Future<Result<List<Member>>> members() => live.members();
   @override
+  Future<Result<void>> markRead(String id) => live.markRead(id);
+  @override
   Future<Result<List<Message>>> messages(String id) => live.messages(id);
   @override
   Future<Result<Message>> send({

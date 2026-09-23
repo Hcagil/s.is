@@ -137,4 +137,6 @@ jobs:
       - name: Wait until Realtime delivers
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart
       - name: Repository integration tests
-        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration
+        # TZ as for the unit tests: a timestamp parsed without its offset only
+        # fails outside UTC, and the runner is UTC.
+        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -e TZ=JST-9 flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration

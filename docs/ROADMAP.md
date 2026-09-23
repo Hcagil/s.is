@@ -24,5 +24,6 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.2 | **done** 2026-09-22 — 1:1 chat with Realtime on the internal track; history survives a phone change and only one phone stays active, both proven by test. Two real devices exchanged messages and photos on 2026-09-23. |
 | v0.3 | **done** 2026-09-22 — group conversations and member-editable display names |
 | v0.4 | **done** 2026-09-23 — live chat list; tags and a first-run name screen; settings; online and typing status with server-enforced sharing switches |
-| v0.5 | in progress — shared Realtime join/teardown merged (#16); name, design direction and logo chosen; design implemented |
+| v0.5 | **done** 2026-09-23 — shared Realtime join/teardown (#16); SIS = Stay In Sync; Nocturne design, Sync S logo and launcher icon (#17) |
+| v0.6 | in progress — design approved 2026-09-23; unread counts and group sender names built |
 | later | in progress — image attachments shipped as a demo; push has its database half, and needs a Firebase project before it can send (docs/DELIVERY.md) |

@@ -27,7 +27,7 @@ RUN groupmod -g "${LOCAL_GID}" ubuntu \
 USER ubuntu
 RUN git clone --depth 1 --branch "${FLUTTER_VERSION}" \
     https://github.com/flutter/flutter.git /opt/flutter \
-    && curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_TOOLS_VERSION}_latest.zip" -o /tmp/android-tools.zip \
+    && curl -fsSL --retry 5 --retry-all-errors "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_TOOLS_VERSION}_latest.zip" -o /tmp/android-tools.zip \
     && echo '4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583  /tmp/android-tools.zip' | sha256sum -c - \
     && unzip -q /tmp/android-tools.zip -d /opt/android-sdk/cmdline-tools \
     && mv /opt/android-sdk/cmdline-tools/cmdline-tools /opt/android-sdk/cmdline-tools/latest \

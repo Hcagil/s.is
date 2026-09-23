@@ -377,3 +377,22 @@ definer view would drop the row-level checks.
 in that person's tint. A person's tint is now seeded by their user id
 everywhere, so the same person has the same colour in the list, the picker
 and a group.
+
+## 2026-09-23 — The release waits for CI on `main`
+
+**`release.yml` runs on CI completing, not on the push, and publishes only
+when CI passed on that exact commit.** Administrators stay outside branch
+protection (2026-09-21, for emergency fixes), so a merge could land past a red
+check and, with the old push trigger, publish in parallel with the CI run
+that would have failed. The emergency path is kept; it now has to be green to
+ship. Cost: a release starts about ten minutes later.
+
+**CI builds the release bundle, not a debug APK**, signed with a throwaway key
+generated in the job. R8 shrinking and the signing configuration only run in
+release mode; building debug in CI meant the first release build of any change
+happened after merge, in the job that publishes.
+
+**The `play-internal` environment deploys only from protected branches**, and
+the repository allows squash merges only. The secrets are reachable from
+`main` alone, and every change reaches `main` as one commit — which the
+release's docs-only check relies on.

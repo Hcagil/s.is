@@ -1,20 +1,62 @@
 name: Release
+# Publishes only a commit CI has already passed on main. Branch protection
+# deliberately lets an administrator merge past a red check (DECISIONS,
+# 2026-09-21); waiting for CI here is what keeps such a merge from shipping.
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-    # Changes that cannot affect the artefact or the database do not publish a build.
-    # .github/** is ignored too: editing a workflow cannot change the artefact
-    # or the database, and publishing for it burns a versionCode.
-    paths-ignore: ['docs/**', '**/*.md', '.gitignore', '.gitattributes', '.github/**']
 concurrency: { group: release, cancel-in-progress: false }
 permissions:
-  contents: write
+  contents: read
 jobs:
-  publish:
-    runs-on: ubuntu-latest
-    environment: play-internal
+  scope:
+    # A push to this repository's main. Checking the event and the head
+    # repository matters: a fork's pull request can come from a branch that
+    # is also named main.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    outputs:
+      ship: ${{ steps.diff.outputs.ship }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+      # Changes that cannot affect the artefact or the database do not publish
+      # a build: publishing for them burns a versionCode.
+      # ponytail: diffs the last commit only. Squash merges make that one change
+      # per push; code in an earlier commit of a multi-commit push ships with
+      # the next release instead.
+      - name: Decide whether this change ships
+        id: diff
+        run: |
+          if git diff --name-only HEAD^ HEAD \
+              | grep -qvE '^(docs/|\.github/)|\.md$|^\.git(ignore|attributes)$'; then
+            echo ship=true >> "$GITHUB_OUTPUT"
+          else
+            echo ship=false >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    needs: scope
+    if: needs.scope.outputs.ship == 'true'
+    runs-on: ubuntu-24.04
+    environment: play-internal
+    permissions:
+      contents: write
+    env:
+      # The commit CI passed. GITHUB_SHA here is main's tip at trigger time,
+      # which a later merge may already have moved past.
+      SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Compute version
         id: v
         run: |
@@ -63,7 +105,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "v${{ steps.v.outputs.name }}+${{ steps.v.outputs.code }}" \
-            --target "$GITHUB_SHA" --generate-notes \
+            --target "$SHA" --generate-notes \
             --title "SIS ${{ steps.v.outputs.name }} (build ${{ steps.v.outputs.code }})"
       - name: Remove signing key
         if: always()

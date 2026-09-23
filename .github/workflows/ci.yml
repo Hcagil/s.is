@@ -96,8 +96,18 @@ jobs:
       # local time at all. POSIX form, so no tzdata is needed.
       - name: Test
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -e TZ=JST-9 flutter flutter test
-      - name: Build debug APK
-        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter build apk --debug
+      # Release mode, not debug: R8 shrinking and the signing config only run
+      # in a release build, and the Release workflow after merge is the wrong
+      # place to find out they break. A throwaway key stands in for the upload
+      # key, which never leaves the play-internal environment.
+      - name: Build release bundle
+        run: |
+          docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm \
+            -e ANDROID_UPLOAD_KEYSTORE=/tmp/ci.jks -e ANDROID_UPLOAD_KEY_ALIAS=ci \
+            -e ANDROID_UPLOAD_STORE_PASSWORD=throwaway -e ANDROID_UPLOAD_KEY_PASSWORD=throwaway \
+            flutter sh -c 'keytool -genkeypair -noprompt -keystore /tmp/ci.jks -alias ci \
+                -storepass throwaway -keypass throwaway -keyalg RSA -keysize 2048 -validity 1 -dname CN=ci \
+              && flutter build appbundle --release'
 
   database:
     name: Database checks

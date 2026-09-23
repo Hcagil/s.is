@@ -47,14 +47,16 @@ class _SignedIn extends SessionController {
   Future<SessionState> build() async => const Allowed(me);
 }
 
-ProviderContainer scope(ChatFake chat, AttachmentSource picker) =>
-    ProviderContainer.test(
-      overrides: [
-        chatRepositoryProvider.overrideWithValue(chat),
-        presenceRepositoryProvider.overrideWithValue(PresenceFake()),
-        attachmentSourceProvider.overrideWithValue(picker),
-        sessionControllerProvider.overrideWith(_SignedIn.new),
-      ],
+Future<ProviderContainer> scope(ChatFake chat, AttachmentSource picker) =>
+    settled(
+      ProviderContainer.test(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(chat),
+          presenceRepositoryProvider.overrideWithValue(PresenceFake()),
+          attachmentSourceProvider.overrideWithValue(picker),
+          sessionControllerProvider.overrideWith(_SignedIn.new),
+        ],
+      ),
     );
 
 Future<ProviderContainer> pump(
@@ -62,7 +64,7 @@ Future<ProviderContainer> pump(
   ChatFake chat,
   AttachmentSource picker,
 ) async {
-  final container = scope(chat, picker);
+  final container = await scope(chat, picker);
   container.read(openConversationProvider.notifier).open('c1');
   await tester.pumpWidget(
     UncontrolledProviderScope(
@@ -187,7 +189,7 @@ void main() {
     test('a cancelled picker is null — not a failure', () async {
       final chat = ChatFake();
       final picker = PickerFake.cancels();
-      final c = scope(chat, picker);
+      final c = await scope(chat, picker);
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
 
@@ -208,7 +210,7 @@ void main() {
 
     test('a picker that throws becomes a provider failure', () async {
       final chat = ChatFake();
-      final c = scope(
+      final c = await scope(
         chat,
         PickerFake.throwsError(StateError('no photo permission')),
       );
@@ -229,7 +231,7 @@ void main() {
 
     test('a chosen image is uploaded with its caption and appended', () async {
       final chat = ChatFake();
-      final c = scope(chat, PickerFake.returns(pickedPng()));
+      final c = await scope(chat, PickerFake.returns(pickedPng()));
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
 
@@ -261,7 +263,7 @@ void main() {
 
     test('an image with no caption is allowed', () async {
       final chat = ChatFake();
-      final c = scope(chat, PickerFake.returns(pickedPng()));
+      final c = await scope(chat, PickerFake.returns(pickedPng()));
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
 
@@ -277,7 +279,7 @@ void main() {
       final chat = ChatFake();
       // A bucket that accepts only four image types refuses this one; a fake
       // that accepts everything would let an unvalidated upload ship green.
-      final c = scope(
+      final c = await scope(
         chat,
         PickerFake.returns(pickedPng(contentType: 'application/pdf')),
       );
@@ -298,7 +300,7 @@ void main() {
       'a slow picker does not resolve before the member has chosen',
       () async {
         final chat = ChatFake();
-        final c = scope(
+        final c = await scope(
           chat,
           PickerFake.returns(
             pickedPng(),
@@ -329,7 +331,7 @@ void main() {
 
     test('attachmentUrl asks the repository for that exact path', () async {
       final chat = ChatFake()..store('c1/held.png');
-      final c = scope(chat, PickerFake.cancels());
+      final c = await scope(chat, PickerFake.cancels());
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
 

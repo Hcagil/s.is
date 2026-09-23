@@ -34,7 +34,7 @@ OwnProfile profile({bool presence = true, bool typing = true}) => OwnProfile(
 
 /// The wiring production mounts, with every repository faked. The session
 /// gate watches the profile before home is ever shown, so it is watched here.
-ProviderContainer scope(PresenceFake presence, ProfileFake p) {
+Future<ProviderContainer> scope(PresenceFake presence, ProfileFake p) async {
   final c = ProviderContainer.test(
     overrides: [
       presenceRepositoryProvider.overrideWithValue(presence),
@@ -43,6 +43,7 @@ ProviderContainer scope(PresenceFake presence, ProfileFake p) {
       sessionControllerProvider.overrideWith(_SignedIn.new),
     ],
   );
+  await settled(c);
   c.listen(ownProfileProvider, (_, _) {});
   return c;
 }
@@ -63,7 +64,7 @@ void main() {
     testWidgets('nothing is joined before the profile is known', (t) async {
       final presence = PresenceFake();
       final p = ProfileFake(profile: profile())..holdLoad();
-      final c = scope(presence, p);
+      final c = await scope(presence, p);
       c.listen(onlineMembersProvider, (_, _) {});
       await flush(t);
 
@@ -86,7 +87,10 @@ void main() {
     testWidgets('a member who does not share joins hidden and still sees '
         'others', (t) async {
       final presence = PresenceFake()..setOthersOnline({'u2'});
-      final c = scope(presence, ProfileFake(profile: profile(presence: false)));
+      final c = await scope(
+        presence,
+        ProfileFake(profile: profile(presence: false)),
+      );
       c.listen(onlineMembersProvider, (_, _) {});
       await flush(t);
 
@@ -97,7 +101,7 @@ void main() {
 
     testWidgets('every arrival and departure is reflected', (t) async {
       final presence = PresenceFake();
-      final c = scope(presence, ProfileFake(profile: profile()));
+      final c = await scope(presence, ProfileFake(profile: profile()));
       c.listen(onlineMembersProvider, (_, _) {});
       await flush(t);
 
@@ -119,7 +123,7 @@ void main() {
         'channel; turning it on announces again', (t) async {
       final presence = PresenceFake()..setOthersOnline({'u2'});
       final p = ProfileFake(profile: profile());
-      final c = scope(presence, p);
+      final c = await scope(presence, p);
       c.listen(onlineMembersProvider, (_, _) {});
       await flush(t);
       expect(presence.announcing, hasLength(1));
@@ -149,7 +153,7 @@ void main() {
       final presence = PresenceFake()
         ..onlineRefusal = const DeniedFailure()
         ..setOthersOnline({'u2'});
-      final c = scope(presence, ProfileFake(profile: profile()));
+      final c = await scope(presence, ProfileFake(profile: profile()));
       c.listen(onlineMembersProvider, (_, _) {});
       await flush(t);
 
@@ -164,7 +168,7 @@ void main() {
         ..setOthersOnline({'u2'})
         ..holdOnline();
       final p = ProfileFake(profile: profile());
-      final c = scope(presence, p);
+      final c = await scope(presence, p);
       c.listen(onlineMembersProvider, (_, _) {});
       await flush(t);
       expect(presence.joins, hasLength(1));
@@ -190,7 +194,7 @@ void main() {
         'announces nor takes over the state', (t) async {
       final presence = PresenceFake()..holdOnline();
       final p = ProfileFake(profile: profile());
-      final c = scope(presence, p);
+      final c = await scope(presence, p);
       c.listen(onlineMembersProvider, (_, _) {});
       await flush(t);
       await c.read(ownProfileProvider.notifier).setSharing(presence: false);
@@ -213,7 +217,7 @@ void main() {
     });
     testWidgets('when nobody watches any more, the channel is left', (t) async {
       final presence = PresenceFake();
-      final c = scope(presence, ProfileFake(profile: profile()));
+      final c = await scope(presence, ProfileFake(profile: profile()));
       final sub = c.listen(onlineMembersProvider, (_, _) {});
       await flush(t);
       expect(presence.announcing, hasLength(1));
@@ -230,7 +234,7 @@ void main() {
       bool shareTyping = true,
     }) async {
       final presence = PresenceFake();
-      final c = scope(
+      final c = await scope(
         presence,
         ProfileFake(profile: profile(typing: shareTyping)),
       );
@@ -244,7 +248,7 @@ void main() {
 
     testWidgets('no open conversation, no typing channel', (t) async {
       final presence = PresenceFake();
-      final c = scope(presence, ProfileFake(profile: profile()));
+      final c = await scope(presence, ProfileFake(profile: profile()));
       c.listen(typingProvider, (_, _) {});
       await flush(t);
 
@@ -342,7 +346,7 @@ void main() {
     // choice, so the test pays two real seconds rather than dictate it.
     test('signalTyping sends at most once per typingEvery', () async {
       final presence = PresenceFake();
-      final c = scope(presence, ProfileFake(profile: profile()));
+      final c = await scope(presence, ProfileFake(profile: profile()));
       c.listen(typingProvider, (_, _) {});
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(ownProfileProvider.future);
@@ -389,7 +393,7 @@ void main() {
     test('turning typing sharing off mid-conversation silences the next '
         'signal', () async {
       final presence = PresenceFake();
-      final c = scope(presence, ProfileFake(profile: profile()));
+      final c = await scope(presence, ProfileFake(profile: profile()));
       c.listen(typingProvider, (_, _) {});
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(ownProfileProvider.future);
@@ -445,7 +449,7 @@ void main() {
     testWidgets('a refused typing channel is an empty set and signalling is '
         'harmless', (t) async {
       final presence = PresenceFake()..typingRefusal = const DeniedFailure();
-      final c = scope(presence, ProfileFake(profile: profile()));
+      final c = await scope(presence, ProfileFake(profile: profile()));
       c.listen(typingProvider, (_, _) {});
       c.read(openConversationProvider.notifier).open('c1');
       await flush(t);
@@ -463,7 +467,7 @@ void main() {
     testWidgets('a typing join still pending when the conversation closes is '
         'closed when it lands', (t) async {
       final presence = PresenceFake()..holdTyping();
-      final c = scope(presence, ProfileFake(profile: profile()));
+      final c = await scope(presence, ProfileFake(profile: profile()));
       c.listen(typingProvider, (_, _) {});
       c.read(openConversationProvider.notifier).open('c1');
       await flush(t);

@@ -434,3 +434,18 @@ happened after merge, in the job that publishes.
 the repository allows squash merges only. The secrets are reachable from
 `main` alone, and every change reaches `main` as one commit — which the
 release's docs-only check relies on.
+
+## 2026-09-24 — Per-account state follows the signed-in account
+
+**Switching account must never show the previous account's data.** The owner
+switched accounts on one phone and the new-chat picker still listed the
+previous account's "everyone else" — the new account itself — until the app
+was restarted. The member list and the conversation list were kept alive
+across sign-out and nothing told them the account had changed.
+
+The fix is structural, not a restart: `currentUserIdProvider` is the signed-in
+member's id, and every provider that holds one account's data (the open
+conversation, the conversation list, the member list, the own profile, online
+status, and everything built on them) watches it. A change of account
+rebuilds them for the new account. A new per-account provider must watch it
+too; the account-switch tests fail if one is missed.

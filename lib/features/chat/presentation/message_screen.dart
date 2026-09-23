@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,13 +21,21 @@ Future<void> openConversation(
   String conversationId, {
   String? title,
   String? otherUserId,
+  bool group = false,
 }) async {
+  final list = ref.read(conversationListProvider.notifier);
   ref.read(openConversationProvider.notifier).open(conversationId);
+  // Opening is reading. Not awaited: the screen must not wait on it.
+  unawaited(list.markRead(conversationId));
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
-      builder: (_) => MessageScreen(title: title, otherUserId: otherUserId),
+      builder: (_) =>
+          MessageScreen(title: title, otherUserId: otherUserId, group: group),
     ),
   );
+  // Again on leaving, so a message that landed while the screen was open is
+  // read before the list below re-reads the counts.
+  await list.markRead(conversationId);
   ref.read(openConversationProvider.notifier).close();
   // The list is also kept live by Realtime; this re-read is the fallback when
   // that subscription could not be established.
@@ -51,9 +61,17 @@ String? _status(WidgetRef ref, String? other) {
 
 /// The open conversation: its messages, and a composer.
 class MessageScreen extends ConsumerWidget {
-  const MessageScreen({super.key, this.title, this.otherUserId});
+  const MessageScreen({
+    super.key,
+    this.title,
+    this.otherUserId,
+    this.group = false,
+  });
 
   final String? title;
+
+  /// A group names each sender above their run of messages.
+  final bool group;
 
   /// The other member of a 1:1, whose online status the header shows. Null
   /// for a group, where the header shows only who is typing.
@@ -76,6 +94,12 @@ class MessageScreen extends ConsumerWidget {
       ref.read(typingProvider.notifier).messageFrom(latest.last.senderId);
     });
     final status = _status(ref, otherUserId);
+    final names = group
+        ? {
+            for (final m in ref.watch(membersProvider).value ?? const [])
+              m.userId: m.displayName,
+          }
+        : const <String, String>{};
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -108,10 +132,15 @@ class MessageScreen extends ConsumerWidget {
                     reverse: true,
                     itemCount: value.length,
                     itemBuilder: (context, i) {
-                      final message = value[value.length - 1 - i];
+                      final index = value.length - 1 - i;
+                      final message = value[index];
+                      final mine = me != null && message.isFrom(me);
                       return _Bubble(
                         message,
-                        mine: me != null && message.isFrom(me),
+                        mine: mine,
+                        sender: group && !mine && startsRun(value, index)
+                            ? (names[message.senderId] ?? 'Member')
+                            : null,
                       );
                     },
                   ),
@@ -134,10 +163,13 @@ class MessageScreen extends ConsumerWidget {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble(this.message, {required this.mine});
+  const _Bubble(this.message, {required this.mine, this.sender});
 
   final Message message;
   final bool mine;
+
+  /// The sender's name, shown above the first bubble of their run in a group.
+  final String? sender;
 
   @override
   Widget build(BuildContext context) {
@@ -166,6 +198,19 @@ class _Bubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (sender != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  sender!,
+                  key: ValueKey('sender-${message.id}'),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: personTint(context, message.senderId, ink: true),
+                  ),
+                ),
+              ),
             if (message.hasAttachment) _Attachment(message.attachmentPath!),
             // An image may be sent without a caption, so an empty body must
             // render nothing at all rather than an empty line.

@@ -18,6 +18,10 @@ abstract interface class ChatRepository {
   /// Conversations the signed-in member belongs to, most recent first.
   Future<Result<List<Conversation>>> conversations();
 
+  /// Marks everything in [conversationId] read for the signed-in member, as of
+  /// now. Only the member's own place moves; nobody else can see it.
+  Future<Result<void>> markRead(String conversationId);
+
   /// Messages in [conversationId], oldest first.
   Future<Result<List<Message>>> messages(String conversationId);
 

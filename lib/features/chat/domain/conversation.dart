@@ -15,6 +15,7 @@ final class Conversation {
     this.lastMessage,
     this.lastMessageAt,
     this.lastSenderId,
+    this.unread = 0,
   });
 
   final String id;
@@ -32,14 +33,31 @@ final class Conversation {
   /// Who wrote [lastMessage], so the list can say "You:".
   final String? lastSenderId;
 
-  /// The same conversation with a newer message as its preview.
-  Conversation withPreview(Message message) => Conversation(
+  /// Messages from others since the member last opened this conversation.
+  final int unread;
+
+  /// The same conversation with a newer message as its preview; [unread]
+  /// grows by one when [counts] (a message from someone else, arriving while
+  /// this conversation is not open).
+  Conversation withPreview(Message message, {bool counts = false}) =>
+      Conversation(
+        id: id,
+        title: title,
+        other: other,
+        lastMessage: previewText(message),
+        lastMessageAt: message.createdAt,
+        lastSenderId: message.senderId,
+        unread: counts ? unread + 1 : unread,
+      );
+
+  /// The same conversation with nothing unread.
+  Conversation read() => Conversation(
     id: id,
     title: title,
     other: other,
-    lastMessage: previewText(message),
-    lastMessageAt: message.createdAt,
-    lastSenderId: message.senderId,
+    lastMessage: lastMessage,
+    lastMessageAt: lastMessageAt,
+    lastSenderId: lastSenderId,
   );
 
   bool get isGroup => title != null;

@@ -354,3 +354,26 @@ artwork file to fall out of step.
 fallback face first and leak a request to Google on every cold start. Manrope
 and Sora are OFL; their licences ship with them and appear on the app's
 licence page.
+
+## 2026-09-23 — Unread counts, and why last_read_at is private
+
+**A member's place in a conversation is one timestamp,
+`conversation_members.last_read_at`.** Unread is everything newer that
+someone else sent. Opening a conversation marks it read (owner's choice over
+per-message tracking), as does leaving it, and so does a message that
+arrives while it is open. Existing memberships were set to the migration's
+time, so the feature starts at zero rather than with the whole history unread.
+
+**Nobody can read another member's `last_read_at`.** There are no read
+receipts (owner, 2026-09-23), and a readable column would be one by the back
+door. `conversation_members` is therefore readable by column (who is in a
+conversation, not where they are in it), `mark_read` is the only write and
+only to the caller's own row, and counts come from `unread_counts()`, a
+security-definer function scoped to the caller. A view was not enough: a
+security-invoker view cannot read a column the caller is denied, and a
+definer view would drop the row-level checks.
+
+**Group conversations name the sender** above the first message of each run,
+in that person's tint. A person's tint is now seeded by their user id
+everywhere, so the same person has the same colour in the list, the picker
+and a group.

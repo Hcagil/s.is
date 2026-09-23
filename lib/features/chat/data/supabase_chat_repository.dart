@@ -124,6 +124,13 @@ final class SupabaseChatRepository implements ChatRepository {
           ),
       };
 
+      // Only conversations with something unread come back.
+      final unreadRows = await _client.rpc('unread_counts') as List<dynamic>;
+      final unreadBy = {
+        for (final row in unreadRows.cast<Map<String, dynamic>>())
+          row['conversation_id'] as String: row['unread'] as int,
+      };
+
       final conversations = [
         for (final id in conversationIds)
           Conversation(
@@ -139,6 +146,7 @@ final class SupabaseChatRepository implements ChatRepository {
             lastMessage: previewBy[id]?.body,
             lastMessageAt: previewBy[id]?.at,
             lastSenderId: previewBy[id]?.sender,
+            unread: unreadBy[id] ?? 0,
           ),
       ];
       // Conversations with no messages yet sort last.
@@ -150,6 +158,16 @@ final class SupabaseChatRepository implements ChatRepository {
         return bt.compareTo(at);
       });
       return Ok(conversations);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<void>> markRead(String conversationId) async {
+    try {
+      await _client.rpc('mark_read', params: {'conversation': conversationId});
+      return const Ok(null);
     } catch (e) {
       return Err(_asFailure(e));
     }

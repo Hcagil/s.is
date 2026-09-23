@@ -19,10 +19,18 @@ class FakeAuth implements AuthRepository {
     this.session = false,
     this.allowed = true,
     this.signInResult = const Ok(null),
+    this.member = const Member(userId: 'u1', displayName: 'Maya'),
   });
   bool session;
   bool allowed;
   Result<void> signInResult;
+
+  /// Who currentMember() reports: the signed-in account, email included.
+  Member member;
+
+  /// Runs as signOut() is entered, before the session ends.
+  void Function()? onSignOut;
+  int signOuts = 0;
   final changes = StreamController<bool>.broadcast();
   @override
   bool get hasSession => session;
@@ -40,10 +48,12 @@ class FakeAuth implements AuthRepository {
   @override
   Future<Result<bool>> activateSession() async => Ok(allowed);
   @override
-  Future<Result<Member>> currentMember() async =>
-      const Ok(Member(userId: 'u1', displayName: 'Maya'));
+  Future<Result<Member>> currentMember() async => Ok(member);
   @override
   Future<void> signOut() async {
+    signOuts++;
+    onSignOut?.call();
+    await Future<void>.delayed(Duration.zero); // a real sign-out is a call
     session = false;
     changes.add(false);
   }
@@ -52,11 +62,13 @@ class FakeAuth implements AuthRepository {
 class FakeUpdate implements UpdateRepository {
   FakeUpdate({
     this.installed = 105,
+    this.version = '0.6.0',
     this.min = const Ok(1),
     this.play = const Ok(null),
   });
 
   int installed;
+  String version;
   Result<int> min;
   Result<int?> play;
   final calls = <String>[];
@@ -65,6 +77,8 @@ class FakeUpdate implements UpdateRepository {
 
   @override
   Future<int> installedBuild() async => installed;
+  @override
+  Future<String> installedVersion() async => version;
   @override
   Future<Result<int>> minSupportedBuild() async => min;
   @override
@@ -749,6 +763,7 @@ class ProfileFake implements ProfileRepository {
           bool? onboardingDone,
           bool? sharePresence,
           bool? shareTyping,
+          bool? shareLastSeen,
         })
       >[];
   List<String> get checks => [
@@ -801,6 +816,7 @@ class ProfileFake implements ProfileRepository {
     bool? onboardingDone,
     bool? sharePresence,
     bool? shareTyping,
+    bool? shareLastSeen,
   }) async {
     await _tick('save');
     saves.add((
@@ -809,6 +825,7 @@ class ProfileFake implements ProfileRepository {
       onboardingDone: onboardingDone,
       sharePresence: sharePresence,
       shareTyping: shareTyping,
+      shareLastSeen: shareLastSeen,
     ));
     final held = _save;
     if (held != null) await held.future;
@@ -831,6 +848,7 @@ class ProfileFake implements ProfileRepository {
       onboardingDone: onboardingDone ?? profile.onboardingDone,
       sharePresence: sharePresence ?? profile.sharePresence,
       shareTyping: shareTyping ?? profile.shareTyping,
+      shareLastSeen: shareLastSeen ?? profile.shareLastSeen,
     );
     return Ok(profile);
   }
@@ -875,7 +893,53 @@ class OnlineJoin {
 /// a live listener only; the first presence state arrives just after the
 /// listener attaches, not synchronously with the join.
 class PresenceFake implements PresenceRepository {
-  PresenceFake({this.selfId = 'u1', this.latency = Duration.zero});
+  PresenceFake({this.selfId = 'u1', this.latency = Duration.zero, this.owner});
+
+  /// The caller's own profile row, as the server reads it. When set, last
+  /// seen is mutual the way `last_seen_of` is: while the caller does not
+  /// share, every answer is null and a touch records nothing. Left null the
+  /// caller is taken to share.
+  final ProfileFake? owner;
+
+  bool get _callerShares => owner?.profile.shareLastSeen ?? true;
+
+  /// Last seen as the server stores it. Only members who share are here; a
+  /// member turning sharing off is removed, as the delete trigger does.
+  final lastSeen = <String, DateTime>{};
+
+  /// Force the outcome of the next [lastSeenOf] / [touchLastSeen] calls.
+  Result<DateTime?>? lastSeenResult;
+  Result<void>? touchResult;
+  Completer<void>? _lastSeenHold;
+
+  /// [lastSeenOf] calls stay in flight until [releaseLastSeen]. The answer
+  /// is the server's state when the query ran, not when it is released.
+  void holdLastSeen() => _lastSeenHold ??= Completer<void>();
+  void releaseLastSeen() {
+    _lastSeenHold?.complete();
+    _lastSeenHold = null;
+  }
+
+  /// How many times the caller reported itself seen.
+  int get touches => calls.where((c) => c == 'touch').length;
+
+  @override
+  Future<Result<void>> touchLastSeen() async {
+    await _tick('touch');
+    if (touchResult case final forced?) return forced;
+    if (_callerShares) lastSeen[selfId] = DateTime.now();
+    return const Ok(null);
+  }
+
+  @override
+  Future<Result<DateTime?>> lastSeenOf(String userId) async {
+    final answer = _callerShares ? lastSeen[userId] : null;
+    await _tick('lastSeen:$userId');
+    final hold = _lastSeenHold;
+    if (hold != null) await hold.future;
+    if (lastSeenResult case final forced?) return forced;
+    return Ok(answer);
+  }
 
   /// The caller; present in the online set only while a sharing join is live.
   final String selfId;

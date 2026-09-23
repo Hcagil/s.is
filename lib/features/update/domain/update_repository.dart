@@ -5,6 +5,9 @@ abstract interface class UpdateRepository {
   /// The running build's versionCode.
   Future<int> installedBuild();
 
+  /// The running build's version name, e.g. "0.6.0".
+  Future<String> installedVersion();
+
   /// `app_config.min_supported_build`; an [Err] must never block the user.
   Future<Result<int>> minSupportedBuild();
 

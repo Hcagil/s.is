@@ -15,6 +15,7 @@ abstract interface class ProfileRepository {
     bool? onboardingDone,
     bool? sharePresence,
     bool? shareTyping,
+    bool? shareLastSeen,
   });
 
   /// Whether [tag] is free for this member (their own current tag counts as

@@ -329,21 +329,26 @@ void main() {
       );
     });
 
-    testWidgets('the menu still opens settings and signs out', (t) async {
+    testWidgets('the settings button opens settings, which signs out', (
+      t,
+    ) async {
       await pumpSignedIn(t);
-      await t.tap(byKey('home-menu'));
-      await t.pumpAndSettle();
-      await t.tap(byKey('menu-settings'));
+      final bar = find.byType(AppBar);
+      expect(
+        find.descendant(of: bar, matching: byKey('home-settings')),
+        findsOneWidget,
+      );
+      expect(byKey('home-menu'), findsNothing);
+      await t.tap(byKey('home-settings'));
       await t.pumpAndSettle();
       expect(find.byType(SettingsScreen), findsOneWidget);
 
-      await t.pageBack();
+      await t.tap(byKey('settings-account'));
       await t.pumpAndSettle();
-      await t.tap(byKey('home-menu'));
-      await t.pumpAndSettle();
-      await t.tap(byKey('menu-sign-out'));
+      await t.tap(byKey('account-sign-out'));
       await t.pumpAndSettle();
       expect(find.text('Continue with Google'), findsOneWidget);
+      expect(find.byType(SettingsScreen, skipOffstage: false), findsNothing);
     });
   });
 

@@ -378,6 +378,44 @@ in that person's tint. A person's tint is now seeded by their user id
 everywhere, so the same person has the same colour in the list, the picker
 and a group.
 
+## 2026-09-23 — Last seen is mutual, and stored where no client can read it
+
+**Mutual, as the owner chose:** a member who hides their last seen cannot see
+anyone else's. The rule lives in the server: `last_seen_of(person)` answers
+only when the caller AND the person share, and gives the same null for every
+refusal, so a refusal reveals nothing.
+
+**The time is stored in `app_private.last_seen`,** a table no client role can
+read. `touch_last_seen()` writes the caller's own time only while they share;
+turning sharing off deletes the stored time (a trigger), so nothing is kept
+that the member chose not to share.
+
+**Recorded when the app opens, resumes and goes to the background.** Known
+limit: a phone that kills the app without it ever reaching the background
+keeps the time it was opened. A heartbeat would fix that at one write a
+minute per open app; not worth it yet.
+
+**Last seen and online stay separate switches** (owner, after the audit).
+Hiding last seen hides the stored time both ways; it does not stop a member
+watching the live "online" dot, which follows the online switch alone. The
+stricter reading (hiding last seen also hides and blinds online) was offered
+and declined.
+
+**Shown in the 1:1 header** under the name, after "typing…" and "online":
+"last seen just now", "N min ago", "today at 14:02", "yesterday at 21:40",
+then a date.
+
+## 2026-09-23 — Settings is a set of pages; sign out lives only there
+
+Settings opens on the member's own card (tap to edit name and tag), then one
+row per section: **Privacy** (online, typing, last seen), **Account** (the
+Google address in use, and Sign out) and **About** (version, build, the
+open-source licences, including the bundled fonts). The home header's menu,
+whose only other entry was Settings, became a single settings icon; Sign out
+moved into Account, where it cannot be tapped by accident from the chat list.
+Signing out first returns to the root screen, so no settings page is left
+standing above the sign-in screen.
+
 ## 2026-09-23 — The release waits for CI on `main`
 
 **`release.yml` runs on CI completing, not on the push, and publishes only

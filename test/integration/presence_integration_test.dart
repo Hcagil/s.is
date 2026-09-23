@@ -150,6 +150,13 @@ class _LateConfirm implements PresenceRepository {
   @override
   Future<Result<TypingChannel>> typing(String conversationId) =>
       real.typing(conversationId);
+
+  @override
+  Future<Result<void>> touchLastSeen() => real.touchLastSeen();
+
+  @override
+  Future<Result<DateTime?>> lastSeenOf(String userId) =>
+      real.lastSeenOf(userId);
 }
 
 class Account {

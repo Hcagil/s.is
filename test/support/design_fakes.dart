@@ -69,6 +69,8 @@ class DesignUpdate implements UpdateRepository {
   @override
   Future<int> installedBuild() async => 10;
   @override
+  Future<String> installedVersion() async => '0.6.0';
+  @override
   Future<Result<int>> minSupportedBuild() async => const Ok(1);
   @override
   Future<Result<int?>> availablePlayBuild() async => const Ok(null);
@@ -207,6 +209,12 @@ class DesignPresence implements PresenceRepository {
   @override
   Future<Result<TypingChannel>> typing(String conversationId) async =>
       Ok(channels.putIfAbsent(conversationId, DesignTyping.new));
+
+  @override
+  Future<Result<void>> touchLastSeen() async => const Ok(null);
+
+  @override
+  Future<Result<DateTime?>> lastSeenOf(String userId) async => const Ok(null);
 }
 
 class DesignProfile implements ProfileRepository {
@@ -226,6 +234,7 @@ class DesignProfile implements ProfileRepository {
     bool? onboardingDone,
     bool? sharePresence,
     bool? shareTyping,
+    bool? shareLastSeen,
   }) async => Ok(
     profile = OwnProfile(
       userId: profile.userId,
@@ -234,6 +243,7 @@ class DesignProfile implements ProfileRepository {
       onboardingDone: onboardingDone ?? profile.onboardingDone,
       sharePresence: sharePresence ?? profile.sharePresence,
       shareTyping: shareTyping ?? profile.shareTyping,
+      shareLastSeen: shareLastSeen ?? profile.shareLastSeen,
     ),
   );
   @override

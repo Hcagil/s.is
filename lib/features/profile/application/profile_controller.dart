@@ -53,6 +53,7 @@ class OwnProfileController extends AsyncNotifier<OwnProfile> {
     bool? onboardingDone,
     bool? sharePresence,
     bool? shareTyping,
+    bool? shareLastSeen,
   }) async {
     final result = await ref
         .read(profileRepositoryProvider)
@@ -62,6 +63,7 @@ class OwnProfileController extends AsyncNotifier<OwnProfile> {
           onboardingDone: onboardingDone,
           sharePresence: sharePresence,
           shareTyping: shareTyping,
+          shareLastSeen: shareLastSeen,
         );
     if (result case Ok(:final value) when ref.mounted) {
       state = AsyncData(value);
@@ -69,9 +71,16 @@ class OwnProfileController extends AsyncNotifier<OwnProfile> {
     return result;
   }
 
-  /// Turns sharing of online status and/or typing on or off.
-  Future<Result<OwnProfile>> setSharing({bool? presence, bool? typing}) =>
-      _save(sharePresence: presence, shareTyping: typing);
+  /// Turns sharing of online status, typing and/or last seen on or off.
+  Future<Result<OwnProfile>> setSharing({
+    bool? presence,
+    bool? typing,
+    bool? lastSeen,
+  }) => _save(
+    sharePresence: presence,
+    shareTyping: typing,
+    shareLastSeen: lastSeen,
+  );
 
   /// Advisory availability for the tag field.
   Future<Result<bool>> checkTag(String tag) =>

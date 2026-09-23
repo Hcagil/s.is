@@ -40,6 +40,9 @@
 --      her on membership -- has_app_access() alone would let her through)
 --   cleo           test/integration/realtime_channels_test.dart
 --     (joins and leaves presence:members through lib/data/realtime_channels.dart)
+--   lars/mona      test/integration/last_seen_integration_test.dart
+--     (lars is seen, mona looks; the stranger in that suite is deliberately
+--      NOT listed here, so only the allowlist can refuse him)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -70,5 +73,7 @@ insert into app_private.allowlist(email) values
   ('cleo@integration.test'),
   ('una@integration.test'),
   ('otto@integration.test'),
-  ('pia@integration.test')
+  ('pia@integration.test'),
+  ('lars@integration.test'),
+  ('mona@integration.test')
 on conflict do nothing;

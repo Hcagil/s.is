@@ -80,3 +80,14 @@ class UpdateController extends AsyncNotifier<UpdateState> {
     }
   }
 }
+
+/// The running app's version name and build, for Settings > About.
+final installedVersionProvider = FutureProvider<({String name, int build})>((
+  ref,
+) async {
+  final repo = ref.read(updateRepositoryProvider);
+  return (
+    name: await repo.installedVersion(),
+    build: await repo.installedBuild(),
+  );
+});

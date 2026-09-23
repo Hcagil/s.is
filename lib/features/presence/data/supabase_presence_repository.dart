@@ -76,6 +76,26 @@ final class SupabasePresenceRepository implements PresenceRepository {
     }
     return Ok(_SupabaseTypingChannel(channel, typists, me, _leave));
   }
+
+  @override
+  Future<Result<void>> touchLastSeen() async {
+    try {
+      await _client.rpc('touch_last_seen');
+      return const Ok(null);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<DateTime?>> lastSeenOf(String userId) async {
+    try {
+      final at = await _client.rpc('last_seen_of', params: {'person': userId});
+      return Ok(at == null ? null : DateTime.parse(at as String));
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
 }
 
 final class _SupabaseTypingChannel implements TypingChannel {

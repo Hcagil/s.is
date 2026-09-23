@@ -139,3 +139,29 @@ class Typing extends Notifier<Set<String>> {
     unawaited(channel.signal());
   }
 }
+
+/// When [userId] was last online, as far as the server will say (null when
+/// hidden by either side). Re-asked when they go offline and when the
+/// member's own last-seen switch flips, since both change the answer.
+final lastSeenProvider = FutureProvider.autoDispose.family<DateTime?, String>((
+  ref,
+  userId,
+) async {
+  ref.watch(onlineMembersProvider.select((online) => online.contains(userId)));
+  ref.watch(ownProfileProvider.select((p) => p.value?.shareLastSeen));
+  return switch (await ref
+      .read(presenceRepositoryProvider)
+      .lastSeenOf(userId)) {
+    Ok(:final value) => value,
+    // A missing "last seen" is not worth an error on screen.
+    Err() => null,
+  };
+});
+
+/// Tells the server "seen now". Called when the app opens and when it goes
+/// to the background; best effort, since a missed update only makes the
+/// shown time a little older.
+final lastSeenReporterProvider = Provider<Future<void> Function()>(
+  (ref) =>
+      () => ref.read(presenceRepositoryProvider).touchLastSeen(),
+);

@@ -1,5 +1,5 @@
-// Settings and the home menu, mounted as production mounts them: the whole
-// app behind the session gate, with fakes only at the repository boundary.
+// Settings and the way into it from home, mounted as production mounts
+// them: the whole app behind the session gate, with fakes only at the repository boundary.
 //
 // This is where the rename dialog's coverage moved: a rename is sent, shows
 // at once, and a refused one shows its reason.
@@ -63,22 +63,39 @@ Future<void> pumpApp(
   expect(find.text('New chat'), findsOneWidget, reason: 'home did not open');
 }
 
-Future<void> openMenu(WidgetTester t) async {
-  await t.tap(find.byKey(const ValueKey('home-menu')));
-  await t.pumpAndSettle();
-}
-
+/// The home header's settings button: the only way into settings.
 Future<void> openSettings(WidgetTester t) async {
-  await openMenu(t);
-  await t.tap(find.byKey(const ValueKey('menu-settings')));
+  await t.tap(find.byKey(const ValueKey('home-settings')));
   await t.pumpAndSettle();
   expect(find.byType(SettingsScreen), findsOneWidget);
 }
 
-Finder signOutWith(String name) => find.descendant(
-  of: find.byKey(const ValueKey('menu-sign-out')),
-  matching: find.textContaining(name),
-  matchRoot: true,
+Future<void> openSettingsPage(WidgetTester t, String row, String title) async {
+  await openSettings(t);
+  await t.tap(find.byKey(ValueKey(row)));
+  await t.pumpAndSettle();
+  expect(
+    find.descendant(of: find.byType(AppBar), matching: find.text(title)),
+    findsOneWidget,
+    reason: '$row did not open "$title"',
+  );
+}
+
+/// Settings > Profile: the name and tag form.
+Future<void> openProfile(WidgetTester t) =>
+    openSettingsPage(t, 'settings-profile', 'Profile');
+
+/// Settings > Account > Sign out.
+Future<void> signOut(WidgetTester t) async {
+  await openSettingsPage(t, 'settings-account', 'Account');
+  await t.tap(find.byKey(const ValueKey('account-sign-out')));
+  await t.pumpAndSettle();
+}
+
+/// The settings profile card names the member by [name].
+Finder cardWith(String name) => find.descendant(
+  of: find.byKey(const ValueKey('settings-profile')),
+  matching: find.text(name),
 );
 
 String fieldText(WidgetTester t, String key) => t
@@ -99,35 +116,45 @@ Future<void> save(WidgetTester t) async {
 }
 
 void main() {
-  testWidgets('the menu offers settings and sign-out, and no rename dialog', (
-    t,
-  ) async {
+  testWidgets('home offers settings, and no menu, sign-out or rename '
+      'dialog', (t) async {
     await pumpApp(t, ProfileFake(profile: maya));
-    await openMenu(t);
 
-    expect(find.byKey(const ValueKey('menu-settings')), findsOneWidget);
+    final button = find.byKey(const ValueKey('home-settings'));
+    expect(button, findsOneWidget);
+    expect(find.byTooltip('Settings'), findsOneWidget);
     expect(
-      signOutWith('Maya Profile'),
+      find.descendant(of: find.byType(AppBar), matching: button),
       findsOneWidget,
-      reason: 'sign-out must name the member by the profile',
+      reason: 'the settings button is not in the home header',
     );
+    expect(find.byKey(const ValueKey('home-menu')), findsNothing);
+    expect(find.byKey(const ValueKey('menu-sign-out')), findsNothing);
+    expect(find.textContaining('Sign out'), findsNothing);
     expect(find.text('Change display name'), findsNothing);
+
+    await openSettings(t);
+    expect(
+      cardWith('Maya Profile'),
+      findsOneWidget,
+      reason: 'settings must name the member by the profile',
+    );
   });
 
-  testWidgets('settings opens on the current name and tag', (t) async {
+  testWidgets('the profile page opens on the current name and tag', (t) async {
     await pumpApp(t, ProfileFake(profile: maya));
-    await openSettings(t);
+    await openProfile(t);
 
     expect(fieldText(t, 'profile-name'), 'Maya Profile');
     expect(fieldText(t, 'profile-tag'), 'maya');
   });
 
-  testWidgets('a rename is saved, confirmed, and shows in the menu at once', (
+  testWidgets('a rename is saved, confirmed, and shows in settings at once', (
     t,
   ) async {
     final p = ProfileFake(profile: maya);
     await pumpApp(t, p);
-    await openSettings(t);
+    await openProfile(t);
 
     await t.enterText(find.byKey(const ValueKey('profile-name')), 'Maya R');
     await save(t);
@@ -138,12 +165,13 @@ void main() {
 
     await t.pageBack();
     await t.pumpAndSettle();
-    await openMenu(t);
+    expect(find.byType(SettingsScreen), findsOneWidget);
     expect(
-      signOutWith('Maya R'),
+      cardWith('Maya R'),
       findsOneWidget,
-      reason: 'the menu still shows the old name after a rename',
+      reason: 'settings still shows the old name after a rename',
     );
+    expect(cardWith('Maya Profile'), findsNothing);
     expect(
       p.calls.where((c) => c == 'load'),
       hasLength(1),
@@ -155,7 +183,7 @@ void main() {
   testWidgets('a new tag is checked, saved and confirmed', (t) async {
     final p = ProfileFake(profile: maya, takenByOthers: ['bob']);
     await pumpApp(t, p);
-    await openSettings(t);
+    await openProfile(t);
 
     await t.enterText(find.byKey(const ValueKey('profile-tag')), '@Maya_R');
     await save(t);
@@ -163,6 +191,10 @@ void main() {
     expect(p.checks, ['maya_r']);
     expect(p.profile.tag, 'maya_r');
     expect(find.text('Saved'), findsOneWidget);
+
+    await t.pageBack();
+    await t.pumpAndSettle();
+    expect(cardWith('@maya_r'), findsOneWidget, reason: 'old tag on the card');
     await t.pumpAndSettle(const Duration(seconds: 6));
   });
 
@@ -170,7 +202,7 @@ void main() {
       'typing', (t) async {
     final p = ProfileFake(profile: maya);
     await pumpApp(t, p);
-    await openSettings(t);
+    await openProfile(t);
 
     await t.enterText(find.byKey(const ValueKey('profile-name')), 'Maya R');
     await t.enterText(find.byKey(const ValueKey('profile-tag')), 'maya_r');
@@ -196,7 +228,7 @@ void main() {
     final p = ProfileFake(profile: maya)
       ..saveResult = const Err(NetworkFailure('no route to host'));
     await pumpApp(t, p);
-    await openSettings(t);
+    await openProfile(t);
 
     await t.enterText(find.byKey(const ValueKey('profile-name')), 'Maya R');
     await save(t);
@@ -213,9 +245,8 @@ void main() {
     final p = ProfileFake(profile: maya);
     await pumpApp(t, p, auth: auth);
 
-    await openMenu(t);
-    await t.tap(find.byKey(const ValueKey('menu-sign-out')));
-    await t.pumpAndSettle();
+    await signOut(t);
+    expect(auth.signOuts, 1);
     expect(find.text('Continue with Google'), findsOneWidget);
 
     // Someone else signs in on the same phone.
@@ -227,10 +258,11 @@ void main() {
     );
     await t.tap(find.text('Continue with Google'));
     await t.pumpAndSettle();
-    await openMenu(t);
+    expect(find.text('New chat'), findsOneWidget);
+    await openSettings(t);
 
     expect(
-      signOutWith('Noor'),
+      cardWith('Noor'),
       findsOneWidget,
       reason: 'the previous member\'s profile survived sign-out',
     );
@@ -254,6 +286,9 @@ void main() {
       await t.pumpAndSettle();
     }
 
+    Future<void> openPrivacy(WidgetTester t) =>
+        openSettingsPage(t, 'settings-privacy', 'Privacy');
+
     OwnProfile sharing({required bool presence, required bool typing}) =>
         OwnProfile(
           userId: maya.userId,
@@ -269,7 +304,7 @@ void main() {
         t,
         ProfileFake(profile: sharing(presence: false, typing: true)),
       );
-      await openSettings(t);
+      await openPrivacy(t);
       expect(switchOn(t, 'share-presence'), isFalse);
       expect(switchOn(t, 'share-typing'), isTrue);
     });
@@ -288,7 +323,7 @@ void main() {
         ]);
       await pumpApp(t, p, presence: presence, chat: chat);
       expect(presence.announcing, hasLength(1));
-      await openSettings(t);
+      await openPrivacy(t);
 
       await flip(t, 'share-presence');
 
@@ -307,6 +342,9 @@ void main() {
       // Home rejoins, hidden, once it is on screen again.
       await t.pageBack();
       await t.pumpAndSettle();
+      await t.pageBack();
+      await t.pumpAndSettle();
+      expect(find.text('New chat'), findsOneWidget);
       expect(presence.calls.last, 'online:hidden');
       expect(presence.live, hasLength(1));
       expect(presence.announcing, isEmpty);
@@ -315,7 +353,7 @@ void main() {
     testWidgets('turning typing off saves only that', (t) async {
       final p = ProfileFake(profile: maya);
       await pumpApp(t, p);
-      await openSettings(t);
+      await openPrivacy(t);
 
       await flip(t, 'share-typing');
 
@@ -331,7 +369,7 @@ void main() {
       final p = ProfileFake(profile: maya)
         ..saveResult = const Err(NetworkFailure('the network is unreachable'));
       await pumpApp(t, p);
-      await openSettings(t);
+      await openPrivacy(t);
 
       await flip(t, 'share-presence');
 

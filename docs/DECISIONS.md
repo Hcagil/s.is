@@ -449,3 +449,22 @@ conversation, the conversation list, the member list, the own profile, online
 status, and everything built on them) watches it. A change of account
 rebuilds them for the new account. A new per-account provider must watch it
 too; the account-switch tests fail if one is missed.
+
+## 2026-09-23 — Links open plainly; photos open full-screen
+
+**Web addresses in messages are tappable and open in the browser.** Only
+`http`, `https` and `www.` addresses are recognised, and the opener checks the
+scheme again, so a message cannot turn into a link to another app or a
+custom scheme. Trailing sentence punctuation is not part of a link.
+
+**No link previews** (owner's choice). A preview means fetching the page,
+which tells that site when the chat was opened and from where; SIS makes no
+request the member did not make.
+
+**Opening a link is a platform capability**, so it sits behind a `LinkOpener`
+interface with its `url_launcher` implementation in `data/`, like the photo
+picker: `presentation/` never imports a platform SDK.
+
+**A photo opens full-screen**, with pinch-zoom and swiping between the
+conversation's photos. Photos load through the same short-lived signed URLs
+as the bubbles; thumbnails and an on-device cache come with v0.9.

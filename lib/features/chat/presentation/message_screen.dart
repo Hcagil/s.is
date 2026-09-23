@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,8 +12,10 @@ import '../../auth/domain/session_state.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
+import '../domain/links.dart';
 import '../domain/message.dart';
 import 'conversation_list.dart';
+import 'photo_viewer.dart';
 
 /// Opens [conversationId] and closes it again when the screen is popped, so
 /// the Realtime subscription lives exactly as long as the screen does.
@@ -223,12 +226,16 @@ class _Bubble extends StatelessWidget {
             if (message.body.isNotEmpty)
               Padding(
                 padding: EdgeInsets.only(top: message.hasAttachment ? 8 : 0),
-                child: Text(
+                child: _LinkedText(
                   message.body,
+                  key: ValueKey('body-${message.id}'),
                   style: TextStyle(
                     fontSize: 15,
                     color: mine ? Colors.white : brand.text,
                   ),
+                  linkColor: mine
+                      ? Colors.white
+                      : Theme.of(context).colorScheme.primary,
                 ),
               ),
           ],
@@ -256,28 +263,53 @@ class _AttachmentState extends ConsumerState<_Attachment> {
       .read(messagesProvider.notifier)
       .attachmentUrl(widget.path);
 
+  /// The open conversation's photos, oldest first, and this one's place.
+  void _view() {
+    final paths = [
+      for (final m in ref.read(messagesProvider).value ?? const <Message>[])
+        if (m.attachmentPath != null) m.attachmentPath!,
+    ];
+    final index = paths.indexOf(widget.path);
+    if (index < 0) return;
+    openPhotoViewer(context, paths, index);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 260, maxWidth: 280),
-        child: FutureBuilder<Result<Uri>>(
-          future: _url,
-          builder: (context, snapshot) => switch (snapshot.data) {
-            Ok(:final value) => Image.network(
-              value.toString(),
-              key: const ValueKey('attachment-image'),
-              fit: BoxFit.cover,
-              errorBuilder: (context, _, _) => _failed('Image unavailable'),
-            ),
-            Err(:final failure) => _failed(failure.message),
-            _ => const SizedBox(
-              height: 120,
-              width: 180,
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          },
+    return GestureDetector(
+      key: ValueKey('attachment-${widget.path}'),
+      onTap: _view,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 260, maxWidth: 280),
+          child: FutureBuilder<Result<Uri>>(
+            future: _url,
+            builder: (context, snapshot) => switch (snapshot.data) {
+              Ok(:final value) => Image.network(
+                value.toString(),
+                key: const ValueKey('attachment-image'),
+                fit: BoxFit.cover,
+                // Until the first frame decodes the image has no size: hold
+                // the place, so the bubble neither jumps nor is untappable.
+                frameBuilder: (context, child, frame, sync) =>
+                    frame == null && !sync
+                    ? const SizedBox(
+                        height: 120,
+                        width: 180,
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    : child,
+                errorBuilder: (context, _, _) => _failed('Image unavailable'),
+              ),
+              Err(:final failure) => _failed(failure.message),
+              _ => const SizedBox(
+                height: 120,
+                width: 180,
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            },
+          ),
         ),
       ),
     );
@@ -399,5 +431,80 @@ class _ComposerState extends ConsumerState<_Composer> {
         ],
       ),
     );
+  }
+}
+
+/// Message text with its links tappable, opening in the browser.
+class _LinkedText extends ConsumerStatefulWidget {
+  const _LinkedText(
+    this.text, {
+    super.key,
+    required this.style,
+    required this.linkColor,
+  });
+
+  final String text;
+  final TextStyle style;
+  final Color linkColor;
+
+  @override
+  ConsumerState<_LinkedText> createState() => _LinkedTextState();
+}
+
+class _LinkedTextState extends ConsumerState<_LinkedText> {
+  // One recognizer per link, disposed with the widget: a recognizer that is
+  // never disposed leaks its gesture arena entry.
+  final _taps = <TapGestureRecognizer>[];
+
+  void _clear() {
+    for (final t in _taps) {
+      t.dispose();
+    }
+    _taps.clear();
+  }
+
+  @override
+  void dispose() {
+    _clear();
+    super.dispose();
+  }
+
+  Future<void> _open(Uri link) async {
+    final opened = await ref.read(linkOpenerProvider).open(link);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Could not open ${link.host}')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _clear();
+    final segments = linkSegments(widget.text);
+    if (segments.every((s) => s.link == null)) {
+      return Text(widget.text, style: widget.style);
+    }
+    final spans = <TextSpan>[];
+    for (final s in segments) {
+      final link = s.link;
+      if (link == null) {
+        spans.add(TextSpan(text: s.text));
+        continue;
+      }
+      final tap = TapGestureRecognizer()..onTap = () => _open(link);
+      _taps.add(tap);
+      spans.add(
+        TextSpan(
+          text: s.text,
+          recognizer: tap,
+          style: TextStyle(
+            color: widget.linkColor,
+            decoration: TextDecoration.underline,
+            decorationColor: widget.linkColor,
+          ),
+        ),
+      );
+    }
+    return Text.rich(TextSpan(style: widget.style, children: spans));
   }
 }

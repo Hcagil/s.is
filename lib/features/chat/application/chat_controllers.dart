@@ -9,6 +9,7 @@ import '../../auth/domain/session_state.dart';
 import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
+import '../domain/links.dart';
 import '../domain/message.dart';
 
 final chatRepositoryProvider = Provider<ChatRepository>(
@@ -17,6 +18,21 @@ final chatRepositoryProvider = Provider<ChatRepository>(
 final attachmentSourceProvider = Provider<AttachmentSource>(
   (_) => throw UnimplementedError('override in main'),
 );
+final linkOpenerProvider = Provider<LinkOpener>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// A short-lived URL for one attachment, kept while something shows it.
+/// Signed for an hour; a screen open longer re-asks by being rebuilt.
+final attachmentUrlProvider = FutureProvider.autoDispose.family<Uri, String>((
+  ref,
+  path,
+) async {
+  return switch (await ref.read(chatRepositoryProvider).attachmentUrl(path)) {
+    Ok(:final value) => value,
+    Err(:final failure) => throw failure,
+  };
+}, retry: (_, _) => null);
 
 /// The conversation the message screen is showing, or null on the list screen.
 ///

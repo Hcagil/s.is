@@ -29,6 +29,12 @@ final class SupabaseChatRepository implements ChatRepository {
     PostgrestException(:final code) when code == '42501' =>
       const DeniedFailure(),
     PostgrestException(:final message) => NetworkFailure(message),
+    // Storage refuses a non-member and reports a missing object alike; both
+    // mean "not yours to see" or "gone", never raw SDK text on screen.
+    StorageException(:final statusCode)
+        when statusCode == '401' || statusCode == '403' =>
+      const DeniedFailure(),
+    StorageException() => const NetworkFailure('This photo is not available.'),
     _ => NetworkFailure('$e'),
   };
 

@@ -15,6 +15,14 @@ abstract interface class PresenceRepository {
   /// Typing signals in [conversationId]: each event is the id of a member who
   /// just typed. The caller's own signals are not echoed back.
   Future<Result<TypingChannel>> typing(String conversationId);
+
+  /// Records now as the caller's last seen. The server ignores it while the
+  /// caller does not share last seen.
+  Future<Result<void>> touchLastSeen();
+
+  /// When [userId] was last online, or null: unknown, not shared by them, or
+  /// not shared by the caller (last seen is mutual). The server decides.
+  Future<Result<DateTime?>> lastSeenOf(String userId);
 }
 
 /// An open typing channel for one conversation.

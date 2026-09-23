@@ -18,6 +18,40 @@ final sessionControllerProvider =
       SessionController.new,
     );
 
+/// Who is signed in: the allowed member's user id, or null.
+///
+/// Every provider that holds one account's data watches this, so switching
+/// account rebuilds it for the new one instead of showing the last account's
+/// members, conversations or profile until the app restarts.
+///
+/// Only a settled answer counts: while the session is (re)checking, the last
+/// known account stands. A recheck of the same member must not look like a
+/// sign-out -- that would close the open conversation and reload everything.
+///
+/// A SessionLoading value counts as not settled.
+final currentUserIdProvider = NotifierProvider<CurrentUserId, String?>(
+  CurrentUserId.new,
+);
+
+class CurrentUserId extends Notifier<String?> {
+  static String? _idOf(AsyncValue<SessionState> session) =>
+      switch (session.value) {
+        Allowed(:final member) => member.userId,
+        _ => null,
+      };
+
+  @override
+  String? build() {
+    ref.listen(sessionControllerProvider, (_, next) {
+      if (next.isLoading || next.value is SessionLoading) return;
+      final id = _idOf(next);
+      if (id != state) state = id;
+    });
+    final now = ref.read(sessionControllerProvider);
+    return now.isLoading || now.value is SessionLoading ? null : _idOf(now);
+  }
+}
+
 /// Session state machine; every failure carries a reason for the screen.
 class SessionController extends AsyncNotifier<SessionState> {
   int _revision = 0; // discards results of superseded refreshes

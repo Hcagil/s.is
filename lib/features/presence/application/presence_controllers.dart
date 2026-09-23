@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
+import '../../auth/application/session_controller.dart';
 import '../../chat/application/chat_controllers.dart';
 import '../../profile/application/profile_controller.dart';
 import '../domain/presence_repository.dart';
@@ -33,6 +34,8 @@ class OnlineMembers extends Notifier<Set<String>> {
 
   @override
   Set<String> build() {
+    // Rejoin as the new account after a switch.
+    ref.watch(currentUserIdProvider);
     final generation = ++_generation;
     final share = ref.watch(
       ownProfileProvider.select((p) => p.value?.sharePresence),

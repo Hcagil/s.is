@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
+import '../../auth/application/session_controller.dart';
 import '../domain/own_profile.dart';
 import '../domain/profile_repository.dart';
 
@@ -24,11 +25,14 @@ final ownProfileProvider =
 
 class OwnProfileController extends AsyncNotifier<OwnProfile> {
   @override
-  Future<OwnProfile> build() async =>
-      switch (await ref.read(profileRepositoryProvider).load()) {
-        Ok(:final value) => value,
-        Err(:final failure) => throw failure,
-      };
+  Future<OwnProfile> build() async {
+    // The profile of whoever is signed in now; a switch loads the new one.
+    ref.watch(currentUserIdProvider);
+    return switch (await ref.read(profileRepositoryProvider).load()) {
+      Ok(:final value) => value,
+      Err(:final failure) => throw failure,
+    };
+  }
 
   Future<void> retry() async {
     state = const AsyncLoading();

@@ -29,7 +29,11 @@ final openConversationProvider = NotifierProvider<OpenConversation, String?>(
 
 class OpenConversation extends Notifier<String?> {
   @override
-  String? build() => null;
+  String? build() {
+    // A new account starts with nothing open.
+    ref.watch(currentUserIdProvider);
+    return null;
+  }
 
   void open(String conversationId) => state = conversationId;
 
@@ -61,6 +65,8 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   /// list still loads, and returning from a conversation refreshes it.
   @override
   Future<List<Conversation>> build() async {
+    // Rebuilt from scratch for each account: never the last one's list.
+    ref.watch(currentUserIdProvider);
     final buffered = <Message>[];
     var loaded = false;
     final opened = await ref.read(chatRepositoryProvider).incomingAll();
@@ -201,6 +207,8 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
 
 /// Everyone else who can sign in — the picker for starting a first chat.
 final membersProvider = FutureProvider<List<Member>>((ref) async {
+  // "Everyone else" depends on who "you" are.
+  ref.watch(currentUserIdProvider);
   return switch (await ref.read(chatRepositoryProvider).members()) {
     Ok(:final value) => value,
     Err(:final failure) => throw failure,

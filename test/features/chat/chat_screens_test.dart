@@ -49,12 +49,14 @@ class _SignedIn extends SessionController {
   Future<SessionState> build() async => const Allowed(me);
 }
 
-ProviderContainer _scope(ChatFake chat) => ProviderContainer.test(
-  overrides: [
-    chatRepositoryProvider.overrideWithValue(chat),
-    presenceRepositoryProvider.overrideWithValue(PresenceFake()),
-    sessionControllerProvider.overrideWith(_SignedIn.new),
-  ],
+Future<ProviderContainer> _scope(ChatFake chat) => settled(
+  ProviderContainer.test(
+    overrides: [
+      chatRepositoryProvider.overrideWithValue(chat),
+      presenceRepositoryProvider.overrideWithValue(PresenceFake()),
+      sessionControllerProvider.overrideWith(_SignedIn.new),
+    ],
+  ),
 );
 
 Future<ProviderContainer> pump(
@@ -63,7 +65,7 @@ Future<ProviderContainer> pump(
   Widget home = const ConversationList(),
   String? open,
 }) async {
-  final container = _scope(chat);
+  final container = await _scope(chat);
   if (open != null) {
     container.read(openConversationProvider.notifier).open(open);
   }
@@ -152,7 +154,7 @@ void main() {
     ) async {
       final chat = ChatFake(latency: const Duration(milliseconds: 200))
         ..conversationsResult = const Ok([withBob]);
-      final container = _scope(chat);
+      final container = await _scope(chat);
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
@@ -375,7 +377,7 @@ void main() {
 
     testWidgets('subscribes before its first read', (tester) async {
       final chat = ChatFake()..holdSubscription();
-      final container = _scope(chat);
+      final container = await _scope(chat);
       container.read(openConversationProvider.notifier).open('c1');
       await tester.pumpWidget(
         UncontrolledProviderScope(
@@ -423,7 +425,7 @@ void main() {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', body: 'first')])
         ..holdMessages();
-      final container = _scope(chat);
+      final container = await _scope(chat);
       container.read(openConversationProvider.notifier).open('c1');
       await tester.pumpWidget(
         UncontrolledProviderScope(

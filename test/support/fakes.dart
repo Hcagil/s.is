@@ -2,7 +2,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sis/core/failure.dart';
+import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/auth_repository.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
@@ -13,6 +15,18 @@ import 'package:sis/features/presence/domain/presence_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/domain/profile_repository.dart';
 import 'package:sis/features/update/domain/update_repository.dart';
+
+/// Waits for the session to settle on a member, as the app does: nothing
+/// opens a conversation or reads a list before the member is allowed. A test
+/// that does so first watches the account change from nobody to the member,
+/// which rebuilds every per-account provider — something the app never does.
+Future<ProviderContainer> settled(ProviderContainer c) async {
+  await c.read(sessionControllerProvider.future);
+  if (c.read(currentUserIdProvider) == null) {
+    throw StateError('the session did not settle on an allowed member');
+  }
+  return c;
+}
 
 class FakeAuth implements AuthRepository {
   FakeAuth({

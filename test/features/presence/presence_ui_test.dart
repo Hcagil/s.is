@@ -52,7 +52,7 @@ class World {
   final presence = PresenceFake();
   final ProfileFake profileFake;
 
-  ProviderContainer container() {
+  Future<ProviderContainer> container() async {
     final c = ProviderContainer.test(
       overrides: [
         chatRepositoryProvider.overrideWithValue(chat),
@@ -61,6 +61,7 @@ class World {
         sessionControllerProvider.overrideWith(_SignedIn.new),
       ],
     );
+    await settled(c);
     c.listen(ownProfileProvider, (_, _) {});
     return c;
   }
@@ -72,7 +73,7 @@ Future<ProviderContainer> pump(
   Widget home = const ConversationList(),
   String? open,
 }) async {
-  final c = w.container();
+  final c = await w.container();
   if (open != null) c.read(openConversationProvider.notifier).open(open);
   await t.pumpWidget(
     UncontrolledProviderScope(

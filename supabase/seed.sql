@@ -43,6 +43,10 @@
 --   lars/mona      test/integration/last_seen_integration_test.dart
 --     (lars is seen, mona looks; the stranger in that suite is deliberately
 --      NOT listed here, so only the allowlist can refuse him)
+--   jude/kara/lena test/integration/account_switch_integration_test.dart
+--     (jude signs out and kara signs in on the SAME client, as one phone
+--      does; lena is in a conversation with each of them, so each has a
+--      list the other must never be shown)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -75,5 +79,8 @@ insert into app_private.allowlist(email) values
   ('otto@integration.test'),
   ('pia@integration.test'),
   ('lars@integration.test'),
-  ('mona@integration.test')
+  ('mona@integration.test'),
+  ('jude@integration.test'),
+  ('kara@integration.test'),
+  ('lena@integration.test')
 on conflict do nothing;

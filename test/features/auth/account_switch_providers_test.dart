@@ -307,4 +307,49 @@ void main() {
     await switchTo(t, p, heybana);
     expect(p.c.read(lastSeenProvider(deniz)).requireValue, denizSeen);
   });
+
+  group('attachmentUrlProvider', () {
+    const path = 'att/1.jpg';
+
+    testWidgets('is the new account\'s signed URL, asked again on switch', (
+      t,
+    ) async {
+      final p = await signedInAsHeybana(t);
+      p.c.listen(attachmentUrlProvider(path), (_, _) {});
+      await settle(t);
+      expect(
+        p.c.read(attachmentUrlProvider(path)).requireValue.toString(),
+        contains('as=$heybana'),
+      );
+      expect(p.chat.calls, contains('attachmentUrl:$path as $heybana'));
+
+      await switchTo(t, p, cagilhay);
+      await settle(t);
+      expect(
+        p.c.read(attachmentUrlProvider(path)).requireValue.toString(),
+        contains('as=$cagilhay'),
+        reason: 'kept heybana\'s signed URL past the switch',
+      );
+      expect(p.chat.calls, contains('attachmentUrl:$path as $cagilhay'));
+    });
+
+    testWidgets('a recheck of the same account does not ask again', (t) async {
+      final p = await signedInAsHeybana(t);
+      p.c.listen(attachmentUrlProvider(path), (_, _) {});
+      await settle(t);
+      final callsBefore = p.chat.calls
+          .where((c) => c.startsWith('attachmentUrl:$path'))
+          .length;
+      expect(callsBefore, 1, reason: 'setup');
+
+      await run(t, p.c.read(sessionControllerProvider.notifier).retry());
+      expect(p.c.read(sessionControllerProvider).value, isA<Allowed>());
+
+      expect(
+        p.chat.calls.where((c) => c.startsWith('attachmentUrl:$path')).length,
+        callsBefore,
+        reason: 'asked the repository again for the same account',
+      );
+    });
+  });
 }

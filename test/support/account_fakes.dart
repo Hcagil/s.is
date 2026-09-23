@@ -323,8 +323,11 @@ class SessionChat implements ChatRepository {
   }) async => const Err(ProviderFailure('no attachments in this fake'));
 
   @override
-  Future<Result<Uri>> attachmentUrl(String attachmentPath) async =>
-      const Err(DeniedFailure());
+  Future<Result<Uri>> attachmentUrl(String attachmentPath) async {
+    final who = await _as('attachmentUrl:$attachmentPath');
+    if (who == null) return const Err(DeniedFailure());
+    return Ok(Uri.parse('https://x.supabase.co/$attachmentPath?as=$who'));
+  }
 }
 
 /// [ProfileRepository] pinned to the session holder, as RLS pins it.

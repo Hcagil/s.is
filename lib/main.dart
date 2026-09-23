@@ -14,6 +14,7 @@ import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/data/image_picker_attachment_source.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
+import 'features/chat/data/url_launcher_link_opener.dart';
 import 'features/presence/application/presence_controllers.dart';
 import 'features/presence/data/supabase_presence_repository.dart';
 import 'features/profile/application/profile_controller.dart';
@@ -72,6 +73,7 @@ Future<void> main() async {
           attachmentSourceProvider.overrideWithValue(
             ImagePickerAttachmentSource(ImagePicker()),
           ),
+          linkOpenerProvider.overrideWithValue(const UrlLauncherLinkOpener()),
         ],
         child: const SisApp(),
       ),

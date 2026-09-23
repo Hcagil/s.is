@@ -5,13 +5,22 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/app/theme.dart';
 import 'package:sis/core/failure.dart';
+import 'package:sis/features/auth/application/session_controller.dart';
+import 'package:sis/features/auth/domain/member.dart';
+import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/presentation/message_screen.dart';
+import 'package:sis/features/chat/presentation/photo_viewer.dart';
+import 'package:sis/features/presence/application/presence_controllers.dart';
+import 'package:sis/features/presence/data/supabase_presence_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
@@ -88,7 +97,32 @@ Future<({int status, Uint8List body})> _get(Uri uri) async {
   }
 }
 
+class _SignedIn extends SessionController {
+  _SignedIn(this.member);
+  final Member member;
+  @override
+  Future<SessionState> build() async => Allowed(member);
+}
+
+/// Text a member may be shown: a reason, never the SDK's own rendering.
+void _expectReadable(Failure failure) {
+  expect(failure.message.trim(), isNotEmpty);
+  for (final raw in ['Exception', 'statusCode', 'not_found', 'Instance of']) {
+    expect(
+      failure.message,
+      isNot(contains(raw)),
+      reason: 'raw SDK text would reach the screen: ${failure.message}',
+    );
+  }
+}
+
 void main() {
+  // The widget test below needs the binding, and the binding answers every
+  // HTTP request with 400 unless told otherwise: this suite talks to a real
+  // server, so it gets the real network.
+  TestWidgetsFlutterBinding.ensureInitialized();
+  HttpOverrides.global = null;
+
   SupabaseClient? liamClient;
   SupabaseClient? miaClient;
   SupabaseClient? noahClient;
@@ -327,6 +361,49 @@ void main() {
       },
     );
 
+    test(
+      'attachmentUrlProvider serves the viewer a URL that fetches the bytes',
+      () async {
+        final sent = await liam.sendImage(
+          conversationId: conversationId,
+          image: _image(),
+        ) as Ok<Message>;
+        final path = sent.value.attachmentPath!;
+
+        // The other member opens it, as the photo viewer does.
+        final container = containerFor(mia, PickerFake.cancels());
+        final sub = container.listen(attachmentUrlProvider(path), (_, _) {});
+        final url = await container.read(attachmentUrlProvider(path).future);
+
+        final fetched = await _get(url);
+        expect(fetched.status, 200);
+        expect(fetched.body, _png);
+        sub.close();
+      },
+    );
+
+    test('attachmentUrlProvider carries the refusal as a Failure', () async {
+      final sent = await liam.sendImage(
+        conversationId: conversationId,
+        image: _image(),
+      ) as Ok<Message>;
+      final path = sent.value.attachmentPath!;
+
+      for (final repository in [noah, offline]) {
+        final container = containerFor(repository, PickerFake.cancels());
+        container.listen(attachmentUrlProvider(path), (_, _) {});
+
+        await expectLater(
+          container.read(attachmentUrlProvider(path).future),
+          throwsA(isA<Failure>()),
+          reason: 'the viewer can only show a reason it is handed',
+        );
+        final state = container.read(attachmentUrlProvider(path));
+        expect(state, isA<AsyncError<Uri>>());
+        expect((state.error! as Failure).message.trim(), isNotEmpty);
+      }
+    });
+
     test('a cancelled picker is null and sends nothing', () async {
       final picker = PickerFake.cancels();
       final container = containerFor(liam, picker);
@@ -376,5 +453,154 @@ void main() {
         );
       },
     );
+  });
+
+  // Last in the file: its Realtime socket is closed on the way out.
+  group('a photo storage cannot serve', () {
+    late String groupId;
+    late String missingPath;
+    late String realPath;
+    late Member miaMember;
+
+    setUpAll(() async {
+      final miaId = miaClient!.auth.currentUser!.id;
+      miaMember = Member(userId: miaId, displayName: 'Mia');
+      final started = await liam.startGroupConversation(
+        title: 'photos ${DateTime.now().microsecondsSinceEpoch}',
+        memberIds: [miaId],
+      );
+      groupId = (started as Ok<String>).value;
+
+      // A message whose object was never stored, or has since gone: the row
+      // is readable, the object is not, and storage answers 404.
+      missingPath = '$groupId/never-uploaded.png';
+      await liamClient!.from('messages').insert({
+        'conversation_id': groupId,
+        'sender_id': liamClient!.auth.currentUser!.id,
+        'body': '',
+        'attachment_path': missingPath,
+      });
+      final sent = await liam.sendImage(
+        conversationId: groupId,
+        image: _image(),
+      ) as Ok<Message>;
+      realPath = sent.value.attachmentPath!;
+    });
+
+    test('storage refusals come back as readable Failures', () async {
+      final missing = await mia.attachmentUrl(missingPath);
+      expect(missing, isA<Err<Uri>>(), reason: 'a missing object was signed');
+      _expectReadable((missing as Err<Uri>).failure);
+
+      final foreign = await noah.attachmentUrl(realPath);
+      expect(foreign, isA<Err<Uri>>(), reason: 'a non-member signed it');
+      _expectReadable((foreign as Err<Uri>).failure);
+
+      final container = ProviderContainer.test(
+        overrides: [chatRepositoryProvider.overrideWithValue(noah)],
+      );
+      container.listen(attachmentUrlProvider(realPath), (_, _) {});
+      await expectLater(
+        container.read(attachmentUrlProvider(realPath).future),
+        throwsA(isA<Failure>()),
+      );
+      _expectReadable(
+        container.read(attachmentUrlProvider(realPath)).error! as Failure,
+      );
+    });
+
+    testWidgets('the bubble and the viewer show that reason', (t) async {
+      t.view.physicalSize = const Size(1080, 4000);
+      t.view.devicePixelRatio = 2;
+      addTearDown(t.view.reset);
+
+      Future<void> until(bool Function() ok, String what) async {
+        for (var i = 0; i < 150; i++) {
+          await t.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 100)),
+          );
+          await t.pump();
+          if (ok()) return;
+        }
+        fail('never happened: $what');
+      }
+
+      final refused = (await t.runAsync(() => mia.attachmentUrl(missingPath)))!;
+      final reason = (refused as Err<Uri>).failure.message;
+
+      // Mounted as production mounts the screen: real repositories for
+      // everything that reaches the server.
+      final container = ProviderContainer(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(mia),
+          presenceRepositoryProvider.overrideWithValue(
+            SupabasePresenceRepository(miaClient!),
+          ),
+          attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
+          linkOpenerProvider.overrideWithValue(LinkOpenerFake()),
+          sessionControllerProvider.overrideWith(() => _SignedIn(miaMember)),
+        ],
+      );
+      // The account settles first: settling resets the open conversation.
+      await t.runAsync(() => settled(container));
+      container.read(openConversationProvider.notifier).open(groupId);
+      await t.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: sisTheme(Brightness.light),
+            home: const MessageScreen(title: 'photos'),
+          ),
+        ),
+      );
+
+      final raw = find.byWidgetPredicate((w) {
+        final text = w is Text ? (w.data ?? w.textSpan?.toPlainText()) : null;
+        return text != null &&
+            (text.contains('Exception') || text.contains('statusCode'));
+      });
+
+      await until(
+        () => find.textContaining(reason).evaluate().isNotEmpty,
+        'the bubble never showed why the photo is missing',
+      );
+      expect(raw, findsNothing);
+
+      final photo = find.byKey(ValueKey('attachment-$realPath'));
+      await until(() => photo.evaluate().isNotEmpty, 'the real photo');
+      await t.tap(photo);
+      await until(
+        () => find.byType(PhotoViewer).evaluate().isNotEmpty,
+        'the viewer never opened',
+      );
+      final inViewer = find.descendant(
+        of: find.byType(PhotoViewer),
+        matching: find.byKey(const ValueKey('viewer-position')),
+      );
+      expect(inViewer, findsOneWidget);
+
+      await t.fling(
+        find.byKey(const ValueKey('viewer-pages')),
+        const Offset(1000, 0),
+        2000,
+      );
+      await until(
+        () => find
+            .descendant(
+              of: find.byType(PhotoViewer),
+              matching: find.textContaining(reason),
+            )
+            .evaluate()
+            .isNotEmpty,
+        'the viewer page never showed why the photo is missing',
+      );
+      expect(raw, findsNothing);
+
+      await t.pumpWidget(const SizedBox());
+      container.dispose();
+      await t.runAsync(() => miaClient!.removeAllChannels());
+      await t.runAsync(() => miaClient!.realtime.disconnect());
+      await t.pump(const Duration(seconds: 61));
+    });
   });
 }

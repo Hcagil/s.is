@@ -100,6 +100,7 @@ final class SupabaseAuthRepository implements AuthRepository {
           userId: row['user_id'] as String,
           displayName: row['display_name'] as String,
           tag: row['tag'] as String?,
+          email: _client.auth.currentUser?.email,
         ),
       );
     } on PostgrestException catch (e) {

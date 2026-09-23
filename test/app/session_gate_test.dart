@@ -42,6 +42,11 @@ const newcomer = OwnProfile(
   onboardingDone: false,
 );
 
+Finder profileCard(String text) => find.descendant(
+  of: find.byKey(const ValueKey('settings-profile')),
+  matching: find.text(text),
+);
+
 final retryButton = find.textContaining(
   RegExp('retry|try again', caseSensitive: false),
 );
@@ -72,11 +77,11 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('New chat'), findsOneWidget);
     expect(find.byType(OnboardingScreen), findsNothing);
-    // The member is still identified, now in the overflow menu.
-    await t.tap(find.byKey(const ValueKey('home-menu')));
+    // The member is still identified, now on the settings profile card.
+    await t.tap(find.byKey(const ValueKey('home-settings')));
     await t.pumpAndSettle();
-    expect(find.byKey(const ValueKey('menu-sign-out')), findsOneWidget);
-    expect(find.text('Sign out (Maya)'), findsOneWidget);
+    expect(profileCard('Maya'), findsOneWidget);
+    expect(profileCard('@maya'), findsOneWidget);
   });
 
   group('onboarding', () {
@@ -133,17 +138,12 @@ void main() {
         (s.displayName, s.tag, s.onboardingDone),
         ('Maya R', 'maya_r', true),
       );
-      // Home names the member by the profile just saved, not by the Google
-      // account the session started with ("Maya").
-      await t.tap(find.byKey(const ValueKey('home-menu')));
+      // Settings names the member by the profile just saved, not by the
+      // Google account the session started with ("Maya").
+      await t.tap(find.byKey(const ValueKey('home-settings')));
       await t.pumpAndSettle();
-      expect(
-        find.descendant(
-          of: find.byKey(const ValueKey('menu-sign-out')),
-          matching: find.textContaining('Maya R'),
-        ),
-        findsOneWidget,
-      );
+      expect(profileCard('Maya R'), findsOneWidget);
+      expect(profileCard('@maya_r'), findsOneWidget);
       expect(find.textContaining('Maya Google'), findsNothing);
     });
 

@@ -239,11 +239,11 @@ void main() {
         .value;
 
     Future<void> openSettings(WidgetTester t) async {
-      await t.tap(find.byKey(const ValueKey('home-menu')));
-      await t.pumpAndSettle();
-      await t.tap(find.byKey(const ValueKey('menu-settings')));
+      await t.tap(find.byKey(const ValueKey('home-settings')));
       await t.pumpAndSettle();
       expect(find.byType(SettingsScreen), findsOneWidget);
+      await t.tap(find.byKey(const ValueKey('settings-privacy')));
+      await t.pumpAndSettle();
       await t.ensureVisible(tile());
       await t.pumpAndSettle();
     }
@@ -358,7 +358,7 @@ void main() {
       expect(w.presence.touches, 1);
       expect(w.presence.lastSeen['u1'], isNotNull);
 
-      // Rebuild home a few ways: a new list, a menu, a settings round trip.
+      // Rebuild home a few ways: a new list, a settings round trip.
       w.chat.deliver(
         Message(
           id: 'm1',
@@ -369,10 +369,9 @@ void main() {
         ),
       );
       await settle(t);
-      await t.tap(find.byKey(const ValueKey('home-menu')));
+      await t.tap(find.byKey(const ValueKey('home-settings')));
       await t.pumpAndSettle();
-      await t.tap(find.byKey(const ValueKey('menu-settings')));
-      await t.pumpAndSettle();
+      expect(find.byType(SettingsScreen), findsOneWidget);
       await t.pageBack();
       await t.pumpAndSettle();
 

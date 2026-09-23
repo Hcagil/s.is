@@ -69,6 +69,8 @@ class DesignUpdate implements UpdateRepository {
   @override
   Future<int> installedBuild() async => 10;
   @override
+  Future<String> installedVersion() async => '0.6.0';
+  @override
   Future<Result<int>> minSupportedBuild() async => const Ok(1);
   @override
   Future<Result<int?>> availablePlayBuild() async => const Ok(null);

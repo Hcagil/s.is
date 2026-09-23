@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
-import '../../auth/application/session_controller.dart';
 import '../../auth/domain/member.dart';
 import '../../chat/presentation/conversation_list.dart';
 import '../../presence/application/presence_controllers.dart';
-import '../../profile/application/profile_controller.dart';
 import '../../profile/presentation/settings_screen.dart';
 import '../../update/presentation/update_banner.dart';
 
@@ -18,34 +16,17 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The profile, not the session, so a rename in settings shows here at
-    // once.
-    final name =
-        ref.watch(ownProfileProvider).value?.displayName ?? member.displayName;
     return Scaffold(
       appBar: AppBar(
         title: const SisBrandRow(),
         actions: [
-          PopupMenuButton<String>(
-            key: const ValueKey('home-menu'),
-            onSelected: (choice) => switch (choice) {
-              'settings' => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
-              ),
-              _ => ref.read(sessionControllerProvider.notifier).signOut(),
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                key: ValueKey('menu-settings'),
-                value: 'settings',
-                child: Text('Settings'),
-              ),
-              PopupMenuItem(
-                key: const ValueKey('menu-sign-out'),
-                value: 'sign-out',
-                child: Text('Sign out ($name)'),
-              ),
-            ],
+          IconButton(
+            key: const ValueKey('home-settings'),
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+            ),
           ),
         ],
       ),

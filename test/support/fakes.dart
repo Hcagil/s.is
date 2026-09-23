@@ -19,10 +19,18 @@ class FakeAuth implements AuthRepository {
     this.session = false,
     this.allowed = true,
     this.signInResult = const Ok(null),
+    this.member = const Member(userId: 'u1', displayName: 'Maya'),
   });
   bool session;
   bool allowed;
   Result<void> signInResult;
+
+  /// Who currentMember() reports: the signed-in account, email included.
+  Member member;
+
+  /// Runs as signOut() is entered, before the session ends.
+  void Function()? onSignOut;
+  int signOuts = 0;
   final changes = StreamController<bool>.broadcast();
   @override
   bool get hasSession => session;
@@ -40,10 +48,12 @@ class FakeAuth implements AuthRepository {
   @override
   Future<Result<bool>> activateSession() async => Ok(allowed);
   @override
-  Future<Result<Member>> currentMember() async =>
-      const Ok(Member(userId: 'u1', displayName: 'Maya'));
+  Future<Result<Member>> currentMember() async => Ok(member);
   @override
   Future<void> signOut() async {
+    signOuts++;
+    onSignOut?.call();
+    await Future<void>.delayed(Duration.zero); // a real sign-out is a call
     session = false;
     changes.add(false);
   }
@@ -52,11 +62,13 @@ class FakeAuth implements AuthRepository {
 class FakeUpdate implements UpdateRepository {
   FakeUpdate({
     this.installed = 105,
+    this.version = '0.6.0',
     this.min = const Ok(1),
     this.play = const Ok(null),
   });
 
   int installed;
+  String version;
   Result<int> min;
   Result<int?> play;
   final calls = <String>[];
@@ -65,6 +77,8 @@ class FakeUpdate implements UpdateRepository {
 
   @override
   Future<int> installedBuild() async => installed;
+  @override
+  Future<String> installedVersion() async => version;
   @override
   Future<Result<int>> minSupportedBuild() async => min;
   @override

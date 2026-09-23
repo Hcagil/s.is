@@ -20,6 +20,10 @@ final class PlayUpdateRepository implements UpdateRepository {
       int.tryParse((await PackageInfo.fromPlatform()).buildNumber) ?? (1 << 30);
 
   @override
+  Future<String> installedVersion() async =>
+      (await PackageInfo.fromPlatform()).version;
+
+  @override
   Future<Result<int>> minSupportedBuild() async {
     try {
       final row = await _client

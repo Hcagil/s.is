@@ -34,6 +34,8 @@
 --     (yara watches zane come online and type; abby is allowlisted and active
 --      but never in their conversation, so the typing channel can only refuse
 --      her on membership -- has_app_access() alone would let her through)
+--   cleo           test/integration/realtime_channels_test.dart
+--     (joins and leaves presence:members through lib/data/realtime_channels.dart)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -60,5 +62,6 @@ insert into app_private.allowlist(email) values
   ('xena@integration.test'),
   ('yara@integration.test'),
   ('zane@integration.test'),
-  ('abby@integration.test')
+  ('abby@integration.test'),
+  ('cleo@integration.test')
 on conflict do nothing;

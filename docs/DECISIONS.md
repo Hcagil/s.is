@@ -309,3 +309,18 @@ appear online or typing. Outsiders cannot — they cannot join the channel at
 all. Accepted as cosmetic for a private allowlisted group; the fix, if ever
 needed, is server-sent typing (a database function broadcasting on the
 member's behalf) rather than client broadcasts.
+
+## 2026-09-23 — One helper joins and leaves every Realtime channel
+
+**`lib/data/realtime_channels.dart` is the only place a channel is joined or
+torn down.** The same defect shipped twice: v0.2 chat and v0.4 presence each
+awaited a teardown on the failed-join path (`removeChannel` over a dead socket,
+`close()` on a stream nobody had listened to), so the path that exists to stop
+a screen hanging hung. The fix was recorded as a lesson after the first time
+and did not prevent the second. A shared helper makes the correct shape the
+convenient one, and `tool/check_pattern.sh` rule 5 fails CI on an awaited
+`close()` or `removeChannel` inside a `catch` under any `data/` directory.
+
+Side effects of unifying: chat subscriptions now fail on `channelError` and
+`timedOut` statuses immediately instead of waiting out the 15-second timeout,
+and cancelling a chat stream no longer waits on the unsubscribe reply.

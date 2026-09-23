@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
+import '../../../data/realtime_channels.dart';
 import '../../auth/domain/member.dart';
 import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
@@ -235,49 +236,27 @@ final class SupabaseChatRepository implements ChatRepository {
   ) async {
     final channel = _client.channel(topic);
     final controller = StreamController<Message>();
-    final subscribed = Completer<void>();
 
-    channel
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'messages',
-          filter: filter,
-          callback: (payload) {
-            if (controller.isClosed) return;
-            controller.add(_toMessage(payload.newRecord));
-          },
-        )
-        .subscribe((status, error) {
-          if (subscribed.isCompleted) return;
-          if (status == RealtimeSubscribeStatus.subscribed) {
-            subscribed.complete();
-          } else if (error != null) {
-            subscribed.completeError(error);
-          }
-        });
-    controller.onCancel = () async => _client.removeChannel(channel);
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.insert,
+      schema: 'public',
+      table: 'messages',
+      filter: filter,
+      callback: (payload) {
+        if (controller.isClosed) return;
+        controller.add(_toMessage(payload.newRecord));
+      },
+    );
+    controller.onCancel = () => leaveChannel(_client, channel);
 
     try {
       // A dead subscription must fail loudly rather than hang the screen.
-      await subscribed.future.timeout(const Duration(seconds: 15));
+      await joinChannel(channel);
     } catch (e) {
       // An unreachable server throws an SDK type (WebSocketChannelException,
       // SocketException, TimeoutException). Left unmapped it would be printed
       // on screen verbatim.
-      //
-      // Tear down WITHOUT awaiting: removeChannel sends an unsubscribe over
-      // the same dead socket and waits for a reply that never arrives, so
-      // awaiting it here would hang the very failure path that exists to stop
-      // the screen hanging.
-      unawaited(() async {
-        try {
-          await controller.close();
-        } catch (_) {}
-        try {
-          await _client.removeChannel(channel);
-        } catch (_) {}
-      }());
+      leaveChannel(_client, channel, controller);
       return Err(_asFailure(e));
     }
     // The controller buffers anything that lands before the caller listens.

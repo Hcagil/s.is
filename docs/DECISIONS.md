@@ -395,6 +395,12 @@ limit: a phone that kills the app without it ever reaching the background
 keeps the time it was opened. A heartbeat would fix that at one write a
 minute per open app; not worth it yet.
 
+**Last seen and online stay separate switches** (owner, after the audit).
+Hiding last seen hides the stored time both ways; it does not stop a member
+watching the live "online" dot, which follows the online switch alone. The
+stricter reading (hiding last seen also hides and blinds online) was offered
+and declined.
+
 **Shown in the 1:1 header** under the name, after "typing…" and "online":
 "last seen just now", "N min ago", "today at 14:02", "yesterday at 21:40",
 then a date.

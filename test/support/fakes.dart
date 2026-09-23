@@ -383,10 +383,22 @@ class ChatFake implements ChatRepository {
   /// member's count goes to zero -- which the next [conversations] reflects.
   Result<void>? markReadResult;
 
+  Completer<void>? _markRead;
+
+  /// Leaves the next [markRead] in flight until [releaseMarkRead]: the screen
+  /// can be gone, and the list disposed, before the server answers.
+  void holdMarkRead() => _markRead = Completer<void>();
+  void releaseMarkRead() {
+    _markRead?.complete();
+    _markRead = null;
+  }
+
   @override
   Future<Result<void>> markRead(String conversationId) async {
     await _tick('markRead:$conversationId');
     markedRead.add(conversationId);
+    final held = _markRead;
+    if (held != null) await held.future;
     if (markReadResult case final forced?) return forced;
     final current = conversationsResult;
     if (current is! Ok<List<Conversation>>) return const Ok(null);

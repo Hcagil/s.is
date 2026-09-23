@@ -142,8 +142,11 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     final result = await ref
         .read(chatRepositoryProvider)
         .markRead(conversationId);
+    // Checked before touching state: the list can be disposed while the call
+    // is in flight, and reading state then throws.
+    if (result is! Ok || !ref.mounted) return;
     final current = state.value;
-    if (result is! Ok || current == null || !ref.mounted) return;
+    if (current == null) return;
     state = AsyncData([
       for (final c in current) c.id == conversationId ? c.read() : c,
     ]);

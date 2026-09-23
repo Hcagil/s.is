@@ -328,6 +328,23 @@ void main() {
       await settle();
       expect(row(c, 'c1').unread, 0);
     });
+    test('markRead answered after the list is gone neither throws nor '
+        'touches state', () async {
+      final chat = ChatFake()
+        ..conversationsResult = Ok([conv('c1', 30, unread: 3)])
+        ..holdMarkRead();
+      final c = await loaded(chat);
+
+      final pending = c.read(conversationListProvider.notifier).markRead('c1');
+      await settle();
+      expect(chat.markedRead, ['c1'], reason: 'the call never went out');
+
+      // The member left: the list is disposed while the server still works.
+      c.dispose();
+      chat.releaseMarkRead();
+
+      await expectLater(pending, completes);
+    });
   });
 
   group('list badge', () {

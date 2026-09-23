@@ -46,15 +46,17 @@ class _SignedIn extends SessionController {
 
 final theme = sisTheme(Brightness.light);
 
-ProviderContainer scope(ChatFake chat, LinkOpenerFake opener) =>
-    ProviderContainer.test(
-      overrides: [
-        chatRepositoryProvider.overrideWithValue(chat),
-        presenceRepositoryProvider.overrideWithValue(PresenceFake()),
-        attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
-        linkOpenerProvider.overrideWithValue(opener),
-        sessionControllerProvider.overrideWith(_SignedIn.new),
-      ],
+Future<ProviderContainer> scope(ChatFake chat, LinkOpenerFake opener) =>
+    settled(
+      ProviderContainer.test(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(chat),
+          presenceRepositoryProvider.overrideWithValue(PresenceFake()),
+          attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
+          linkOpenerProvider.overrideWithValue(opener),
+          sessionControllerProvider.overrideWith(_SignedIn.new),
+        ],
+      ),
     );
 
 Future<void> pump(
@@ -63,7 +65,7 @@ Future<void> pump(
   LinkOpenerFake? opener,
   bool decode = true,
 }) async {
-  final container = scope(chat, opener ?? LinkOpenerFake());
+  final container = await scope(chat, opener ?? LinkOpenerFake());
   container.read(openConversationProvider.notifier).open('c1');
   await tester.pumpWidget(
     UncontrolledProviderScope(
@@ -561,7 +563,7 @@ void main() {
   group('attachmentUrlProvider', () {
     test('is the repository\'s signed URL for that path', () async {
       final chat = ChatFake()..store('c1/a.png');
-      final c = scope(chat, LinkOpenerFake());
+      final c = await scope(chat, LinkOpenerFake());
 
       final url = await c.read(attachmentUrlProvider('c1/a.png').future);
 
@@ -572,7 +574,7 @@ void main() {
     test('an Err becomes an AsyncError carrying the Failure itself', () async {
       const failure = NetworkFailure('storage is down');
       final chat = ChatFake()..urlFailures['c1/a.png'] = failure;
-      final c = scope(chat, LinkOpenerFake());
+      final c = await scope(chat, LinkOpenerFake());
       c.listen(attachmentUrlProvider('c1/a.png'), (_, _) {});
 
       await expectLater(
@@ -586,7 +588,7 @@ void main() {
 
     test('a failure is not retried behind the screen\'s back', () async {
       final chat = ChatFake()..urlFailures['c1/a.png'] = const DeniedFailure();
-      final c = scope(chat, LinkOpenerFake());
+      final c = await scope(chat, LinkOpenerFake());
       c.listen(attachmentUrlProvider('c1/a.png'), (_, _) {});
 
       await Future<void>.delayed(const Duration(seconds: 2));

@@ -28,6 +28,8 @@ final attachmentUrlProvider = FutureProvider.autoDispose.family<Uri, String>((
   ref,
   path,
 ) async {
+  // A signed URL is issued to one account; a new account asks again.
+  ref.watch(currentUserIdProvider);
   return switch (await ref.read(chatRepositoryProvider).attachmentUrl(path)) {
     Ok(:final value) => value,
     Err(:final failure) => throw failure,

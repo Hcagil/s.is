@@ -11,6 +11,8 @@ lib/
   main.dart               bootstrap only: config → ProviderScope → App
   app/                    MaterialApp, theme, top-level routing
   core/                   RuntimeConfig, Failure types, Result — no widgets, no SDKs
+  data/                   SDK helpers shared by more than one feature's data/
+                          layer (realtime_channels.dart); same rules as data/
   features/<feature>/
     domain/               immutable models + repository interfaces (pure Dart)
     data/                 repository implementations — the ONLY layer importing
@@ -47,7 +49,13 @@ inside `chat`.
    verified on a device instead. Keep those classes thin for that reason: logic
    that could be tested belongs in `domain/`.
 
-`tool/check_pattern.sh` enforces rules 1–3 by import analysis; it runs in CI
+5. `data/` never awaits a teardown (`close()`, `removeChannel`) inside a
+   `catch` block. On a failed Realtime join both can wait forever, hanging the
+   failure path. Every Realtime repository joins and leaves through
+   `lib/data/realtime_channels.dart` (`joinChannel`, `leaveChannel`).
+
+`tool/check_pattern.sh` enforces rules 1–3 by import analysis and rule 5 by
+scanning `catch` blocks under every `data/` directory; it runs in CI
 and blocks the merge on any violation. Violations are fixed by rewriting the
 offending code to the pattern, not by exempting it.
 

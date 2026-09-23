@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
+import '../../../data/realtime_channels.dart';
 import '../domain/presence_repository.dart';
 
 /// [PresenceRepository] over private Realtime channels.
@@ -18,32 +19,7 @@ final class SupabasePresenceRepository implements PresenceRepository {
 
   Failure _asFailure(Object e) => NetworkFailure('$e');
 
-  /// Joins [channel] and resolves when the server confirms it -- or refuses
-  /// it, which for a private channel is how an unauthorised join ends.
-  Future<void> _join(RealtimeChannel channel) {
-    final joined = Completer<void>();
-    channel.subscribe((status, error) {
-      if (joined.isCompleted) return;
-      if (status == RealtimeSubscribeStatus.subscribed) {
-        joined.complete();
-      } else if (status == RealtimeSubscribeStatus.channelError ||
-          status == RealtimeSubscribeStatus.timedOut ||
-          error != null) {
-        joined.completeError(error ?? status);
-      }
-    });
-    return joined.future.timeout(const Duration(seconds: 15));
-  }
-
-  /// Leaves [channel] without waiting: on a dead socket the unsubscribe
-  /// handshake never completes (see SupabaseChatRepository.incoming).
-  void _leave(RealtimeChannel channel) {
-    unawaited(() async {
-      try {
-        await _client.removeChannel(channel);
-      } catch (_) {}
-    }());
-  }
+  void _leave(RealtimeChannel channel) => leaveChannel(_client, channel);
 
   @override
   Future<Result<Stream<Set<String>>>> online({required bool share}) async {
@@ -62,17 +38,14 @@ final class SupabasePresenceRepository implements PresenceRepository {
     });
     controller.onCancel = () => _leave(channel);
     try {
-      await _join(channel);
+      await joinChannel(channel);
       if (share) {
         await channel.track({
           'online_at': DateTime.now().toUtc().toIso8601String(),
         });
       }
     } catch (e) {
-      _leave(channel);
-      // Not awaited: close() on a stream nobody ever listened to completes
-      // only once someone does, so awaiting it hung this failure path forever.
-      unawaited(controller.close());
+      leaveChannel(_client, channel, controller);
       return Err(_asFailure(e));
     }
     return Ok(controller.stream);
@@ -96,10 +69,9 @@ final class SupabasePresenceRepository implements PresenceRepository {
       },
     );
     try {
-      await _join(channel);
+      await joinChannel(channel);
     } catch (e) {
-      _leave(channel);
-      await typists.close();
+      leaveChannel(_client, channel, typists);
       return Err(_asFailure(e));
     }
     return Ok(_SupabaseTypingChannel(channel, typists, me, _leave));

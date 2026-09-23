@@ -9,6 +9,7 @@ import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/presence/domain/presence_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/domain/profile_repository.dart';
 import 'package:sis/features/update/domain/update_repository.dart';
@@ -650,7 +651,16 @@ class ProfileFake implements ProfileRepository {
 
   /// Call names in order: `load`, `save`, `check:<tag>`.
   final calls = <String>[];
-  final saves = <({String? displayName, String? tag, bool? onboardingDone})>[];
+  final saves =
+      <
+        ({
+          String? displayName,
+          String? tag,
+          bool? onboardingDone,
+          bool? sharePresence,
+          bool? shareTyping,
+        })
+      >[];
   List<String> get checks => [
     for (final c in calls)
       if (c.startsWith('check:')) c.substring(6),
@@ -699,12 +709,16 @@ class ProfileFake implements ProfileRepository {
     String? displayName,
     String? tag,
     bool? onboardingDone,
+    bool? sharePresence,
+    bool? shareTyping,
   }) async {
     await _tick('save');
     saves.add((
       displayName: displayName,
       tag: tag,
       onboardingDone: onboardingDone,
+      sharePresence: sharePresence,
+      shareTyping: shareTyping,
     ));
     final held = _save;
     if (held != null) await held.future;
@@ -725,6 +739,8 @@ class ProfileFake implements ProfileRepository {
       displayName: displayName ?? profile.displayName,
       tag: tag ?? profile.tag,
       onboardingDone: onboardingDone ?? profile.onboardingDone,
+      sharePresence: sharePresence ?? profile.sharePresence,
+      shareTyping: shareTyping ?? profile.shareTyping,
     );
     return Ok(profile);
   }
@@ -740,5 +756,176 @@ class ProfileFake implements ProfileRepository {
       await gate.future;
     }
     return availabilityResult ?? Ok(answer);
+  }
+}
+
+/// One `online()` join, as the server sees it.
+class OnlineJoin {
+  OnlineJoin(this.share);
+
+  /// Whether this join announces the caller.
+  final bool share;
+
+  /// Set once the server confirmed the channel.
+  bool confirmed = false;
+
+  /// Set once the caller let go of the channel (cancelled its stream).
+  bool left = false;
+
+  StreamController<Set<String>>? _events;
+  Completer<void>? _gate;
+}
+
+/// A presence repository written from the [PresenceRepository] contract.
+///
+/// Joining takes time and can be held open: the server has not confirmed yet.
+/// A confirmed online channel announces the caller (when it shares) until the
+/// caller cancels its stream — a join nobody listens to and cancels stays
+/// announcing, exactly as a joined Realtime channel stays joined. Events reach
+/// a live listener only; the first presence state arrives just after the
+/// listener attaches, not synchronously with the join.
+class PresenceFake implements PresenceRepository {
+  PresenceFake({this.selfId = 'u1', this.latency = Duration.zero});
+
+  /// The caller; present in the online set only while a sharing join is live.
+  final String selfId;
+  final Duration latency;
+
+  /// When set, the join is refused with this failure.
+  Failure? onlineRefusal;
+  Failure? typingRefusal;
+
+  /// Call names in order: `online:share`, `online:hidden`, `typing:<id>`.
+  final calls = <String>[];
+  final joins = <OnlineJoin>[];
+  final typingChannels = <FakeTypingChannel>[];
+
+  Set<String> _others = {};
+  bool _holdingOnline = false;
+  Completer<void>? _typingHold;
+
+  /// Joins currently holding the caller visible to everyone else.
+  List<OnlineJoin> get announcing => [
+    for (final j in joins)
+      if (j.share && j.confirmed && !j.left) j,
+  ];
+
+  /// Channels the caller still holds open.
+  List<OnlineJoin> get live => [
+    for (final j in joins)
+      if (j.confirmed && !j.left) j,
+  ];
+
+  /// The open typing channel for [conversationId], if any.
+  FakeTypingChannel? typingIn(String conversationId) => typingChannels
+      .where((c) => c.conversationId == conversationId && !c.closed)
+      .lastOrNull;
+
+  /// Joins started after this stay pending until released — all at once
+  /// ([releaseOnline]) or one by one, in any order ([releaseJoin]).
+  void holdOnline() => _holdingOnline = true;
+  void releaseOnline() {
+    _holdingOnline = false;
+    for (final j in joins) {
+      releaseJoin(j);
+    }
+  }
+
+  void releaseJoin(OnlineJoin join) {
+    final gate = join._gate;
+    join._gate = null;
+    if (gate != null && !gate.isCompleted) gate.complete();
+  }
+
+  void holdTyping() => _typingHold ??= Completer<void>();
+  void releaseTyping() {
+    _typingHold?.complete();
+    _typingHold = null;
+  }
+
+  /// Other members come and go; every live channel hears about it.
+  void setOthersOnline(Iterable<String> ids) {
+    _others = {...ids};
+    for (final j in live) {
+      j._events?.add(_stateFor(j));
+    }
+  }
+
+  Set<String> _stateFor(OnlineJoin j) => {..._others, if (j.share) selfId};
+
+  Future<void> _tick(String call) async {
+    calls.add(call);
+    await Future<void>.delayed(latency);
+  }
+
+  @override
+  Future<Result<Stream<Set<String>>>> online({required bool share}) async {
+    final join = OnlineJoin(share);
+    joins.add(join);
+    if (_holdingOnline) join._gate = Completer<void>();
+    final gate = join._gate;
+    await _tick(share ? 'online:share' : 'online:hidden');
+    if (gate != null) await gate.future;
+    if (onlineRefusal case final refused?) return Err(refused);
+    join.confirmed = true;
+    late final StreamController<Set<String>> events;
+    events = StreamController<Set<String>>(
+      onListen: () => scheduleMicrotask(() {
+        if (!join.left) events.add(_stateFor(join));
+      }),
+      onCancel: () => join.left = true,
+    );
+    join._events = events;
+    return Ok(events.stream);
+  }
+
+  @override
+  Future<Result<TypingChannel>> typing(String conversationId) async {
+    await _tick('typing:$conversationId');
+    final hold = _typingHold;
+    if (hold != null) await hold.future;
+    if (typingRefusal case final refused?) return Err(refused);
+    final channel = FakeTypingChannel(conversationId);
+    typingChannels.add(channel);
+    return Ok(channel);
+  }
+}
+
+/// A typing channel for one conversation: others' signals arrive only while
+/// someone listens, the caller's own signals are counted and never echoed.
+class FakeTypingChannel implements TypingChannel {
+  FakeTypingChannel(this.conversationId);
+
+  final String conversationId;
+  final _typists = StreamController<String>.broadcast();
+  bool closed = false;
+
+  /// Signals the caller sent while the channel was open.
+  int signals = 0;
+
+  /// Signals attempted after close — a leak, never counted as sent.
+  int signalsAfterClose = 0;
+
+  /// Another member typed in this conversation.
+  void type(String userId) {
+    if (!closed) _typists.add(userId);
+  }
+
+  @override
+  Stream<String> get typists => _typists.stream;
+
+  @override
+  Future<void> signal() async {
+    if (closed) {
+      signalsAfterClose++;
+      return;
+    }
+    signals++;
+  }
+
+  @override
+  Future<void> close() async {
+    closed = true;
+    await _typists.close();
   }
 }

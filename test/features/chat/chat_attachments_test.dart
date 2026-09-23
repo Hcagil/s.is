@@ -17,6 +17,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
@@ -50,6 +51,7 @@ ProviderContainer scope(ChatFake chat, AttachmentSource picker) =>
     ProviderContainer.test(
       overrides: [
         chatRepositoryProvider.overrideWithValue(chat),
+        presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         attachmentSourceProvider.overrideWithValue(picker),
         sessionControllerProvider.overrideWith(_SignedIn.new),
       ],

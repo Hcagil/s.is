@@ -284,3 +284,28 @@ Google name and the generated tag.
 
 **Renaming moved from the chat feature to a profile feature.** One owner of
 profile writes; two paths to the same column would drift.
+
+## 2026-09-23 — Online status and typing over private, RLS-gated channels
+
+**Presence and typing use private Realtime channels authorised by RLS on
+`realtime.messages`.** A public channel would let anyone holding the public
+anon key join `typing:<conversation>` or the presence channel. The policies
+apply the same rule as every other read: `has_app_access()`, plus membership of
+the conversation for typing. Before this, `realtime.messages` had RLS on and no
+policies — private channels were deny-all — and only these two topics were
+opened.
+
+**The sharing switches are stored on the profile and enforced by the server.**
+Stored on the profile so the choice follows the account to a new phone.
+Enforced in the send policy, not only in the app, so a modified client cannot
+announce someone who chose to stay hidden. Realtime evaluates policies when a
+channel is joined, so the app rejoins when a switch flips and also stops
+sending at once.
+
+**Known limit: identities inside presence and typing are client-supplied.**
+Realtime does not tell a receiver who sent a broadcast, and the presence key is
+chosen by the client. A malicious *member* could therefore make another member
+appear online or typing. Outsiders cannot — they cannot join the channel at
+all. Accepted as cosmetic for a private allowlisted group; the fix, if ever
+needed, is server-sent typing (a database function broadcasting on the
+member's behalf) rather than client broadcasts.

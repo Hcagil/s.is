@@ -6,6 +6,7 @@ import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/presentation/onboarding_screen.dart';
@@ -27,6 +28,7 @@ Widget app(FakeAuth a, FakeUpdate u, [FakeChat? c, ProfileFake? p]) =>
         updateRepositoryProvider.overrideWithValue(u),
         // The home of an allowed member is the conversation list.
         chatRepositoryProvider.overrideWithValue(c ?? FakeChat()),
+        presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         // Every allowed member's profile is read before home is shown.
         profileRepositoryProvider.overrideWithValue(p ?? ProfileFake()),
       ],

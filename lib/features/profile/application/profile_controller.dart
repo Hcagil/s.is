@@ -51,6 +51,8 @@ class OwnProfileController extends AsyncNotifier<OwnProfile> {
     String? displayName,
     String? tag,
     bool? onboardingDone,
+    bool? sharePresence,
+    bool? shareTyping,
   }) async {
     final result = await ref
         .read(profileRepositoryProvider)
@@ -58,12 +60,18 @@ class OwnProfileController extends AsyncNotifier<OwnProfile> {
           displayName: displayName,
           tag: tag,
           onboardingDone: onboardingDone,
+          sharePresence: sharePresence,
+          shareTyping: shareTyping,
         );
     if (result case Ok(:final value) when ref.mounted) {
       state = AsyncData(value);
     }
     return result;
   }
+
+  /// Turns sharing of online status and/or typing on or off.
+  Future<Result<OwnProfile>> setSharing({bool? presence, bool? typing}) =>
+      _save(sharePresence: presence, shareTyping: typing);
 
   /// Advisory availability for the tag field.
   Future<Result<bool>> checkTag(String tag) =>

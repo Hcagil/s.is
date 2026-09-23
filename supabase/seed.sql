@@ -30,6 +30,10 @@
 --     (rose's list is kept live while sam writes; tess is allowlisted and
 --      active and talks to sam, but is never in a conversation with rose, so
 --      only row-level security can keep rose's messages from her stream)
+--   yara/zane/abby test/integration/presence_integration_test.dart
+--     (yara watches zane come online and type; abby is allowlisted and active
+--      but never in their conversation, so the typing channel can only refuse
+--      her on membership -- has_app_access() alone would let her through)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -53,5 +57,8 @@ insert into app_private.allowlist(email) values
   ('tess@integration.test'),
   ('vera@integration.test'),
   ('walt@integration.test'),
-  ('xena@integration.test')
+  ('xena@integration.test'),
+  ('yara@integration.test'),
+  ('zane@integration.test'),
+  ('abby@integration.test')
 on conflict do nothing;

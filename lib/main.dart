@@ -12,6 +12,8 @@ import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/data/image_picker_attachment_source.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
+import 'features/presence/application/presence_controllers.dart';
+import 'features/presence/data/supabase_presence_repository.dart';
 import 'features/profile/application/profile_controller.dart';
 import 'features/profile/data/supabase_profile_repository.dart';
 import 'features/update/application/update_controller.dart';
@@ -50,6 +52,9 @@ Future<void> main() async {
           ),
           chatRepositoryProvider.overrideWithValue(
             SupabaseChatRepository(client),
+          ),
+          presenceRepositoryProvider.overrideWithValue(
+            SupabasePresenceRepository(client),
           ),
           profileRepositoryProvider.overrideWithValue(
             SupabaseProfileRepository(client),

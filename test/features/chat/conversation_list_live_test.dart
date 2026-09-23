@@ -11,6 +11,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/conversation_list.dart';
@@ -55,6 +56,7 @@ class _SignedIn extends SessionController {
 ProviderContainer scope(ChatFake chat) => ProviderContainer.test(
   overrides: [
     chatRepositoryProvider.overrideWithValue(chat),
+    presenceRepositoryProvider.overrideWithValue(PresenceFake()),
     sessionControllerProvider.overrideWith(_SignedIn.new),
   ],
 );

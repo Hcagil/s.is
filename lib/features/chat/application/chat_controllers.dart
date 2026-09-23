@@ -347,3 +347,32 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     return result;
   }
 }
+
+Future<T> _value<T>(Future<Result<T>> call) async => switch (await call) {
+  Ok(:final value) => value,
+  Err(:final failure) => throw failure,
+};
+
+/// Who is in a conversation, for its group page.
+final conversationMembersProvider = FutureProvider.autoDispose
+    .family<List<Member>, String>(
+      (ref, id) =>
+          _value(ref.read(chatRepositoryProvider).conversationMembers(id)),
+      retry: _never,
+    );
+
+/// A conversation's photos, newest first.
+final sharedMediaProvider = FutureProvider.autoDispose
+    .family<List<Message>, String>(
+      (ref, id) => _value(ref.read(chatRepositoryProvider).sharedMedia(id)),
+      retry: _never,
+    );
+
+/// A conversation's links, newest first.
+final sharedLinksProvider = FutureProvider.autoDispose
+    .family<List<SharedLink>, String>(
+      (ref, id) async => sharedLinksIn(
+        await _value(ref.read(chatRepositoryProvider).sharedLinks(id)),
+      ),
+      retry: _never,
+    );

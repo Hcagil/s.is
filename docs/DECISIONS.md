@@ -468,3 +468,25 @@ picker: `presentation/` never imports a platform SDK.
 **A photo opens full-screen**, with pinch-zoom and swiping between the
 conversation's photos. Photos load through the same short-lived signed URLs
 as the bubbles; thumbnails and an on-device cache come with v0.9.
+
+## 2026-09-23 — Profile pages for people and groups
+
+**A person's page** opens from the title of your 1:1 chat with them or from
+a group's member list (the owner chose not to make group sender names a
+second entry point). It shows their name, @tag, online or last seen (under
+the same server rules as the chat header), and Media and Links from your 1:1
+chat only. It never creates a chat just to be looked at: with no 1:1 yet it
+says so, and the Message button is what starts one.
+
+**A group's page** opens from the group chat's title: name, member count,
+and Members, Media and Links tabs. View only in v0.7; renaming, adding and
+leaving need their own rules and come later.
+
+**No new database access.** Members, photos and link messages are read under
+the existing row-level security; each read is capped at the newest few
+hundred, like the chat history.
+
+**One open conversation at a time, restored on return.** Opening a chat from
+another chat's member page (group, member, Message) puts the new chat on top;
+leaving it hands the "open conversation" back to the one underneath instead
+of clearing it, so the group chat below keeps its live messages.

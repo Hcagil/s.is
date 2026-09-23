@@ -1,3 +1,5 @@
+import 'message.dart';
+
 /// A run of message text: plain, or a link to open.
 final class TextSegment {
   const TextSegment(this.text, [this.link]);
@@ -50,6 +52,16 @@ List<TextSegment> linkSegments(String text) {
 List<Uri> extractLinks(String text) => [
   for (final s in linkSegments(text))
     if (s.link != null) s.link!,
+];
+
+/// One shared link: the address and the message it came from.
+typedef SharedLink = ({Uri link, Message message});
+
+/// Every link in [messages], in the messages' order; a message with two links
+/// gives two entries.
+List<SharedLink> sharedLinksIn(List<Message> messages) => [
+  for (final m in messages)
+    for (final link in extractLinks(m.body)) (link: link, message: m),
 ];
 
 /// Opens a link outside the app. Its own boundary because the browser is a

@@ -16,6 +16,7 @@ import '../domain/links.dart';
 import '../domain/message.dart';
 import 'conversation_list.dart';
 import 'photo_viewer.dart';
+import 'profile_pages.dart';
 
 /// Opens [conversationId] and closes it again when the screen is popped, so
 /// the Realtime subscription lives exactly as long as the screen does.
@@ -28,6 +29,9 @@ Future<void> openConversation(
   bool group = false,
 }) async {
   final list = ref.read(conversationListProvider.notifier);
+  // A conversation can be opened from inside another (a group member's page
+  // -> Message); leaving it must hand the screen back to that one.
+  final previous = ref.read(openConversationProvider);
   ref.read(openConversationProvider.notifier).open(conversationId);
   // Opening is reading. Not awaited: the screen must not wait on it.
   unawaited(list.markRead(conversationId));
@@ -40,7 +44,11 @@ Future<void> openConversation(
   // Again on leaving, so a message that landed while the screen was open is
   // read before the list below re-reads the counts.
   await list.markRead(conversationId);
-  ref.read(openConversationProvider.notifier).close();
+  if (previous == null) {
+    ref.read(openConversationProvider.notifier).close();
+  } else {
+    ref.read(openConversationProvider.notifier).open(previous);
+  }
   // The list is also kept live by Realtime; this re-read is the fallback when
   // that subscription could not be established.
   await ref.read(conversationListProvider.notifier).reloadQuietly();
@@ -111,20 +119,41 @@ class MessageScreen extends ConsumerWidget {
         : const <String, String>{};
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title ?? 'Conversation'),
-            if (status != null)
-              Text(
-                status,
-                key: const ValueKey('conversation-status'),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.w600,
+        title: InkWell(
+          key: const ValueKey('conversation-title'),
+          borderRadius: BorderRadius.circular(8),
+          onTap: () {
+            final id = ref.read(openConversationProvider);
+            if (id == null) return;
+            final page = group
+                ? GroupScreen(conversationId: id, title: title ?? 'Group')
+                : otherUserId == null
+                ? null
+                // Already in this chat: no Message button on their page.
+                : PersonScreen(
+                    userId: otherUserId!,
+                    fallbackName: title,
+                    showMessage: false,
+                  );
+            if (page == null) return;
+            Navigator.of(context)
+                .push(MaterialPageRoute<void>(builder: (_) => page));
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title ?? 'Conversation'),
+              if (status != null)
+                Text(
+                  status,
+                  key: const ValueKey('conversation-status'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
       body: SisGlow(

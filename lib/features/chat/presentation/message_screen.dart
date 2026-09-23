@@ -9,6 +9,7 @@ import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../../presence/application/presence_controllers.dart';
+import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
 import '../domain/message.dart';
 import 'conversation_list.dart';
@@ -42,7 +43,8 @@ Future<void> openConversation(
   await ref.read(conversationListProvider.notifier).reloadQuietly();
 }
 
-/// "typing…" beats "online"; in a group, who is typing by name.
+/// "typing…" beats "online", which beats "last seen"; in a group, who is
+/// typing by name.
 String? _status(WidgetRef ref, String? other) {
   final typing = ref.watch(typingProvider);
   if (typing.isNotEmpty) {
@@ -55,6 +57,10 @@ String? _status(WidgetRef ref, String? other) {
   }
   if (other != null && ref.watch(onlineMembersProvider).contains(other)) {
     return 'online';
+  }
+  if (other != null) {
+    final at = ref.watch(lastSeenProvider(other)).value;
+    if (at != null) return lastSeenLabel(at, DateTime.now());
   }
   return null;
 }

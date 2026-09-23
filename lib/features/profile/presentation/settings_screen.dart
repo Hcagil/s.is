@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
+import '../../presence/application/presence_controllers.dart';
 import '../application/profile_controller.dart';
 import 'profile_form.dart';
 
@@ -10,10 +11,16 @@ Future<void> _setSharing(
   WidgetRef ref, {
   bool? presence,
   bool? typing,
+  bool? lastSeen,
 }) async {
   final result = await ref
       .read(ownProfileProvider.notifier)
-      .setSharing(presence: presence, typing: typing);
+      .setSharing(presence: presence, typing: typing, lastSeen: lastSeen);
+  // Turning last seen back on starts from now, not from nothing: the server
+  // forgot the old time when it was turned off.
+  if (result is Ok && lastSeen == true) {
+    await ref.read(lastSeenReporterProvider)();
+  }
   if (result case Err(:final failure) when context.mounted) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(failure.message)));
@@ -68,6 +75,16 @@ class SettingsScreen extends ConsumerWidget {
                 title: const Text('Show when I am typing'),
                 value: value.shareTyping,
                 onChanged: (on) => _setSharing(context, ref, typing: on),
+              ),
+              SwitchListTile(
+                key: const ValueKey('share-last-seen'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Show my last seen'),
+                subtitle: const Text(
+                  "While this is off, you can't see anyone else's either.",
+                ),
+                value: value.shareLastSeen,
+                onChanged: (on) => _setSharing(context, ref, lastSeen: on),
               ),
             ],
           ),

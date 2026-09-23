@@ -7,6 +7,7 @@ final class OwnProfile {
     required this.onboardingDone,
     this.sharePresence = true,
     this.shareTyping = true,
+    this.shareLastSeen = true,
   });
 
   final String userId;
@@ -25,6 +26,10 @@ final class OwnProfile {
 
   /// Whether others may see this member typing. Same storage and enforcement.
   final bool shareTyping;
+
+  /// Whether others may see when this member was last online. Mutual: while
+  /// it is off, the server shows this member nobody else's either.
+  final bool shareLastSeen;
 }
 
 /// Longest display name the database accepts.

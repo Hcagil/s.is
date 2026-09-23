@@ -541,6 +541,8 @@ void main() {
           sessionControllerProvider.overrideWith(() => _SignedIn(miaMember)),
         ],
       );
+      // The account settles first: settling resets the open conversation.
+      await t.runAsync(() => settled(container));
       container.read(openConversationProvider.notifier).open(groupId);
       await t.pumpWidget(
         UncontrolledProviderScope(

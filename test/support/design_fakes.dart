@@ -104,6 +104,27 @@ class DesignChat implements ChatRepository {
 
   @override
   Future<Result<List<Member>>> members() async => Ok(people);
+
+  /// Who is in each conversation; one the caller is not in reads as empty.
+  final roster = <String, List<Member>>{};
+  static final _webAddress = RegExp(r'https?://|www\.', caseSensitive: false);
+
+  List<Message> _newest(String id, bool Function(Message) keep) =>
+      (history[id] ?? const <Message>[]).reversed
+          .where(keep)
+          .take(500)
+          .toList();
+
+  @override
+  Future<Result<List<Member>>> conversationMembers(String id) async => Ok(
+    [...?roster[id]]..sort((a, b) => a.displayName.compareTo(b.displayName)),
+  );
+  @override
+  Future<Result<List<Message>>> sharedMedia(String id) async =>
+      Ok(_newest(id, (m) => m.hasAttachment));
+  @override
+  Future<Result<List<Message>>> sharedLinks(String id) async =>
+      Ok(_newest(id, (m) => _webAddress.hasMatch(m.body)));
   @override
   Future<Result<List<Conversation>>> conversations() async => Ok(list);
   @override

@@ -124,6 +124,13 @@ class _MarkReadDown implements ChatRepository {
   @override
   Future<Result<List<Member>>> members() => live.members();
   @override
+  Future<Result<List<Member>>> conversationMembers(String id) =>
+      live.conversationMembers(id);
+  @override
+  Future<Result<List<Message>>> sharedMedia(String id) => live.sharedMedia(id);
+  @override
+  Future<Result<List<Message>>> sharedLinks(String id) => live.sharedLinks(id);
+  @override
   Future<Result<List<Message>>> messages(String id) => live.messages(id);
   @override
   Future<Result<Message>> send({

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-
 import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
 import '../../auth/application/session_controller.dart';

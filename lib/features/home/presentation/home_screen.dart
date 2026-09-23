@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/brand.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/member.dart';
 import '../../chat/presentation/conversation_list.dart';
@@ -22,7 +23,7 @@ class HomeScreen extends ConsumerWidget {
         ref.watch(ownProfileProvider).value?.displayName ?? member.displayName;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SIS'),
+        title: const SisBrandRow(),
         actions: [
           PopupMenuButton<String>(
             key: const ValueKey('home-menu'),

@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
@@ -21,6 +23,14 @@ import 'features/update/data/play_update_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // The bundled fonts are OFL: their licences ship with them.
+  LicenseRegistry.addLicense(() async* {
+    for (final font in ['manrope', 'sora']) {
+      yield LicenseEntryWithLineBreaks([
+        font,
+      ], await rootBundle.loadString('assets/fonts/OFL-$font.txt'));
+    }
+  });
   final config = RuntimeConfig.fromEnvironment();
   if (!config.isComplete) {
     runApp(const ProviderScope(child: SisApp()));

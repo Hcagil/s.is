@@ -9,6 +9,7 @@ import '../domain/message.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
 import '../domain/conversation.dart';
+import '../domain/initials.dart';
 import 'message_screen.dart';
 
 /// Reason text for any failure, so a screen never shows a bare exception.
@@ -28,8 +29,9 @@ class ConversationList extends ConsumerWidget {
         AsyncData(:final value) => RefreshIndicator(
           onRefresh: () =>
               ref.read(conversationListProvider.notifier).refresh(),
-          child: ListView.builder(
+          child: ListView.separated(
             itemCount: value.length,
+            separatorBuilder: (_, _) => const Divider(),
             itemBuilder: (context, i) => _ConversationTile(value[i]),
           ),
         ),
@@ -157,7 +159,6 @@ class _GroupComposerState extends ConsumerState<_GroupComposer> {
               decoration: const InputDecoration(
                 labelText: 'Group name',
                 counterText: '',
-                border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 8),
@@ -229,7 +230,12 @@ class _MemberPicker extends ConsumerWidget {
             for (final m in value)
               ListTile(
                 key: ValueKey('member-${m.userId}'),
-                leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+                leading: _Avatar(
+                  label: m.displayName,
+                  seed: m.userId,
+                  online: false,
+                  dotKey: ValueKey('picker-online-${m.userId}'),
+                ),
                 title: Text(m.displayName),
                 subtitle: m.tag == null ? null : Text('@${m.tag}'),
                 onTap: () => Navigator.of(context).pop(m),
@@ -261,8 +267,10 @@ class _ConversationTile extends ConsumerWidget {
     };
     return ListTile(
       key: ValueKey('conversation-${conversation.id}'),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
       leading: _Avatar(
-        group: conversation.isGroup,
+        label: conversation.label,
+        seed: conversation.id,
         online:
             conversation.other != null &&
             ref
@@ -270,7 +278,10 @@ class _ConversationTile extends ConsumerWidget {
                 .contains(conversation.other!.userId),
         dotKey: ValueKey('online-${conversation.id}'),
       ),
-      title: Text(conversation.label),
+      title: Text(
+        conversation.label,
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
       subtitle: conversation.lastMessage == null
           ? const Text('No messages yet')
           : Text(
@@ -300,22 +311,49 @@ class _ConversationTile extends ConsumerWidget {
   }
 }
 
-/// An avatar with a green dot when the member is online.
+/// Initials in a circle, tinted per person, with a brand dot when online.
 class _Avatar extends StatelessWidget {
   const _Avatar({
-    required this.group,
+    required this.label,
+    required this.seed,
     required this.online,
     required this.dotKey,
   });
 
-  final bool group;
+  final String label;
+
+  /// Picks the tint, so a person keeps one colour everywhere.
+  final String seed;
   final bool online;
   final Key dotKey;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = scheme.brightness == Brightness.dark;
+    // Hues 222..301: blues through violets, the palette's own range.
+    final hue = 222.0 + seed.codeUnits.fold<int>(0, (a, c) => a + c) % 80;
     final avatar = CircleAvatar(
-      child: Icon(group ? Icons.groups_outlined : Icons.person_outline),
+      radius: 24,
+      backgroundColor: HSLColor.fromAHSL(
+        1,
+        hue,
+        dark ? .38 : .70,
+        dark ? .24 : .92,
+      ).toColor(),
+      child: Text(
+        initialsOf(label),
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 16,
+          color: HSLColor.fromAHSL(
+            1,
+            hue,
+            dark ? .80 : .50,
+            dark ? .84 : .34,
+          ).toColor(),
+        ),
+      ),
     );
     if (!online) return avatar;
     return Stack(
@@ -327,15 +365,12 @@ class _Avatar extends StatelessWidget {
           bottom: -1,
           child: Container(
             key: dotKey,
-            width: 12,
-            height: 12,
+            width: 14,
+            height: 14,
             decoration: BoxDecoration(
-              color: Colors.green,
+              color: scheme.primary,
               shape: BoxShape.circle,
-              border: Border.all(
-                color: Theme.of(context).colorScheme.surface,
-                width: 2,
-              ),
+              border: Border.all(color: scheme.surface, width: 2.5),
             ),
           ),
         ),

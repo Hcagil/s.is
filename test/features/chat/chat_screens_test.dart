@@ -241,7 +241,7 @@ void main() {
       await pump(tester, chat, home: const HomeScreen(member: me));
 
       expect(find.byKey(const ValueKey('conversation-c1')), findsOneWidget);
-      expect(find.byKey(const ValueKey('home-menu')), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-settings')), findsOneWidget);
     });
   });
 

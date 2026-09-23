@@ -404,3 +404,14 @@ and declined.
 **Shown in the 1:1 header** under the name, after "typing…" and "online":
 "last seen just now", "N min ago", "today at 14:02", "yesterday at 21:40",
 then a date.
+
+## 2026-09-23 — Settings is a set of pages; sign out lives only there
+
+Settings opens on the member's own card (tap to edit name and tag), then one
+row per section: **Privacy** (online, typing, last seen), **Account** (the
+Google address in use, and Sign out) and **About** (version, build, the
+open-source licences, including the bundled fonts). The home header's menu,
+whose only other entry was Settings, became a single settings icon; Sign out
+moved into Account, where it cannot be tapped by accident from the chat list.
+Signing out first returns to the root screen, so no settings page is left
+standing above the sign-in screen.

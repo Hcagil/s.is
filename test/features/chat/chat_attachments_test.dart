@@ -5,7 +5,6 @@
 // The outcome this file exists for is the cancelled picker. "The member backed
 // out" is not a failure, and a slice that treats it as one puts an error in
 // front of somebody who did nothing wrong and throws away what they had typed.
-import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -72,7 +71,10 @@ Future<ProviderContainer> pump(
       child: const MaterialApp(home: MessageScreen(title: 'Bob')),
     ),
   );
-  await tester.pumpAndSettle();
+  await tester.pump();
+  // A photo shows a spinner until it decodes, which the fake clock never
+  // settles; let the engine decode for real.
+  await settleImages(tester);
   return container;
 }
 
@@ -101,88 +103,8 @@ void expectNoRawException(WidgetTester tester) {
   expect(leaked, findsNothing, reason: 'a raw exception string reached the UI');
 }
 
-/// Serves a real PNG to any request, so a widget that renders a signed URL
-/// decodes actual bytes instead of the 400 the test harness returns by
-/// default. Without this an image widget fails for a reason that has nothing
-/// to do with this slice.
-class _PngServer extends HttpOverrides {
-  @override
-  HttpClient createHttpClient(SecurityContext? context) => _PngClient();
-}
-
-class _PngClient implements HttpClient {
-  @override
-  bool autoUncompress = true;
-  @override
-  Duration? connectionTimeout;
-  @override
-  Duration idleTimeout = const Duration(seconds: 15);
-  @override
-  int? maxConnectionsPerHost;
-  @override
-  String? userAgent;
-
-  @override
-  Future<HttpClientRequest> openUrl(String method, Uri url) async =>
-      _PngRequest(url);
-  @override
-  Future<HttpClientRequest> getUrl(Uri url) => openUrl('get', url);
-
-  @override
-  void close({bool force = false}) {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _PngRequest implements HttpClientRequest {
-  _PngRequest(this.uri);
-  @override
-  final Uri uri;
-  @override
-  final HttpHeaders headers = _NoHeaders();
-
-  @override
-  Future<HttpClientResponse> close() async => _PngResponse();
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _NoHeaders implements HttpHeaders {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
-class _PngResponse extends Stream<List<int>> implements HttpClientResponse {
-  @override
-  int get statusCode => HttpStatus.ok;
-  @override
-  int get contentLength => pngBytes.length;
-  @override
-  HttpClientResponseCompressionState get compressionState =>
-      HttpClientResponseCompressionState.notCompressed;
-  @override
-  HttpHeaders get headers => _NoHeaders();
-
-  @override
-  StreamSubscription<List<int>> listen(
-    void Function(List<int> event)? onData, {
-    Function? onError,
-    void Function()? onDone,
-    bool? cancelOnError,
-  }) => Stream<List<int>>.value(pngBytes).listen(
-    onData,
-    onError: onError,
-    onDone: onDone,
-    cancelOnError: cancelOnError,
-  );
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
-
 void main() {
-  setUpAll(() => HttpOverrides.global = _PngServer());
+  setUpAll(() => HttpOverrides.global = ImageServer());
   tearDownAll(() => HttpOverrides.global = null);
 
   group('MessagesController.sendImage', () {
@@ -459,7 +381,7 @@ void main() {
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('composer-attach')));
-      await tester.pumpAndSettle();
+      await settleImages(tester);
 
       expect(chat.sentImages.single.body, 'look at this');
       expect(composerText(tester), isEmpty);
@@ -551,7 +473,7 @@ void main() {
           minute: 5,
         ),
       );
-      await tester.pumpAndSettle();
+      await settleImages(tester);
 
       expect(find.byKey(const ValueKey('message-m2')), findsOneWidget);
       expect(find.byKey(const ValueKey('attachment-image')), findsOneWidget);

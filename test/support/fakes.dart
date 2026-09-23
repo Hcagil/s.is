@@ -1,6 +1,10 @@
 // Hand-written fakes shared by controller and widget tests.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sis/core/failure.dart';
@@ -10,6 +14,7 @@ import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/presence/domain/presence_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
@@ -612,6 +617,10 @@ class ChatFake implements ChatRepository {
   Result<Message>? sendImageResult;
   Result<Uri>? attachmentUrlResult;
 
+  /// Per-path refusals, for a conversation where one object cannot be signed
+  /// while its neighbours can.
+  final urlFailures = <String, Failure>{};
+
   int _imageSeq = 0;
 
   @override
@@ -642,6 +651,7 @@ class ChatFake implements ChatRepository {
   Future<Result<Uri>> attachmentUrl(String attachmentPath) async {
     await _tick('attachmentUrl:$attachmentPath');
     urlRequests.add(attachmentPath);
+    if (urlFailures[attachmentPath] case final failure?) return Err(failure);
     if (attachmentUrlResult case final forced?) return forced;
     if (!storedObjects.contains(attachmentPath)) {
       return const Err(DeniedFailure());
@@ -1096,4 +1106,140 @@ class FakeTypingChannel implements TypingChannel {
     closed = true;
     await _typists.close();
   }
+}
+
+/// A link opener written from the [LinkOpener] contract.
+///
+/// Opening is never instant: the OS resolves an app first, so the answer is
+/// delayed by [latency]. It can decline (no browser, a blocked scheme), and
+/// that decline is a plain false — the contract says an opener never throws.
+class LinkOpenerFake implements LinkOpener {
+  LinkOpenerFake({this.opens = true, this.latency = Duration.zero});
+
+  /// What [open] answers.
+  bool opens;
+  final Duration latency;
+
+  /// Every link asked for, in order.
+  final opened = <Uri>[];
+
+  @override
+  Future<bool> open(Uri link) async {
+    opened.add(link);
+    await Future<void>.delayed(latency);
+    return opens;
+  }
+}
+
+/// Lets real image decoding finish: it runs in the engine, outside the fake
+/// clock, exactly as on a device where a photo has a size only once decoded.
+Future<void> settleImages(WidgetTester tester) async {
+  for (var i = 0; i < 40; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.pump(const Duration(milliseconds: 20));
+    if (find.byType(CircularProgressIndicator).evaluate().isEmpty) break;
+  }
+  await tester.pumpAndSettle();
+}
+
+/// A 320x240 PNG: a photo with a size, so a thumbnail that sizes itself to
+/// its image has something to tap once it has decoded.
+final photoPng = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAUAAAADwCAIAAAD+Tyo8AAACD0lEQVR42u3TQQkAAAgEwYtmFKMZ1Q7+hIFJsLDpGuCpSAAGBgwMGBgMDBgYMDBgYDAwYGDAwGBgwMCAgQEDg4EBAwMGBgwMBgYMDBgYDAwYGDAwYGAwMGBgwMCAgcHAgIEBA4OBAQMDBgYMDAYGDAwYGAysAhgYMDBgYDAwYGDAwICBwcCAgQEDg4EBAwMGBgwMBgYMDBgYMDAYGDAwYGAwMGBgwMCAgcHAgIEBAwMGBgMDBgYMDAYGDAwYGDAwGBgwMGBgMDBgYMDAgIHBwICBAQMDBgYDAwYGDAwGBgwMGBgwMBgYMDBgYMDAYGDAwICBwcCAgQEDAwYGAwMGBgwMGBgMDBgYMDAYGDAwYGDAwGBgwMCAgcHAgIEBAwMGBgMDBgYMDBgYDAwYGDAwGBgwMGBgwMBgYMDAgIEBA4OBAQMDBgYDAwYGDAwYGAwMGBgwMBhYBTAwYGDAwGBgwMCAgQEDg4EBAwMGBgMDBgYMDBgYDAwYGDAwYGAwMGBgwMBgYMDAgIEBA4OBAQMDBgYMDAYGDAwYGAwMGBgwMGBgMDBgYMDAYGDAwICBAQODgQEDAwYGDAwGBgwMGBgMDBgYMDBgYDAwYGDAwICBwcCAgQEDg4EBAwMGBgwMBgYMDBgYMDAYGDAwYGAwMGBgwMCAgcHAgIEBA4OBAQMDBgYMDAYGDAwYGDAwGBgwMHC3w4QV+mvl+L0AAAAASUVORK5CYII=',
+);
+
+/// Serves a real PNG to any request, so a widget that renders a signed URL
+/// decodes actual bytes instead of the 400 the test harness returns by
+/// default. A URL whose path contains one of [missing] answers 404 instead:
+/// a signed URL that was issued but whose object is gone, the broken image a
+/// device really sees.
+class ImageServer extends HttpOverrides {
+  ImageServer({this.missing = const {}});
+
+  final Set<String> missing;
+
+  @override
+  HttpClient createHttpClient(SecurityContext? context) => _ImageClient(this);
+}
+
+class _ImageClient implements HttpClient {
+  _ImageClient(this.server);
+  final ImageServer server;
+
+  @override
+  bool autoUncompress = true;
+  @override
+  Duration? connectionTimeout;
+  @override
+  Duration idleTimeout = const Duration(seconds: 15);
+  @override
+  int? maxConnectionsPerHost;
+  @override
+  String? userAgent;
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async =>
+      _ImageRequest(url, found: !server.missing.any(url.path.contains));
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) => openUrl('get', url);
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _ImageRequest implements HttpClientRequest {
+  _ImageRequest(this.uri, {required this.found});
+  @override
+  final Uri uri;
+  final bool found;
+  @override
+  final HttpHeaders headers = _NoHeaders();
+
+  @override
+  Future<HttpClientResponse> close() async => _ImageResponse(found);
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _NoHeaders implements HttpHeaders {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _ImageResponse extends Stream<List<int>> implements HttpClientResponse {
+  _ImageResponse(this.found);
+  final bool found;
+
+  List<int> get _body => found ? photoPng : utf8.encode('not found');
+
+  @override
+  int get statusCode => found ? HttpStatus.ok : HttpStatus.notFound;
+  @override
+  int get contentLength => _body.length;
+  @override
+  HttpClientResponseCompressionState get compressionState =>
+      HttpClientResponseCompressionState.notCompressed;
+  @override
+  HttpHeaders get headers => _NoHeaders();
+
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int> event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) => Stream<List<int>>.value(_body).listen(
+    onData,
+    onError: onError,
+    onDone: onDone,
+    cancelOnError: cancelOnError,
+  );
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
 }

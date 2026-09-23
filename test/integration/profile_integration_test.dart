@@ -13,6 +13,8 @@ import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
+import 'package:sis/features/presence/application/presence_controllers.dart';
+import 'package:sis/features/presence/data/supabase_presence_repository.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
@@ -384,6 +386,20 @@ void main() {
           .eq('user_id', xena.userId),
     );
     final before = (await t.runAsync(xena.reload))!;
+    // No stored last seen, so the one read below can only be this mount's.
+    await t.runAsync(() async {
+      final repo = SupabaseProfileRepository(xena.client);
+      await repo.save(shareLastSeen: false);
+      await repo.save(shareLastSeen: true);
+    });
+    Future<DateTime?> xenaLastSeen() async {
+      final r = await t.runAsync(
+        () => SupabasePresenceRepository(vera.client).lastSeenOf(xena.userId),
+      );
+      return (r! as Ok<DateTime?>).value;
+    }
+
+    expect(await xenaLastSeen(), isNull);
 
     Future<void> until(Finder f) async {
       for (var i = 0; i < 100; i++) {
@@ -411,6 +427,10 @@ void main() {
         profileRepositoryProvider.overrideWithValue(
           SupabaseProfileRepository(xena.client),
         ),
+        // main.dart installs it; home reports the member seen through it.
+        presenceRepositoryProvider.overrideWithValue(
+          SupabasePresenceRepository(xena.client),
+        ),
       ],
       child: const SisApp(),
     );
@@ -421,6 +441,21 @@ void main() {
 
     await t.tap(find.byKey(const ValueKey('onboarding-skip')));
     await until(find.text('New chat'));
+    // The report is an HTTP call made from the widget's zone; give it real
+    // time and frames to land.
+    DateTime? seen;
+    for (var i = 0; i < 50 && seen == null; i++) {
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await t.pump();
+      seen = await xenaLastSeen();
+    }
+    expect(
+      seen,
+      isNotNull,
+      reason: 'home opened and never reported the member seen',
+    );
 
     final after = (await t.runAsync(xena.reload))!;
     expect(after.onboardingDone, isTrue, reason: 'the skip was not saved');

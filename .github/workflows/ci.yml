@@ -7,7 +7,10 @@ on:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Only a pull request's superseded run is cancelled. A run on main is the
+  # trigger for Release: cancelling it when a second merge lands minutes later
+  # would leave the first merge unpublished.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

@@ -14,6 +14,7 @@ import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
@@ -41,6 +42,7 @@ Future<void> pumpApp(
   FakeAuth? auth,
   PresenceFake? presence,
   ChatRepository? chat,
+  PushRegistryFake? push,
 }) async {
   await t.pumpWidget(
     ProviderScope(
@@ -55,6 +57,8 @@ Future<void> pumpApp(
           presence ?? PresenceFake(),
         ),
         profileRepositoryProvider.overrideWithValue(p),
+        pushSourceProvider.overrideWithValue(PushSourceFake()),
+        pushRegistryProvider.overrideWithValue(push ?? PushRegistryFake()),
       ],
       child: const SisApp(),
     ),
@@ -243,10 +247,23 @@ void main() {
   ) async {
     final auth = FakeAuth(session: true);
     final p = ProfileFake(profile: maya);
-    await pumpApp(t, p, auth: auth);
+    final push = PushRegistryFake();
+    bool? sessionActiveWhenForgotten;
+    push.onForget = (_) => sessionActiveWhenForgotten = auth.session;
+    await pumpApp(t, p, auth: auth, push: push);
 
     await signOut(t);
     expect(auth.signOuts, 1);
+    expect(
+      sessionActiveWhenForgotten,
+      isTrue,
+      reason: 'forget() must run while the session still exists',
+    );
+    expect(
+      push.forgotten,
+      isNotEmpty,
+      reason: 'the device was never forgotten',
+    );
     expect(find.text('Continue with Google'), findsOneWidget);
 
     // Someone else signs in on the same phone.

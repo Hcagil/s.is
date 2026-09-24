@@ -16,12 +16,14 @@ import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/home/presentation/home_screen.dart';
+import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../support/account_fakes.dart';
-import '../support/fakes.dart' show FakeUpdate;
+import '../support/fakes.dart'
+    show FakeUpdate, PushRegistryFake, PushSourceFake;
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -45,6 +47,8 @@ class Owner {
   late final SwitchingAuth auth;
   late final SessionChat chat;
   late final SessionPresence presence;
+  final pushSource = PushSourceFake();
+  final pushRegistry = PushRegistryFake();
 
   Future<void> start() async {
     await t.pumpWidget(
@@ -56,6 +60,8 @@ class Owner {
           chatRepositoryProvider.overrideWithValue(chat),
           presenceRepositoryProvider.overrideWithValue(presence),
           profileRepositoryProvider.overrideWithValue(SessionProfile(backend)),
+          pushSourceProvider.overrideWithValue(pushSource),
+          pushRegistryProvider.overrideWithValue(pushRegistry),
         ],
         child: const SisApp(),
       ),

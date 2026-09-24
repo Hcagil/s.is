@@ -20,6 +20,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/home/presentation/home_screen.dart';
+import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
@@ -52,6 +53,7 @@ List<Override> overrides({
   FakeAuth? auth,
   FakeUpdate? update,
   ProfileFake? profile,
+  PushRegistryFake? push,
 }) => [
   runtimeConfigProvider.overrideWithValue(config),
   authRepositoryProvider.overrideWithValue(
@@ -63,6 +65,8 @@ List<Override> overrides({
   profileRepositoryProvider.overrideWithValue(
     profile ?? ProfileFake(profile: maya),
   ),
+  pushSourceProvider.overrideWithValue(PushSourceFake()),
+  pushRegistryProvider.overrideWithValue(push ?? PushRegistryFake()),
 ];
 
 Future<void> pumpApp(
@@ -70,10 +74,16 @@ Future<void> pumpApp(
   FakeAuth? auth,
   FakeUpdate? update,
   ProfileFake? profile,
+  PushRegistryFake? push,
 }) async {
   await t.pumpWidget(
     ProviderScope(
-      overrides: overrides(auth: auth, update: update, profile: profile),
+      overrides: overrides(
+        auth: auth,
+        update: update,
+        profile: profile,
+        push: push,
+      ),
       child: const SisApp(),
     ),
   );
@@ -314,7 +324,10 @@ void main() {
     testWidgets('sign-out returns to the root first, then signs out, and '
         'leaves no settings page behind', (t) async {
       final auth = FakeAuth(session: true, member: mayaAccount);
-      await pumpApp(t, auth: auth);
+      final push = PushRegistryFake();
+      bool? sessionActiveWhenForgotten;
+      push.onForget = (_) => sessionActiveWhenForgotten = auth.session;
+      await pumpApp(t, auth: auth, push: push);
       final nav = t.state<NavigatorState>(find.byType(Navigator));
       bool? couldPopAtSignOut;
       auth.onSignOut = () => couldPopAtSignOut = nav.canPop();
@@ -325,6 +338,16 @@ void main() {
       await t.pumpAndSettle();
 
       expect(auth.signOuts, 1);
+      expect(
+        sessionActiveWhenForgotten,
+        isTrue,
+        reason: 'forget() must run while the session still exists',
+      );
+      expect(
+        push.forgotten,
+        isNotEmpty,
+        reason: 'the device was never forgotten',
+      );
       expect(
         couldPopAtSignOut,
         isFalse,

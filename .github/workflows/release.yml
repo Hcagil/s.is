@@ -69,6 +69,10 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
         run: |
           mkdir -p .private && printf '%s' "$KEYSTORE_BASE64" | base64 -d > .private/upload-keystore.jks
+      - name: Restore Firebase config
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
       - name: Build signed AAB
         env:
           ANDROID_UPLOAD_KEYSTORE: /workspace/.private/upload-keystore.jks

@@ -6,6 +6,7 @@ import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../../chat/presentation/person_avatar.dart';
+import '../../notifications/application/push_controller.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../update/application/update_controller.dart';
 import '../application/profile_controller.dart';
@@ -238,11 +239,17 @@ class AccountScreen extends ConsumerWidget {
               style: OutlinedButton.styleFrom(
                 foregroundColor: Theme.of(context).colorScheme.error,
               ),
-              onPressed: () {
+              onPressed: () async {
+                // Read before leaving: this page is gone after the pop.
+                final push = ref.read(pushRegistrationProvider.notifier);
+                final session = ref.read(sessionControllerProvider.notifier);
                 // Back to the root first: signing out swaps the root screen,
                 // and the settings pages above it would otherwise stay.
                 Navigator.of(context).popUntil((route) => route.isFirst);
-                ref.read(sessionControllerProvider.notifier).signOut();
+                // While still signed in: this phone stops receiving this
+                // account's notifications.
+                await push.forget();
+                await session.signOut();
               },
               child: const Text('Sign out'),
             ),

@@ -16,6 +16,7 @@ import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/notifications/domain/push.dart';
 import 'package:sis/features/presence/domain/presence_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/domain/profile_repository.dart';
@@ -1192,6 +1193,149 @@ class FakeTypingChannel implements TypingChannel {
   Future<void> close() async {
     closed = true;
     await _typists.close();
+  }
+}
+
+/// A push source written from the [PushSource] contract.
+///
+/// Nothing here is instant: a platform channel round trip always takes at
+/// least [latency], and permission or the token can be held open past that
+/// while a test does something else first. A refused permission is a plain
+/// false, never a failure -- the contract says asking again must not nag.
+class PushSourceFake implements PushSource {
+  PushSourceFake({
+    this.permissionGranted = true,
+    String? token = 'device-token-1',
+    this.launchConversationId,
+    this.latency = Duration.zero,
+  }) : currentToken = token;
+
+  /// What the next requestPermission() answers.
+  bool permissionGranted;
+
+  /// The device's current token; null when the platform has none yet. Set
+  /// directly to change what the next token() read answers.
+  String? currentToken;
+
+  /// The conversation id a cold start answers with, once.
+  String? launchConversationId;
+
+  final Duration latency;
+
+  int permissionRequests = 0;
+  int tokenReads = 0;
+  int launchConversationReads = 0;
+
+  Completer<void>? _permissionGate;
+  Completer<void>? _tokenGate;
+
+  /// The next requestPermission() call stays in flight until
+  /// [releasePermission].
+  void holdPermission() => _permissionGate = Completer<void>();
+  void releasePermission() {
+    _permissionGate?.complete();
+    _permissionGate = null;
+  }
+
+  /// The next token() call stays in flight until [releaseToken].
+  void holdToken() => _tokenGate = Completer<void>();
+  void releaseToken() {
+    _tokenGate?.complete();
+    _tokenGate = null;
+  }
+
+  final _refreshes = StreamController<String>.broadcast();
+  final _opened = StreamController<String>.broadcast();
+
+  /// The platform rotates the token -- the device's own record changes too,
+  /// so a later [token] read agrees with the last refresh.
+  void refreshToken(String next) {
+    currentToken = next;
+    _refreshes.add(next);
+  }
+
+  /// The member taps a notification while the app runs in the background.
+  void openConversation(String id) => _opened.add(id);
+
+  @override
+  Future<bool> requestPermission() async {
+    permissionRequests++;
+    await Future<void>.delayed(latency);
+    final gate = _permissionGate;
+    if (gate != null) await gate.future;
+    return permissionGranted;
+  }
+
+  @override
+  Future<String?> token() async {
+    tokenReads++;
+    await Future<void>.delayed(latency);
+    final gate = _tokenGate;
+    if (gate != null) await gate.future;
+    return currentToken;
+  }
+
+  @override
+  Stream<String> get tokenRefreshes => _refreshes.stream;
+
+  @override
+  Future<String?> launchConversation() async {
+    launchConversationReads++;
+    await Future<void>.delayed(latency);
+    return launchConversationId;
+  }
+
+  @override
+  Stream<String> get openedConversations => _opened.stream;
+}
+
+/// A push registry written from the [PushRegistry] contract.
+///
+/// Answers like the server: refuses when told to, and otherwise records what
+/// was claimed and what was forgotten so a test can check what happened, and
+/// in what order relative to everything else (e.g. signing out).
+class PushRegistryFake implements PushRegistry {
+  PushRegistryFake({this.latency = Duration.zero});
+
+  final Duration latency;
+
+  /// Forces the outcome of the next register()/forget() call; left null both
+  /// succeed.
+  Result<void>? registerResult;
+  Result<void>? forgetResult;
+
+  /// Every token registered, in order -- the last one is what the server
+  /// currently has on file for this device.
+  final registered = <String>[];
+
+  /// Every token forgotten, in order.
+  final forgotten = <String>[];
+
+  /// Every call, as `register:<token>` / `forget:<token>`, in the order made.
+  final calls = <String>[];
+
+  /// Runs synchronously as forget() is entered, before its result is
+  /// decided -- lets a test check what has (or has not) happened yet, e.g.
+  /// that the session has not signed out.
+  void Function(String token)? onForget;
+
+  @override
+  Future<Result<void>> register(String token) async {
+    calls.add('register:$token');
+    await Future<void>.delayed(latency);
+    if (registerResult case final forced?) return forced;
+    registered.add(token);
+    return const Ok(null);
+  }
+
+  @override
+  Future<Result<void>> forget(String token) async {
+    calls.add('forget:$token');
+    onForget?.call(token);
+    await Future<void>.delayed(latency);
+    if (forgetResult case final forced?) return forced;
+    forgotten.add(token);
+    return const Ok(null);
   }
 }
 

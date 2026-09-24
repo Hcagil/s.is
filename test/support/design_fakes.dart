@@ -20,6 +20,7 @@ import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/domain/presence_repository.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
@@ -27,6 +28,8 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/domain/profile_repository.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 import 'package:sis/features/update/domain/update_repository.dart';
+
+import 'fakes.dart' show PushRegistryFake, PushSourceFake;
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
 
@@ -291,6 +294,8 @@ Widget designApp({
     chatRepositoryProvider.overrideWithValue(chat ?? DesignChat()),
     presenceRepositoryProvider.overrideWithValue(presence ?? DesignPresence()),
     profileRepositoryProvider.overrideWithValue(profile ?? DesignProfile()),
+    pushSourceProvider.overrideWithValue(PushSourceFake()),
+    pushRegistryProvider.overrideWithValue(PushRegistryFake()),
   ],
   child: const SisApp(),
 );

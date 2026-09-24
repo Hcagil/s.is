@@ -552,3 +552,24 @@ whether someone muted you.
 
 **No foreground notifications.** While the app is open, the chat list
 already shows new messages and unread counts.
+
+## 2026-09-24 — The app's half of push
+
+**This phone registers for whoever is signed in**, and only while someone
+is: the token is sent when an account settles and on every token refresh,
+and Sign out removes it first, while the session can still reach the
+server. If that fails, nothing leaks: the server sends nothing to a device
+whose session has ended, and the next sign-in on the phone takes the token
+over.
+
+**Permission is asked once, on the home screen**, the first time an
+allowed member reaches it (Android 13+). A refusal is respected; the
+member can allow notifications later in system settings, and the phone is
+already registered.
+
+**Tapping a notification opens its conversation**, reading the chat list
+again if the chat is new. An id the list still does not know is ignored.
+
+**Firebase code stays thin and in `data/`** (`FirebasePushSource`),
+verified on a device like the photo picker; the server calls
+(`SupabasePushRegistry`) have integration tests.

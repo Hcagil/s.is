@@ -335,7 +335,12 @@ final class SupabaseChatRepository implements ChatRepository {
       filter: filter,
       callback: (payload) {
         if (controller.isClosed) return;
-        controller.add(_toMessage(payload.newRecord));
+        final row = payload.newRecord;
+        // An event the server could not authorise (a channel still open
+        // after its account signed out) carries no row: there is nothing
+        // to show, and a throw here would escape the Realtime client.
+        if (row['id'] == null) return;
+        controller.add(_toMessage(row));
       },
     );
     controller.onCancel = () => leaveChannel(_client, channel);

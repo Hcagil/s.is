@@ -1,21 +1,16 @@
 // Sends a push notification for a new message.
 //
-// NOT DEPLOYED. It needs an FCM service account that only the project owner
-// can create; see docs/DELIVERY.md, "Push notifications". Everything it
-// depends on inside the database already exists and is tested:
-// app_private.push_targets_for_message() decides who should hear about a
-// message, and returns only members who still hold an active session.
-//
-// Invoke with a database webhook on insert into public.messages.
+// Called by the messages_notify trigger (pg_net) with only the message id,
+// and deployed with --no-verify-jwt because a trigger holds no user JWT.
+// That is safe because the request decides nothing: public.push_targets()
+// claims the message (at most once, and only while it is under two minutes
+// old) and returns who to notify and what each of them may see. A forged or
+// replayed call can at most send a notification that was due anyway, once.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-// A message body is not a notification body: notifications are shown on a
-// locked screen, and an attachment has no text at all.
-function preview(body: string | null, hasAttachment: boolean): string {
-  const text = (body ?? '').trim();
-  if (text.length === 0) return hasAttachment ? 'Sent a photo' : 'New message';
-  return text.length <= 120 ? text : `${text.slice(0, 119)}…`;
-}
+// What each recipient may see is decided in SQL, by their own preview
+// setting (app_private.push_targets_for_message); this only delivers it.
+type Target = { token: string; conversation_id: string; title: string; body: string };
 
 async function accessToken(serviceAccount: {
   client_email: string;
@@ -64,37 +59,53 @@ async function accessToken(serviceAccount: {
   return (await res.json()).access_token;
 }
 
+// Supabase's edge runtime keeps the worker alive for promises handed to it.
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
+
+// The caller always gets the same empty answer, straight away. The function
+// needs no JWT and a member can learn a message id at once, so anything in the
+// response -- counts, errors, even how long it took -- would tell a sender
+// whether the other person muted them. The work runs after the answer; its
+// details go to the log.
 Deno.serve(async (req: Request) => {
+  const payload = await req.json().catch(() => null);
+  const id = payload?.record?.id;
+  // Only the id is taken from the request; everything shown comes from the
+  // database.
+  if (typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)) {
+    EdgeRuntime.waitUntil(send(id).catch((e) => console.error('notify failed', e)));
+  }
+  return new Response(null, { status: 204 });
+});
+
+async function send(id: string): Promise<void> {
   const raw = Deno.env.get('FCM_SERVICE_ACCOUNT');
   if (!raw) {
-    // Loud, not silent: a missing credential must not look like "nobody to
+    // Loud in the log: a missing credential must not look like "nobody to
     // notify".
-    return new Response('FCM_SERVICE_ACCOUNT is not set', { status: 503 });
+    console.error('FCM_SERVICE_ACCOUNT is not set');
+    return;
   }
   const serviceAccount = JSON.parse(raw);
 
-  const payload = await req.json();
-  const message = payload.record ?? payload;
-  if (!message?.id) return new Response('no message', { status: 400 });
-
-  // service_role: push_targets_for_message reads across members by design and
-  // is revoked from every client role.
+  // service_role: push_targets is revoked from every client role.
   const db = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
-  const { data: targets, error } = await db.rpc('push_targets', {
-    message_id: message.id,
-  });
-  if (error) return new Response(error.message, { status: 500 });
-  if (!targets?.length) return new Response('no active devices', { status: 200 });
+  const { data, error } = await db.rpc('push_targets', { message_id: id });
+  if (error) {
+    console.error('push_targets failed', error.message);
+    return;
+  }
+  const targets = (data ?? []) as Target[];
+  if (!targets.length) return;
 
   const token = await accessToken(serviceAccount);
   const projectId = serviceAccount.project_id;
-  const text = preview(message.body, Boolean(message.attachment_path));
 
   const results = await Promise.allSettled(
-    targets.map((t: { token: string; sender_name: string }) =>
+    targets.map((t) =>
       fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
         method: 'POST',
         headers: {
@@ -104,17 +115,20 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({
           message: {
             token: t.token,
-            notification: { title: t.sender_name, body: text },
-            data: { conversation_id: String(message.conversation_id) },
+            notification: { title: t.title, body: t.body },
+            // Tapping opens this conversation. Not shown on the lock screen.
+            data: { conversation_id: t.conversation_id },
             android: { priority: 'high' },
           },
         }),
+      }).then((r) => {
+        if (!r.ok) throw new Error(`fcm ${r.status}`);
       }),
     ),
   );
 
   const sent = results.filter((r) => r.status === 'fulfilled').length;
-  return new Response(JSON.stringify({ sent, of: targets.length }), {
-    headers: { 'content-type': 'application/json' },
-  });
-});
+  // ponytail: the message is claimed before FCM answers, so a failed send is
+  // not retried; add a retry queue if lost notifications are ever reported.
+  console.log(`sent ${sent} of ${targets.length}`);
+}

@@ -92,6 +92,19 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      # The push sender. Deployed before the trigger learns its URL, so the
+      # trigger never calls a function that is not there yet. No JWT: the
+      # database trigger holds none; push_targets() makes a forged call
+      # harmless (docs/DECISIONS.md, 2026-09-24).
+      - name: Deploy the push sender
+        run: |
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" FCM_SERVICE_ACCOUNT="$FCM_SERVICE_ACCOUNT"
+          supabase functions deploy notify-on-message --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+          supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/notify-on-message', 'notify_on_message_url') where not exists (select 1 from vault.secrets where name = 'notify_on_message_url')"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          FCM_SERVICE_ACCOUNT: ${{ secrets.FCM_SERVICE_ACCOUNT }}
       - name: Upload to Play internal track
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:

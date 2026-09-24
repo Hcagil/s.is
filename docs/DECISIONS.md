@@ -517,3 +517,38 @@ connection" instead of blaming the token.
 
 **A pattern rule keeps it that way.** `tool/check_pattern.sh` (rule 6)
 fails CI when a feature's `data/` passes error text into a `NetworkFailure`.
+
+## 2026-09-24 — Push notifications: settings, mutes, and a sender nobody can misuse
+
+**Firebase lives in the existing Cloud project** (`sis-app-509303`), with
+Google Analytics off: the app does not track its members. The sender uses a
+service account that can only send notifications.
+
+**Each member decides what the lock screen shows** (owner's choice):
+*Full* (default) is who and what, "Ayşe @ Family: see you at 8"; *Sender
+only* is the person alone, "Ayşe: New message", without the group's name,
+which can say as much as the text; *No details* is "SIS: New message",
+nothing about who or what. The wording is made in the database, per
+recipient, so a phone is never sent more than its owner allowed.
+
+**Mutes: 8 hours, 1 week or always**, for a conversation or for a person.
+Muting a person silences them in every conversation, groups included:
+someone muted in the 1:1 would otherwise still reach you through a shared
+group. A global switch turns everything off. Settings and mutes are private
+to their member, unlike the sharing switches, which others must read.
+
+**The sender accepts calls without a JWT, and that is safe.** A database
+trigger holds no user token, so the function is deployed with
+`--no-verify-jwt`. It takes only a message id; `push_targets()` claims that
+message once and only while it is under two minutes old. A forged call can
+at most send a notification that was due anyway, once.
+
+**Removed from the allowlist means no more notifications**, even while
+the old session and device token still exist: the target list checks the
+allowlist as `has_app_access()` does. **A broken sender never costs a
+message**: the trigger swallows a failed request with a warning. **Every
+call gets the same empty answer**, so the sender cannot be used to learn
+whether someone muted you.
+
+**No foreground notifications.** While the app is open, the chat list
+already shows new messages and unread counts.

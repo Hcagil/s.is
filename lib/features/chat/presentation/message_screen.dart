@@ -58,11 +58,13 @@ Future<void> openConversation(
   await ref.read(conversationListProvider.notifier).reloadQuietly();
 }
 
-/// "typing…" beats "online", which beats "last seen"; in a group, who is
-/// typing by name.
+/// "typing…" beats "online", which beats "last seen". In a 1:1 chat the
+/// header already names the person, so it says just "typing…"; in a group,
+/// who is typing by name.
 String? _status(WidgetRef ref, String? other) {
   final typing = ref.watch(typingProvider);
   if (typing.isNotEmpty) {
+    if (other != null) return 'typing…';
     if (typing.length > 1) return '${typing.length} people are typing…';
     final names = {
       for (final m in ref.watch(membersProvider).value ?? const []) m.userId: m,

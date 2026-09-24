@@ -745,3 +745,10 @@ news, never who or what.
 push is shown by a short-lived background isolate while the app is closed.
 Opening a chat clears its notification; signing out clears them all. While
 the app is open nothing is shown: the chat list already says what is new.
+
+**Older builds keep regular notifications.** A build from before 0.12 has
+no code to show a data-only push, and updates are never forced, so each
+device says when it registers whether it shows pushes itself
+(`device_tokens.shows_itself`, false unless the app says so). Only those get
+data only; every other device still gets a regular notification. An updated
+app re-registers on its next start and switches over.

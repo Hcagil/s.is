@@ -15,7 +15,12 @@ final class SupabasePushRegistry implements PushRegistry {
     try {
       await _client.rpc(
         'register_device_token',
-        params: {'device_token': token, 'device_platform': 'android'},
+        params: {
+          'device_token': token,
+          'device_platform': 'android',
+          // This build shows pushes itself, grouped: send it data only.
+          'shows_itself': true,
+        },
       );
       return const Ok(null);
     } on PostgrestException catch (e) {

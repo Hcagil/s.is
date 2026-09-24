@@ -10,7 +10,13 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 // What each recipient may see is decided in SQL, by their own preview
 // setting (app_private.push_targets_for_message); this only delivers it.
-type Target = { token: string; conversation_id: string; title: string; body: string };
+type Target = {
+  token: string;
+  conversation_id: string;
+  title: string;
+  body: string;
+  shows_itself: boolean;
+};
 
 async function accessToken(serviceAccount: {
   client_email: string;
@@ -115,8 +121,10 @@ async function send(id: string): Promise<void> {
         body: JSON.stringify({
           message: {
             token: t.token,
-            // Data only: the app shows it itself, grouped into one SIS
-            // notification per phone, a line per message within each chat.
+            // Data only where the app shows pushes itself (0.12+), grouped
+            // into one SIS notification per phone. Older builds cannot show
+            // a data-only push, so they still get a regular notification.
+            ...(t.shows_itself ? {} : { notification: { title: t.title, body: t.body } }),
             data: {
               conversation_id: t.conversation_id,
               title: t.title,

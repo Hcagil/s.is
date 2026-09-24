@@ -440,7 +440,12 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     _append(pending);
     final result = await ref
         .read(chatRepositoryProvider)
-        .sendImage(conversationId: conversationId, image: image, body: body);
+        .sendImage(
+          conversationId: conversationId,
+          image: image,
+          body: body,
+          replyTo: ref.read(replyingToProvider)?.id,
+        );
     if (!ref.mounted) return result;
     final current = state.value;
     if (current != null) {
@@ -449,7 +454,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
           if (m.id != pending.id) m,
       ]);
     }
-    if (result case Ok(:final value)) _append(value);
+    if (result case Ok(:final value)) {
+      _append(value);
+      if (ref.mounted) ref.read(replyingToProvider.notifier).clear();
+    }
     return result;
   }
 
@@ -467,12 +475,49 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   Future<Result<Message>> send(String body) async {
     final conversationId = ref.read(openConversationProvider);
     if (conversationId == null) return const Err(DeniedFailure());
+    final replyTo = ref.read(replyingToProvider)?.id;
     final result = await ref
         .read(chatRepositoryProvider)
-        .send(conversationId: conversationId, body: body);
-    if (result case Ok(:final value)) _append(value);
+        .send(conversationId: conversationId, body: body, replyTo: replyTo);
+    if (result case Ok(:final value)) {
+      _append(value);
+      if (ref.mounted) ref.read(replyingToProvider.notifier).clear();
+    }
     return result;
   }
+
+  /// Sends a copy of [message] to each of [conversationIds]; the chat list
+  /// then shows them.
+  Future<Result<void>> forward(
+    Message message,
+    List<String> conversationIds,
+  ) async {
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .forward(message, conversationIds);
+    if (result is Ok && ref.mounted) {
+      unawaited(ref.read(conversationListProvider.notifier).reloadQuietly());
+    }
+    return result;
+  }
+}
+
+/// The message the composer is answering, or null. Cleared when another
+/// conversation opens and after the reply is sent.
+final replyingToProvider = NotifierProvider<ReplyingTo, Message?>(
+  ReplyingTo.new,
+);
+
+class ReplyingTo extends Notifier<Message?> {
+  @override
+  Message? build() {
+    ref.watch(openConversationProvider);
+    return null;
+  }
+
+  void start(Message message) => state = message;
+
+  void clear() => state = null;
 }
 
 Future<T> _value<T>(Future<Result<T>> call) async => switch (await call) {

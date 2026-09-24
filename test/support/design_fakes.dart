@@ -158,6 +158,7 @@ class DesignChat implements ChatRepository {
   Future<Result<Message>> send({
     required String conversationId,
     required String body,
+    String? replyTo,
   }) async => Ok(
     Message(
       id: 'sent-${DateTime.now().microsecondsSinceEpoch}',
@@ -165,8 +166,15 @@ class DesignChat implements ChatRepository {
       senderId: me.userId,
       body: body,
       createdAt: DateTime.now().toUtc(),
+      replyTo: replyTo,
     ),
   );
+
+  @override
+  Future<Result<void>> forward(
+    Message message,
+    List<String> conversationIds,
+  ) async => const Err(NetworkFailure('not in this test'));
 
   @override
   Future<Result<Stream<Message>>> incoming(String conversationId) async => Ok(
@@ -188,6 +196,7 @@ class DesignChat implements ChatRepository {
     required String conversationId,
     required PickedImage image,
     String body = '',
+    String? replyTo,
   }) async => const Err(NetworkFailure('not in this test'));
   @override
   Future<Result<Uri>> attachmentUrl(String attachmentPath) async =>

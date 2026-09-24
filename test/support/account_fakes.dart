@@ -262,6 +262,7 @@ class SessionChat implements ChatRepository {
   Future<Result<Message>> send({
     required String conversationId,
     required String body,
+    String? replyTo,
   }) async {
     final who = await _as('send:$conversationId');
     final r = _roomFor(conversationId, who);
@@ -272,9 +273,34 @@ class SessionChat implements ChatRepository {
       senderId: who!,
       body: body.trim(),
       createdAt: DateTime.utc(2026, 9, 24, 9, r.messages.length),
+      replyTo: replyTo,
     );
     deliver(m);
     return Ok(m);
+  }
+
+  @override
+  Future<Result<void>> forward(
+    Message message,
+    List<String> conversationIds,
+  ) async {
+    final who = await _as('forward:${message.id}');
+    if (who == null) return const Err(DeniedFailure());
+    for (final id in conversationIds) {
+      final r = _roomFor(id, who);
+      if (r == null) return const Err(DeniedFailure());
+      deliver(
+        Message(
+          id: 'fwd${r.messages.length + 1}-${r.id}',
+          conversationId: r.id,
+          senderId: who,
+          body: message.body,
+          createdAt: DateTime.utc(2026, 9, 24, 9, r.messages.length),
+          forwarded: true,
+        ),
+      );
+    }
+    return const Ok(null);
   }
 
   /// Stores [m] and fans it out the way Realtime does: to every live
@@ -345,6 +371,7 @@ class SessionChat implements ChatRepository {
     required String conversationId,
     required PickedImage image,
     String body = '',
+    String? replyTo,
   }) async => const Err(ProviderFailure('no attachments in this fake'));
 
   @override

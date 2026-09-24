@@ -176,7 +176,7 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, reply_to, forwarded';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -280,6 +280,7 @@ final class SupabaseChatRepository implements ChatRepository {
   Future<Result<Message>> send({
     required String conversationId,
     required String body,
+    String? replyTo,
   }) async {
     final me = _uid;
     if (me == null) return const Err(DeniedFailure());
@@ -297,6 +298,7 @@ final class SupabaseChatRepository implements ChatRepository {
             'conversation_id': conversationId,
             'sender_id': me,
             'body': trimmed,
+            'reply_to': ?replyTo,
           })
           .select(_messageColumns)
           .single();
@@ -401,6 +403,7 @@ final class SupabaseChatRepository implements ChatRepository {
     required String conversationId,
     required PickedImage image,
     String body = '',
+    String? replyTo,
   }) async {
     final me = _uid;
     if (me == null) return const Err(DeniedFailure());
@@ -426,6 +429,7 @@ final class SupabaseChatRepository implements ChatRepository {
             'sender_id': me,
             'body': body.trim(),
             'attachment_path': path,
+            'reply_to': ?replyTo,
             if (image.preview case final preview?)
               'attachment_preview': base64Encode(preview),
           })
@@ -451,6 +455,42 @@ final class SupabaseChatRepository implements ChatRepository {
           .download(attachmentPath);
       await _cache.write(attachmentPath, bytes);
       return Ok(bytes);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<void>> forward(
+    Message message,
+    List<String> conversationIds,
+  ) async {
+    final me = _uid;
+    if (me == null) return const Err(DeniedFailure());
+    try {
+      for (final target in conversationIds) {
+        String? path;
+        final source = message.attachmentPath;
+        if (source != null) {
+          // Server-side copy into the target's folder: its members can read
+          // it, and nothing is uploaded again.
+          final ext = source.contains('.') ? source.split('.').last : 'jpg';
+          path =
+              '$target/${DateTime.now().microsecondsSinceEpoch}'
+              '-${me.substring(0, 8)}.$ext';
+          await _client.storage.from('attachments').copy(source, path);
+        }
+        await _client.from('messages').insert({
+          'conversation_id': target,
+          'sender_id': me,
+          'body': message.body,
+          'attachment_path': ?path,
+          if (message.attachmentPreview case final preview?)
+            'attachment_preview': base64Encode(preview),
+          'forwarded': true,
+        });
+      }
+      return const Ok(null);
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -500,6 +540,8 @@ final class SupabaseChatRepository implements ChatRepository {
     createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
     attachmentPath: row['attachment_path'] as String?,
     attachmentPreview: _preview(row['attachment_preview']),
+    replyTo: row['reply_to'] as String?,
+    forwarded: row['forwarded'] as bool? ?? false,
     deletion: switch (row['deleted']) {
       'vanished' => MessageDeletion.vanished,
       'placeholder' => MessageDeletion.placeholder,

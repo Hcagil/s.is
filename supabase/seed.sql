@@ -60,6 +60,11 @@
 --     (opal deletes her own messages through the real long-press -> sheet ->
 --      confirm flow; russ's screen, mounted at once and wired the way
 --      main.dart wires it, is what must show the result arrive live)
+--   reid/beth/cora test/integration/reply_forward_repository_test.dart,
+--                  test/integration/reply_forward_seam_test.dart
+--     (reid replies to and forwards messages between reid+beth, reid+cora,
+--      and a group of all three; beth and cora prove a forwarded photo is
+--      readable only in the conversation it was forwarded into)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -102,5 +107,8 @@ insert into app_private.allowlist(email) values
   ('ines@integration.test'),
   ('iris@integration.test'),
   ('opal@integration.test'),
-  ('russ@integration.test')
+  ('russ@integration.test'),
+  ('reid@integration.test'),
+  ('beth@integration.test'),
+  ('cora@integration.test')
 on conflict do nothing;

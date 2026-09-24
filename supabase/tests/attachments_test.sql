@@ -239,8 +239,10 @@ select set_eq(
   $$select column_name::text from information_schema.column_privileges
      where table_schema = 'public' and table_name = 'messages'
        and grantee = 'authenticated' and privilege_type = 'INSERT'$$,
-  $$values ('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview')$$,
-  'authenticated may insert exactly conversation_id, sender_id, body, attachment_path, attachment_preview');
+  $$values ('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
+           ('reply_to'),('forwarded')$$,
+  'authenticated may insert exactly conversation_id, sender_id, body, attachment_path, '
+  'attachment_preview, reply_to, forwarded (20260924150000_reply_and_forward.sql)');
 
 -- 8 losing the active session closes the attachment too ---------------------
 -- ann is still a member, so membership cannot be what stops her here.

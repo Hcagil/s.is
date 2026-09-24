@@ -47,6 +47,7 @@ abstract interface class ChatRepository {
   Future<Result<Message>> send({
     required String conversationId,
     required String body,
+    String? replyTo,
   });
 
   /// Messages arriving in [conversationId] after subscription.
@@ -96,7 +97,13 @@ abstract interface class ChatRepository {
     required String conversationId,
     required PickedImage image,
     String body,
+    String? replyTo,
   });
+
+  /// Sends a copy of [message] to each of [conversationIds], marked as
+  /// forwarded. A photo is copied into each conversation (members of one
+  /// conversation cannot read another's photos), never uploaded again.
+  Future<Result<void>> forward(Message message, List<String> conversationIds);
 
   /// A short-lived URL for [attachmentPath], issued only to a member of the
   /// conversation the path names. The bucket is private; there is no public

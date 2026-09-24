@@ -1,9 +1,12 @@
 @Tags(['integration'])
 library;
 
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
+import 'package:sis/data/failures.dart' show offlineMessage;
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
@@ -57,6 +60,43 @@ Future<SupabaseClient> signedIn(String email) async {
   return client;
 }
 
+/// A dead-host client carrying a real, unexpired session. `recoverSession`
+/// only decodes the session and checks its expiry locally — no request
+/// leaves the device — so this reaches the network-erroring path of a call
+/// that first checks `auth.currentUser`, which an unauthenticated dead
+/// client never would: it would return `DeniedFailure` before a socket ever
+/// opens, proving nothing about the offline message.
+Future<SupabaseClient> deadButSignedIn(SupabaseClient live) async {
+  final dead = _client(_deadUrl);
+  await dead.auth.recoverSession(
+    jsonEncode(live.auth.currentSession!.toJson()),
+  );
+  return dead;
+}
+
+/// Never the raw SDK error that produced the message: no exception name, no
+/// status/error code, no socket detail.
+void expectNoRawText(String message) {
+  for (final needle in [
+    'Exception',
+    'statusCode',
+    'errno',
+    'Failed host lookup',
+  ]) {
+    expect(
+      message,
+      isNot(contains(needle)),
+      reason: 'raw error text reached the screen: $message',
+    );
+  }
+}
+
+/// The offline message, and nothing of the raw SDK error that produced it.
+void expectOffline(String message) {
+  expect(message, offlineMessage);
+  expectNoRawText(message);
+}
+
 ProviderContainer containerFor(ChatRepositoryOwner owner) =>
     ProviderContainer.test(
       overrides: [chatRepositoryProvider.overrideWithValue(owner.repository)],
@@ -92,9 +132,14 @@ void main() {
   SupabaseClient? carolClient;
   SupabaseClient? danClient;
   SupabaseClient? deadClient;
+  SupabaseClient? deadSignedInClient;
   late ChatRepositoryOwner carol;
   late ChatRepositoryOwner dan;
   late ChatRepositoryOwner offline;
+  // Same account as carol, same dead host, but with a real session: reaches
+  // the offline path of members()/conversations()/send(), which first check
+  // `auth.currentUser` and would otherwise short-circuit to DeniedFailure.
+  late ChatRepositoryOwner offlineSignedIn;
   late String conversationId;
 
   setUpAll(() async {
@@ -104,6 +149,8 @@ void main() {
     dan = ChatRepositoryOwner(danClient!);
     deadClient = _client(_deadUrl);
     offline = ChatRepositoryOwner(deadClient!);
+    deadSignedInClient = await deadButSignedIn(carolClient!);
+    offlineSignedIn = ChatRepositoryOwner(deadSignedInClient!);
 
     final started = await carol.repository.startDirectConversation(dan.userId);
     expect(started, isA<Ok<String>>());
@@ -119,6 +166,7 @@ void main() {
     await carolClient?.dispose();
     await danClient?.dispose();
     await deadClient?.dispose();
+    await deadSignedInClient?.dispose();
   });
 
   test('the conversation list controller loads real conversations', () async {
@@ -253,7 +301,7 @@ void main() {
   test(
     'a broken connection fails the list with a reason, not a spinner',
     () async {
-      final container = containerFor(offline);
+      final container = containerFor(offlineSignedIn);
       container.listen(conversationListProvider, (_, _) {});
 
       final state = await eventually<AsyncValue<List<Conversation>>>(
@@ -262,7 +310,7 @@ void main() {
         reason: 'the list spun forever on an unreachable server',
       );
       expect(state, isA<AsyncError<List<Conversation>>>());
-      expect((state.error! as Failure).message, isNotEmpty);
+      expectOffline((state.error! as Failure).message);
     },
   );
 
@@ -279,19 +327,20 @@ void main() {
     );
     expect(state, isA<AsyncError<List<Message>>>());
     // `incoming()` is the one call that signals failure by throwing, and the
-    // SDK throws its own exception type. It must be mapped to a Failure:
-    // the screen renders `error.toString()` for anything else, which puts a
-    // raw WebSocketChannelException in front of a member.
+    // SDK throws its own exception type (`WebSocketChannelException`,
+    // wrapping the refused socket). It must be mapped to a Failure: the
+    // screen renders `error.toString()` for anything else, which puts a raw
+    // WebSocketChannelException in front of a member.
     expect(
       state.error,
       isA<Failure>(),
       reason: 'a raw SDK exception reached the screen',
     );
-    expect((state.error! as Failure).message, isNotEmpty);
+    expectOffline((state.error! as Failure).message);
   });
 
   test('a broken connection fails members with a reason', () async {
-    final container = containerFor(offline);
+    final container = containerFor(offlineSignedIn);
     container.listen(membersProvider, (_, _) {});
 
     final state = await eventually<AsyncValue<List<Member>>>(
@@ -300,7 +349,7 @@ void main() {
       reason: 'the member picker spun forever on an unreachable server',
     );
     expect(state, isA<AsyncError<List<Member>>>());
-    expect((state.error! as Failure).message, isNotEmpty);
+    expectOffline((state.error! as Failure).message);
   });
 
   test(
@@ -312,14 +361,14 @@ void main() {
           .read(conversationListProvider.notifier)
           .startWith('00000000-0000-0000-0000-000000000000');
       expect(started, isA<Err<String>>());
-      expect((started as Err<String>).failure.message, isNotEmpty);
+      expectOffline((started as Err<String>).failure.message);
 
-      final sent = await offline.repository.send(
+      final sent = await offlineSignedIn.repository.send(
         conversationId: conversationId,
         body: 'never arrives',
       );
       expect(sent, isA<Err<void>>());
-      expect((sent as Err<void>).failure.message, isNotEmpty);
+      expectOffline((sent as Err<void>).failure.message);
     },
   );
 }

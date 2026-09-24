@@ -1,6 +1,7 @@
 @Tags(['integration'])
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
+import 'package:sis/data/failures.dart' show offlineMessage;
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
@@ -74,6 +76,37 @@ Future<SupabaseClient> signedIn(String email) async {
   return client;
 }
 
+/// A dead-host client carrying a real, unexpired session. `recoverSession`
+/// only decodes the session and checks its expiry locally, so this reaches
+/// the network-erroring path of `load()`/`save()`, which first check
+/// `auth.currentUser` and would otherwise short-circuit to `DeniedFailure`
+/// on an unauthenticated dead client, proving nothing about the offline
+/// message.
+Future<SupabaseClient> deadButSignedIn(SupabaseClient live) async {
+  final dead = _client(_deadUrl);
+  await dead.auth.recoverSession(
+    jsonEncode(live.auth.currentSession!.toJson()),
+  );
+  return dead;
+}
+
+/// The offline message, never the raw SDK error that produced it.
+void expectOffline(String message) {
+  expect(message, offlineMessage);
+  for (final needle in [
+    'Exception',
+    'statusCode',
+    'errno',
+    'Failed host lookup',
+  ]) {
+    expect(
+      message,
+      isNot(contains(needle)),
+      reason: 'raw error text reached the screen: $message',
+    );
+  }
+}
+
 class Account {
   Account(this.client);
   final SupabaseClient client;
@@ -122,7 +155,7 @@ void main() {
     veraClient = await signedIn('vera@integration.test');
     waltClient = await signedIn('walt@integration.test');
     xenaClient = await signedIn('xena@integration.test');
-    deadClient = _client(_deadUrl);
+    deadClient = await deadButSignedIn(veraClient!);
     vera = Account(veraClient!);
     walt = Account(waltClient!);
     xena = Account(xenaClient!);
@@ -359,12 +392,12 @@ void main() {
       isA<Failure>(),
       reason: 'a raw exception reached state',
     );
-    expect((state.error! as Failure).message, isNotEmpty);
+    expectOffline((state.error! as Failure).message);
 
     final repo = SupabaseProfileRepository(offline.client);
     final saved = await repo.save(displayName: 'Never arrives');
     expect(saved, isA<Err<OwnProfile>>());
-    expect((saved as Err<OwnProfile>).failure.message, isNotEmpty);
+    expectOffline((saved as Err<OwnProfile>).failure.message);
 
     final checked = await repo.isTagAvailable('free_tag');
     expect(
@@ -372,6 +405,7 @@ void main() {
       isA<Err<bool>>(),
       reason: 'a failed check must not read as "taken" or "free"',
     );
+    expectOffline((checked as Err<bool>).failure.message);
   });
 
   // The session gate as production mounts it, over the real profile

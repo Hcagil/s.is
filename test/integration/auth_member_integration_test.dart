@@ -1,11 +1,13 @@
 @Tags(['integration'])
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sis/core/failure.dart';
+import 'package:sis/data/failures.dart' show offlineMessage;
 import 'package:sis/features/auth/data/supabase_auth_repository.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -31,12 +33,17 @@ const _key = String.fromEnvironment(
 );
 const _password = 'integration-password';
 
+/// A host that accepts nothing: the honest form of "the connection failed".
+const _deadUrl = 'http://127.0.0.1:1';
+
+SupabaseClient _client(String url) => SupabaseClient(
+  url,
+  _key,
+  authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
+);
+
 Future<SupabaseClient> signedIn(String email) async {
-  final client = SupabaseClient(
-    _url,
-    _key,
-    authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
-  );
+  final client = _client(_url);
   try {
     await client.auth.signInWithPassword(email: email, password: _password);
   } on AuthException {
@@ -45,6 +52,37 @@ Future<SupabaseClient> signedIn(String email) async {
   expect(client.auth.currentUser, isNotNull, reason: 'sign-in failed');
   expect(await client.rpc('activate_session'), isTrue);
   return client;
+}
+
+/// A dead-host client carrying a real, unexpired session. `recoverSession`
+/// only decodes the session and checks its expiry locally, so this reaches
+/// the network-erroring path of `currentMember()`, which first checks
+/// `auth.currentUser` and would otherwise short-circuit to `DeniedFailure`
+/// on an unauthenticated dead client, proving nothing about the offline
+/// message.
+Future<SupabaseClient> deadButSignedIn(SupabaseClient live) async {
+  final dead = _client(_deadUrl);
+  await dead.auth.recoverSession(
+    jsonEncode(live.auth.currentSession!.toJson()),
+  );
+  return dead;
+}
+
+/// The offline message, never the raw SDK error that produced it.
+void expectOffline(String message) {
+  expect(message, offlineMessage);
+  for (final needle in [
+    'Exception',
+    'statusCode',
+    'errno',
+    'Failed host lookup',
+  ]) {
+    expect(
+      message,
+      isNot(contains(needle)),
+      reason: 'raw error text reached the screen: $message',
+    );
+  }
 }
 
 SupabaseAuthRepository repoOver(SupabaseClient c) =>
@@ -74,4 +112,28 @@ void main() {
       expect(member.email, email);
     });
   }
+
+  test('a broken connection: activateSession() fails with the offline '
+      'message, not raw SDK text', () async {
+    final dead = _client(_deadUrl);
+    clients.add(dead);
+
+    final result = await repoOver(dead).activateSession();
+
+    expect(result, isA<Err<bool>>());
+    expectOffline((result as Err<bool>).failure.message);
+  });
+
+  test('a broken connection: currentMember() fails with the offline '
+      'message, not raw SDK text', () async {
+    final live = await signedIn('cleo@integration.test');
+    clients.add(live);
+    final dead = await deadButSignedIn(live);
+    clients.add(dead);
+
+    final result = await repoOver(dead).currentMember();
+
+    expect(result, isA<Err<Member>>());
+    expectOffline((result as Err<Member>).failure.message);
+  });
 }

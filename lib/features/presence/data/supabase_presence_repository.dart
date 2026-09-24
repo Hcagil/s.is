@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
+import '../../../data/failures.dart';
 import '../../../data/realtime_channels.dart';
 import '../domain/presence_repository.dart';
 
@@ -17,7 +18,7 @@ final class SupabasePresenceRepository implements PresenceRepository {
 
   String? get _uid => _client.auth.currentUser?.id;
 
-  Failure _asFailure(Object e) => NetworkFailure('$e');
+  Failure _asFailure(Object e) => readableFailure(e);
 
   void _leave(RealtimeChannel channel) => leaveChannel(_client, channel);
 

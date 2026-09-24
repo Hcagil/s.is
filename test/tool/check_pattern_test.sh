@@ -125,4 +125,34 @@ EOF
 clean 'same catch outside data/ (application)' features/demo/application/ctl.dart <<<"$awaited_close"
 clean 'same catch outside data/ (presentation)' features/demo/presentation/view.dart <<<"$awaited_close"
 
+# Rule 6: a feature's data/ never builds a NetworkFailure from an error's
+# text. Only a plain string literal (no `$` interpolation) may be passed.
+violation 'string interpolation of the error' features/demo/data/repo.dart <<'EOF'
+Failure f(Object e) => NetworkFailure('$e');
+EOF
+
+violation 'error.message passed straight through' features/demo/data/repo2.dart <<'EOF'
+Failure f(Object e) => NetworkFailure(e.message);
+EOF
+
+violation 'error.toString() passed straight through' features/demo/data/repo3.dart <<'EOF'
+Failure f(Object e) => NetworkFailure(e.toString());
+EOF
+
+violation 'a bare variable, not a literal' features/demo/data/repo4.dart <<'EOF'
+Failure f(String message) => NetworkFailure(message);
+EOF
+
+violation 'interpolation mid-sentence' features/demo/data/repo5.dart <<'EOF'
+Failure f(Object e) => NetworkFailure('Upload failed: $e');
+EOF
+
+clean 'a plain string literal, no interpolation' features/demo/data/ok4.dart <<'EOF'
+Failure f(Object e) => NetworkFailure('This photo is not available.');
+EOF
+
+clean 'the same raw-text pattern outside features/*/data' data/helper.dart <<'EOF'
+Failure f(Object e) => NetworkFailure('$e');
+EOF
+
 echo "PASS"

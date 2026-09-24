@@ -12,11 +12,13 @@ dependencies:
   flutter_riverpod: ^3.4.3
   flutter_secure_storage: ^11.2.0
   google_sign_in: ^7.2.0
+  http: ^1.6.0
   image_picker: ^1.1.2
   in_app_update: ^5.0.0
   package_info_plus: ^10.2.1
   supabase_flutter: ^2.17.2
   url_launcher: ^6.3.2
+  web_socket_channel: ^3.0.3
 
 dev_dependencies:
   flutter_test:

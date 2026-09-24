@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
+import '../../../data/failures.dart';
 import '../domain/own_profile.dart';
 import '../domain/profile_repository.dart';
 
@@ -20,8 +21,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
       const ProviderFailure('That name or tag is not allowed.'),
     PostgrestException(:final code) when code == '42501' =>
       const DeniedFailure(),
-    PostgrestException(:final message) => NetworkFailure(message),
-    _ => NetworkFailure('$e'),
+    _ => readableFailure(e),
   };
 
   OwnProfile _toProfile(Map<String, dynamic> row) => OwnProfile(

@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
+import 'package:sis/data/failures.dart' show offlineMessage;
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
@@ -47,6 +48,23 @@ SupabaseClient _client([String url = _url]) => SupabaseClient(
   _key,
   authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
 );
+
+/// The offline message, never the raw SDK error that produced it.
+void expectOffline(String message) {
+  expect(message, offlineMessage);
+  for (final needle in [
+    'Exception',
+    'statusCode',
+    'errno',
+    'Failed host lookup',
+  ]) {
+    expect(
+      message,
+      isNot(contains(needle)),
+      reason: 'raw error text reached the screen: $message',
+    );
+  }
+}
 
 Future<SupabaseClient> _signIn(String email) async {
   final client = _client();
@@ -341,8 +359,10 @@ void main() {
       final repo = SupabasePresenceRepository(dead);
       final touched = await repo.touchLastSeen();
       expect(touched, isA<Err<void>>());
-      expect((touched as Err<void>).failure.message, isNotEmpty);
-      expect(await repo.lastSeenOf(lars.id), isA<Err<DateTime?>>());
+      expectOffline((touched as Err<void>).failure.message);
+      final seen = await repo.lastSeenOf(lars.id);
+      expect(seen, isA<Err<DateTime?>>());
+      expectOffline((seen as Err<DateTime?>).failure.message);
     });
   });
 

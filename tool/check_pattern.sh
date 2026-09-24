@@ -34,4 +34,12 @@ while IFS= read -r f; do
     in_catch && depth <= catch_depth && !/catch[[:space:]]*\([^)]*\)[[:space:]]*\{[[:space:]]*$/ { in_catch = 0 }
   ' "$f" | while read -r l; do report "awaited teardown in catch: $l"; done || true
 done < <(find "$LIB_DIR" -path '*/data/*.dart' 2>/dev/null)
+# Rule 6 (ARCHITECTURE rule 6): a feature's data/ never builds a
+# NetworkFailure from error text.
+# Raw SDK text ("ClientException: SocketException ...") ends up on screen;
+# pass the error to readableFailure() from lib/data/failures.dart instead.
+# Only a plain string literal is allowed.
+while IFS= read -r f; do
+  grep -nE "NetworkFailure\\([^'\"]|NetworkFailure\\(['\"][^'\"]*\\$" "$f" | sed "s|^|$f:|" | while read -r l; do report "raw error text in a Failure: $l"; done || true
+done < <(find "$LIB_DIR" -path '*/features/*/data/*.dart' 2>/dev/null)
 if [ -s "$FAILFLAG" ]; then exit 1; fi; echo "pattern: OK"

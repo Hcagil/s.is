@@ -2,6 +2,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
+import '../../../data/failures.dart';
 import '../domain/auth_repository.dart';
 import '../domain/member.dart';
 
@@ -67,6 +68,9 @@ final class SupabaseAuthRepository implements AuthRepository {
         accessToken: auth.accessToken,
       );
       return const Ok(null);
+    } on AuthRetryableFetchException catch (e) {
+      // Offline, not a rejection: say so rather than blame the token.
+      return Err(readableFailure(e));
     } on AuthException catch (e) {
       return Err(
         ProviderFailure('Supabase rejected the Google token: ${e.message}'),
@@ -78,10 +82,8 @@ final class SupabaseAuthRepository implements AuthRepository {
   Future<Result<bool>> activateSession() async {
     try {
       return Ok(await _client.rpc('activate_session') == true);
-    } on PostgrestException catch (e) {
-      return Err(NetworkFailure(e.message));
     } catch (e) {
-      return Err(NetworkFailure(e.toString()));
+      return Err(readableFailure(e));
     }
   }
 
@@ -103,11 +105,8 @@ final class SupabaseAuthRepository implements AuthRepository {
           email: _client.auth.currentUser?.email,
         ),
       );
-    } on PostgrestException catch (e) {
-      return Err(NetworkFailure(e.message));
     } catch (e) {
-      // Network failures surface as ClientException, not PostgrestException.
-      return Err(NetworkFailure('$e'));
+      return Err(readableFailure(e));
     }
   }
 

@@ -1,5 +1,5 @@
 begin;
-select plan(84);
+select plan(85);
 
 -- Push notification delivery addresses.
 --
@@ -377,9 +377,9 @@ select is((select string_agg(platform, ',' order by platform) from app_private.p
 select is((select string_agg(body, ',') from app_private.push_targets_for_message((select grp from _ids))
             where user_id = '00000000-0000-0000-0000-0000000fd002'),
           'pgtap push to the group', 'the notification carries the message');
-select is((select string_agg(sender_name, ',') from app_private.push_targets_for_message((select grp from _ids))
+select is((select string_agg(title, ',') from app_private.push_targets_for_message((select grp from _ids))
             where user_id = '00000000-0000-0000-0000-0000000fd002'),
-          'Nina N', 'and the name the sender chose, not the one her account was created with');
+          'Nina N @ pgtap-push', 'the title carries the name the sender chose, not the one her account was created with, plus the group''s name');
 select is((select count(*) from app_private.push_targets_for_message((select grp from _ids))
             where user_id = '00000000-0000-0000-0000-0000000fd003'),
           0::bigint, 'a member with no phone is not a target');
@@ -407,9 +407,9 @@ select is((select count(*) from app_private.push_targets_for_message((select oma
           0::bigint, 'whoever sends is the one member left off the list');
 select is((select count(*) from app_private.push_targets_for_message((select omar from _ids))),
           2::bigint, 'nina and pia are told about omar''s message');
-select is((select string_agg(sender_name, ',') from app_private.push_targets_for_message((select omar from _ids))
+select is((select string_agg(title, ',') from app_private.push_targets_for_message((select omar from _ids))
             where user_id = '00000000-0000-0000-0000-0000000fd001'),
-          'Omar', 'the name on it is the sender of THAT message');
+          'Omar @ pgtap-push', 'the title names the sender of THAT message, not whoever started the group');
 
 -- the one-to-one
 select is((select count(*) from app_private.push_targets_for_message((select direct from _ids))),
@@ -417,6 +417,9 @@ select is((select count(*) from app_private.push_targets_for_message((select dir
 select is((select count(*) from app_private.push_targets_for_message((select direct from _ids))
             where user_id = '00000000-0000-0000-0000-0000000fd002'),
           1::bigint, 'and it is the other person''s');
+select is((select string_agg(title, ',') from app_private.push_targets_for_message((select direct from _ids))
+            where user_id = '00000000-0000-0000-0000-0000000fd002'),
+          'Nina N', 'a 1:1 conversation has no title to append: the title is the sender''s name alone');
 
 -- omar changes phone: the handset he left is never on the list again
 select test_as('00000000-0000-0000-0000-0000000fd002', 'fd000000-0000-0000-0000-000000000012');

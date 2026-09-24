@@ -1,3 +1,5 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +17,9 @@ import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/data/image_picker_attachment_source.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
+import 'features/notifications/application/push_controller.dart';
+import 'features/notifications/data/firebase_push_source.dart';
+import 'features/notifications/data/supabase_push_registry.dart';
 import 'features/presence/application/presence_controllers.dart';
 import 'features/presence/data/supabase_presence_repository.dart';
 import 'features/profile/application/profile_controller.dart';
@@ -46,6 +51,8 @@ Future<void> main() async {
         localStorage: SecureSessionStorage(),
       ),
     );
+    // Push: reads android/app/google-services.json, bundled at build time.
+    await Firebase.initializeApp();
     final client = Supabase.instance.client;
     runApp(
       ProviderScope(
@@ -74,6 +81,10 @@ Future<void> main() async {
             ImagePickerAttachmentSource(ImagePicker()),
           ),
           linkOpenerProvider.overrideWithValue(const UrlLauncherLinkOpener()),
+          pushSourceProvider.overrideWithValue(
+            FirebasePushSource(FirebaseMessaging.instance),
+          ),
+          pushRegistryProvider.overrideWithValue(SupabasePushRegistry(client)),
         ],
         child: const SisApp(),
       ),

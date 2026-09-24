@@ -50,6 +50,9 @@
 --   fern/gus/hugo/ines test/integration/profile_pages_integration_test.dart
 --     (fern, gus and hugo share groups and a 1:1; ines is allowlisted and
 --      active but in none of them, so only membership can hide their rows)
+--   iris           test/integration/push_registry_integration_test.dart
+--     (registers and forgets a device token; the refused path uses a plain
+--      anon client, which needs no seeded account of its own)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -89,5 +92,6 @@ insert into app_private.allowlist(email) values
   ('fern@integration.test'),
   ('gus@integration.test'),
   ('hugo@integration.test'),
-  ('ines@integration.test')
+  ('ines@integration.test'),
+  ('iris@integration.test')
 on conflict do nothing;

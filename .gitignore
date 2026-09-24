@@ -38,3 +38,6 @@ __pycache__/
 /skills-lock.json
 skill-observations/
 skill-updates/
+
+# Firebase client config: restored from the GOOGLE_SERVICES_JSON secret.
+/android/app/google-services.json

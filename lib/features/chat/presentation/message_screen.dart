@@ -177,6 +177,11 @@ class MessageScreen extends ConsumerWidget {
                       final index = value.length - 1 - i;
                       final message = value[index];
                       final mine = me != null && message.isFrom(me);
+                      final quoted = message.replyTo == null
+                          ? null
+                          : value
+                                .where((m) => m.id == message.replyTo)
+                                .firstOrNull;
                       final bubble = GestureDetector(
                         onLongPress: () =>
                             showMessageActions(context, ref, message, me: me),
@@ -186,6 +191,12 @@ class MessageScreen extends ConsumerWidget {
                           sender: group && !mine && startsRun(value, index)
                               ? (names[message.senderId] ?? 'Member')
                               : null,
+                          quoted: quoted,
+                          quotedName: quoted == null
+                              ? null
+                              : quoted.senderId == me
+                              ? 'You'
+                              : (names[quoted.senderId] ?? 'Member'),
                         ),
                       );
                       return message.deletion == MessageDeletion.vanished
@@ -215,10 +226,20 @@ class MessageScreen extends ConsumerWidget {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble(this.message, {required this.mine, this.sender});
+  const _Bubble(
+    this.message, {
+    required this.mine,
+    this.sender,
+    this.quoted,
+    this.quotedName,
+  });
 
   final Message message;
   final bool mine;
+
+  /// The message this one answers, when it is loaded here, and who wrote it.
+  final Message? quoted;
+  final String? quotedName;
 
   /// The sender's name, shown above the first bubble of their run in a group.
   final String? sender;
@@ -274,6 +295,80 @@ class _Bubble extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            if (message.forwarded)
+              Padding(
+                key: ValueKey('forwarded-${message.id}'),
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.shortcut,
+                      size: 14,
+                      color: mine
+                          ? Colors.white70
+                          : brand.text.withValues(alpha: 0.6),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Forwarded',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        color: mine
+                            ? Colors.white70
+                            : brand.text.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (message.replyTo != null && !message.isDeleted)
+              Container(
+                key: ValueKey('quote-${message.id}'),
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                decoration: BoxDecoration(
+                  color: (mine ? Colors.white : brand.text).withValues(
+                    alpha: 0.12,
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border(
+                    left: BorderSide(
+                      color: mine
+                          ? Colors.white
+                          : Theme.of(context).colorScheme.primary,
+                      width: 3,
+                    ),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (quotedName != null)
+                      Text(
+                        quotedName!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: mine
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    Text(
+                      quoteText(quoted),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: mine ? Colors.white : brand.text,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             if (sender != null)
               Padding(
@@ -521,6 +616,7 @@ class _ComposerState extends ConsumerState<_Composer> {
 
   @override
   Widget build(BuildContext context) {
+    final replying = ref.watch(replyingToProvider);
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -529,46 +625,123 @@ class _ComposerState extends ConsumerState<_Composer> {
         ),
       ),
       padding: const EdgeInsets.fromLTRB(6, 8, 10, 12),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            key: const ValueKey('composer-attach'),
-            onPressed: _sending ? null : _attach,
-            icon: const Icon(Icons.attach_file_rounded),
-            tooltip: 'Send a photo',
-          ),
-          Expanded(
-            child: TextField(
-              key: const ValueKey('composer-field'),
-              controller: _controller,
-              maxLength: maxMessageLength,
-              minLines: 1,
-              maxLines: 4,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _send(),
-              // Throttled, and silent when the member does not share typing.
-              onChanged: (text) {
-                if (text.isNotEmpty) {
-                  ref.read(typingProvider.notifier).signalTyping();
-                }
-              },
-              decoration: const InputDecoration(
-                hintText: 'Message',
-                counterText: '',
+          if (replying != null) _ReplyBar(replying),
+          Row(
+            children: [
+              IconButton(
+                key: const ValueKey('composer-attach'),
+                onPressed: _sending ? null : _attach,
+                icon: const Icon(Icons.attach_file_rounded),
+                tooltip: 'Send a photo',
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton.filled(
-            key: const ValueKey('composer-send'),
-            onPressed: _sending ? null : _send,
-            icon: const Icon(Icons.arrow_upward_rounded),
+              Expanded(
+                child: TextField(
+                  key: const ValueKey('composer-field'),
+                  controller: _controller,
+                  maxLength: maxMessageLength,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _send(),
+                  // Throttled, and silent when the member does not share typing.
+                  onChanged: (text) {
+                    if (text.isNotEmpty) {
+                      ref.read(typingProvider.notifier).signalTyping();
+                    }
+                  },
+                  decoration: const InputDecoration(
+                    hintText: 'Message',
+                    counterText: '',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                key: const ValueKey('composer-send'),
+                onPressed: _sending ? null : _send,
+                icon: const Icon(Icons.arrow_upward_rounded),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 }
+
+/// What the composer is answering, with a way to stop.
+class _ReplyBar extends ConsumerWidget {
+  const _ReplyBar(this.message);
+
+  final Message message;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(currentUserIdProvider);
+    final name = message.senderId == me
+        ? 'You'
+        : (ref.watch(membersProvider).value ?? const [])
+                  .where((m) => m.userId == message.senderId)
+                  .firstOrNull
+                  ?.displayName ??
+              'Member';
+    return Container(
+      key: const ValueKey('reply-bar'),
+      margin: const EdgeInsets.fromLTRB(10, 0, 0, 6),
+      padding: const EdgeInsets.fromLTRB(10, 4, 0, 4),
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: Theme.of(context).colorScheme.primary,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Replying to $name',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                Text(
+                  quoteText(message),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('reply-cancel'),
+            tooltip: 'Cancel reply',
+            icon: const Icon(Icons.close),
+            onPressed: () => ref.read(replyingToProvider.notifier).clear(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A quoted message in one line: its text, "Photo", or what became of it.
+String quoteText(Message? message) => switch (message) {
+  null => 'Original message',
+  Message(isDeleted: true) => 'This message was deleted',
+  Message(:final body) when body.isNotEmpty => body,
+  Message(hasAttachment: true) => '📷 Photo',
+  _ => 'Message',
+};
 
 /// Message text with its links tappable, opening in the browser.
 class _LinkedText extends ConsumerStatefulWidget {

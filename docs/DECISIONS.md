@@ -640,3 +640,19 @@ ceiling).
 **Long press opens the message's actions**: delete for everyone here;
 reply and forward join it in the next change. Nothing opens when there is
 nothing to offer.
+
+## 2026-09-24 — Replies and forwards
+
+**Long press a message to reply or forward it** (owner's choice). A reply
+shows a quote of the message it answers; the quote comes from the chat
+already on screen, and a deleted original reads "This message was
+deleted". The database accepts a reply only to a message of the same
+conversation, so a quote can never carry a message across chats or probe
+for one.
+
+**Forward to several chats at once, marked "Forwarded".** A photo is
+copied server-side into each target chat's folder (members of one chat
+cannot read another's photos) and is owned by whoever forwarded it, so the
+original sender's later delete does not reach those copies -- as with any
+photo someone saved. The label is set by the sender's app, so it is a
+courtesy, not proof.

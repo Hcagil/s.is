@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/failure.dart';
 import '../application/chat_controllers.dart';
 import '../domain/message.dart';
+import 'forward_sheet.dart';
 
-/// What a long press on a message offers. Nothing opens when there is
-/// nothing to offer.
+/// What a long press on a message offers: reply, forward, and -- for your
+/// own message under 6 hours old -- delete for everyone. Nothing opens when
+/// there is nothing to offer.
 Future<void> showMessageActions(
   BuildContext context,
   WidgetRef ref,
@@ -15,7 +17,9 @@ Future<void> showMessageActions(
 }) async {
   final canDelete =
       me != null && message.canDeleteForEveryone(me, DateTime.now());
-  if (!canDelete) return;
+  // Reply and forward need a stored message with something in it.
+  final canShare = !message.isPending && !message.isDeleted;
+  if (!canDelete && !canShare) return;
 
   final action = await showModalBottomSheet<String>(
     context: context,
@@ -24,24 +28,52 @@ Future<void> showMessageActions(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ListTile(
-            key: const ValueKey('action-delete'),
-            leading: Icon(
-              Icons.delete_outline,
-              color: Theme.of(sheet).colorScheme.error,
+          if (canShare) ...[
+            ListTile(
+              key: const ValueKey('action-reply'),
+              leading: const Icon(Icons.reply),
+              title: const Text('Reply'),
+              onTap: () => Navigator.of(sheet).pop('reply'),
             ),
-            title: Text(
-              'Delete for everyone',
-              style: TextStyle(color: Theme.of(sheet).colorScheme.error),
+            ListTile(
+              key: const ValueKey('action-forward'),
+              leading: const Icon(Icons.shortcut),
+              title: const Text('Forward'),
+              onTap: () => Navigator.of(sheet).pop('forward'),
             ),
-            onTap: () => Navigator.of(sheet).pop('delete'),
-          ),
+          ],
+          if (canDelete)
+            ListTile(
+              key: const ValueKey('action-delete'),
+              leading: Icon(
+                Icons.delete_outline,
+                color: Theme.of(sheet).colorScheme.error,
+              ),
+              title: Text(
+                'Delete for everyone',
+                style: TextStyle(color: Theme.of(sheet).colorScheme.error),
+              ),
+              onTap: () => Navigator.of(sheet).pop('delete'),
+            ),
         ],
       ),
     ),
   );
 
-  if (action != 'delete' || !context.mounted) return;
+  if (!context.mounted) return;
+  switch (action) {
+    case 'reply':
+      ref.read(replyingToProvider.notifier).start(message);
+      return;
+    case 'forward':
+      await showForwardSheet(context, ref, message);
+      return;
+    case 'delete':
+      break;
+    default:
+      return;
+  }
+  if (!context.mounted) return;
 
   final confirmed = await showDialog<bool>(
     context: context,

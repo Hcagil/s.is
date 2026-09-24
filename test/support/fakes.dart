@@ -139,6 +139,9 @@ class FakeChat implements ChatRepository {
   Completer<void>? gate;
 
   final sent = <String>[];
+
+  /// The replyTo handed to each [send], in the same order as [sent].
+  final sentReplyTo = <String?>[];
   final started = <String>[];
   int subscriptions = 0;
   final _incoming = StreamController<Message>.broadcast();
@@ -210,8 +213,10 @@ class FakeChat implements ChatRepository {
   Future<Result<Message>> send({
     required String conversationId,
     required String body,
+    String? replyTo,
   }) async {
     sent.add(body);
+    sentReplyTo.add(replyTo);
     return sendResult ??
         Ok(
           Message(
@@ -220,6 +225,7 @@ class FakeChat implements ChatRepository {
             senderId: 'me',
             body: body.trim(),
             createdAt: DateTime.now(),
+            replyTo: replyTo,
           ),
         );
   }
@@ -280,7 +286,14 @@ class FakeChat implements ChatRepository {
 
   /// Every image handed to [sendImage], with the caption it was sent with.
   final sentImages =
-      <({String conversationId, PickedImage image, String body})>[];
+      <
+        ({
+          String conversationId,
+          PickedImage image,
+          String body,
+          String? replyTo,
+        })
+      >[];
 
   /// Every path [attachmentUrl] was asked to sign, in order.
   final urlRequests = <String>[];
@@ -315,8 +328,14 @@ class FakeChat implements ChatRepository {
     required String conversationId,
     required PickedImage image,
     String body = '',
+    String? replyTo,
   }) async {
-    sentImages.add((conversationId: conversationId, image: image, body: body));
+    sentImages.add((
+      conversationId: conversationId,
+      image: image,
+      body: body,
+      replyTo: replyTo,
+    ));
     if (sendImageResult case final forced?) return forced;
     if (rejectUpload(image, body) case final refused?) return refused;
     final path = '$conversationId/${++_imageSeq}.${image.extension}';
@@ -331,8 +350,55 @@ class FakeChat implements ChatRepository {
         createdAt: DateTime.now(),
         attachmentPath: path,
         attachmentPreview: image.preview,
+        replyTo: replyTo,
       ),
     );
+  }
+
+  /// Every forward asked for, in order: which message, to which conversations.
+  final forwarded = <({String messageId, List<String> conversationIds})>[];
+
+  /// Forces the outcome. Left null the fake answers like the server: one new
+  /// message per target conversation, marked forwarded, its photo (if any)
+  /// copied to a brand NEW path in that target's own folder -- the source
+  /// object and message untouched -- delivered live the way an insert
+  /// really arrives.
+  Result<void>? forwardResult;
+  int _forwardSeq = 0;
+
+  @override
+  Future<Result<void>> forward(
+    Message message,
+    List<String> conversationIds,
+  ) async {
+    forwarded.add((
+      messageId: message.id,
+      conversationIds: List.unmodifiable(conversationIds),
+    ));
+    if (forwardResult case final forced?) return forced;
+    for (final id in conversationIds) {
+      String? path;
+      final source = message.attachmentPath;
+      if (source != null) {
+        path = '$id/fwd-${++_forwardSeq}.${source.split('.').last}';
+        storedObjects.add(path);
+        final bytes = objectBytes[source];
+        if (bytes != null) objectBytes[path] = bytes;
+      }
+      deliver(
+        Message(
+          id: 'fwd-${++_forwardSeq}',
+          conversationId: id,
+          senderId: 'me',
+          body: message.body,
+          createdAt: DateTime.now(),
+          attachmentPath: path,
+          attachmentPreview: message.attachmentPreview,
+          forwarded: true,
+        ),
+      );
+    }
+    return const Ok(null);
   }
 
   @override
@@ -419,7 +485,7 @@ class ChatFake implements ChatRepository {
 
   /// Call names in the order they were made, e.g. `incoming:c1`.
   final calls = <String>[];
-  final sent = <({String conversationId, String body})>[];
+  final sent = <({String conversationId, String body, String? replyTo})>[];
   final started = <String>[];
   int subscriptions = 0;
   int canceledSubscriptions = 0;
@@ -652,9 +718,10 @@ class ChatFake implements ChatRepository {
   Future<Result<Message>> send({
     required String conversationId,
     required String body,
+    String? replyTo,
   }) async {
     await _tick('send:$conversationId');
-    sent.add((conversationId: conversationId, body: body));
+    sent.add((conversationId: conversationId, body: body, replyTo: replyTo));
     return sendResult ??
         Ok(
           Message(
@@ -663,6 +730,7 @@ class ChatFake implements ChatRepository {
             senderId: 'me',
             body: body.trim(),
             createdAt: DateTime.now(),
+            replyTo: replyTo,
           ),
         );
   }
@@ -744,7 +812,14 @@ class ChatFake implements ChatRepository {
 
   /// Every image handed to [sendImage], with the caption it was sent with.
   final sentImages =
-      <({String conversationId, PickedImage image, String body})>[];
+      <
+        ({
+          String conversationId,
+          PickedImage image,
+          String body,
+          String? replyTo,
+        })
+      >[];
 
   /// Every path [attachmentUrl] was asked to sign, in order.
   final urlRequests = <String>[];
@@ -806,9 +881,15 @@ class ChatFake implements ChatRepository {
     required String conversationId,
     required PickedImage image,
     String body = '',
+    String? replyTo,
   }) async {
     await _tick('sendImage:$conversationId');
-    sentImages.add((conversationId: conversationId, image: image, body: body));
+    sentImages.add((
+      conversationId: conversationId,
+      image: image,
+      body: body,
+      replyTo: replyTo,
+    ));
     final held = _sendImageHold;
     if (held != null) await held.future;
     if (sendImageResult case final forced?) return forced;
@@ -825,8 +906,67 @@ class ChatFake implements ChatRepository {
         createdAt: DateTime.now(),
         attachmentPath: path,
         attachmentPreview: image.preview,
+        replyTo: replyTo,
       ),
     );
+  }
+
+  /// Every forward asked for, in order: which message, to which conversations.
+  final forwarded = <({String messageId, List<String> conversationIds})>[];
+
+  /// Forces the outcome. Left null the fake answers like the server: refused
+  /// whole -- before creating anything -- if any target is not one the
+  /// caller belongs to (per [conversationsResult]); otherwise one new,
+  /// forwarded message per target, its photo (if any) copied to a brand NEW
+  /// path in that target's own folder, the source object and message
+  /// untouched, delivered live the way an insert really arrives.
+  Result<void>? forwardResult;
+  int _forwardSeq = 0;
+
+  @override
+  Future<Result<void>> forward(
+    Message message,
+    List<String> conversationIds,
+  ) async {
+    await _tick('forward:${message.id}');
+    forwarded.add((
+      messageId: message.id,
+      conversationIds: List.unmodifiable(conversationIds),
+    ));
+    if (forwardResult case final forced?) return forced;
+    final mine = {
+      for (final c in switch (conversationsResult) {
+        Ok(:final value) => value,
+        Err() => const <Conversation>[],
+      })
+        c.id,
+    };
+    for (final id in conversationIds) {
+      if (!mine.contains(id)) return const Err(DeniedFailure());
+    }
+    for (final id in conversationIds) {
+      String? path;
+      final source = message.attachmentPath;
+      if (source != null) {
+        path = '$id/fwd-${++_forwardSeq}.${source.split('.').last}';
+        storedObjects.add(path);
+        final bytes = objectBytes[source];
+        if (bytes != null) objectBytes[path] = bytes;
+      }
+      deliver(
+        Message(
+          id: 'fwd-${++_forwardSeq}',
+          conversationId: id,
+          senderId: self ?? 'me',
+          body: message.body,
+          createdAt: DateTime.now(),
+          attachmentPath: path,
+          attachmentPreview: message.attachmentPreview,
+          forwarded: true,
+        ),
+      );
+    }
+    return const Ok(null);
   }
 
   @override

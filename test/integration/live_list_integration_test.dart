@@ -110,7 +110,11 @@ class _RealtimeDown implements ChatRepository {
   Future<Result<Message>> send({
     required String conversationId,
     required String body,
-  }) => live.send(conversationId: conversationId, body: body);
+    String? replyTo,
+  }) => live.send(conversationId: conversationId, body: body, replyTo: replyTo);
+  @override
+  Future<Result<void>> forward(Message message, List<String> ids) =>
+      live.forward(message, ids);
   @override
   Future<Result<Stream<Message>>> incoming(String id) => live.incoming(id);
   @override
@@ -126,8 +130,13 @@ class _RealtimeDown implements ChatRepository {
     required String conversationId,
     required PickedImage image,
     String body = '',
-  }) =>
-      live.sendImage(conversationId: conversationId, image: image, body: body);
+    String? replyTo,
+  }) => live.sendImage(
+    conversationId: conversationId,
+    image: image,
+    body: body,
+    replyTo: replyTo,
+  );
   @override
   Future<Result<Uri>> attachmentUrl(String path) => live.attachmentUrl(path);
   @override

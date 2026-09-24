@@ -47,6 +47,8 @@ final class Message {
     this.attachmentPreview,
     this.localImage,
     this.deletion,
+    this.replyTo,
+    this.forwarded = false,
   });
 
   final String id;
@@ -66,6 +68,12 @@ final class Message {
   final Uint8List? localImage;
 
   bool get hasAttachment => attachmentPath != null || localImage != null;
+
+  /// The message this one answers, in the same conversation.
+  final String? replyTo;
+
+  /// A copy of a message from another conversation.
+  final bool forwarded;
 
   /// Set when the sender deleted it for everyone; its content is gone.
   final MessageDeletion? deletion;

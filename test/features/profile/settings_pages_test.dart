@@ -54,6 +54,7 @@ List<Override> overrides({
   FakeUpdate? update,
   ProfileFake? profile,
   PushRegistryFake? push,
+  AttachmentCacheFake? photos,
 }) => [
   runtimeConfigProvider.overrideWithValue(config),
   authRepositoryProvider.overrideWithValue(
@@ -67,6 +68,7 @@ List<Override> overrides({
   ),
   pushSourceProvider.overrideWithValue(PushSourceFake()),
   pushRegistryProvider.overrideWithValue(push ?? PushRegistryFake()),
+  attachmentCacheProvider.overrideWithValue(photos ?? AttachmentCacheFake()),
 ];
 
 Future<void> pumpApp(
@@ -75,6 +77,7 @@ Future<void> pumpApp(
   FakeUpdate? update,
   ProfileFake? profile,
   PushRegistryFake? push,
+  AttachmentCacheFake? photos,
 }) async {
   await t.pumpWidget(
     ProviderScope(
@@ -83,6 +86,7 @@ Future<void> pumpApp(
         update: update,
         profile: profile,
         push: push,
+        photos: photos,
       ),
       child: const SisApp(),
     ),
@@ -325,9 +329,12 @@ void main() {
         'leaves no settings page behind', (t) async {
       final auth = FakeAuth(session: true, member: mayaAccount);
       final push = PushRegistryFake();
+      final photos = AttachmentCacheFake();
       bool? sessionActiveWhenForgotten;
       push.onForget = (_) => sessionActiveWhenForgotten = auth.session;
-      await pumpApp(t, auth: auth, push: push);
+      int? signOutsWhenCleared;
+      photos.onClear = () => signOutsWhenCleared = auth.signOuts;
+      await pumpApp(t, auth: auth, push: push, photos: photos);
       final nav = t.state<NavigatorState>(find.byType(Navigator));
       bool? couldPopAtSignOut;
       auth.onSignOut = () => couldPopAtSignOut = nav.canPop();
@@ -347,6 +354,18 @@ void main() {
         push.forgotten,
         isNotEmpty,
         reason: 'the device was never forgotten',
+      );
+      expect(
+        photos.clears,
+        1,
+        reason: 'the attachment cache was never cleared',
+      );
+      expect(
+        signOutsWhenCleared,
+        1,
+        reason:
+            'the cache must be cleared after signing out, so the next '
+            'account on this phone does not inherit the last one\'s photos',
       );
       expect(
         couldPopAtSignOut,

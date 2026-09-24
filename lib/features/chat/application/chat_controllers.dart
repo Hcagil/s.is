@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -35,6 +36,26 @@ final attachmentUrlProvider = FutureProvider.autoDispose.family<Uri, String>((
     Err(:final failure) => throw failure,
   };
 }, retry: (_, _) => null);
+
+/// Photos already on this phone. Cleared on sign-out.
+final attachmentCacheProvider = Provider<AttachmentCache>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// One attachment's bytes: from this phone when they are here, otherwise
+/// downloaded once and kept. Replaces a signed URL per look, which fetched
+/// the whole photo again every time.
+final attachmentBytesProvider = FutureProvider.autoDispose
+    .family<Uint8List, String>((ref, path) async {
+      // Per account, like every other read.
+      ref.watch(currentUserIdProvider);
+      return switch (await ref
+          .read(chatRepositoryProvider)
+          .attachmentBytes(path)) {
+        Ok(:final value) => value,
+        Err(:final failure) => throw failure,
+      };
+    }, retry: (_, _) => null);
 
 /// The conversation the message screen is showing, or null on the list screen.
 ///
@@ -313,15 +334,34 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     try {
       image = await ref.read(attachmentSourceProvider).pickImage();
     } catch (e) {
-      // A picker that throws must read as a reason on screen, like any other
-      // platform failure.
-      return Err(ProviderFailure('Could not open the photo picker: $e'));
+      // A picker that throws must read as a reason on screen -- in words,
+      // not the platform's exception text.
+      return Err(const ProviderFailure('Could not open the photo picker.'));
     }
     if (image == null) return null;
 
+    // Shown at once from the phone while it uploads; replaced by the stored
+    // message, or taken away again if the upload fails.
+    final pending = Message(
+      id: 'pending-${DateTime.now().microsecondsSinceEpoch}',
+      conversationId: conversationId,
+      senderId: _me ?? '',
+      body: body.trim(),
+      createdAt: DateTime.now(),
+      localImage: image.bytes,
+    );
+    _append(pending);
     final result = await ref
         .read(chatRepositoryProvider)
         .sendImage(conversationId: conversationId, image: image, body: body);
+    if (!ref.mounted) return result;
+    final current = state.value;
+    if (current != null) {
+      state = AsyncData([
+        for (final m in current)
+          if (m.id != pending.id) m,
+      ]);
+    }
     if (result case Ok(:final value)) _append(value);
     return result;
   }

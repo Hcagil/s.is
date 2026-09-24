@@ -14,6 +14,7 @@ import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
+import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/image_picker_attachment_source.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
@@ -56,6 +57,7 @@ Future<void> main() async {
     // Push: reads android/app/google-services.json, bundled at build time.
     await Firebase.initializeApp();
     final client = Supabase.instance.client;
+    final attachmentCache = FileAttachmentCache();
     runApp(
       ProviderScope(
         overrides: [
@@ -71,8 +73,9 @@ Future<void> main() async {
             PlayUpdateRepository(client),
           ),
           chatRepositoryProvider.overrideWithValue(
-            SupabaseChatRepository(client),
+            SupabaseChatRepository(client, cache: attachmentCache),
           ),
+          attachmentCacheProvider.overrideWithValue(attachmentCache),
           presenceRepositoryProvider.overrideWithValue(
             SupabasePresenceRepository(client),
           ),

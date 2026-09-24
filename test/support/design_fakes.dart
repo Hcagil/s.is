@@ -6,6 +6,7 @@
 // its first set only after the listener attaches (a Realtime sync arrives
 // after the join), and typing arrives whenever the test says so.
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,7 +30,7 @@ import 'package:sis/features/profile/domain/profile_repository.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 import 'package:sis/features/update/domain/update_repository.dart';
 
-import 'fakes.dart' show PushRegistryFake, PushSourceFake;
+import 'fakes.dart' show AttachmentCacheFake, PushRegistryFake, PushSourceFake;
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
 
@@ -191,6 +192,9 @@ class DesignChat implements ChatRepository {
   @override
   Future<Result<Uri>> attachmentUrl(String attachmentPath) async =>
       const Err(NetworkFailure('not in this test'));
+  @override
+  Future<Result<Uint8List>> attachmentBytes(String attachmentPath) async =>
+      const Err(NetworkFailure('not in this test'));
 }
 
 class DesignTyping implements TypingChannel {
@@ -296,6 +300,7 @@ Widget designApp({
     profileRepositoryProvider.overrideWithValue(profile ?? DesignProfile()),
     pushSourceProvider.overrideWithValue(PushSourceFake()),
     pushRegistryProvider.overrideWithValue(PushRegistryFake()),
+    attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
   ],
   child: const SisApp(),
 );

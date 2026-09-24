@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -249,7 +251,7 @@ class _Bubble extends StatelessWidget {
                   ),
                 ),
               ),
-            if (message.hasAttachment) _Attachment(message.attachmentPath!),
+            if (message.hasAttachment) _Attachment(message),
             // An image may be sent without a caption, so an empty body must
             // render nothing at all rather than an empty line.
             if (message.body.isNotEmpty)
@@ -278,73 +280,95 @@ class _Bubble extends StatelessWidget {
 ///
 /// The URL is short-lived, so it is resolved when the bubble is built rather
 /// than stored with the message.
-class _Attachment extends ConsumerStatefulWidget {
-  const _Attachment(this.path);
+class _Attachment extends ConsumerWidget {
+  const _Attachment(this.message);
 
-  final String path;
-
-  @override
-  ConsumerState<_Attachment> createState() => _AttachmentState();
-}
-
-class _AttachmentState extends ConsumerState<_Attachment> {
-  late final Future<Result<Uri>> _url = ref
-      .read(messagesProvider.notifier)
-      .attachmentUrl(widget.path);
+  final Message message;
 
   /// The open conversation's photos, oldest first, and this one's place.
-  void _view() {
+  void _view(BuildContext context, WidgetRef ref, String path) {
     final paths = [
       for (final m in ref.read(messagesProvider).value ?? const <Message>[])
         if (m.attachmentPath != null) m.attachmentPath!,
     ];
-    final index = paths.indexOf(widget.path);
+    final index = paths.indexOf(path);
     if (index < 0) return;
     openPhotoViewer(context, paths, index);
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final path = message.attachmentPath;
     return GestureDetector(
-      key: ValueKey('attachment-${widget.path}'),
-      onTap: _view,
+      key: ValueKey('attachment-${path ?? message.id}'),
+      onTap: path == null ? null : () => _view(context, ref, path),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(6),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 260, maxWidth: 280),
-          child: FutureBuilder<Result<Uri>>(
-            future: _url,
-            builder: (context, snapshot) => switch (snapshot.data) {
-              Ok(:final value) => Image.network(
-                value.toString(),
+          child: switch ((message.localImage, path)) {
+            // Your own photo, straight from the phone while it uploads.
+            (final Uint8List local, null) => Stack(
+              alignment: Alignment.center,
+              children: [
+                Image.memory(
+                  local,
+                  key: const ValueKey('attachment-local'),
+                  cacheWidth: 560,
+                  fit: BoxFit.cover,
+                ),
+                const CircularProgressIndicator(),
+              ],
+            ),
+            (_, final String path) => switch (ref.watch(
+              attachmentBytesProvider(path),
+            )) {
+              AsyncData(:final value) => Image.memory(
+                value,
                 key: const ValueKey('attachment-image'),
+                cacheWidth: 560,
                 fit: BoxFit.cover,
-                // Until the first frame decodes the image has no size: hold
-                // the place, so the bubble neither jumps nor is untappable.
-                frameBuilder: (context, child, frame, sync) =>
-                    frame == null && !sync
-                    ? const SizedBox(
-                        height: 120,
-                        width: 180,
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    : child,
-                errorBuilder: (context, _, _) => _failed('Image unavailable'),
+                errorBuilder: (context, _, _) =>
+                    _failed(context, 'Image unavailable'),
               ),
-              Err(:final failure) => _failed(failure.message),
-              _ => const SizedBox(
-                height: 120,
-                width: 180,
-                child: Center(child: CircularProgressIndicator()),
+              AsyncError(:final error) => _failed(
+                context,
+                error is Failure ? error.message : 'Image unavailable',
               ),
+              // The preview that came with the message, blurred, until the
+              // photo is here.
+              _ => switch (message.attachmentPreview) {
+                final Uint8List preview => SizedBox(
+                  height: 180,
+                  width: 240,
+                  child: ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                    child: Image.memory(
+                      preview,
+                      key: const ValueKey('attachment-preview'),
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                      // Valid base64 can still be a broken image: then just
+                      // wait for the photo.
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+                null => const SizedBox(
+                  height: 120,
+                  width: 180,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              },
             },
-          ),
+            _ => const SizedBox.shrink(),
+          },
         ),
       ),
     );
   }
 
-  Widget _failed(String reason) => Container(
+  Widget _failed(BuildContext context, String reason) => Container(
     height: 96,
     width: 180,
     alignment: Alignment.center,

@@ -8,6 +8,7 @@
 // signed-in account from one shared [Backend], the way the real ones read it
 // from the one client.
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/auth_repository.dart';
@@ -351,6 +352,13 @@ class SessionChat implements ChatRepository {
     final who = await _as('attachmentUrl:$attachmentPath');
     if (who == null) return const Err(DeniedFailure());
     return Ok(Uri.parse('https://x.supabase.co/$attachmentPath?as=$who'));
+  }
+
+  @override
+  Future<Result<Uint8List>> attachmentBytes(String attachmentPath) async {
+    final who = await _as('attachmentBytes:$attachmentPath');
+    if (who == null) return const Err(DeniedFailure());
+    return Ok(Uint8List.fromList(attachmentPath.codeUnits));
   }
 }
 

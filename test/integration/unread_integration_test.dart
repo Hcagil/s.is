@@ -2,6 +2,7 @@
 library;
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -158,6 +159,9 @@ class _MarkReadDown implements ChatRepository {
       live.sendImage(conversationId: conversationId, image: image, body: body);
   @override
   Future<Result<Uri>> attachmentUrl(String path) => live.attachmentUrl(path);
+  @override
+  Future<Result<Uint8List>> attachmentBytes(String path) =>
+      live.attachmentBytes(path);
 }
 
 /// The overrides main.dart mounts, on [client]; only Google sign-in, the Play

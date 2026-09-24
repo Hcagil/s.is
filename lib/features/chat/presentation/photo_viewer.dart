@@ -69,12 +69,12 @@ class _Photo extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     const white = TextStyle(color: Colors.white70);
-    return switch (ref.watch(attachmentUrlProvider(path))) {
+    return switch (ref.watch(attachmentBytesProvider(path))) {
       AsyncData(:final value) => InteractiveViewer(
         maxScale: 5,
         child: Center(
-          child: Image.network(
-            value.toString(),
+          child: Image.memory(
+            value,
             key: ValueKey('viewer-image-$path'),
             fit: BoxFit.contain,
             errorBuilder: (_, _, _) =>

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
 import 'attachment.dart';
@@ -100,4 +102,8 @@ abstract interface class ChatRepository {
   /// conversation the path names. The bucket is private; there is no public
   /// URL for an attachment.
   Future<Result<Uri>> attachmentUrl(String attachmentPath);
+
+  /// The photo at [attachmentPath]: from this phone's cache when it is there,
+  /// otherwise downloaded once (members of its conversation only) and kept.
+  Future<Result<Uint8List>> attachmentBytes(String attachmentPath);
 }

@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -287,13 +288,24 @@ class FakeChat implements ChatRepository {
   /// signed, exactly as the bucket refuses to sign an object the caller may
   /// not read. Seed it with [store] when a test invents history.
   final storedObjects = <String>{};
-  void store(String path) => storedObjects.add(path);
+
+  /// The bytes actually behind each stored path, as a real receiver would
+  /// download them. [sendImage] records the sender's own bytes here.
+  final objectBytes = <String, Uint8List>{};
+  void store(String path, [Uint8List? bytes]) {
+    storedObjects.add(path);
+    if (bytes != null) objectBytes[path] = bytes;
+  }
 
   /// Force an outcome. Left null both calls answer like the real thing: the
   /// upload refuses what the bucket and the check constraint refuse, and a
   /// URL is issued only for a stored key.
   Result<Message>? sendImageResult;
   Result<Uri>? attachmentUrlResult;
+  Result<Uint8List>? attachmentBytesResult;
+
+  /// Every path [attachmentBytes] was asked for, in order.
+  final bytesRequests = <String>[];
 
   int _imageSeq = 0;
 
@@ -308,6 +320,7 @@ class FakeChat implements ChatRepository {
     if (rejectUpload(image, body) case final refused?) return refused;
     final path = '$conversationId/${++_imageSeq}.${image.extension}';
     storedObjects.add(path);
+    objectBytes[path] = image.bytes;
     return Ok(
       Message(
         id: 'img-$_imageSeq',
@@ -316,6 +329,7 @@ class FakeChat implements ChatRepository {
         body: body.trim(),
         createdAt: DateTime.now(),
         attachmentPath: path,
+        attachmentPreview: image.preview,
       ),
     );
   }
@@ -334,6 +348,16 @@ class FakeChat implements ChatRepository {
         '?token=fake&expires=3600',
       ),
     );
+  }
+
+  @override
+  Future<Result<Uint8List>> attachmentBytes(String attachmentPath) async {
+    bytesRequests.add(attachmentPath);
+    if (attachmentBytesResult case final forced?) return forced;
+    if (!storedObjects.contains(attachmentPath)) {
+      return const Err(DeniedFailure());
+    }
+    return Ok(objectBytes[attachmentPath] ?? pngBytes);
   }
 }
 
@@ -698,19 +722,53 @@ class ChatFake implements ChatRepository {
   /// signed, exactly as the bucket refuses to sign an object the caller may
   /// not read. Seed it with [store] when a test invents history.
   final storedObjects = <String>{};
-  void store(String path) => storedObjects.add(path);
+
+  /// The bytes actually behind each stored path, as a real receiver would
+  /// download them. [sendImage] records the sender's own bytes here, so a
+  /// receiver reading the same path back sees what was actually sent.
+  final objectBytes = <String, Uint8List>{};
+  void store(String path, [Uint8List? bytes]) {
+    storedObjects.add(path);
+    if (bytes != null) objectBytes[path] = bytes;
+  }
 
   /// Force an outcome. Left null both calls answer like the real thing: the
   /// upload refuses what the bucket and the check constraint refuse, and a
   /// URL is issued only for a stored key.
   Result<Message>? sendImageResult;
   Result<Uri>? attachmentUrlResult;
+  Result<Uint8List>? attachmentBytesResult;
 
   /// Per-path refusals, for a conversation where one object cannot be signed
   /// while its neighbours can.
   final urlFailures = <String, Failure>{};
+  final bytesFailures = <String, Failure>{};
+
+  /// Every path [attachmentBytes] was asked for, in order.
+  final bytesRequests = <String>[];
+
+  Completer<void>? _bytesHold;
+
+  /// The next [attachmentBytes] call stays in flight until [releaseBytes]: a
+  /// slow connection, independent of every other call's own latency.
+  void holdBytes() => _bytesHold = Completer<void>();
+  void releaseBytes() {
+    _bytesHold?.complete();
+    _bytesHold = null;
+  }
 
   int _imageSeq = 0;
+
+  Completer<void>? _sendImageHold;
+
+  /// The next [sendImage] stays in flight until [releaseSendImage]: an
+  /// upload is never instant, and a test needs the moment before the
+  /// repository answers to see whatever the caller shows in the meantime.
+  void holdSendImage() => _sendImageHold = Completer<void>();
+  void releaseSendImage() {
+    _sendImageHold?.complete();
+    _sendImageHold = null;
+  }
 
   @override
   Future<Result<Message>> sendImage({
@@ -720,10 +778,13 @@ class ChatFake implements ChatRepository {
   }) async {
     await _tick('sendImage:$conversationId');
     sentImages.add((conversationId: conversationId, image: image, body: body));
+    final held = _sendImageHold;
+    if (held != null) await held.future;
     if (sendImageResult case final forced?) return forced;
     if (rejectUpload(image, body) case final refused?) return refused;
     final path = '$conversationId/${++_imageSeq}.${image.extension}';
     storedObjects.add(path);
+    objectBytes[path] = image.bytes;
     return Ok(
       Message(
         id: 'img-$_imageSeq',
@@ -732,6 +793,7 @@ class ChatFake implements ChatRepository {
         body: body.trim(),
         createdAt: DateTime.now(),
         attachmentPath: path,
+        attachmentPreview: image.preview,
       ),
     );
   }
@@ -752,6 +814,20 @@ class ChatFake implements ChatRepository {
         '?token=fake&expires=3600',
       ),
     );
+  }
+
+  @override
+  Future<Result<Uint8List>> attachmentBytes(String attachmentPath) async {
+    await _tick('attachmentBytes:$attachmentPath');
+    bytesRequests.add(attachmentPath);
+    final held = _bytesHold;
+    if (held != null) await held.future;
+    if (bytesFailures[attachmentPath] case final failure?) return Err(failure);
+    if (attachmentBytesResult case final forced?) return forced;
+    if (!storedObjects.contains(attachmentPath)) {
+      return const Err(DeniedFailure());
+    }
+    return Ok(objectBytes[attachmentPath] ?? pngBytes);
   }
 }
 
@@ -825,6 +901,39 @@ class PickerFake implements AttachmentSource {
     if (latency > Duration.zero) await Future<void>.delayed(latency);
     if (_error case final error?) throw error;
     return _image;
+  }
+}
+
+/// An [AttachmentCache] kept in memory, for tests that must give
+/// [attachmentCacheProvider] something real to read, write and clear.
+///
+/// Signing out reads this before the session ends: a test asserting that
+/// order needs to see whether the session was still active when [clear] ran,
+/// the same way [PushRegistryFake.onForget] lets a test see the session at
+/// the moment the device was forgotten.
+class AttachmentCacheFake implements AttachmentCache {
+  final _store = <String, Uint8List>{};
+
+  /// How many times [clear] was called.
+  int clears = 0;
+
+  /// Runs synchronously as clear() is entered, before it finishes -- lets a
+  /// test check what has (or has not) happened yet.
+  void Function()? onClear;
+
+  @override
+  Future<Uint8List?> read(String path) async => _store[path];
+
+  @override
+  Future<void> write(String path, Uint8List bytes) async {
+    _store[path] = bytes;
+  }
+
+  @override
+  Future<void> clear() async {
+    clears++;
+    onClear?.call();
+    _store.clear();
   }
 }
 

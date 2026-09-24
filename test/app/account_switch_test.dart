@@ -23,7 +23,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 
 import '../support/account_fakes.dart';
 import '../support/fakes.dart'
-    show FakeUpdate, PushRegistryFake, PushSourceFake;
+    show AttachmentCacheFake, FakeUpdate, PushRegistryFake, PushSourceFake;
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -62,6 +62,7 @@ class Owner {
           profileRepositoryProvider.overrideWithValue(SessionProfile(backend)),
           pushSourceProvider.overrideWithValue(pushSource),
           pushRegistryProvider.overrideWithValue(pushRegistry),
+          attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
         ],
         child: const SisApp(),
       ),

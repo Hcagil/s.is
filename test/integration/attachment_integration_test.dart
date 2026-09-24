@@ -59,6 +59,23 @@ final _png = base64Decode(
 PickedImage _image({String contentType = 'image/png', String ext = 'png'}) =>
     PickedImage(bytes: _png, contentType: contentType, extension: ext);
 
+/// An [AttachmentCache] kept in memory, shared between two repositories so a
+/// test can prove the second one served a read from it, never the network.
+class _MemoryCache implements AttachmentCache {
+  final _store = <String, Uint8List>{};
+
+  @override
+  Future<Uint8List?> read(String path) async => _store[path];
+
+  @override
+  Future<void> write(String path, Uint8List bytes) async {
+    _store[path] = bytes;
+  }
+
+  @override
+  Future<void> clear() async => _store.clear();
+}
+
 SupabaseClient _client(String url) => SupabaseClient(
   url,
   _key,
@@ -453,6 +470,144 @@ void main() {
         );
       },
     );
+  });
+
+  group('attachmentBytes and the cache', () {
+    test(
+      'downloads a photo a member can see and writes it to the cache',
+      () async {
+        final cache = _MemoryCache();
+        final reader = SupabaseChatRepository(miaClient!, cache: cache);
+        final sent = await liam.sendImage(
+          conversationId: conversationId,
+          image: _image(),
+        ) as Ok<Message>;
+        final path = sent.value.attachmentPath!;
+
+        final result = await reader.attachmentBytes(path);
+
+        expect(result, isA<Ok<Uint8List>>());
+        expect((result as Ok<Uint8List>).value, _png);
+        expect(
+          await cache.read(path),
+          _png,
+          reason: 'the downloaded bytes must be written to the cache',
+        );
+      },
+    );
+
+    test(
+      'a second call is served from the cache, without the network',
+      () async {
+        final cache = _MemoryCache();
+        final live = SupabaseChatRepository(miaClient!, cache: cache);
+        final sent = await liam.sendImage(
+          conversationId: conversationId,
+          image: _image(),
+        ) as Ok<Message>;
+        final path = sent.value.attachmentPath!;
+        expect(await live.attachmentBytes(path), isA<Ok<Uint8List>>());
+
+        // Same cache, but a repository over a client that cannot reach
+        // anything at all: succeeding here can only mean the second read
+        // never touched the network.
+        final dead = SupabaseChatRepository(deadClient!, cache: cache);
+        final second = await dead.attachmentBytes(path);
+
+        expect(second, isA<Ok<Uint8List>>());
+        expect((second as Ok<Uint8List>).value, _png);
+      },
+    );
+
+    test('a non-member is refused with a readable reason', () async {
+      final sent = await liam.sendImage(
+        conversationId: conversationId,
+        image: _image(),
+      ) as Ok<Message>;
+      final path = sent.value.attachmentPath!;
+      final reader = SupabaseChatRepository(noahClient!);
+
+      final result = await reader.attachmentBytes(path);
+
+      // The storage API answers the same way for "not yours" and "gone"
+      // (both are a 404 from the object store the RLS check hides behind);
+      // _asFailure maps both to the same readable NetworkFailure, exactly
+      // as attachmentUrl already does for the same object.
+      expect(result, isA<Err<Uint8List>>());
+      _expectReadable((result as Err<Uint8List>).failure);
+    });
+  });
+
+  group('attachment_preview round trip', () {
+    test('sendImage stores it, and it comes back through messages() for the '
+        'other member', () async {
+      final image = PickedImage(
+        bytes: _png,
+        contentType: 'image/png',
+        extension: 'png',
+        preview: _png,
+      );
+      final caption = 'preview ${DateTime.now().microsecondsSinceEpoch}';
+      final sent = await liam.sendImage(
+        conversationId: conversationId,
+        image: image,
+        body: caption,
+      ) as Ok<Message>;
+      expect(sent.value.attachmentPreview, _png);
+
+      final theirs = await mia.messages(conversationId);
+      final seen = (theirs as Ok<List<Message>>).value.firstWhere(
+        (m) => m.id == sent.value.id,
+      );
+      expect(
+        seen.attachmentPreview,
+        _png,
+        reason: 'the preview must survive the round trip through the row',
+      );
+    });
+
+    test('arrives on incoming() for the other member too', () async {
+      final subscribed = await mia.incoming(conversationId);
+      expect(subscribed, isA<Ok<Stream<Message>>>());
+      final stream = (subscribed as Ok<Stream<Message>>).value;
+
+      final image = PickedImage(
+        bytes: _png,
+        contentType: 'image/png',
+        extension: 'png',
+        preview: _png,
+      );
+      final caption =
+          'incoming preview ${DateTime.now().microsecondsSinceEpoch}';
+      final sent = await liam.sendImage(
+        conversationId: conversationId,
+        image: image,
+        body: caption,
+      ) as Ok<Message>;
+
+      // Filtered by id, not "first": a still-in-flight broadcast for a
+      // message an earlier test sent into the same conversation can arrive
+      // just after this subscription joins, and must not be mistaken for
+      // this one.
+      final message = await stream
+          .firstWhere((m) => m.id == sent.value.id)
+          .timeout(const Duration(seconds: 15));
+      expect(message.attachmentPreview, _png);
+    });
+
+    test('a PickedImage with no preview sends none', () async {
+      final sent = await liam.sendImage(
+        conversationId: conversationId,
+        image: _image(),
+      ) as Ok<Message>;
+      expect(sent.value.attachmentPreview, isNull);
+
+      final theirs = await mia.messages(conversationId);
+      final seen = (theirs as Ok<List<Message>>).value.firstWhere(
+        (m) => m.id == sent.value.id,
+      );
+      expect(seen.attachmentPreview, isNull);
+    });
   });
 
   // Last in the file: its Realtime socket is closed on the way out.

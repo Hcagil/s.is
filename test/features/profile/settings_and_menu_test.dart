@@ -43,6 +43,7 @@ Future<void> pumpApp(
   PresenceFake? presence,
   ChatRepository? chat,
   PushRegistryFake? push,
+  AttachmentCacheFake? photos,
 }) async {
   await t.pumpWidget(
     ProviderScope(
@@ -59,6 +60,9 @@ Future<void> pumpApp(
         profileRepositoryProvider.overrideWithValue(p),
         pushSourceProvider.overrideWithValue(PushSourceFake()),
         pushRegistryProvider.overrideWithValue(push ?? PushRegistryFake()),
+        attachmentCacheProvider.overrideWithValue(
+          photos ?? AttachmentCacheFake(),
+        ),
       ],
       child: const SisApp(),
     ),
@@ -248,9 +252,12 @@ void main() {
     final auth = FakeAuth(session: true);
     final p = ProfileFake(profile: maya);
     final push = PushRegistryFake();
+    final photos = AttachmentCacheFake();
     bool? sessionActiveWhenForgotten;
     push.onForget = (_) => sessionActiveWhenForgotten = auth.session;
-    await pumpApp(t, p, auth: auth, push: push);
+    int? signOutsWhenCleared;
+    photos.onClear = () => signOutsWhenCleared = auth.signOuts;
+    await pumpApp(t, p, auth: auth, push: push, photos: photos);
 
     await signOut(t);
     expect(auth.signOuts, 1);
@@ -263,6 +270,14 @@ void main() {
       push.forgotten,
       isNotEmpty,
       reason: 'the device was never forgotten',
+    );
+    expect(photos.clears, 1, reason: 'the attachment cache was never cleared');
+    expect(
+      signOutsWhenCleared,
+      1,
+      reason:
+          'the cache must be cleared after signing out, so the next '
+          'account on this phone does not inherit the last one\'s photos',
     );
     expect(find.text('Continue with Google'), findsOneWidget);
 

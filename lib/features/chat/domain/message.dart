@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 /// The longest body the database will accept, per the check constraint on
 /// `public.messages.body`.
 const int maxMessageLength = 4000;
@@ -42,6 +44,8 @@ final class Message {
     required this.body,
     required this.createdAt,
     this.attachmentPath,
+    this.attachmentPreview,
+    this.localImage,
   });
 
   final String id;
@@ -53,7 +57,17 @@ final class Message {
   /// Storage key of an attached image, or null for a text-only message.
   final String? attachmentPath;
 
-  bool get hasAttachment => attachmentPath != null;
+  /// The tiny preview sent with a photo, shown blurred until the photo loads.
+  final Uint8List? attachmentPreview;
+
+  /// The sender's own photo while it is still uploading: shown at once from
+  /// the phone, before the server has it. Such a message is not yet stored.
+  final Uint8List? localImage;
+
+  bool get hasAttachment => attachmentPath != null || localImage != null;
+
+  /// Still on its way to the server.
+  bool get isPending => localImage != null && attachmentPath == null;
 
   /// Whether [userId] wrote this message; decides which side it is drawn on.
   bool isFrom(String userId) => senderId == userId;

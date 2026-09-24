@@ -314,11 +314,12 @@ class _Thumb extends ConsumerWidget {
     final placeholder = ColoredBox(
       color: Theme.of(context).colorScheme.surfaceContainerHigh,
     );
-    // ponytail: full-size images scaled down; v0.9 brings real thumbnails and
-    // an on-device cache.
-    return switch (ref.watch(attachmentUrlProvider(path))) {
-      AsyncData(:final value) => Image.network(
-        value.toString(),
+    return switch (ref.watch(attachmentBytesProvider(path))) {
+      // Decoded at thumbnail size: a grid of full photos would hold every one
+      // at full resolution in memory.
+      AsyncData(:final value) => Image.memory(
+        value,
+        cacheWidth: 300,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => placeholder,
       ),

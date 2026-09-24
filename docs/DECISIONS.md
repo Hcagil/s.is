@@ -573,3 +573,29 @@ again if the chat is new. An id the list still does not know is ignored.
 **Firebase code stays thin and in `data/`** (`FirebasePushSource`),
 verified on a device like the photo picker; the server calls
 (`SupabasePushRegistry`) have integration tests.
+
+## 2026-09-24 — Photos load once, and yours appear at once
+
+**A photo is downloaded once per phone.** Photos come straight from the
+private bucket (`storage.download`, under the same membership policy as a
+signed URL) and are kept in the app's cache directory, one file per storage
+path. A signed URL changed on every look, so the same photo was fetched
+again every time. The cache has no size cap: Android clears the cache
+directory when space runs low, and a missing photo is simply downloaded
+again. **Sign-out clears it**, so the next account on the phone does not
+inherit the last one's photos.
+
+**Your own photo shows the moment you choose it**, from the phone, with a
+spinner while it uploads; it becomes the stored message when the server has
+it, or disappears with the reason if the upload fails. The sender's copy is
+written to the cache, so it is never downloaded back.
+
+**Receivers see a blurred preview first.** The sender's phone makes a tiny
+PNG (about 24 px wide, a few hundred bytes) and sends it in the message
+row, `messages.attachment_preview`. It is readable exactly where the
+message is and never goes into a notification. Messages cannot be edited,
+so the database accepts only well-formed base64 of a PNG there; the app
+also drops a preview that will not decode rather than failing the
+conversation.
+
+**The media grid decodes thumbnails at thumbnail size**, not full photos.

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -17,9 +19,11 @@ import '../domain/message.dart';
 /// filters for authorisation. A refusal arrives as a [PostgrestException] with
 /// SQLSTATE 42501 and is reported as [DeniedFailure].
 final class SupabaseChatRepository implements ChatRepository {
-  SupabaseChatRepository(this._client);
+  SupabaseChatRepository(this._client, {AttachmentCache? cache})
+    : _cache = cache ?? const _NoCache();
 
   final SupabaseClient _client;
+  final AttachmentCache _cache;
 
   /// How many messages one conversation screen holds.
   static const _historyLimit = 500;
@@ -170,7 +174,7 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -251,9 +255,7 @@ final class SupabaseChatRepository implements ChatRepository {
     try {
       final rows = await _client
           .from('messages')
-          .select(
-            'id, conversation_id, sender_id, body, created_at, attachment_path',
-          )
+          .select(_messageColumns)
           .eq('conversation_id', conversationId)
           // Read NEWEST-first with a cap, then reverse. PostgREST truncates a
           // response at max_rows, and an ascending read would silently drop
@@ -294,9 +296,7 @@ final class SupabaseChatRepository implements ChatRepository {
             'sender_id': me,
             'body': trimmed,
           })
-          .select(
-            'id, conversation_id, sender_id, body, created_at, attachment_path',
-          )
+          .select(_messageColumns)
           .single();
       return Ok(_toMessage(row));
     } catch (e) {
@@ -422,12 +422,31 @@ final class SupabaseChatRepository implements ChatRepository {
             'sender_id': me,
             'body': body.trim(),
             'attachment_path': path,
+            if (image.preview case final preview?)
+              'attachment_preview': base64Encode(preview),
           })
-          .select(
-            'id, conversation_id, sender_id, body, created_at, attachment_path',
-          )
+          .select(_messageColumns)
           .single();
+      // The sender already has the photo: never download it back.
+      await _cache.write(path, image.bytes);
       return Ok(_toMessage(row));
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<Uint8List>> attachmentBytes(String attachmentPath) async {
+    final cached = await _cache.read(attachmentPath);
+    if (cached != null) return Ok(cached);
+    try {
+      // Straight from the private bucket under the same storage policy as a
+      // signed URL: members of the conversation only.
+      final bytes = await _client.storage
+          .from('attachments')
+          .download(attachmentPath);
+      await _cache.write(attachmentPath, bytes);
+      return Ok(bytes);
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -452,5 +471,32 @@ final class SupabaseChatRepository implements ChatRepository {
     body: row['body'] as String,
     createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
     attachmentPath: row['attachment_path'] as String?,
+    attachmentPreview: _preview(row['attachment_preview']),
   );
+
+  /// A preview that does not decode is dropped, never thrown: one bad row
+  /// must not make a whole conversation unreadable. A missing preview only
+  /// means the receiver waits for the photo.
+  static Uint8List? _preview(Object? value) {
+    if (value is! String) return null;
+    try {
+      return base64Decode(value);
+    } on FormatException {
+      return null;
+    }
+  }
+}
+
+/// Without a cache every look downloads again -- the behaviour before v0.9.
+final class _NoCache implements AttachmentCache {
+  const _NoCache();
+
+  @override
+  Future<Uint8List?> read(String path) async => null;
+
+  @override
+  Future<void> write(String path, Uint8List bytes) async {}
+
+  @override
+  Future<void> clear() async {}
 }

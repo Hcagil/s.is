@@ -1,6 +1,7 @@
 import 'package:image_picker/image_picker.dart';
 
 import '../domain/attachment.dart';
+import 'tiny_preview.dart';
 
 /// [AttachmentSource] backed by the platform photo picker.
 ///
@@ -32,6 +33,7 @@ final class ImagePickerAttachmentSource implements AttachmentSource {
       bytes: bytes,
       contentType: file.mimeType ?? _mimeFor(extension),
       extension: extension,
+      preview: await tinyPreview(bytes),
     );
   }
 

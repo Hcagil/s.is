@@ -3,6 +3,7 @@
 // and the link opener are fakes; the providers, the controller and the
 // widgets between them are the production ones.
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -403,9 +404,9 @@ void main() {
         ),
       );
       expect(
-        (image.image as NetworkImage).url,
-        contains('attachments/c1/b.png'),
-        reason: 'the page must show the URL signed for its own path',
+        (image.image as MemoryImage).bytes,
+        pngBytes,
+        reason: 'the page must show the bytes fetched for its own path',
       );
       expectNoRawException();
     });
@@ -434,43 +435,50 @@ void main() {
       expect(viewerImage('c1/b.png'), findsOneWidget);
     });
 
-    testWidgets('a photo still decoding is a real tap target that opens it', (
-      tester,
-    ) async {
-      // No settleImages: under the fake clock the engine never finishes
-      // decoding, which is a slow phone on a slow network.
-      await pump(tester, chatWith(history), decode: false);
-      final photo = find.byKey(const ValueKey('attachment-c1/b.png'));
-      await tester.ensureVisible(photo);
-      await tester.pump(const Duration(milliseconds: 500));
+    testWidgets(
+      'a photo whose bytes are still loading is a real tap target that '
+      'opens it',
+      (tester) async {
+        // Held open: attachmentBytesProvider stays in AsyncLoading on this
+        // path through the whole pump below -- a slow connection, not a
+        // decoding engine, and independent of every other call's own
+        // latency (the initial messages() read still resolves normally).
+        final chat = chatWith(history)..holdBytes();
+        await pump(tester, chat, decode: false);
+        final photo = find.byKey(const ValueKey('attachment-c1/b.png'));
+        await tester.ensureVisible(photo);
+        await tester.pump(const Duration(milliseconds: 500));
 
-      final size = tester.getSize(photo);
-      expect(
-        size.width * size.height,
-        greaterThan(40 * 40),
-        reason: 'an undecoded photo must still occupy a tappable area',
-      );
+        final size = tester.getSize(photo);
+        expect(
+          size.width * size.height,
+          greaterThan(40 * 40),
+          reason: 'bytes still loading must still occupy a tappable area',
+        );
 
-      expect(
-        find.descendant(
-          of: photo,
-          matching: find.byType(CircularProgressIndicator),
-        ),
-        findsOneWidget,
-        reason: 'this test is about the moment before the photo has decoded',
-      );
+        expect(
+          find.descendant(
+            of: photo,
+            matching: find.byType(CircularProgressIndicator),
+          ),
+          findsOneWidget,
+          reason: 'this test is about the moment before bytes have arrived',
+        );
 
-      final fatal = WidgetController.hitTestWarningShouldBeFatal;
-      WidgetController.hitTestWarningShouldBeFatal = true;
-      addTearDown(() => WidgetController.hitTestWarningShouldBeFatal = fatal);
-      await tester.tap(photo);
-      for (var i = 0; i < 10; i++) {
-        await tester.pump(const Duration(milliseconds: 100));
-      }
+        // Opening the viewer only needs the path, not the loaded bytes: it
+        // must not wait on this bubble's own fetch to become tappable.
+        final fatal = WidgetController.hitTestWarningShouldBeFatal;
+        WidgetController.hitTestWarningShouldBeFatal = true;
+        addTearDown(() => WidgetController.hitTestWarningShouldBeFatal = fatal);
+        await tester.tap(photo);
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
 
-      expect(find.byType(PhotoViewer), findsOneWidget);
-      expect(position(tester), '2 of 3');
-    });
+        expect(find.byType(PhotoViewer), findsOneWidget);
+        expect(position(tester), '2 of 3');
+      },
+    );
 
     testWidgets('the last photo opens at the end', (tester) async {
       await pump(tester, chatWith(history));
@@ -504,10 +512,12 @@ void main() {
       expect(scaffold.backgroundColor?.toARGB32(), Colors.black.toARGB32());
     });
 
-    testWidgets('a photo whose URL cannot be issued says why', (tester) async {
+    testWidgets('a photo whose bytes cannot be fetched says why', (
+      tester,
+    ) async {
       final chat = chatWith(history);
-      chat.urlFailures['c1/b.png'] = const NetworkFailure(
-        'signing refused for this photo',
+      chat.bytesFailures['c1/b.png'] = const NetworkFailure(
+        'fetching refused for this photo',
       );
       await pump(tester, chat);
       await openPhoto(tester, 'c1/a.png');
@@ -516,7 +526,7 @@ void main() {
 
       expect(position(tester), '2 of 3');
       expect(
-        inViewer(find.textContaining('signing refused for this photo')),
+        inViewer(find.textContaining('fetching refused for this photo')),
         findsOneWidget,
         reason: 'a page that cannot load must show the reason',
       );
@@ -525,7 +535,7 @@ void main() {
         findsNothing,
         reason: 'a failed page must not spin forever',
       );
-      expect(chat.urlRequests, contains('c1/b.png'));
+      expect(chat.bytesRequests, contains('c1/b.png'));
       expectNoRawException();
     });
 
@@ -533,7 +543,7 @@ void main() {
       final chat = chatWith([
         msg('m1', attachment: 'c1/a.png', minute: 1),
         msg('m2', attachment: 'c1/gone.png', minute: 2),
-      ]);
+      ])..store('c1/gone.png', Uint8List.fromList([1, 2, 3, 4]));
       await pump(tester, chat);
       await openPhoto(tester, 'c1/a.png');
       expect(inViewer(find.text('Image unavailable')), findsNothing);

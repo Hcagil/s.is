@@ -1,6 +1,8 @@
 @Tags(['integration'])
 library;
 
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
@@ -128,6 +130,9 @@ class _RealtimeDown implements ChatRepository {
       live.sendImage(conversationId: conversationId, image: image, body: body);
   @override
   Future<Result<Uri>> attachmentUrl(String path) => live.attachmentUrl(path);
+  @override
+  Future<Result<Uint8List>> attachmentBytes(String path) =>
+      live.attachmentBytes(path);
 }
 
 /// A container wired as production mounts it: only the repository provider

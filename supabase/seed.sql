@@ -53,6 +53,9 @@
 --   iris           test/integration/push_registry_integration_test.dart
 --     (registers and forgets a device token; the refused path uses a plain
 --      anon client, which needs no seeded account of its own)
+--   walt/xena      test/integration/message_screen_seam_test.dart
+--     (walt sends a photo with a preview; xena's screen, wired the way
+--      main.dart wires it, is what shows it)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),

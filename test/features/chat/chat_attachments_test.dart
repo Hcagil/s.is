@@ -31,6 +31,7 @@ Message msg(
   String body = 'hi',
   String from = 'u1',
   String? attachment,
+  Uint8List? preview,
   int minute = 0,
 }) => Message(
   id: id,
@@ -39,6 +40,7 @@ Message msg(
   body: body,
   createdAt: DateTime.utc(2026, 9, 22, 12, minute),
   attachmentPath: attachment,
+  attachmentPreview: preview,
 );
 
 class _SignedIn extends SessionController {
@@ -61,8 +63,9 @@ Future<ProviderContainer> scope(ChatFake chat, AttachmentSource picker) =>
 Future<ProviderContainer> pump(
   WidgetTester tester,
   ChatFake chat,
-  AttachmentSource picker,
-) async {
+  AttachmentSource picker, {
+  bool settle = true,
+}) async {
   final container = await scope(chat, picker);
   container.read(openConversationProvider.notifier).open('c1');
   await tester.pumpWidget(
@@ -73,8 +76,10 @@ Future<ProviderContainer> pump(
   );
   await tester.pump();
   // A photo shows a spinner until it decodes, which the fake clock never
-  // settles; let the engine decode for real.
-  await settleImages(tester);
+  // settles; let the engine decode for real. Skipped when the test itself
+  // is holding something open on purpose (bytes that never arrive): the
+  // loop would just spin for its whole timeout.
+  if (settle) await settleImages(tester);
   return container;
 }
 
@@ -270,6 +275,76 @@ void main() {
         isA<Err<Uri>>(),
       );
     });
+
+    test(
+      'the photo appears at once, pending, before the repository answers',
+      () async {
+        final chat = ChatFake()..holdSendImage();
+        final c = await scope(chat, PickerFake.returns(pickedPng()));
+        c.read(openConversationProvider.notifier).open('c1');
+        await c.read(messagesProvider.future);
+
+        final pending = c.read(messagesProvider.notifier).sendImage();
+        // Let the picker resolve and the pending message get appended,
+        // without letting the (held) repository call answer.
+        await Future<void>.delayed(Duration.zero);
+
+        final shown = c.read(messagesProvider).requireValue;
+        expect(shown, hasLength(1));
+        expect(shown.single.localImage, pngBytes);
+        expect(
+          shown.single.isPending,
+          isTrue,
+          reason: 'not yet stored: the repository has not answered',
+        );
+        expect(
+          shown.single.attachmentPath,
+          isNull,
+          reason: 'isPending requires no attachmentPath yet',
+        );
+
+        chat.releaseSendImage();
+        final result = await pending;
+        expect(result, isA<Ok<Message>>());
+      },
+    );
+
+    test('on Ok the pending message is replaced by the stored one: no '
+        'duplicate, no leftover pending', () async {
+      final chat = ChatFake();
+      final c = await scope(chat, PickerFake.returns(pickedPng()));
+      c.read(openConversationProvider.notifier).open('c1');
+      await c.read(messagesProvider.future);
+
+      final result = await c.read(messagesProvider.notifier).sendImage();
+
+      final shown = c.read(messagesProvider).requireValue;
+      expect(
+        shown,
+        hasLength(1),
+        reason: 'the pending message must be replaced, not kept alongside',
+      );
+      expect(shown.single.isPending, isFalse);
+      expect(shown.single.id, (result! as Ok<Message>).value.id);
+      expect(shown.single.attachmentPath, isNotNull);
+    });
+
+    test('on Err the pending message disappears and Err is returned', () async {
+      final chat = ChatFake()
+        ..sendImageResult = const Err(NetworkFailure('the upload failed'));
+      final c = await scope(chat, PickerFake.returns(pickedPng()));
+      c.read(openConversationProvider.notifier).open('c1');
+      await c.read(messagesProvider.future);
+
+      final result = await c.read(messagesProvider.notifier).sendImage();
+
+      expect(result, isA<Err<Message>>());
+      expect(
+        c.read(messagesProvider).requireValue,
+        isEmpty,
+        reason: 'a failed upload must leave no pending photo behind',
+      );
+    });
   });
 
   group('composer', () {
@@ -402,9 +477,11 @@ void main() {
       expect(find.byKey(const ValueKey('attachment-image')), findsOneWidget);
       expect(find.text('look at this'), findsOneWidget);
       expect(
-        chat.urlRequests,
+        chat.bytesRequests,
         contains('c1/photo.png'),
-        reason: 'the bucket is private; the path must be signed before use',
+        reason:
+            'the bucket is private; the bytes must be fetched, not '
+            'assumed cached',
       );
     });
 
@@ -421,14 +498,14 @@ void main() {
     });
 
     testWidgets(
-      'a URL that cannot be issued shows a reason, not a broken box',
+      'bytes that cannot be fetched show a reason, not a broken box',
       (tester) async {
         final chat = ChatFake()
           ..messagesResult = Ok([
             msg('m1', body: 'look at this', attachment: 'c1/photo.png'),
           ])
-          // Deliberately NOT stored: the signed URL cannot be issued.
-          ..attachmentUrlResult = const Err(
+          // Deliberately NOT stored: the bytes cannot be fetched.
+          ..attachmentBytesResult = const Err(
             NetworkFailure('the image is unavailable'),
           );
         await pump(tester, chat, PickerFake.cancels());
@@ -448,14 +525,14 @@ void main() {
       },
     );
 
-    testWidgets('a text-only message asks for no URL at all', (tester) async {
+    testWidgets('a text-only message asks for no bytes at all', (tester) async {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', body: 'just words')]);
       await pump(tester, chat, PickerFake.cancels());
 
       expect(find.text('just words'), findsOneWidget);
       expect(find.byKey(const ValueKey('attachment-image')), findsNothing);
-      expect(chat.urlRequests, isEmpty);
+      expect(chat.bytesRequests, isEmpty);
     });
 
     testWidgets('an image arriving over Realtime renders too', (tester) async {
@@ -476,6 +553,97 @@ void main() {
       await settleImages(tester);
 
       expect(find.byKey(const ValueKey('message-m2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('attachment-image')), findsOneWidget);
+    });
+  });
+
+  group('Bubble', () {
+    testWidgets(
+      'a pending photo shows the local bytes with a progress indicator, '
+      'and is not tappable',
+      (tester) async {
+        final chat = ChatFake()..holdSendImage();
+        await pump(
+          tester,
+          chat,
+          PickerFake.returns(pickedPng()),
+          settle: false,
+        );
+
+        await tester.tap(find.byKey(const ValueKey('composer-attach')));
+        // Let the picker resolve and the pending message get appended,
+        // without the (held) upload ever answering.
+        await tester.pump();
+        await tester.pump();
+
+        final local = find.byKey(const ValueKey('attachment-local'));
+        expect(local, findsOneWidget);
+        final provider = tester.widget<Image>(local).image;
+        final memory = provider is ResizeImage
+            ? provider.imageProvider as MemoryImage
+            : provider as MemoryImage;
+        expect(memory.bytes, pngBytes);
+        expect(
+          find.byType(CircularProgressIndicator),
+          findsOneWidget,
+          reason: 'a pending upload shows a progress indicator',
+        );
+
+        // Not tappable: there is no stored path yet to open a viewer with.
+        // The attachment's own GestureDetector is keyed 'attachment-<id>',
+        // where <id> is the pending message's generated id.
+        final gesture = tester.widget<GestureDetector>(
+          find.byWidgetPredicate(
+            (w) =>
+                w is GestureDetector &&
+                w.key is ValueKey<String> &&
+                (w.key! as ValueKey<String>).value.startsWith('attachment-'),
+          ),
+        );
+        expect(gesture.onTap, isNull);
+
+        chat.releaseSendImage();
+        await settleImages(tester);
+      },
+    );
+
+    testWidgets('a stored photo shows the blurred preview, then the photo', (
+      tester,
+    ) async {
+      final preview = Uint8List.fromList([1, 2, 3]);
+      final chat = ChatFake()
+        ..messagesResult = Ok([
+          msg('m1', attachment: 'c1/photo.png', preview: preview),
+        ])
+        ..store('c1/photo.png')
+        ..holdBytes();
+      await pump(tester, chat, PickerFake.cancels(), settle: false);
+
+      expect(find.byKey(const ValueKey('attachment-preview')), findsOneWidget);
+      expect(find.byKey(const ValueKey('attachment-image')), findsNothing);
+
+      chat.releaseBytes();
+      await settleImages(tester);
+
+      expect(find.byKey(const ValueKey('attachment-image')), findsOneWidget);
+      expect(find.byKey(const ValueKey('attachment-preview')), findsNothing);
+    });
+
+    testWidgets('no preview at all shows a spinner while bytes load', (
+      tester,
+    ) async {
+      final chat = ChatFake()
+        ..messagesResult = Ok([msg('m1', attachment: 'c1/photo.png')])
+        ..store('c1/photo.png')
+        ..holdBytes();
+      await pump(tester, chat, PickerFake.cancels(), settle: false);
+
+      expect(find.byKey(const ValueKey('attachment-preview')), findsNothing);
+      expect(find.byKey(const ValueKey('attachment-image')), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      chat.releaseBytes();
+      await settleImages(tester);
       expect(find.byKey(const ValueKey('attachment-image')), findsOneWidget);
     });
   });

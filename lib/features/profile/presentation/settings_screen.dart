@@ -5,6 +5,7 @@ import '../../../app/brand.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
+import '../../chat/application/chat_controllers.dart';
 import '../../chat/presentation/person_avatar.dart';
 import '../../notifications/application/push_controller.dart';
 import '../../notifications/presentation/notification_pages.dart';
@@ -250,6 +251,7 @@ class AccountScreen extends ConsumerWidget {
                 // Read before leaving: this page is gone after the pop.
                 final push = ref.read(pushRegistrationProvider.notifier);
                 final session = ref.read(sessionControllerProvider.notifier);
+                final photos = ref.read(attachmentCacheProvider);
                 // Back to the root first: signing out swaps the root screen,
                 // and the settings pages above it would otherwise stay.
                 Navigator.of(context).popUntil((route) => route.isFirst);
@@ -257,6 +259,9 @@ class AccountScreen extends ConsumerWidget {
                 // account's notifications.
                 await push.forget();
                 await session.signOut();
+                // The next account on this phone must not inherit the last
+                // one's photos.
+                await photos.clear();
               },
               child: const Text('Sign out'),
             ),

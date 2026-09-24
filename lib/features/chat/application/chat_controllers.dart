@@ -10,6 +10,7 @@ import '../../auth/domain/session_state.dart';
 import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
+import '../domain/gallery.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
 
@@ -36,6 +37,11 @@ final attachmentUrlProvider = FutureProvider.autoDispose.family<Uri, String>((
     Err(:final failure) => throw failure,
   };
 }, retry: (_, _) => null);
+
+/// The phone's own photo library, for the attachment sheet's grid.
+final galleryProvider = Provider<Gallery>(
+  (_) => throw UnimplementedError('override in main'),
+);
 
 /// Photos already on this phone. Cleared on sign-out.
 final attachmentCacheProvider = Provider<AttachmentCache>(
@@ -326,13 +332,18 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   ///
   /// Returns null when they back out of the picker — not a failure, and the
   /// composer must not report one.
-  Future<Result<Message>?> sendImage({String body = ''}) async {
+  Future<Result<Message>?> sendImage({
+    String body = '',
+    PickedImage? chosen,
+  }) async {
     final conversationId = ref.read(openConversationProvider);
     if (conversationId == null) return const Err(DeniedFailure());
 
+    // Chosen in the attachment sheet's own grid, or else from the system
+    // picker.
     final PickedImage? image;
     try {
-      image = await ref.read(attachmentSourceProvider).pickImage();
+      image = chosen ?? await ref.read(attachmentSourceProvider).pickImage();
     } catch (e) {
       // A picker that throws must read as a reason on screen -- in words,
       // not the platform's exception text.

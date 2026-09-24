@@ -18,6 +18,7 @@ import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
+import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 
@@ -48,25 +49,34 @@ class _SignedIn extends SessionController {
   Future<SessionState> build() async => const Allowed(me);
 }
 
-Future<ProviderContainer> scope(ChatFake chat, AttachmentSource picker) =>
-    settled(
-      ProviderContainer.test(
-        overrides: [
-          chatRepositoryProvider.overrideWithValue(chat),
-          presenceRepositoryProvider.overrideWithValue(PresenceFake()),
-          attachmentSourceProvider.overrideWithValue(picker),
-          sessionControllerProvider.overrideWith(_SignedIn.new),
-        ],
-      ),
-    );
+Future<ProviderContainer> scope(
+  ChatFake chat,
+  AttachmentSource picker, {
+  Gallery? gallery,
+}) => settled(
+  ProviderContainer.test(
+    overrides: [
+      chatRepositoryProvider.overrideWithValue(chat),
+      presenceRepositoryProvider.overrideWithValue(PresenceFake()),
+      attachmentSourceProvider.overrideWithValue(picker),
+      // The composer's attach button opens the sheet first; a gallery with
+      // no photos and full access falls through to it fastest, so these
+      // picker-focused tests reach the system picker the same way a member
+      // who has no photos yet, or backs out to "All photos", would.
+      galleryProvider.overrideWithValue(gallery ?? GalleryFake()),
+      sessionControllerProvider.overrideWith(_SignedIn.new),
+    ],
+  ),
+);
 
 Future<ProviderContainer> pump(
   WidgetTester tester,
   ChatFake chat,
   AttachmentSource picker, {
   bool settle = true,
+  Gallery? gallery,
 }) async {
-  final container = await scope(chat, picker);
+  final container = await scope(chat, picker, gallery: gallery);
   container.read(openConversationProvider.notifier).open('c1');
   await tester.pumpWidget(
     UncontrolledProviderScope(
@@ -81,6 +91,16 @@ Future<ProviderContainer> pump(
   // loop would just spin for its whole timeout.
   if (settle) await settleImages(tester);
   return container;
+}
+
+/// Opens the attachment sheet from the composer and taps "All photos" --
+/// the sheet's own path to the system picker, which these tests are about.
+/// The sheet's own grid is covered separately in attachment_sheet_test.dart.
+Future<void> openSystemPicker(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('composer-attach')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('sheet-system-picker')));
+  await tester.pumpAndSettle();
 }
 
 String composerText(WidgetTester tester) => tester
@@ -364,10 +384,15 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.byKey(const ValueKey('composer-attach')));
-      await tester.pumpAndSettle();
+      await openSystemPicker(tester);
 
-      expect(picker.calls, 1, reason: 'the attach button never opened it');
+      expect(
+        picker.calls,
+        1,
+        reason:
+            'the attach button, via the sheet\'s "All photos", must '
+            'still reach the system picker',
+      );
       expect(
         find.byType(SnackBar),
         findsNothing,
@@ -383,8 +408,7 @@ void main() {
       expectNoRawException(tester);
 
       // Still usable afterwards: cancelling must not leave it stuck.
-      await tester.tap(find.byKey(const ValueKey('composer-attach')));
-      await tester.pumpAndSettle();
+      await openSystemPicker(tester);
       expect(picker.calls, 2);
     });
 
@@ -401,8 +425,7 @@ void main() {
         'worth keeping',
       );
       await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('composer-attach')));
-      await tester.pumpAndSettle();
+      await openSystemPicker(tester);
 
       expect(
         find.byType(SnackBar),
@@ -434,8 +457,7 @@ void main() {
         'worth keeping',
       );
       await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('composer-attach')));
-      await tester.pumpAndSettle();
+      await openSystemPicker(tester);
 
       expect(
         find.textContaining('the upload did not finish'),
@@ -456,6 +478,8 @@ void main() {
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('composer-attach')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('sheet-system-picker')));
       await settleImages(tester);
 
       expect(chat.sentImages.single.body, 'look at this');
@@ -571,6 +595,11 @@ void main() {
         );
 
         await tester.tap(find.byKey(const ValueKey('composer-attach')));
+        // Let the sheet's own entrance animation finish before tapping into
+        // it -- a bare pump() catches it mid-transition, off the bottom of
+        // the screen. Nothing here is held yet, so settling is safe.
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('sheet-system-picker')));
         // Let the picker resolve and the pending message get appended,
         // without the (held) upload ever answering.
         await tester.pump();

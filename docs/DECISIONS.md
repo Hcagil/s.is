@@ -599,3 +599,21 @@ also drops a preview that will not decode rather than failing the
 conversation.
 
 **The media grid decodes thumbnails at thumbnail size**, not full photos.
+
+## 2026-09-24 — The attachment sheet shows the phone's own photos
+
+**Tapping attach opens a sheet with the phone's recent photos** (owner's
+choice: WhatsApp-style), and "All photos" still opens Android's own picker.
+The grid needs the photo permission, asked at runtime the first time the
+sheet opens. On Android 14+ the member may share only selected photos; the
+grid then shows those and a "Select more" tile. A refusal leaves the system
+picker, which needs no permission.
+
+**Photos only.** The manifest asks for `READ_MEDIA_IMAGES` and
+`READ_MEDIA_VISUAL_USER_SELECTED` (and legacy storage up to Android 12) and
+removes the video, audio, write and media-location permissions the plugin
+would add; a test pins that list.
+
+**If Google Play refuses the photo-permission declaration**, the owner's
+rule applies: the grid waits for the owner, and the permission comes out
+so releases keep flowing with the system picker alone.

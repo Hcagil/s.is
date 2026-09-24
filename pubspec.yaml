@@ -1,7 +1,7 @@
 name: sis
 description: SIS — private chat by ESD.
 publish_to: 'none'
-version: 0.8.0
+version: 0.9.0
 
 environment:
   sdk: ^3.13.2
@@ -19,6 +19,7 @@ dependencies:
   in_app_update: ^5.0.0
   package_info_plus: ^10.2.1
   path_provider: ^2.1.6
+  photo_manager: ^3.12.0
   supabase_flutter: ^2.17.2
   url_launcher: ^6.3.2
   web_socket_channel: ^3.0.3

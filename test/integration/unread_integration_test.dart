@@ -162,6 +162,9 @@ class _MarkReadDown implements ChatRepository {
   @override
   Future<Result<Uint8List>> attachmentBytes(String path) =>
       live.attachmentBytes(path);
+  @override
+  Future<Result<void>> deleteForEveryone(Message message) =>
+      live.deleteForEveryone(message);
 }
 
 /// The overrides main.dart mounts, on [client]; only Google sign-in, the Play

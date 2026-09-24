@@ -56,6 +56,10 @@
 --   walt/xena      test/integration/message_screen_seam_test.dart
 --     (walt sends a photo with a preview; xena's screen, wired the way
 --      main.dart wires it, is what shows it)
+--   opal/russ      test/integration/message_delete_seam_test.dart
+--     (opal deletes her own messages through the real long-press -> sheet ->
+--      confirm flow; russ's screen, mounted at once and wired the way
+--      main.dart wires it, is what must show the result arrive live)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -96,5 +100,7 @@ insert into app_private.allowlist(email) values
   ('gus@integration.test'),
   ('hugo@integration.test'),
   ('ines@integration.test'),
-  ('iris@integration.test')
+  ('iris@integration.test'),
+  ('opal@integration.test'),
+  ('russ@integration.test')
 on conflict do nothing;

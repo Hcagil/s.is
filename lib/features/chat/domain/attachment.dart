@@ -38,6 +38,9 @@ abstract interface class AttachmentCache {
 
   Future<void> write(String path, Uint8List bytes);
 
+  /// Forgets one photo: it was deleted for everyone.
+  Future<void> remove(String path);
+
   /// Forgets every cached photo: called on sign-out, so the next account on
   /// this phone does not inherit the last one's photos.
   Future<void> clear();

@@ -83,6 +83,8 @@ class _HoldableCache implements AttachmentCache {
   @override
   Future<void> write(String path, Uint8List bytes) => _inner.write(path, bytes);
   @override
+  Future<void> remove(String path) => _inner.remove(path);
+  @override
   Future<void> clear() => _inner.clear();
 }
 
@@ -104,6 +106,8 @@ class _SpyCache implements AttachmentCache {
 
   @override
   Future<void> write(String path, Uint8List bytes) => _inner.write(path, bytes);
+  @override
+  Future<void> remove(String path) => _inner.remove(path);
   @override
   Future<void> clear() => _inner.clear();
 }

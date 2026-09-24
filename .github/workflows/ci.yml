@@ -155,5 +155,12 @@ jobs:
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart
       - name: Repository integration tests
         # TZ as for the unit tests: a timestamp parsed without its offset only
-        # fails outside UTC, and the runner is UTC.
-        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -e TZ=JST-9 flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration
+        # fails outside UTC, and the runner is UTC. The local stack's
+        # service-role key comes from the stack itself, never the repository
+        # (test/support/service_key.dart).
+        run: |
+          export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
+          SUPABASE_TEST_SERVICE_KEY=$(docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm supabase status -o env | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p')
+          echo "::add-mask::$SUPABASE_TEST_SERVICE_KEY"
+          test -n "$SUPABASE_TEST_SERVICE_KEY"
+          docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -e TZ=JST-9 -e SUPABASE_TEST_SERVICE_KEY="$SUPABASE_TEST_SERVICE_KEY" flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration

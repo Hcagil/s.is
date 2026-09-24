@@ -260,6 +260,9 @@ installed on the workstation. `.private/` and `.orchestra/` are local-only.
 | v0.7 | User and group profile pages; tappable links; full-screen photo viewer | Tapping a 1:1 chat title or a group member opens their profile |
 | v0.8 | Push notifications; lock-screen preview choice; mute a person or a chat (8 h / 1 week / always); a global switch | A message arrives as a notification on a closed app |
 | v0.9 | Own media sheet and fast media | A photo appears at once for the sender and as a blurred preview first for receivers |
+| v0.10 | Message actions by long press: delete for everyone (within 6 h; under 1 h it vanishes), reply, forward to several chats | A reply shows its quote; a deleted message is gone for everyone |
+| v0.11 | Read status (mutual, like last seen; group "read by"); 1:1 header says just "typing…" | Your message turns from grey to normal when it is read |
+| v0.12 | One SIS notification grouping every chat, expandable like Telegram | Several messages from several chats arrive as one expandable notification |
 | after v0.9 | iOS | scheduled after v0.9 |
 | later | E2EE | scheduled individually |
 

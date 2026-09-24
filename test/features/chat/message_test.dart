@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
@@ -114,6 +116,90 @@ void main() {
       final late = DateTime(2026, 9, 23, 23, 30);
       expect(previewTime(early.toUtc(), late.toUtc()), '00:30');
       expect(previewTime(late.toUtc(), early.toUtc()), '23:30');
+    });
+  });
+
+  group('canDeleteForEveryone', () {
+    final now = DateTime.utc(2026, 9, 24, 12, 0);
+    Message own({
+      Duration age = const Duration(minutes: 1),
+      Uint8List? localImage,
+      String? attachmentPath,
+      MessageDeletion? deletion,
+    }) => Message(
+      id: 'm1',
+      conversationId: 'c1',
+      senderId: 'me',
+      body: 'hi',
+      createdAt: now.subtract(age),
+      localImage: localImage,
+      attachmentPath: attachmentPath,
+      deletion: deletion,
+    );
+
+    test('own, stored, undeleted and under 6 hours: yes', () {
+      expect(
+        own(age: const Duration(hours: 5, minutes: 59))
+            .canDeleteForEveryone('me', now),
+        isTrue,
+      );
+    });
+
+    test('somebody else\'s message: no', () {
+      final theirs = Message(
+        id: 'm1',
+        conversationId: 'c1',
+        senderId: 'someone-else',
+        body: 'hi',
+        createdAt: now,
+      );
+      expect(theirs.canDeleteForEveryone('me', now), isFalse);
+    });
+
+    test('exactly at 6 hours: no -- the window is strictly under', () {
+      expect(
+        own(age: const Duration(hours: 6)).canDeleteForEveryone('me', now),
+        isFalse,
+      );
+    });
+
+    test('just under 6 hours: yes', () {
+      expect(
+        own(age: const Duration(hours: 6) - const Duration(seconds: 1))
+            .canDeleteForEveryone('me', now),
+        isTrue,
+      );
+    });
+
+    test('over 6 hours: no', () {
+      expect(
+        own(age: const Duration(hours: 7)).canDeleteForEveryone('me', now),
+        isFalse,
+      );
+    });
+
+    test('already deleted: no', () {
+      expect(
+        own(deletion: MessageDeletion.placeholder)
+            .canDeleteForEveryone('me', now),
+        isFalse,
+      );
+      expect(
+        own(deletion: MessageDeletion.vanished).canDeleteForEveryone('me', now),
+        isFalse,
+      );
+    });
+
+    test('still pending (local image, not yet stored): no', () {
+      final pending = own(localImage: Uint8List(0), attachmentPath: null);
+      expect(pending.isPending, isTrue);
+      expect(pending.canDeleteForEveryone('me', now), isFalse);
+    });
+
+    test('a stored photo message (local image AND a path): yes', () {
+      final stored = own(localImage: Uint8List(0), attachmentPath: 'c1/1.png');
+      expect(stored.isPending, isFalse);
+      expect(stored.canDeleteForEveryone('me', now), isTrue);
     });
   });
 

@@ -106,4 +106,9 @@ abstract interface class ChatRepository {
   /// The photo at [attachmentPath]: from this phone's cache when it is there,
   /// otherwise downloaded once (members of its conversation only) and kept.
   Future<Result<Uint8List>> attachmentBytes(String attachmentPath);
+
+  /// Deletes the member's own [message] for everyone, and its photo. The
+  /// server refuses (DeniedFailure) when it is not theirs, already deleted,
+  /// or over 6 hours old.
+  Future<Result<void>> deleteForEveryone(Message message);
 }

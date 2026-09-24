@@ -69,6 +69,14 @@ create temp table _fx as
            where m2.conversation_id = c.id) = 4;
 grant select on _fx to authenticated, anon;
 
+-- messages_send now also requires the sender to own the storage object at
+-- attachment_path (20260924140000_delete_for_everyone.sql), so every photo
+-- path exercised below needs a real, ann-owned row in storage.objects first.
+insert into storage.objects(bucket_id, name, owner_id, metadata)
+  select 'attachments', (select conv from _fx) || '/' || suffix, '00000000-0000-0000-0000-000000009001', '{"size":3}'::jsonb
+    from unnest(array['p-ok.png', 'p-null.png', 'p-toolong.png', 'p-mod4.png', 'p-charset.png',
+                       'p-pad2.png', 'p-pad3.png', 'p-padmid.png', 'p-sig.png', 'p-name.png']) as suffix;
+
 -- 1 the shape of a valid preview ---------------------------------------------
 select test_as('00000000-0000-0000-0000-000000009001', 'a7000000-0000-0000-0000-000000009001');
 

@@ -360,6 +360,31 @@ class SessionChat implements ChatRepository {
     if (who == null) return const Err(DeniedFailure());
     return Ok(Uint8List.fromList(attachmentPath.codeUnits));
   }
+
+  @override
+  Future<Result<void>> deleteForEveryone(Message message) async {
+    final who = await _as('deleteForEveryone:${message.id}');
+    if (who == null) return const Err(DeniedFailure());
+    final room = backend.rooms.firstWhere(
+      (r) => r.id == message.conversationId,
+      orElse: () => Room(message.conversationId, const {}),
+    );
+    final i = room.messages.indexWhere((m) => m.id == message.id);
+    if (i < 0 ||
+        room.messages[i].senderId != who ||
+        room.messages[i].isDeleted) {
+      return const Err(DeniedFailure());
+    }
+    room.messages[i] = Message(
+      id: message.id,
+      conversationId: message.conversationId,
+      senderId: who,
+      body: '',
+      createdAt: room.messages[i].createdAt,
+      deletion: MessageDeletion.vanished,
+    );
+    return const Ok(null);
+  }
 }
 
 /// [ProfileRepository] pinned to the session holder, as RLS pins it.

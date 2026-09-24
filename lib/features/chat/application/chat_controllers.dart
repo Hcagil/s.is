@@ -134,6 +134,10 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     loaded = true;
     var unknown = false;
     for (final message in buffered) {
+      if (message.isDeleted) {
+        unknown = true; // a deletion during the load: read again
+        continue;
+      }
       final next = _withMessage(list, message);
       if (next == null) {
         unknown = true;
@@ -152,6 +156,12 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   void _apply(Message message) {
     final current = state.value;
     if (current == null) return;
+    // A deletion can change which message a conversation previews, and the
+    // list does not hold the one before it: read again.
+    if (message.isDeleted) {
+      reloadQuietly();
+      return;
+    }
     final next = _withMessage(current, message);
     if (next == null) {
       reloadQuietly();
@@ -294,6 +304,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         buffered.add(message);
         return;
       }
+      if (message.isDeleted) {
+        _deleted(message);
+        return;
+      }
       _append(message);
       // Open on screen means read; tell the server so the count stays zero.
       if (!message.isFrom(_me ?? '')) {
@@ -309,10 +323,20 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         loaded = true;
         final merged = [...value];
         for (final message in buffered) {
-          if (merged.every((m) => m.id != message.id)) merged.add(message);
+          final i = merged.indexWhere((m) => m.id == message.id);
+          if (i < 0) {
+            merged.add(message);
+          } else if (message.isDeleted) {
+            merged[i] = message;
+          }
         }
         merged.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-        return merged;
+        // Vanished before this screen opened: as if never sent. One that
+        // vanishes while open stays long enough to animate away.
+        return [
+          for (final m in merged)
+            if (m.deletion != MessageDeletion.vanished) m,
+        ];
     }
   }
 
@@ -320,6 +344,58 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     Allowed(:final member) => member.userId,
     _ => null,
   };
+
+  /// A message deleted for everyone replaces its old self, and its photo
+  /// leaves this phone's cache.
+  void _deleted(Message message) {
+    final current = state.value;
+    if (current == null) return;
+    final i = current.indexWhere((m) => m.id == message.id);
+    if (i < 0) return;
+    final old = current[i];
+    final path = old.attachmentPath;
+    if (path != null) unawaited(ref.read(attachmentCacheProvider).remove(path));
+    // A vanishing message keeps its text for the moment it takes to animate
+    // away on this screen; the server no longer has it.
+    final shown = message.deletion == MessageDeletion.vanished
+        ? Message(
+            id: old.id,
+            conversationId: old.conversationId,
+            senderId: old.senderId,
+            body: old.body,
+            createdAt: old.createdAt,
+            deletion: MessageDeletion.vanished,
+          )
+        : message;
+    state = AsyncData([...current]..[i] = shown);
+  }
+
+  /// Deletes the member's own [message] for everyone. The screen shows an
+  /// [Err]'s reason; on success the message vanishes or becomes "deleted"
+  /// here at once, and on every other open screen through Realtime.
+  Future<Result<void>> deleteForEveryone(Message message) async {
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .deleteForEveryone(message);
+    if (result is Ok && ref.mounted) {
+      final vanishes =
+          DateTime.now().difference(message.createdAt) <
+          const Duration(hours: 1);
+      _deleted(
+        Message(
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          body: '',
+          createdAt: message.createdAt,
+          deletion: vanishes
+              ? MessageDeletion.vanished
+              : MessageDeletion.placeholder,
+        ),
+      );
+    }
+    return result;
+  }
 
   void _append(Message message) {
     final current = state.value;

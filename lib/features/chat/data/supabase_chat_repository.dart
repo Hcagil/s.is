@@ -119,14 +119,16 @@ final class SupabaseChatRepository implements ChatRepository {
       final recent = await _client
           .from('conversation_previews')
           .select(
-            'conversation_id, body, created_at, attachment_path, sender_id',
+            'conversation_id, body, created_at, attachment_path, sender_id, deleted',
           );
       final previewBy = <String, ({String body, DateTime at, String sender})>{
         for (final row in recent)
           row['conversation_id'] as String: (
             // An image may be sent without a caption, and an empty preview
             // would read as "no messages" while hiding a real one.
-            body: (row['body'] as String).isNotEmpty
+            body: row['deleted'] != null
+                ? 'This message was deleted'
+                : (row['body'] as String).isNotEmpty
                 ? row['body'] as String
                 : (row['attachment_path'] == null ? '' : 'Photo'),
             at: DateTime.parse(row['created_at'] as String),
@@ -174,7 +176,7 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -328,8 +330,10 @@ final class SupabaseChatRepository implements ChatRepository {
     final channel = _client.channel(topic);
     final controller = StreamController<Message>();
 
+    // Inserts are new messages; updates are deletions for everyone, which
+    // arrive as the wiped row.
     channel.onPostgresChanges(
-      event: PostgresChangeEvent.insert,
+      event: PostgresChangeEvent.all,
       schema: 'public',
       table: 'messages',
       filter: filter,
@@ -453,6 +457,30 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   @override
+  Future<Result<void>> deleteForEveryone(Message message) async {
+    try {
+      final path = await _client.rpc(
+        'delete_message',
+        params: {'message': message.id},
+      );
+      if (path is String) {
+        // The server has already taken the message's content; the photo
+        // file follows. ponytail: a failed remove is not retried, leaving an
+        // object no message points to (still listed in
+        // app_private.deleted_attachments); add a scheduled sweep of that
+        // list if it is ever seen to matter.
+        try {
+          await _client.storage.from('attachments').remove([path]);
+        } catch (_) {}
+        await _cache.remove(path);
+      }
+      return const Ok(null);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
   Future<Result<Uri>> attachmentUrl(String attachmentPath) async {
     try {
       final signed = await _client.storage
@@ -472,6 +500,11 @@ final class SupabaseChatRepository implements ChatRepository {
     createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
     attachmentPath: row['attachment_path'] as String?,
     attachmentPreview: _preview(row['attachment_preview']),
+    deletion: switch (row['deleted']) {
+      'vanished' => MessageDeletion.vanished,
+      'placeholder' => MessageDeletion.placeholder,
+      _ => null,
+    },
   );
 
   /// A preview that does not decode is dropped, never thrown: one bad row
@@ -496,6 +529,9 @@ final class _NoCache implements AttachmentCache {
 
   @override
   Future<void> write(String path, Uint8List bytes) async {}
+
+  @override
+  Future<void> remove(String path) async {}
 
   @override
   Future<void> clear() async {}

@@ -18,6 +18,7 @@ import '../domain/links.dart';
 import '../domain/message.dart';
 import 'attachment_sheet.dart';
 import 'conversation_list.dart';
+import 'message_actions.dart';
 import 'photo_viewer.dart';
 import 'profile_pages.dart';
 
@@ -176,13 +177,23 @@ class MessageScreen extends ConsumerWidget {
                       final index = value.length - 1 - i;
                       final message = value[index];
                       final mine = me != null && message.isFrom(me);
-                      return _Bubble(
-                        message,
-                        mine: mine,
-                        sender: group && !mine && startsRun(value, index)
-                            ? (names[message.senderId] ?? 'Member')
-                            : null,
+                      final bubble = GestureDetector(
+                        onLongPress: () =>
+                            showMessageActions(context, ref, message, me: me),
+                        child: _Bubble(
+                          message,
+                          mine: mine,
+                          sender: group && !mine && startsRun(value, index)
+                              ? (names[message.senderId] ?? 'Member')
+                              : null,
+                        ),
                       );
+                      return message.deletion == MessageDeletion.vanished
+                          ? _Vanishing(
+                              key: ValueKey('vanish-${message.id}'),
+                              child: bubble,
+                            )
+                          : bubble;
                     },
                   ),
                   AsyncError(:final error) => Center(
@@ -239,6 +250,31 @@ class _Bubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (message.deletion == MessageDeletion.placeholder)
+              Row(
+                key: ValueKey('deleted-${message.id}'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.block,
+                    size: 16,
+                    color: mine
+                        ? Colors.white70
+                        : brand.text.withValues(alpha: 0.6),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'This message was deleted',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontStyle: FontStyle.italic,
+                      color: mine
+                          ? Colors.white70
+                          : brand.text.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
+              ),
             if (sender != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 2),
@@ -275,6 +311,42 @@ class _Bubble extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A message deleted for everyone within its first hour: it shrinks and
+/// fades away, then takes no space.
+class _Vanishing extends StatefulWidget {
+  const _Vanishing({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<_Vanishing> createState() => _VanishingState();
+}
+
+class _VanishingState extends State<_Vanishing>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _out = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 350),
+  )..forward();
+
+  late final Animation<double> _left = CurvedAnimation(
+    parent: ReverseAnimation(_out),
+    curve: Curves.easeInCubic,
+  );
+
+  @override
+  void dispose() {
+    _out.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SizeTransition(
+    sizeFactor: _left,
+    child: FadeTransition(opacity: _left, child: widget.child),
+  );
 }
 
 /// An attachment, fetched through a signed URL issued only to a member.

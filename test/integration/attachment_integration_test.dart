@@ -24,6 +24,7 @@ import 'package:sis/features/presence/data/supabase_presence_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/service_key.dart';
 
 /// Image attachments against the real stack: a real upload into a private
 /// bucket, real storage row-level security, a real signed URL fetched over
@@ -46,6 +47,12 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 const _password = 'integration-password';
+
+// The service_role key: bypasses RLS, the only way left to create a message
+// pointing at a photo that was never uploaded (messages_send now requires the
+// sender to own a real storage object at attachment_path) -- a state a real
+// client can no longer reach, but the one this fixture needs to exist so the
+// read side's handling of a dangling reference is still exercised.
 
 /// A host that accepts nothing: the honest form of "the connection failed".
 const _deadUrl = 'http://127.0.0.1:1';
@@ -71,6 +78,9 @@ class _MemoryCache implements AttachmentCache {
   Future<void> write(String path, Uint8List bytes) async {
     _store[path] = bytes;
   }
+
+  @override
+  Future<void> remove(String path) async => _store.remove(path);
 
   @override
   Future<void> clear() async => _store.clear();
@@ -627,9 +637,21 @@ void main() {
       groupId = (started as Ok<String>).value;
 
       // A message whose object was never stored, or has since gone: the row
-      // is readable, the object is not, and storage answers 404.
+      // is readable, the object is not, and storage answers 404. No client
+      // insert can create this any more (messages_send now checks
+      // ownership of a real object), so it is written with the service
+      // role, the way it could still arise for real -- the object was
+      // removed after the message was sent.
       missingPath = '$groupId/never-uploaded.png';
-      await liamClient!.from('messages').insert({
+      final service = SupabaseClient(
+        _url,
+        serviceKey(),
+        authOptions: const AuthClientOptions(
+          authFlowType: AuthFlowType.implicit,
+        ),
+      );
+      addTearDown(service.dispose);
+      await service.from('messages').insert({
         'conversation_id': groupId,
         'sender_id': liamClient!.auth.currentUser!.id,
         'body': '',

@@ -320,6 +320,15 @@ select is((select count(*) from public.notification_settings
             where user_id = '00000000-0000-0000-0000-0000000ee001'),
           0::bigint, 'and no settings row -- the defaults are what get exercised first');
 
+-- messages_send now also requires the sender to own the storage object at
+-- attachment_path, and its folder to match the conversation
+-- (20260924140000_delete_for_everyone.sql): both photo fixtures below need a
+-- real, bo-owned row in storage.objects, in _grp's own folder.
+insert into storage.objects(bucket_id, name, owner_id, metadata)
+  select 'attachments', id::text || '/photo1.jpg', '00000000-0000-0000-0000-0000000ee002', '{"size":3}'::jsonb from _grp
+  union all
+  select 'attachments', id::text || '/photo2.jpg', '00000000-0000-0000-0000-0000000ee002', '{"size":3}'::jsonb from _grp;
+
 -- 5 messages, sent while ann has no settings row and no mutes --------------
 select test_as('00000000-0000-0000-0000-0000000ee002', 'ee000000-0000-0000-0000-000000000002');
 insert into public.messages(conversation_id, sender_id, body)
@@ -327,9 +336,9 @@ insert into public.messages(conversation_id, sender_id, body)
 insert into public.messages(conversation_id, sender_id, body)
   select id, '00000000-0000-0000-0000-0000000ee002', repeat('x', 130) from _grp;
 insert into public.messages(conversation_id, sender_id, body, attachment_path)
-  select id, '00000000-0000-0000-0000-0000000ee002', 'look', 'ee-group/photo1.jpg' from _grp;
+  select id, '00000000-0000-0000-0000-0000000ee002', 'look', id::text || '/photo1.jpg' from _grp;
 insert into public.messages(conversation_id, sender_id, body, attachment_path)
-  select id, '00000000-0000-0000-0000-0000000ee002', '', 'ee-group/photo2.jpg' from _grp;
+  select id, '00000000-0000-0000-0000-0000000ee002', '', id::text || '/photo2.jpg' from _grp;
 insert into public.messages(conversation_id, sender_id, body)
   select id, '00000000-0000-0000-0000-0000000ee002', 'direct hello' from _direct_bo_ann;
 reset role;
@@ -341,9 +350,9 @@ create temp table _msg as
     (select id from public.messages where conversation_id = (select id from _grp)
       and body = repeat('x', 130)) as long,
     (select id from public.messages where conversation_id = (select id from _grp)
-      and attachment_path = 'ee-group/photo1.jpg') as photo_cap,
+      and attachment_path = (select id from _grp)::text || '/photo1.jpg') as photo_cap,
     (select id from public.messages where conversation_id = (select id from _grp)
-      and attachment_path = 'ee-group/photo2.jpg') as photo_nocap,
+      and attachment_path = (select id from _grp)::text || '/photo2.jpg') as photo_nocap,
     (select id from public.messages where conversation_id = (select id from _direct_bo_ann)
       and body = 'direct hello') as direct;
 

@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
 import '../application/chat_controllers.dart';
+import '../../presence/domain/last_seen.dart';
 import '../domain/message.dart';
+import '../domain/read_marks.dart';
 import 'forward_sheet.dart';
 
 /// What a long press on a message offers: reply, forward, and -- for your
@@ -14,11 +16,14 @@ Future<void> showMessageActions(
   WidgetRef ref,
   Message message, {
   required String? me,
+  bool group = false,
 }) async {
   final canDelete =
       me != null && message.canDeleteForEveryone(me, DateTime.now());
   // Reply and forward need a stored message with something in it.
   final canShare = !message.isPending && !message.isDeleted;
+  // In a group, who has read your message (where read status is shared).
+  final canSeeReaders = group && me != null && message.isFrom(me) && canShare;
   if (!canDelete && !canShare) return;
 
   final action = await showModalBottomSheet<String>(
@@ -28,6 +33,13 @@ Future<void> showMessageActions(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (canSeeReaders)
+            ListTile(
+              key: const ValueKey('action-read-by'),
+              leading: const Icon(Icons.done_all),
+              title: const Text('Read by'),
+              onTap: () => Navigator.of(sheet).pop('read-by'),
+            ),
           if (canShare) ...[
             ListTile(
               key: const ValueKey('action-reply'),
@@ -67,6 +79,9 @@ Future<void> showMessageActions(
       return;
     case 'forward':
       await showForwardSheet(context, ref, message);
+      return;
+    case 'read-by':
+      await _showReaders(context, ref, message);
       return;
     case 'delete':
       break;
@@ -113,4 +128,51 @@ Future<void> showMessageActions(
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(failure.message)));
   }
+}
+
+/// Who has read [message], among the members who share read status with
+/// you, and when.
+Future<void> _showReaders(
+  BuildContext context,
+  WidgetRef ref,
+  Message message,
+) {
+  final marks = ref.read(readMarksProvider).value ?? const <ReadMark>[];
+  final names = {
+    for (final m in ref.read(membersProvider).value ?? const [])
+      m.userId: m.displayName,
+  };
+  final readers = [
+    for (final m in marks)
+      if (m.hasRead(message.createdAt)) m,
+  ];
+  return showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheet) => SafeArea(
+      child: Column(
+        key: const ValueKey('readers'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Read by',
+              style: Theme.of(sheet).textTheme.titleMedium,
+            ),
+          ),
+          if (readers.isEmpty)
+            const ListTile(title: Text('Nobody yet'), enabled: false)
+          else
+            for (final m in readers)
+              ListTile(
+                key: ValueKey('reader-${m.userId}'),
+                leading: const Icon(Icons.done_all),
+                title: Text(names[m.userId] ?? 'Member'),
+                subtitle: Text(lastSeenLabel(m.readAt!, DateTime.now())),
+              ),
+        ],
+      ),
+    ),
+  );
 }

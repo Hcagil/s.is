@@ -8,6 +8,7 @@ final class OwnProfile {
     this.sharePresence = true,
     this.shareTyping = true,
     this.shareLastSeen = true,
+    this.shareReadStatus = true,
   });
 
   final String userId;
@@ -30,6 +31,10 @@ final class OwnProfile {
   /// Whether others may see when this member was last online. Mutual: while
   /// it is off, the server shows this member nobody else's either.
   final bool shareLastSeen;
+
+  /// Whether others may see when this member has read their messages.
+  /// Mutual, like last seen: while it is off, this member sees nobody's.
+  final bool shareReadStatus;
 }
 
 /// Longest display name the database accepts.

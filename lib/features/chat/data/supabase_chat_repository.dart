@@ -12,6 +12,7 @@ import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
 import '../domain/message.dart';
+import '../domain/read_marks.dart';
 
 /// [ChatRepository] backed by Supabase Postgres and Realtime.
 ///
@@ -458,6 +459,60 @@ final class SupabaseChatRepository implements ChatRepository {
     } catch (e) {
       return Err(_asFailure(e));
     }
+  }
+
+  @override
+  Future<Result<List<ReadMark>>> readMarks(String conversationId) async {
+    try {
+      final rows = await _client.rpc(
+        'read_marks',
+        params: {'conversation': conversationId},
+      ) as List<dynamic>;
+      return Ok([
+        for (final r in rows.cast<Map<String, dynamic>>())
+          ReadMark(
+            userId: r['user_id'] as String,
+            shares: r['shares'] as bool,
+            readAt: switch (r['read_at']) {
+              final String at => DateTime.parse(at),
+              _ => null,
+            },
+          ),
+      ]);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<Stream<ReadMark>>> readUpdates(String conversationId) async {
+    // Sent by the database when a member who shares read status reads;
+    // clients cannot send on this topic.
+    final channel = _client.channel(
+      'reads:$conversationId',
+      opts: const RealtimeChannelConfig(private: true),
+    );
+    final reads = StreamController<ReadMark>();
+    channel.onBroadcast(
+      event: 'read',
+      callback: (payload) {
+        final who = payload['user_id'];
+        final at = payload['read_at'];
+        if (who is String && at is String && !reads.isClosed) {
+          reads.add(
+            ReadMark(userId: who, shares: true, readAt: DateTime.parse(at)),
+          );
+        }
+      },
+    );
+    reads.onCancel = () => leaveChannel(_client, channel);
+    try {
+      await joinChannel(channel);
+    } catch (e) {
+      leaveChannel(_client, channel, reads);
+      return Err(_asFailure(e));
+    }
+    return Ok(reads.stream);
   }
 
   @override

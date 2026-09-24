@@ -15,6 +15,7 @@ import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/notifications/domain/notification_settings.dart';
@@ -901,6 +902,126 @@ class PickerFake implements AttachmentSource {
     if (latency > Duration.zero) await Future<void>.delayed(latency);
     if (_error case final error?) throw error;
     return _image;
+  }
+}
+
+/// A gallery written from the [Gallery] contract in
+/// lib/features/chat/domain/gallery.dart.
+///
+/// Nothing here is instant: every call takes at least [latency], so a sheet
+/// that assumes recent() or load() answers synchronously fails here. Limited
+/// access only ever returns what [allowed] actually holds -- exactly like
+/// the platform, which never reveals a photo nobody agreed to share -- and
+/// [selectMore] only adds to it once actually called, so a caller that
+/// forgets to re-read after selectMore() cannot fake the extra photos into
+/// view.
+class GalleryFake implements Gallery {
+  GalleryFake({
+    this.access = GalleryAccess.full,
+    List<GalleryPhoto> photos = const [],
+    Iterable<String> allowed = const [],
+    this.latency = Duration.zero,
+  }) : photos = [...photos],
+       allowed = {...allowed};
+
+  /// What the next requestAccess() answers. Change it (e.g. denied -> full)
+  /// to simulate the member granting access from "Allow access".
+  GalleryAccess access;
+
+  /// The library, newest first, before any access filtering.
+  List<GalleryPhoto> photos;
+
+  /// With limited access, which of [photos] the member has actually
+  /// allowed so far. Ignored for full and denied access.
+  Set<String> allowed;
+
+  final Duration latency;
+
+  /// How many times requestAccess() was called.
+  int accessRequests = 0;
+
+  /// How many times recent() was called.
+  int recentCalls = 0;
+
+  /// How many times selectMore() was called.
+  int selectMoreCalls = 0;
+
+  /// Every photo id [load] was asked for, in call order -- including a
+  /// second tap that a correct sheet must never have made.
+  final loadedIds = <String>[];
+
+  /// Every photo id [thumbnail] was asked for.
+  final thumbnailIds = <String>[];
+
+  /// Per-photo thumbnail bytes. An id with no entry, or mapped to null,
+  /// cannot be read -- the quiet tile the contract requires.
+  final Map<String, Uint8List?> thumbnails = {};
+
+  /// Per-photo load() outcome. An id with no entry loads a working image
+  /// made from [pngBytes]; mapped to null means "cannot be opened".
+  final Map<String, PickedImage?> loadResults = {};
+
+  /// What the next selectMore() adds to [allowed].
+  Set<String> selectMoreAdds = {};
+
+  Completer<void>? _loadGate;
+
+  /// The next [load] call stays in flight until [releaseLoad] -- long
+  /// enough for a test to tap the same (or another) tile again and prove a
+  /// second call never happens.
+  void holdLoad() => _loadGate = Completer<void>();
+  void releaseLoad() {
+    _loadGate?.complete();
+    _loadGate = null;
+  }
+
+  Future<void> _tick() async {
+    if (latency > Duration.zero) await Future<void>.delayed(latency);
+  }
+
+  @override
+  Future<GalleryAccess> requestAccess() async {
+    accessRequests++;
+    await _tick();
+    return access;
+  }
+
+  @override
+  Future<List<GalleryPhoto>> recent({int count = 60}) async {
+    recentCalls++;
+    await _tick();
+    final visible = access == GalleryAccess.limited
+        ? photos.where((p) => allowed.contains(p.id))
+        : photos;
+    return visible.take(count).toList();
+  }
+
+  @override
+  Future<Uint8List?> thumbnail(GalleryPhoto photo, {int size = 240}) async {
+    thumbnailIds.add(photo.id);
+    await _tick();
+    return thumbnails[photo.id];
+  }
+
+  @override
+  Future<PickedImage?> load(GalleryPhoto photo) async {
+    loadedIds.add(photo.id);
+    await _tick();
+    final gate = _loadGate;
+    if (gate != null) await gate.future;
+    if (loadResults.containsKey(photo.id)) return loadResults[photo.id];
+    return PickedImage(
+      bytes: pngBytes,
+      contentType: 'image/png',
+      extension: 'png',
+    );
+  }
+
+  @override
+  Future<void> selectMore() async {
+    selectMoreCalls++;
+    await _tick();
+    allowed.addAll(selectMoreAdds);
   }
 }
 

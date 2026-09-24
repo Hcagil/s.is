@@ -28,4 +28,5 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.6 | **done** 2026-09-23 — unread counts and sender names in groups (#18); last seen, mutual and server-enforced (#21); settings pages (#20) |
 | v0.7 | **done** 2026-09-24 — tappable links and a full-screen photo viewer (#23); person and group profile pages with shared media and links |
 | v0.8 | **done** 2026-09-24 — notification settings, mutes and the sender (#27); the app's push client (#28); Notifications settings page and mute on person and group pages |
+| v0.9 | **done** 2026-09-24 — photos load once, yours appear at once, blurred previews first (#31); attachment sheet with the phone's own photos |
 | later | in progress — image attachments shipped as a demo; push has its database half, and needs a Firebase project before it can send (docs/DELIVERY.md) |

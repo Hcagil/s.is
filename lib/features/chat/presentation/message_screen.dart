@@ -16,6 +16,7 @@ import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
+import 'attachment_sheet.dart';
 import 'conversation_list.dart';
 import 'photo_viewer.dart';
 import 'profile_pages.dart';
@@ -418,10 +419,20 @@ class _ComposerState extends ConsumerState<_Composer> {
   /// Picks and sends an image, with whatever is typed as its caption.
   Future<void> _attach() async {
     if (_sending) return;
+    // The phone's own photos first; "All photos" falls back to the system
+    // picker. Closing the sheet sends nothing.
+    final choice = await showAttachmentSheet(context);
+    if (choice == null || !mounted) return;
     setState(() => _sending = true);
     final result = await ref
         .read(messagesProvider.notifier)
-        .sendImage(body: _controller.text);
+        .sendImage(
+          body: _controller.text,
+          chosen: switch (choice) {
+            ChosenPhoto(:final image) => image,
+            UseSystemPicker() => null,
+          },
+        );
     if (!mounted) return;
     setState(() => _sending = false);
     // null means the member backed out of the picker: not a failure.

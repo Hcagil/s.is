@@ -16,6 +16,7 @@ import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/image_picker_attachment_source.dart';
+import 'features/chat/data/photo_manager_gallery.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
 import 'features/notifications/application/notification_settings_controller.dart';
@@ -76,6 +77,7 @@ Future<void> main() async {
             SupabaseChatRepository(client, cache: attachmentCache),
           ),
           attachmentCacheProvider.overrideWithValue(attachmentCache),
+          galleryProvider.overrideWithValue(const PhotoManagerGallery()),
           presenceRepositoryProvider.overrideWithValue(
             SupabasePresenceRepository(client),
           ),

@@ -5,6 +5,8 @@ import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/member.dart';
 import '../../auth/domain/session_state.dart';
+import '../../notifications/domain/notification_settings.dart';
+import '../../notifications/presentation/notification_pages.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
@@ -75,6 +77,8 @@ class PersonScreen extends ConsumerWidget {
                 label: const Text('Message'),
               ),
             ],
+            // Muting a person silences them in every chat, groups included.
+            MuteTile(kind: MuteKind.person, target: userId),
             const SizedBox(height: 12),
             const TabBar(
               tabs: [
@@ -191,6 +195,7 @@ class GroupScreen extends ConsumerWidget {
                 key: const ValueKey('group-count'),
                 style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               ),
+            MuteTile(kind: MuteKind.conversation, target: conversationId),
             const SizedBox(height: 12),
             const TabBar(
               tabs: [

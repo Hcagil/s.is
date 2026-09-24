@@ -1,5 +1,5 @@
 begin;
-select plan(14);
+select plan(15);
 
 -- public.conversation_previews is a read path of its own: a view with its own
 -- grant. It is only safe because `security_invoker = true` makes it run with
@@ -116,13 +116,15 @@ select ok((select coalesce('security_invoker=true' = any(reloptions), false)
           'conversation_previews is still security_invoker');
 select has_column('public', 'conversation_previews', 'sender_id',
                   'conversation_previews exposes sender_id');
+select has_column('public', 'conversation_previews', 'deleted',
+                  'conversation_previews exposes deleted, for a placeholder row');
 -- Appended, not inserted: `create or replace view` cannot reorder columns, so
 -- a migration that put it anywhere else would not apply to an existing view.
 select is((select attname::text from pg_attribute
             where attrelid = 'public.conversation_previews'::regclass
               and attnum > 0 and not attisdropped
             order by attnum desc limit 1),
-          'sender_id', 'sender_id is the last column');
+          'deleted', 'deleted is now the last column, appended after sender_id');
 
 select * from finish();
 rollback;

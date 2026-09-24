@@ -46,6 +46,7 @@ final class Message {
     this.attachmentPath,
     this.attachmentPreview,
     this.localImage,
+    this.deletion,
   });
 
   final String id;
@@ -66,6 +67,19 @@ final class Message {
 
   bool get hasAttachment => attachmentPath != null || localImage != null;
 
+  /// Set when the sender deleted it for everyone; its content is gone.
+  final MessageDeletion? deletion;
+
+  bool get isDeleted => deletion != null;
+
+  /// Whether [me] may still delete this for everyone at [now]: their own,
+  /// stored, not yet deleted, and under 6 hours old (the server checks too).
+  bool canDeleteForEveryone(String me, DateTime now) =>
+      senderId == me &&
+      !isPending &&
+      deletion == null &&
+      now.difference(createdAt) < deleteForEveryoneWindow;
+
   /// Still on its way to the server.
   bool get isPending => localImage != null && attachmentPath == null;
 
@@ -78,3 +92,11 @@ final class Message {
 /// conversation names the sender only at the start of each run.
 bool startsRun(List<Message> messages, int index) =>
     index == 0 || messages[index - 1].senderId != messages[index].senderId;
+
+/// How long after sending a message its sender may delete it for everyone.
+const deleteForEveryoneWindow = Duration(hours: 6);
+
+/// What a delete for everyone left behind. Within an hour of sending the
+/// message vanishes as if never sent; after that, "This message was
+/// deleted" stays in its place.
+enum MessageDeletion { vanished, placeholder }

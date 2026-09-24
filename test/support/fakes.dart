@@ -360,6 +360,36 @@ class FakeChat implements ChatRepository {
     }
     return Ok(objectBytes[attachmentPath] ?? pngBytes);
   }
+
+  /// Every message handed to [deleteForEveryone], in order.
+  final deletedMessages = <Message>[];
+
+  /// Forces the outcome. Left null the fake answers like the server: it wipes
+  /// the message and delivers the update the way Realtime does -- vanished
+  /// under an hour old, a placeholder otherwise -- to both the conversation's
+  /// own subscription and the list-wide one.
+  Result<void>? deleteForEveryoneResult;
+
+  @override
+  Future<Result<void>> deleteForEveryone(Message message) async {
+    deletedMessages.add(message);
+    if (deleteForEveryoneResult case final forced?) return forced;
+    final vanished =
+        DateTime.now().difference(message.createdAt) < const Duration(hours: 1);
+    deliver(
+      Message(
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        body: '',
+        createdAt: message.createdAt,
+        deletion: vanished
+            ? MessageDeletion.vanished
+            : MessageDeletion.placeholder,
+      ),
+    );
+    return const Ok(null);
+  }
 }
 
 /// A chat repository written from the [ChatRepository] contract, for the
@@ -830,6 +860,51 @@ class ChatFake implements ChatRepository {
     }
     return Ok(objectBytes[attachmentPath] ?? pngBytes);
   }
+
+  /// Every message id [deleteForEveryone] was asked to delete, in order.
+  final deleted = <String>[];
+
+  /// Forces the outcome. Left null the fake answers like the server: refused
+  /// (DeniedFailure) unless the message is in [history], sent by [self]
+  /// (when set) or its own recorded sender, and not already deleted -- then
+  /// wipes it (vanished under an hour old, a placeholder otherwise) and
+  /// delivers the update to that conversation's subscription AND the
+  /// list-wide one, exactly like a real UPDATE over Realtime.
+  Result<void>? deleteForEveryoneResult;
+
+  @override
+  Future<Result<void>> deleteForEveryone(Message message) async {
+    await _tick('delete:${message.id}');
+    deleted.add(message.id);
+    if (deleteForEveryoneResult case final forced?) return forced;
+    final rows = history[message.conversationId];
+    final i = rows?.indexWhere((m) => m.id == message.id) ?? -1;
+    if (rows == null || i < 0) return const Err(DeniedFailure());
+    final existing = rows[i];
+    if (existing.isDeleted ||
+        (self != null && existing.senderId != self) ||
+        DateTime.now().difference(existing.createdAt) >
+            const Duration(hours: 6)) {
+      return const Err(DeniedFailure());
+    }
+    final vanished =
+        DateTime.now().difference(existing.createdAt) <
+        const Duration(hours: 1);
+    final wiped = Message(
+      id: existing.id,
+      conversationId: existing.conversationId,
+      senderId: existing.senderId,
+      body: '',
+      createdAt: existing.createdAt,
+      deletion: vanished
+          ? MessageDeletion.vanished
+          : MessageDeletion.placeholder,
+    );
+    rows[i] = wiped;
+    _streams[message.conversationId]?.add(wiped);
+    _all?.add(wiped);
+    return const Ok(null);
+  }
 }
 
 /// The refusals the storage bucket and the `messages` check constraint make.
@@ -1048,6 +1123,15 @@ class AttachmentCacheFake implements AttachmentCache {
   @override
   Future<void> write(String path, Uint8List bytes) async {
     _store[path] = bytes;
+  }
+
+  /// Every path [remove] was asked to forget, in order.
+  final removed = <String>[];
+
+  @override
+  Future<void> remove(String path) async {
+    removed.add(path);
+    _store.remove(path);
   }
 
   @override

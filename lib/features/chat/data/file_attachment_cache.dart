@@ -49,6 +49,15 @@ final class FileAttachmentCache implements AttachmentCache {
   }
 
   @override
+  Future<void> remove(String path) async {
+    try {
+      await (await _file(path)).delete();
+    } on FileSystemException {
+      // Not cached here: nothing to forget.
+    }
+  }
+
+  @override
   Future<void> clear() async {
     try {
       final d = await _dir();

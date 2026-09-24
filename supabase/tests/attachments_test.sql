@@ -171,6 +171,13 @@ select is((select count(*) from storage.objects where bucket_id = 'attachments')
 reset role;
 
 -- 6 the relaxed body check --------------------------------------------------
+-- messages_send now also requires the sender to own the storage object at
+-- attachment_path (20260924140000_delete_for_everyone.sql), so every photo
+-- fixture below needs a real, ann-owned row in storage.objects first.
+insert into storage.objects(bucket_id, name, owner_id, metadata) values
+  ('attachments', (select conv from _fx) || '/photo2.jpg', '00000000-0000-0000-0000-00000000aa01', '{"size":3}'::jsonb),
+  ('attachments', (select conv from _fx) || '/photo3.jpg', '00000000-0000-0000-0000-00000000aa01', '{"size":3}'::jsonb),
+  ('attachments', (select conv from _fx) || '/photo4.jpg', '00000000-0000-0000-0000-00000000aa01', '{"size":3}'::jsonb);
 select test_as('00000000-0000-0000-0000-00000000aa01', 'a7a7a7a7-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 select lives_ok(
   format($$insert into public.messages(conversation_id, sender_id, body, attachment_path)

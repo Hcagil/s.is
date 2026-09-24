@@ -133,6 +133,9 @@ class _RealtimeDown implements ChatRepository {
   @override
   Future<Result<Uint8List>> attachmentBytes(String path) =>
       live.attachmentBytes(path);
+  @override
+  Future<Result<void>> deleteForEveryone(Message message) =>
+      live.deleteForEveryone(message);
 }
 
 /// A container wired as production mounts it: only the repository provider

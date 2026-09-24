@@ -617,3 +617,26 @@ would add; a test pins that list.
 **If Google Play refuses the photo-permission declaration**, the owner's
 rule applies: the grid waits for the owner, and the permission comes out
 so releases keep flowing with the system picker alone.
+
+## 2026-09-24 — Deleting a message for everyone
+
+**A sender may delete their message for everyone for 6 hours** (owner's
+rule). Within the first hour it vanishes, animated away on any screen that
+shows it; between 1 and 6 hours it becomes "This message was deleted". The
+server enforces the window (`delete_message`), wipes the content (text,
+photo path, preview) and keeps the row as a tombstone, so the conversation
+still reads in order. Screens learn of it through Realtime UPDATEs, which
+respect the read policy; deletes stay unpublished because Realtime sends a
+DELETE to every subscriber of the table.
+
+**The photo file goes too.** Its sender may remove it only after
+`delete_message` recorded it and while no live message shows it. Each photo
+belongs to exactly one message, in that message's own conversation folder,
+and only to the member who uploaded it: otherwise a member could claim or
+re-post someone else's photo. Other phones drop it from their cache when
+the deletion reaches them. A failed removal is not retried (a known
+ceiling).
+
+**Long press opens the message's actions**: delete for everyone here;
+reply and forward join it in the next change. Nothing opens when there is
+nothing to offer.

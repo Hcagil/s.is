@@ -195,6 +195,24 @@ class DesignChat implements ChatRepository {
   @override
   Future<Result<Uint8List>> attachmentBytes(String attachmentPath) async =>
       const Err(NetworkFailure('not in this test'));
+
+  @override
+  Future<Result<void>> deleteForEveryone(Message message) async {
+    final rows = history[message.conversationId];
+    final i = rows?.indexWhere((m) => m.id == message.id) ?? -1;
+    if (rows == null || i < 0) return const Err(DeniedFailure());
+    final wiped = Message(
+      id: rows[i].id,
+      conversationId: rows[i].conversationId,
+      senderId: rows[i].senderId,
+      body: '',
+      createdAt: rows[i].createdAt,
+      deletion: MessageDeletion.vanished,
+    );
+    rows[i] = wiped;
+    deliver(wiped);
+    return const Ok(null);
+  }
 }
 
 class DesignTyping implements TypingChannel {

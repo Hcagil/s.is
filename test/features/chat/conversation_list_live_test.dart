@@ -211,6 +211,50 @@ void main() {
       );
     });
 
+    test(
+      'a deletion event re-reads the list: it does not hold the message '
+      'the deletion replaced, so it cannot compute the new preview itself',
+      () async {
+        final chat = ChatFake()..conversationsResult = Ok([conv('c1', 30)]);
+        await loaded(chat);
+        final readsBefore = chat.calls
+            .where((x) => x == 'conversations')
+            .length;
+
+        // The server now shows the conversation's preview one message back,
+        // or as a placeholder -- whichever it settled on.
+        chat.conversationsResult = Ok([
+          conv('c1', 30).withPreview(
+            Message(
+              id: 'del-1',
+              conversationId: 'c1',
+              senderId: 'u2',
+              body: '',
+              createdAt: at(31),
+              deletion: MessageDeletion.placeholder,
+            ),
+          ),
+        ]);
+        chat.deliver(
+          Message(
+            id: 'del-1',
+            conversationId: 'c1',
+            senderId: 'u2',
+            body: '',
+            createdAt: at(31),
+            deletion: MessageDeletion.placeholder,
+          ),
+        );
+        await settle();
+
+        expect(
+          chat.calls.where((x) => x == 'conversations').length,
+          greaterThan(readsBefore),
+          reason: 'a deletion event must trigger a re-read',
+        );
+      },
+    );
+
     test('a message arriving during the first read is not lost', () async {
       final chat = ChatFake()
         ..conversationsResult = Ok([conv('c1', 30), conv('c2', 20)])

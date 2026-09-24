@@ -1,6 +1,7 @@
 @Tags(['integration'])
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -78,14 +79,36 @@ const _names = {'fern': 'Zoe Fern', 'gus': 'Ana Gus', 'hugo': 'Mia Hugo'};
 
 String _uid(SupabaseClient c) => c.auth.currentUser!.id;
 
+/// A real 1x1 PNG: messages_send now requires the sender to own a real
+/// storage object at attachment_path (20260924140000_delete_for_everyone.sql),
+/// so every photo fixture below needs a real upload first, not just a path.
+final _photoBytes = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+);
+
+/// Uploads a real object at [path], owned by [c]'s account, so a message
+/// naming it as its attachment_path passes ownership -- and, for the folder
+/// check in the same policy, so [path] must already start with the
+/// conversation id it is inserted into.
+Future<void> _uploadPhoto(SupabaseClient c, String path) => c.storage
+    .from('attachments')
+    .uploadBinary(
+      path,
+      _photoBytes,
+      fileOptions: const FileOptions(contentType: 'image/png'),
+    );
+
 /// One message written straight into the table, the way the app's own
-/// inserts land (the server sets id and created_at).
+/// inserts land (the server sets id and created_at) -- except the upload,
+/// which the app does through [ChatRepository.sendImage] and this suite
+/// does directly, since it is exercising the read side, not the send.
 Future<String> _insert(
   SupabaseClient c,
   String conversation, {
   String body = '',
   String? photo,
 }) async {
+  if (photo != null) await _uploadPhoto(c, photo);
   final row = await c
       .from('messages')
       .insert({
@@ -99,22 +122,35 @@ Future<String> _insert(
   return row['id'] as String;
 }
 
-/// Many rows in ONE statement: they share a created_at.
+/// Many rows in ONE statement: they share a created_at. Every photo path is
+/// uploaded first (concurrently, in bounded batches so a few hundred of them
+/// do not open a few hundred sockets at once), for the same reason as above.
 Future<void> _bulk(
   SupabaseClient c,
   String conversation,
   int n, {
   String Function(int)? body,
   String Function(int)? photo,
-}) => c.from('messages').insert([
-  for (var i = 0; i < n; i++)
-    {
-      'conversation_id': conversation,
-      'sender_id': _uid(c),
-      'body': body?.call(i) ?? '',
-      'attachment_path': ?photo?.call(i),
-    },
-]);
+}) async {
+  if (photo != null) {
+    const batchSize = 25;
+    for (var start = 0; start < n; start += batchSize) {
+      final end = (start + batchSize < n) ? start + batchSize : n;
+      await Future.wait([
+        for (var i = start; i < end; i++) _uploadPhoto(c, photo(i)),
+      ]);
+    }
+  }
+  await c.from('messages').insert([
+    for (var i = 0; i < n; i++)
+      {
+        'conversation_id': conversation,
+        'sender_id': _uid(c),
+        'body': body?.call(i) ?? '',
+        'attachment_path': ?photo?.call(i),
+      },
+  ]);
+}
 
 T _ok<T>(Result<T> r, String what) {
   if (r is Err<T>) fail('$what failed: ${r.failure.message}');

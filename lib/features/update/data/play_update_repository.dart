@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/failure.dart';
+import '../../../data/failures.dart';
 import '../domain/update_repository.dart';
 
 /// [UpdateRepository] backed by `app_config` and Google Play in-app updates.
@@ -32,10 +33,8 @@ final class PlayUpdateRepository implements UpdateRepository {
           .eq('id', 1)
           .single();
       return Ok(row['min_supported_build'] as int);
-    } on PostgrestException catch (e) {
-      return Err(NetworkFailure(e.message));
     } catch (e) {
-      return Err(NetworkFailure('$e'));
+      return Err(readableFailure(e));
     }
   }
 
@@ -49,7 +48,7 @@ final class PlayUpdateRepository implements UpdateRepository {
       return Ok(offered ? info.availableVersionCode : null);
     } catch (e) {
       // Not installed from Play, or an unsupported platform: no update.
-      return Err(NetworkFailure('$e'));
+      return Err(readableFailure(e));
     }
   }
 

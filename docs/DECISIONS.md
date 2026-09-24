@@ -490,3 +490,30 @@ hundred, like the chat history.
 another chat's member page (group, member, Message) puts the new chat on top;
 leaving it hands the "open conversation" back to the one underneath instead
 of clearing it, so the group chat below keeps its live messages.
+
+## 2026-09-24 — Errors are written for the member
+
+**Offline, the app showed the SDK's own words**, such as "ClientException
+with SocketException: Failed host lookup". Every repository ended its error
+mapping with the raw text of whatever was thrown.
+
+**One mapper decides the words**: `readableFailure()` in
+`lib/data/failures.dart`. No connection (socket, TLS, timeout, the HTTP
+client's failure, Supabase's retryable auth failure, a refused Realtime
+socket, a Realtime join that timed out) says "No connection. Check your internet and try again." An
+answer from the server that is an error says "The server could not do
+that. Try again." Anything else says "Something went wrong. Try again."
+Errors that mean something keep their own words: a refusal is still "Not
+allowed", a taken tag still says so, a missing photo is still "not
+available".
+
+**The raw error is logged, not shown.** It goes to the device log under
+`sis.data`, so nothing is lost for debugging.
+
+**Sign-in keeps its diagnostics.** Google's error code and Supabase's
+rejection text stay on the sign-in screen: they are how a signing or client
+registration fault was found before. Only an offline sign-in now says "No
+connection" instead of blaming the token.
+
+**A pattern rule keeps it that way.** `tool/check_pattern.sh` (rule 6)
+fails CI when a feature's `data/` passes error text into a `NetworkFailure`.

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
+import '../../../data/failures.dart';
 import '../../../data/realtime_channels.dart';
 import '../../auth/domain/member.dart';
 import '../domain/attachment.dart';
@@ -28,14 +29,13 @@ final class SupabaseChatRepository implements ChatRepository {
   Failure _asFailure(Object e) => switch (e) {
     PostgrestException(:final code) when code == '42501' =>
       const DeniedFailure(),
-    PostgrestException(:final message) => NetworkFailure(message),
     // Storage refuses a non-member and reports a missing object alike; both
     // mean "not yours to see" or "gone", never raw SDK text on screen.
     StorageException(:final statusCode)
         when statusCode == '401' || statusCode == '403' =>
       const DeniedFailure(),
     StorageException() => const NetworkFailure('This photo is not available.'),
-    _ => NetworkFailure('$e'),
+    _ => readableFailure(e),
   };
 
   @override

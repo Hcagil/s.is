@@ -56,8 +56,14 @@ inside `chat`.
    failure path. Every Realtime repository joins and leaves through
    `lib/data/realtime_channels.dart` (`joinChannel`, `leaveChannel`).
 
-`tool/check_pattern.sh` enforces rules 1–3 by import analysis and rule 5 by
-scanning `catch` blocks under every `data/` directory; it runs in CI
+6. A feature's `data/` never builds a `NetworkFailure` from an error's text
+   (`'$e'`, `e.message`, `e.toString()`). SDK text is not written for people
+   and, offline, is a socket dump. The error goes to `readableFailure()` in
+   `lib/data/failures.dart`; only a plain sentence may be written inline.
+
+`tool/check_pattern.sh` enforces rules 1–3 by import analysis, rule 5 by
+scanning `catch` blocks under every `data/` directory and rule 6 by scanning
+`NetworkFailure(` arguments under every feature's `data/`; it runs in CI
 and blocks the merge on any violation. Violations are fixed by rewriting the
 offending code to the pattern, not by exempting it.
 
@@ -69,6 +75,11 @@ incomplete runtime configuration is not one of them: it is a screen state
 (`SetupRequired`), reached before any repository exists. Notifiers map failures to explicit screen states. Every failure
 state shows its reason on screen; there are no silent returns to a previous
 screen.
+
+The reason is written for the member, not the developer. An error with no
+domain meaning becomes one of three sentences in `lib/data/failures.dart`:
+no connection, the server refused, or something else went wrong. The raw
+error goes to the device log (`dart:developer`, name `sis.data`).
 
 ### Runtime configuration
 

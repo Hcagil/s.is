@@ -21,6 +21,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/chat/presentation/photo_viewer.dart';
 import 'package:sis/features/chat/presentation/profile_pages.dart';
+import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/domain/last_seen.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
@@ -136,6 +137,8 @@ class World {
       profileRepositoryProvider.overrideWithValue(profile),
       linkOpenerProvider.overrideWithValue(opener),
       attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
+      pushSourceProvider.overrideWithValue(PushSourceFake()),
+      pushRegistryProvider.overrideWithValue(PushRegistryFake()),
     ],
     child: const SisApp(),
   );

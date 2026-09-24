@@ -205,9 +205,16 @@ void main() {
       final registry = PushRegistryFake();
       final c = await signedIn(t, FakeAuth(session: true), source, registry);
 
+      registry.onForget = (_) => expect(
+        source.clearAllCalls,
+        0,
+        reason: 'the shade must not be cleared before the token is forgotten',
+      );
+
       await run(t, c.read(pushRegistrationProvider.notifier).forget());
 
       expect(registry.forgotten, ['device-token-1']);
+      expect(source.clearAllCalls, 1);
     });
 
     testWidgets("forgets the source's current token when nothing was "
@@ -225,11 +232,11 @@ void main() {
       await run(t, c.read(pushRegistrationProvider.notifier).forget());
 
       expect(registry.forgotten, ['device-token-1']);
+      expect(source.clearAllCalls, 1);
     });
 
-    testWidgets('nothing is forgotten when the platform has no token', (
-      t,
-    ) async {
+    testWidgets('nothing is forgotten when the platform has no token, but '
+        'the shade is still cleared', (t) async {
       final source = PushSourceFake(token: null);
       final registry = PushRegistryFake();
       final c = await signedIn(t, FakeAuth(session: true), source, registry);
@@ -237,6 +244,7 @@ void main() {
       await run(t, c.read(pushRegistrationProvider.notifier).forget());
 
       expect(registry.forgotten, isEmpty);
+      expect(source.clearAllCalls, 1);
     });
   });
 

@@ -1834,6 +1834,22 @@ class PushSourceFake implements PushSource {
   /// The member taps a notification while the app runs in the background.
   void openConversation(String id) => _opened.add(id);
 
+  /// Every conversation id [clearConversation] was called for, in order.
+  final cleared = <String>[];
+
+  /// How many times [clearAll] was called.
+  int clearAllCalls = 0;
+
+  @override
+  Future<void> clearConversation(String conversationId) async {
+    cleared.add(conversationId);
+  }
+
+  @override
+  Future<void> clearAll() async {
+    clearAllCalls++;
+  }
+
   @override
   Future<bool> requestPermission() async {
     permissionRequests++;

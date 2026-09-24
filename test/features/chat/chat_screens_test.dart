@@ -15,6 +15,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/conversation_list.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/home/presentation/home_screen.dart';
+import 'package:sis/features/notifications/application/push_controller.dart';
 
 import '../../support/fakes.dart';
 
@@ -49,23 +50,27 @@ class _SignedIn extends SessionController {
   Future<SessionState> build() async => const Allowed(me);
 }
 
-Future<ProviderContainer> _scope(ChatFake chat) => settled(
-  ProviderContainer.test(
-    overrides: [
-      chatRepositoryProvider.overrideWithValue(chat),
-      presenceRepositoryProvider.overrideWithValue(PresenceFake()),
-      sessionControllerProvider.overrideWith(_SignedIn.new),
-    ],
-  ),
-);
+Future<ProviderContainer> _scope(ChatFake chat, {PushSourceFake? push}) =>
+    settled(
+      ProviderContainer.test(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(chat),
+          presenceRepositoryProvider.overrideWithValue(PresenceFake()),
+          sessionControllerProvider.overrideWith(_SignedIn.new),
+          pushSourceProvider.overrideWithValue(push ?? PushSourceFake()),
+          pushRegistryProvider.overrideWithValue(PushRegistryFake()),
+        ],
+      ),
+    );
 
 Future<ProviderContainer> pump(
   WidgetTester tester,
   ChatFake chat, {
   Widget home = const ConversationList(),
   String? open,
+  PushSourceFake? push,
 }) async {
-  final container = await _scope(chat);
+  final container = await _scope(chat, push: push);
   if (open != null) {
     container.read(openConversationProvider.notifier).open(open);
   }
@@ -174,7 +179,8 @@ void main() {
       tester,
     ) async {
       final chat = ChatFake()..conversationsResult = const Ok([withBob]);
-      final container = await pump(tester, chat);
+      final push = PushSourceFake();
+      final container = await pump(tester, chat, push: push);
       expect(container.read(openConversationProvider), isNull);
 
       await tester.tap(find.byKey(const ValueKey('conversation-c1')));
@@ -182,6 +188,9 @@ void main() {
 
       expect(find.byType(MessageScreen), findsOneWidget);
       expect(container.read(openConversationProvider), 'c1');
+      expect(push.cleared, [
+        'c1',
+      ], reason: 'opening a conversation clears its own notification');
 
       await tester.pageBack();
       await tester.pumpAndSettle();

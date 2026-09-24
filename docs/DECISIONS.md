@@ -656,3 +656,27 @@ cannot read another's photos) and is owned by whoever forwarded it, so the
 original sender's later delete does not reach those copies -- as with any
 photo someone saved. The label is set by the sender's app, so it is a
 courtesy, not proof.
+
+## 2026-09-24 — Read status, mutual like last seen
+
+**Your message looks a little grey until it is read, then normal**
+(owner's choice). In a 1:1 chat that means the other person has read it;
+in a group, everyone who shares read status. Touching your message in a
+group shows who has read it.
+
+**Mutual, enforced by the server**, like last seen: a "Show when I have
+read messages" switch. While it is off, your reads are not shown to anyone
+and you see nobody's; a partner who hides it makes your messages simply
+normal. Read times live in `conversation_members.last_read_at`, which no
+client can select; they reach the app only through `read_marks()` and a
+`reads:<conversation>` broadcast that the database sends from `mark_read`,
+and only between members who both share. No client can send a read.
+
+**Known ceiling:** Realtime checks who may receive a channel when it is
+joined (and at token refresh), not per message. A modified client that
+joins while sharing and then turns sharing off keeps receiving reads until
+its token refreshes; the app itself re-subscribes when the switch changes.
+The same holds for typing and membership changes.
+
+**In a 1:1 chat the header says just "typing…"**: the person is already
+named above it.

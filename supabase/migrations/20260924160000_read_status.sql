@@ -30,7 +30,9 @@ language sql stable security definer set search_path = '' as $$
     from public.conversation_members cm
     left join public.profiles p on p.user_id = cm.user_id
    cross join lateral (
+     -- Someone taken off the allowlist shows nothing, as for last seen.
      select coalesce(p.share_read_status, false)
+            and app_private.is_allowed(cm.user_id)
             and app_private.shares_read_status() as both_share
    ) s
    where cm.conversation_id = conversation

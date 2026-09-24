@@ -7,6 +7,7 @@ import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../../chat/presentation/person_avatar.dart';
 import '../../notifications/application/push_controller.dart';
+import '../../notifications/presentation/notification_pages.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../update/application/update_controller.dart';
 import '../application/profile_controller.dart';
@@ -122,6 +123,12 @@ class SettingsScreen extends StatelessWidget {
             Icons.lock_outline_rounded,
             'Privacy',
             const PrivacyScreen(),
+          ),
+          row(
+            'settings-notifications',
+            Icons.notifications_outlined,
+            'Notifications',
+            const NotificationsScreen(),
           ),
           row(
             'settings-account',

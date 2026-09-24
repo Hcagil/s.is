@@ -17,8 +17,10 @@ import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/data/image_picker_attachment_source.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
+import 'features/notifications/application/notification_settings_controller.dart';
 import 'features/notifications/application/push_controller.dart';
 import 'features/notifications/data/firebase_push_source.dart';
+import 'features/notifications/data/supabase_notification_settings_repository.dart';
 import 'features/notifications/data/supabase_push_registry.dart';
 import 'features/presence/application/presence_controllers.dart';
 import 'features/presence/data/supabase_presence_repository.dart';
@@ -85,6 +87,9 @@ Future<void> main() async {
             FirebasePushSource(FirebaseMessaging.instance),
           ),
           pushRegistryProvider.overrideWithValue(SupabasePushRegistry(client)),
+          notificationSettingsRepositoryProvider.overrideWithValue(
+            SupabaseNotificationSettingsRepository(client),
+          ),
         ],
         child: const SisApp(),
       ),

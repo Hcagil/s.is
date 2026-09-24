@@ -16,6 +16,7 @@ import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/notifications/domain/notification_settings.dart';
 import 'package:sis/features/notifications/domain/push.dart';
 import 'package:sis/features/presence/domain/presence_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
@@ -1473,4 +1474,112 @@ class _ImageResponse extends Stream<List<int>> implements HttpClientResponse {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+/// A notification settings repository written from the
+/// [NotificationSettingsRepository] contract: defaults when nothing is
+/// saved, a mute replaces any existing one for the same kind and target, and
+/// every call can be forced to a failure or held in flight, the way a real
+/// request can arrive slowly or not at all.
+class NotificationSettingsFake implements NotificationSettingsRepository {
+  NotificationSettingsFake({
+    this.settings = const NotificationSettings(),
+    Iterable<Mute> mutes = const [],
+    this.latency = Duration.zero,
+  }) : savedMutes = [...mutes];
+
+  /// The row as the database holds it now.
+  NotificationSettings settings;
+
+  /// Every saved mute, expired ones included, as the database holds them.
+  List<Mute> savedMutes;
+
+  final Duration latency;
+
+  /// Force an outcome; left null the fake answers from its own state.
+  Result<NotificationSettings>? loadResult;
+  Result<void>? saveResult;
+  Result<List<Mute>>? mutesResult;
+  Result<void>? muteResult;
+  Result<void>? unmuteResult;
+
+  /// Call names in order: `load`, `save`, `mutes`, `mute`, `unmute`.
+  final calls = <String>[];
+  final saves = <NotificationSettings>[];
+  final muteCalls = <(MuteKind kind, String target, DateTime? until)>[];
+  final unmuteCalls = <(MuteKind kind, String target)>[];
+
+  Completer<void>? _loadHold;
+  Completer<void>? _mutesHold;
+
+  /// The next [load] stays in flight until [releaseLoad].
+  void holdLoad() => _loadHold = Completer<void>();
+  void releaseLoad() {
+    _loadHold?.complete();
+    _loadHold = null;
+  }
+
+  /// The next [mutes] read stays in flight until [releaseMutes].
+  void holdMutes() => _mutesHold = Completer<void>();
+  void releaseMutes() {
+    _mutesHold?.complete();
+    _mutesHold = null;
+  }
+
+  Future<void> _tick(String call) async {
+    calls.add(call);
+    if (latency > Duration.zero) await Future<void>.delayed(latency);
+  }
+
+  @override
+  Future<Result<NotificationSettings>> load() async {
+    await _tick('load');
+    if (_loadHold case final hold?) await hold.future;
+    return loadResult ?? Ok(settings);
+  }
+
+  @override
+  Future<Result<void>> save(NotificationSettings next) async {
+    await _tick('save');
+    saves.add(next);
+    if (saveResult case final forced?) return forced;
+    settings = next;
+    return const Ok(null);
+  }
+
+  @override
+  Future<Result<List<Mute>>> mutes() async {
+    await _tick('mutes');
+    if (_mutesHold case final hold?) await hold.future;
+    return mutesResult ?? Ok([...savedMutes]);
+  }
+
+  @override
+  Future<Result<void>> mute(
+    MuteKind kind,
+    String target,
+    DateTime? until,
+  ) async {
+    await _tick('mute');
+    muteCalls.add((kind, target, until));
+    if (muteResult case final forced?) return forced;
+    savedMutes = [
+      for (final m in savedMutes)
+        if (m.kind != kind || m.target != target) m,
+      Mute(kind: kind, target: target, until: until),
+    ];
+    return const Ok(null);
+  }
+
+  @override
+  Future<Result<void>> unmute(MuteKind kind, String target) async {
+    await _tick('unmute');
+    unmuteCalls.add((kind, target));
+    if (unmuteResult case final forced?) return forced;
+    savedMutes = [
+      for (final m in savedMutes)
+        if (m.kind != kind || m.target != target) m,
+    ];
+    return const Ok(null);
+  }
 }

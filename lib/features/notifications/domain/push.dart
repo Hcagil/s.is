@@ -21,6 +21,12 @@ abstract interface class PushSource {
 
   /// Conversation ids of notifications tapped while the app is running in the background.
   Stream<String> get openedConversations;
+
+  /// The member opened [conversationId]: its notification leaves the shade.
+  Future<void> clearConversation(String conversationId);
+
+  /// Sign-out: every notification of this account leaves the shade.
+  Future<void> clearAll();
 }
 
 /// The server's list of where to deliver (implemented over the Supabase RPCs

@@ -58,8 +58,11 @@ class PushRegistration extends Notifier<String?> {
   /// Best effort -- if it fails, the server still sends nothing to a device
   /// whose session has ended.
   Future<void> forget() async {
-    final token = state ?? await ref.read(pushSourceProvider).token();
+    final source = ref.read(pushSourceProvider);
+    final token = state ?? await source.token();
     if (token != null) await ref.read(pushRegistryProvider).forget(token);
+    // Nothing of this account stays in the notification shade.
+    await source.clearAll();
   }
 }
 

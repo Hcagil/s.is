@@ -22,6 +22,7 @@ import 'features/chat/data/url_launcher_link_opener.dart';
 import 'features/notifications/application/notification_settings_controller.dart';
 import 'features/notifications/application/push_controller.dart';
 import 'features/notifications/data/firebase_push_source.dart';
+import 'features/notifications/data/local_push_display.dart';
 import 'features/notifications/data/supabase_notification_settings_repository.dart';
 import 'features/notifications/data/supabase_push_registry.dart';
 import 'features/presence/application/presence_controllers.dart';
@@ -57,6 +58,9 @@ Future<void> main() async {
     );
     // Push: reads android/app/google-services.json, bundled at build time.
     await Firebase.initializeApp();
+    // Pushes are data only; the app shows them itself, grouped.
+    FirebaseMessaging.onBackgroundMessage(onBackgroundPush);
+    await LocalPushDisplay.init(onTap: FirebasePushSource.tapped);
     final client = Supabase.instance.client;
     final attachmentCache = FileAttachmentCache();
     runApp(

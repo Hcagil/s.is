@@ -115,9 +115,13 @@ async function send(id: string): Promise<void> {
         body: JSON.stringify({
           message: {
             token: t.token,
-            notification: { title: t.title, body: t.body },
-            // Tapping opens this conversation. Not shown on the lock screen.
-            data: { conversation_id: t.conversation_id },
+            // Data only: the app shows it itself, grouped into one SIS
+            // notification per phone, a line per message within each chat.
+            data: {
+              conversation_id: t.conversation_id,
+              title: t.title,
+              body: t.body,
+            },
             android: { priority: 'high' },
           },
         }),

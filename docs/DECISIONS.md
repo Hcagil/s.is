@@ -729,3 +729,19 @@ Reconstructing a multi-GB image from a remote layer cache with `load: true`
 costs as much as building it from scratch; not worth the added workflow
 complexity. Reverted; `docker compose build` stayed as it was. The
 `supabase start -x ...` trim (this entry) is the change that stuck.
+
+## 2026-09-24 — One SIS notification, grouped like Telegram
+
+**Pushes carry data only, and the app shows them itself** (owner's choice):
+one SIS summary in the shade that expands into a notification per chat,
+each listing that chat's newest lines, instead of one notification per
+message. The server still words each line by the recipient's own preview
+setting (full, sender only, no details), so a phone is never sent more than
+its owner allowed; the app only arranges them. With "no details" a chat's
+entry says "SIS: New message", so the grouping shows how many chats have
+news, never who or what.
+
+**What is waiting is kept on the phone** (shared preferences), because a
+push is shown by a short-lived background isolate while the app is closed.
+Opening a chat clears its notification; signing out clears them all. While
+the app is open nothing is shown: the chat list already says what is new.

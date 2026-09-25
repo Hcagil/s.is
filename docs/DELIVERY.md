@@ -86,8 +86,10 @@ tool/ci_local.sh            # everything: pattern, format, analyze, unit
                              # tests, a debug build, db lint, pgTAP, and the
                              # integration folder
 tool/ci_local.sh --no-db    # skip the database part (no local Supabase
-                             # stack needed)
-tool/ci_local.sh --db-only  # only the database part
+                             # stack needed) -- measured 3:43
+tool/ci_local.sh --db-only  # only the database part -- measured 10:12,
+                             # 9:47 of it the integration tests; not fast,
+                             # run it before pushing a data/ or db/ change
 tool/ci_local.sh --reset-db # replay migrations onto a clean database first,
                              # instead of reusing whatever is already running
 ```

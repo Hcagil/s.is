@@ -703,3 +703,12 @@ protection or a stranger's code on the owner's machine. CI speed (this
 entry's sibling work: `.github/workflows/ci.yml`, `tool/ci_local.sh`) is
 the lever that stays available: less wall-clock time on hosted runners,
 same protection, same public repo.
+
+**Tried and reverted: caching the flutter dev image with
+`docker/build-push-action`'s GitHub Actions cache (`type=gha`).** Measured
+on PR #36 (Android "Build development image"): 125 s baseline → 374 s on
+the run that filled the cache → 141 s on a warm run (36097541294).
+Reconstructing a multi-GB image from a remote layer cache with `load: true`
+costs as much as building it from scratch; not worth the added workflow
+complexity. Reverted; `docker compose build` stayed as it was. The
+`supabase start -x ...` trim (this entry) is the change that stuck.

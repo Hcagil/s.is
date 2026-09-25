@@ -1,7 +1,6 @@
 @Tags(['integration'])
 library;
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +20,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/dead_host.dart';
 
 /// The home screen wired exactly as `main.dart` wires it, over a real
 /// [SupabaseChatRepository] pointed at a server that will never answer.
@@ -49,9 +49,6 @@ const _key = String.fromEnvironment(
 );
 const _password = 'integration-password';
 
-/// A host that accepts nothing: the honest form of "the connection failed".
-const _deadUrl = 'http://127.0.0.1:1';
-
 SupabaseClient _client(String url) => SupabaseClient(
   url,
   _key,
@@ -72,18 +69,6 @@ Future<SupabaseClient> _signedIn(String email) async {
     reason: 'activate_session refused an allowlisted user',
   );
   return client;
-}
-
-/// A dead-host client carrying a real, unexpired session: `conversations()`
-/// first checks `auth.currentUser`, which an unauthenticated dead client
-/// never would, short-circuiting to `DeniedFailure` before a socket ever
-/// opens and proving nothing about the offline message.
-Future<SupabaseClient> _deadButSignedIn(SupabaseClient live) async {
-  final dead = _client(_deadUrl);
-  await dead.auth.recoverSession(
-    jsonEncode(live.auth.currentSession!.toJson()),
-  );
-  return dead;
 }
 
 void main() {
@@ -109,7 +94,7 @@ void main() {
             .update({'onboarding_done': true})
             .eq('user_id', live.auth.currentUser!.id),
       );
-      final dead = (await t.runAsync(() => _deadButSignedIn(live)))!;
+      final dead = (await t.runAsync(() => deadButSignedIn(live)))!;
       addTearDown(() => dead.dispose());
 
       final container = ProviderContainer(

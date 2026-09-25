@@ -383,7 +383,9 @@ void main() {
       await t.runAsync(() => coraClient!.removeAllChannels());
       await t.runAsync(() => reidClient!.realtime.disconnect());
       await t.runAsync(() => coraClient!.realtime.disconnect());
-      await t.pump(const Duration(seconds: 61));
+      // No pump(61 s) to flush timers, as the fake-clock suites end with:
+      // under this live binding it is a real minute of waiting, and a live
+      // test has no pending fake timers to flush.
     },
   );
 }

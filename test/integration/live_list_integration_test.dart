@@ -16,6 +16,8 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/dead_host.dart';
+
 /// The live conversation list against the real stack: the REAL
 /// [ConversationListController] on the REAL [SupabaseChatRepository], with
 /// real Realtime deciding per subscriber, through row-level security, which
@@ -37,9 +39,6 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 const _password = 'integration-password';
-
-/// A host that accepts nothing: the honest form of "the connection failed".
-const _deadUrl = 'http://127.0.0.1:1';
 
 SupabaseClient _client(String url) => SupabaseClient(
   url,
@@ -197,7 +196,7 @@ void main() {
     samClient = await _signedIn('sam@integration.test');
     tessClient = await _signedIn('tess@integration.test');
     roseClient = await _signedIn('rose@integration.test');
-    deadClient = _client(_deadUrl);
+    deadClient = deadHostClient();
     rose = SupabaseChatRepository(roseClient!);
     sam = SupabaseChatRepository(samClient!);
     tess = SupabaseChatRepository(tessClient!);

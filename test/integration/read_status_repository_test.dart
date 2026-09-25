@@ -12,6 +12,8 @@ import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/dead_host.dart';
+
 /// [SupabaseChatRepository.readMarks], `.readUpdates` and `.markRead` against
 /// the real local stack: the real RPCs and the real Realtime broadcast that
 /// `mark_read` sends.
@@ -32,8 +34,6 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 const _password = 'integration-password';
-const _deadUrl = 'http://127.0.0.1:1';
-
 SupabaseClient _client([String url = _url]) => SupabaseClient(
   url,
   _key,
@@ -303,7 +303,7 @@ void main() {
     });
 
     test('an unreachable server is an Err, not an exception', () async {
-      final dead = _client(_deadUrl);
+      final dead = deadHostClient();
       extra.add(dead);
       final repo = SupabaseChatRepository(dead);
       expect(await repo.readMarks(club), isA<Err<List<ReadMark>>>());

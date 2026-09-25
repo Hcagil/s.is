@@ -9,6 +9,8 @@ import 'package:sis/data/failures.dart' show offlineMessage;
 import 'package:sis/features/notifications/data/supabase_push_registry.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/dead_host.dart';
+
 /// [SupabasePushRegistry] against the real stack: the register_device_token
 /// and forget_device_token RPCs, over a signed-in client.
 ///
@@ -158,13 +160,7 @@ void main() {
       () async {
         // A host that accepts nothing: the honest form of "the connection
         // failed", exactly as the other data-layer integration suites use it.
-        final dead = SupabaseClient(
-          'http://127.0.0.1:1',
-          _key,
-          authOptions: const AuthClientOptions(
-            authFlowType: AuthFlowType.implicit,
-          ),
-        );
+        final dead = deadHostClient();
         extra.add(dead);
         final result = await SupabasePushRegistry(dead).register(_token());
         expect(result, isA<Err<void>>());

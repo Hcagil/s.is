@@ -16,6 +16,8 @@ import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/dead_host.dart';
+
 /// Last seen against the real stack: [SupabasePresenceRepository]'s two RPCs,
 /// [SupabaseProfileRepository]'s share_last_seen column, and the REAL
 /// providers wired as `main.dart` wires them, over two signed-in clients.
@@ -39,9 +41,6 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 const _password = 'integration-password';
-
-/// A host that accepts nothing: the honest form of "the connection failed".
-const _deadUrl = 'http://127.0.0.1:1';
 
 SupabaseClient _client([String url = _url]) => SupabaseClient(
   url,
@@ -354,7 +353,7 @@ void main() {
     });
 
     test('a broken connection fails both calls instead of throwing', () async {
-      final dead = _client(_deadUrl);
+      final dead = deadHostClient();
       extra.add(dead);
       final repo = SupabasePresenceRepository(dead);
       final touched = await repo.touchLastSeen();
@@ -490,7 +489,7 @@ void main() {
         'the reporter does not throw', () async {
       // Only the presence repository's connection is dead; the profile is
       // real, so the failure under test is this seam and nothing upstream.
-      final dead = _client(_deadUrl);
+      final dead = deadHostClient();
       extra.add(dead);
       final c = ProviderContainer.test(
         overrides: [

@@ -247,7 +247,9 @@ void main() {
         await t.pumpWidget(const SizedBox());
         await t.runAsync(() => cleoClient!.removeAllChannels());
         await t.runAsync(() => cleoClient!.realtime.disconnect());
-        await t.pump(const Duration(seconds: 61));
+        // No pump(61 s) to flush timers, as the fake-clock suites end with:
+        // under this live binding it is a real minute of waiting, and a live
+        // test has no pending fake timers to flush.
       },
       timeout: const Timeout(Duration(seconds: 120)),
     );

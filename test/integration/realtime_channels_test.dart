@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/data/realtime_channels.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/dead_host.dart';
+
 /// `joinChannel` / `leaveChannel` against the real Realtime server.
 ///
 /// These helpers exist because a failed private join used to hang the failure
@@ -28,9 +30,6 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 const _password = 'integration-password';
-
-/// Nothing listens here: a server that is not there at all.
-const _deadUrl = 'http://127.0.0.1:1';
 
 /// Well inside joinChannel's default 15 s, and inside the SDK's own 10 s join
 /// timeout, so a helper that ignores `channelError` and waits for either
@@ -203,7 +202,7 @@ void main() {
     }, timeout: const Timeout(Duration(minutes: 1)));
 
     test('an unreachable server fails by the given timeout', () async {
-      final c = _client(_deadUrl);
+      final c = _client(deadUrl);
       final ch = _presence(c);
       const timeout = Duration(seconds: 3);
       await _failsWithin(
@@ -222,7 +221,7 @@ void main() {
       ),
       (
         'on a dead socket',
-        () async => _client(_deadUrl),
+        () async => _client(deadUrl),
         (RealtimeChannel ch) =>
             joinChannel(ch, timeout: const Duration(seconds: 2)),
       ),
@@ -252,7 +251,7 @@ void main() {
     }
 
     test('on a dead socket without a controller, never throws', () async {
-      final c = _client(_deadUrl);
+      final c = _client(deadUrl);
       final ch = _presence(c);
       expect(() => leaveChannel(c, ch), returnsNormally);
       await _dropped(c, ch);
@@ -262,7 +261,7 @@ void main() {
     test('never throws, even when the controller refuses to close', () async {
       // close() throws StateError while an addStream is in flight: the one
       // teardown that fails synchronously.
-      final c = _client(_deadUrl);
+      final c = _client(deadUrl);
       final ch = _presence(c);
       final controller = StreamController<Object?>();
       unawaited(controller.addStream(StreamController<Object?>().stream));

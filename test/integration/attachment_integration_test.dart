@@ -25,6 +25,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/service_key.dart';
+import '../support/dead_host.dart';
 
 /// Image attachments against the real stack: a real upload into a private
 /// bucket, real storage row-level security, a real signed URL fetched over
@@ -53,9 +54,6 @@ const _password = 'integration-password';
 // sender to own a real storage object at attachment_path) -- a state a real
 // client can no longer reach, but the one this fixture needs to exist so the
 // read side's handling of a dangling reference is still exercised.
-
-/// A host that accepts nothing: the honest form of "the connection failed".
-const _deadUrl = 'http://127.0.0.1:1';
 
 /// A real 1x1 PNG. Real bytes, because the bucket checks the mime type and
 /// the HTTP round trip below compares what came back with what went up.
@@ -164,7 +162,7 @@ void main() {
     noahClient = await _signedIn('noah@integration.test');
     miaClient = await _signedIn('mia@integration.test');
     liamClient = await _signedIn('liam@integration.test');
-    deadClient = _client(_deadUrl);
+    deadClient = deadHostClient();
     liam = SupabaseChatRepository(liamClient!);
     mia = SupabaseChatRepository(miaClient!);
     noah = SupabaseChatRepository(noahClient!);

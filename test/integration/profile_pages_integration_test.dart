@@ -28,6 +28,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/dead_host.dart';
 
 /// The profile pages' three reads through the real stack --
 /// [SupabaseChatRepository.conversationMembers], `sharedMedia` and
@@ -48,8 +49,6 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 const _password = 'integration-password';
-const _deadUrl = 'http://127.0.0.1:1';
-
 SupabaseClient _client(String url) => SupabaseClient(
   url,
   _key,
@@ -206,7 +205,7 @@ void main() {
     gusClient = await _signedIn('gus@integration.test');
     hugoClient = await _signedIn('hugo@integration.test');
     inesClient = await _signedIn('ines@integration.test');
-    deadClient = _client(_deadUrl);
+    deadClient = deadHostClient();
     fern = SupabaseChatRepository(fernClient!);
     gus = SupabaseChatRepository(gusClient!);
     hugo = SupabaseChatRepository(hugoClient!);

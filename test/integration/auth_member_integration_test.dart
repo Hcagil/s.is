@@ -1,7 +1,6 @@
 @Tags(['integration'])
 library;
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +10,8 @@ import 'package:sis/data/failures.dart' show offlineMessage;
 import 'package:sis/features/auth/data/supabase_auth_repository.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../support/dead_host.dart';
 
 /// `SupabaseAuthRepository.currentMember()` against a running local Supabase:
 /// the member it returns carries the signed-in account's email, which
@@ -33,9 +34,6 @@ const _key = String.fromEnvironment(
 );
 const _password = 'integration-password';
 
-/// A host that accepts nothing: the honest form of "the connection failed".
-const _deadUrl = 'http://127.0.0.1:1';
-
 SupabaseClient _client(String url) => SupabaseClient(
   url,
   _key,
@@ -52,20 +50,6 @@ Future<SupabaseClient> signedIn(String email) async {
   expect(client.auth.currentUser, isNotNull, reason: 'sign-in failed');
   expect(await client.rpc('activate_session'), isTrue);
   return client;
-}
-
-/// A dead-host client carrying a real, unexpired session. `recoverSession`
-/// only decodes the session and checks its expiry locally, so this reaches
-/// the network-erroring path of `currentMember()`, which first checks
-/// `auth.currentUser` and would otherwise short-circuit to `DeniedFailure`
-/// on an unauthenticated dead client, proving nothing about the offline
-/// message.
-Future<SupabaseClient> deadButSignedIn(SupabaseClient live) async {
-  final dead = _client(_deadUrl);
-  await dead.auth.recoverSession(
-    jsonEncode(live.auth.currentSession!.toJson()),
-  );
-  return dead;
 }
 
 /// The offline message, never the raw SDK error that produced it.
@@ -115,7 +99,7 @@ void main() {
 
   test('a broken connection: activateSession() fails with the offline '
       'message, not raw SDK text', () async {
-    final dead = _client(_deadUrl);
+    final dead = deadHostClient();
     clients.add(dead);
 
     final result = await repoOver(dead).activateSession();

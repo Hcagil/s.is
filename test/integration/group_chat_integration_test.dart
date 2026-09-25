@@ -10,6 +10,8 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/dead_host.dart';
+
 /// Groups through the real stack.
 ///
 /// The widget and controller tests prove the controllers behave with a fake
@@ -32,9 +34,6 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 const _password = 'integration-password';
-
-/// A host that accepts nothing: the honest form of "the connection failed".
-const _deadUrl = 'http://127.0.0.1:1';
 
 /// An account that does not exist, to stand in for an invitee the caller may
 /// not add.
@@ -99,7 +98,7 @@ void main() {
     ivyClient = await signedIn('ivy@integration.test');
     jackClient = await signedIn('jack@integration.test');
     kimClient = await signedIn('kim@integration.test');
-    deadClient = _client(_deadUrl);
+    deadClient = deadHostClient();
     hank = ChatRepositoryOwner(hankClient!);
     ivy = ChatRepositoryOwner(ivyClient!);
     jack = ChatRepositoryOwner(jackClient!);

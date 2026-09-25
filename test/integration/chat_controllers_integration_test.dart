@@ -1,8 +1,6 @@
 @Tags(['integration'])
 library;
 
-import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
@@ -13,6 +11,8 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../support/dead_host.dart';
 
 /// The controller seam against the real stack.
 ///
@@ -35,9 +35,6 @@ const _key = String.fromEnvironment(
 );
 const _password = 'integration-password';
 
-/// A host that accepts nothing: the honest form of "the connection failed".
-const _deadUrl = 'http://127.0.0.1:1';
-
 SupabaseClient _client(String url) => SupabaseClient(
   url,
   _key,
@@ -58,20 +55,6 @@ Future<SupabaseClient> signedIn(String email) async {
     reason: 'activate_session refused an allowlisted user',
   );
   return client;
-}
-
-/// A dead-host client carrying a real, unexpired session. `recoverSession`
-/// only decodes the session and checks its expiry locally — no request
-/// leaves the device — so this reaches the network-erroring path of a call
-/// that first checks `auth.currentUser`, which an unauthenticated dead
-/// client never would: it would return `DeniedFailure` before a socket ever
-/// opens, proving nothing about the offline message.
-Future<SupabaseClient> deadButSignedIn(SupabaseClient live) async {
-  final dead = _client(_deadUrl);
-  await dead.auth.recoverSession(
-    jsonEncode(live.auth.currentSession!.toJson()),
-  );
-  return dead;
 }
 
 /// Never the raw SDK error that produced the message: no exception name, no
@@ -147,7 +130,7 @@ void main() {
     carolClient = await signedIn('carol@integration.test');
     carol = ChatRepositoryOwner(carolClient!);
     dan = ChatRepositoryOwner(danClient!);
-    deadClient = _client(_deadUrl);
+    deadClient = deadHostClient();
     offline = ChatRepositoryOwner(deadClient!);
     deadSignedInClient = await deadButSignedIn(carolClient!);
     offlineSignedIn = ChatRepositoryOwner(deadSignedInClient!);

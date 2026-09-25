@@ -128,8 +128,18 @@ jobs:
         run: docker compose build supabase
       # `start`, not `db start`: the integration tests need the API, auth and
       # Realtime services, not only Postgres.
+      #
+      # -x excludes containers nothing here talks to (grepped: no test
+      # references mailpit, postgres-meta, studio, edge-runtime, logflare,
+      # vector, imgproxy or supavisor -- the pooler is already `enabled =
+      # false` in supabase/config.toml, imgproxy only serves the Pro-only
+      # image_transformation feature, which is disabled). On a GH-hosted
+      # runner's 2 vCPUs those extra containers (Logflare and Vector
+      # especially) compete with Realtime's replication for CPU; that contention, not
+      # Realtime itself, is why message delivery lags far more here than on a
+      # developer machine with cores to spare (see docs/DECISIONS.md).
       - name: Start Supabase and replay migrations
-        run: docker compose run --rm supabase start
+        run: docker compose run --rm supabase start -x imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - name: Lint database
         run: docker compose run --rm supabase db lint --level error
       - name: Test database

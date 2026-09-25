@@ -672,6 +672,20 @@ client can select; they reach the app only through `read_marks()` and a
 `reads:<conversation>` broadcast that the database sends from `mark_read`,
 and only between members who both share. No client can send a read.
 
+**2026-09-25: a read made while the switch was off stays hidden forever,
+even after it is turned back on.** `read_marks()` originally returned
+`last_read_at` whenever both members *currently* share, so a read made at
+03:00 with sharing off became visible the moment sharing was switched back
+on at noon -- exactly what "your reads are not shown to anyone" promised
+against. The fix (`20260925090000_shared_read_at.sql`) adds
+`conversation_members.shared_read_at`, which `mark_read` only advances when
+the reader shares at that instant; `read_marks()` now returns
+`shared_read_at`, not `last_read_at`, under the same mutual-sharing gate. A
+read made while sharing, then hidden by turning sharing off, stays visible
+(it was already shared); a read made while off never becomes visible, turning
+sharing back on or not. `last_read_at` is untouched and still drives unread
+counts, which were never about privacy.
+
 **Known ceiling:** Realtime checks who may receive a channel when it is
 joined (and at token refresh), not per message. A modified client that
 joins while sharing and then turns sharing off keeps receiving reads until

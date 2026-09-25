@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/controls.dart';
+import '../../../app/loading.dart';
+import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../../chat/application/chat_controllers.dart';
 import '../../chat/presentation/conversation_list.dart';
@@ -19,8 +22,7 @@ class NotificationsScreen extends ConsumerWidget {
           .read(notificationSettingsProvider.notifier)
           .save(next);
       if (r case Err(:final failure) when context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(failure.message)));
+        showSisNotice(context, failure.message, isError: true);
       }
     }
 
@@ -30,38 +32,34 @@ class NotificationsScreen extends ConsumerWidget {
         AsyncData(:final value) => ListView(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           children: [
-            SwitchListTile(
+            SisSwitchTile(
               key: const ValueKey('notif-enabled'),
-              title: const Text('Notifications'),
-              subtitle: const Text('New messages when the app is closed'),
+              title: 'Notifications',
+              subtitle: 'New messages when the app is closed',
               value: value.enabled,
               onChanged: (on) => save(value.copyWith(enabled: on)),
             ),
             const _Header('On the lock screen'),
-            RadioGroup<NotificationPreview>(
-              groupValue: value.preview,
-              onChanged: (p) {
-                if (p != null) save(value.copyWith(preview: p));
-              },
-              child: Column(
-                children: [
-                  for (final p in NotificationPreview.values)
-                    RadioListTile<NotificationPreview>(
-                      key: ValueKey('notif-preview-${p.name}'),
-                      value: p,
-                      title: Text(switch (p) {
-                        NotificationPreview.full => 'Name and message',
-                        NotificationPreview.sender => 'Only who it is from',
-                        NotificationPreview.none => 'No details',
-                      }),
-                      subtitle: Text(switch (p) {
-                        NotificationPreview.full => 'Ayşe: See you at 8',
-                        NotificationPreview.sender => 'Ayşe: New message',
-                        NotificationPreview.none => 'SIS: New message',
-                      }),
-                    ),
-                ],
-              ),
+            Column(
+              children: [
+                for (final p in NotificationPreview.values)
+                  SisChoiceCard<NotificationPreview>(
+                    key: ValueKey('notif-preview-${p.name}'),
+                    value: p,
+                    groupValue: value.preview,
+                    onChanged: (p) => save(value.copyWith(preview: p)),
+                    title: switch (p) {
+                      NotificationPreview.full => 'Name and message',
+                      NotificationPreview.sender => 'Only who it is from',
+                      NotificationPreview.none => 'No details',
+                    },
+                    subtitle: switch (p) {
+                      NotificationPreview.full => 'Ayşe: See you at 8',
+                      NotificationPreview.sender => 'Ayşe: New message',
+                      NotificationPreview.none => 'SIS: New message',
+                    },
+                  ),
+              ],
             ),
             const _Header('Muted'),
             const _MutedList(),
@@ -84,7 +82,7 @@ class NotificationsScreen extends ConsumerWidget {
             ),
           ),
         ),
-        _ => const Center(child: CircularProgressIndicator()),
+        _ => const Center(child: SisLoadingLogo()),
       },
     );
   }
@@ -116,7 +114,7 @@ class _MutedList extends ConsumerWidget {
     return switch (ref.watch(mutesProvider)) {
       AsyncData(:final value) => _buildActive(context, ref, value),
       AsyncError(:final error) => ListTile(title: Text(reasonOf(error))),
-      _ => const LinearProgressIndicator(),
+      _ => const SisProgressLine(),
     };
   }
 
@@ -132,8 +130,7 @@ class _MutedList extends ConsumerWidget {
     Future<void> unmute(MuteKind kind, String target) async {
       final r = await ref.read(mutesProvider.notifier).unmute(kind, target);
       if (r case Err(:final failure) when context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(failure.message)));
+        showSisNotice(context, failure.message, isError: true);
       }
     }
 
@@ -211,9 +208,7 @@ class MuteTile extends ConsumerWidget {
                         .read(mutesProvider.notifier)
                         .mute(kind, target, l);
                     if (r case Err(:final failure) when context.mounted) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text(failure.message)));
+                      showSisNotice(context, failure.message, isError: true);
                     }
                   },
                 ),
@@ -227,9 +222,7 @@ class MuteTile extends ConsumerWidget {
                         .read(mutesProvider.notifier)
                         .unmute(kind, target);
                     if (r case Err(:final failure) when context.mounted) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text(failure.message)));
+                      showSisNotice(context, failure.message, isError: true);
                     }
                   },
                 ),

@@ -98,7 +98,7 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     // Not before the session is past SetupRequired: pushSourceProvider is
     // only overridden once config is complete, and this must not be built
     // in the config-incomplete or startup-failure run of the app.
-    if (session.value is! SetupRequired) {
+    if (session.value != null && session.value is! SetupRequired) {
       ref.listen(pushRegistrationProvider, (_, _) {});
     }
 

@@ -57,9 +57,12 @@ class UpdateController extends AsyncNotifier<UpdateState> {
   /// never sees the lifecycle event itself). A download in flight is left
   /// alone; [download] and [install] own that transition.
   Future<void> recheck() async {
-    if (state.value is UpdateDownloading) return;
+    final before = state.value;
+    if (before is UpdateDownloading) return;
     final next = await AsyncValue.guard(_check);
-    if (!ref.mounted) return;
+    // Something else (download, install, dismiss) moved the state while Play
+    // was answering: that transition wins over this now-stale check.
+    if (!ref.mounted || !identical(state.value, before)) return;
     state = next;
   }
 

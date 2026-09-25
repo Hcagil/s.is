@@ -21,6 +21,7 @@ import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/domain/presence_repository.dart';
@@ -223,6 +224,13 @@ class DesignChat implements ChatRepository {
     deliver(wiped);
     return const Ok(null);
   }
+
+  @override
+  Future<Result<List<ReadMark>>> readMarks(String conversationId) async =>
+      const Ok([]);
+  @override
+  Future<Result<Stream<ReadMark>>> readUpdates(String conversationId) async =>
+      Ok(const Stream<ReadMark>.empty());
 }
 
 class DesignTyping implements TypingChannel {
@@ -291,6 +299,7 @@ class DesignProfile implements ProfileRepository {
     bool? sharePresence,
     bool? shareTyping,
     bool? shareLastSeen,
+    bool? shareReadStatus,
   }) async => Ok(
     profile = OwnProfile(
       userId: profile.userId,
@@ -300,6 +309,7 @@ class DesignProfile implements ProfileRepository {
       sharePresence: sharePresence ?? profile.sharePresence,
       shareTyping: shareTyping ?? profile.shareTyping,
       shareLastSeen: shareLastSeen ?? profile.shareLastSeen,
+      shareReadStatus: shareReadStatus ?? profile.shareReadStatus,
     ),
   );
   @override

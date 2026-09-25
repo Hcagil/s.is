@@ -410,5 +410,29 @@ void main() {
       expect(find.textContaining('the network is unreachable'), findsWidgets);
       await t.pumpAndSettle(const Duration(seconds: 6));
     });
+
+    testWidgets('turning read status off saves only that', (t) async {
+      final p = ProfileFake(profile: maya);
+      await pumpApp(t, p);
+      await openPrivacy(t);
+
+      expect(
+        switchOn(t, 'share-read-status'),
+        isTrue,
+        reason: 'a new member shares read status by default',
+      );
+      await flip(t, 'share-read-status');
+
+      final s = p.saves.single;
+      expect(
+        (s.sharePresence, s.shareTyping, s.shareLastSeen, s.shareReadStatus),
+        (null, null, null, false),
+        reason:
+            'only shareReadStatus is sent -- a partial save, not a whole '
+            'profile write',
+      );
+      expect(p.profile.shareReadStatus, isFalse);
+      expect(switchOn(t, 'share-read-status'), isFalse);
+    });
   });
 }

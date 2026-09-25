@@ -65,6 +65,13 @@
 --     (reid replies to and forwards messages between reid+beth, reid+cora,
 --      and a group of all three; beth and cora prove a forwarded photo is
 --      readable only in the conversation it was forwarded into)
+--   priya/quinlan/remy test/integration/read_status_repository_test.dart
+--     (priya and quinlan share read status; remy does not, so sharing --
+--      not just membership -- decides what each sees of the others; a
+--      stranger-reads account signs up there and is never allowlisted)
+--   sana/theo/wren test/integration/read_status_seam_test.dart
+--     (sana's controller and screens see theo and wren read her messages,
+--      live; each test sets their sharing choices itself)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -110,5 +117,11 @@ insert into app_private.allowlist(email) values
   ('russ@integration.test'),
   ('reid@integration.test'),
   ('beth@integration.test'),
-  ('cora@integration.test')
+  ('cora@integration.test'),
+  ('priya@integration.test'),
+  ('quinlan@integration.test'),
+  ('remy@integration.test'),
+  ('sana@integration.test'),
+  ('theo@integration.test'),
+  ('wren@integration.test')
 on conflict do nothing;

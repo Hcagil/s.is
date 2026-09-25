@@ -103,9 +103,6 @@ String? status(WidgetTester t) {
   return text.isEmpty ? null : text;
 }
 
-/// One typist: the contract allows the bare or the named form.
-Matcher oneTypist(String name) => anyOf('typing…', '$name is typing…');
-
 Finder dot(String conversationId) =>
     find.byKey(ValueKey('online-$conversationId'));
 
@@ -214,7 +211,7 @@ void main() {
       await openWith(t, w);
       w.presence.typingIn('c1')!.type('u2');
       await settle(t);
-      expect(status(t), oneTypist('Bob'));
+      expect(status(t), 'typing…', reason: '1:1 never names the typist');
 
       await t.pump(typingLinger + const Duration(milliseconds: 100));
       await t.pumpAndSettle();
@@ -261,7 +258,7 @@ void main() {
       await openWith(t, w);
       w.presence.typingIn('c1')!.type('u2');
       await settle(t);
-      expect(status(t), oneTypist('Bob'));
+      expect(status(t), 'typing…', reason: '1:1 never names the typist');
 
       w.chat.deliver(from('u2'));
       await settle(t);

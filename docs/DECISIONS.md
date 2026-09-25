@@ -768,3 +768,22 @@ phone) is dropped too, even though the server addressed it correctly when it
 was sent. App data is excluded from Android backup and device-to-device
 transfer (`data_extraction_rules.xml` for Android 12+, `backup_rules.xml`
 below it — `allowBackup="false"` alone does not stop transfers on 12+).
+
+## 2026-09-25 — Editing a message
+
+**You can edit your own text messages and photo captions for 6 hours**
+(owner's choice; the same window as delete for everyone). Forwarded and
+deleted messages can't be edited. The bubble then shows a small "edited"
+next to its time; **no history is kept** — the old text is replaced, not
+stored (owner). An edit sends no notification.
+
+Enforced by the server: `edit_message(message, body)` is the only write path
+(sender only, still a member, window, body rules as for a send: a photo
+caption may become empty, a text may not). Edits reach open chats the way
+deletions do (a Realtime update, re-checked per reader); the chat list
+preview follows only when the edited message is the newest. Deleting a
+message for everyone also clears its edited mark.
+
+Each bubble now shows its time (HH:MM, local). The date of older messages is
+left to day separators, not repeated in every bubble.
+

@@ -35,4 +35,5 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.10 | **done** 2026-09-24 — delete for everyone (#33); reply and forward to several chats |
 | v0.11 | **done** 2026-09-25 — read status, mutual like last seen: your message has a yellow edge until read (0.11.1; a group message counts as read once anyone has read it), normal once read; groups show who read it; reads made while sharing is off stay hidden; 1:1 header says just "typing…" |
 | v0.12 | **done** 2026-09-25 — one SIS notification grouping every chat, expandable like Telegram; opening a chat clears its notification; older builds keep regular notifications; nothing of a previous member survives on the phone |
+| v0.13 | **done** 2026-09-25 — edit your own message or photo caption for 6 hours; "edited" next to the time; no history; each bubble shows its time |
 | later | in progress — image attachments shipped as a demo; push has its database half, and needs a Firebase project before it can send (docs/DELIVERY.md) |

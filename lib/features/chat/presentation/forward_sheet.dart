@@ -24,7 +24,8 @@ Future<void> showForwardSheet(
   final r = await ref.read(messagesProvider.notifier).forward(message, chosen);
   if (!context.mounted) return;
   showSisNotice(context, switch (r) {
-    Ok() => 'Forwarded',
+    Ok() =>
+      chosen.length == 1 ? 'Forwarded' : 'Forwarded to ${chosen.length} chats',
     Err(:final failure) => failure.message,
   }, isError: r is Err);
 }

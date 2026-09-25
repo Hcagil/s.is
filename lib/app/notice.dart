@@ -19,49 +19,53 @@ class SisNotice extends StatelessWidget {
     return Semantics(
       liveRegion: true,
       label: message,
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(10, 8, 18, 8),
-          decoration: BoxDecoration(
-            color: t.surface,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: t.line),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: .12),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isError ? t.danger : null,
-                  gradient: isError ? null : t.gradient,
+      // Otherwise the visible Text's own label merges in too, and a screen
+      // reader hears the message twice.
+      child: ExcludeSemantics(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(10, 8, 18, 8),
+            decoration: BoxDecoration(
+              color: t.surface,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: t.line),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .12),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
-                child: Icon(
-                  isError ? Icons.priority_high_rounded : Icons.check_rounded,
-                  color: Colors.white,
-                  size: 16,
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isError ? t.danger : null,
+                    gradient: isError ? null : t.gradient,
+                  ),
+                  child: Icon(
+                    isError ? Icons.priority_high_rounded : Icons.check_rounded,
+                    color: Colors.white,
+                    size: 16,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(
-                  message,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyLarge,
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    message,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -188,7 +188,6 @@ void main() {
       presenceRepositoryProvider.overrideWithValue(
         SupabasePresenceRepository(xenaClient),
       ),
-      attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
       sessionControllerProvider.overrideWith(() => _SignedIn(xenaMember)),
     ],
   );

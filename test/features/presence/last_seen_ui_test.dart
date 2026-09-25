@@ -25,6 +25,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/presentation/settings_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
+import '../../support/sis_ui.dart';
 import '../../support/fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
@@ -231,15 +232,7 @@ void main() {
   group('settings switch', () {
     Finder tile() => find.byKey(const ValueKey('share-last-seen'));
 
-    bool switchOn(WidgetTester t) => t
-        .widget<Switch>(
-          find.descendant(
-            of: tile(),
-            matching: find.byType(Switch),
-            matchRoot: true,
-          ),
-        )
-        .value;
+    bool switchOn(WidgetTester t) => switchedOn(t, tile());
 
     Future<void> openSettings(WidgetTester t) async {
       await t.tap(find.byKey(const ValueKey('home-settings')));

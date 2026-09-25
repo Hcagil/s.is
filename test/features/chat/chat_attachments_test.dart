@@ -2,8 +2,8 @@
 // they see, and what the repository is asked for — never how any of it is
 // built.
 //
-// The outcome this file exists for is the cancelled picker. "The member backed
-// out" is not a failure, and a slice that treats it as one puts an error in
+// The outcome this file exists for is the member backing out of the sheet.
+// That is not a failure, and a slice that treats it as one puts an error in
 // front of somebody who did nothing wrong and throws away what they had typed.
 import 'dart:io';
 import 'dart:typed_data';
@@ -23,6 +23,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 
 import '../../support/fakes.dart';
+import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -49,21 +50,20 @@ class _SignedIn extends SessionController {
   Future<SessionState> build() async => const Allowed(me);
 }
 
-Future<ProviderContainer> scope(
-  ChatFake chat,
-  AttachmentSource picker, {
-  Gallery? gallery,
-}) => settled(
+/// A phone with one photo, 'p1', that loads to [image] -- null means it
+/// cannot be opened. What a member picks now comes from the sheet's own
+/// grid; there is no system picker any more.
+GalleryFake phoneWith(PickedImage? image) =>
+    GalleryFake(photos: [const GalleryPhoto('p1')])
+      ..thumbnails['p1'] = photoPng
+      ..loadResults['p1'] = image;
+
+Future<ProviderContainer> scope(ChatFake chat, {Gallery? gallery}) => settled(
   ProviderContainer.test(
     overrides: [
       chatRepositoryProvider.overrideWithValue(chat),
       presenceRepositoryProvider.overrideWithValue(PresenceFake()),
-      attachmentSourceProvider.overrideWithValue(picker),
-      // The composer's attach button opens the sheet first; a gallery with
-      // no photos and full access falls through to it fastest, so these
-      // picker-focused tests reach the system picker the same way a member
-      // who has no photos yet, or backs out to "All photos", would.
-      galleryProvider.overrideWithValue(gallery ?? GalleryFake()),
+      galleryProvider.overrideWithValue(gallery ?? phoneWith(pickedPng())),
       sessionControllerProvider.overrideWith(_SignedIn.new),
     ],
   ),
@@ -71,12 +71,11 @@ Future<ProviderContainer> scope(
 
 Future<ProviderContainer> pump(
   WidgetTester tester,
-  ChatFake chat,
-  AttachmentSource picker, {
+  ChatFake chat, {
   bool settle = true,
   Gallery? gallery,
 }) async {
-  final container = await scope(chat, picker, gallery: gallery);
+  final container = await scope(chat, gallery: gallery);
   container.read(openConversationProvider.notifier).open('c1');
   await tester.pumpWidget(
     UncontrolledProviderScope(
@@ -85,7 +84,7 @@ Future<ProviderContainer> pump(
     ),
   );
   await tester.pump();
-  // A photo shows a spinner until it decodes, which the fake clock never
+  // A photo shows a wait until it decodes, which the fake clock never
   // settles; let the engine decode for real. Skipped when the test itself
   // is holding something open on purpose (bytes that never arrive): the
   // loop would just spin for its whole timeout.
@@ -93,14 +92,16 @@ Future<ProviderContainer> pump(
   return container;
 }
 
-/// Opens the attachment sheet from the composer and taps "All photos" --
-/// the sheet's own path to the system picker, which these tests are about.
-/// The sheet's own grid is covered separately in attachment_sheet_test.dart.
-Future<void> openSystemPicker(WidgetTester tester) async {
+/// Opens the attachment sheet from the composer.
+Future<void> openSheet(WidgetTester tester) async {
   await tester.tap(find.byKey(const ValueKey('composer-attach')));
   await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const ValueKey('sheet-system-picker')));
-  await tester.pumpAndSettle();
+}
+
+/// Opens the sheet and taps the phone's one photo.
+Future<void> choosePhoto(WidgetTester tester) async {
+  await openSheet(tester);
+  await tester.tap(find.byKey(const ValueKey('sheet-photo-p1')));
 }
 
 String composerText(WidgetTester tester) => tester
@@ -133,10 +134,9 @@ void main() {
   tearDownAll(() => HttpOverrides.global = null);
 
   group('MessagesController.sendImage', () {
-    test('a cancelled picker is null — not a failure', () async {
+    test('nothing chosen is null -- not a failure', () async {
       final chat = ChatFake();
-      final picker = PickerFake.cancels();
-      final c = await scope(chat, picker);
+      final c = await scope(chat);
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
 
@@ -145,9 +145,8 @@ void main() {
       expect(
         result,
         isNull,
-        reason: 'backing out of the picker is not an error to report',
+        reason: 'backing out of the sheet is not an error to report',
       );
-      expect(picker.calls, 1);
       expect(
         chat.sentImages,
         isEmpty,
@@ -155,36 +154,15 @@ void main() {
       );
     });
 
-    test('a picker that throws becomes a provider failure', () async {
-      final chat = ChatFake();
-      final c = await scope(
-        chat,
-        PickerFake.throwsError(StateError('no photo permission')),
-      );
-      c.read(openConversationProvider.notifier).open('c1');
-      await c.read(messagesProvider.future);
-
-      final result = await c.read(messagesProvider.notifier).sendImage();
-
-      expect(result, isA<Err<Message>>());
-      expect((result! as Err<Message>).failure, isA<ProviderFailure>());
-      expect(
-        (result as Err<Message>).failure.message.trim(),
-        isNotEmpty,
-        reason: 'a failure with no reason cannot be shown to anybody',
-      );
-      expect(chat.sentImages, isEmpty);
-    });
-
     test('a chosen image is uploaded with its caption and appended', () async {
       final chat = ChatFake();
-      final c = await scope(chat, PickerFake.returns(pickedPng()));
+      final c = await scope(chat);
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
 
       final result = await c
           .read(messagesProvider.notifier)
-          .sendImage(body: 'look at this');
+          .sendImage(body: 'look at this', chosen: pickedPng());
 
       expect(result, isA<Ok<Message>>());
       final sent = chat.sentImages.single;
@@ -193,7 +171,7 @@ void main() {
       expect(
         sent.image.bytes,
         pngBytes,
-        reason: 'the bytes the picker returned must be the bytes uploaded',
+        reason: 'the bytes chosen must be the bytes uploaded',
       );
       expect(sent.image.contentType, 'image/png');
 
@@ -210,11 +188,13 @@ void main() {
 
     test('an image with no caption is allowed', () async {
       final chat = ChatFake();
-      final c = await scope(chat, PickerFake.returns(pickedPng()));
+      final c = await scope(chat);
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
 
-      final result = await c.read(messagesProvider.notifier).sendImage();
+      final result = await c
+          .read(messagesProvider.notifier)
+          .sendImage(chosen: pickedPng());
 
       expect(result, isA<Ok<Message>>());
       expect(chat.sentImages.single.body, '');
@@ -226,14 +206,13 @@ void main() {
       final chat = ChatFake();
       // A bucket that accepts only four image types refuses this one; a fake
       // that accepts everything would let an unvalidated upload ship green.
-      final c = await scope(
-        chat,
-        PickerFake.returns(pickedPng(contentType: 'application/pdf')),
-      );
+      final c = await scope(chat);
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
 
-      final result = await c.read(messagesProvider.notifier).sendImage();
+      final result = await c
+          .read(messagesProvider.notifier)
+          .sendImage(chosen: pickedPng(contentType: 'application/pdf'));
 
       expect(result, isA<Err<Message>>());
       expect(
@@ -243,42 +222,9 @@ void main() {
       );
     });
 
-    test(
-      'a slow picker does not resolve before the member has chosen',
-      () async {
-        final chat = ChatFake();
-        final c = await scope(
-          chat,
-          PickerFake.returns(
-            pickedPng(),
-            latency: const Duration(milliseconds: 120),
-          ),
-        );
-        c.read(openConversationProvider.notifier).open('c1');
-        await c.read(messagesProvider.future);
-
-        var settled = false;
-        final pending = c
-            .read(messagesProvider.notifier)
-            .sendImage()
-            .whenComplete(() => settled = true);
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-
-        expect(
-          settled,
-          isFalse,
-          reason: 'the picker sheet is open; nothing has been chosen yet',
-        );
-        expect(chat.sentImages, isEmpty);
-
-        expect(await pending, isA<Ok<Message>>());
-        expect(settled, isTrue);
-      },
-    );
-
     test('attachmentUrl asks the repository for that exact path', () async {
       final chat = ChatFake()..store('c1/held.png');
-      final c = await scope(chat, PickerFake.cancels());
+      final c = await scope(chat);
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
 
@@ -300,13 +246,15 @@ void main() {
       'the photo appears at once, pending, before the repository answers',
       () async {
         final chat = ChatFake()..holdSendImage();
-        final c = await scope(chat, PickerFake.returns(pickedPng()));
+        final c = await scope(chat);
         c.read(openConversationProvider.notifier).open('c1');
         await c.read(messagesProvider.future);
 
-        final pending = c.read(messagesProvider.notifier).sendImage();
-        // Let the picker resolve and the pending message get appended,
-        // without letting the (held) repository call answer.
+        final pending = c
+            .read(messagesProvider.notifier)
+            .sendImage(chosen: pickedPng());
+        // Let the pending message get appended, without letting the (held)
+        // repository call answer.
         await Future<void>.delayed(Duration.zero);
 
         final shown = c.read(messagesProvider).requireValue;
@@ -332,11 +280,13 @@ void main() {
     test('on Ok the pending message is replaced by the stored one: no '
         'duplicate, no leftover pending', () async {
       final chat = ChatFake();
-      final c = await scope(chat, PickerFake.returns(pickedPng()));
+      final c = await scope(chat);
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
 
-      final result = await c.read(messagesProvider.notifier).sendImage();
+      final result = await c
+          .read(messagesProvider.notifier)
+          .sendImage(chosen: pickedPng());
 
       final shown = c.read(messagesProvider).requireValue;
       expect(
@@ -352,11 +302,13 @@ void main() {
     test('on Err the pending message disappears and Err is returned', () async {
       final chat = ChatFake()
         ..sendImageResult = const Err(NetworkFailure('the upload failed'));
-      final c = await scope(chat, PickerFake.returns(pickedPng()));
+      final c = await scope(chat);
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
 
-      final result = await c.read(messagesProvider.notifier).sendImage();
+      final result = await c
+          .read(messagesProvider.notifier)
+          .sendImage(chosen: pickedPng());
 
       expect(result, isA<Err<Message>>());
       expect(
@@ -369,14 +321,16 @@ void main() {
 
   group('composer', () {
     testWidgets('offers an attach button', (tester) async {
-      await pump(tester, ChatFake(), PickerFake.cancels());
+      await pump(tester, ChatFake());
       expect(find.byKey(const ValueKey('composer-attach')), findsOneWidget);
     });
 
-    testWidgets('cancelling shows no error and clears nothing', (tester) async {
+    testWidgets('backing out of the sheet shows no error and clears nothing', (
+      tester,
+    ) async {
       final chat = ChatFake();
-      final picker = PickerFake.cancels();
-      await pump(tester, chat, picker);
+      final gallery = phoneWith(pickedPng());
+      await pump(tester, chat, gallery: gallery);
 
       await tester.enterText(
         find.byKey(const ValueKey('composer-field')),
@@ -384,51 +338,73 @@ void main() {
       );
       await tester.pump();
 
-      await openSystemPicker(tester);
+      await openSheet(tester);
+      expect(find.byKey(const ValueKey('sheet-photo-p1')), findsOneWidget);
+      // Android's back gesture: the member leaves without choosing.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
 
+      expect(find.byKey(const ValueKey('sheet-photo-p1')), findsNothing);
       expect(
-        picker.calls,
-        1,
-        reason:
-            'the attach button, via the sheet\'s "All photos", must '
-            'still reach the system picker',
-      );
-      expect(
-        find.byType(SnackBar),
+        notice,
         findsNothing,
-        reason: 'backing out of the picker is not an error',
+        reason: 'backing out of the sheet is not an error',
       );
       expect(
         composerText(tester),
         'a caption I typed',
-        reason: 'a cancelled pick must not throw away what was typed',
+        reason: 'backing out must not throw away what was typed',
       );
       expect(chat.sentImages, isEmpty);
+      expect(gallery.loadedIds, isEmpty);
       expect(find.byKey(const ValueKey('attachment-image')), findsNothing);
       expectNoRawException(tester);
 
-      // Still usable afterwards: cancelling must not leave it stuck.
-      await openSystemPicker(tester);
-      expect(picker.calls, 2);
+      // Still usable afterwards: backing out must not leave it stuck.
+      await openSheet(tester);
+      expect(find.byKey(const ValueKey('sheet-photo-p1')), findsOneWidget);
     });
 
-    testWidgets('a picker that fails shows its reason', (tester) async {
+    testWidgets('nothing is sent while the chosen photo is still loading', (
+      tester,
+    ) async {
       final chat = ChatFake();
-      await pump(
-        tester,
-        chat,
-        PickerFake.throwsError(StateError('no photo permission')),
+      final gallery = phoneWith(pickedPng())..holdLoad();
+      await pump(tester, chat, gallery: gallery);
+
+      await choosePhoto(tester);
+      await tester.pump();
+      await tester.pump();
+
+      expect(gallery.loadedIds, ['p1']);
+      expect(
+        chat.sentImages,
+        isEmpty,
+        reason: 'the photo has not been read yet; there is nothing to send',
       );
+
+      gallery.releaseLoad();
+      await settleImages(tester);
+      expect(chat.sentImages.single.image.bytes, pngBytes);
+    });
+
+    testWidgets('a photo that cannot be opened says so in a notice', (
+      tester,
+    ) async {
+      final chat = ChatFake();
+      await pump(tester, chat, gallery: phoneWith(null));
 
       await tester.enterText(
         find.byKey(const ValueKey('composer-field')),
         'worth keeping',
       );
       await tester.pump();
-      await openSystemPicker(tester);
+      await choosePhoto(tester);
+      await tester.pump();
+      await tester.pump();
 
       expect(
-        find.byType(SnackBar),
+        notice,
         findsOneWidget,
         reason: 'a failed pick must say so; a silent return is a defect',
       );
@@ -440,7 +416,7 @@ void main() {
       );
       expect(chat.sentImages, isEmpty);
       expectNoRawException(tester);
-      await tester.pumpAndSettle(const Duration(seconds: 6));
+      await drainNotice(tester);
     });
 
     testWidgets('a failed upload shows its reason and keeps the caption', (
@@ -450,41 +426,41 @@ void main() {
         ..sendImageResult = const Err(
           NetworkFailure('the upload did not finish'),
         );
-      await pump(tester, chat, PickerFake.returns(pickedPng()));
+      await pump(tester, chat);
 
       await tester.enterText(
         find.byKey(const ValueKey('composer-field')),
         'worth keeping',
       );
       await tester.pump();
-      await openSystemPicker(tester);
+      await choosePhoto(tester);
+      await settleImages(tester);
 
       expect(
         find.textContaining('the upload did not finish'),
         findsAtLeastNWidgets(1),
       );
+      expect(notice, findsOneWidget);
       expect(composerText(tester), 'worth keeping');
       expectNoRawException(tester);
-      await tester.pumpAndSettle(const Duration(seconds: 6));
+      await drainNotice(tester);
     });
 
     testWidgets('a successful send clears the composer', (tester) async {
       final chat = ChatFake();
-      await pump(tester, chat, PickerFake.returns(pickedPng()));
+      await pump(tester, chat);
 
       await tester.enterText(
         find.byKey(const ValueKey('composer-field')),
         'look at this',
       );
       await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('composer-attach')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('sheet-system-picker')));
+      await choosePhoto(tester);
       await settleImages(tester);
 
       expect(chat.sentImages.single.body, 'look at this');
       expect(composerText(tester), isEmpty);
-      expect(find.byType(SnackBar), findsNothing);
+      expect(notice, findsNothing);
     });
   });
 
@@ -495,7 +471,7 @@ void main() {
           msg('m1', body: 'look at this', attachment: 'c1/photo.png'),
         ])
         ..store('c1/photo.png');
-      await pump(tester, chat, PickerFake.cancels());
+      await pump(tester, chat);
 
       expect(find.byKey(const ValueKey('message-m1')), findsOneWidget);
       expect(find.byKey(const ValueKey('attachment-image')), findsOneWidget);
@@ -515,7 +491,7 @@ void main() {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', body: '', attachment: 'c1/photo.png')])
         ..store('c1/photo.png');
-      await pump(tester, chat, PickerFake.cancels());
+      await pump(tester, chat);
 
       expect(find.byKey(const ValueKey('attachment-image')), findsOneWidget);
       expectNoRawException(tester);
@@ -532,7 +508,7 @@ void main() {
           ..attachmentBytesResult = const Err(
             NetworkFailure('the image is unavailable'),
           );
-        await pump(tester, chat, PickerFake.cancels());
+        await pump(tester, chat);
 
         expect(find.byKey(const ValueKey('message-m1')), findsOneWidget);
         expect(
@@ -541,9 +517,9 @@ void main() {
           reason: 'an attachment that cannot load must say why',
         );
         expect(
-          find.byType(CircularProgressIndicator),
+          sisWait,
           findsNothing,
-          reason: 'a failed attachment must not spin forever',
+          reason: 'a failed attachment must not wait forever',
         );
         expectNoRawException(tester);
       },
@@ -552,7 +528,7 @@ void main() {
     testWidgets('a text-only message asks for no bytes at all', (tester) async {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', body: 'just words')]);
-      await pump(tester, chat, PickerFake.cancels());
+      await pump(tester, chat);
 
       expect(find.text('just words'), findsOneWidget);
       expect(find.byKey(const ValueKey('attachment-image')), findsNothing);
@@ -563,7 +539,7 @@ void main() {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', body: 'first')])
         ..store('c1/incoming.png');
-      await pump(tester, chat, PickerFake.cancels());
+      await pump(tester, chat);
 
       chat.deliver(
         msg(
@@ -582,59 +558,51 @@ void main() {
   });
 
   group('Bubble', () {
-    testWidgets(
-      'a pending photo shows the local bytes with a progress indicator, '
-      'and is not tappable',
-      (tester) async {
-        final chat = ChatFake()..holdSendImage();
-        await pump(
-          tester,
-          chat,
-          PickerFake.returns(pickedPng()),
-          settle: false,
-        );
+    testWidgets('a pending photo shows the local bytes with SIS\'s wait, '
+        'and is not tappable', (tester) async {
+      final chat = ChatFake()..holdSendImage();
+      await pump(tester, chat, settle: false);
 
-        await tester.tap(find.byKey(const ValueKey('composer-attach')));
-        // Let the sheet's own entrance animation finish before tapping into
-        // it -- a bare pump() catches it mid-transition, off the bottom of
-        // the screen. Nothing here is held yet, so settling is safe.
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('sheet-system-picker')));
-        // Let the picker resolve and the pending message get appended,
-        // without the (held) upload ever answering.
+      // Let the sheet's own entrance animation finish before tapping into
+      // it -- a bare pump() catches it mid-transition, off the bottom of
+      // the screen. Nothing here is held yet, so settling is safe.
+      await choosePhoto(tester);
+      // Let the photo load and the pending message get appended, without
+      // the (held) upload ever answering.
+      for (var i = 0; i < 5; i++) {
         await tester.pump();
-        await tester.pump();
+      }
 
-        final local = find.byKey(const ValueKey('attachment-local'));
-        expect(local, findsOneWidget);
-        final provider = tester.widget<Image>(local).image;
-        final memory = provider is ResizeImage
-            ? provider.imageProvider as MemoryImage
-            : provider as MemoryImage;
-        expect(memory.bytes, pngBytes);
-        expect(
-          find.byType(CircularProgressIndicator),
-          findsOneWidget,
-          reason: 'a pending upload shows a progress indicator',
-        );
+      final local = find.byKey(const ValueKey('attachment-local'));
+      expect(local, findsOneWidget);
+      final provider = tester.widget<Image>(local).image;
+      final memory = provider is ResizeImage
+          ? provider.imageProvider as MemoryImage
+          : provider as MemoryImage;
+      expect(memory.bytes, pngBytes);
+      expect(
+        sisWait,
+        findsOneWidget,
+        reason: 'a pending upload shows SIS\'s own wait',
+      );
+      expect(find.byType(CircularProgressIndicator), findsNothing);
 
-        // Not tappable: there is no stored path yet to open a viewer with.
-        // The attachment's own GestureDetector is keyed 'attachment-<id>',
-        // where <id> is the pending message's generated id.
-        final gesture = tester.widget<GestureDetector>(
-          find.byWidgetPredicate(
-            (w) =>
-                w is GestureDetector &&
-                w.key is ValueKey<String> &&
-                (w.key! as ValueKey<String>).value.startsWith('attachment-'),
-          ),
-        );
-        expect(gesture.onTap, isNull);
+      // Not tappable: there is no stored path yet to open a viewer with.
+      // The attachment's own GestureDetector is keyed 'attachment-<id>',
+      // where <id> is the pending message's generated id.
+      final gesture = tester.widget<GestureDetector>(
+        find.byWidgetPredicate(
+          (w) =>
+              w is GestureDetector &&
+              w.key is ValueKey<String> &&
+              (w.key! as ValueKey<String>).value.startsWith('attachment-'),
+        ),
+      );
+      expect(gesture.onTap, isNull);
 
-        chat.releaseSendImage();
-        await settleImages(tester);
-      },
-    );
+      chat.releaseSendImage();
+      await settleImages(tester);
+    });
 
     testWidgets('a stored photo shows the blurred preview, then the photo', (
       tester,
@@ -646,7 +614,7 @@ void main() {
         ])
         ..store('c1/photo.png')
         ..holdBytes();
-      await pump(tester, chat, PickerFake.cancels(), settle: false);
+      await pump(tester, chat, settle: false);
 
       expect(find.byKey(const ValueKey('attachment-preview')), findsOneWidget);
       expect(find.byKey(const ValueKey('attachment-image')), findsNothing);
@@ -658,18 +626,19 @@ void main() {
       expect(find.byKey(const ValueKey('attachment-preview')), findsNothing);
     });
 
-    testWidgets('no preview at all shows a spinner while bytes load', (
+    testWidgets('no preview at all shows SIS\'s wait while bytes load', (
       tester,
     ) async {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', attachment: 'c1/photo.png')])
         ..store('c1/photo.png')
         ..holdBytes();
-      await pump(tester, chat, PickerFake.cancels(), settle: false);
+      await pump(tester, chat, settle: false);
 
       expect(find.byKey(const ValueKey('attachment-preview')), findsNothing);
       expect(find.byKey(const ValueKey('attachment-image')), findsNothing);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(sisWait, findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
 
       chat.releaseBytes();
       await settleImages(tester);

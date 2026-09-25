@@ -211,7 +211,6 @@ List<Override> _production(
   profileRepositoryProvider.overrideWithValue(
     SupabaseProfileRepository(client),
   ),
-  attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
   // The device's push channel (Firebase in main.dart): opening a chat clears
   // its notification through it. Not what this suite is about.
   pushSourceProvider.overrideWithValue(PushSourceFake()),

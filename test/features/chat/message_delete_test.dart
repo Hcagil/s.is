@@ -15,6 +15,7 @@ import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
+import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -183,6 +184,7 @@ void main() {
         reason: 'a refused delete must not touch the message',
       );
       expect(find.byKey(const ValueKey('message-m1')), findsOneWidget);
+      await drainNotice(tester);
     });
   });
 

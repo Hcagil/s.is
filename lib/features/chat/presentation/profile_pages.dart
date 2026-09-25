@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/loading.dart';
+import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/member.dart';
@@ -116,8 +118,7 @@ class PersonScreen extends ConsumerWidget {
         case Ok(:final value):
           id = value;
         case Err(:final failure):
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(failure.message)));
+          showSisNotice(context, failure.message, isError: true);
           return;
       }
     }
@@ -369,10 +370,10 @@ class _LinksTab extends ConsumerWidget {
                     .read(linkOpenerProvider)
                     .open(entry.link);
                 if (!opened && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Could not open ${entry.link.host}'),
-                    ),
+                  showSisNotice(
+                    context,
+                    'Could not open ${entry.link.host}',
+                    isError: true,
                   );
                 }
               },
@@ -396,7 +397,7 @@ class _Async<T> extends StatelessWidget {
     AsyncData(:final value) when value.isEmpty => _Empty(empty),
     AsyncData(:final value) => builder(value),
     AsyncError(:final error) => _Empty(reasonOf(error)),
-    _ => const Center(child: CircularProgressIndicator()),
+    _ => const Center(child: SisLoadingLogo(size: 40)),
   };
 }
 

@@ -787,3 +787,21 @@ message for everyone also clears its edited mark.
 Each bubble now shows its time (HH:MM, local). The date of older messages is
 left to day separators, not repeated in every bubble.
 
+## 2026-09-25 — Everything visible is SIS's own design
+
+**No Android-drawn UI inside the app** (owner): notices are an SIS pill under
+the header (errors in red, success in brand purple), waits show the Sync S
+logo pulsing (static when the phone asks for reduced motion) or a thin brand
+gradient line, switches and choices are SIS controls, licences are an SIS
+page. Android's photo picker is removed: photos come only from SIS's own
+gallery. A guard test fails the build if a stock SnackBar, spinner, switch,
+radio, licence page or image_picker comes back.
+
+**Permission prompts are Android's and cannot be replaced or moved to the
+store** (the owner asked for consent at download; Android 6+ grants sensitive
+permissions only at runtime, and the store's permission list grants nothing).
+So each is asked once, behind an SIS screen that explains it: photos the
+first time the member attaches one ("Allow photos"; "Open settings" once the
+member has refused twice), notifications once after first sign-in — skipped
+when the phone has already allowed them.
+

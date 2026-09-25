@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:photo_manager/photo_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/attachment.dart';
 import '../domain/gallery.dart';
@@ -15,8 +16,18 @@ final class PhotoManagerGallery implements Gallery {
   /// Long edge of a sent photo, as for the system picker.
   static const _maxEdge = 1600;
 
+  /// photo_manager (and Android) never says "permanently denied" directly:
+  /// the OS silently stops showing its own prompt once the member has
+  /// refused once already. So: remember that a refusal was shown, and read
+  /// a second refusal as permanent. Ceiling: a member who denies, quits
+  /// without asking again, then later taps deny from a cold app state is
+  /// read the same way on their next ask -- indistinguishable from here.
+  static const _askedBeforeKey = 'gallery_permission_asked_before';
+
   @override
   Future<GalleryAccess> requestAccess() async {
+    final prefs = await SharedPreferences.getInstance();
+    final askedBefore = prefs.getBool(_askedBeforeKey) ?? false;
     final s = await PhotoManager.requestPermissionExtend(
       requestOption: const PermissionRequestOption(
         androidPermission: AndroidPermission(
@@ -25,12 +36,15 @@ final class PhotoManagerGallery implements Gallery {
         ),
       ),
     );
-    return s.isAuth
-        ? GalleryAccess.full
-        : s.hasAccess
-        ? GalleryAccess.limited
-        : GalleryAccess.denied;
+    if (s.isAuth) return GalleryAccess.full;
+    if (s.hasAccess) return GalleryAccess.limited;
+    if (askedBefore) return GalleryAccess.permanentlyDenied;
+    await prefs.setBool(_askedBeforeKey, true);
+    return GalleryAccess.denied;
   }
+
+  @override
+  Future<void> openSettings() => PhotoManager.openSetting();
 
   @override
   Future<List<GalleryPhoto>> recent({int count = 60}) async {

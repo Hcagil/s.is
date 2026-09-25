@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
+import '../../../app/controls.dart';
+import '../../../app/licences_page.dart';
+import '../../../app/loading.dart';
+import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
@@ -37,8 +41,7 @@ Future<void> _setSharing(
     await ref.read(lastSeenReporterProvider)();
   }
   if (result case Err(:final failure) when context.mounted) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(failure.message)));
+    showSisNotice(context, failure.message, isError: true);
   }
 }
 
@@ -79,7 +82,7 @@ class _WithProfile extends ConsumerWidget {
               ),
             ),
           ),
-          _ => const Center(child: CircularProgressIndicator()),
+          _ => const Center(child: SisLoadingLogo()),
         },
       ),
     );
@@ -176,8 +179,7 @@ class ProfileSettingsScreen extends ConsumerWidget {
                 .read(ownProfileProvider.notifier)
                 .save(displayName: name, tag: tag);
             if (result is Ok && context.mounted) {
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(const SnackBar(content: Text('Saved')));
+              showSisNotice(context, 'Saved');
             }
             return result;
           },
@@ -197,33 +199,29 @@ class PrivacyScreen extends ConsumerWidget {
     builder: (context, profile) => ListView(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       children: [
-        SwitchListTile(
+        SisSwitchTile(
           key: const ValueKey('share-presence'),
-          title: const Text('Show when I am online'),
+          title: 'Show when I am online',
           value: profile.sharePresence,
           onChanged: (on) => _setSharing(context, ref, presence: on),
         ),
-        SwitchListTile(
+        SisSwitchTile(
           key: const ValueKey('share-typing'),
-          title: const Text('Show when I am typing'),
+          title: 'Show when I am typing',
           value: profile.shareTyping,
           onChanged: (on) => _setSharing(context, ref, typing: on),
         ),
-        SwitchListTile(
+        SisSwitchTile(
           key: const ValueKey('share-last-seen'),
-          title: const Text('Show my last seen'),
-          subtitle: const Text(
-            "While this is off, you can't see anyone else's either.",
-          ),
+          title: 'Show my last seen',
+          subtitle: "While this is off, you can't see anyone else's either.",
           value: profile.shareLastSeen,
           onChanged: (on) => _setSharing(context, ref, lastSeen: on),
         ),
-        SwitchListTile(
+        SisSwitchTile(
           key: const ValueKey('share-read-status'),
-          title: const Text('Show when I have read messages'),
-          subtitle: const Text(
-            "While this is off, you can't see when others read yours.",
-          ),
+          title: 'Show when I have read messages',
+          subtitle: "While this is off, you can't see when others read yours.",
           value: profile.shareReadStatus,
           onChanged: (on) => _setSharing(context, ref, readStatus: on),
         ),
@@ -330,13 +328,12 @@ class AboutScreen extends ConsumerWidget {
               leading: const Icon(Icons.description_outlined),
               title: const Text('Open-source licences'),
               trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => showLicensePage(
-                context: context,
-                applicationName: 'SIS',
-                applicationVersion: label,
-                applicationIcon: const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SisLogo(size: 48),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => SisLicencesPage(
+                    applicationName: 'SIS',
+                    applicationVersion: label,
+                  ),
                 ),
               ),
             ),

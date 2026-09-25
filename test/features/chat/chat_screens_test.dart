@@ -18,6 +18,7 @@ import 'package:sis/features/home/presentation/home_screen.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -119,7 +120,7 @@ void main() {
     ) async {
       await pump(tester, ChatFake());
 
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(sisWait, findsNothing);
       expect(
         guidance,
         findsAtLeastNWidgets(1),
@@ -136,11 +137,7 @@ void main() {
       await pump(tester, chat);
 
       expect(find.textContaining('the network is unreachable'), findsOneWidget);
-      expect(
-        find.byType(CircularProgressIndicator),
-        findsNothing,
-        reason: 'a failure must not spin forever',
-      );
+      expect(sisWait, findsNothing, reason: 'a failure must not spin forever');
       expectNoRawException(tester);
 
       // The retry affordance must actually ask the repository again.
@@ -168,7 +165,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(sisWait, findsOneWidget);
       expect(guidance, findsNothing, reason: 'not empty — still loading');
 
       await tester.pumpAndSettle();
@@ -272,7 +269,7 @@ void main() {
       );
 
       expect(find.textContaining('messages are unavailable'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(sisWait, findsNothing);
       expectNoRawException(tester);
     });
 
@@ -403,7 +400,7 @@ void main() {
         'incoming:c1',
       ], reason: 'a read before the subscription is confirmed loses messages');
       expect(
-        find.byType(CircularProgressIndicator),
+        sisWait,
         findsOneWidget,
         reason: 'an unconfirmed subscription is still loading',
       );

@@ -30,6 +30,7 @@ import 'package:sis/features/profile/presentation/settings_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
 const bob = Member(userId: 'ub', displayName: 'Bob Stone', tag: 'bobby');
@@ -136,7 +137,6 @@ class World {
       presenceRepositoryProvider.overrideWithValue(presence),
       profileRepositoryProvider.overrideWithValue(profile),
       linkOpenerProvider.overrideWithValue(opener),
-      attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
       pushSourceProvider.overrideWithValue(PushSourceFake()),
       pushRegistryProvider.overrideWithValue(PushRegistryFake()),
     ],
@@ -442,7 +442,7 @@ void main() {
       await tapKey(t, 'tab-links');
       await tapKey(t, 'link-0');
       expect(w.opener.opened, [Uri.parse('https://one.example/x')]);
-      expect(find.byType(SnackBar), findsNothing);
+      expect(notice, findsNothing);
     });
 
     testWidgets('a link nothing can open says so', (t) async {
@@ -453,11 +453,12 @@ void main() {
       expect(w.opener.opened, [Uri.parse('http://two.example')]);
       expect(
         find.descendant(
-          of: find.byType(SnackBar),
+          of: notice,
           matching: find.text('Could not open two.example'),
         ),
         findsOneWidget,
       );
+      await drainNotice(t);
     });
 
     testWidgets('media and links show a spinner while loading', (t) async {
@@ -470,24 +471,12 @@ void main() {
       await steps(t);
       await t.tap(byKey('tab-media'));
       await steps(t);
-      expect(
-        find.descendant(
-          of: tabBody,
-          matching: find.byType(CircularProgressIndicator),
-        ),
-        findsWidgets,
-      );
+      expect(find.descendant(of: tabBody, matching: sisWait), findsWidgets);
       expect(byKey('media-grid'), findsNothing);
 
       await t.tap(byKey('tab-links'));
       await steps(t);
-      expect(
-        find.descendant(
-          of: tabBody,
-          matching: find.byType(CircularProgressIndicator),
-        ),
-        findsWidgets,
-      );
+      expect(find.descendant(of: tabBody, matching: sisWait), findsWidgets);
       expect(byKey('link-0'), findsNothing);
 
       w.chat.releaseShared();
@@ -571,13 +560,14 @@ void main() {
       await tapKey(t, 'person-message');
       expect(
         find.descendant(
-          of: find.byType(SnackBar),
+          of: notice,
           matching: find.textContaining('Cem cannot be reached'),
         ),
         findsOneWidget,
       );
       expect(find.byType(PersonScreen), findsOneWidget);
       expect(openId(t), 'g1', reason: 'the group is still the open chat');
+      await drainNotice(t);
     });
   });
 

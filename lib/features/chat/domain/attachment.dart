@@ -20,15 +20,6 @@ final class PickedImage {
   final Uint8List? preview;
 }
 
-/// Where a [PickedImage] comes from.
-///
-/// Its own boundary because choosing an image is a platform capability, and
-/// `presentation/` may not import a platform SDK. The picker returns null when
-/// the member backs out, which is not a failure.
-abstract interface class AttachmentSource {
-  Future<PickedImage?> pickImage();
-}
-
 /// Photos already on this phone, keyed by storage path, so a photo is
 /// downloaded once rather than on every look. The signed URL changes each
 /// time; the path does not.

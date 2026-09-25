@@ -61,9 +61,10 @@ class PushRegistration extends Notifier<String?> {
 
   Future<void> _start() async {
     final source = ref.read(pushSourceProvider);
-    // Registered even when refused: the member can allow notifications later
-    // in system settings, and the server then already knows the device.
-    await source.requestPermission();
+    // Permission is asked for by NotificationExplainer, after the member has
+    // seen why -- never here. Registration itself does not depend on it:
+    // even refused, the server already knows the device, and can reach it
+    // if the member allows notifications later in system settings.
     final token = await source.token();
     if (token != null) await _register(token);
   }
@@ -87,6 +88,47 @@ class PushRegistration extends Notifier<String?> {
     if (token != null) await ref.read(pushRegistryProvider).forget(token);
     // Nothing of this account stays in the notification shade.
     await source.clearAll();
+  }
+}
+
+/// Where "the explainer was shown" is persisted (shared_preferences in
+/// data/).
+final notificationExplainerStoreProvider = Provider<NotificationExplainerStore>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// True when NotificationExplainerScreen should be skipped: already shown
+/// before, or -- an existing install from before this screen existed, or a
+/// member who granted the permission some other way -- the platform already
+/// has an answer that needs no explaining. Starts as loading (AsyncLoading),
+/// so nothing shows the explainer before this settles.
+final notificationExplainerShownProvider = FutureProvider<bool>((ref) async {
+  final store = ref.read(notificationExplainerStoreProvider);
+  if (await store.wasShown()) return true;
+  final status = await ref.read(pushSourceProvider).permissionStatus();
+  if (status == PushPermissionStatus.authorized ||
+      status == PushPermissionStatus.provisional) {
+    // Nothing to explain: the member already answered. Recorded so this
+    // platform round trip only ever happens once.
+    await store.markShown();
+    return true;
+  }
+  return false;
+});
+
+/// Marks the explainer shown and only then asks the platform for
+/// notification permission -- the one place `requestPermission` is called.
+final notificationExplainerProvider =
+    NotifierProvider<NotificationExplainer, void>(NotificationExplainer.new);
+
+class NotificationExplainer extends Notifier<void> {
+  @override
+  void build() {}
+
+  Future<void> continueAndAskPermission() async {
+    await ref.read(notificationExplainerStoreProvider).markShown();
+    ref.invalidate(notificationExplainerShownProvider);
+    await ref.read(pushSourceProvider).requestPermission();
   }
 }
 

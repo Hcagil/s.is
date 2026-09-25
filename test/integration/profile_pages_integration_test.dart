@@ -505,7 +505,6 @@ void main() {
         profileRepositoryProvider.overrideWithValue(
           SupabaseProfileRepository(fernClient!),
         ),
-        attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
         // Firebase push in main.dart: opening a chat clears its notification.
         pushSourceProvider.overrideWithValue(PushSourceFake()),
         pushRegistryProvider.overrideWithValue(PushRegistryFake()),

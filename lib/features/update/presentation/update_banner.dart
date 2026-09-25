@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/loading.dart';
+import '../../../app/theme.dart';
 import '../application/update_controller.dart';
 import '../domain/update_state.dart';
 
@@ -25,7 +27,7 @@ class UpdateBanner extends ConsumerWidget {
         children: [
           Text('Downloading update…'),
           SizedBox(height: 8),
-          LinearProgressIndicator(),
+          SisProgressLine(),
         ],
       ),
       UpdateReadyToInstall() => Row(
@@ -37,11 +39,18 @@ class UpdateBanner extends ConsumerWidget {
       _ => null,
     };
     if (child == null) return const SizedBox.shrink();
-    return Material(
-      color: Theme.of(context).colorScheme.secondaryContainer,
+    final t = SisBrand.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: t.surfaceHigh,
+        border: Border(bottom: BorderSide(color: t.line)),
+      ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: child,
+        child: DefaultTextStyle.merge(
+          style: TextStyle(color: t.text),
+          child: child,
+        ),
       ),
     );
   }

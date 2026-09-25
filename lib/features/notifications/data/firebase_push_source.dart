@@ -57,6 +57,20 @@ final class FirebasePushSource implements PushSource {
   }
 
   @override
+  Future<PushPermissionStatus> permissionStatus() async {
+    final s = await _messaging.getNotificationSettings();
+    return switch (s.authorizationStatus) {
+      AuthorizationStatus.authorized => PushPermissionStatus.authorized,
+      AuthorizationStatus.provisional => PushPermissionStatus.provisional,
+      // deniedPermanently is iOS-only (this app ships on Android only); read
+      // the same as a plain denial, which the explainer can still act on.
+      AuthorizationStatus.denied ||
+      AuthorizationStatus.deniedPermanently => PushPermissionStatus.denied,
+      AuthorizationStatus.notDetermined => PushPermissionStatus.notDetermined,
+    };
+  }
+
+  @override
   Future<String?> token() async {
     try {
       return await _messaging.getToken();

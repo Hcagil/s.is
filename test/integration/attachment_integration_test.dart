@@ -338,37 +338,31 @@ void main() {
 
   group('the controller seam', () {
     /// Mounted the way production mounts it: the real repository behind
-    /// [chatRepositoryProvider], the picker behind [attachmentSourceProvider].
-    ProviderContainer containerFor(
-      SupabaseChatRepository repository,
-      AttachmentSource picker,
-    ) => ProviderContainer.test(
-      overrides: [
-        chatRepositoryProvider.overrideWithValue(repository),
-        attachmentSourceProvider.overrideWithValue(picker),
-      ],
-    );
+    /// [chatRepositoryProvider]. The photo comes from the attachment sheet,
+    /// which hands sendImage what the member chose.
+    ProviderContainer containerFor(SupabaseChatRepository repository) =>
+        ProviderContainer.test(
+          overrides: [chatRepositoryProvider.overrideWithValue(repository)],
+        );
 
     test(
       'sendImage appends a real message the other member can read',
       () async {
-        final container = containerFor(
-          liam,
-          PickerFake.returns(
-            PickedImage(
-              bytes: _png,
-              contentType: 'image/png',
-              extension: 'png',
-            ),
-          ),
-        );
+        final container = containerFor(liam);
         container.read(openConversationProvider.notifier).open(conversationId);
         await container.read(messagesProvider.future);
 
         final caption = 'seam ${DateTime.now().microsecondsSinceEpoch}';
         final result = await container
             .read(messagesProvider.notifier)
-            .sendImage(body: caption);
+            .sendImage(
+              body: caption,
+              chosen: PickedImage(
+                bytes: _png,
+                contentType: 'image/png',
+                extension: 'png',
+              ),
+            );
 
         expect(result, isA<Ok<Message>>());
         final appended = container.read(messagesProvider).requireValue;
@@ -396,7 +390,7 @@ void main() {
         final path = sent.value.attachmentPath!;
 
         // The other member opens it, as the photo viewer does.
-        final container = containerFor(mia, PickerFake.cancels());
+        final container = containerFor(mia);
         final sub = container.listen(attachmentUrlProvider(path), (_, _) {});
         final url = await container.read(attachmentUrlProvider(path).future);
 
@@ -415,7 +409,7 @@ void main() {
       final path = sent.value.attachmentPath!;
 
       for (final repository in [noah, offline]) {
-        final container = containerFor(repository, PickerFake.cancels());
+        final container = containerFor(repository);
         container.listen(attachmentUrlProvider(path), (_, _) {});
 
         await expectLater(
@@ -429,9 +423,8 @@ void main() {
       }
     });
 
-    test('a cancelled picker is null and sends nothing', () async {
-      final picker = PickerFake.cancels();
-      final container = containerFor(liam, picker);
+    test('nothing chosen is null and sends nothing', () async {
+      final container = containerFor(liam);
       container.read(openConversationProvider.notifier).open(conversationId);
       final before = (await container.read(messagesProvider.future)).length;
 
@@ -440,7 +433,6 @@ void main() {
           .sendImage(body: 'never sent');
 
       expect(result, isNull);
-      expect(picker.calls, 1);
       expect(container.read(messagesProvider).requireValue, hasLength(before));
       final theirs = await mia.messages(conversationId);
       expect(
@@ -452,23 +444,21 @@ void main() {
     test(
       'the failure path of the upload connection reaches the caller',
       () async {
-        final container = containerFor(
-          offline,
-          PickerFake.returns(
-            PickedImage(
-              bytes: _png,
-              contentType: 'image/png',
-              extension: 'png',
-            ),
-          ),
-        );
+        final container = containerFor(offline);
         container.read(openConversationProvider.notifier).open(conversationId);
         container.listen(messagesProvider, (_, _) {});
         await Future<void>.delayed(const Duration(seconds: 1));
 
         final result = await container
             .read(messagesProvider.notifier)
-            .sendImage(body: 'offline');
+            .sendImage(
+              body: 'offline',
+              chosen: PickedImage(
+                bytes: _png,
+                contentType: 'image/png',
+                extension: 'png',
+              ),
+            );
 
         expect(result, isA<Err<Message>>());
         expect(
@@ -711,7 +701,6 @@ void main() {
           presenceRepositoryProvider.overrideWithValue(
             SupabasePresenceRepository(miaClient!),
           ),
-          attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
           linkOpenerProvider.overrideWithValue(LinkOpenerFake()),
           sessionControllerProvider.overrideWith(() => _SignedIn(miaMember)),
         ],

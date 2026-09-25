@@ -21,6 +21,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/presentation/settings_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
+import '../../support/sis_ui.dart';
 import '../../support/fakes.dart';
 
 const config = RuntimeConfig(
@@ -311,15 +312,8 @@ void main() {
   });
 
   group('sharing switches', () {
-    bool switchOn(WidgetTester t, String key) => t
-        .widget<Switch>(
-          find.descendant(
-            of: find.byKey(ValueKey(key)),
-            matching: find.byType(Switch),
-            matchRoot: true,
-          ),
-        )
-        .value;
+    bool switchOn(WidgetTester t, String key) =>
+        switchedOn(t, find.byKey(ValueKey(key)));
 
     Future<void> flip(WidgetTester t, String key) async {
       await t.ensureVisible(find.byKey(ValueKey(key)));

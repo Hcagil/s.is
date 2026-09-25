@@ -19,9 +19,6 @@ import '../domain/read_marks.dart';
 final chatRepositoryProvider = Provider<ChatRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
-final attachmentSourceProvider = Provider<AttachmentSource>(
-  (_) => throw UnimplementedError('override in main'),
-);
 final linkOpenerProvider = Provider<LinkOpener>(
   (_) => throw UnimplementedError('override in main'),
 );
@@ -448,27 +445,18 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     state = AsyncData([...current, message]);
   }
 
-  /// Lets the member choose an image and sends it with an optional [body].
+  /// Sends [chosen], picked in the attachment sheet's own grid, with an
+  /// optional [body].
   ///
-  /// Returns null when they back out of the picker — not a failure, and the
-  /// composer must not report one.
+  /// Returns null when [chosen] is null -- the member backed out of the
+  /// sheet, which is not a failure, and the composer must not report one.
   Future<Result<Message>?> sendImage({
     String body = '',
     PickedImage? chosen,
   }) async {
     final conversationId = ref.read(openConversationProvider);
     if (conversationId == null) return const Err(DeniedFailure());
-
-    // Chosen in the attachment sheet's own grid, or else from the system
-    // picker.
-    final PickedImage? image;
-    try {
-      image = chosen ?? await ref.read(attachmentSourceProvider).pickImage();
-    } catch (e) {
-      // A picker that throws must read as a reason on screen -- in words,
-      // not the platform's exception text.
-      return Err(const ProviderFailure('Could not open the photo picker.'));
-    }
+    final image = chosen;
     if (image == null) return null;
 
     // Shown at once from the phone while it uploads; replaced by the stored

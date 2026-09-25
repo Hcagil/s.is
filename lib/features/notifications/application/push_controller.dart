@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
+import '../../auth/domain/session_state.dart';
 import '../domain/push.dart';
 
 /// The device's push channel (Firebase Messaging in data/).
@@ -16,6 +17,25 @@ final pushRegistryProvider = Provider<PushRegistry>(
   (_) => throw UnimplementedError('override in main'),
 );
 
+/// Tells the push source who owns what it keeps on this device (the shade
+/// and the stored inbox), from every settled answer about the session --
+/// not only from home: a cold start that ends on the sign-in or Denied
+/// screen must drop the previous member's notifications too. While the
+/// session is still being (re)checked nobody has changed, so nothing is
+/// told: a start offline must not wipe the member's own inbox.
+final pushInboxOwnerProvider = Provider<void>((ref) {
+  final source = ref.read(pushSourceProvider);
+  ref.listen(sessionControllerProvider, (_, next) {
+    switch (next.value) {
+      case Allowed(:final member):
+        unawaited(source.forUser(member.userId));
+      case SignedOut() || Denied():
+        unawaited(source.forUser(null));
+      case _:
+    }
+  }, fireImmediately: true);
+});
+
 /// Keeps this device on the server's delivery list for whoever is signed in;
 /// state is the token last registered for the current account, or null.
 final pushRegistrationProvider = NotifierProvider<PushRegistration, String?>(
@@ -25,10 +45,13 @@ final pushRegistrationProvider = NotifierProvider<PushRegistration, String?>(
 class PushRegistration extends Notifier<String?> {
   @override
   String? build() {
+    // Before anything is registered: what a previous member left must be
+    // gone before the first push for this one can arrive.
+    ref.watch(pushInboxOwnerProvider);
     final me = ref.watch(currentUserIdProvider);
     if (me == null) return null;
-
     final source = ref.read(pushSourceProvider);
+
     final sub = source.tokenRefreshes.listen(_register);
     ref.onDispose(sub.cancel);
 
@@ -48,6 +71,7 @@ class PushRegistration extends Notifier<String?> {
   /// A failed registration is not shown anywhere: it is retried on the next
   /// start and on the next token refresh.
   Future<void> _register(String token) async {
+    if (!ref.mounted) return;
     final r = await ref.read(pushRegistryProvider).register(token);
     if (r is Ok && ref.mounted) state = token;
   }
@@ -58,8 +82,11 @@ class PushRegistration extends Notifier<String?> {
   /// Best effort -- if it fails, the server still sends nothing to a device
   /// whose session has ended.
   Future<void> forget() async {
-    final token = state ?? await ref.read(pushSourceProvider).token();
+    final source = ref.read(pushSourceProvider);
+    final token = state ?? await source.token();
     if (token != null) await ref.read(pushRegistryProvider).forget(token);
+    // Nothing of this account stays in the notification shade.
+    await source.clearAll();
   }
 }
 

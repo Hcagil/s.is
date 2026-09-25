@@ -17,6 +17,7 @@ import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
+import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/domain/last_seen.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
@@ -73,6 +74,8 @@ class World {
       chatRepositoryProvider.overrideWithValue(chat),
       presenceRepositoryProvider.overrideWithValue(presence),
       profileRepositoryProvider.overrideWithValue(profileFake),
+      pushSourceProvider.overrideWithValue(PushSourceFake()),
+      pushRegistryProvider.overrideWithValue(PushRegistryFake()),
     ],
     child: const SisApp(),
   );

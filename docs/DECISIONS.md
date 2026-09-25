@@ -729,3 +729,42 @@ Reconstructing a multi-GB image from a remote layer cache with `load: true`
 costs as much as building it from scratch; not worth the added workflow
 complexity. Reverted; `docker compose build` stayed as it was. The
 `supabase start -x ...` trim (this entry) is the change that stuck.
+
+## 2026-09-24 — One SIS notification, grouped like Telegram
+
+**Pushes carry data only, and the app shows them itself** (owner's choice):
+one SIS summary in the shade that expands into a notification per chat,
+each listing that chat's newest lines, instead of one notification per
+message. The server still words each line by the recipient's own preview
+setting (full, sender only, no details), so a phone is never sent more than
+its owner allowed; the app only arranges them. With "no details" a chat's
+entry says "SIS: New message", so the grouping shows how many chats have
+news, never who or what.
+
+**What is waiting is kept on the phone** (shared preferences), because a
+push is shown by a short-lived background isolate while the app is closed.
+Opening a chat clears its notification; signing out clears them all. While
+the app is open nothing is shown: the chat list already says what is new.
+
+**Older builds keep regular notifications.** A build from before 0.12 has
+no code to show a data-only push, and updates are never forced, so each
+device says when it registers whether it shows pushes itself
+(`device_tokens.shows_itself`, false unless the app says so). Only those get
+data only; every other device still gets a regular notification. An updated
+app re-registers on its next start and switches over.
+
+**Nothing of a previous member survives on the phone** (security review,
+2026-09-25). The stored inbox is kept per member, and its owner follows the
+*settled* session answer from the app's root (signed in / signed out / not
+allowed), never the loading or error state: a cold start onto the sign-in or
+"not allowed" screen clears the previous member's notifications and inbox,
+while an offline start keeps the member's own. The server stops pushes to a
+session it knows has ended; it cannot know about one that only ended locally
+(an offline sign-out, where `forget()` never reaches it), so the phone itself
+never draws without knowing whose inbox it is: a push arriving with no stored
+owner is dropped before anything is shown or saved, and a push computed for
+someone other than the stored owner (delivered after a handover on the same
+phone) is dropped too, even though the server addressed it correctly when it
+was sent. App data is excluded from Android backup and device-to-device
+transfer (`data_extraction_rules.xml` for Android 12+, `backup_rules.xml`
+below it — `allowBackup="false"` alone does not stop transfers on 12+).

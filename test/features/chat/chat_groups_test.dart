@@ -15,6 +15,7 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/presentation/conversation_list.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
+import 'package:sis/features/notifications/application/push_controller.dart';
 
 import '../../support/fakes.dart';
 
@@ -39,6 +40,7 @@ ProviderContainer _scope(ChatFake chat) => ProviderContainer.test(
     chatRepositoryProvider.overrideWithValue(chat),
     presenceRepositoryProvider.overrideWithValue(PresenceFake()),
     sessionControllerProvider.overrideWith(_SignedIn.new),
+    pushSourceProvider.overrideWithValue(PushSourceFake()),
   ],
 );
 

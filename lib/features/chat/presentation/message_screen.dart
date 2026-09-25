@@ -11,6 +11,7 @@ import '../../../app/theme.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
+import '../../notifications/application/push_controller.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
@@ -40,6 +41,8 @@ Future<void> openConversation(
   ref.read(openConversationProvider.notifier).open(conversationId);
   // Opening is reading. Not awaited: the screen must not wait on it.
   unawaited(list.markRead(conversationId));
+  // Its notification leaves the shade.
+  unawaited(ref.read(pushSourceProvider).clearConversation(conversationId));
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) =>

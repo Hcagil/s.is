@@ -10,7 +10,14 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 // What each recipient may see is decided in SQL, by their own preview
 // setting (app_private.push_targets_for_message); this only delivers it.
-type Target = { token: string; conversation_id: string; title: string; body: string };
+type Target = {
+  user_id: string;
+  token: string;
+  conversation_id: string;
+  title: string;
+  body: string;
+  shows_itself: boolean;
+};
 
 async function accessToken(serviceAccount: {
   client_email: string;
@@ -115,9 +122,22 @@ async function send(id: string): Promise<void> {
         body: JSON.stringify({
           message: {
             token: t.token,
-            notification: { title: t.title, body: t.body },
-            // Tapping opens this conversation. Not shown on the lock screen.
-            data: { conversation_id: t.conversation_id },
+            // Data only where the app shows pushes itself (0.12+), grouped
+            // into one SIS notification per phone. Older builds cannot show
+            // a data-only push, so they still get a regular notification.
+            ...(t.shows_itself ? {} : { notification: { title: t.title, body: t.body } }),
+            // A push computed for one member must never be drawn by a phone
+            // that has since become another member's: onBackgroundPush drops
+            // a data-only push whose user_id differs from the device's
+            // stored owner. Present on both send shapes, so an
+            // already-drawn (notification+data) push still carries the
+            // recipient for a build that later needs it.
+            data: {
+              user_id: t.user_id,
+              conversation_id: t.conversation_id,
+              title: t.title,
+              body: t.body,
+            },
             android: { priority: 'high' },
           },
         }),

@@ -22,6 +22,7 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
+import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/data/supabase_presence_repository.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
@@ -184,8 +185,8 @@ class _MarkReadDown implements ChatRepository {
 }
 
 /// The overrides main.dart mounts, on [client]; only Google sign-in, the Play
-/// update API and the photo picker -- nothing local to run them on -- are
-/// fakes.
+/// update API, the photo picker and Firebase push -- nothing local to run
+/// them on -- are fakes.
 List<Override> _production(
   SupabaseClient client,
   String name, {
@@ -210,6 +211,13 @@ List<Override> _production(
     SupabaseProfileRepository(client),
   ),
   attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
+  // Firebase push in main.dart: opening a chat clears its notification.
+  // No token: shutDown() disposes the scope while the fake clock may still
+  // hold PushRegistration's first registration, which then reads a disposed
+  // Ref. Registration is not what this suite is about (see
+  // push_display_integration_test.dart).
+  pushSourceProvider.overrideWithValue(PushSourceFake(token: null)),
+  pushRegistryProvider.overrideWithValue(PushRegistryFake()),
 ];
 
 List<Conversation> _list(ProviderContainer c) =>

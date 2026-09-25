@@ -102,6 +102,9 @@ void main() {
       readsBefore,
       reason: 'a conversation already on the list needs no re-read',
     );
+    expect(push.cleared, [
+      'c1',
+    ], reason: 'opening the tapped conversation clears its notification');
   });
 
   testWidgets('a tapped notification for a conversation not yet on the list '
@@ -134,6 +137,7 @@ void main() {
       readsBefore + 1,
       reason: 'exactly one re-read, not a poll',
     );
+    expect(push.cleared, ['c2']);
   });
 
   testWidgets('a notification for a conversation that is still unknown is '
@@ -147,6 +151,11 @@ void main() {
 
     expect(find.byType(MessageScreen), findsNothing);
     expect(find.byType(HomeScreen), findsOneWidget);
+    expect(
+      push.cleared,
+      isEmpty,
+      reason: 'nothing was opened, so nothing should be cleared',
+    );
   });
 
   testWidgets('the conversation a cold start was launched from opens '
@@ -163,5 +172,8 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(push.cleared, [
+      'c1',
+    ], reason: 'opening from a cold-start launch clears its notification too');
   });
 }

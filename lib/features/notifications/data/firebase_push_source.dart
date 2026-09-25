@@ -18,6 +18,11 @@ Future<void> onBackgroundPush(RemoteMessage message) async {
   final d = message.data;
   final id = d['conversation_id'], title = d['title'], body = d['body'];
   if (id is! String || title is! String || body is! String) return;
+  final targetUser = d['user_id'];
+  if (targetUser is String &&
+      targetUser != await LocalPushDisplay.currentOwner()) {
+    return;
+  }
   await LocalPushDisplay.init();
   await LocalPushDisplay.show(conversationId: id, title: title, body: body);
 }

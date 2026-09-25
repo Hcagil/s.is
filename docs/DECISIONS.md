@@ -677,7 +677,7 @@ even after it is turned back on.** `read_marks()` originally returned
 `last_read_at` whenever both members *currently* share, so a read made at
 03:00 with sharing off became visible the moment sharing was switched back
 on at noon -- exactly what "your reads are not shown to anyone" promised
-against. The fix (`20260925100000_shared_read_at.sql`) adds
+against. The fix (`20260925090000_shared_read_at.sql`) adds
 `conversation_members.shared_read_at`, which `mark_read` only advances when
 the reader shares at that instant; `read_marks()` now returns
 `shared_read_at`, not `last_read_at`, under the same mutual-sharing gate. A

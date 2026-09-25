@@ -76,6 +76,29 @@ A `release-ios.yml` on a hosted macOS runner builds, signs and uploads to
 TestFlight with the same structure and secret discipline. Nothing in the
 Android pipeline blocks it.
 
+### Before pushing
+
+`tool/ci_local.sh` runs the same checks as `ci.yml`'s Android and Database
+checks jobs, in the project's Docker images, stopping at the first failure:
+
+```bash
+tool/ci_local.sh            # everything: pattern, format, analyze, unit
+                             # tests, a debug build, db lint, pgTAP, and the
+                             # integration folder
+tool/ci_local.sh --no-db    # skip the database part (no local Supabase
+                             # stack needed) -- measured 3:43
+tool/ci_local.sh --db-only  # only the database part -- measured 10:12,
+                             # 9:47 of it the integration tests; not fast,
+                             # run it before pushing a data/ or db/ change
+tool/ci_local.sh --reset-db # replay migrations onto a clean database first,
+                             # instead of reusing whatever is already running
+```
+
+It reuses an already-running local Supabase stack (`supabase start` is
+idempotent) rather than resetting it, and never runs `docker compose down
+-v`. The database part needs `docker compose run --rm supabase start` to
+have been run at least once (or pass `--reset-db`).
+
 ## Runbook
 
 - **Ship:** merge a pull request into `main`. Nothing else. CI runs again on `main` first (about ten minutes), then *Actions → Release* starts; the Play Console *Internal testing* track shows the new build within minutes of that. Phones receive it as a flexible in-app update.

@@ -680,3 +680,35 @@ The same holds for typing and membership changes.
 
 **In a 1:1 chat the header says just "typing…"**: the person is already
 named above it.
+
+## 2026-09-25 — Repo stays public; CI stays on GitHub-hosted runners
+
+**The repository stays public and CI keeps running on GitHub-hosted
+runners** (owner decision). Two alternatives were considered and rejected:
+
+- **Self-hosted runner on the current public repo.** A public repo runs
+  fork pull request workflows automatically; a self-hosted runner would
+  execute a stranger's PR code on the owner's own PC. Not acceptable at any
+  usage level.
+- **Make the repository private.** Drops two things the free plan does not
+  give a private repo: mandatory branch protection (required status checks
+  on `main` cannot be enforced without a paid plan) and secret
+  push-protection. It would also stop being free to build: CI used about
+  1,600 Actions minutes in the 7 days to 2026-09-25 (≈6,800/month
+  extrapolated), against the 2,000 free minutes a private repo gets; a
+  public repo's Actions minutes are unmetered.
+
+So the trade is paying in unmetered public-repo minutes, not in dropped
+protection or a stranger's code on the owner's machine. CI speed (this
+entry's sibling work: `.github/workflows/ci.yml`, `tool/ci_local.sh`) is
+the lever that stays available: less wall-clock time on hosted runners,
+same protection, same public repo.
+
+**Tried and reverted: caching the flutter dev image with
+`docker/build-push-action`'s GitHub Actions cache (`type=gha`).** Measured
+on PR #36 (Android "Build development image"): 125 s baseline → 374 s on
+the run that filled the cache → 141 s on a warm run (36097541294).
+Reconstructing a multi-GB image from a remote layer cache with `load: true`
+costs as much as building it from scratch; not worth the added workflow
+complexity. Reverted; `docker compose build` stayed as it was. The
+`supabase start -x ...` trim (this entry) is the change that stuck.

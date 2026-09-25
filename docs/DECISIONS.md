@@ -758,9 +758,13 @@ app re-registers on its next start and switches over.
 *settled* session answer from the app's root (signed in / signed out / not
 allowed), never the loading or error state: a cold start onto the sign-in or
 "not allowed" screen clears the previous member's notifications and inbox,
-while an offline start keeps the member's own. The server already stops
-pushes to a device whose session ended; a push queued before that can still
-draw until the app is next opened. App data is excluded from Android backup
-and device-to-device transfer (`data_extraction_rules.xml` for Android 12+,
-`backup_rules.xml` below it — `allowBackup="false"` alone does not stop
-transfers on 12+).
+while an offline start keeps the member's own. The server stops pushes to a
+session it knows has ended; it cannot know about one that only ended locally
+(an offline sign-out, where `forget()` never reaches it), so the phone itself
+never draws without knowing whose inbox it is: a push arriving with no stored
+owner is dropped before anything is shown or saved, and a push computed for
+someone other than the stored owner (delivered after a handover on the same
+phone) is dropped too, even though the server addressed it correctly when it
+was sent. App data is excluded from Android backup and device-to-device
+transfer (`data_extraction_rules.xml` for Android 12+, `backup_rules.xml`
+below it — `allowBackup="false"` alone does not stop transfers on 12+).

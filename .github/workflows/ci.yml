@@ -15,6 +15,12 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # Fixed, not the checkout directory's name: android, database and release.yml
+  # all build the same docker/Dockerfile image and must agree on its tag so a
+  # cache hit in one is a cache hit in the others.
+  COMPOSE_PROJECT_NAME: sis
+
 jobs:
   changes:
     name: Classify changes
@@ -83,8 +89,28 @@ jobs:
           path: .ci-cache
           key: flutter-${{ runner.os }}-${{ hashFiles('pubspec.lock', 'docker/Dockerfile') }}
           restore-keys: flutter-${{ runner.os }}-
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Resolve local uid/gid
+        id: ids
+        run: |
+          echo "uid=$(id -u)" >> "$GITHUB_OUTPUT"
+          echo "gid=$(id -g)" >> "$GITHUB_OUTPUT"
+      # docker/Dockerfile is the single source of truth (compose.yaml points
+      # here too); only the builder differs so layers survive between runs.
       - name: Build development image
-        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./docker
+          file: ./docker/Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            LOCAL_UID=${{ steps.ids.outputs.uid }}
+            LOCAL_GID=${{ steps.ids.outputs.gid }}
+          tags: ${{ env.COMPOSE_PROJECT_NAME }}-flutter:latest
+          load: true
+          cache-from: type=gha,scope=flutter-dev-image
+          cache-to: type=gha,mode=max,scope=flutter-dev-image
       - name: Resolve dependencies
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter pub get
       - name: Layer rules
@@ -128,16 +154,44 @@ jobs:
         run: docker compose build supabase
       # `start`, not `db start`: the integration tests need the API, auth and
       # Realtime services, not only Postgres.
+      #
+      # -x excludes containers nothing here talks to (grepped: no test
+      # references mailpit, postgres-meta, studio, edge-runtime, logflare,
+      # vector, imgproxy or supavisor -- the pooler is already `enabled =
+      # false` in supabase/config.toml, imgproxy only serves the Pro-only
+      # image_transformation feature, which is disabled). On a GH-hosted
+      # runner's 2 vCPUs those extra containers (Logflare and Vector
+      # especially) compete with Realtime's replication for CPU; that contention, not
+      # Realtime itself, is why message delivery lags far more here than on a
+      # developer machine with cores to spare (see docs/DECISIONS.md).
       - name: Start Supabase and replay migrations
-        run: docker compose run --rm supabase start
+        run: docker compose run --rm supabase start -x imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - name: Lint database
         run: docker compose run --rm supabase db lint --level error
       - name: Test database
         run: docker compose run --rm supabase test db
       - name: Prepare cache directories
         run: mkdir -p .ci-cache/pub .ci-cache/gradle
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Resolve local uid/gid
+        id: ids
+        run: |
+          echo "uid=$(id -u)" >> "$GITHUB_OUTPUT"
+          echo "gid=$(id -g)" >> "$GITHUB_OUTPUT"
       - name: Build development image
-        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml build flutter
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./docker
+          file: ./docker/Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            LOCAL_UID=${{ steps.ids.outputs.uid }}
+            LOCAL_GID=${{ steps.ids.outputs.gid }}
+          tags: ${{ env.COMPOSE_PROJECT_NAME }}-flutter:latest
+          load: true
+          cache-from: type=gha,scope=flutter-dev-image
+          cache-to: type=gha,mode=max,scope=flutter-dev-image
       # Skipped by the ordinary `flutter test` run; this is the only job with a
       # database for them to talk to.
       #

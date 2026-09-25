@@ -47,6 +47,7 @@ final class Message {
     this.attachmentPreview,
     this.localImage,
     this.deletion,
+    this.editedAt,
     this.replyTo,
     this.forwarded = false,
   });
@@ -78,7 +79,13 @@ final class Message {
   /// Set when the sender deleted it for everyone; its content is gone.
   final MessageDeletion? deletion;
 
+  /// When the sender last edited this message's body, or null if never
+  /// edited. No history is kept: only the latest body survives.
+  final DateTime? editedAt;
+
   bool get isDeleted => deletion != null;
+
+  bool get isEdited => editedAt != null;
 
   /// Whether [me] may still delete this for everyone at [now]: their own,
   /// stored, not yet deleted, and under 6 hours old (the server checks too).
@@ -86,6 +93,16 @@ final class Message {
       senderId == me &&
       !isPending &&
       deletion == null &&
+      now.difference(createdAt) < deleteForEveryoneWindow;
+
+  /// Whether [me] may still edit this message at [now]: their own, stored,
+  /// not deleted, not forwarded, and under 6 hours old -- the same window as
+  /// [canDeleteForEveryone] (the server checks too).
+  bool canEdit(String me, DateTime now) =>
+      senderId == me &&
+      !isPending &&
+      deletion == null &&
+      !forwarded &&
       now.difference(createdAt) < deleteForEveryoneWindow;
 
   /// Still on its way to the server.

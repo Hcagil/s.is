@@ -442,6 +442,25 @@ class _Bubble extends StatelessWidget {
                       : Theme.of(context).colorScheme.primary,
                 ),
               ),
+            if (!message.isDeleted)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    message.isEdited
+                        ? 'edited ${previewTime(message.createdAt, DateTime.now())}'
+                        : previewTime(message.createdAt, DateTime.now()),
+                    key: ValueKey('time-${message.id}'),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: (mine ? Colors.white : brand.text).withValues(
+                        alpha: 0.6,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -608,16 +627,24 @@ class _ComposerState extends ConsumerState<_Composer> {
 
   Future<void> _send() async {
     final body = _controller.text;
-    // The same rule the database enforces, applied before the round trip.
-    if (_sending || !isSendableBody(body)) return;
+    final editing = ref.read(editingProvider);
+    // The same rule the database enforces, applied before the round trip. A
+    // photo message's caption may be empty; a text-only message may not.
+    final bodyOk = editing != null && editing.hasAttachment
+        ? body.trim().length <= maxMessageLength
+        : isSendableBody(body);
+    if (_sending || !bodyOk) return;
     setState(() => _sending = true);
-    final result = await ref.read(messagesProvider.notifier).send(body);
+    final result = editing == null
+        ? await ref.read(messagesProvider.notifier).send(body)
+        : await ref.read(messagesProvider.notifier).editMessage(editing, body);
     if (!mounted) return;
     setState(() => _sending = false);
     switch (result) {
       case Ok():
         // Cleared only on success, so nothing a member typed is lost.
         _controller.clear();
+        if (editing != null) ref.read(editingProvider.notifier).clear();
       case Err(:final failure):
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(failure.message)));
@@ -658,6 +685,17 @@ class _ComposerState extends ConsumerState<_Composer> {
   @override
   Widget build(BuildContext context) {
     final replying = ref.watch(replyingToProvider);
+    final editing = ref.watch(editingProvider);
+    ref.listen(editingProvider, (previous, next) {
+      if (next != null && previous?.id != next.id) {
+        _controller.text = next.body;
+        _controller.selection = TextSelection.collapsed(
+          offset: _controller.text.length,
+        );
+      } else if (next == null && previous != null) {
+        _controller.clear();
+      }
+    });
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -669,7 +707,10 @@ class _ComposerState extends ConsumerState<_Composer> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (replying != null) _ReplyBar(replying),
+          if (editing != null)
+            _EditBar(editing)
+          else if (replying != null)
+            _ReplyBar(replying),
           Row(
             children: [
               IconButton(
@@ -768,6 +809,60 @@ class _ReplyBar extends ConsumerWidget {
             tooltip: 'Cancel reply',
             icon: const Icon(Icons.close),
             onPressed: () => ref.read(replyingToProvider.notifier).clear(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What the composer is editing, with a way to stop.
+class _EditBar extends ConsumerWidget {
+  const _EditBar(this.message);
+
+  final Message message;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      key: const ValueKey('edit-bar'),
+      margin: const EdgeInsets.fromLTRB(10, 0, 0, 6),
+      padding: const EdgeInsets.fromLTRB(10, 4, 0, 4),
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: Theme.of(context).colorScheme.primary,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Editing message',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                Text(
+                  quoteText(message),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('edit-cancel'),
+            tooltip: 'Cancel edit',
+            icon: const Icon(Icons.close),
+            onPressed: () => ref.read(editingProvider.notifier).clear(),
           ),
         ],
       ),

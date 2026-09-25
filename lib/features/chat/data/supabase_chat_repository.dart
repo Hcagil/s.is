@@ -177,7 +177,7 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, reply_to, forwarded';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, reply_to, forwarded, edited_at';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -580,6 +580,19 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   @override
+  Future<Result<Message>> editMessage(Message message, String body) async {
+    try {
+      final row = await _client.rpc(
+        'edit_message',
+        params: {'message': message.id, 'body': body.trim()},
+      );
+      return Ok(_toMessage(row as Map<String, dynamic>));
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
   Future<Result<Uri>> attachmentUrl(String attachmentPath) async {
     try {
       final signed = await _client.storage
@@ -601,6 +614,10 @@ final class SupabaseChatRepository implements ChatRepository {
     attachmentPreview: _preview(row['attachment_preview']),
     replyTo: row['reply_to'] as String?,
     forwarded: row['forwarded'] as bool? ?? false,
+    editedAt: switch (row['edited_at']) {
+      final String at => DateTime.parse(at).toLocal(),
+      _ => null,
+    },
     deletion: switch (row['deleted']) {
       'vanished' => MessageDeletion.vanished,
       'placeholder' => MessageDeletion.placeholder,

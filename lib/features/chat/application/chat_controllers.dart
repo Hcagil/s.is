@@ -136,8 +136,8 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     loaded = true;
     var unknown = false;
     for (final message in buffered) {
-      if (message.isDeleted) {
-        unknown = true; // a deletion during the load: read again
+      if (message.isDeleted || message.editedAt != null) {
+        unknown = true; // a deletion or edit during the load: read again
         continue;
       }
       final next = _withMessage(list, message);
@@ -162,6 +162,19 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     // list does not hold the one before it: read again.
     if (message.isDeleted) {
       reloadQuietly();
+      return;
+    }
+    if (message.editedAt != null) {
+      final index = current.indexWhere((c) => c.id == message.conversationId);
+      // Only when the edited message is still the previewed one -- an edit
+      // to an older message further up the conversation changes nothing
+      // shown in the list.
+      if (index >= 0 && current[index].lastMessageAt == message.createdAt) {
+        state = AsyncData([
+          for (var i = 0; i < current.length; i++)
+            if (i == index) current[i].withPreview(message) else current[i],
+        ]);
+      }
       return;
     }
     final next = _withMessage(current, message);
@@ -310,6 +323,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         _deleted(message);
         return;
       }
+      if (message.editedAt != null) {
+        _edited(message);
+        return;
+      }
       _append(message);
       // Open on screen means read; tell the server so the count stays zero.
       if (!message.isFrom(_me ?? '')) {
@@ -328,7 +345,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
           final i = merged.indexWhere((m) => m.id == message.id);
           if (i < 0) {
             merged.add(message);
-          } else if (message.isDeleted) {
+          } else if (message.isDeleted || message.editedAt != null) {
             merged[i] = message;
           }
         }
@@ -372,6 +389,16 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     state = AsyncData([...current]..[i] = shown);
   }
 
+  /// An edited message replaces its old self, in place, on this screen --
+  /// and on every other open screen through the same Realtime update.
+  void _edited(Message message) {
+    final current = state.value;
+    if (current == null) return;
+    final i = current.indexWhere((m) => m.id == message.id);
+    if (i < 0) return;
+    state = AsyncData([...current]..[i] = message);
+  }
+
   /// Deletes the member's own [message] for everyone. The screen shows an
   /// [Err]'s reason; on success the message vanishes or becomes "deleted"
   /// here at once, and on every other open screen through Realtime.
@@ -395,6 +422,19 @@ class MessagesController extends AsyncNotifier<List<Message>> {
               : MessageDeletion.placeholder,
         ),
       );
+    }
+    return result;
+  }
+
+  /// Edits the member's own [message] to [body]. The screen shows an [Err]'s
+  /// reason; on success the new text shows here at once, and on every other
+  /// open screen through Realtime.
+  Future<Result<Message>> editMessage(Message message, String body) async {
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .editMessage(message, body);
+    if (result case Ok(:final value) when ref.mounted) {
+      _edited(value);
     }
     return result;
   }
@@ -511,6 +551,22 @@ final replyingToProvider = NotifierProvider<ReplyingTo, Message?>(
 );
 
 class ReplyingTo extends Notifier<Message?> {
+  @override
+  Message? build() {
+    ref.watch(openConversationProvider);
+    return null;
+  }
+
+  void start(Message message) => state = message;
+
+  void clear() => state = null;
+}
+
+/// The message being edited in the composer, or null. Cleared when another
+/// conversation opens and after the edit is saved or cancelled.
+final editingProvider = NotifierProvider<Editing, Message?>(Editing.new);
+
+class Editing extends Notifier<Message?> {
   @override
   Message? build() {
     ref.watch(openConversationProvider);

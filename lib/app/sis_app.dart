@@ -87,20 +87,26 @@ class _SessionGateState extends ConsumerState<SessionGate> {
 
   @override
   Widget build(BuildContext context) {
+    final startupError = ref.watch(startupErrorProvider);
+    if (startupError != null) return StartupFailedScreen(startupError);
+
+    final session = ref.watch(sessionControllerProvider);
     // For the life of the app, whatever screen it is on: keeps this phone on
     // the delivery list for whoever is signed in, and drops what a previous
     // member's pushes left on it as soon as their session is found to have
     // ended -- on any path, a cold start onto sign-in or Denied included.
-    ref.listen(pushRegistrationProvider, (_, _) {});
-    final startupError = ref.watch(startupErrorProvider);
-    if (startupError != null) return StartupFailedScreen(startupError);
+    // Not before the session is past SetupRequired: pushSourceProvider is
+    // only overridden once config is complete, and this must not be built
+    // in the config-incomplete or startup-failure run of the app.
+    if (session.value is! SetupRequired) {
+      ref.listen(pushRegistrationProvider, (_, _) {});
+    }
 
     final update = ref.watch(updateControllerProvider).value;
     if (update case UpdateRequired(:final installed, :final minimum)) {
       return UpdateRequiredScreen(installed: installed, minimum: minimum);
     }
 
-    final session = ref.watch(sessionControllerProvider);
     final notifier = ref.read(sessionControllerProvider.notifier);
     return switch (session) {
       AsyncData(value: SetupRequired()) => const SetupRequiredScreen(),

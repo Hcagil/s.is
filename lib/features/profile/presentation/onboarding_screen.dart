@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../application/profile_controller.dart';
 import '../domain/own_profile.dart';
@@ -27,8 +28,7 @@ class OnboardingScreen extends ConsumerWidget {
             onPressed: () async {
               final result = await controller.completeOnboarding();
               if (result case Err(:final failure) when context.mounted) {
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text(failure.message)));
+                showSisNotice(context, failure.message, isError: true);
               }
             },
             child: const Text('Skip'),

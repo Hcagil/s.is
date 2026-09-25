@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/loading.dart';
 import '../application/chat_controllers.dart';
 import 'conversation_list.dart';
 
@@ -85,7 +86,7 @@ class _Photo extends ConsumerWidget {
       AsyncError(:final error) => Center(
         child: Text(reasonOf(error), style: white),
       ),
-      _ => const Center(child: CircularProgressIndicator(color: Colors.white)),
+      _ => const Center(child: SisLoadingLogo(size: 48)),
     };
   }
 }

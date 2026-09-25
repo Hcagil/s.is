@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../application/chat_controllers.dart';
 import '../../presence/domain/last_seen.dart';
@@ -138,8 +139,7 @@ Future<void> showMessageActions(
       .read(messagesProvider.notifier)
       .deleteForEveryone(message);
   if (r case Err(:final failure) when context.mounted) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(failure.message)));
+    showSisNotice(context, failure.message, isError: true);
   }
 }
 

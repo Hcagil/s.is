@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/loading.dart';
+import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
 import '../../auth/application/session_controller.dart';
@@ -39,7 +41,7 @@ class ConversationList extends ConsumerWidget {
           reason: reasonOf(error),
           onRetry: () => ref.read(conversationListProvider.notifier).refresh(),
         ),
-        _ => const Center(child: CircularProgressIndicator()),
+        _ => const Center(child: SisLoadingLogo(size: 40)),
       },
       floatingActionButton: Row(
         mainAxisSize: MainAxisSize.min,
@@ -86,8 +88,7 @@ Future<void> _startChat(BuildContext context, WidgetRef ref) async {
         otherUserId: picked.userId,
       );
     case Err(:final failure):
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(failure.message)));
+      showSisNotice(context, failure.message, isError: true);
   }
 }
 
@@ -117,8 +118,7 @@ Future<void> _startGroup(BuildContext context, WidgetRef ref) async {
         group: true,
       );
     case Err(:final failure):
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(failure.message)));
+      showSisNotice(context, failure.message, isError: true);
   }
 }
 
@@ -197,7 +197,7 @@ class _GroupComposerState extends ConsumerState<_GroupComposer> {
                 ),
                 _ => const Padding(
                   padding: EdgeInsets.all(24),
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(child: SisLoadingLogo(size: 40)),
                 ),
               },
             ),
@@ -251,7 +251,7 @@ class _MemberPicker extends ConsumerWidget {
         AsyncError(:final error) => ListTile(title: Text(reasonOf(error))),
         _ => const Padding(
           padding: EdgeInsets.all(24),
-          child: Center(child: CircularProgressIndicator()),
+          child: Center(child: SisLoadingLogo(size: 40)),
         ),
       },
     );

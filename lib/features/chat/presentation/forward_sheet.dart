@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/loading.dart';
+import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../application/chat_controllers.dart';
 import '../domain/message.dart';
@@ -21,17 +23,10 @@ Future<void> showForwardSheet(
   if (chosen == null || chosen.isEmpty || !context.mounted) return;
   final r = await ref.read(messagesProvider.notifier).forward(message, chosen);
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(switch (r) {
-        Ok() =>
-          chosen.length == 1
-              ? 'Forwarded'
-              : 'Forwarded to ${chosen.length} chats',
-        Err(:final failure) => failure.message,
-      }),
-    ),
-  );
+  showSisNotice(context, switch (r) {
+    Ok() => 'Forwarded',
+    Err(:final failure) => failure.message,
+  }, isError: r is Err);
 }
 
 class _ForwardPicker extends ConsumerStatefulWidget {
@@ -100,7 +95,7 @@ class _ForwardPickerState extends ConsumerState<_ForwardPicker> {
               AsyncError() => const Center(
                 child: Text('Chats could not be loaded.'),
               ),
-              _ => const Center(child: CircularProgressIndicator()),
+              _ => const Center(child: SisLoadingLogo(size: 40)),
             },
           ),
         ],

@@ -43,6 +43,7 @@ Future<void> pumpApp(
   PresenceFake? presence,
   ChatRepository? chat,
   PushRegistryFake? push,
+  PushSourceFake? source,
   AttachmentCacheFake? photos,
 }) async {
   await t.pumpWidget(
@@ -58,7 +59,7 @@ Future<void> pumpApp(
           presence ?? PresenceFake(),
         ),
         profileRepositoryProvider.overrideWithValue(p),
-        pushSourceProvider.overrideWithValue(PushSourceFake()),
+        pushSourceProvider.overrideWithValue(source ?? PushSourceFake()),
         pushRegistryProvider.overrideWithValue(push ?? PushRegistryFake()),
         attachmentCacheProvider.overrideWithValue(
           photos ?? AttachmentCacheFake(),
@@ -252,15 +253,23 @@ void main() {
     final auth = FakeAuth(session: true);
     final p = ProfileFake(profile: maya);
     final push = PushRegistryFake();
+    final source = PushSourceFake();
     final photos = AttachmentCacheFake();
     bool? sessionActiveWhenForgotten;
     push.onForget = (_) => sessionActiveWhenForgotten = auth.session;
     int? signOutsWhenCleared;
     photos.onClear = () => signOutsWhenCleared = auth.signOuts;
-    await pumpApp(t, p, auth: auth, push: push, photos: photos);
+    await pumpApp(t, p, auth: auth, push: push, source: source, photos: photos);
 
     await signOut(t);
     expect(auth.signOuts, 1);
+    expect(
+      source.clearAllCalls,
+      1,
+      reason:
+          'the Sign out button must take every notification of this '
+          'account out of the shade',
+    );
     expect(
       sessionActiveWhenForgotten,
       isTrue,

@@ -18,6 +18,7 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
+import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/chat/presentation/profile_pages.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/data/supabase_presence_repository.dart';
@@ -506,6 +507,9 @@ void main() {
           SupabaseProfileRepository(fernClient!),
         ),
         attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
+        // Firebase push in main.dart: opening a chat clears its notification.
+        pushSourceProvider.overrideWithValue(PushSourceFake()),
+        pushRegistryProvider.overrideWithValue(PushRegistryFake()),
       ],
       child: const SisApp(),
     );

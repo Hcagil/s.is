@@ -22,6 +22,7 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
+import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/data/supabase_presence_repository.dart';
 import 'package:sis/features/presence/domain/last_seen.dart';
@@ -182,8 +183,8 @@ class _Wired implements ChatRepository {
 }
 
 /// The overrides main.dart mounts, on [client]; only Google sign-in, the Play
-/// update API and the photo picker -- nothing local to run them on -- are
-/// fakes.
+/// update API, the photo picker and Firebase push -- nothing local to run
+/// them on -- are fakes.
 List<Override> _production(
   SupabaseClient client,
   String name, {
@@ -208,6 +209,10 @@ List<Override> _production(
     SupabaseProfileRepository(client),
   ),
   attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
+  // The device's push channel (Firebase in main.dart): opening a chat clears
+  // its notification through it. Not what this suite is about.
+  pushSourceProvider.overrideWithValue(PushSourceFake()),
+  pushRegistryProvider.overrideWithValue(PushRegistryFake()),
 ];
 
 ReadMark? _markOf(ProviderContainer c, String userId) => c

@@ -72,6 +72,9 @@
 --   sana/theo/wren test/integration/read_status_seam_test.dart
 --     (sana's controller and screens see theo and wren read her messages,
 --      live; each test sets their sharing choices itself)
+--   nell/oren      test/integration/push_display_integration_test.dart
+--     (oren's phone registers as a 0.11 build, then as this build on its
+--      next start; nell writes to him so the delivery list shows which)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -123,5 +126,7 @@ insert into app_private.allowlist(email) values
   ('remy@integration.test'),
   ('sana@integration.test'),
   ('theo@integration.test'),
-  ('wren@integration.test')
+  ('wren@integration.test'),
+  ('nell@integration.test'),
+  ('oren@integration.test')
 on conflict do nothing;

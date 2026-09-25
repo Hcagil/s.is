@@ -3,6 +3,8 @@
 // addToInbox moves a chat to the end with its latest title, appends the body
 // keeping only the newest maxInboxLines, and counts one more; removeFromInbox
 // drops a chat; inboxSummary words the total; InboxChat round-trips to JSON.
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/notifications/domain/notification_inbox.dart';
 
@@ -77,8 +79,11 @@ void main() {
     });
 
     test('only the newest maxInboxLines are kept, oldest first', () {
+      // Well past the cap, so a count that follows the kept lines (at most
+      // maxInboxLines + 1 on any one step) cannot pass for the real count.
+      const total = maxInboxLines + 3;
       var inbox = const <InboxChat>[];
-      for (var i = 1; i <= maxInboxLines + 1; i++) {
+      for (var i = 1; i <= total; i++) {
         inbox = addToInbox(
           inbox,
           conversationId: 'c1',
@@ -89,15 +94,10 @@ void main() {
 
       expect(inbox.single.lines, hasLength(maxInboxLines));
       expect(inbox.single.lines, [
-        'line 2',
-        'line 3',
-        'line 4',
-        'line 5',
-        'line 6',
-        'line 7',
+        for (var i = total - maxInboxLines + 1; i <= total; i++) 'line $i',
       ], reason: 'the oldest line must be dropped, not the newest');
       // count keeps every message ever received, even ones no longer shown.
-      expect(inbox.single.count, maxInboxLines + 1);
+      expect(inbox.single.count, total);
     });
   });
 
@@ -168,6 +168,26 @@ void main() {
       expect(restored.title, original.title);
       expect(restored.lines, original.lines);
       expect(restored.count, original.count);
+    });
+
+    test('round-trips through the JSON text it is stored as', () {
+      // Stored as a string in shared preferences, so fromJson meets what
+      // jsonDecode returns (List<dynamic>, Map<String, dynamic>), not the
+      // typed map toJson built.
+      const original = InboxChat(
+        conversationId: 'c1',
+        title: 'Maya',
+        lines: ['hi', 'you there?'],
+        count: 2,
+      );
+
+      final decoded = jsonDecode(jsonEncode(original.toJson()));
+      final restored = InboxChat.fromJson(decoded as Map<String, Object?>);
+
+      expect(restored.conversationId, 'c1');
+      expect(restored.title, 'Maya');
+      expect(restored.lines, ['hi', 'you there?']);
+      expect(restored.count, 2);
     });
 
     test('round-trips an empty lines list', () {

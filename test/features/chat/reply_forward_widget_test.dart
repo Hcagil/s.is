@@ -143,15 +143,9 @@ void main() {
             ),
           ]);
         await pump(tester, chat);
-        // "This message was deleted" only overflows its Row under flutter
-        // test's font substitution (see message_delete_test.dart) -- never
-        // with a real font. Consumed so it does not fail this test, which is
-        // about the long-press sheet, not that layout.
-        tester.takeException();
 
         await tester.longPress(find.byKey(const ValueKey('message-m1')));
         await tester.pumpAndSettle();
-        tester.takeException();
 
         expect(find.byKey(const ValueKey('action-reply')), findsNothing);
         expect(find.byKey(const ValueKey('action-forward')), findsNothing);
@@ -280,9 +274,6 @@ void main() {
           msg('m2', from: me.userId, body: 'ok', replyTo: 'm1'),
         ];
       await pump(tester, chat);
-      // Same font-substitution overflow as message_delete_test.dart's
-      // placeholder bubble; irrelevant to what this test is checking.
-      tester.takeException();
 
       expect(find.byKey(const ValueKey('quote-m2')), findsOneWidget);
       expect(

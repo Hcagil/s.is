@@ -317,14 +317,18 @@ class _Bubble extends StatelessWidget {
                         : brand.text.withValues(alpha: 0.6),
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    'This message was deleted',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontStyle: FontStyle.italic,
-                      color: mine
-                          ? Colors.white70
-                          : brand.text.withValues(alpha: 0.6),
+                  Flexible(
+                    child: Text(
+                      'This message was deleted',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontStyle: FontStyle.italic,
+                        color: mine
+                            ? Colors.white70
+                            : brand.text.withValues(alpha: 0.6),
+                      ),
                     ),
                   ),
                 ],
@@ -344,14 +348,18 @@ class _Bubble extends StatelessWidget {
                           : brand.text.withValues(alpha: 0.6),
                     ),
                     const SizedBox(width: 4),
-                    Text(
-                      'Forwarded',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                        color: mine
-                            ? Colors.white70
-                            : brand.text.withValues(alpha: 0.6),
+                    Flexible(
+                      child: Text(
+                        'Forwarded',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                          color: mine
+                              ? Colors.white70
+                              : brand.text.withValues(alpha: 0.6),
+                        ),
                       ),
                     ),
                   ],

@@ -21,7 +21,11 @@ lib/
                           an SDK. tool/check_pattern.sh holds the list and is
                           the authority: supabase_flutter, supabase,
                           google_sign_in, in_app_update, package_info_plus,
-                          flutter_secure_storage, url_launcher, image_picker
+                          flutter_secure_storage, flutter_local_notifications,
+                          firebase_messaging, firebase_core,
+                          shared_preferences, web_socket_channel,
+                          path_provider, photo_manager, url_launcher,
+                          image_picker, http
     application/          Riverpod Notifiers: state machines; import domain only
     presentation/         widgets: watch state, call notifiers, render
 ```

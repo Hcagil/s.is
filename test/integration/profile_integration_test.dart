@@ -1,7 +1,6 @@
 @Tags(['integration'])
 library;
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -25,6 +24,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/dead_host.dart';
 
 /// Tags, names and onboarding through the real stack.
 ///
@@ -51,9 +51,6 @@ const _key = String.fromEnvironment(
 );
 const _password = 'integration-password';
 
-/// A host that accepts nothing: the honest form of "the connection failed".
-const _deadUrl = 'http://127.0.0.1:1';
-
 SupabaseClient _client(String url) => SupabaseClient(
   url,
   _key,
@@ -74,20 +71,6 @@ Future<SupabaseClient> signedIn(String email) async {
     reason: 'activate_session refused an allowlisted user',
   );
   return client;
-}
-
-/// A dead-host client carrying a real, unexpired session. `recoverSession`
-/// only decodes the session and checks its expiry locally, so this reaches
-/// the network-erroring path of `load()`/`save()`, which first check
-/// `auth.currentUser` and would otherwise short-circuit to `DeniedFailure`
-/// on an unauthenticated dead client, proving nothing about the offline
-/// message.
-Future<SupabaseClient> deadButSignedIn(SupabaseClient live) async {
-  final dead = _client(_deadUrl);
-  await dead.auth.recoverSession(
-    jsonEncode(live.auth.currentSession!.toJson()),
-  );
-  return dead;
 }
 
 /// The offline message, never the raw SDK error that produced it.

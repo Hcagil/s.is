@@ -9,6 +9,8 @@ import 'package:sis/data/failures.dart' show offlineMessage;
 import 'package:sis/features/update/data/play_update_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/dead_host.dart';
+
 /// `PlayUpdateRepository.minSupportedBuild()` against a running local
 /// Supabase.
 ///
@@ -29,9 +31,6 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 const _password = 'integration-password';
-
-/// A host that accepts nothing: the honest form of "the connection failed".
-const _deadUrl = 'http://127.0.0.1:1';
 
 SupabaseClient _client(String url) => SupabaseClient(
   url,
@@ -78,7 +77,7 @@ void main() {
 
   test('a broken connection: minSupportedBuild() fails with the offline '
       'message, not raw SDK text', () async {
-    final dead = _client(_deadUrl);
+    final dead = deadHostClient();
     clients.add(dead);
 
     final result = await PlayUpdateRepository(dead).minSupportedBuild();

@@ -31,6 +31,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/dead_host.dart';
 
 /// Unread counts through the real stack: [SupabaseChatRepository.markRead]
 /// and `conversations().unread` against the real RPCs, and the seam the
@@ -49,8 +50,6 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 const _password = 'integration-password';
-const _deadUrl = 'http://127.0.0.1:1';
-
 SupabaseClient _client(String url) => SupabaseClient(
   url,
   _key,
@@ -271,7 +270,7 @@ void main() {
     unaClient = await _signedIn('una@integration.test');
     ottoClient = await _signedIn('otto@integration.test');
     piaClient = await _signedIn('pia@integration.test');
-    deadClient = _client(_deadUrl);
+    deadClient = deadHostClient();
     una = SupabaseChatRepository(unaClient!);
     otto = SupabaseChatRepository(ottoClient!);
     pia = SupabaseChatRepository(piaClient!);

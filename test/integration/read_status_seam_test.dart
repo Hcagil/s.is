@@ -33,6 +33,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/dead_host.dart';
 
 /// Read status on its seams, wired as main.dart wires it: the REAL
 /// [ReadMarksController] over the real chat and profile repositories, the
@@ -51,8 +52,6 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 const _password = 'integration-password';
-const _deadUrl = 'http://127.0.0.1:1';
-
 SupabaseClient _client([String url = _url]) => SupabaseClient(
   url,
   _key,
@@ -252,7 +251,7 @@ void main() {
     sanaClient = await _signedIn('sana@integration.test');
     theoClient = await _signedIn('theo@integration.test');
     wrenClient = await _signedIn('wren@integration.test');
-    deadClient = _client(_deadUrl);
+    deadClient = deadHostClient();
     sana = SupabaseChatRepository(sanaClient);
     theo = SupabaseChatRepository(theoClient);
     wren = SupabaseChatRepository(wrenClient);

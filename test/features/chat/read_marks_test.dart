@@ -1,5 +1,5 @@
 // Unit tests for the pure read-status domain: ReadMark.hasRead and
-// isReadByAll. Written from the contract in read_marks.dart's own doc
+// isReadByAnyone. Written from the contract in read_marks.dart's own doc
 // comments, never from how any repository or controller uses them.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
@@ -67,64 +67,108 @@ void main() {
     );
   });
 
-  group('isReadByAll', () {
-    test('nobody shares: vacuously read -- the message looks normal', () {
-      final marks = [
-        ReadMark(userId: 'u2', shares: false, readAt: null),
-        ReadMark(userId: 'u3', shares: false, readAt: null),
-      ];
-      expect(
-        isReadByAll(marks, sentAt),
-        isTrue,
-        reason:
-            'nothing to show when nobody shares -- must not read as '
-            'unread forever',
-      );
-    });
+  group('isReadByAnyone', () {
+    ReadMark readBy(String id) => ReadMark(
+      userId: id,
+      shares: true,
+      readAt: sentAt.add(const Duration(minutes: 1)),
+    );
+    ReadMark unreadBy(String id) => ReadMark(
+      userId: id,
+      shares: true,
+      readAt: sentAt.subtract(const Duration(minutes: 1)),
+    );
+
+    test(
+      'nobody shares: read -- nothing to show, the message looks normal',
+      () {
+        final marks = [
+          const ReadMark(userId: 'u2', shares: false),
+          const ReadMark(userId: 'u3', shares: false),
+        ];
+        expect(
+          isReadByAnyone(marks, sentAt),
+          isTrue,
+          reason:
+              'nothing to show when nobody shares -- must not read as '
+              'unread forever',
+        );
+      },
+    );
 
     test('no marks at all (e.g. a 1:1 where the other never shared): read', () {
-      expect(isReadByAll(const [], sentAt), isTrue);
+      expect(isReadByAnyone(const [], sentAt), isTrue);
     });
 
-    test('one sharing member has read, one has not: not read', () {
-      final marks = [
-        ReadMark(
-          userId: 'u2',
-          shares: true,
-          readAt: sentAt.add(const Duration(minutes: 1)),
-        ),
-        const ReadMark(userId: 'u3', shares: true, readAt: null),
-      ];
-      expect(isReadByAll(marks, sentAt), isFalse);
-    });
-
-    test('a non-sharing member with no readAt is ignored -- '
-        'only sharing members gate the answer', () {
-      final marks = [
-        ReadMark(
-          userId: 'u2',
-          shares: true,
-          readAt: sentAt.add(const Duration(minutes: 1)),
-        ),
-        const ReadMark(userId: 'u3', shares: false, readAt: null),
-      ];
+    test('1:1: the one sharer has not read it: not read', () {
+      expect(isReadByAnyone([unreadBy('u2')], sentAt), isFalse);
       expect(
-        isReadByAll(marks, sentAt),
-        isTrue,
-        reason: 'u3 does not share, so u3 cannot block the read indicator',
+        isReadByAnyone(const [ReadMark(userId: 'u2', shares: true)], sentAt),
+        isFalse,
       );
     });
 
-    test('every sharing member has read: read', () {
+    test('1:1: the one sharer has read it: read', () {
+      expect(isReadByAnyone([readBy('u2')], sentAt), isTrue);
+    });
+
+    test('group: one sharer has read, one has not: read -- one reader is '
+        'enough', () {
+      expect(isReadByAnyone([readBy('u2'), unreadBy('u3')], sentAt), isTrue);
+      expect(isReadByAnyone([unreadBy('u2'), readBy('u3')], sentAt), isTrue);
+    });
+
+    test('group: one of several sharers has read: read', () {
       final marks = [
+        unreadBy('u2'),
+        unreadBy('u3'),
+        readBy('u4'),
+        unreadBy('u5'),
+      ];
+      expect(isReadByAnyone(marks, sentAt), isTrue);
+    });
+
+    test('group: several sharers, none has read: not read', () {
+      final marks = [
+        unreadBy('u2'),
+        const ReadMark(userId: 'u3', shares: true),
+        unreadBy('u4'),
+      ];
+      expect(isReadByAnyone(marks, sentAt), isFalse);
+    });
+
+    test('every sharer has read: read', () {
+      expect(isReadByAnyone([readBy('u2'), readBy('u3')], sentAt), isTrue);
+    });
+
+    test('a non-sharing member never counts as the reader', () {
+      // u3 does not share; whatever readAt it carries is not a read.
+      final marks = [
+        unreadBy('u2'),
         ReadMark(
-          userId: 'u2',
-          shares: true,
+          userId: 'u3',
+          shares: false,
           readAt: sentAt.add(const Duration(minutes: 1)),
         ),
+      ];
+      expect(isReadByAnyone(marks, sentAt), isFalse);
+    });
+
+    test('a non-sharing member does not make a sharer\'s silence '
+        '"nobody shares"', () {
+      final marks = [
+        unreadBy('u2'),
+        const ReadMark(userId: 'u3', shares: false),
+      ];
+      expect(isReadByAnyone(marks, sentAt), isFalse);
+    });
+
+    test('a sharer who read at exactly the send time counts', () {
+      final marks = [
+        unreadBy('u2'),
         ReadMark(userId: 'u3', shares: true, readAt: sentAt),
       ];
-      expect(isReadByAll(marks, sentAt), isTrue);
+      expect(isReadByAnyone(marks, sentAt), isTrue);
     });
   });
 }

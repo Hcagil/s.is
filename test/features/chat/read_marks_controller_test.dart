@@ -156,8 +156,8 @@ void main() {
 
   test('my own read, echoed back by the channel, is not a mark', () async {
     // mark_read broadcasts to every member of the topic, the reader
-    // included. Counted as a mark, my own place would hold my own messages
-    // grey in a group.
+    // included. Counted as a mark, my own read would make my own messages
+    // look read in a group, where one reader is enough.
     final chat = ChatFake()
       ..readMarksData['c1'] = [
         ReadMark(userId: 'u2', shares: true, readAt: t0),

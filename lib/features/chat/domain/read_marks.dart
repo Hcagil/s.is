@@ -13,8 +13,11 @@ final class ReadMark {
       shares && readAt != null && !readAt!.isBefore(sentAt);
 }
 
-/// Whether a message sent at [sentAt] shows as read: every other member who
-/// shares read status has read it. When nobody shares it there is nothing to
-/// show, and the message looks normal.
-bool isReadByAll(List<ReadMark> marks, DateTime sentAt) =>
-    marks.where((m) => m.shares).every((m) => m.hasRead(sentAt));
+/// Whether a message sent at [sentAt] shows as read: at least one other
+/// member who shares read status has read it (in a group, one reader is
+/// enough — read status is not "read by all"). When nobody shares it there
+/// is nothing to show, and the message looks normal.
+bool isReadByAnyone(List<ReadMark> marks, DateTime sentAt) {
+  final sharers = marks.where((m) => m.shares);
+  return sharers.isEmpty || sharers.any((m) => m.hasRead(sentAt));
+}

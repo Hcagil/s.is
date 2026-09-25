@@ -199,11 +199,12 @@ class SisBrand extends ThemeExtension<SisBrand> {
     required this.glow,
     required this.glowDeep,
     required this.danger,
+    required this.unreadEdge,
     required this.prism,
   });
 
   final Color background, surface, surfaceHigh, text, muted, line;
-  final Color brand, brandDeep, theirs, glow, glowDeep, danger;
+  final Color brand, brandDeep, theirs, glow, glowDeep, danger, unreadEdge;
 
   /// Three stops, used only on the logo and the "SIS" wordmark.
   final LinearGradient prism;
@@ -228,6 +229,7 @@ class SisBrand extends ThemeExtension<SisBrand> {
     glow: Color(0x295B4CF0),
     glowDeep: Color(0x1A2F3FD1),
     danger: Color(0xFFD23F57),
+    unreadEdge: Color(0xFFFFD54F),
     prism: LinearGradient(
       colors: [Color(0xFF2E36D9), Color(0xFF6D35E8), Color(0xFFB23FD0)],
       stops: [0, .55, 1],
@@ -247,6 +249,7 @@ class SisBrand extends ThemeExtension<SisBrand> {
     glow: Color(0x3D7B6BFF),
     glowDeep: Color(0x293D4BE8),
     danger: Color(0xFFFF7B8E),
+    unreadEdge: Color(0xFFFFD54F),
     prism: LinearGradient(
       colors: [Color(0xFF4450FF), Color(0xFF8B5CFF), Color(0xFFC45BE6)],
       stops: [0, .55, 1],

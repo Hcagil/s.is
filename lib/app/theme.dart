@@ -174,10 +174,6 @@ ThemeData sisTheme(Brightness brightness) {
         side: BorderSide(color: t.line),
       ),
     ),
-    snackBarTheme: const SnackBarThemeData(
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: r8),
-    ),
     progressIndicatorTheme: ProgressIndicatorThemeData(color: t.brand),
   );
 }

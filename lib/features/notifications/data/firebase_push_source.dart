@@ -11,6 +11,10 @@ import 'local_push_display.dart';
 /// SIS notification. Registered in main; runs in its own isolate.
 @pragma('vm:entry-point')
 Future<void> onBackgroundPush(RemoteMessage message) async {
+  // A notification block means Android already drew this one itself (an
+  // older build, or this device's shows_itself was still false when it was
+  // sent): showing it again here would duplicate it.
+  if (message.notification != null) return;
   final d = message.data;
   final id = d['conversation_id'], title = d['title'], body = d['body'];
   if (id is! String || title is! String || body is! String) return;

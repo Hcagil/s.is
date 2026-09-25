@@ -7,8 +7,10 @@ Source of truth: [DESIGN.md §5–6](DESIGN.md).
   Play link. Raising `min_supported_build` is a manual, recorded decision,
   used only when an older build would break against the current backend.
 - Otherwise, if Play reports a newer version → **flexible** in-app update:
-  dismissible banner, background download, install on tap. No repeated
-  prompts.
+  dismissible banner, background download, install on tap. The check runs at
+  launch and every time the app returns to the foreground; a dismissed banner
+  stays away until then, never while the member is using the app. An update
+  that finished downloading earlier is offered for install at once.
 - Publishing a build never changes `min_supported_build`.
 - Migrations must remain compatible with every build ≥ `min_supported_build`.
 
@@ -78,6 +80,12 @@ Android pipeline blocks it.
 
 - **Ship:** merge a pull request into `main`. Nothing else. CI runs again on `main` first (about ten minutes), then *Actions → Release* starts; the Play Console *Internal testing* track shows the new build within minutes of that. Phones receive it as a flexible in-app update.
 - **A release failed:** read the failed step first. A failure before *Apply database migrations* changed nothing anywhere — re-run the failed job (*Re-run failed jobs*; it keeps the same `versionCode`). A failure at the migration or upload step is also safe to re-run: `db push` skips migrations that are already applied. A failure only at *Tag and publish release notes* means the build is already on Play — do not re-run (Play rejects the same `versionCode` twice); create the tag by hand.
+- **A phone does not see a new build:** the app asks Play on launch and on
+  every return to the foreground, but Play answers from the Play Store's own
+  cache, which can lag a fresh internal-track release by hours. Open the Play
+  Store → profile → *Manage apps & device* → *Updates available* to refresh
+  it; the next time SIS comes to the foreground it offers the update. Never
+  uninstall to update: that signs the phone out and drops its local cache.
 - **versionCode** is `run_number + 100` of the Release workflow — never edit it by hand, never reuse one. `versionName` is edited in `pubspec.yaml` when a milestone changes (0.1.0 → 0.2.0).
 - **Raise the minimum supported build** only when an older build would break against the current backend: a migration `update public.app_config set min_supported_build = <code> where id = 1;` with the reason in a SQL comment, plus a DECISIONS entry. Every migration must remain compatible with all builds ≥ the current minimum.
 - **Register a signing fingerprint with Google:** download the certificate

@@ -11,6 +11,7 @@ import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/presentation/onboarding_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
+import 'package:sis/features/update/domain/update_repository.dart';
 
 import '../support/fakes.dart';
 
@@ -231,7 +232,10 @@ void main() {
   });
   testWidgets('flexible update shows a dismissible banner', (t) async {
     await t.pumpWidget(
-      app(FakeAuth(session: true), FakeUpdate(play: const Ok(107))),
+      app(
+        FakeAuth(session: true),
+        FakeUpdate(play: const Ok(PlayUpdateCheck(offeredBuild: 107))),
+      ),
     );
     await t.pumpAndSettle();
     expect(find.text('Update available'), findsOneWidget);
@@ -263,12 +267,124 @@ void main() {
 
   testWidgets('finished download shows restart', (t) async {
     await t.pumpWidget(
-      app(FakeAuth(session: true), FakeUpdate(play: const Ok(107))),
+      app(
+        FakeAuth(session: true),
+        FakeUpdate(play: const Ok(PlayUpdateCheck(offeredBuild: 107))),
+      ),
     );
     await t.pumpAndSettle();
     await t.tap(find.text('Update'));
     await t.pumpAndSettle();
     expect(find.text('Ready to install'), findsOneWidget);
     expect(find.text('Restart'), findsOneWidget);
+  });
+
+  group('returning to the app re-checks for updates', () {
+    /// Background, then foreground, the way Android reports it.
+    Future<void> leaveAndReturn(WidgetTester t) async {
+      for (final s in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        t.binding.handleAppLifecycleStateChanged(s);
+        await t.pump();
+      }
+    }
+
+    testWidgets('a build released while backgrounded shows the banner', (
+      t,
+    ) async {
+      final u = FakeUpdate();
+      await t.pumpWidget(app(FakeAuth(session: true), u));
+      await t.pumpAndSettle();
+      expect(find.text('New chat'), findsOneWidget);
+      expect(find.text('Update available'), findsNothing);
+      final before = u.checks;
+
+      u.offer(108);
+      await leaveAndReturn(t);
+      await t.pumpAndSettle();
+
+      expect(u.checks, greaterThan(before), reason: 'resume never asked Play');
+      expect(find.text('Update available'), findsOneWidget);
+      expect(find.text('New chat'), findsOneWidget);
+    });
+
+    testWidgets('a download finished while backgrounded offers restart', (
+      t,
+    ) async {
+      final u = FakeUpdate()..offer(107);
+      await t.pumpWidget(app(FakeAuth(session: true), u));
+      await t.pumpAndSettle();
+      expect(find.text('Update available'), findsOneWidget);
+
+      u.play = const Ok(PlayUpdateCheck(offeredBuild: 107, downloaded: true));
+      await leaveAndReturn(t);
+      await t.pumpAndSettle();
+
+      expect(find.text('Ready to install'), findsOneWidget);
+      await t.tap(find.text('Restart'));
+      await t.pumpAndSettle();
+      expect(u.calls, ['complete']);
+    });
+
+    testWidgets('a failing Play check on resume leaves the app usable', (
+      t,
+    ) async {
+      final u = FakeUpdate();
+      await t.pumpWidget(app(FakeAuth(session: true), u));
+      await t.pumpAndSettle();
+      final before = u.checks;
+
+      u.play = const Err(NetworkFailure('no Play'));
+      await leaveAndReturn(t);
+      await t.pumpAndSettle();
+
+      expect(u.checks, greaterThan(before));
+      expect(find.text('New chat'), findsOneWidget);
+      expect(find.text('Update available'), findsNothing);
+      expect(find.textContaining('no Play'), findsNothing);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('below the minimum, resume keeps the block without flicker', (
+      t,
+    ) async {
+      final u = FakeUpdate(min: const Ok(999));
+      await t.pumpWidget(app(FakeAuth(session: true), u));
+      await t.pumpAndSettle();
+      expect(find.text('Update required'), findsOneWidget);
+      final before = u.minReads;
+
+      for (final s in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        t.binding.handleAppLifecycleStateChanged(s);
+        await t.pump();
+      }
+      // Every frame while the re-check resolves still shows the block.
+      for (var i = 0; i < 10; i++) {
+        await t.pump(const Duration(milliseconds: 16));
+        expect(
+          find.text('Update required'),
+          findsOneWidget,
+          reason: 'frame $i',
+        );
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+      }
+      await t.pumpAndSettle();
+      expect(u.minReads, greaterThan(before), reason: 'policy not re-read');
+      expect(find.text('Update required'), findsOneWidget);
+      expect(u.calls, isNot(contains('immediate')));
+    });
   });
 }

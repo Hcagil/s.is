@@ -58,11 +58,34 @@ class _AllowedGate extends ConsumerWidget {
 }
 
 /// Chooses the screen from the update policy first, then the session state.
-class SessionGate extends ConsumerWidget {
+class SessionGate extends ConsumerStatefulWidget {
   const SessionGate({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SessionGate> createState() => _SessionGateState();
+}
+
+class _SessionGateState extends ConsumerState<SessionGate> {
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    // A build released, or a flexible download finished, while the app was
+    // backgrounded is otherwise never seen again without a restart.
+    _lifecycle = AppLifecycleListener(
+      onResume: () => ref.read(updateControllerProvider.notifier).recheck(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final startupError = ref.watch(startupErrorProvider);
     if (startupError != null) return StartupFailedScreen(startupError);
 

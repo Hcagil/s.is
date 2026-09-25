@@ -162,8 +162,10 @@ exist only in GitHub Actions secrets and in the maintainer's offline backup.
   Play link. Raising `min_supported_build` is a manual, recorded decision,
   used only when an older build would break against the current backend.
 - Otherwise, if Play reports a newer version → **flexible** in-app update:
-  dismissible banner, background download, install on tap. No repeated
-  prompts.
+  dismissible banner, background download, install on tap. The check runs at
+  launch and every time the app returns to the foreground; a dismissed banner
+  stays away until then, never while the member is using the app. An update
+  that finished downloading earlier is offered for install at once.
 - Publishing a build never changes `min_supported_build`.
 - Migrations must remain compatible with every build ≥ `min_supported_build`.
 

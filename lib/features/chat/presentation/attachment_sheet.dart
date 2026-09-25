@@ -170,52 +170,62 @@ class _PhotoAccessRequest extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = SisBrand.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                color: t.surfaceHigh,
-                borderRadius: BorderRadius.circular(24),
+    // A short phone (360x640 dp and smaller) cannot fit the icon, both
+    // lines of text and both buttons at once; scroll rather than clip --
+    // the buttons must always be reachable, never cut off.
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 96,
+                    height: 96,
+                    decoration: BoxDecoration(
+                      color: t.surfaceHigh,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Icon(Icons.image_rounded, size: 48, color: t.brand),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Send photos faster',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Allow access so your gallery loads right here – '
+                    'nothing is uploaded until you send it.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: t.muted),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      key: const ValueKey('sheet-allow'),
+                      onPressed: permanentlyDenied ? onOpenSettings : onAllow,
+                      child: Text(
+                        permanentlyDenied ? 'Open settings' : 'Allow photos',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    key: const ValueKey('sheet-not-now'),
+                    onPressed: onNotNow,
+                    child: const Text('Not now'),
+                  ),
+                ],
               ),
-              child: Icon(Icons.image_rounded, size: 48, color: t.brand),
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Send photos faster',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Allow access so your gallery loads right here – nothing is '
-              'uploaded until you send it.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: t.muted),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                key: const ValueKey('sheet-allow'),
-                onPressed: permanentlyDenied ? onOpenSettings : onAllow,
-                child: Text(
-                  permanentlyDenied ? 'Open settings' : 'Allow photos',
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              key: const ValueKey('sheet-not-now'),
-              onPressed: onNotNow,
-              child: const Text('Not now'),
-            ),
-          ],
+          ),
         ),
       ),
     );

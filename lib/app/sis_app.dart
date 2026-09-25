@@ -8,6 +8,7 @@ import '../features/auth/domain/session_state.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/status_screens.dart';
 import '../features/home/presentation/home_screen.dart';
+import '../features/notifications/application/push_controller.dart';
 import '../features/profile/application/profile_controller.dart';
 import '../features/profile/presentation/onboarding_screen.dart';
 import '../features/update/application/update_controller.dart';
@@ -86,6 +87,11 @@ class _SessionGateState extends ConsumerState<SessionGate> {
 
   @override
   Widget build(BuildContext context) {
+    // For the life of the app, whatever screen it is on: keeps this phone on
+    // the delivery list for whoever is signed in, and drops what a previous
+    // member's pushes left on it as soon as their session is found to have
+    // ended -- on any path, a cold start onto sign-in or Denied included.
+    ref.listen(pushRegistrationProvider, (_, _) {});
     final startupError = ref.watch(startupErrorProvider);
     if (startupError != null) return StartupFailedScreen(startupError);
 

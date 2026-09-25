@@ -106,12 +106,14 @@ final class LocalPushDisplay {
   /// provider that watches who is signed in, not only on an actual change).
   /// On an actual change: drops whatever was stored for the previous member
   /// and empties the shade, then remembers the new owner, so a stale inbox
-  /// can never be read as -- or merged into -- someone else's.
+  /// can never be read as -- or merged into -- someone else's. Nobody again
+  /// is not a no-op: a push delivered late, after the session ended, must
+  /// not wait in the shade until the next member signs in.
   static Future<void> forUser(String? userId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     final previousOwner = prefs.getString(_ownerKey);
-    if (previousOwner == userId) return;
+    if (previousOwner == userId && userId != null) return;
     await prefs.remove(_keyFor(previousOwner));
     await _plugin.cancelAll();
     if (userId == null) {

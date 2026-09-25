@@ -21,8 +21,6 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Keeps this phone on the delivery list for whoever is signed in.
-    ref.listen(pushRegistrationProvider, (_, _) {});
     ref.listen(openedFromNotificationProvider, (_, next) {
       if (next case AsyncData(:final value)) {
         unawaited(_openFromNotification(context, ref, value));

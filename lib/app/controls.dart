@@ -67,11 +67,21 @@ class SisSwitchTile extends StatelessWidget {
   final ValueChanged<bool> onChanged;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    title: Text(title),
-    subtitle: subtitle == null ? null : Text(subtitle!),
-    trailing: SisSwitch(value: value, onChanged: onChanged),
-    onTap: () => onChanged(!value),
+  Widget build(BuildContext context) => MergeSemantics(
+    child: Semantics(
+      toggled: value,
+      child: ListTile(
+        title: Text(title),
+        subtitle: subtitle == null ? null : Text(subtitle!),
+        // The switch's own toggled/tap semantics would otherwise sit on a
+        // second, unlabelled node; the row above is the one node a screen
+        // reader should land on, the way SwitchListTile's did.
+        trailing: ExcludeSemantics(
+          child: SisSwitch(value: value, onChanged: onChanged),
+        ),
+        onTap: () => onChanged(!value),
+      ),
+    ),
   );
 }
 

@@ -11,8 +11,10 @@ abstract interface class UpdateRepository {
   /// `app_config.min_supported_build`; an [Err] must never block the user.
   Future<Result<int>> minSupportedBuild();
 
-  /// The versionCode Play offers as a flexible update, or `null` when none.
-  Future<Result<int?>> availablePlayBuild();
+  /// What Play currently knows about an update for this app: an offered
+  /// build, an already-downloaded one, or neither. An [Err] must never
+  /// block the user.
+  Future<Result<PlayUpdateCheck>> checkForUpdate();
 
   Future<void> startFlexibleUpdate();
 
@@ -23,4 +25,18 @@ abstract interface class UpdateRepository {
 
   /// Opens the Play listing; the fallback when an in-app update cannot start.
   Future<void> openStoreListing();
+}
+
+/// The result of asking Play about an update for this app.
+class PlayUpdateCheck {
+  const PlayUpdateCheck({this.offeredBuild, this.downloaded = false});
+
+  /// A newer build Play offers as a flexible update; null when none is
+  /// offered.
+  final int? offeredBuild;
+
+  /// A previously started flexible update finished downloading (possibly in
+  /// an earlier app session) and is waiting for
+  /// [UpdateRepository.completeFlexibleUpdate].
+  final bool downloaded;
 }

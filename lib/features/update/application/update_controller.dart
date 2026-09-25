@@ -22,7 +22,12 @@ class UpdateController extends AsyncNotifier<UpdateState> {
     // The policy row is readable only by an active member. Rebuild only when
     // that flips, not on every session transition (a dismissed banner stays
     // dismissed; the blocking screen never flickers through loading).
-    final allowed = ref.watch(
+    ref.watch(sessionControllerProvider.select((s) => s.value is Allowed));
+    return _check();
+  }
+
+  Future<UpdateState> _check() async {
+    final allowed = ref.read(
       sessionControllerProvider.select((s) => s.value is Allowed),
     );
     final repo = ref.read(updateRepositoryProvider);
@@ -37,10 +42,25 @@ class UpdateController extends AsyncNotifier<UpdateState> {
         return UpdateRequired(installed: installed, minimum: min);
       }
     }
-    return switch (await repo.availablePlayBuild()) {
-      Ok(value: final v?) when v > installed => UpdateAvailableFlexible(v),
+    return switch (await repo.checkForUpdate()) {
+      Ok(value: PlayUpdateCheck(downloaded: true)) =>
+        const UpdateReadyToInstall(),
+      Ok(value: PlayUpdateCheck(:final offeredBuild))
+          when offeredBuild != null && offeredBuild > installed =>
+        UpdateAvailableFlexible(offeredBuild),
       _ => const UpdateIdle(),
     };
+  }
+
+  /// Re-runs the Play/policy check. Called when the app returns to the
+  /// foreground, from presentation (see docs/ARCHITECTURE.md — application/
+  /// never sees the lifecycle event itself). A download in flight is left
+  /// alone; [download] and [install] own that transition.
+  Future<void> recheck() async {
+    if (state.value is UpdateDownloading) return;
+    final next = await AsyncValue.guard(_check);
+    if (!ref.mounted) return;
+    state = next;
   }
 
   Future<void> download() async {

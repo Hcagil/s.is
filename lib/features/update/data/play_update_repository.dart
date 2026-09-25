@@ -39,13 +39,20 @@ final class PlayUpdateRepository implements UpdateRepository {
   }
 
   @override
-  Future<Result<int?>> availablePlayBuild() async {
+  Future<Result<PlayUpdateCheck>> checkForUpdate() async {
     try {
       final info = await InAppUpdate.checkForUpdate();
+      if (info.installStatus == InstallStatus.downloaded) {
+        return Ok(const PlayUpdateCheck(downloaded: true));
+      }
       final offered =
           info.updateAvailability == UpdateAvailability.updateAvailable &&
           info.flexibleUpdateAllowed;
-      return Ok(offered ? info.availableVersionCode : null);
+      return Ok(
+        PlayUpdateCheck(
+          offeredBuild: offered ? info.availableVersionCode : null,
+        ),
+      );
     } catch (e) {
       // Not installed from Play, or an unsupported platform: no update.
       return Err(readableFailure(e));

@@ -16,6 +16,7 @@ import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
+import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -375,6 +376,7 @@ void main() {
       expect(chat.forwarded.single.messageId, 'm1');
       expect(chat.forwarded.single.conversationIds, ['c2']);
       expect(find.text('Forwarded'), findsOneWidget);
+      await drainNotice(tester);
     });
 
     testWidgets('sending to two chats shows "Forwarded to 2 chats"', (
@@ -395,6 +397,7 @@ void main() {
 
       expect(chat.forwarded.single.conversationIds, ['c2', 'c3']);
       expect(find.text('Forwarded to 2 chats'), findsOneWidget);
+      await drainNotice(tester);
     });
 
     testWidgets('a refused forward shows its reason', (tester) async {
@@ -412,6 +415,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('not your chat'), findsOneWidget);
+      await drainNotice(tester);
     });
 
     testWidgets('a forwarded message is marked "Forwarded" in the bubble', (

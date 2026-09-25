@@ -19,6 +19,7 @@ import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -536,7 +537,7 @@ void main() {
       // Every frame on the way back: never a spinner in place of the list.
       for (var i = 0; i < 20; i++) {
         await tester.pump(const Duration(milliseconds: 5));
-        expect(find.byType(CircularProgressIndicator), findsNothing);
+        expect(sisWait, findsNothing);
       }
       await tester.pumpAndSettle();
 

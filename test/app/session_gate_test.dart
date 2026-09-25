@@ -14,6 +14,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:sis/features/update/domain/update_repository.dart';
 
 import '../support/fakes.dart';
+import '../support/sis_ui.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -379,7 +380,7 @@ void main() {
           findsOneWidget,
           reason: 'frame $i',
         );
-        expect(find.byType(CircularProgressIndicator), findsNothing);
+        expect(sisWait, findsNothing);
       }
       await t.pumpAndSettle();
       expect(u.minReads, greaterThan(before), reason: 'policy not re-read');

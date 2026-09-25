@@ -29,6 +29,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../../support/fakes.dart';
+import '../../../support/sis_ui.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -92,22 +93,9 @@ Future<void> openNotifications(WidgetTester t) async {
   );
 }
 
-bool switchOn(WidgetTester t) =>
-    t.widget<SwitchListTile>(byKey('notif-enabled')).value;
+bool switchOn(WidgetTester t) => switchedOn(t, byKey('notif-enabled'));
 
-/// The radios sit under one [RadioGroup]; each `RadioListTile` gets its
-/// selection from that ancestor rather than its own `groupValue`.
-NotificationPreview? selectedPreview(WidgetTester t) =>
-    RadioGroup.maybeOf<NotificationPreview>(
-      t.element(byKey('notif-preview-full')),
-    )?.groupValue;
-
-bool radioSelected(WidgetTester t, String key) {
-  final value = NotificationPreview.values.firstWhere(
-    (p) => 'notif-preview-${p.name}' == key,
-  );
-  return selectedPreview(t) == value;
-}
+bool radioSelected(WidgetTester t, String key) => choiceSelected(t, byKey(key));
 
 /// A minimal host for [MuteTile]: it reads only the mutes repository and
 /// `currentUserIdProvider`, so nothing else needs a fake.
@@ -257,7 +245,7 @@ void main() {
       final fake = NotificationSettingsFake()..holdLoad();
       await t.pumpWidget(alone(fake));
       await t.pump();
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(sisWait, findsOneWidget);
 
       fake.loadResult = const Err(NetworkFailure('no route to host'));
       fake.releaseLoad();
@@ -433,6 +421,7 @@ void main() {
 
       expect(find.text('Mute notifications'), findsOneWidget);
       expect(find.textContaining('the server refused'), findsOneWidget);
+      await drainNotice(t);
     });
   });
 }

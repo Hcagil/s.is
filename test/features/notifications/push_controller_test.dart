@@ -15,6 +15,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
+import 'package:sis/features/notifications/domain/push.dart';
 
 import '../../support/fakes.dart';
 
@@ -77,13 +78,19 @@ Future<ProviderContainer> signedIn(
 
 void main() {
   group('build', () {
-    testWidgets('while signed in it asks permission, gets the token and '
-        'registers it', (t) async {
+    testWidgets('while signed in it registers the token without asking for '
+        'permission -- only the explainer asks', (t) async {
       final source = PushSourceFake();
       final registry = PushRegistryFake();
       final c = await signedIn(t, FakeAuth(session: true), source, registry);
 
-      expect(source.permissionRequests, 1);
+      expect(
+        source.permissionRequests,
+        0,
+        reason:
+            'registration must never prompt: the one prompt comes after '
+            'SIS\'s own explainer screen',
+      );
       expect(registry.registered, ['device-token-1']);
       expect(c.read(pushRegistrationProvider), 'device-token-1');
     });
@@ -100,15 +107,18 @@ void main() {
       expect(c.read(pushRegistrationProvider), isNull);
     });
 
-    testWidgets('registers even when permission is refused -- asking again '
-        'must not nag', (t) async {
-      final source = PushSourceFake(permissionGranted: false);
-      final registry = PushRegistryFake();
-      final c = await signedIn(t, FakeAuth(session: true), source, registry);
+    testWidgets('registers whatever token exists whatever the permission '
+        'status -- and never asks', (t) async {
+      for (final status in PushPermissionStatus.values) {
+        final source = PushSourceFake(status: status, permissionGranted: false);
+        final registry = PushRegistryFake();
+        final c = await signedIn(t, FakeAuth(session: true), source, registry);
 
-      expect(source.permissionRequests, 1);
-      expect(registry.registered, ['device-token-1']);
-      expect(c.read(pushRegistrationProvider), 'device-token-1');
+        expect(source.permissionRequests, 0, reason: '$status');
+        expect(registry.registered, ['device-token-1'], reason: '$status');
+        expect(c.read(pushRegistrationProvider), 'device-token-1');
+        c.dispose();
+      }
     });
 
     testWidgets('nothing is registered when the platform has no token yet', (

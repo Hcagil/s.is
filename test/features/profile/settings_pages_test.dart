@@ -11,6 +11,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/app/controls.dart';
+import 'package:sis/app/licences_page.dart';
 import 'package:sis/app/brand.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/app/theme.dart';
@@ -29,6 +31,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:sis/main.dart' as entry;
 
 import '../../support/fakes.dart';
+import '../../support/sis_ui.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -224,12 +227,12 @@ void main() {
       await t.pump();
       await t.pump(const Duration(milliseconds: 100));
 
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(sisWait, findsOneWidget);
       expect(byKey('settings-profile'), findsNothing);
 
       p.releaseLoad();
       await t.pumpAndSettle();
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(sisWait, findsNothing);
       expect(under('settings-profile', 'Maya Profile'), findsOneWidget);
     });
 
@@ -269,12 +272,13 @@ void main() {
         expect(
           find.descendant(
             of: byKey(key),
-            matching: find.byType(Switch),
+            matching: find.byType(SisSwitch),
             matchRoot: true,
           ),
           findsOneWidget,
           reason: '$key is not a switch',
         );
+        switchedOn(t, byKey(key)); // announced as a toggle, too
       }
       expect(
         under(
@@ -446,9 +450,19 @@ void main() {
       }
       await t.pumpAndSettle();
 
-      expect(find.byType(LicensePage), findsOneWidget);
+      expect(find.byType(SisLicencesPage), findsOneWidget);
+      expect(
+        find.byType(LicensePage),
+        findsNothing,
+        reason: 'the stock licence page is Android-looking UI, not ours',
+      );
       expect(find.text('manrope'), findsOneWidget);
       expect(find.text('sora'), findsOneWidget);
+
+      // Grouped by package: a package opens onto its own licence text.
+      await t.tap(find.text('sora'));
+      await t.pumpAndSettle();
+      expect(find.textContaining('SIL OPEN FONT LICENSE'), findsWidgets);
     });
   });
 }

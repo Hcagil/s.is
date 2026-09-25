@@ -204,6 +204,37 @@ class DeviceMessaging extends FirebaseMessagingPlatform {
   @override
   Stream<String> get onTokenRefresh => _refreshes.stream;
 
+  /// The platform's own record of the notification permission, read by
+  /// getNotificationSettings() without prompting.
+  AuthorizationStatus status = AuthorizationStatus.notDetermined;
+
+  /// What the member answers when the platform prompts; asking also updates
+  /// [status], as Android's own record does.
+  AuthorizationStatus answer = AuthorizationStatus.authorized;
+
+  /// How many times the platform's permission prompt was asked for.
+  int prompts = 0;
+
+  static NotificationSettings _settings(AuthorizationStatus status) =>
+      NotificationSettings(
+        alert: AppleNotificationSetting.enabled,
+        announcement: AppleNotificationSetting.notSupported,
+        authorizationStatus: status,
+        badge: AppleNotificationSetting.notSupported,
+        carPlay: AppleNotificationSetting.notSupported,
+        lockScreen: AppleNotificationSetting.enabled,
+        notificationCenter: AppleNotificationSetting.enabled,
+        showPreviews: AppleShowPreviewSetting.always,
+        timeSensitive: AppleNotificationSetting.notSupported,
+        criticalAlert: AppleNotificationSetting.notSupported,
+        sound: AppleNotificationSetting.enabled,
+        providesAppNotificationSettings: AppleNotificationSetting.notSupported,
+      );
+
+  @override
+  Future<NotificationSettings> getNotificationSettings() async =>
+      _settings(status);
+
   @override
   Future<NotificationSettings> requestPermission({
     bool alert = true,
@@ -214,18 +245,9 @@ class DeviceMessaging extends FirebaseMessagingPlatform {
     bool provisional = false,
     bool sound = true,
     bool providesAppNotificationSettings = false,
-  }) async => const NotificationSettings(
-    alert: AppleNotificationSetting.enabled,
-    announcement: AppleNotificationSetting.notSupported,
-    authorizationStatus: AuthorizationStatus.authorized,
-    badge: AppleNotificationSetting.notSupported,
-    carPlay: AppleNotificationSetting.notSupported,
-    lockScreen: AppleNotificationSetting.enabled,
-    notificationCenter: AppleNotificationSetting.enabled,
-    showPreviews: AppleShowPreviewSetting.always,
-    timeSensitive: AppleNotificationSetting.notSupported,
-    criticalAlert: AppleNotificationSetting.notSupported,
-    sound: AppleNotificationSetting.enabled,
-    providesAppNotificationSettings: AppleNotificationSetting.notSupported,
-  );
+  }) async {
+    prompts++;
+    status = answer;
+    return _settings(status);
+  }
 }

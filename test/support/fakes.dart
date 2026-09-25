@@ -1362,43 +1362,6 @@ final pngBytes = base64Decode(
 PickedImage pickedPng({String contentType = 'image/png'}) =>
     PickedImage(bytes: pngBytes, contentType: contentType, extension: 'png');
 
-/// A picker written from the [AttachmentSource] contract.
-///
-/// Every outcome a real picker has, including the two that are easy to forget:
-/// the member backs out (null, and NOT a failure), and the platform throws.
-/// Picking is never instant, so every outcome is delayed by [latency] —
-/// code that assumes the sheet returns synchronously fails here.
-class PickerFake implements AttachmentSource {
-  PickerFake.returns(PickedImage image, {this.latency = Duration.zero})
-    : _image = image,
-      _error = null;
-
-  /// The member opened the sheet and backed out.
-  PickerFake.cancels({this.latency = Duration.zero})
-    : _image = null,
-      _error = null;
-
-  /// The platform channel failed — no permission, no camera, no gallery.
-  PickerFake.throwsError(Object error, {this.latency = Duration.zero})
-    : _image = null,
-      _error = error;
-
-  final PickedImage? _image;
-  final Object? _error;
-  final Duration latency;
-
-  /// How many times the member opened the picker.
-  int calls = 0;
-
-  @override
-  Future<PickedImage?> pickImage() async {
-    calls++;
-    if (latency > Duration.zero) await Future<void>.delayed(latency);
-    if (_error case final error?) throw error;
-    return _image;
-  }
-}
-
 /// A gallery written from the [Gallery] contract in
 /// lib/features/chat/domain/gallery.dart.
 ///
@@ -1419,8 +1382,18 @@ class GalleryFake implements Gallery {
        allowed = {...allowed};
 
   /// What the next requestAccess() answers. Change it (e.g. denied -> full)
-  /// to simulate the member granting access from "Allow access".
+  /// to simulate the member granting access from "Allow photos".
+  /// [GalleryAccess.permanentlyDenied] is the platform refusing to prompt
+  /// again: only [openSettings] can change anything then.
   GalleryAccess access;
+
+  /// What access becomes once the member comes back from the settings page
+  /// [openSettings] opened; null leaves [access] as it was (they changed
+  /// nothing there).
+  GalleryAccess? accessAfterSettings;
+
+  /// How many times openSettings() was called.
+  int openSettingsCalls = 0;
 
   /// The library, newest first, before any access filtering.
   List<GalleryPhoto> photos;
@@ -1458,6 +1431,12 @@ class GalleryFake implements Gallery {
   /// What the next selectMore() adds to [allowed].
   Set<String> selectMoreAdds = {};
 
+  /// With limited access, what the member adds in the platform's own
+  /// "select photos" prompt when access is requested again (Android 14+
+  /// shows it on every later ask). The first ask never adds anything: that
+  /// is the grant [allowed] already describes.
+  Set<String> reRequestAdds = {};
+
   Completer<void>? _loadGate;
 
   /// The next [load] call stays in flight until [releaseLoad] -- long
@@ -1477,6 +1456,9 @@ class GalleryFake implements Gallery {
   Future<GalleryAccess> requestAccess() async {
     accessRequests++;
     await _tick();
+    if (accessRequests > 1 && access == GalleryAccess.limited) {
+      allowed.addAll(reRequestAdds);
+    }
     return access;
   }
 
@@ -1516,6 +1498,13 @@ class GalleryFake implements Gallery {
     selectMoreCalls++;
     await _tick();
     allowed.addAll(selectMoreAdds);
+  }
+
+  @override
+  Future<void> openSettings() async {
+    openSettingsCalls++;
+    await _tick();
+    if (accessAfterSettings case final next?) access = next;
   }
 }
 
@@ -1943,13 +1932,42 @@ class FakeTypingChannel implements TypingChannel {
 class PushSourceFake implements PushSource {
   PushSourceFake({
     this.permissionGranted = true,
+    this.status = PushPermissionStatus.notDetermined,
     String? token = 'device-token-1',
     this.launchConversationId,
     this.latency = Duration.zero,
   }) : currentToken = token;
 
-  /// What the next requestPermission() answers.
+  /// What the member answers the next time the platform prompts. Asking
+  /// also changes [status], as the platform's own record does.
   bool permissionGranted;
+
+  /// The platform's current answer, read by permissionStatus() without
+  /// prompting.
+  PushPermissionStatus status;
+
+  /// When set, permissionStatus() fails with it (a platform channel error).
+  Object? statusError;
+
+  int statusReads = 0;
+  Completer<void>? _statusGate;
+
+  /// The next permissionStatus() call stays in flight until [releaseStatus].
+  void holdStatus() => _statusGate = Completer<void>();
+  void releaseStatus() {
+    _statusGate?.complete();
+    _statusGate = null;
+  }
+
+  @override
+  Future<PushPermissionStatus> permissionStatus() async {
+    statusReads++;
+    await Future<void>.delayed(latency);
+    final gate = _statusGate;
+    if (gate != null) await gate.future;
+    if (statusError case final error?) throw error;
+    return status;
+  }
 
   /// The device's current token; null when the platform has none yet. Set
   /// directly to change what the next token() read answers.
@@ -2032,6 +2050,9 @@ class PushSourceFake implements PushSource {
     await Future<void>.delayed(latency);
     final gate = _permissionGate;
     if (gate != null) await gate.future;
+    status = permissionGranted
+        ? PushPermissionStatus.authorized
+        : PushPermissionStatus.denied;
     return permissionGranted;
   }
 
@@ -2056,6 +2077,41 @@ class PushSourceFake implements PushSource {
 
   @override
   Stream<String> get openedConversations => _opened.stream;
+}
+
+/// A [NotificationExplainerStore] written from its contract: a flag that
+/// survives restarts. Pass the same instance to a second ProviderScope to
+/// model the app starting again on the same phone.
+class NotificationExplainerStoreFake implements NotificationExplainerStore {
+  NotificationExplainerStoreFake({this.shown = false});
+
+  bool shown;
+
+  /// When set, wasShown() fails with it (the preferences file unreadable).
+  Object? readError;
+
+  int reads = 0;
+  int marks = 0;
+
+  /// Runs as markShown() is entered -- lets a test see what had (or had
+  /// not) happened yet, e.g. whether the permission was already requested.
+  void Function()? onMark;
+
+  @override
+  Future<bool> wasShown() async {
+    reads++;
+    await Future<void>.delayed(Duration.zero);
+    if (readError case final error?) throw error;
+    return shown;
+  }
+
+  @override
+  Future<void> markShown() async {
+    marks++;
+    onMark?.call();
+    await Future<void>.delayed(Duration.zero);
+    shown = true;
+  }
 }
 
 /// A push registry written from the [PushRegistry] contract.

@@ -21,6 +21,7 @@ import 'package:sis/features/chat/presentation/photo_viewer.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
+import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = 'u2';
@@ -53,7 +54,6 @@ Future<ProviderContainer> scope(ChatFake chat, LinkOpenerFake opener) =>
         overrides: [
           chatRepositoryProvider.overrideWithValue(chat),
           presenceRepositoryProvider.overrideWithValue(PresenceFake()),
-          attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
           linkOpenerProvider.overrideWithValue(opener),
           sessionControllerProvider.overrideWith(_SignedIn.new),
         ],
@@ -259,7 +259,7 @@ void main() {
         Uri.parse('https://one.example/x'),
       ]);
       expect(
-        find.byType(SnackBar),
+        notice,
         findsNothing,
         reason: 'a link that opened is not an error',
       );
@@ -298,10 +298,10 @@ void main() {
       await tapText(tester, 'm1', 'https://blocked.example.org/page');
 
       expect(opener.opened, [Uri.parse('https://blocked.example.org/page')]);
-      expect(find.byType(SnackBar), findsOneWidget);
+      expect(notice, findsOneWidget);
       expect(
         find.descendant(
-          of: find.byType(SnackBar),
+          of: notice,
           matching: find.text('Could not open blocked.example.org'),
         ),
         findsOneWidget,
@@ -457,10 +457,7 @@ void main() {
         );
 
         expect(
-          find.descendant(
-            of: photo,
-            matching: find.byType(CircularProgressIndicator),
-          ),
+          find.descendant(of: photo, matching: sisWait),
           findsOneWidget,
           reason: 'this test is about the moment before bytes have arrived',
         );
@@ -531,7 +528,7 @@ void main() {
         reason: 'a page that cannot load must show the reason',
       );
       expect(
-        inViewer(find.byType(CircularProgressIndicator)),
+        inViewer(sisWait),
         findsNothing,
         reason: 'a failed page must not spin forever',
       );

@@ -213,7 +213,6 @@ List<Override> _production(
   profileRepositoryProvider.overrideWithValue(
     SupabaseProfileRepository(client),
   ),
-  attachmentSourceProvider.overrideWithValue(PickerFake.cancels()),
   // Firebase push in main.dart: opening a chat clears its notification.
   // No token: shutDown() disposes the scope while the fake clock may still
   // hold PushRegistration's first registration, which then reads a disposed

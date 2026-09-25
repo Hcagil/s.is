@@ -33,7 +33,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
+import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/member.dart';
+import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/notifications/data/firebase_push_source.dart';
@@ -398,6 +400,99 @@ void main() {
         Shade.text(shade.summaries.single),
         contains('3 new messages in 3 chats'),
       );
+    });
+  });
+
+  group('a start that does not settle who is signed in', () {
+    // Only Allowed, SignedOut and Denied say who owns the inbox. A start
+    // whose session check fails (offline) says nothing, and must not wipe
+    // what arrived for the member while the app was closed.
+
+    SessionState? session(WidgetTester t) =>
+        ProviderScope.containerOf(t.element(find.byType(SisApp)))
+            .read(sessionControllerProvider)
+            .value;
+
+    _android('an offline start keeps the member\'s own notifications, in '
+        'the shade and on disk', (t) async {
+      final auth = CheckingAuth(session: true, member: ava);
+      final p = ProfileFake(profile: profileOf(ava));
+      await launch(t, auth, p);
+      expectHome();
+      await kill(t);
+      await avaPushes(t);
+
+      auth.answer = const Err(NetworkFailure('offline'));
+      await launch(t, auth, p);
+      expect(session(t), isA<SessionError>(), reason: 'precondition');
+
+      expect(shade.childChats, {'c-zed', 'c-yan'});
+      final stored = jsonEncode(disk.values);
+      for (final s in ['Ava secret one', 'Ava secret two']) {
+        expect(stored, contains(s), reason: 'wiped from disk: $stored');
+      }
+      await background(t, dataPush('c-xi', 'Xi', 'third'));
+      expect(
+        Shade.text(shade.summaries.single),
+        contains('3 new messages in 3 chats'),
+        reason: 'the waiting ones must still count',
+      );
+    });
+  });
+
+  group('a push delivered late, after the session ended', () {
+    // FCM can deliver a push for the previous member after the session
+    // ended here: it is drawn while nobody owns the inbox. The next start
+    // that settles on nobody clears it, before anyone signs in.
+
+    Future<void> latePush(WidgetTester t) async {
+      await background(t, dataPush('c-zed', 'Zed', 'late secret'));
+      expect(shade.childChats, {'c-zed'}, reason: 'precondition');
+    }
+
+    void expectLateGone() {
+      expect(shade.posted, isEmpty, reason: 'still in the shade');
+      final stored = jsonEncode(disk.values);
+      for (final s in ['late secret', 'Zed']) {
+        expect(stored, isNot(contains(s)), reason: 'kept on disk: $stored');
+      }
+    }
+
+    _android('is gone once the next start shows sign-in', (t) async {
+      final auth = FakeAuth(session: true, member: ava);
+      final p = ProfileFake(profile: profileOf(ava));
+      await launch(t, auth, p);
+      expectHome();
+      await t.tap(find.byKey(const ValueKey('home-settings')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('settings-account')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('account-sign-out')));
+      await t.pumpAndSettle();
+      expect(find.text('Continue with Google'), findsOneWidget);
+      await kill(t);
+      await latePush(t);
+
+      await launch(t, auth, p);
+      expect(find.text('Continue with Google'), findsOneWidget);
+
+      expectLateGone();
+    });
+
+    _android('is gone once the next start lands on the Denied screen', (
+      t,
+    ) async {
+      final auth = FakeAuth(session: true, allowed: false, member: ava);
+      final p = ProfileFake(profile: profileOf(ava));
+      await launch(t, auth, p);
+      expect(find.textContaining('not currently approved'), findsOneWidget);
+      await kill(t);
+      await latePush(t);
+
+      await launch(t, auth, p);
+      expect(find.textContaining('not currently approved'), findsOneWidget);
+
+      expectLateGone();
     });
   });
 

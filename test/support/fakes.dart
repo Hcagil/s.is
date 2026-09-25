@@ -83,6 +83,32 @@ class FakeAuth implements AuthRepository {
   }
 }
 
+/// Auth whose session check is not a plain yes/no: it can fail (offline at
+/// start) or stay in flight until the test answers it, as a slow network
+/// does.
+class CheckingAuth extends FakeAuth {
+  CheckingAuth({super.session, super.member});
+
+  /// What the next activateSession() answers; null = [allowed].
+  Result<bool>? answer;
+  Completer<void>? _gate;
+
+  /// The next activateSession() stays in flight until [answerNow].
+  void hold() => _gate = Completer<void>();
+  void answerNow() {
+    _gate?.complete();
+    _gate = null;
+  }
+
+  @override
+  Future<Result<bool>> activateSession() async {
+    await Future<void>.value(); // a network call: never answers in-line
+    final gate = _gate;
+    if (gate != null) await gate.future;
+    return answer ?? Ok(allowed);
+  }
+}
+
 /// Play and the policy table, as the controller sees them. Every call is
 /// asynchronous, as the real ones are; [flexibleGate] holds a flexible
 /// download "in flight" until the test completes it, and a finished download

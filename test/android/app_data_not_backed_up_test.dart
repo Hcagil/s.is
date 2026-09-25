@@ -14,6 +14,19 @@ void main() {
       .firstMatch(manifest)!
       .group(0)!;
 
+  /// Every domain a rule can name (Android docs, Auto Backup).
+  const domains = ['root', 'file', 'database', 'sharedpref', 'external'];
+
+  /// Each rule must name a path; "." is the whole domain. A rule without
+  /// one is invalid, and what Android makes of it is not ours to guess.
+  void expectWholeDomains(String rules) {
+    final excludes = RegExp(r'<exclude\b[^>]*>').allMatches(rules).toList();
+    expect(excludes, isNotEmpty);
+    for (final e in excludes) {
+      expect(e.group(0), contains('path="."'), reason: '${e.group(0)}');
+    }
+  }
+
   test('backup is off for the application', () {
     expect(application, contains('android:allowBackup="false"'));
   });
@@ -32,7 +45,7 @@ void main() {
         dotAll: true,
       ).firstMatch(rules)?.group(1);
       expect(body, isNotNull, reason: 'no <$section> section');
-      for (final domain in ['root', 'file', 'database', 'sharedpref']) {
+      for (final domain in domains) {
         expect(
           body,
           matches(RegExp('<exclude[^>]*domain="$domain"')),
@@ -40,5 +53,24 @@ void main() {
         );
       }
     }
+    expectWholeDomains(rules);
+  });
+
+  test('Android 11 and lower: full backup content excludes every domain', () {
+    final ref = RegExp(r'android:fullBackupContent="@xml/([a-z_]+)"')
+        .firstMatch(application);
+    expect(ref, isNotNull, reason: 'no fullBackupContent on <application>');
+    final rules = File('android/app/src/main/res/xml/${ref!.group(1)}.xml')
+        .readAsStringSync();
+    expect(rules, contains('<full-backup-content'));
+    expect(rules, isNot(contains('<include')), reason: 'nothing is included');
+    for (final domain in domains) {
+      expect(
+        rules,
+        matches(RegExp('<exclude[^>]*domain="$domain"')),
+        reason: 'does not exclude $domain',
+      );
+    }
+    expectWholeDomains(rules);
   });
 }

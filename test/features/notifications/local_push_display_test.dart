@@ -247,6 +247,22 @@ void main() {
       expectGone(['secret one', 'late secret', 'Ava']);
     });
 
+    test('a push drawn late while nobody owns the inbox is cleared by the '
+        'next start that settles on nobody', () async {
+      await LocalPushDisplay.forUser('member-a');
+      await push('c1', 'Ava', 'secret one');
+      await LocalPushDisplay.forUser(null);
+      newIsolate(); // FCM delivers late, to a background isolate
+      await push('c1', 'Ava', 'late secret');
+      expect(shade.childChats, {'c1'}, reason: 'precondition');
+
+      newIsolate(); // the app starts again, still signed out
+      await LocalPushDisplay.forUser(null);
+
+      expect(shade.posted, isEmpty);
+      expectGone(['secret one', 'late secret', 'Ava']);
+    });
+
     test('the same member again changes nothing', () async {
       await LocalPushDisplay.forUser('member-a');
       await push('c1', 'Ava', 'hi');

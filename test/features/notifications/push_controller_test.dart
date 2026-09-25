@@ -13,6 +13,7 @@ import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
+import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 
 import '../../support/fakes.dart';
@@ -289,6 +290,130 @@ void main() {
       expect(c.read(currentUserIdProvider), isNull, reason: 'precondition');
       expect(source.users, ['u1', null]);
       expect(auth.signOuts, 0);
+    });
+  });
+
+  group('an unsettled session answer tells the push source nothing', () {
+    // Only a settled answer says who owns the inbox. Loading, an error (an
+    // offline start) and missing setup say nothing about who is signed in:
+    // telling the source "nobody" then would wipe the member's own
+    // notifications that arrived while the app was closed.
+
+    testWidgets('an offline start (SessionError) calls forUser not at '
+        'all', (t) async {
+      final source = PushSourceFake();
+      final registry = PushRegistryFake();
+      final auth = CheckingAuth(session: true)
+        ..answer = const Err(NetworkFailure('offline'));
+      final c = make(auth, source, registry);
+      c.listen(sessionControllerProvider, (_, _) {});
+      c.listen(pushRegistrationProvider, (_, _) {});
+      await flush(t);
+
+      expect(
+        c.read(sessionControllerProvider).value,
+        isA<SessionError>(),
+        reason: 'precondition',
+      );
+      expect(source.users, isEmpty);
+      expect(registry.calls, isEmpty);
+    });
+
+    testWidgets('a signed-in member whose session check then fails keeps '
+        'their inbox: no forUser(null)', (t) async {
+      final source = PushSourceFake();
+      final registry = PushRegistryFake();
+      final auth = CheckingAuth(session: true);
+      final c = await signedIn(t, auth, source, registry);
+      expect(source.users, ['u1']);
+
+      auth.answer = const Err(NetworkFailure('offline'));
+      c.read(sessionControllerProvider.notifier).retry().ignore();
+      await flush(t);
+
+      expect(
+        c.read(sessionControllerProvider).value,
+        isA<SessionError>(),
+        reason: 'precondition',
+      );
+      expect(source.users, ['u1']);
+    });
+
+    testWidgets('while the session is still being checked: nothing; once '
+        'it settles: the member', (t) async {
+      final source = PushSourceFake();
+      final registry = PushRegistryFake();
+      final auth = CheckingAuth(session: true)..hold();
+      final c = make(auth, source, registry);
+      c.listen(sessionControllerProvider, (_, _) {});
+      c.listen(pushRegistrationProvider, (_, _) {});
+      await flush(t);
+
+      final now = c.read(sessionControllerProvider);
+      expect(
+        now.isLoading || now.value is SessionLoading,
+        isTrue,
+        reason: 'precondition: still checking, got $now',
+      );
+      expect(source.users, isEmpty);
+
+      auth.answerNow();
+      await flush(t);
+
+      expect(c.read(sessionControllerProvider).value, isA<Allowed>());
+      expect(source.users, ['u1']);
+    });
+
+    testWidgets('signing in from signed out: nothing while it is checked, '
+        'then the member', (t) async {
+      final source = PushSourceFake();
+      final registry = PushRegistryFake();
+      final auth = CheckingAuth();
+      final c = make(auth, source, registry);
+      c.listen(sessionControllerProvider, (_, _) {});
+      c.listen(pushRegistrationProvider, (_, _) {});
+      await flush(t);
+      expect(source.users, [null]);
+
+      auth.hold();
+      final signIn = c.read(sessionControllerProvider.notifier).signIn();
+      await flush(t);
+      expect(source.users, [null], reason: 'nothing while being checked');
+
+      auth.answerNow();
+      await run(t, signIn);
+      expect(source.users, [null, 'u1']);
+    });
+
+    testWidgets('missing setup (SetupRequired) calls forUser not at all', (
+      t,
+    ) async {
+      final source = PushSourceFake();
+      final registry = PushRegistryFake();
+      final c = ProviderContainer.test(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            const RuntimeConfig(
+              supabaseUrl: '',
+              supabasePublishableKey: '',
+              googleWebClientId: '',
+            ),
+          ),
+          authRepositoryProvider.overrideWithValue(FakeAuth(session: true)),
+          pushSourceProvider.overrideWithValue(source),
+          pushRegistryProvider.overrideWithValue(registry),
+        ],
+      );
+      c.listen(sessionControllerProvider, (_, _) {});
+      c.listen(pushRegistrationProvider, (_, _) {});
+      await flush(t);
+
+      expect(
+        c.read(sessionControllerProvider).value,
+        isA<SetupRequired>(),
+        reason: 'precondition',
+      );
+      expect(source.users, isEmpty);
     });
   });
 

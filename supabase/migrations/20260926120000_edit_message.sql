@@ -53,3 +53,43 @@ begin
 end $$;
 revoke all on function public.edit_message(uuid, text) from public, anon;
 grant execute on function public.edit_message(uuid, text) to authenticated;
+
+-- delete_message, redefined: a deleted message keeps only who sent it and
+-- when, so its edited mark must go too -- otherwise a vanished or
+-- placeholder row could still read as edited. Identical to the definition in
+-- 20260924140000_delete_for_everyone.sql (not yet released, so amended here
+-- rather than layering a second migration on top of it) except the UPDATE
+-- also clears edited_at.
+create or replace function public.delete_message(message uuid)
+returns text language plpgsql security definer set search_path = '' as $$
+declare
+  m public.messages;
+begin
+  if not app_private.has_app_access() then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
+  select * into m from public.messages where id = message for update;
+  if not found
+     or m.sender_id <> auth.uid()
+     or m.deleted is not null
+     or m.created_at < now() - interval '6 hours' then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
+  if m.attachment_path is not null then
+    insert into app_private.deleted_attachments(path, user_id)
+    values (m.attachment_path, m.sender_id)
+    on conflict do nothing;
+  end if;
+  update public.messages
+     set body = '',
+         attachment_path = null,
+         attachment_preview = null,
+         edited_at = null,
+         deleted = case when m.created_at >= now() - interval '1 hour'
+                        then 'vanished' else 'placeholder' end,
+         deleted_at = now()
+   where id = message;
+  return m.attachment_path;
+end $$;
+revoke all on function public.delete_message(uuid) from public, anon;
+grant execute on function public.delete_message(uuid) to authenticated;

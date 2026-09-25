@@ -22,17 +22,26 @@ String previewText(Message message) => message.body.isNotEmpty
     ? message.body
     : (message.hasAttachment ? 'Photo' : '');
 
+String _two(int v) => v.toString().padLeft(2, '0');
+
+/// The local clock time of [at], always HH:MM -- whatever day it falls on.
+/// What a chat bubble shows: unlike [previewTime] it never falls back to a
+/// date, since a bubble is already anchored in its conversation's order.
+String clockTime(DateTime at) {
+  final local = at.toLocal();
+  return '${_two(local.hour)}:${_two(local.minute)}';
+}
+
 /// The time shown next to a preview: the clock time today, the date before.
 String previewTime(DateTime at, DateTime now) {
-  String two(int v) => v.toString().padLeft(2, '0');
   final local = at.toLocal();
   final today = now.toLocal();
   if (local.year == today.year &&
       local.month == today.month &&
       local.day == today.day) {
-    return '${two(local.hour)}:${two(local.minute)}';
+    return clockTime(at);
   }
-  return '${two(local.day)}.${two(local.month)}.${two(local.year % 100)}';
+  return '${_two(local.day)}.${_two(local.month)}.${_two(local.year % 100)}';
 }
 
 /// One message in a conversation.

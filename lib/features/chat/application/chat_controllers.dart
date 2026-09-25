@@ -169,7 +169,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       // Only when the edited message is still the previewed one -- an edit
       // to an older message further up the conversation changes nothing
       // shown in the list.
-      if (index >= 0 && current[index].lastMessageAt == message.createdAt) {
+      final previewedAt = index >= 0 ? current[index].lastMessageAt : null;
+      if (index >= 0 &&
+          (previewedAt?.isAtSameMomentAs(message.createdAt) ?? false)) {
         state = AsyncData([
           for (var i = 0; i < current.length; i++)
             if (i == index) current[i].withPreview(message) else current[i],

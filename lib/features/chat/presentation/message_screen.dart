@@ -449,8 +449,8 @@ class _Bubble extends StatelessWidget {
                   alignment: Alignment.centerRight,
                   child: Text(
                     message.isEdited
-                        ? 'edited ${previewTime(message.createdAt, DateTime.now())}'
-                        : previewTime(message.createdAt, DateTime.now()),
+                        ? 'edited ${clockTime(message.createdAt)}'
+                        : clockTime(message.createdAt),
                     key: ValueKey('time-${message.id}'),
                     style: TextStyle(
                       fontSize: 11,

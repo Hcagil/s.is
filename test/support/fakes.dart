@@ -520,6 +520,26 @@ class FakeChat implements ChatRepository {
     return const Ok(null);
   }
 
+  /// Every edit asked for, in order: the message as the caller held it, and
+  /// the body exactly as passed.
+  final edits = <({Message message, String body})>[];
+
+  /// Forces the outcome. Left null the fake answers like edit_message: it
+  /// refuses what [refuseEdit] refuses, and otherwise returns the edited row
+  /// and delivers it the way Realtime delivers an UPDATE -- to the
+  /// conversation's own subscription and the list-wide one.
+  Result<Message>? editMessageResult;
+
+  @override
+  Future<Result<Message>> editMessage(Message message, String body) async {
+    edits.add((message: message, body: body));
+    if (editMessageResult case final forced?) return forced;
+    if (refuseEdit(message, body) case final refused?) return refused;
+    final edited = editedCopy(message, body);
+    deliver(edited);
+    return Ok(edited);
+  }
+
   @override
   Future<Result<List<ReadMark>>> readMarks(String conversationId) async =>
       const Ok([]);
@@ -1116,6 +1136,87 @@ class ChatFake implements ChatRepository {
     return const Ok(null);
   }
 
+  /// Every edit asked for, in order: which message, to what body (exactly as
+  /// passed, untrimmed).
+  final edits = <({String messageId, String body})>[];
+
+  /// Forces the outcome. Left null the fake answers like edit_message:
+  /// refused (DeniedFailure) unless the message is in [history] and
+  /// [refuseEdit] lets the STORED row through (the sender checked against
+  /// [self] when set) -- then [serverEdit] writes and delivers it.
+  Result<Message>? editMessageResult;
+
+  Completer<void>? _editHold;
+
+  /// The next [editMessage] stays in flight until [releaseEdit]: the round
+  /// trip is never instant, and whatever the screen shows meanwhile counts.
+  void holdEdit() => _editHold = Completer<void>();
+  void releaseEdit() {
+    _editHold?.complete();
+    _editHold = null;
+  }
+
+  @override
+  Future<Result<Message>> editMessage(Message message, String body) async {
+    await _tick('edit:${message.id}');
+    edits.add((messageId: message.id, body: body));
+    final held = _editHold;
+    if (held != null) await held.future;
+    if (editMessageResult case final forced?) return forced;
+    final stored = history[message.conversationId]
+        ?.where((m) => m.id == message.id)
+        .firstOrNull;
+    if (stored == null) return const Err(DeniedFailure());
+    if (refuseEdit(stored, body, self: self) case final refused?) {
+      return refused;
+    }
+    return Ok(serverEdit(stored, body));
+  }
+
+  /// Writes an edit the way the database does -- whoever made it, e.g. the
+  /// other member -- and delivers it as Realtime delivers an UPDATE.
+  ///
+  /// The row in [history] is replaced in place. When [self] is set the
+  /// "database" behind [conversations] changes too, and only as
+  /// conversation_previews would: the preview text follows the edit only when
+  /// this is the conversation's newest message still shown; an older one
+  /// moves neither the preview, nor the order, nor any unread count. The
+  /// UPDATE then reaches the conversation's subscription and every list-wide
+  /// one, like any other change to a row.
+  Message serverEdit(Message stored, String body) {
+    final edited = editedCopy(stored, body);
+    final rows = history[stored.conversationId];
+    final i = rows?.indexWhere((m) => m.id == stored.id) ?? -1;
+    if (rows != null && i >= 0) rows[i] = edited;
+    final list = conversationsResult;
+    if (self != null && list is Ok<List<Conversation>>) {
+      final shown = rows
+          ?.where((m) => m.deletion != MessageDeletion.vanished)
+          .lastOrNull;
+      conversationsResult = Ok([
+        for (final c in list.value)
+          if (c.id == edited.conversationId &&
+              (rows == null
+                  ? c.lastMessageAt?.isAtSameMomentAs(edited.createdAt) ?? false
+                  : shown?.id == edited.id))
+            Conversation(
+              id: c.id,
+              title: c.title,
+              other: c.other,
+              lastMessage: edited.body,
+              lastMessageAt: c.lastMessageAt,
+              lastSenderId: c.lastSenderId,
+              unread: c.unread,
+            )
+          else
+            c,
+      ]);
+    }
+    _streams[edited.conversationId]?.add(edited);
+    _all?.add(edited);
+    return edited;
+  }
+
   /// What [readMarks] answers with, per conversation, when
   /// [readMarksResult] is not forced.
   final readMarksData = <String, List<ReadMark>>{};
@@ -1218,6 +1319,40 @@ Err<Message>? rejectUpload(PickedImage image, String body) {
   }
   return null;
 }
+
+/// The refusals edit_message makes (42501, so DeniedFailure), kept in one
+/// place so every fake refuses exactly what the server refuses: not the
+/// caller's own (checked when [self] is known), deleted, forwarded, 6 hours
+/// old or more, or a body that would fail the send check -- a text message
+/// needs text, a photo's caption may be empty, and neither may be longer than
+/// [maxMessageLength] once trimmed.
+Err<Message>? refuseEdit(Message stored, String body, {String? self}) {
+  final trimmed = body.trim();
+  if ((self != null && stored.senderId != self) ||
+      stored.isDeleted ||
+      stored.forwarded ||
+      DateTime.now().difference(stored.createdAt) >= deleteForEveryoneWindow ||
+      (stored.attachmentPath == null && trimmed.isEmpty) ||
+      trimmed.length > maxMessageLength) {
+    return const Err(DeniedFailure());
+  }
+  return null;
+}
+
+/// [stored] as edit_message returns it: the new body and an edit time, every
+/// other column untouched.
+Message editedCopy(Message stored, String body) => Message(
+  id: stored.id,
+  conversationId: stored.conversationId,
+  senderId: stored.senderId,
+  body: body.trim(),
+  createdAt: stored.createdAt,
+  attachmentPath: stored.attachmentPath,
+  attachmentPreview: stored.attachmentPreview,
+  replyTo: stored.replyTo,
+  forwarded: stored.forwarded,
+  editedAt: DateTime.now(),
+);
 
 /// A 1x1 PNG: real bytes a real decoder accepts, which a made-up list is not.
 final pngBytes = base64Decode(

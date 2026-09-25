@@ -31,7 +31,13 @@ import 'package:sis/features/profile/domain/profile_repository.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 import 'package:sis/features/update/domain/update_repository.dart';
 
-import 'fakes.dart' show AttachmentCacheFake, PushRegistryFake, PushSourceFake;
+import 'fakes.dart'
+    show
+        AttachmentCacheFake,
+        PushRegistryFake,
+        PushSourceFake,
+        editedCopy,
+        refuseEdit;
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
 
@@ -223,6 +229,18 @@ class DesignChat implements ChatRepository {
     rows[i] = wiped;
     deliver(wiped);
     return const Ok(null);
+  }
+
+  @override
+  Future<Result<Message>> editMessage(Message message, String body) async {
+    final rows = history[message.conversationId];
+    final i = rows?.indexWhere((m) => m.id == message.id) ?? -1;
+    if (rows == null || i < 0) return const Err(DeniedFailure());
+    if (refuseEdit(rows[i], body) case final refused?) return refused;
+    final edited = editedCopy(rows[i], body);
+    rows[i] = edited;
+    deliver(edited);
+    return Ok(edited);
   }
 
   @override

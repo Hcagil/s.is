@@ -179,6 +179,10 @@ class _Wired implements ChatRepository {
   @override
   Future<Result<void>> deleteForEveryone(Message message) =>
       live.deleteForEveryone(message);
+
+  @override
+  Future<Result<Message>> editMessage(Message message, String body) =>
+      live.editMessage(message, body);
 }
 
 /// The overrides main.dart mounts, on [client]; only Google sign-in, the Play

@@ -23,6 +23,8 @@ import 'package:sis/features/presence/domain/presence_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/domain/profile_repository.dart';
 
+import 'fakes.dart' show editedCopy, refuseEdit;
+
 /// One conversation as the database stores it.
 class Room {
   Room(this.id, this.members, {this.title});
@@ -458,6 +460,19 @@ class SessionChat implements ChatRepository {
       deletion: MessageDeletion.vanished,
     );
     return const Ok(null);
+  }
+
+  @override
+  Future<Result<Message>> editMessage(Message message, String body) async {
+    final who = await _as('editMessage:${message.id}');
+    if (who == null) return const Err(DeniedFailure());
+    final room = _roomFor(message.conversationId, who);
+    final i = room?.messages.indexWhere((m) => m.id == message.id) ?? -1;
+    if (room == null || i < 0) return const Err(DeniedFailure());
+    if (refuseEdit(room.messages[i], body, self: who) case final refused?) {
+      return refused;
+    }
+    return Ok(room.messages[i] = editedCopy(room.messages[i], body));
   }
 }
 

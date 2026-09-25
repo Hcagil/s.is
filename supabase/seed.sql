@@ -75,6 +75,14 @@
 --   nell/oren      test/integration/push_display_integration_test.dart
 --     (oren's phone registers as a 0.11 build, then as this build on its
 --      next start; nell writes to him so the delivery list shows which)
+--   edie/fitz/gale test/integration/edit_message_repository_test.dart
+--     (edie edits her own messages to fitz; gale is allowlisted and active but
+--      never in their conversation, so only row-level security can keep the
+--      edit's UPDATE off her list-wide subscription)
+--   hale/ivo       test/integration/message_edit_seam_test.dart
+--     (hale edits through the real long-press -> Edit -> composer flow; ivo's
+--      open chat and conversation list, wired as main.dart wires them, must
+--      show it live)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -128,5 +136,10 @@ insert into app_private.allowlist(email) values
   ('theo@integration.test'),
   ('wren@integration.test'),
   ('nell@integration.test'),
-  ('oren@integration.test')
+  ('oren@integration.test'),
+  ('edie@integration.test'),
+  ('fitz@integration.test'),
+  ('gale@integration.test'),
+  ('hale@integration.test'),
+  ('ivo@integration.test')
 on conflict do nothing;

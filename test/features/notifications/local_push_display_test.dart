@@ -39,6 +39,12 @@ void main() {
   /// A fresh isolate: no in-memory copy of the preferences yet.
   void newIsolate() => SharedPreferences.resetStatic();
 
+  /// The preferences file with nothing waiting: only who is signed in.
+  Map<String, Object> onlyOwner() => {
+    for (final e in disk.values.entries)
+      if (e.key == 'flutter.sis.push_inbox_owner') e.key: e.value,
+  };
+
   setUp(() async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     AndroidFlutterLocalNotificationsPlugin.registerWith();
@@ -71,7 +77,76 @@ void main() {
   Future<void> push(String chat, String title, String body) =>
       LocalPushDisplay.show(conversationId: chat, title: title, body: body);
 
+  /// A member is signed in on this phone: pushes are theirs to see.
+  Future<void> signedIn() => LocalPushDisplay.forUser('member-a');
+
+  group('nobody owns the inbox', () {
+    // An offline sign-out ends the session only on this phone: the server
+    // may still send it the previous member's previews. With no owner
+    // stored, show() must neither draw nor keep anything.
+
+    test('a phone nobody has signed in on draws and stores nothing', () async {
+      final before = Map<String, Object>.of(disk.values);
+
+      await push('c1', 'Ava', 'secret');
+
+      expect(shade.posted, isEmpty, reason: '${shade.posted}');
+      expect(disk.values, before, reason: 'stored: ${disk.values}');
+    });
+
+    test('signed out (offline): a push arriving afterwards, in a background '
+        'isolate, draws and stores nothing', () async {
+      await signedIn();
+      await push('c1', 'Ava', 'before sign-out');
+      await LocalPushDisplay.forUser(null);
+      final before = Map<String, Object>.of(disk.values);
+
+      newIsolate();
+      await push('c2', 'Zed', 'after sign-out secret');
+      await push('c1', 'Ava', 'another after sign-out');
+
+      expect(shade.posted, isEmpty, reason: '${shade.posted}');
+      expect(disk.values, before, reason: 'stored: ${disk.values}');
+      expect(jsonEncode(disk.values), isNot(contains('after sign-out')));
+    });
+
+    test('the guard is not vacuous: with an owner the same push draws and '
+        'is stored', () async {
+      await signedIn();
+      newIsolate();
+      await push('c1', 'Ava', 'mine');
+
+      expect(shade.childChats, {'c1'});
+      expect(jsonEncode(disk.values), contains('mine'));
+    });
+  });
+
+  group('currentOwner', () {
+    test('is null on a phone nobody has signed in on', () async {
+      expect(await LocalPushDisplay.currentOwner(), isNull);
+    });
+
+    test('is the member forUser was last told, in any isolate', () async {
+      await LocalPushDisplay.forUser('member-a');
+      newIsolate();
+      expect(await LocalPushDisplay.currentOwner(), 'member-a');
+
+      await LocalPushDisplay.forUser('member-b');
+      newIsolate();
+      expect(await LocalPushDisplay.currentOwner(), 'member-b');
+    });
+
+    test('is null again after forUser(null)', () async {
+      await LocalPushDisplay.forUser('member-a');
+      await LocalPushDisplay.forUser(null);
+      newIsolate();
+      expect(await LocalPushDisplay.currentOwner(), isNull);
+    });
+  });
+
   group('one SIS notification, grouped by chat', () {
+    setUp(signedIn);
+
     test(
       'two chats: one summary and one entry per chat, in one group',
       () async {
@@ -115,6 +190,8 @@ void main() {
   });
 
   group('opening a chat', () {
+    setUp(signedIn);
+
     test('takes its entry out and updates the summary', () async {
       await push('c1', 'Ava', 'hi');
       await push('c1', 'Ava', 'again');
@@ -160,6 +237,8 @@ void main() {
   });
 
   group('signing out', () {
+    setUp(signedIn);
+
     test('empties the shade, and nothing of the last account comes back '
         'with the next one\'s first message', () async {
       await push('c1', 'Ava', 'secret');
@@ -168,6 +247,10 @@ void main() {
       await LocalPushDisplay.clearAll();
       expect(shade.posted, isEmpty);
 
+      // The next one signs in on the same phone. forUser is told about the
+      // same member here on purpose: a change of member would clear the
+      // inbox itself and hide whether clearAll did.
+      await signedIn();
       await push('c3', 'Cy', 'hello new account');
       expect(shade.childChats, {'c3'});
       expect(Shade.text(shade.summaries.single), contains('1 new message'));
@@ -247,14 +330,15 @@ void main() {
       expectGone(['secret one', 'late secret', 'Ava']);
     });
 
-    test('a push drawn late while nobody owns the inbox is cleared by the '
-        'next start that settles on nobody', () async {
+    test('a push delivered late while nobody owns the inbox is not drawn, '
+        'and the next start that settles on nobody finds nothing', () async {
       await LocalPushDisplay.forUser('member-a');
       await push('c1', 'Ava', 'secret one');
       await LocalPushDisplay.forUser(null);
       newIsolate(); // FCM delivers late, to a background isolate
       await push('c1', 'Ava', 'late secret');
-      expect(shade.childChats, {'c1'}, reason: 'precondition');
+      expect(shade.posted, isEmpty, reason: 'drawn with no owner');
+      expectGone(['late secret']);
 
       newIsolate(); // the app starts again, still signed out
       await LocalPushDisplay.forUser(null);
@@ -367,6 +451,8 @@ void main() {
   });
 
   group('what is waiting survives the isolate that showed it', () {
+    setUp(signedIn);
+
     test('a push shown while the app was closed is still counted after the '
         'app starts', () async {
       await push('c1', 'Ava', 'hi'); // the background isolate
@@ -387,7 +473,7 @@ void main() {
       await push('c1', 'Ava', 'hi');
       final afterPush = Map<String, Object>.of(disk.values);
       // The app read its preferences BEFORE that push arrived...
-      disk.values = {};
+      disk.values = onlyOwner();
       newIsolate();
       await SharedPreferences.getInstance();
       // ...and the background isolate's write lands on disk underneath it.
@@ -405,7 +491,7 @@ void main() {
       await push('c1', 'Ava', 'hi'); // background isolate, kept alive
       // The app opens c1: on disk nothing is waiting any more, and its
       // notifications left the shade.
-      disk.values = {};
+      disk.values = onlyOwner();
       shade.posted.clear();
 
       await push('c2', 'Ben', 'yo'); // the same background isolate

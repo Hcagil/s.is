@@ -101,7 +101,7 @@ function as<T>(uid: string, email: string, session: string, body: (tx: postgres.
 }
 
 Deno.test({
-  name: 'one message: data only to the phone that shows pushes itself, a notification to the older build',
+  name: 'one message: data only to the phone that shows pushes itself, a notification to the older build, each addressed to its recipient',
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
@@ -139,7 +139,7 @@ Deno.test({
                    values (${conversationId}, ${sender.id}, 'edge hello') returning id`);
 
       // What the database says each recipient gets (read without claiming).
-      const expected = await sql`select token, conversation_id::text, title, body, shows_itself
+      const expected = await sql`select token, user_id::text, conversation_id::text, title, body, shows_itself
                                    from app_private.push_targets_for_message(${messageId})`;
       assertEquals(expected.length, 2, 'fixture: two recipients on the delivery list');
       assertEquals(
@@ -147,6 +147,11 @@ Deno.test({
         [`${newBuild.token}:true`, `${oldBuild.token}:false`].sort(),
         'fixture: one device of each kind',
       );
+      // Who each device belongs to, from the fixture, not from the function.
+      const recipientOf: Record<string, string> = {
+        [newBuild.token]: newBuild.id,
+        [oldBuild.token]: oldBuild.id,
+      };
 
       sent.length = 0;
       pending.length = 0;
@@ -166,14 +171,20 @@ Deno.test({
         assertEquals(mine.length, 1, `exactly one send to ${target.token}`);
         const m = mine[0].message;
         const data = m.data as Record<string, unknown>;
-        // What the app reads (conversation_id, title, body), as strings --
-        // FCM refuses a data map with any other value type.
+        // What the app reads (conversation_id, title, body, and the
+        // recipient it is addressed to), as strings -- FCM refuses a data
+        // map with any other value type. user_id is on BOTH shapes: the
+        // phone drops a push addressed to someone other than its owner.
         assertEquals(data, {
           conversation_id: target.conversation_id,
           title: target.title,
           body: target.body,
+          user_id: target.user_id,
         }, `data for ${target.token}`);
         assertEquals(data.conversation_id, conversationId);
+        assertEquals(data.user_id, recipientOf[target.token as string],
+          `addressed to the device's own member: ${target.token}`);
+        assert(data.user_id !== sender.id, 'never addressed to the sender');
         if (target.shows_itself) {
           assert(!('notification' in m), `a device that shows pushes itself gets data only: ${JSON.stringify(m)}`);
           const android = (m.android ?? {}) as Record<string, unknown>;

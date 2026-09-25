@@ -48,6 +48,9 @@ class Shade {
   /// The payload of the notification whose tap started the app, if one did.
   String? launchedBy;
 
+  /// Every call the app made into the plugin, in order.
+  final calls = <String>[];
+
   static const channel = MethodChannel(
     'dexterous.com/flutter/local_notifications',
   );
@@ -73,6 +76,7 @@ class Shade {
 
   Future<Object?> handle(MethodCall call) async {
     final args = call.arguments;
+    calls.add(call.method);
     switch (call.method) {
       case 'initialize':
         return true;

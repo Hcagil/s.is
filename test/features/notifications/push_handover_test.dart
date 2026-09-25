@@ -36,6 +36,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
+import 'package:sis/features/auth/presentation/status_screens.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/notifications/data/firebase_push_source.dart';
@@ -76,10 +77,18 @@ Map<String, Object> legacyInbox() => {
 };
 const legacySecrets = ['legacy secret one', 'legacy secret two', 'Olga'];
 
-/// A data-only push, as notify-on-message sends it to this build.
-RemoteMessage dataPush(String chat, String title, String body) => RemoteMessage(
-  data: {'conversation_id': chat, 'title': title, 'body': body},
-);
+/// A data-only push, as notify-on-message sends it to this build: addressed
+/// to the recipient [to]. Without [to], as a server from before user_id was
+/// sent does.
+RemoteMessage dataPush(String chat, String title, String body, {String? to}) =>
+    RemoteMessage(
+      data: {
+        'conversation_id': chat,
+        'title': title,
+        'body': body,
+        'user_id': ?to,
+      },
+    );
 
 /// A push with a notification block, as sent to a device still registered
 /// as an older build: Android draws it itself.
@@ -149,8 +158,14 @@ void main() {
   }
 
   Future<void> avaPushes(WidgetTester t) async {
-    await background(t, dataPush('c-zed', 'Zed', 'Ava secret one'));
-    await background(t, dataPush('c-yan', 'Yan', 'Ava secret two'));
+    await background(
+      t,
+      dataPush('c-zed', 'Zed', 'Ava secret one', to: ava.userId),
+    );
+    await background(
+      t,
+      dataPush('c-yan', 'Yan', 'Ava secret two', to: ava.userId),
+    );
     expect(shade.childChats, {'c-zed', 'c-yan'}, reason: 'precondition');
   }
 
@@ -219,7 +234,10 @@ void main() {
       expect(stored, isNot(contains(s)), reason: 'kept on disk: $stored');
     }
 
-    await background(t, dataPush('c-bea', 'Cal', 'first for Bea'));
+    await background(
+      t,
+      dataPush('c-bea', 'Cal', 'first for Bea', to: bea.userId),
+    );
 
     expect(shade.childChats, {'c-bea'}, reason: '${shade.posted}');
     expect(shade.summaries, hasLength(1));
@@ -395,7 +413,7 @@ void main() {
       expectHome();
 
       expect(shade.childChats, {'c-zed', 'c-yan'});
-      await background(t, dataPush('c-xi', 'Xi', 'third'));
+      await background(t, dataPush('c-xi', 'Xi', 'third', to: ava.userId));
       expect(
         Shade.text(shade.summaries.single),
         contains('3 new messages in 3 chats'),
@@ -431,7 +449,7 @@ void main() {
       for (final s in ['Ava secret one', 'Ava secret two']) {
         expect(stored, contains(s), reason: 'wiped from disk: $stored');
       }
-      await background(t, dataPush('c-xi', 'Xi', 'third'));
+      await background(t, dataPush('c-xi', 'Xi', 'third', to: ava.userId));
       expect(
         Shade.text(shade.summaries.single),
         contains('3 new messages in 3 chats'),
@@ -442,12 +460,15 @@ void main() {
 
   group('a push delivered late, after the session ended', () {
     // FCM can deliver a push for the previous member after the session
-    // ended here: it is drawn while nobody owns the inbox. The next start
-    // that settles on nobody clears it, before anyone signs in.
+    // ended here. Nobody owns the inbox, so it is never drawn -- and the
+    // next start that settles on nobody still finds nothing of it.
 
     Future<void> latePush(WidgetTester t) async {
-      await background(t, dataPush('c-zed', 'Zed', 'late secret'));
-      expect(shade.childChats, {'c-zed'}, reason: 'precondition');
+      await background(
+        t,
+        dataPush('c-zed', 'Zed', 'late secret', to: ava.userId),
+      );
+      expect(shade.posted, isEmpty, reason: 'drawn with nobody signed in');
     }
 
     void expectLateGone() {
@@ -560,10 +581,322 @@ void main() {
 
     _android('a data-only push is still drawn (the check above is not '
         'vacuous)', (t) async {
-      await background(t, dataPush('c-data', 'Zed', 'drawn by the app'));
+      await t.runAsync(() => LocalPushDisplay.forUser(ava.userId));
+      await background(
+        t,
+        dataPush('c-data', 'Zed', 'drawn by the app', to: ava.userId),
+      );
 
       expect(shade.childChats, {'c-data'});
       expect(shade.summaries, hasLength(1));
+    });
+  });
+
+  group('a push addressed to someone else', () {
+    // A push computed for Ava can land after Bea signed in on this phone.
+    // It carries user_id = Ava: it must reach neither Bea's shade nor the
+    // inbox her summary is built from.
+
+    Future<void> avaSignsOutBeaSignsIn(
+      WidgetTester t,
+      FakeAuth auth,
+      ProfileFake p,
+    ) async {
+      await t.tap(find.byKey(const ValueKey('home-settings')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('settings-account')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('account-sign-out')));
+      await t.pumpAndSettle();
+      await beaSignsIn(t, auth, p);
+      expect(
+        await t.runAsync<String?>(LocalPushDisplay.currentOwner),
+        bea.userId,
+        reason: 'precondition: Bea owns the inbox',
+      );
+    }
+
+    _android('Ava\'s push delivered after Bea signed in: not drawn, not '
+        'stored, the plugin not even initialised', (t) async {
+      final auth = FakeAuth(session: true, member: ava);
+      final p = ProfileFake(profile: profileOf(ava));
+      await launch(t, auth, p);
+      expectHome();
+      await avaSignsOutBeaSignsIn(t, auth, p);
+      final storedBefore = Map<String, Object>.of(disk.values);
+      final mark = shade.calls.length;
+
+      await background(
+        t,
+        dataPush('c-zed', 'Zed', 'Ava late secret', to: ava.userId),
+      );
+
+      expect(shade.posted, isEmpty, reason: 'in Bea\'s shade');
+      expect(disk.values, storedBefore, reason: 'stored: ${disk.values}');
+      expect(shade.calls.sublist(mark), isEmpty, reason: 'touched the plugin');
+      await expectBeaSeesOnlyHers(t, ['Ava late secret', 'Zed']);
+    });
+
+    _android('Bea\'s own push, addressed to her, is drawn', (t) async {
+      final auth = FakeAuth(session: true, member: ava);
+      final p = ProfileFake(profile: profileOf(ava));
+      await launch(t, auth, p);
+      await avaSignsOutBeaSignsIn(t, auth, p);
+
+      await background(t, dataPush('c-bea', 'Cal', 'for Bea', to: bea.userId));
+
+      expect(shade.childChats, {'c-bea'});
+      expect(jsonEncode(disk.values), contains('for Bea'));
+    });
+
+    _android('a push without user_id (a server from before it was sent) '
+        'still draws for the member signed in', (t) async {
+      final auth = FakeAuth(session: true, member: ava);
+      final p = ProfileFake(profile: profileOf(ava));
+      await launch(t, auth, p);
+      await avaSignsOutBeaSignsIn(t, auth, p);
+
+      await background(t, dataPush('c-old', 'Cal', 'no address'));
+
+      expect(shade.childChats, {'c-old'});
+      expect(jsonEncode(disk.values), contains('no address'));
+    });
+  });
+
+  group('signed out while offline', () {
+    Future<void> lifecycle(WidgetTester t, List<AppLifecycleState> s) async {
+      for (final state in s) {
+        t.binding.handleAppLifecycleStateChanged(state);
+        await t.pump();
+      }
+      await t.pumpAndSettle();
+    }
+
+    // The sign-out happens on this phone, but the server never hears that
+    // this device is gone: it keeps sending Ava's previews here.
+
+    Future<(FakeAuth, ProfileFake)> avaSignsOutOffline(WidgetTester t) async {
+      final auth = FakeAuth(session: true, member: ava);
+      final p = ProfileFake(profile: profileOf(ava));
+      final registry = PushRegistryFake()
+        ..forgetResult = const Err(NetworkFailure('offline'));
+      await t.pumpWidget(
+        ProviderScope(
+          overrides: [
+            runtimeConfigProvider.overrideWithValue(config),
+            authRepositoryProvider.overrideWithValue(auth),
+            updateRepositoryProvider.overrideWithValue(FakeUpdate()),
+            chatRepositoryProvider.overrideWithValue(FakeChat()),
+            presenceRepositoryProvider.overrideWithValue(PresenceFake()),
+            profileRepositoryProvider.overrideWithValue(p),
+            attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
+            pushSourceProvider.overrideWithValue(source),
+            pushRegistryProvider.overrideWithValue(registry),
+          ],
+          child: const SisApp(),
+        ),
+      );
+      await t.pumpAndSettle();
+      expectHome();
+      await avaPushes(t);
+      await t.tap(find.byKey(const ValueKey('home-settings')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('settings-account')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('account-sign-out')));
+      await t.pumpAndSettle();
+      expect(find.text('Continue with Google'), findsOneWidget);
+      return (auth, p);
+    }
+
+    _android('a push for Ava arriving afterwards is neither drawn nor '
+        'stored', (t) async {
+      await avaSignsOutOffline(t);
+      expectAvaGone();
+
+      await background(
+        t,
+        dataPush('c-zed', 'Zed', 'after sign-out secret', to: ava.userId),
+      );
+      await background(t, dataPush('c-yan', 'Yan', 'unaddressed secret'));
+
+      expect(shade.posted, isEmpty, reason: '${shade.posted}');
+      final stored = jsonEncode(disk.values);
+      expect(stored, isNot(contains('after sign-out secret')));
+      expect(stored, isNot(contains('unaddressed secret')));
+    });
+
+    _android('the app coming back to the foreground on the sign-in screen '
+        'shows nothing of it', (t) async {
+      final (auth, p) = await avaSignsOutOffline(t);
+      await lifecycle(t, [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+      ]);
+
+      await background(
+        t,
+        dataPush('c-zed', 'Zed', 'while away secret', to: ava.userId),
+      );
+      await background(t, dataPush('c-yan', 'Yan', 'unaddressed away secret'));
+
+      await lifecycle(t, [
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]);
+      expect(find.text('Continue with Google'), findsOneWidget);
+      expect(shade.posted, isEmpty, reason: '${shade.posted}');
+      expect(jsonEncode(disk.values), isNot(contains('while away secret')));
+      expect(jsonEncode(disk.values), isNot(contains('unaddressed away')));
+
+      await beaSignsIn(t, auth, p);
+      await expectBeaSeesOnlyHers(t, [
+        'while away secret',
+        'unaddressed away secret',
+        ...avaSecrets,
+      ]);
+    });
+  });
+
+  group('the app shown before any session exists', () {
+    // main.dart mounts SisApp without pushSourceProvider in two runs: the
+    // config is incomplete (SetupRequired), or startup threw (the startup
+    // error screen). Building the push registration there reads the
+    // unoverridden provider, which throws UnimplementedError.
+    //
+    // Under the test binding that error does not surface on its own (it
+    // stays inside the provider's error state), so the contract is checked
+    // directly as well: the registration is never built, and nothing -- a
+    // FlutterError or an uncaught zone error, both of which takeException
+    // returns -- was thrown, including after the time Riverpod's retries
+    // would take.
+
+    Future<void> expectNothingBuiltOrThrown(WidgetTester t) async {
+      await t.pump(const Duration(seconds: 10));
+      final c = ProviderScope.containerOf(t.element(find.byType(SisApp)));
+      expect(
+        c.exists(pushRegistrationProvider),
+        isFalse,
+        reason: 'the push registration was built',
+      );
+      expect(c.exists(pushSourceProvider), isFalse);
+      final e = t.takeException();
+      expect(e, isNot(isA<UnimplementedError>()));
+      expect(e, isNull);
+    }
+
+    _android('incomplete config: the setup screen, nothing thrown', (t) async {
+      // Exactly main.dart's SetupRequired run: no overrides at all.
+      await t.pumpWidget(const ProviderScope(child: SisApp()));
+      await t.pumpAndSettle();
+
+      expect(find.byType(SetupRequiredScreen), findsOneWidget);
+      await expectNothingBuiltOrThrown(t);
+    });
+
+    _android('incomplete config: the unoverridden push source is never '
+        'asked for, not even before the session is known', (t) async {
+      // Stands in for the unoverridden provider: throws exactly what it
+      // throws, and counts how often it was made to.
+      var thrown = 0;
+      await t.pumpWidget(
+        ProviderScope(
+          overrides: [
+            pushSourceProvider.overrideWith((_) {
+              thrown++;
+              throw UnimplementedError('override in main');
+            }),
+          ],
+          child: const SisApp(),
+        ),
+      );
+      await t.pumpAndSettle();
+      await t.pump(const Duration(seconds: 10));
+
+      expect(find.byType(SetupRequiredScreen), findsOneWidget);
+      expect(thrown, 0, reason: 'UnimplementedError thrown $thrown time(s)');
+      expect(t.takeException(), isNull);
+    });
+
+    for (final withConfig in [false, true]) {
+      final name = withConfig
+          ? 'with the complete config main.dart had read'
+          : 'as main.dart mounts it';
+      _android('startup failed ($name): the reason, nothing thrown', (t) async {
+        await t.pumpWidget(
+          ProviderScope(
+            overrides: [
+              startupErrorProvider.overrideWithValue('bad secure store'),
+              if (withConfig) runtimeConfigProvider.overrideWithValue(config),
+            ],
+            child: const SisApp(),
+          ),
+        );
+        await t.pumpAndSettle();
+
+        expect(find.byType(StartupFailedScreen), findsOneWidget);
+        expect(find.textContaining('bad secure store'), findsOneWidget);
+        await expectNothingBuiltOrThrown(t);
+      });
+    }
+
+    _android('once past SetupRequired, every settled answer reaches the '
+        'inbox owner', (t) async {
+      await t.runAsync(() => LocalPushDisplay.forUser('member-old'));
+      var current = const RuntimeConfig(
+        supabaseUrl: '',
+        supabasePublishableKey: '',
+        googleWebClientId: '',
+      );
+      final auth = FakeAuth(session: true, allowed: false, member: ava);
+      final p = ProfileFake(profile: profileOf(ava));
+      await t.pumpWidget(
+        ProviderScope(
+          overrides: [
+            runtimeConfigProvider.overrideWith((_) => current),
+            authRepositoryProvider.overrideWithValue(auth),
+            updateRepositoryProvider.overrideWithValue(FakeUpdate()),
+            chatRepositoryProvider.overrideWithValue(FakeChat()),
+            presenceRepositoryProvider.overrideWithValue(PresenceFake()),
+            profileRepositoryProvider.overrideWithValue(p),
+            attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
+            pushSourceProvider.overrideWithValue(source),
+            pushRegistryProvider.overrideWithValue(PushRegistryFake()),
+          ],
+          child: const SisApp(),
+        ),
+      );
+      await t.pumpAndSettle();
+      expect(find.byType(SetupRequiredScreen), findsOneWidget);
+      Future<String?> owner() async =>
+          t.runAsync<String?>(LocalPushDisplay.currentOwner);
+      expect(
+        await owner(),
+        'member-old',
+        reason: 'SetupRequired settles nobody',
+      );
+
+      // The config is complete from here on: the session is asked again.
+      current = config;
+      final c = ProviderScope.containerOf(t.element(find.byType(SisApp)));
+      c.invalidate(runtimeConfigProvider);
+      c.invalidate(sessionControllerProvider);
+      await t.pumpAndSettle();
+      expect(find.textContaining('not currently approved'), findsOneWidget);
+      expect(await owner(), isNull, reason: 'Denied must reach forUser');
+
+      await t.tap(find.text('Sign out'));
+      await t.pumpAndSettle();
+      await beaSignsIn(t, auth, p);
+      expect(await owner(), bea.userId, reason: 'Allowed must reach forUser');
+
+      auth.session = false; // the server ends Bea's session
+      auth.changes.add(false);
+      await t.pumpAndSettle();
+      expect(find.text('Continue with Google'), findsOneWidget);
+      expect(await owner(), isNull, reason: 'SignedOut must reach forUser');
     });
   });
 }

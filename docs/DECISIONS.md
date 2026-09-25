@@ -659,10 +659,13 @@ courtesy, not proof.
 
 ## 2026-09-24 — Read status, mutual like last seen
 
-**Your message looks a little grey until it is read, then normal**
-(owner's choice). In a 1:1 chat that means the other person has read it;
-in a group, everyone who shares read status. Touching your message in a
-group shows who has read it.
+**Your message has a thin yellow edge until it is read, then looks
+normal** (owner's choice; changed 2026-09-25 from a dimmed grey bubble,
+which the owner rejected — the edge keeps full brightness and never changes
+the bubble's size). In a 1:1 chat "read" means the other person has read
+it; in a group, that **any one** member who shares read status has read it
+(owner, 2026-09-25; was "everyone"). Touching your message in a group shows
+who has read it.
 
 **Mutual, enforced by the server**, like last seen: a "Show when I have
 read messages" switch. While it is off, your reads are not shown to anyone

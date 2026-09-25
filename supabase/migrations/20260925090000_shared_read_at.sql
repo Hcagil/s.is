@@ -13,8 +13,9 @@
 alter table public.conversation_members
   add column shared_read_at timestamptz;
 
--- Backfill: a currently-sharing member's past reads were, by definition,
--- made while sharing (there was no other state before this column existed).
+-- Backfill: a currently-sharing member keeps their last read as shared. One
+-- read made during an off period in v0.11 cannot be told apart and stays
+-- visible; v0.11 already showed it, so nothing new is exposed.
 -- A member not currently sharing gets nothing backfilled -- whether their
 -- last_read_at was earned while sharing or not is exactly what could not be
 -- told apart before this migration, so the conservative read (hidden) wins.

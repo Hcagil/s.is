@@ -20,11 +20,12 @@ Future<void> showMessageActions(
 }) async {
   final canDelete =
       me != null && message.canDeleteForEveryone(me, DateTime.now());
+  final canEdit = me != null && message.canEdit(me, DateTime.now());
   // Reply and forward need a stored message with something in it.
   final canShare = !message.isPending && !message.isDeleted;
   // In a group, who has read your message (where read status is shared).
   final canSeeReaders = group && me != null && message.isFrom(me) && canShare;
-  if (!canDelete && !canShare) return;
+  if (!canDelete && !canShare && !canEdit) return;
 
   final action = await showModalBottomSheet<String>(
     context: context,
@@ -54,6 +55,13 @@ Future<void> showMessageActions(
               onTap: () => Navigator.of(sheet).pop('forward'),
             ),
           ],
+          if (canEdit)
+            ListTile(
+              key: const ValueKey('action-edit'),
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Edit'),
+              onTap: () => Navigator.of(sheet).pop('edit'),
+            ),
           if (canDelete)
             ListTile(
               key: const ValueKey('action-delete'),
@@ -75,7 +83,12 @@ Future<void> showMessageActions(
   if (!context.mounted) return;
   switch (action) {
     case 'reply':
+      ref.read(editingProvider.notifier).clear();
       ref.read(replyingToProvider.notifier).start(message);
+      return;
+    case 'edit':
+      ref.read(replyingToProvider.notifier).clear();
+      ref.read(editingProvider.notifier).start(message);
       return;
     case 'forward':
       await showForwardSheet(context, ref, message);

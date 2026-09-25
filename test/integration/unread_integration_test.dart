@@ -175,6 +175,10 @@ class _MarkReadDown implements ChatRepository {
   @override
   Future<Result<void>> deleteForEveryone(Message message) =>
       live.deleteForEveryone(message);
+
+  @override
+  Future<Result<Message>> editMessage(Message message, String body) =>
+      live.editMessage(message, body);
   @override
   Future<Result<List<ReadMark>>> readMarks(String conversationId) =>
       live.readMarks(conversationId);

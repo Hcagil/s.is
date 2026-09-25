@@ -126,4 +126,14 @@ abstract interface class ChatRepository {
   /// server refuses (DeniedFailure) when it is not theirs, already deleted,
   /// or over 6 hours old.
   Future<Result<void>> deleteForEveryone(Message message);
+
+  /// Edits the member's own [message] to [body]: replaces its text, or a
+  /// photo message's caption. Returns the updated message on success.
+  ///
+  /// The server refuses (DeniedFailure) exactly as [deleteForEveryone] does:
+  /// not the caller's own message, no longer a member, deleted, forwarded,
+  /// over 6 hours old, or a [body] that would not pass the same validation
+  /// [send] applies -- a photo message may have an empty caption, a
+  /// text-only message may not.
+  Future<Result<Message>> editMessage(Message message, String body);
 }

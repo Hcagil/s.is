@@ -22,17 +22,26 @@ String previewText(Message message) => message.body.isNotEmpty
     ? message.body
     : (message.hasAttachment ? 'Photo' : '');
 
+String _two(int v) => v.toString().padLeft(2, '0');
+
+/// The local clock time of [at], always HH:MM -- whatever day it falls on.
+/// What a chat bubble shows: unlike [previewTime] it never falls back to a
+/// date, since a bubble is already anchored in its conversation's order.
+String clockTime(DateTime at) {
+  final local = at.toLocal();
+  return '${_two(local.hour)}:${_two(local.minute)}';
+}
+
 /// The time shown next to a preview: the clock time today, the date before.
 String previewTime(DateTime at, DateTime now) {
-  String two(int v) => v.toString().padLeft(2, '0');
   final local = at.toLocal();
   final today = now.toLocal();
   if (local.year == today.year &&
       local.month == today.month &&
       local.day == today.day) {
-    return '${two(local.hour)}:${two(local.minute)}';
+    return clockTime(at);
   }
-  return '${two(local.day)}.${two(local.month)}.${two(local.year % 100)}';
+  return '${_two(local.day)}.${_two(local.month)}.${_two(local.year % 100)}';
 }
 
 /// One message in a conversation.
@@ -47,6 +56,7 @@ final class Message {
     this.attachmentPreview,
     this.localImage,
     this.deletion,
+    this.editedAt,
     this.replyTo,
     this.forwarded = false,
   });
@@ -78,7 +88,13 @@ final class Message {
   /// Set when the sender deleted it for everyone; its content is gone.
   final MessageDeletion? deletion;
 
+  /// When the sender last edited this message's body, or null if never
+  /// edited. No history is kept: only the latest body survives.
+  final DateTime? editedAt;
+
   bool get isDeleted => deletion != null;
+
+  bool get isEdited => editedAt != null;
 
   /// Whether [me] may still delete this for everyone at [now]: their own,
   /// stored, not yet deleted, and under 6 hours old (the server checks too).
@@ -86,6 +102,16 @@ final class Message {
       senderId == me &&
       !isPending &&
       deletion == null &&
+      now.difference(createdAt) < deleteForEveryoneWindow;
+
+  /// Whether [me] may still edit this message at [now]: their own, stored,
+  /// not deleted, not forwarded, and under 6 hours old -- the same window as
+  /// [canDeleteForEveryone] (the server checks too).
+  bool canEdit(String me, DateTime now) =>
+      senderId == me &&
+      !isPending &&
+      deletion == null &&
+      !forwarded &&
       now.difference(createdAt) < deleteForEveryoneWindow;
 
   /// Still on its way to the server.

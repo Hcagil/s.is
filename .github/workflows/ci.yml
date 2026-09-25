@@ -55,6 +55,7 @@ jobs:
               # The integration tests exercise the data layer against a real
               # database, so changes there have to run this job too.
               - 'test/integration/**'
+              - 'test/edge/**'
               - 'lib/features/**/data/**'
               - 'dart_test.yaml'
 
@@ -144,6 +145,19 @@ jobs:
         run: docker compose run --rm supabase db lint --level error
       - name: Test database
         run: docker compose run --rm supabase test db
+      # Against the real local stack (Deno's own test runner, not Flutter's):
+      # what push_targets() says about each recipient -> what the function
+      # sends FCM. --add-host: the stack publishes on the runner's host, the
+      # same way the flutter service reaches it (see compose.yaml).
+      - name: Edge function tests
+        run: |
+          SUPABASE_TEST_SERVICE_KEY=$(docker compose run --rm supabase status -o env | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p')
+          echo "::add-mask::$SUPABASE_TEST_SERVICE_KEY"
+          test -n "$SUPABASE_TEST_SERVICE_KEY"
+          docker run --rm --add-host host.docker.internal:host-gateway \
+            -v "$PWD":/w -w /w -e SUPABASE_TEST_SERVICE_KEY="$SUPABASE_TEST_SERVICE_KEY" \
+            denoland/deno:2.9.7@sha256:fa335acdf6b72106eda2cb6a8cb5f4187e7630e357467489db4b2e7352d5e432 \
+            test --no-check --no-lock --allow-all test/edge/notify_on_message_test.ts
       - name: Prepare cache directories
         run: mkdir -p .ci-cache/pub .ci-cache/gradle
       - name: Build development image

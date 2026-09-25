@@ -97,6 +97,17 @@ if [ "$run_db" = 1 ]; then
   step "Test database (pgTAP)"
   docker compose run --rm supabase test db || verdict_fail "Test database"
 
+  step "Edge function tests"
+  EDGE_TEST_KEY=$(docker compose run --rm supabase status -o env \
+    | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p')
+  [ -n "$EDGE_TEST_KEY" ] \
+    || verdict_fail "could not read the local stack's service key"
+  docker run --rm --add-host host.docker.internal:host-gateway \
+    -v "$PWD":/w -w /w -e SUPABASE_TEST_SERVICE_KEY="$EDGE_TEST_KEY" \
+    denoland/deno:2.9.7@sha256:fa335acdf6b72106eda2cb6a8cb5f4187e7630e357467489db4b2e7352d5e432 \
+    test --no-check --no-lock --allow-all test/edge/notify_on_message_test.ts \
+    || verdict_fail "Edge function tests"
+
   [ "$run_app" = 1 ] || build_dev_image
 
   step "Wait until Realtime delivers"

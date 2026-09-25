@@ -9,11 +9,13 @@ import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/status_screens.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/notifications/application/push_controller.dart';
+import '../features/notifications/presentation/notification_explainer_screen.dart';
 import '../features/profile/application/profile_controller.dart';
 import '../features/profile/presentation/onboarding_screen.dart';
 import '../features/update/application/update_controller.dart';
 import '../features/update/domain/update_state.dart';
 import '../features/update/presentation/update_required_screen.dart';
+import 'loading.dart';
 import 'theme.dart';
 
 /// Set by main() when bootstrap itself fails; the gate shows the reason.
@@ -48,12 +50,17 @@ class _AllowedGate extends ConsumerWidget {
       AsyncData(:final value) when !value.onboardingDone => OnboardingScreen(
         profile: value,
       ),
+      // Shown once, before the first Home: while it is still loading or
+      // failed to load, Home wins -- this must never block the app.
+      AsyncData()
+          when ref.watch(notificationExplainerShownProvider).value == false =>
+        const NotificationExplainerScreen(),
       AsyncData() => HomeScreen(member: member),
       AsyncError(:final error) => StatusScreen.error(
         error is Failure ? error.message : '$error',
         onRetry: () => ref.read(ownProfileProvider.notifier).retry(),
       ),
-      _ => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      _ => const SisFullScreenLoader(),
     };
   }
 }
@@ -125,7 +132,7 @@ class _SessionGateState extends ConsumerState<SessionGate> {
         '$error',
         onRetry: notifier.retry,
       ),
-      _ => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      _ => const SisFullScreenLoader(),
     };
   }
 }

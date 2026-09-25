@@ -35,6 +35,16 @@ abstract interface class PushSource {
   Future<void> forUser(String? userId);
 }
 
+/// Whether the member has already seen the explainer screen that runs before
+/// SIS asks for notification permission (implemented over shared_preferences
+/// in data/).
+abstract interface class NotificationExplainerStore {
+  /// True once the explainer has been shown, so it is never shown again.
+  Future<bool> wasShown();
+
+  Future<void> markShown();
+}
+
 /// The server's list of where to deliver (implemented over the Supabase RPCs
 /// register_device_token / forget_device_token in data/).
 abstract interface class PushRegistry {

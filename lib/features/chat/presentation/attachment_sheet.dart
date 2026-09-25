@@ -3,37 +3,26 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/loading.dart';
+import '../../../app/notice.dart';
+import '../../../app/theme.dart';
 import '../application/chat_controllers.dart';
 import '../domain/attachment.dart';
 import '../domain/gallery.dart';
 
-/// What the member chose in the attachment sheet.
-sealed class AttachmentChoice {
-  const AttachmentChoice();
-}
-
-/// A photo from the sheet's own grid, ready to send.
-final class ChosenPhoto extends AttachmentChoice {
-  const ChosenPhoto(this.image);
-  final PickedImage image;
-}
-
-/// Open the system photo picker instead.
-final class UseSystemPicker extends AttachmentChoice {
-  const UseSystemPicker();
-}
-
-/// Shows the attachment sheet; null when the member closes it.
-Future<AttachmentChoice?> showAttachmentSheet(BuildContext context) =>
-    showModalBottomSheet<AttachmentChoice>(
+/// Shows the attachment sheet; null when the member closes it or backs out
+/// without choosing a photo.
+Future<PickedImage?> showAttachmentSheet(BuildContext context) =>
+    showModalBottomSheet<PickedImage>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => const AttachmentSheet(),
     );
 
-/// The phone's recent photos to send from, with a way out to the system
-/// picker. Asks for photo access the first time it opens.
+/// The phone's recent photos to send from. Asks for photo access the first
+/// time it opens; when access is missing or partial, shows SIS's own screen
+/// for it instead of the phone's photos.
 class AttachmentSheet extends ConsumerStatefulWidget {
   const AttachmentSheet({super.key});
 
@@ -56,9 +45,10 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
   Future<void> _load() async {
     final gallery = ref.read(galleryProvider);
     final access = await gallery.requestAccess();
-    final photos = access == GalleryAccess.denied
-        ? const <GalleryPhoto>[]
-        : await gallery.recent();
+    final photos =
+        access == GalleryAccess.full || access == GalleryAccess.limited
+        ? await gallery.recent()
+        : const <GalleryPhoto>[];
     if (!mounted) return;
     setState(() {
       _access = access;
@@ -74,12 +64,10 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     if (!mounted) return;
     setState(() => _opening = false);
     if (image == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('That photo could not be opened.')),
-      );
+      showSisNotice(context, 'That photo could not be opened.', isError: true);
       return;
     }
-    Navigator.of(context).pop(ChosenPhoto(image));
+    Navigator.of(context).pop(image);
   }
 
   Future<void> _selectMore() async {
@@ -91,81 +79,144 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final height = MediaQuery.sizeOf(context).height * 0.6;
+    if (_loading) {
+      return SizedBox(
+        height: height,
+        child: const Center(child: SisLoadingLogo()),
+      );
+    }
+    if (_access == GalleryAccess.denied ||
+        _access == GalleryAccess.permanentlyDenied) {
+      return SizedBox(
+        height: height,
+        child: _PhotoAccessRequest(
+          permanentlyDenied: _access == GalleryAccess.permanentlyDenied,
+          onAllow: () {
+            setState(() => _loading = true);
+            _load();
+          },
+          onOpenSettings: () => ref.read(galleryProvider).openSettings(),
+          onNotNow: () => Navigator.of(context).pop(),
+        ),
+      );
+    }
+
+    final limited = _access == GalleryAccess.limited;
     final header = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
           Text('Photos', style: Theme.of(context).textTheme.titleMedium),
           const Spacer(),
-          TextButton.icon(
-            key: const ValueKey('sheet-system-picker'),
-            icon: const Icon(Icons.photo_library_outlined),
-            label: const Text('All photos'),
-            onPressed: () => Navigator.of(context).pop(const UseSystemPicker()),
-          ),
+          if (limited)
+            TextButton(
+              key: const ValueKey('sheet-allow-more'),
+              onPressed: _selectMore,
+              child: const Text('Allow more'),
+            ),
         ],
       ),
     );
 
-    final Widget body;
-    if (_loading) {
-      body = const Center(child: CircularProgressIndicator());
-    } else if (_access == GalleryAccess.denied) {
-      body = Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Allow SIS to show your photos here, or pick one from all '
-                'photos.',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                key: const ValueKey('sheet-allow'),
-                onPressed: () {
-                  setState(() => _loading = true);
-                  _load();
-                },
-                child: const Text('Allow access'),
-              ),
-            ],
-          ),
-        ),
-      );
-    } else if (_photos.isEmpty && _access == GalleryAccess.full) {
-      body = const Center(child: Text('No photos yet'));
-    } else {
-      final limited = _access == GalleryAccess.limited;
-      body = GridView.builder(
-        padding: const EdgeInsets.all(2),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          mainAxisSpacing: 2,
-          crossAxisSpacing: 2,
-        ),
-        itemCount: _photos.length + (limited ? 1 : 0),
-        itemBuilder: (context, i) {
-          if (i == _photos.length) return _SelectMoreTile(onTap: _selectMore);
-          final p = _photos[i];
-          return _Thumb(
-            key: ValueKey('sheet-photo-${p.id}'),
-            photo: p,
-            onTap: () => _choose(p),
+    final Widget body = _photos.isEmpty
+        ? const Center(child: Text('No photos yet'))
+        : GridView.builder(
+            padding: const EdgeInsets.all(2),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 2,
+              crossAxisSpacing: 2,
+            ),
+            itemCount: _photos.length,
+            itemBuilder: (context, i) {
+              final p = _photos[i];
+              return _Thumb(
+                key: ValueKey('sheet-photo-${p.id}'),
+                photo: p,
+                onTap: () => _choose(p),
+              );
+            },
           );
-        },
-      );
-    }
 
     return SizedBox(
-      height: MediaQuery.sizeOf(context).height * 0.6,
+      height: height,
       child: Column(
         children: [
           header,
           Expanded(child: body),
         ],
+      ),
+    );
+  }
+}
+
+/// SIS's own screen for asking gallery access: shown instead of the grid
+/// when access is denied, or opens the app's settings page when a previous
+/// ask was already refused (the system will not prompt again).
+class _PhotoAccessRequest extends StatelessWidget {
+  const _PhotoAccessRequest({
+    required this.permanentlyDenied,
+    required this.onAllow,
+    required this.onOpenSettings,
+    required this.onNotNow,
+  });
+
+  final bool permanentlyDenied;
+  final VoidCallback onAllow;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onNotNow;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SisBrand.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: t.surfaceHigh,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Icon(Icons.image_rounded, size: 48, color: t.brand),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Send photos faster',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Allow access so your gallery loads right here – nothing is '
+              'uploaded until you send it.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: t.muted),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const ValueKey('sheet-allow'),
+                onPressed: permanentlyDenied ? onOpenSettings : onAllow,
+                child: Text(
+                  permanentlyDenied ? 'Open settings' : 'Allow photos',
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              key: const ValueKey('sheet-not-now'),
+              onPressed: onNotNow,
+              child: const Text('Not now'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -201,33 +252,6 @@ class _ThumbState extends ConsumerState<_Thumb> {
           color: Theme.of(context).colorScheme.surfaceContainerHigh,
         ),
       },
-    );
-  }
-}
-
-class _SelectMoreTile extends StatelessWidget {
-  const _SelectMoreTile({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      key: const ValueKey('sheet-select-more'),
-      onTap: onTap,
-      child: ColoredBox(
-        color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        child: const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.add_photo_alternate_outlined),
-              SizedBox(height: 4),
-              Text('Select more'),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

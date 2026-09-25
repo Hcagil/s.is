@@ -10,8 +10,12 @@ enum GalleryAccess {
   /// The member selected a subset of photos (Android 14+).
   limited,
 
-  /// The member denied access.
+  /// The member denied access; asking again shows the system prompt.
   denied,
+
+  /// The member denied access on an earlier ask too: the system will not
+  /// prompt again, so the only way forward is the app's settings page.
+  permanentlyDenied,
 }
 
 /// One photo on the phone, by the platform's id; its pixels are fetched on
@@ -44,4 +48,8 @@ abstract interface class Gallery {
   /// With limited access, lets the member add photos to what they allowed
   /// (Android 14+ system sheet).
   Future<void> selectMore();
+
+  /// Opens this app's page in the phone's settings, for when access is
+  /// [GalleryAccess.permanentlyDenied] and no prompt will be shown again.
+  Future<void> openSettings();
 }

@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
+import '../../../app/loading.dart';
+import '../../../app/notice.dart';
 import '../../../app/theme.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
@@ -234,7 +236,7 @@ class MessageScreen extends ConsumerWidget {
                       child: Text(reasonOf(error), textAlign: TextAlign.center),
                     ),
                   ),
-                  _ => const Center(child: CircularProgressIndicator()),
+                  _ => const Center(child: SisLoadingLogo()),
                 },
               ),
               const _Composer(),
@@ -545,7 +547,7 @@ class _Attachment extends ConsumerWidget {
                   cacheWidth: 560,
                   fit: BoxFit.cover,
                 ),
-                const CircularProgressIndicator(),
+                const SisLoadingLogo(size: 40),
               ],
             ),
             (_, final String path) => switch (ref.watch(
@@ -585,7 +587,7 @@ class _Attachment extends ConsumerWidget {
                 null => const SizedBox(
                   height: 120,
                   width: 180,
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(child: SisLoadingLogo(size: 40)),
                 ),
               },
             },
@@ -646,28 +648,21 @@ class _ComposerState extends ConsumerState<_Composer> {
         _controller.clear();
         if (editing != null) ref.read(editingProvider.notifier).clear();
       case Err(:final failure):
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(failure.message)));
+        showSisNotice(context, failure.message, isError: true);
     }
   }
 
   /// Picks and sends an image, with whatever is typed as its caption.
   Future<void> _attach() async {
     if (_sending) return;
-    // The phone's own photos first; "All photos" falls back to the system
-    // picker. Closing the sheet sends nothing.
-    final choice = await showAttachmentSheet(context);
-    if (choice == null || !mounted) return;
+    // The phone's own photos. Closing the sheet without choosing one sends
+    // nothing.
+    final image = await showAttachmentSheet(context);
+    if (image == null || !mounted) return;
     setState(() => _sending = true);
     final result = await ref
         .read(messagesProvider.notifier)
-        .sendImage(
-          body: _controller.text,
-          chosen: switch (choice) {
-            ChosenPhoto(:final image) => image,
-            UseSystemPicker() => null,
-          },
-        );
+        .sendImage(body: _controller.text, chosen: image);
     if (!mounted) return;
     setState(() => _sending = false);
     // null means the member backed out of the picker: not a failure.
@@ -677,8 +672,7 @@ class _ComposerState extends ConsumerState<_Composer> {
       case Ok():
         _controller.clear();
       case Err(:final failure):
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(failure.message)));
+        showSisNotice(context, failure.message, isError: true);
     }
   }
 
@@ -917,8 +911,7 @@ class _LinkedTextState extends ConsumerState<_LinkedText> {
   Future<void> _open(Uri link) async {
     final opened = await ref.read(linkOpenerProvider).open(link);
     if (!opened && mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Could not open ${link.host}')));
+      showSisNotice(context, 'Could not open ${link.host}', isError: true);
     }
   }
 

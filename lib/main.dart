@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/sis_app.dart';
@@ -15,7 +14,6 @@ import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/data/file_attachment_cache.dart';
-import 'features/chat/data/image_picker_attachment_source.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
@@ -23,6 +21,7 @@ import 'features/notifications/application/notification_settings_controller.dart
 import 'features/notifications/application/push_controller.dart';
 import 'features/notifications/data/firebase_push_source.dart';
 import 'features/notifications/data/local_push_display.dart';
+import 'features/notifications/data/shared_prefs_notification_explainer_store.dart';
 import 'features/notifications/data/supabase_notification_settings_repository.dart';
 import 'features/notifications/data/supabase_push_registry.dart';
 import 'features/presence/application/presence_controllers.dart';
@@ -88,9 +87,6 @@ Future<void> main() async {
           profileRepositoryProvider.overrideWithValue(
             SupabaseProfileRepository(client),
           ),
-          attachmentSourceProvider.overrideWithValue(
-            ImagePickerAttachmentSource(ImagePicker()),
-          ),
           linkOpenerProvider.overrideWithValue(const UrlLauncherLinkOpener()),
           pushSourceProvider.overrideWithValue(
             FirebasePushSource(FirebaseMessaging.instance),
@@ -98,6 +94,9 @@ Future<void> main() async {
           pushRegistryProvider.overrideWithValue(SupabasePushRegistry(client)),
           notificationSettingsRepositoryProvider.overrideWithValue(
             SupabaseNotificationSettingsRepository(client),
+          ),
+          notificationExplainerStoreProvider.overrideWithValue(
+            const SharedPrefsNotificationExplainerStore(),
           ),
         ],
         child: const SisApp(),

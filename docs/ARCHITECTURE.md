@@ -24,8 +24,7 @@ lib/
                           flutter_secure_storage, flutter_local_notifications,
                           firebase_messaging, firebase_core,
                           shared_preferences, web_socket_channel,
-                          path_provider, photo_manager, url_launcher,
-                          image_picker, http
+                          path_provider, photo_manager, url_launcher, http
     application/          Riverpod Notifiers: state machines; import domain only
     presentation/         widgets: watch state, call notifiers, render
 ```
@@ -51,7 +50,7 @@ inside `chat`.
    API, the platform photo picker, the OS keystore — have no integration test,
    because there is nothing to run them against locally. `SupabaseChatRepository`
    is covered; `SupabaseAuthRepository`, `PlayUpdateRepository`,
-   `ImagePickerAttachmentSource` and `SecureSessionStorage` are not, and are
+   `PhotoManagerGallery` and `SecureSessionStorage` are not, and are
    verified on a device instead. Keep those classes thin for that reason: logic
    that could be tested belongs in `domain/`.
 

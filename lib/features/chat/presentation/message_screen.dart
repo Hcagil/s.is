@@ -192,7 +192,7 @@ class MessageScreen extends ConsumerWidget {
                           mine &&
                           !message.isDeleted &&
                           (message.isPending ||
-                              !isReadByAll(marks, message.createdAt));
+                              !isReadByAnyone(marks, message.createdAt));
                       final bubble = GestureDetector(
                         onLongPress: () => showMessageActions(
                           context,

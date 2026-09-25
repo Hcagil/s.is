@@ -57,9 +57,8 @@ grant execute on function public.edit_message(uuid, text) to authenticated;
 -- delete_message, redefined: a deleted message keeps only who sent it and
 -- when, so its edited mark must go too -- otherwise a vanished or
 -- placeholder row could still read as edited. Identical to the definition in
--- 20260924140000_delete_for_everyone.sql (not yet released, so amended here
--- rather than layering a second migration on top of it) except the UPDATE
--- also clears edited_at.
+-- 20260924140000_delete_for_everyone.sql (released; never edit it) except
+-- the UPDATE also clears edited_at.
 create or replace function public.delete_message(message uuid)
 returns text language plpgsql security definer set search_path = '' as $$
 declare

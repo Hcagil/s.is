@@ -54,6 +54,10 @@ final class LocalPushDisplay {
     required String title,
     required String body,
   }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final owner = prefs.getString(_ownerKey);
+    if (owner == null) return;
     final inbox = addToInbox(
       await _load(),
       conversationId: conversationId,
@@ -84,6 +88,15 @@ final class LocalPushDisplay {
       payload: conversationId,
     );
     await _showSummary(inbox);
+  }
+
+  /// The owner [show] is currently keeping the shade for, or null. Lets a
+  /// caller decide a push is addressed to someone else before ever reaching
+  /// [show].
+  static Future<String?> currentOwner() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    return prefs.getString(_ownerKey);
   }
 
   /// The member opened [conversationId]: its notification goes.

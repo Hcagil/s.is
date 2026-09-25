@@ -201,22 +201,20 @@ class MessageScreen extends ConsumerWidget {
                           me: me,
                           group: group,
                         ),
-                        child: Opacity(
+                        child: _Bubble(
+                          message,
                           key: ValueKey('read-$unread-${message.id}'),
-                          opacity: unread ? 0.6 : 1,
-                          child: _Bubble(
-                            message,
-                            mine: mine,
-                            sender: group && !mine && startsRun(value, index)
-                                ? (names[message.senderId] ?? 'Member')
-                                : null,
-                            quoted: quoted,
-                            quotedName: quoted == null
-                                ? null
-                                : quoted.senderId == me
-                                ? 'You'
-                                : (names[quoted.senderId] ?? 'Member'),
-                          ),
+                          mine: mine,
+                          unread: unread,
+                          sender: group && !mine && startsRun(value, index)
+                              ? (names[message.senderId] ?? 'Member')
+                              : null,
+                          quoted: quoted,
+                          quotedName: quoted == null
+                              ? null
+                              : quoted.senderId == me
+                              ? 'You'
+                              : (names[quoted.senderId] ?? 'Member'),
                         ),
                       );
                       return message.deletion == MessageDeletion.vanished
@@ -248,7 +246,9 @@ class MessageScreen extends ConsumerWidget {
 class _Bubble extends StatelessWidget {
   const _Bubble(
     this.message, {
+    super.key,
     required this.mine,
+    required this.unread,
     this.sender,
     this.quoted,
     this.quotedName,
@@ -256,6 +256,10 @@ class _Bubble extends StatelessWidget {
 
   final Message message;
   final bool mine;
+
+  /// True for an own message no other member has read yet (or still
+  /// sending). Shown as a thin yellow edge, never as a dimmed bubble.
+  final bool unread;
 
   /// The message this one answers, when it is loaded here, and who wrote it.
   final Message? quoted;
@@ -286,6 +290,12 @@ class _Bubble extends StatelessWidget {
             bottomLeft: mine ? r : tail,
             bottomRight: mine ? tail : r,
           ),
+          border: mine
+              ? Border.all(
+                  width: 1.5,
+                  color: unread ? brand.unreadEdge : Colors.transparent,
+                )
+              : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

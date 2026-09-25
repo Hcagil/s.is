@@ -1,5 +1,5 @@
 begin;
-select plan(97);
+select plan(101);
 
 -- Read status (v0.11): profiles.share_read_status, public.read_marks(),
 -- public.mark_read()'s added broadcast, app_private.reads_conversation(),
@@ -292,7 +292,19 @@ select test_as('00000000-0000-0000-0000-00000000dd01', 'ed000000-0000-0000-0000-
 select is(shares_with((select id from _g), '00000000-0000-0000-0000-00000000dd05'),
           true, 'ada sees eve sharing, still allowlisted (control)');
 reset role;
+-- Probe rows for the receive checks (here and in section 13).
+insert into realtime.messages (topic, extension, payload, event, private) values
+  ('fixture', 'broadcast', '{}'::jsonb, 'fixture', true),
+  ('fixture', 'presence',  '{}'::jsonb, 'fixture', true);
+select test_as('00000000-0000-0000-0000-00000000dd05', 'ed000000-0000-0000-0000-00000000dd05');
+select ok(can_receive('reads:' || (select id from _g)::text, 'broadcast'),
+          'eve, still allowlisted, receives on G''s reads: topic (control)');
+reset role;
 delete from app_private.allowlist where email = 'eve@reads.test';
+select test_as('00000000-0000-0000-0000-00000000dd05', 'ed000000-0000-0000-0000-00000000dd05');
+select ok(not can_receive('reads:' || (select id from _g)::text, 'broadcast'),
+          'eve, delisted but still a sharing member with her session, no longer receives reads');
+reset role;
 select test_as('00000000-0000-0000-0000-00000000dd01', 'ed000000-0000-0000-0000-00000000dd01');
 select is(shares_with((select id from _g), '00000000-0000-0000-0000-00000000dd05'), false,
           'once eve is delisted, ada sees her as not-shared, although eve never turned sharing off');
@@ -338,11 +350,6 @@ select throws_ok($$update public.profiles set share_read_status = false$$,
 reset role;
 
 -- 13 the realtime channel: receive/send on reads:<conversation> -----------------
--- Probe rows for the receive checks.
-insert into realtime.messages (topic, extension, payload, event, private) values
-  ('fixture', 'broadcast', '{}'::jsonb, 'fixture', true),
-  ('fixture', 'presence',  '{}'::jsonb, 'fixture', true);
-
 select test_as('00000000-0000-0000-0000-00000000dd01', 'ed000000-0000-0000-0000-00000000dd01');
 select ok(can_receive('reads:' || (select id from _g)::text, 'broadcast'),
           'ada, sharing, member of G, receives on its reads: topic');
@@ -384,6 +391,23 @@ select ok(can_receive('reads:' || (select id from _x)::text, 'broadcast'),
 select ok(not can_receive('reads:' || (select id from _g)::text, 'broadcast'),
           'xan, sharing, but not a member of G, cannot receive on its reads: topic');
 reset role;
+
+-- hal, never allowlisted, planted as a sharing member of G so membership and
+-- sharing are not what stop him. He cannot activate, so this fails the
+-- allowlist and app-access gates together; eve above isolates the allowlist.
+insert into public.conversation_members (conversation_id, user_id)
+  values ((select id from _g), '00000000-0000-0000-0000-00000000dd09');
+update public.profiles set share_read_status = true
+ where user_id = '00000000-0000-0000-0000-00000000dd09';
+select is((select share_read_status from public.profiles
+            where user_id = '00000000-0000-0000-0000-00000000dd09'), true,
+          'hal has a profile and shares (fixture check)');
+select test_as('00000000-0000-0000-0000-00000000dd09', 'ed000000-0000-0000-0000-00000000dd09');
+select ok(not can_receive('reads:' || (select id from _g)::text, 'broadcast'),
+          'hal, never allowlisted, cannot receive on G''s reads: topic even as a member');
+reset role;
+delete from public.conversation_members
+ where conversation_id = (select id from _g) and user_id = '00000000-0000-0000-0000-00000000dd09';
 
 -- regression: the typing/presence topics this migration did not touch are
 -- still open, unaffected by the reads: clause being added to the same OR.

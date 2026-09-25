@@ -271,6 +271,30 @@ void main() {
       expect(on.readAt, isNotNull);
     });
 
+    test('a read made while sharing is off stays hidden after sharing is '
+        'back on', () async {
+      // quinlan's last shared read, the one priya may keep seeing.
+      expect(await quinlan.markRead(club), isA<Ok<void>>());
+      final shared = _of(_ok(await priya.readMarks(club)), quinlanId).readAt;
+      expect(shared, isNotNull, reason: 'control: the shared read is shown');
+
+      await share(quinlanClient, false);
+      final sent = await priya.send(conversationId: club, body: _stamp('off'));
+      final message = (sent as Ok<Message>).value;
+      expect(await quinlan.markRead(club), isA<Ok<void>>());
+      await share(quinlanClient, true);
+
+      final back = _of(_ok(await priya.readMarks(club)), quinlanId);
+      expect(back.shares, isTrue);
+      expect(back.readAt, shared, reason: 'the off-period read surfaced');
+      expect(back.hasRead(message.createdAt), isFalse);
+
+      // control: a read made now, while sharing, shows at once.
+      expect(await quinlan.markRead(club), isA<Ok<void>>());
+      final now = _of(_ok(await priya.readMarks(club)), quinlanId);
+      expect(now.hasRead(message.createdAt), isTrue);
+    });
+
     test('a conversation I am not in tells me nothing', () async {
       final r = await remy.readMarks(direct);
       if (r case Ok(:final value)) {

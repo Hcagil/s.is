@@ -203,13 +203,6 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      // "This message was deleted" only overflows its Row under
-      // flutter test's font substitution (verified in isolation, with no
-      // app code involved at all) -- never with a real font, where the
-      // string measures well under the bubble's width. Consumed here so
-      // it does not fail the test; the assertions below prove the row and
-      // its text are really on screen.
-      tester.takeException();
 
       expect(find.byKey(const ValueKey('deleted-m1')), findsOneWidget);
       expect(find.text('This message was deleted'), findsOneWidget);

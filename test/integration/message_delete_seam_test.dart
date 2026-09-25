@@ -135,7 +135,6 @@ void main() {
     WidgetTester t,
     bool Function() ok,
     String what, {
-    bool swallowOverflow = false,
     Future<String> Function()? explain,
   }) async {
     for (var i = 0; i < 300; i++) {
@@ -144,12 +143,6 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 100)),
       );
       await t.pump();
-      // "This message was deleted" only overflows its Row under flutter
-      // test's font substitution (verified in isolation, with no app code
-      // involved at all) -- never with a real font, where the string
-      // measures well under the bubble's width. Consumed here, every
-      // frame it recurs, so it never fails the test.
-      if (swallowOverflow) t.takeException();
     }
     // Explain a timeout instead of only reporting it: what is on screen (a
     // refused delete leaves its reason in a SnackBar) and which message
@@ -387,10 +380,7 @@ void main() {
       reason: 'the confirm dialog never opened for the second message',
     );
     await t.tap(find.byKey(const ValueKey('delete-confirm')));
-    await t.pump();
-    t.takeException();
-    await t.pump(const Duration(milliseconds: 300));
-    t.takeException();
+    await settle(t);
 
     await until(
       t,
@@ -399,7 +389,6 @@ void main() {
         find.byKey(ValueKey('deleted-${oldMessage.id}')),
       ).evaluate().isNotEmpty,
       'A\'s own screen to show the old message as a placeholder',
-      swallowOverflow: true,
     );
 
     await until(
@@ -409,7 +398,6 @@ void main() {
         find.byKey(ValueKey('deleted-${oldMessage.id}')),
       ).evaluate().isNotEmpty,
       'B\'s screen to show the old message as a placeholder',
-      swallowOverflow: true,
     );
     // Scoped to this run's own message: the conversation is a fixed, reused
     // seed pair, and an earlier run's own placeholder can still be sitting

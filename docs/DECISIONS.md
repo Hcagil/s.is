@@ -752,3 +752,15 @@ device says when it registers whether it shows pushes itself
 (`device_tokens.shows_itself`, false unless the app says so). Only those get
 data only; every other device still gets a regular notification. An updated
 app re-registers on its next start and switches over.
+
+**Nothing of a previous member survives on the phone** (security review,
+2026-09-25). The stored inbox is kept per member, and its owner follows the
+*settled* session answer from the app's root (signed in / signed out / not
+allowed), never the loading or error state: a cold start onto the sign-in or
+"not allowed" screen clears the previous member's notifications and inbox,
+while an offline start keeps the member's own. The server already stops
+pushes to a device whose session ended; a push queued before that can still
+draw until the app is next opened. App data is excluded from Android backup
+and device-to-device transfer (`data_extraction_rules.xml` for Android 12+,
+`backup_rules.xml` below it — `allowBackup="false"` alone does not stop
+transfers on 12+).

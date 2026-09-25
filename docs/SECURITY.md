@@ -99,6 +99,12 @@ account selection; the app shows that reason rather than returning silently.
 No secrets in the app or repository. Service-role keys and signing material
 exist only in GitHub Actions secrets and in the maintainer's offline backup.
 
+Nothing the app stores on the phone (session, waiting notification previews)
+leaves it through Android backup or device-to-device transfer: both are
+excluded in `android/app/src/main/res/xml/` (see DECISIONS 2026-09-24, one
+SIS notification). A previous member's notifications are cleared on every
+session end, including a cold start onto sign-in or "not allowed".
+
 ## Runbook
 
 - **Allow a member:** insert the row directly against the project, through the

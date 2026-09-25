@@ -1,5 +1,20 @@
 import '../../../core/failure.dart';
 
+/// The platform's current answer to notification permission, read without
+/// prompting (so it can be checked before deciding whether to ask at all).
+enum PushPermissionStatus {
+  /// Not yet asked: the explainer is worth showing.
+  notDetermined,
+
+  /// Refused, but the platform may still show its own prompt if asked
+  /// again: the explainer is worth showing.
+  denied,
+
+  /// Already allowed, in full or provisionally: nothing left to ask for.
+  authorized,
+  provisional,
+}
+
 /// This device's push channel (implemented over Firebase Messaging in data/).
 abstract interface class PushSource {
   /// Asks the member to allow notifications (Android 13+).
@@ -7,6 +22,9 @@ abstract interface class PushSource {
   /// Returns true when allowed. Asking again after a refusal must not nag:
   /// the platform decides whether a prompt shows.
   Future<bool> requestPermission();
+
+  /// The current answer, without prompting.
+  Future<PushPermissionStatus> permissionStatus();
 
   /// This device's push token, or null when the platform cannot provide one
   /// (no Play services, offline at first start).

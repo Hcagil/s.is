@@ -97,11 +97,24 @@ final notificationExplainerStoreProvider = Provider<NotificationExplainerStore>(
   (_) => throw UnimplementedError('override in main'),
 );
 
-/// True once NotificationExplainerScreen has been shown; starts as loading
-/// (AsyncLoading), so nothing shows the explainer before this settles.
-final notificationExplainerShownProvider = FutureProvider<bool>(
-  (ref) => ref.read(notificationExplainerStoreProvider).wasShown(),
-);
+/// True when NotificationExplainerScreen should be skipped: already shown
+/// before, or -- an existing install from before this screen existed, or a
+/// member who granted the permission some other way -- the platform already
+/// has an answer that needs no explaining. Starts as loading (AsyncLoading),
+/// so nothing shows the explainer before this settles.
+final notificationExplainerShownProvider = FutureProvider<bool>((ref) async {
+  final store = ref.read(notificationExplainerStoreProvider);
+  if (await store.wasShown()) return true;
+  final status = await ref.read(pushSourceProvider).permissionStatus();
+  if (status == PushPermissionStatus.authorized ||
+      status == PushPermissionStatus.provisional) {
+    // Nothing to explain: the member already answered. Recorded so this
+    // platform round trip only ever happens once.
+    await store.markShown();
+    return true;
+  }
+  return false;
+});
 
 /// Marks the explainer shown and only then asks the platform for
 /// notification permission -- the one place `requestPermission` is called.

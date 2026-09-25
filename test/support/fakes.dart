@@ -82,34 +82,70 @@ class FakeAuth implements AuthRepository {
   }
 }
 
+/// Play and the policy table, as the controller sees them. Every call is
+/// asynchronous, as the real ones are; [flexibleGate] holds a flexible
+/// download "in flight" until the test completes it, and a finished download
+/// is then reported by [checkForUpdate] as Play reports it: downloaded.
 class FakeUpdate implements UpdateRepository {
   FakeUpdate({
     this.installed = 105,
     this.version = '0.6.0',
     this.min = const Ok(1),
-    this.play = const Ok(null),
+    this.play = const Ok(PlayUpdateCheck()),
   });
 
   int installed;
   String version;
   Result<int> min;
-  Result<int?> play;
+  Result<PlayUpdateCheck> play;
   final calls = <String>[];
   bool failFlexible = false;
   bool failImmediate = false;
+
+  /// How many times Play was asked.
+  int checks = 0;
+
+  /// How many times the minimum supported build was read.
+  int minReads = 0;
+
+  /// When set, checkForUpdate() waits on it (Play has not answered yet).
+  Completer<void>? checkGate;
+
+  /// When set, startFlexibleUpdate() waits on it (the download is running).
+  Completer<void>? flexibleGate;
+
+  /// Offers [build] as a flexible update from now on.
+  void offer(int build) => play = Ok(PlayUpdateCheck(offeredBuild: build));
 
   @override
   Future<int> installedBuild() async => installed;
   @override
   Future<String> installedVersion() async => version;
   @override
-  Future<Result<int>> minSupportedBuild() async => min;
+  Future<Result<int>> minSupportedBuild() async {
+    minReads++;
+    await Future<void>.delayed(Duration.zero);
+    return min;
+  }
+
   @override
-  Future<Result<int?>> availablePlayBuild() async => play;
+  Future<Result<PlayUpdateCheck>> checkForUpdate() async {
+    checks++;
+    await Future<void>.delayed(Duration.zero);
+    await checkGate?.future;
+    return play;
+  }
+
   @override
   Future<void> startFlexibleUpdate() async {
     calls.add('flexible');
     if (failFlexible) throw StateError('declined');
+    await flexibleGate?.future;
+    final offered = switch (play) {
+      Ok(:final value) => value.offeredBuild,
+      Err() => null,
+    };
+    play = Ok(PlayUpdateCheck(offeredBuild: offered, downloaded: true));
   }
 
   @override

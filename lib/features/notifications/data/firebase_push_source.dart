@@ -22,7 +22,15 @@ Future<void> onBackgroundPush(RemoteMessage message) async {
 /// on a device. While the app is open nothing is shown: the chat list already
 /// says what is new.
 final class FirebasePushSource implements PushSource {
-  FirebasePushSource(this._messaging);
+  FirebasePushSource(this._messaging) {
+    // A tap on a notification Android drew itself (this device's
+    // shows_itself was still false when the push arrived): the same path
+    // LocalPushDisplay taps already use.
+    FirebaseMessaging.onMessageOpenedApp.listen((m) {
+      final id = _conversationOf(m);
+      if (id != null) _taps.add(id);
+    });
+  }
 
   final FirebaseMessaging _messaging;
 
@@ -52,7 +60,12 @@ final class FirebasePushSource implements PushSource {
   Stream<String> get tokenRefreshes => _messaging.onTokenRefresh;
 
   @override
-  Future<String?> launchConversation() => LocalPushDisplay.launchConversation();
+  Future<String?> launchConversation() async {
+    final local = await LocalPushDisplay.launchConversation();
+    if (local != null) return local;
+    // Cold start via a notification Android drew itself.
+    return _conversationOf(await _messaging.getInitialMessage());
+  }
 
   @override
   Stream<String> get openedConversations => _taps.stream;
@@ -63,4 +76,9 @@ final class FirebasePushSource implements PushSource {
 
   @override
   Future<void> clearAll() => LocalPushDisplay.clearAll();
+
+  static String? _conversationOf(RemoteMessage? m) {
+    final id = m?.data['conversation_id'];
+    return id is String && id.isNotEmpty ? id : null;
+  }
 }

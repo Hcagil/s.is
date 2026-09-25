@@ -16,6 +16,7 @@ final class LocalPushDisplay {
   static final _plugin = FlutterLocalNotificationsPlugin();
   static const _group = 'sis.messages';
   static const _prefsKey = 'sis.push_inbox';
+  static const _ownerKey = 'sis.push_inbox_owner';
   static const _summaryId = 0;
   static const _channelId = 'messages';
   static const _channelName = 'Messages';
@@ -99,6 +100,30 @@ final class LocalPushDisplay {
     await _plugin.cancelAll();
   }
 
+  /// The signed-in member is now [userId], or nobody (about to sign in, just
+  /// signed out, or handed to someone else on the same phone). A no-op when
+  /// nothing changed (the common case: this runs on every rebuild of the
+  /// provider that watches who is signed in, not only on an actual change).
+  /// On an actual change: drops whatever was stored for the previous member
+  /// and empties the shade, then remembers the new owner, so a stale inbox
+  /// can never be read as -- or merged into -- someone else's.
+  static Future<void> forUser(String? userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final previousOwner = prefs.getString(_ownerKey);
+    if (previousOwner == userId) return;
+    await prefs.remove(_keyFor(previousOwner));
+    await _plugin.cancelAll();
+    if (userId == null) {
+      await prefs.remove(_ownerKey);
+    } else {
+      await prefs.setString(_ownerKey, userId);
+    }
+  }
+
+  static String _keyFor(String? owner) =>
+      owner == null ? _prefsKey : '$_prefsKey.$owner';
+
   static Future<void> _showSummary(List<InboxChat> inbox) async {
     if (inbox.isEmpty) {
       await _plugin.cancel(id: _summaryId);
@@ -140,7 +165,7 @@ final class LocalPushDisplay {
     final prefs = await SharedPreferences.getInstance();
     // What the background isolate wrote must be seen here.
     await prefs.reload();
-    final raw = prefs.getString(_prefsKey);
+    final raw = prefs.getString(_keyFor(prefs.getString(_ownerKey)));
     if (raw == null) return const [];
     try {
       return [
@@ -155,7 +180,7 @@ final class LocalPushDisplay {
   static Future<void> _save(List<InboxChat> inbox) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-      _prefsKey,
+      _keyFor(prefs.getString(_ownerKey)),
       jsonEncode([for (final c in inbox) c.toJson()]),
     );
   }

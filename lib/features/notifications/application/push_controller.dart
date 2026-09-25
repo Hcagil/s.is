@@ -26,9 +26,10 @@ class PushRegistration extends Notifier<String?> {
   @override
   String? build() {
     final me = ref.watch(currentUserIdProvider);
+    final source = ref.read(pushSourceProvider);
+    unawaited(source.forUser(me));
     if (me == null) return null;
 
-    final source = ref.read(pushSourceProvider);
     final sub = source.tokenRefreshes.listen(_register);
     ref.onDispose(sub.cancel);
 

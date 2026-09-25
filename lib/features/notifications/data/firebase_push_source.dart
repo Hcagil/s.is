@@ -77,6 +77,9 @@ final class FirebasePushSource implements PushSource {
   @override
   Future<void> clearAll() => LocalPushDisplay.clearAll();
 
+  @override
+  Future<void> forUser(String? userId) => LocalPushDisplay.forUser(userId);
+
   static String? _conversationOf(RemoteMessage? m) {
     final id = m?.data['conversation_id'];
     return id is String && id.isNotEmpty ? id : null;

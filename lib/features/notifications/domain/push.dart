@@ -27,6 +27,12 @@ abstract interface class PushSource {
 
   /// Sign-out: every notification of this account leaves the shade.
   Future<void> clearAll();
+
+  /// The signed-in member is now [userId], or nobody. Called on every such
+  /// change (never only on an explicit sign-out): whatever was kept for a
+  /// previous member on this device -- the shade and any stored previews --
+  /// must never be seen by, or merged into, whoever is signed in next.
+  Future<void> forUser(String? userId);
 }
 
 /// The server's list of where to deliver (implemented over the Supabase RPCs

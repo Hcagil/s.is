@@ -324,7 +324,10 @@ void main() {
       expect(_markOf(c, theoId)?.shares, isTrue, reason: 'both share');
       final message = await sent(direct);
       expect(
-        isReadByAll(c.read(readMarksProvider).requireValue, message.createdAt),
+        isReadByAnyone(
+          c.read(readMarksProvider).requireValue,
+          message.createdAt,
+        ),
         isFalse,
         reason: 'fixture: theo has not read it yet',
       );
@@ -335,7 +338,10 @@ void main() {
         meanwhile: () => theo.markRead(direct),
       );
       expect(
-        isReadByAll(c.read(readMarksProvider).requireValue, message.createdAt),
+        isReadByAnyone(
+          c.read(readMarksProvider).requireValue,
+          message.createdAt,
+        ),
         isTrue,
       );
     }, timeout: const Timeout(Duration(minutes: 1)));
@@ -423,7 +429,7 @@ void main() {
 
         expect(_markOf(c, theoId)?.shares, isFalse);
         expect(
-          isReadByAll(
+          isReadByAnyone(
             c.read(readMarksProvider).requireValue,
             message.createdAt,
           ),
@@ -507,34 +513,28 @@ void main() {
     Finder tile(String id) => find.byKey(ValueKey('conversation-$id'));
     Finder bubble(String id) => find.byKey(ValueKey('message-$id'));
 
-    /// Whether the bubble is drawn below full opacity: the product's grey.
-    bool grey(WidgetTester t, String id) {
-      double of(Element e) => switch (e.widget) {
-        final Opacity o => o.opacity,
-        final FadeTransition f => f.opacity.value,
-        final AnimatedOpacity a => a.opacity,
-        _ => 1,
-      };
-      bool fade(Widget w) =>
-          w is Opacity || w is FadeTransition || w is AnimatedOpacity;
-      // Only between the screen and the bubble: a route's own transition
-      // above the screen is not the bubble's colour.
-      final screen = find.byType(MessageScreen).evaluate().single;
-      bool insideScreen(Element e) {
-        var inside = false;
-        e.visitAncestorElements((a) => !(inside = a == screen));
-        return inside;
-      }
-
-      return [
-        ...find
-            .ancestor(of: bubble(id), matching: find.byWidgetPredicate(fade))
-            .evaluate()
-            .where(insideScreen),
-        ...find
-            .descendant(of: bubble(id), matching: find.byWidgetPredicate(fade))
-            .evaluate(),
-      ].any((e) => of(e) < 1);
+    /// Whether the bubble has the yellow unread edge: the outermost
+    /// decoration at `ValueKey('message-$id')` bordered in 0xFFFFD54F.
+    bool yellow(WidgetTester t, String id) {
+      final box =
+          find
+                  .descendant(
+                    of: bubble(id),
+                    matching: find.byType(DecoratedBox),
+                    matchRoot: true,
+                  )
+                  .evaluate()
+                  .first
+                  .widget
+              as DecoratedBox;
+      final border = (box.decoration as BoxDecoration).border as Border?;
+      return border != null &&
+          [
+            border.top,
+            border.right,
+            border.bottom,
+            border.left,
+          ].every((s) => s.color == const Color(0xFFFFD54F));
     }
 
     Future<Message> openWithMine(
@@ -558,15 +558,19 @@ void main() {
       return message;
     }
 
-    testWidgets('1:1: my message is grey until theo reads it, then normal, '
-        'live', (t) async {
+    testWidgets('1:1: my message has the yellow edge until theo reads it, '
+        'then none, live', (t) async {
       try {
         final message = await openWithMine(t, direct);
-        await until(t, () => grey(t, message.id), 'grey before theo reads');
+        await until(
+          t,
+          () => yellow(t, message.id),
+          'yellow edge before theo reads',
+        );
 
         await until(
           t,
-          () => !grey(t, message.id),
+          () => !yellow(t, message.id),
           'normal once theo has read it',
           meanwhile: () => theo.markRead(direct),
         );
@@ -575,8 +579,8 @@ void main() {
       }
     }, timeout: const Timeout(Duration(minutes: 2)));
 
-    testWidgets('group: grey until everyone who shares has read it; "Read '
-        'by" names them, with when', (t) async {
+    testWidgets('group: yellow edge until the first sharer reads it; "Read '
+        'by" names every reader, with when', (t) async {
       try {
         final names = {
           for (final m in (await t.runAsync(
@@ -585,27 +589,35 @@ void main() {
             m.userId: m.displayName,
         };
         final message = await openWithMine(t, club);
-        await until(t, () => grey(t, message.id), 'grey before anyone reads');
+        await until(
+          t,
+          () => yellow(t, message.id),
+          'yellow edge before anyone reads',
+        );
 
-        // theo alone: still grey, wren shares and has not read it.
-        await t.runAsync(() => theo.markRead(club));
+        // theo alone is enough, though wren shares and has not read it.
+        await until(
+          t,
+          () => !yellow(t, message.id),
+          'read once theo has read it',
+          meanwhile: () => theo.markRead(club),
+        );
         final container = ProviderScope.containerOf(
           t.element(find.byType(MessageScreen)),
         );
-        await until(
-          t,
-          () => _markOf(container, theoId)?.hasRead(message.createdAt) ?? false,
-          "theo's read to arrive",
-          meanwhile: () => theo.markRead(club),
+        expect(
+          _markOf(container, wrenId)?.hasRead(message.createdAt),
+          isFalse,
+          reason: 'fixture: wren shares and has not read it yet',
         );
-        expect(grey(t, message.id), isTrue, reason: 'wren has not read it');
 
         await until(
           t,
-          () => !grey(t, message.id),
-          'normal once wren has read it too',
+          () => _markOf(container, wrenId)?.hasRead(message.createdAt) ?? false,
+          "wren's read to arrive",
           meanwhile: () => wren.markRead(club),
         );
+        expect(yellow(t, message.id), isFalse);
 
         await t.longPress(bubble(message.id));
         await t.pumpAndSettle();
@@ -640,7 +652,7 @@ void main() {
           'the read-status connection to fail',
         );
         expect(bubble(message.id), findsOneWidget);
-        expect(grey(t, message.id), isFalse);
+        expect(yellow(t, message.id), isFalse);
       } finally {
         await shutDown(t);
       }

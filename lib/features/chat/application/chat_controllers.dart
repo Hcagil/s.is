@@ -561,8 +561,12 @@ final readMarksProvider =
     );
 
 class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
+  // Reads that arrive while a load is on its way, applied once it lands.
+  final _early = <ReadMark>[];
+
   @override
   Future<List<ReadMark>> build() async {
+    _early.clear();
     final conversationId = ref.watch(openConversationProvider);
     ref.watch(currentUserIdProvider);
     ref.watch(ownProfileProvider.select((p) => p.value?.shareReadStatus));
@@ -575,22 +579,29 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
       final sub = value.listen(_saw);
       ref.onDispose(sub.cancel);
     }
-    return switch (await repo.readMarks(conversationId)) {
+    final loaded = switch (await repo.readMarks(conversationId)) {
       Ok(:final value) => value,
       Err(:final failure) => throw failure,
     };
+    return _early.fold<List<ReadMark>>(loaded, _merged);
   }
 
   void _saw(ReadMark mark) {
     final current = state.value;
-    if (current == null) return;
-    state = AsyncData([
-      for (final m in current)
-        if (m.userId == mark.userId &&
-            (m.readAt == null || mark.readAt!.isAfter(m.readAt!)))
-          mark
-        else
-          m,
-    ]);
+    if (state.isLoading || current == null) {
+      _early.add(mark);
+      return;
+    }
+    state = AsyncData(_merged(current, mark));
   }
+
+  /// [marks] with [mark] applied: only a later read moves a member's mark.
+  static List<ReadMark> _merged(List<ReadMark> marks, ReadMark mark) => [
+    for (final m in marks)
+      if (m.userId == mark.userId &&
+          (m.readAt == null || mark.readAt!.isAfter(m.readAt!)))
+        mark
+      else
+        m,
+  ];
 }

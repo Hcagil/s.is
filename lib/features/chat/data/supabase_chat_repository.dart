@@ -496,8 +496,12 @@ final class SupabaseChatRepository implements ChatRepository {
     channel.onBroadcast(
       event: 'read',
       callback: (payload) {
-        final who = payload['user_id'];
-        final at = payload['read_at'];
+        // Sent by the database (realtime.send), so the fields sit inside the
+        // envelope's `payload`, unlike a client broadcast such as typing.
+        final body = payload['payload'];
+        if (body is! Map) return;
+        final who = body['user_id'];
+        final at = body['read_at'];
         if (who is String && at is String && !reads.isClosed) {
           reads.add(
             ReadMark(userId: who, shares: true, readAt: DateTime.parse(at)),

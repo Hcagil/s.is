@@ -48,6 +48,7 @@ class PushRegistration extends Notifier<String?> {
   /// A failed registration is not shown anywhere: it is retried on the next
   /// start and on the next token refresh.
   Future<void> _register(String token) async {
+    if (!ref.mounted) return;
     final r = await ref.read(pushRegistryProvider).register(token);
     if (r is Ok && ref.mounted) state = token;
   }

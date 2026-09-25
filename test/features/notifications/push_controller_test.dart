@@ -199,6 +199,138 @@ void main() {
     });
   });
 
+  group('who is signed in reaches the push source', () {
+    // PushSource.forUser: called on every change of member, null included,
+    // so whatever a previous member left on the device is dropped before
+    // the next one's pushes can arrive.
+
+    testWidgets('a signed-in start tells it the member, before anything is '
+        'registered for them', (t) async {
+      final source = PushSourceFake();
+      final registry = PushRegistryFake();
+      int? registeredAtForUser;
+      source.onForUser = (_) => registeredAtForUser = registry.calls.length;
+
+      await signedIn(t, FakeAuth(session: true), source, registry);
+
+      expect(source.users, ['u1']);
+      expect(
+        registeredAtForUser,
+        0,
+        reason:
+            'pushes for the member can arrive once the token is registered; '
+            'what the previous member left must be gone before that',
+      );
+      expect(registry.registered, ['device-token-1']);
+    });
+
+    testWidgets('a signed-out start tells it nobody is signed in', (t) async {
+      final source = PushSourceFake();
+      final registry = PushRegistryFake();
+      final c = make(FakeAuth(), source, registry);
+      c.listen(pushRegistrationProvider, (_, _) {});
+      await flush(t);
+
+      expect(
+        source.users,
+        [null],
+        reason:
+            'signed out is a change of member too -- it must not be '
+            'skipped along with registration',
+      );
+      expect(registry.calls, isEmpty);
+    });
+
+    testWidgets('a start on a session that is no longer approved (e.g. the '
+        'phone was replaced) tells it nobody is signed in', (t) async {
+      final source = PushSourceFake();
+      final registry = PushRegistryFake();
+      final c = make(FakeAuth(session: true, allowed: false), source, registry);
+      c.listen(sessionControllerProvider, (_, _) {});
+      c.listen(pushRegistrationProvider, (_, _) {});
+      await flush(t);
+
+      expect(source.users, [null]);
+      expect(registry.calls, isEmpty);
+    });
+
+    testWidgets('sign-out and the next member: nobody, then the next '
+        'member, before their token is registered', (t) async {
+      final source = PushSourceFake();
+      final registry = PushRegistryFake();
+      final auth = FakeAuth(session: true);
+      final c = await signedIn(t, auth, source, registry);
+      expect(source.users, ['u1']);
+
+      await run(t, c.read(sessionControllerProvider.notifier).signOut());
+      expect(source.users, ['u1', null]);
+
+      int? registeredAtForUser;
+      source.onForUser = (_) => registeredAtForUser = registry.calls.length;
+      auth.member = const Member(userId: 'u2', displayName: 'Noor');
+      await run(t, c.read(sessionControllerProvider.notifier).signIn());
+
+      expect(source.users, ['u1', null, 'u2']);
+      expect(registeredAtForUser, 1, reason: 'only u1 was registered then');
+      expect(registry.registered, ['device-token-1', 'device-token-1']);
+    });
+
+    testWidgets('a session the server ended (no sign-out call on this '
+        'phone) tells it nobody is signed in', (t) async {
+      final source = PushSourceFake();
+      final registry = PushRegistryFake();
+      final auth = FakeAuth(session: true);
+      final c = await signedIn(t, auth, source, registry);
+
+      auth.session = false;
+      auth.changes.add(false);
+      await flush(t);
+
+      expect(c.read(currentUserIdProvider), isNull, reason: 'precondition');
+      expect(source.users, ['u1', null]);
+      expect(auth.signOuts, 0);
+    });
+  });
+
+  group('the scope goes away mid-registration', () {
+    testWidgets('while the token is being read: nothing is registered and '
+        'nothing throws', (t) async {
+      final source = PushSourceFake()..holdToken();
+      final registry = PushRegistryFake();
+      final c = make(FakeAuth(session: true), source, registry);
+      c.listen(sessionControllerProvider, (_, _) {});
+      await c.read(sessionControllerProvider.future);
+      c.listen(pushRegistrationProvider, (_, _) {});
+      await flush(t);
+      expect(source.tokenReads, 1, reason: 'precondition: token in flight');
+
+      c.dispose();
+      source.releaseToken();
+      await flush(t);
+
+      expect(registry.calls, isEmpty);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('while the server is registering the token: nothing '
+        'throws', (t) async {
+      final source = PushSourceFake();
+      final registry = PushRegistryFake(latency: const Duration(seconds: 1));
+      final c = make(FakeAuth(session: true), source, registry);
+      c.listen(sessionControllerProvider, (_, _) {});
+      await c.read(sessionControllerProvider.future);
+      c.listen(pushRegistrationProvider, (_, _) {});
+      await flush(t);
+      expect(registry.calls, ['register:device-token-1'], reason: 'in flight');
+
+      c.dispose();
+      await t.pump(const Duration(seconds: 2));
+      await flush(t);
+
+      expect(t.takeException(), isNull);
+    });
+  });
+
   group('forget', () {
     testWidgets('forgets the last registered token', (t) async {
       final source = PushSourceFake();

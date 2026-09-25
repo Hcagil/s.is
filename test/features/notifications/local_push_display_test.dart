@@ -27,110 +27,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sis/features/notifications/data/local_push_display.dart';
 
-/// The notification shade: every posted notification by id.
-class Shade {
-  final posted = <int, Map<String, Object?>>{};
-
-  Map<String, Object?> _specifics(Map<String, Object?> n) =>
-      Map<String, Object?>.from(
-        (n['platformSpecifics'] as Map?) ?? const <String, Object?>{},
-      );
-
-  bool _isSummary(Map<String, Object?> n) =>
-      _specifics(n)['setAsGroupSummary'] == true;
-
-  List<Map<String, Object?>> get summaries => [
-    for (final n in posted.values)
-      if (_isSummary(n)) n,
-  ];
-
-  List<Map<String, Object?>> get children => [
-    for (final n in posted.values)
-      if (!_isSummary(n)) n,
-  ];
-
-  /// The chat a child opens when tapped.
-  Set<Object?> get childChats => {for (final n in children) n['payload']};
-
-  Map<String, Object?> childFor(String conversationId) =>
-      children.singleWhere((n) => n['payload'] == conversationId);
-
-  Set<Object?> get groupKeys => {
-    for (final n in posted.values) _specifics(n)['groupKey'],
-  };
-
-  /// Everything a person could read on [n], expanded or not.
-  static String text(Map<String, Object?> n) => jsonEncode(n);
-
-  Future<Object?> handle(MethodCall call) async {
-    final args = call.arguments;
-    switch (call.method) {
-      case 'initialize':
-        return true;
-      case 'show':
-        final n = Map<String, Object?>.from(args as Map);
-        posted[n['id']! as int] = n;
-        return null;
-      case 'cancel':
-        posted.remove(args is Map ? args['id'] : args);
-        return null;
-      case 'cancelAll':
-        posted.clear();
-        return null;
-      case 'getActiveNotifications':
-        return [
-          for (final n in posted.values)
-            {
-              'id': n['id'],
-              'title': n['title'],
-              'body': n['body'],
-              'payload': n['payload'],
-              'groupKey': _specifics(n)['groupKey'],
-            },
-        ];
-      default:
-        return null;
-    }
-  }
-}
-
-/// Android's SharedPreferences file: one store, shared by every isolate.
-class DiskPrefs {
-  Map<String, Object> values = {};
-
-  Future<Object?> handle(MethodCall call) async {
-    final args = (call.arguments as Map?) ?? const {};
-    switch (call.method) {
-      case 'getAll':
-        return Map<String, Object>.of(values);
-      case 'getAllWithParameters':
-        final prefix = args['prefix'] as String;
-        final allow = (args['allowList'] as List?)?.cast<String>().toSet();
-        return {
-          for (final e in values.entries)
-            if (e.key.startsWith(prefix) &&
-                (allow == null || allow.contains(e.key)))
-              e.key: e.value,
-        };
-      case 'remove':
-        values.remove(args['key']);
-        return true;
-      case 'clear':
-        values.clear();
-        return true;
-      case 'clearWithParameters':
-        final prefix = args['prefix'] as String;
-        values.removeWhere((k, _) => k.startsWith(prefix));
-        return true;
-      default:
-        if (call.method.startsWith('set')) {
-          values[args['key'] as String] = args['value'] as Object;
-          return true;
-        }
-        throw MissingPluginException(call.method);
-    }
-  }
-}
+import '../../support/push_platform.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -277,6 +174,179 @@ void main() {
       final everything = jsonEncode(shade.posted.values.toList());
       expect(everything, isNot(contains('secret')));
       expect(everything, isNot(contains('Ava')));
+    });
+  });
+
+  group('a change of member (forUser)', () {
+    // Security: whoever signs in next must never see the previous member's
+    // lines or counts -- not in the shade, not merged into their first
+    // summary, and not left on disk for it to be merged from.
+
+    /// Nothing of [secrets] anywhere a person or the next summary could
+    /// read it: the shade, or the preferences file.
+    void expectGone(List<String> secrets) {
+      final shown = jsonEncode(shade.posted.values.toList());
+      final stored = jsonEncode(disk.values);
+      for (final s in secrets) {
+        expect(shown, isNot(contains(s)), reason: 'in the shade: $shown');
+        expect(stored, isNot(contains(s)), reason: 'on disk: $stored');
+      }
+    }
+
+    /// The next member's first push shows their chat alone.
+    Future<void> expectCleanFirstPush() async {
+      await push('c-b', 'Bea', 'first for the next member');
+      expect(shade.childChats, {'c-b'});
+      expect(shade.summaries, hasLength(1));
+      expect(Shade.text(shade.summaries.single), contains('1 new message'));
+      expect(Shade.text(shade.summaries.single), isNot(contains('chats')));
+    }
+
+    test('to another member: the shade and the stored lines are gone, and '
+        'their first push is theirs alone', () async {
+      await LocalPushDisplay.forUser('member-a');
+      await push('c1', 'Ava', 'secret one');
+      await push('c2', 'Ada', 'secret two');
+
+      await LocalPushDisplay.forUser('member-b');
+
+      expect(shade.posted, isEmpty);
+      expectGone(['secret one', 'secret two', 'Ava', 'Ada']);
+      await expectCleanFirstPush();
+      expectGone(['secret one', 'secret two']);
+    });
+
+    test('to nobody: the shade and the stored lines are gone at once, not '
+        'only when the next member arrives', () async {
+      await LocalPushDisplay.forUser('member-a');
+      await push('c1', 'Ava', 'secret one');
+
+      await LocalPushDisplay.forUser(null);
+
+      expect(shade.posted, isEmpty);
+      expectGone(['secret one', 'Ava']);
+
+      await LocalPushDisplay.forUser('member-b');
+      await expectCleanFirstPush();
+    });
+
+    test('a push for the previous member delivered late, after sign-out, is '
+        'not merged into the next member\'s summary', () async {
+      await LocalPushDisplay.forUser('member-a');
+      await push('c1', 'Ava', 'secret one');
+      await LocalPushDisplay.forUser(null);
+      // FCM delivers late: the background isolate shows it while nobody
+      // is signed in.
+      newIsolate();
+      await push('c1', 'Ava', 'late secret');
+
+      newIsolate(); // the app, where the next member signs in
+      await LocalPushDisplay.forUser('member-b');
+      newIsolate(); // their first push, in a background isolate
+      await expectCleanFirstPush();
+      expectGone(['secret one', 'late secret', 'Ava']);
+    });
+
+    test('the same member again changes nothing', () async {
+      await LocalPushDisplay.forUser('member-a');
+      await push('c1', 'Ava', 'hi');
+
+      await LocalPushDisplay.forUser('member-a');
+
+      expect(shade.childChats, {'c1'});
+      await push('c2', 'Ben', 'yo');
+      expect(
+        Shade.text(shade.summaries.single),
+        contains('2 new messages in 2 chats'),
+      );
+    });
+
+    test('the same member after the app restarts changes nothing: what '
+        'arrived while it was closed is still waiting', () async {
+      await LocalPushDisplay.forUser('member-a');
+      newIsolate();
+      await push('c1', 'Ava', 'arrived while closed'); // background isolate
+
+      newIsolate(); // the app starts, the same member still signed in
+      await LocalPushDisplay.forUser('member-a');
+
+      expect(shade.childChats, {'c1'});
+      expect(jsonEncode(disk.values), contains('arrived while closed'));
+      newIsolate();
+      await push('c2', 'Ben', 'yo');
+      expect(
+        Shade.text(shade.summaries.single),
+        contains('2 new messages in 2 chats'),
+      );
+    });
+
+    test('a background isolate still holding the previous member\'s copy '
+        'does not bring their lines into the next member\'s push', () async {
+      await LocalPushDisplay.forUser('member-a');
+      await push('c1', 'Ava', 'secret one'); // a long-lived background isolate
+      final beforeSwitch = Map<String, Object>.of(disk.values);
+
+      // The app, another isolate, switches member underneath it.
+      newIsolate();
+      await LocalPushDisplay.forUser('member-b');
+      final afterSwitch = Map<String, Object>.of(disk.values);
+      // Back in the background isolate: its copy was read before the switch.
+      disk.values = beforeSwitch;
+      newIsolate();
+      await SharedPreferences.getInstance();
+      disk.values = afterSwitch;
+
+      await expectCleanFirstPush();
+      expectGone(['secret one', 'Ava']);
+    });
+
+    group('lines stored by a 0.12-pre build (one inbox for everyone)', () {
+      // Exactly what the 0.12-pre LocalPushDisplay (24d7ac6) wrote for two
+      // pushes, captured from that build over these fakes.
+      Map<String, Object> legacy() => {
+        'flutter.sis.push_inbox':
+            '[{"c":"c-old-1","t":"Olga","l":["legacy secret one"],"n":1},'
+            '{"c":"c-old-2","t":"Omar","l":["legacy secret two"],"n":1}]',
+      };
+      const legacySecrets = ['legacy secret one', 'legacy secret two', 'Olga'];
+
+      test('are not merged into the first member signed in after the '
+          'update', () async {
+        disk.values = legacy();
+        newIsolate();
+
+        await LocalPushDisplay.forUser('member-b');
+        newIsolate();
+        await expectCleanFirstPush();
+        expectGone(legacySecrets);
+      });
+
+      test('a push shown before the updated app was opened, then a change '
+          'of member: none of it reaches the next member', () async {
+        disk.values = legacy();
+        newIsolate();
+        await push('c-old-1', 'Olga', 'after update secret'); // no owner yet
+
+        newIsolate(); // the updated app opens, the old member signed in
+        await LocalPushDisplay.forUser('member-a');
+        await LocalPushDisplay.forUser(null);
+        await LocalPushDisplay.forUser('member-b');
+        newIsolate();
+        await expectCleanFirstPush();
+        expectGone([...legacySecrets, 'after update secret']);
+      });
+
+      test('the updated app starts signed out, then a member signs in: '
+          'none of it reaches them', () async {
+        disk.values = legacy();
+        newIsolate();
+
+        await LocalPushDisplay.forUser(null);
+        await LocalPushDisplay.forUser('member-b');
+        newIsolate();
+        await expectCleanFirstPush();
+        expectGone(legacySecrets);
+      });
     });
   });
 

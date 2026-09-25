@@ -1850,6 +1850,21 @@ class PushSourceFake implements PushSource {
     clearAllCalls++;
   }
 
+  /// Every member [forUser] was told about, in order (null = nobody).
+  final users = <String?>[];
+
+  /// Runs synchronously as forUser() is entered -- lets a test check what
+  /// had (or had not) happened yet, e.g. whether the new member's token was
+  /// already registered.
+  void Function(String? userId)? onForUser;
+
+  @override
+  Future<void> forUser(String? userId) async {
+    users.add(userId);
+    onForUser?.call(userId);
+    await Future<void>.delayed(latency); // a platform round trip
+  }
+
   @override
   Future<bool> requestPermission() async {
     permissionRequests++;

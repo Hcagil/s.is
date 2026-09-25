@@ -30,6 +30,9 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # Firebase's own test doubles for its platform side (unit tests only).
+  firebase_core_platform_interface: ^8.1.1
+  firebase_messaging_platform_interface: ^4.10.0
   flutter_launcher_icons: ^0.14.4
 
 flutter:

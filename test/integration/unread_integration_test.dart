@@ -20,6 +20,7 @@ import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/data/supabase_presence_repository.dart';
@@ -174,6 +175,12 @@ class _MarkReadDown implements ChatRepository {
   @override
   Future<Result<void>> deleteForEveryone(Message message) =>
       live.deleteForEveryone(message);
+  @override
+  Future<Result<List<ReadMark>>> readMarks(String conversationId) =>
+      live.readMarks(conversationId);
+  @override
+  Future<Result<Stream<ReadMark>>> readUpdates(String conversationId) =>
+      live.readUpdates(conversationId);
 }
 
 /// The overrides main.dart mounts, on [client]; only Google sign-in, the Play

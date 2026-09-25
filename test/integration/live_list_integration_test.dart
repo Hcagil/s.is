@@ -13,6 +13,7 @@ import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// The live conversation list against the real stack: the REAL
@@ -145,6 +146,12 @@ class _RealtimeDown implements ChatRepository {
   @override
   Future<Result<void>> deleteForEveryone(Message message) =>
       live.deleteForEveryone(message);
+  @override
+  Future<Result<List<ReadMark>>> readMarks(String conversationId) =>
+      live.readMarks(conversationId);
+  @override
+  Future<Result<Stream<ReadMark>>> readUpdates(String conversationId) =>
+      live.readUpdates(conversationId);
 }
 
 /// A container wired as production mounts it: only the repository provider

@@ -21,10 +21,16 @@ Future<void> _setSharing(
   bool? presence,
   bool? typing,
   bool? lastSeen,
+  bool? readStatus,
 }) async {
   final result = await ref
       .read(ownProfileProvider.notifier)
-      .setSharing(presence: presence, typing: typing, lastSeen: lastSeen);
+      .setSharing(
+        presence: presence,
+        typing: typing,
+        lastSeen: lastSeen,
+        readStatus: readStatus,
+      );
   // Turning last seen back on starts from now, not from nothing: the server
   // forgot the old time when it was turned off.
   if (result is Ok && lastSeen == true) {
@@ -211,6 +217,15 @@ class PrivacyScreen extends ConsumerWidget {
           ),
           value: profile.shareLastSeen,
           onChanged: (on) => _setSharing(context, ref, lastSeen: on),
+        ),
+        SwitchListTile(
+          key: const ValueKey('share-read-status'),
+          title: const Text('Show when I have read messages'),
+          subtitle: const Text(
+            "While this is off, you can't see when others read yours.",
+          ),
+          value: profile.shareReadStatus,
+          onChanged: (on) => _setSharing(context, ref, readStatus: on),
         ),
       ],
     ),

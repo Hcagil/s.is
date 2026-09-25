@@ -18,6 +18,7 @@ import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/presence/domain/presence_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/domain/profile_repository.dart';
@@ -46,6 +47,9 @@ class Backend {
 
   /// Last seen as stored, for members who share it.
   final lastSeen = <String, DateTime>{};
+
+  /// Each room's last_read_at per member, as [SessionChat.markRead] writes it.
+  final lastReadAt = <String, Map<String, DateTime>>{};
 
   Room room(String id, Set<String> members, {String? title}) {
     final r = Room(id, members, title: title);
@@ -224,9 +228,52 @@ class SessionChat implements ChatRepository {
   @override
   Future<Result<void>> markRead(String conversationId) async {
     final who = await _as('markRead:$conversationId');
-    return _roomFor(conversationId, who) == null
-        ? const Err(DeniedFailure())
-        : const Ok(null);
+    final room = _roomFor(conversationId, who);
+    if (room == null) return const Err(DeniedFailure());
+    final at = DateTime.now();
+    (backend.lastReadAt[room.id] ??= {})[who!] = at;
+    // Broadcast, like the server's mark_read, only while the reader shares.
+    if (backend.profiles[who]!.shareReadStatus) {
+      for (final s in readSubscriptions) {
+        if (s.id == room.id &&
+            room.members.contains(s.as) &&
+            s.sink.hasListener) {
+          s.sink.add(ReadMark(userId: who, shares: true, readAt: at));
+        }
+      }
+    }
+    return const Ok(null);
+  }
+
+  /// Live per-conversation read-mark subscriptions and the account each was
+  /// opened as.
+  final readSubscriptions =
+      <({String? as, String id, StreamController<ReadMark> sink})>[];
+
+  @override
+  Future<Result<List<ReadMark>>> readMarks(String conversationId) async {
+    final who = await _as('readMarks:$conversationId');
+    final room = _roomFor(conversationId, who);
+    if (room == null || who == null) return const Ok([]);
+    final mine = backend.profiles[who]!.shareReadStatus;
+    final marks = <ReadMark>[];
+    for (final m in room.members) {
+      if (m == who) continue;
+      final mutual = mine && backend.profiles[m]!.shareReadStatus;
+      final theirRoom = backend.lastReadAt[room.id];
+      final at = mutual && theirRoom != null ? theirRoom[m] : null;
+      marks.add(ReadMark(userId: m, shares: mutual, readAt: at));
+    }
+    return Ok(marks);
+  }
+
+  @override
+  Future<Result<Stream<ReadMark>>> readUpdates(String conversationId) async {
+    final who = await _as('readUpdates:$conversationId');
+    if (who == null) return const Err(DeniedFailure());
+    final sink = StreamController<ReadMark>.broadcast();
+    readSubscriptions.add((as: who, id: conversationId, sink: sink));
+    return Ok(sink.stream);
   }
 
   @override
@@ -442,6 +489,7 @@ class SessionProfile implements ProfileRepository {
     bool? sharePresence,
     bool? shareTyping,
     bool? shareLastSeen,
+    bool? shareReadStatus,
   }) async {
     final who = await _as('save');
     if (who == null) return const Err(DeniedFailure());
@@ -461,6 +509,7 @@ class SessionProfile implements ProfileRepository {
         sharePresence: sharePresence ?? p.sharePresence,
         shareTyping: shareTyping ?? p.shareTyping,
         shareLastSeen: shareLastSeen ?? p.shareLastSeen,
+        shareReadStatus: shareReadStatus ?? p.shareReadStatus,
       ),
     );
   }

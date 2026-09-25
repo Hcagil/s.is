@@ -5,6 +5,7 @@ import '../../auth/domain/member.dart';
 import 'attachment.dart';
 import 'conversation.dart';
 import 'message.dart';
+import 'read_marks.dart';
 
 /// Chat boundary; the only way the app reaches conversations and messages.
 ///
@@ -113,6 +114,13 @@ abstract interface class ChatRepository {
   /// The photo at [attachmentPath]: from this phone's cache when it is there,
   /// otherwise downloaded once (members of its conversation only) and kept.
   Future<Result<Uint8List>> attachmentBytes(String attachmentPath);
+
+  /// How far each other member has read, where read status is shared.
+  Future<Result<List<ReadMark>>> readMarks(String conversationId);
+
+  /// Reads as they happen in [conversationId], from members who share read
+  /// status, while the caller shares theirs. Resolves once subscribed.
+  Future<Result<Stream<ReadMark>>> readUpdates(String conversationId);
 
   /// Deletes the member's own [message] for everyone, and its photo. The
   /// server refuses (DeniedFailure) when it is not theirs, already deleted,

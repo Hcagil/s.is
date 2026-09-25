@@ -387,7 +387,10 @@ void main() {
       );
       await tester.pump();
 
-      expect(chat.calls, [
+      // Read status has its own calls; only the message calls matter here.
+      List<String> messageCalls() =>
+          chat.calls.where((c) => !c.startsWith('read')).toList();
+      expect(messageCalls(), [
         'incoming:c1',
       ], reason: 'a read before the subscription is confirmed loses messages');
       expect(
@@ -398,7 +401,7 @@ void main() {
 
       chat.confirmSubscription();
       await tester.pumpAndSettle();
-      expect(chat.calls, ['incoming:c1', 'messages:c1']);
+      expect(messageCalls(), ['incoming:c1', 'messages:c1']);
     });
 
     testWidgets('a message arriving after the screen is built appears', (

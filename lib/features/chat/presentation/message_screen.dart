@@ -16,6 +16,7 @@ import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
+import '../domain/read_marks.dart';
 import 'attachment_sheet.dart';
 import 'conversation_list.dart';
 import 'message_actions.dart';
@@ -58,11 +59,13 @@ Future<void> openConversation(
   await ref.read(conversationListProvider.notifier).reloadQuietly();
 }
 
-/// "typing…" beats "online", which beats "last seen"; in a group, who is
-/// typing by name.
+/// "typing…" beats "online", which beats "last seen". In a 1:1 chat the
+/// header already names the person, so it says just "typing…"; in a group,
+/// who is typing by name.
 String? _status(WidgetRef ref, String? other) {
   final typing = ref.watch(typingProvider);
   if (typing.isNotEmpty) {
+    if (other != null) return 'typing…';
     if (typing.length > 1) return '${typing.length} people are typing…';
     final names = {
       for (final m in ref.watch(membersProvider).value ?? const []) m.userId: m,
@@ -121,6 +124,9 @@ class MessageScreen extends ConsumerWidget {
               m.userId: m.displayName,
           }
         : const <String, String>{};
+    // Read status, where it is shared: your own messages look a little grey
+    // until every sharing member has read them.
+    final marks = ref.watch(readMarksProvider).value ?? const <ReadMark>[];
     return Scaffold(
       appBar: AppBar(
         title: InkWell(
@@ -182,21 +188,35 @@ class MessageScreen extends ConsumerWidget {
                           : value
                                 .where((m) => m.id == message.replyTo)
                                 .firstOrNull;
+                      final unread =
+                          mine &&
+                          !message.isDeleted &&
+                          (message.isPending ||
+                              !isReadByAll(marks, message.createdAt));
                       final bubble = GestureDetector(
-                        onLongPress: () =>
-                            showMessageActions(context, ref, message, me: me),
-                        child: _Bubble(
+                        onLongPress: () => showMessageActions(
+                          context,
+                          ref,
                           message,
-                          mine: mine,
-                          sender: group && !mine && startsRun(value, index)
-                              ? (names[message.senderId] ?? 'Member')
-                              : null,
-                          quoted: quoted,
-                          quotedName: quoted == null
-                              ? null
-                              : quoted.senderId == me
-                              ? 'You'
-                              : (names[quoted.senderId] ?? 'Member'),
+                          me: me,
+                          group: group,
+                        ),
+                        child: Opacity(
+                          key: ValueKey('read-$unread-${message.id}'),
+                          opacity: unread ? 0.6 : 1,
+                          child: _Bubble(
+                            message,
+                            mine: mine,
+                            sender: group && !mine && startsRun(value, index)
+                                ? (names[message.senderId] ?? 'Member')
+                                : null,
+                            quoted: quoted,
+                            quotedName: quoted == null
+                                ? null
+                                : quoted.senderId == me
+                                ? 'You'
+                                : (names[quoted.senderId] ?? 'Member'),
+                          ),
                         ),
                       );
                       return message.deletion == MessageDeletion.vanished

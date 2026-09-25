@@ -253,7 +253,7 @@ void main() {
   });
 
   group('privacy page', () {
-    testWidgets('holds the three sharing switches, labelled', (t) async {
+    testWidgets('holds the four sharing switches, labelled', (t) async {
       await pumpApp(t);
       await openPage(t, 'settings-privacy');
 
@@ -262,6 +262,7 @@ void main() {
         ('share-presence', 'Show when I am online'),
         ('share-typing', 'Show when I am typing'),
         ('share-last-seen', 'Show my last seen'),
+        ('share-read-status', 'Show when I have read messages'),
       ]) {
         await t.ensureVisible(byKey(key));
         expect(under(key, label), findsOneWidget, reason: '$key label');

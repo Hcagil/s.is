@@ -18,6 +18,7 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/notifications/domain/notification_settings.dart';
 import 'package:sis/features/notifications/domain/push.dart';
 import 'package:sis/features/presence/domain/presence_repository.dart';
@@ -492,6 +493,13 @@ class FakeChat implements ChatRepository {
     );
     return const Ok(null);
   }
+
+  @override
+  Future<Result<List<ReadMark>>> readMarks(String conversationId) async =>
+      const Ok([]);
+  @override
+  Future<Result<Stream<ReadMark>>> readUpdates(String conversationId) async =>
+      Ok(const Stream<ReadMark>.empty());
 }
 
 /// A chat repository written from the [ChatRepository] contract, for the
@@ -1081,6 +1089,80 @@ class ChatFake implements ChatRepository {
     _all?.add(wiped);
     return const Ok(null);
   }
+
+  /// What [readMarks] answers with, per conversation, when
+  /// [readMarksResult] is not forced.
+  final readMarksData = <String, List<ReadMark>>{};
+
+  /// Forces the outcome for every conversation. Left null each call answers
+  /// from [readMarksData] (empty when the conversation has no entry).
+  Result<List<ReadMark>>? readMarksResult;
+
+  /// Every conversation [readMarks] was asked for, in order.
+  final readMarksCalls = <String>[];
+
+  Completer<void>? _readMarksHold;
+
+  /// Leaves the next [readMarks] read in flight until [releaseReadMarks].
+  void holdReadMarks() => _readMarksHold = Completer<void>();
+  void releaseReadMarks() {
+    _readMarksHold?.complete();
+    _readMarksHold = null;
+  }
+
+  @override
+  Future<Result<List<ReadMark>>> readMarks(String conversationId) async {
+    await _tick('readMarks:$conversationId');
+    readMarksCalls.add(conversationId);
+    final held = _readMarksHold;
+    if (held != null) await held.future;
+    if (readMarksResult case final forced?) return forced;
+    return Ok(List.of(readMarksData[conversationId] ?? const []));
+  }
+
+  /// When set, readUpdates() reports a subscription that could not be made.
+  Result<Stream<ReadMark>>? readUpdatesResult;
+
+  /// Live read subscriptions per conversation. Like the real one, each is
+  /// joined before readUpdates() resolves and keeps what arrives until it
+  /// is listened to; nothing sent before the join reaches it.
+  final _readSinks = <String, List<StreamController<ReadMark>>>{};
+  int readSubscriptions = 0;
+  int canceledReadSubscriptions = 0;
+  Completer<void>? _subscribeReads;
+
+  /// The server has not confirmed the read-marks subscription yet.
+  void holdReadSubscription() => _subscribeReads = Completer<void>();
+  void confirmReadSubscription() {
+    _subscribeReads?.complete();
+    _subscribeReads = null;
+  }
+
+  /// Delivers [mark] as Realtime would: to every subscription on
+  /// [conversationId] joined by now. Without one it is gone.
+  void deliverRead(String conversationId, ReadMark mark) {
+    for (final sink in [...?_readSinks[conversationId]]) {
+      sink.add(mark);
+    }
+  }
+
+  @override
+  Future<Result<Stream<ReadMark>>> readUpdates(String conversationId) async {
+    await _tick('readUpdates:$conversationId');
+    final held = _subscribeReads;
+    if (held != null) await held.future;
+    if (readUpdatesResult case final failed?) return failed;
+    readSubscriptions++;
+    late final StreamController<ReadMark> sink;
+    sink = StreamController<ReadMark>(
+      onCancel: () {
+        canceledReadSubscriptions++;
+        _readSinks[conversationId]?.remove(sink);
+      },
+    );
+    (_readSinks[conversationId] ??= []).add(sink);
+    return Ok(sink.stream);
+  }
 }
 
 /// The refusals the storage bucket and the `messages` check constraint make.
@@ -1367,6 +1449,7 @@ class ProfileFake implements ProfileRepository {
           bool? sharePresence,
           bool? shareTyping,
           bool? shareLastSeen,
+          bool? shareReadStatus,
         })
       >[];
   List<String> get checks => [
@@ -1420,6 +1503,7 @@ class ProfileFake implements ProfileRepository {
     bool? sharePresence,
     bool? shareTyping,
     bool? shareLastSeen,
+    bool? shareReadStatus,
   }) async {
     await _tick('save');
     saves.add((
@@ -1429,6 +1513,7 @@ class ProfileFake implements ProfileRepository {
       sharePresence: sharePresence,
       shareTyping: shareTyping,
       shareLastSeen: shareLastSeen,
+      shareReadStatus: shareReadStatus,
     ));
     final held = _save;
     if (held != null) await held.future;
@@ -1452,6 +1537,7 @@ class ProfileFake implements ProfileRepository {
       sharePresence: sharePresence ?? profile.sharePresence,
       shareTyping: shareTyping ?? profile.shareTyping,
       shareLastSeen: shareLastSeen ?? profile.shareLastSeen,
+      shareReadStatus: shareReadStatus ?? profile.shareReadStatus,
     );
     return Ok(profile);
   }

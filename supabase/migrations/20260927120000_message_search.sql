@@ -61,10 +61,66 @@
 --
 --    ~125x fewer buffers, ~100x faster, and it stays that way as history
 --    grows instead of scaling with it -- which a security-invoker version,
---    measurably, cannot do on this table today. This is the same kind of
---    narrow, explained exception as `public.forget_device_token()` in
---    SECURITY.md: a specific, named reason, the same authority functions,
---    nothing reimplemented.
+--    measurably, cannot do on this table today. Compare this to the
+--    codebase's other `security definer` public RPCs that re-check access
+--    explicitly rather than relying on RLS -- start_direct_conversation(),
+--    delete_message(), edit_message(), mark_read(), unread_counts(),
+--    read_marks() -- every one of them calls app_private.has_app_access()
+--    (or the equivalent plpgsql `if not ... raise exception ... 42501`)
+--    itself, for the same reason: a function that needs to see or touch more
+--    than RLS alone would show its caller has always had to ask RLS's own
+--    question explicitly. This is that established pattern, not
+--    `public.forget_device_token()`'s (SECURITY.md): that one deliberately
+--    checks LESS than has_app_access() for a narrower, different reason (a
+--    revoked member must still be able to silence a device's push); this one
+--    checks the same as messages_read, just explicitly instead of through
+--    RLS's automatic path.
+--
+--    security-lead (2026-09-27, F1) caught a second, subtler cost once the
+--    barrier above is gone: app_private.is_member(m.conversation_id) only
+--    rejects a foreign row AFTER the trigram index has found it and the
+--    bitmap heap scan has fetched it, so a search touching many rows in
+--    conversations the caller is NOT in ran measurably longer than one that
+--    did not -- a timing side channel on content the caller can never see
+--    (roughly 5us of is_member()'s own lookup per such row). Fixed by
+--    bounding every row to the caller's own conversations with a LEAKPROOF,
+--    plain equality first -- `conversation_id = any(array(...))` against a
+--    list read once from conversation_members -- which costs an array
+--    lookup, not a function call and a subquery, per foreign row; and by
+--    rejecting a `conversation` given explicitly up front, in one hoisted
+--    check, before the scan runs at all, when the caller is not a member of
+--    it. app_private.is_member(m.conversation_id) stays alongside both,
+--    unchanged: they exist for their cost profile, not to replace it as the
+--    real authority check.
+--
+--    Re-measured, same 50,000-row fixture as above, plus a SEPARATE
+--    conversation the caller is not a member of, 20,000 messages, every one
+--    matching "istanbul" (the densest possible foreign case for a shared
+--    trigram index), EXPLAIN (ANALYZE, BUFFERS) as authenticated:
+--
+--      conversation given explicitly, caller NOT a member of it: 17 buffer
+--        hits, ~0.4-0.6ms, whatever the term -- rejected by the hoisted
+--        is_member(conversation) check before the scan runs, same cost as
+--        an empty table.
+--      conversation null (search every conversation the caller belongs to),
+--        with those 20,000 dense foreign matches present: ~1,750-1,985
+--        buffer hits, ~65-68ms, steady across repeated (warm-cache) runs --
+--        a real residual, NOT a function-call-per-row cost: the shared GIN
+--        index's own posting lists for a globally common term still have to
+--        be walked, and Postgres still bitmap-heap-fetches the foreign rows
+--        it finds there before the (cheap) array check discards them, since
+--        no index here lets it skip straight to "only the caller's own
+--        conversations" within the trigram results. That scales with how
+--        common the term is SYSTEM-WIDE, not with anything the caller could
+--        not already infer by how long any shared search takes -- unlike
+--        F1's per-row function-call cost, this is not a side channel onto
+--        specific foreign content, and eliminating it entirely would need
+--        the trigram index itself partitioned by conversation, which
+--        membership changing over time rules out for a stored index. Left
+--        as a known, now-small-relative-to-history-size cost rather than
+--        built further: it does not grow per foreign MEMBER, only per
+--        foreign MATCH of a given search term, and 20,000 dense matches in
+--        one conversation is already an extreme case.
 --
 -- 3. Access: has_app_access() and is_member(conversation_id) are both
 --    checked, explicitly, using the identical functions messages_read's
@@ -94,7 +150,7 @@ create extension if not exists pg_trgm with schema extensions;
 -- Pure text transforms, no table access: plain functions in `public`, not
 -- `security definer`.
 create function public.fold_search(input text) returns text
-language sql immutable as $$
+language sql immutable set search_path = '' as $$
   select lower(translate(input, 'İIı', 'iii'))
 $$;
 revoke all on function public.fold_search(text) from public, anon;
@@ -104,7 +160,7 @@ grant execute on function public.fold_search(text) to authenticated;
 -- escape it is about to gain into a real escape sequence), then the two LIKE
 -- wildcards.
 create function public.escape_like(input text) returns text
-language sql immutable as $$
+language sql immutable set search_path = '' as $$
   select replace(replace(replace(input, '\', '\\'), '%', '\%'), '_', '\_')
 $$;
 revoke all on function public.escape_like(text) from public, anon;
@@ -135,6 +191,21 @@ language sql stable security definer set search_path = '' as $$
          m.forwarded, m.edited_at
     from public.messages m
    where (select app_private.has_app_access())
+     -- A given `conversation` the caller is not a member of is rejected here,
+     -- once, before the trigram scan below ever runs (a scalar subquery on
+     -- the parameter alone, hoisted the same way has_app_access() is): a
+     -- foreign conversation id costs the same ~nothing regardless of how
+     -- many messages match `query` anywhere. See point 2 for why this is not
+     -- enough by itself when `conversation` is null.
+     and (conversation is null or (select app_private.is_member(conversation)))
+     -- Bounds every candidate row to the caller's own conversations with a
+     -- leakproof equality (an array built once from conversation_members),
+     -- BEFORE app_private.is_member()'s own (real, still-kept) check --
+     -- see point 2.
+     and m.conversation_id = any (
+           array(select cm.conversation_id from public.conversation_members cm
+                  where cm.user_id = auth.uid())
+         )
      and app_private.is_member(m.conversation_id)
      and char_length(btrim(query)) >= 2
      and m.deleted is null

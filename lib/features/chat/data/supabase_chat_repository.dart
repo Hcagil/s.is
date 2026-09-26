@@ -30,6 +30,9 @@ final class SupabaseChatRepository implements ChatRepository {
   /// How many messages one conversation screen holds.
   static const _historyLimit = 500;
 
+  /// How many messages [messagesAround] fetches on each side of the anchor.
+  static const _aroundWindow = 50;
+
   String? get _uid => _client.auth.currentUser?.id;
 
   Failure _asFailure(Object e) => switch (e) {
@@ -610,6 +613,54 @@ final class SupabaseChatRepository implements ChatRepository {
           .from('attachments')
           .createSignedUrl(attachmentPath, 3600);
       return Ok(Uri.parse(signed));
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<List<Message>>> search(
+    String query, {
+    String? conversationId,
+  }) async {
+    try {
+      final rows = await _client.rpc(
+        'search_messages',
+        params: {'query': query, 'conversation': conversationId},
+      ) as List<dynamic>;
+      return Ok(rows.cast<Map<String, dynamic>>().map(_toMessage).toList());
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<List<Message>>> messagesAround(
+    String conversationId,
+    Message anchor,
+  ) async {
+    try {
+      final anchorAt = anchor.createdAt.toUtc().toIso8601String();
+      final before = await _client
+          .from('messages')
+          .select(_messageColumns)
+          .eq('conversation_id', conversationId)
+          .lte('created_at', anchorAt)
+          .order('created_at', ascending: false)
+          .limit(_aroundWindow + 1)
+          .retriedOnce();
+      final after = await _client
+          .from('messages')
+          .select(_messageColumns)
+          .eq('conversation_id', conversationId)
+          .gt('created_at', anchorAt)
+          .order('created_at', ascending: true)
+          .limit(_aroundWindow)
+          .retriedOnce();
+      // `before` comes back newest-first and includes the anchor itself
+      // (>=); reversed, followed by `after` (strictly newer, ascending),
+      // gives one oldest-first run centred on the anchor.
+      return Ok([...before.reversed.map(_toMessage), ...after.map(_toMessage)]);
     } catch (e) {
       return Err(_asFailure(e));
     }

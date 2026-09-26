@@ -136,4 +136,22 @@ abstract interface class ChatRepository {
   /// [send] applies -- a photo message may have an empty caption, a
   /// text-only message may not.
   Future<Result<Message>> editMessage(Message message, String body);
+
+  /// Messages whose text contains [query], newest first, case-insensitively
+  /// and Turkish-safely (the server folds İ, I and ı together before
+  /// comparing, so "istanbul" finds "İstanbul", "ISTANBUL" and "ıstanbul").
+  /// Scoped to [conversationId] when given, otherwise every conversation the
+  /// caller is a member of. [query] shorter than two characters after
+  /// trimming returns an empty list, never a failure. Capped at 50 hits, like
+  /// every other capped read here.
+  Future<Result<List<Message>>> search(String query, {String? conversationId});
+
+  /// A window of messages around [anchor] in [conversationId], oldest first:
+  /// up to 50 older than it and 50 newer, [anchor] itself included. For
+  /// jumping to a search hit that predates the conversation screen's own
+  /// loaded history (see [messages]'s cap).
+  Future<Result<List<Message>>> messagesAround(
+    String conversationId,
+    Message anchor,
+  );
 }

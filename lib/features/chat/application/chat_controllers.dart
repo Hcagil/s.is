@@ -651,3 +651,137 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
         m,
   ];
 }
+
+/// Search inside the open conversation, and where the member is looking
+/// among the hits.
+final class ChatSearchState {
+  const ChatSearchState({
+    this.query = '',
+    this.hits = const [],
+    this.index = -1,
+  });
+
+  /// What was searched for; empty means the search box is closed.
+  final String query;
+
+  /// Hits in the open conversation, newest first.
+  final List<Message> hits;
+
+  /// Which hit is current, or -1 when there are none (no search yet, or no
+  /// match).
+  final int index;
+
+  Message? get current =>
+      index >= 0 && index < hits.length ? hits[index] : null;
+}
+
+final chatSearchProvider =
+    NotifierProvider<ChatSearchController, ChatSearchState>(
+      ChatSearchController.new,
+    );
+
+/// In-chat search: jumping between hits with next/previous, clamped at the
+/// ends -- it does not wrap, so reaching the oldest or newest hit and asking
+/// for another simply stays there.
+class ChatSearchController extends Notifier<ChatSearchState> {
+  @override
+  ChatSearchState build() {
+    // Closed whenever a different conversation opens.
+    ref.watch(openConversationProvider);
+    return const ChatSearchState();
+  }
+
+  /// Searches the open conversation for [query]; the newest hit becomes
+  /// current. The [Err] reason is the caller's to show -- the search stays as
+  /// it was, same as [MessagesController.editMessage].
+  Future<Result<void>> search(String query) async {
+    final conversationId = ref.read(openConversationProvider);
+    if (conversationId == null) return const Err(DeniedFailure());
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .search(query, conversationId: conversationId);
+    if (result case Ok(:final value) when ref.mounted) {
+      state = ChatSearchState(
+        query: query,
+        hits: value,
+        index: value.isEmpty ? -1 : 0,
+      );
+    }
+    return switch (result) {
+      Ok() => const Ok(null),
+      Err(:final failure) => Err(failure),
+    };
+  }
+
+  /// Closes the search: no query, no hits, nothing current.
+  void close() => state = const ChatSearchState();
+
+  /// Moves toward an older hit (hits are newest first, so a higher index).
+  void next() => _move(1);
+
+  /// Moves toward a newer hit (a lower index).
+  void previous() => _move(-1);
+
+  void _move(int delta) {
+    if (state.hits.isEmpty) return;
+    state = ChatSearchState(
+      query: state.query,
+      hits: state.hits,
+      index: (state.index + delta).clamp(0, state.hits.length - 1),
+    );
+  }
+}
+
+/// The chat list's own search box: every conversation the caller belongs to.
+final class ChatListSearchState {
+  const ChatListSearchState({this.query = '', this.results = const []});
+
+  final String query;
+
+  /// Hits across every conversation, newest first.
+  final List<Message> results;
+}
+
+final chatListSearchProvider =
+    NotifierProvider<ChatListSearchController, ChatListSearchState>(
+      ChatListSearchController.new,
+    );
+
+class ChatListSearchController extends Notifier<ChatListSearchState> {
+  Timer? _debounce;
+
+  /// Bumped on every keystroke; a response is applied only when it is still
+  /// the latest one asked for, so a slow answer to an old query can never
+  /// overwrite a newer one still in flight.
+  int _generation = 0;
+
+  @override
+  ChatListSearchState build() {
+    // Fresh per account, like every other search/list here.
+    ref.watch(currentUserIdProvider);
+    ref.onDispose(() => _debounce?.cancel());
+    return const ChatListSearchState();
+  }
+
+  /// Debounces [query] ~300ms, then searches every conversation the caller
+  /// belongs to. An empty box clears the results at once, with no round trip.
+  void search(String query) {
+    _debounce?.cancel();
+    if (query.trim().isEmpty) {
+      _generation++;
+      state = const ChatListSearchState();
+      return;
+    }
+    final generation = ++_generation;
+    _debounce = Timer(const Duration(milliseconds: 300), () async {
+      final result = await ref.read(chatRepositoryProvider).search(query);
+      if (!ref.mounted || generation != _generation) return;
+      if (result case Ok(:final value)) {
+        state = ChatListSearchState(query: query, results: value);
+      }
+    });
+  }
+
+  /// Clears the search box: back to the plain conversation list.
+  void clear() => search('');
+}

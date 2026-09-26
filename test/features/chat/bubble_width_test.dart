@@ -13,6 +13,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/theme.dart';
+import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
@@ -25,6 +26,7 @@ import '../../support/fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
+const hay = Member(userId: 'u3', displayName: 'Hayrullah Cagil');
 
 /// The bubble's outer cap, from the contract.
 const cap = 320.0;
@@ -98,7 +100,8 @@ Future<void> pump(
 
   final chat = ChatFake(self: me.userId)
     ..history['c1'] = history
-    ..roster['c1'] = [me, bob];
+    ..roster['c1'] = [me, bob, hay]
+    ..membersResult = const Ok([me, bob, hay]);
   final container = await settled(
     ProviderContainer.test(
       overrides: [
@@ -237,7 +240,16 @@ class Measured {
 
 /// Everything the contract says about bubble [id]'s body and time, in
 /// either placement. Returns the measurement for further checks.
-Measured expectLaidOut(WidgetTester tester, String id, String text) {
+///
+/// [headers] are the keys of rows above the body (sender name, "Forwarded",
+/// reply quote): they widen the content to their natural width too, up to
+/// the column, and are never squeezed below it.
+Measured expectLaidOut(
+  WidgetTester tester,
+  String id,
+  String text, {
+  List<String> headers = const [],
+}) {
   final m = Measured(tester, id, text);
   final why = m.describe;
   expect(m.bubbleRect.width, lessThanOrEqualTo(cap + 0.5), reason: why);
@@ -256,6 +268,7 @@ Measured expectLaidOut(WidgetTester tester, String id, String text) {
         : 'the time does not fit on the last line but is there: $why',
   );
   final content = m.contentRight - m.contentLeft;
+  final headerWidths = [for (final k in headers) headerWidth(tester, k)];
   if (m.inline) {
     for (final line in m.lines.where(
       (l) => l.bottom > m.timeRect.top + 0.5 && l.top < m.timeRect.bottom,
@@ -266,21 +279,62 @@ Measured expectLaidOut(WidgetTester tester, String id, String text) {
         reason: 'the time overlaps the body\'s last line $line: $why',
       );
     }
-    final want = [m.widest, m.lastLine + gap + m.timeWidth].reduce(maxOf);
-    expect(content, closeTo(want, 1), reason: 'content width: $why');
+    final want = [
+      m.widest,
+      m.lastLine + gap + m.timeWidth,
+      ...headerWidths,
+    ].reduce(maxOf);
+    expect(content, closeTo(minOf(want, m.column), 1), reason: 'width: $why');
   } else {
     expect(
       m.timeRect.top,
       greaterThanOrEqualTo(m.bodyRect.bottom - 0.5),
       reason: 'the time is not on its own row under the body: $why',
     );
-    final want = [m.widest, m.timeWidth].reduce(maxOf);
-    expect(content, closeTo(want, 1), reason: 'content width: $why');
+    final want = [m.widest, m.timeWidth, ...headerWidths].reduce(maxOf);
+    expect(content, closeTo(minOf(want, m.column), 1), reason: 'width: $why');
+  }
+  // Below the column, no header text is squeezed under its natural width.
+  if (content < m.column - 0.5) {
+    for (final key in headers) {
+      for (final e
+          in find
+              .descendant(
+                of: find.byKey(ValueKey(key)),
+                matching: find.byType(RichText),
+              )
+              .evaluate()) {
+        final p = e.renderObject! as RenderParagraph;
+        expect(
+          p.size.width,
+          greaterThanOrEqualTo(p.getMaxIntrinsicWidth(double.infinity) - 0.5),
+          reason: '$key "${p.text.toPlainText()}" is squeezed: $why',
+        );
+      }
+    }
   }
   return m;
 }
 
+/// The natural width of header row [key], measured from its left edge: its
+/// own intrinsic width, and no less than any text in it needs.
+double headerWidth(WidgetTester tester, String key) {
+  final f = find.byKey(ValueKey(key));
+  final left = tester.getRect(f).left;
+  var w = tester
+      .renderObject<RenderBox>(f)
+      .getMaxIntrinsicWidth(double.infinity);
+  for (final e
+      in find.descendant(of: f, matching: find.byType(RichText)).evaluate()) {
+    final p = e.renderObject! as RenderParagraph;
+    final at = p.localToGlobal(Offset.zero).dx - left;
+    w = maxOf(w, at + p.getMaxIntrinsicWidth(double.infinity));
+  }
+  return w;
+}
+
 double maxOf(double a, double b) => a > b ? a : b;
+double minOf(double a, double b) => a < b ? a : b;
 
 /// The exact text of the time label of bubble [id].
 String timeText(WidgetTester tester, String id) =>
@@ -748,10 +802,19 @@ void main() {
           'above; body and time below, the time bottom-right', (tester) async {
         final other = from == me.userId ? bob.userId : me.userId;
         await pump(tester, [
-          msg('a', 'hello, how are you doing today?', from: other),
+          msg('a', 'hello there', from: other),
           msg('r', short, from: from, replyTo: 'a', forwarded: true),
         ], group: true);
-        final m = expectLaidOut(tester, 'r', short);
+        final m = expectLaidOut(
+          tester,
+          'r',
+          short,
+          headers: [
+            'forwarded-r',
+            'quote-r',
+            if (from != me.userId) 'sender-r',
+          ],
+        );
         expect(m.inline, isTrue, reason: m.describe);
         for (final key in [
           'forwarded-r',
@@ -771,4 +834,39 @@ void main() {
       });
     });
   }
+
+  testWidgets('in a group, a long sender name above "ok" stays on one line '
+      'and widens the bubble', (tester) async {
+    await pump(tester, [msg('h', short, from: hay.userId)], group: true);
+    final sender = find.byKey(const ValueKey('sender-h'));
+    expect(sender, findsOneWidget);
+    expect(
+      find.descendant(
+        of: sender,
+        matching: find.text(hay.displayName, findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    final name = tester.renderObject<RenderParagraph>(
+      find.descendant(of: sender, matching: find.byType(RichText)).first,
+    );
+    final natural = name.getMaxIntrinsicWidth(double.infinity);
+    final lineHeight = name.getMaxIntrinsicHeight(double.infinity);
+    expect(
+      name.size.height,
+      closeTo(lineHeight, 0.5),
+      reason: 'the name wraps: ${name.size} for a one-line $lineHeight',
+    );
+    expect(name.size.width, greaterThanOrEqualTo(natural - 0.5));
+    final m = expectLaidOut(tester, 'h', short, headers: ['sender-h']);
+    expect(m.inline, isTrue, reason: m.describe);
+    expect(
+      m.contentRight - m.contentLeft,
+      greaterThanOrEqualTo(natural - 0.5),
+      reason: 'the bubble is narrower than the name: ${m.describe}',
+    );
+    final nameRect = tester.getRect(sender);
+    expect(nameRect.bottom, lessThanOrEqualTo(m.bodyRect.top + 0.5));
+    expectInside(nameRect, m.bubbleRect, 'the name');
+  });
 }

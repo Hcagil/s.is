@@ -1,5 +1,5 @@
 begin;
-select plan(64);
+select plan(65);
 -- The plan checks below read planner statistics this transaction writes
 -- with ANALYZE. A concurrent (auto)vacuum of messages would overwrite
 -- pg_class.reltuples in place, mid-test; holding this lock keeps it out.
@@ -407,6 +407,13 @@ select is((select string_agg(what || ': ' || line, E'\n')
 select ok((select bool_and(plan ~ '\n\s*Filter: .*conversation_id = ANY \(\(InitPlan \d+\)\.col1\)'
                        and plan ~ '\n\s*Filter: .*app_private\.is_member\(conversation_id\)') from _plans),
   'every candidate row is checked against the caller''s conversations AND by is_member()');
+
+-- The trigram index skips GIN's pending list: with fastupdate on, fresh
+-- messages sit unindexed in a list every search scans in full until the next
+-- vacuum. At fixture size the planner would not show the difference.
+select ok((select 'fastupdate=off' = any(reloptions) from pg_class
+            where oid = 'public.messages_search_trgm_idx'::regclass),
+  'messages_search_trgm_idx is built with fastupdate = off');
 
 select * from finish();
 rollback;

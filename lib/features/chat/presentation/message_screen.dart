@@ -23,6 +23,7 @@ import '../domain/read_marks.dart';
 import 'attachment_sheet.dart';
 import 'conversation_list.dart';
 import 'message_actions.dart';
+import 'person_avatar.dart';
 import 'photo_viewer.dart';
 import 'profile_pages.dart';
 
@@ -132,13 +133,15 @@ class MessageScreen extends ConsumerWidget {
     // Read status, where it is shared: your own messages look a little grey
     // until every sharing member has read them.
     final marks = ref.watch(readMarksProvider).value ?? const <ReadMark>[];
+    final conversationId = ref.watch(openConversationProvider);
     return Scaffold(
       appBar: AppBar(
+        titleSpacing: 0,
         title: InkWell(
           key: const ValueKey('conversation-title'),
           borderRadius: BorderRadius.circular(8),
           onTap: () {
-            final id = ref.read(openConversationProvider);
+            final id = conversationId;
             if (id == null) return;
             final page = group
                 ? GroupScreen(conversationId: id, title: title ?? 'Group')
@@ -154,20 +157,47 @@ class MessageScreen extends ConsumerWidget {
             Navigator.of(context)
                 .push(MaterialPageRoute<void>(builder: (_) => page));
           },
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title ?? 'Conversation'),
-              if (status != null)
-                Text(
-                  status,
-                  key: const ValueKey('conversation-status'),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w600,
+          child: SizedBox(
+            width: double.infinity,
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                children: [
+                  PersonAvatar(
+                    label: title ?? 'Conversation',
+                    seed:
+                        otherUserId ??
+                        conversationId ??
+                        title ??
+                        'Conversation',
+                    radius: 18,
                   ),
-                ),
-            ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title ?? 'Conversation',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (status != null)
+                          Text(
+                            status,
+                            key: const ValueKey('conversation-status'),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

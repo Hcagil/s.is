@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
 import '../../../data/failures.dart';
+import '../../../data/postgrest_retry.dart';
 import '../domain/auth_repository.dart';
 import '../domain/member.dart';
 
@@ -96,7 +97,8 @@ final class SupabaseAuthRepository implements AuthRepository {
           .from('profiles')
           .select('user_id, display_name, tag')
           .eq('user_id', uid)
-          .single();
+          .single()
+          .retriedOnce();
       return Ok(
         Member(
           userId: row['user_id'] as String,

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
 import '../../../data/failures.dart';
+import '../../../data/postgrest_retry.dart';
 import '../../../data/realtime_channels.dart';
 import '../../auth/domain/member.dart';
 import '../domain/attachment.dart';
@@ -53,7 +54,8 @@ final class SupabaseChatRepository implements ChatRepository {
           .from('profiles')
           .select('user_id, display_name, tag')
           .neq('user_id', me)
-          .order('display_name');
+          .order('display_name')
+          .retriedOnce();
       return Ok([
         for (final row in rows)
           Member(
@@ -76,13 +78,15 @@ final class SupabaseChatRepository implements ChatRepository {
       // to, so this is already scoped — including the other side's row.
       final memberRows = await _client
           .from('conversation_members')
-          .select('conversation_id, user_id');
+          .select('conversation_id, user_id')
+          .retriedOnce();
 
       // Titles distinguish a group from a 1:1; RLS scopes this to the
       // caller's own conversations, same as the membership rows.
       final conversationRows = await _client
           .from('conversations')
-          .select('id, title');
+          .select('id, title')
+          .retriedOnce();
       final titleById = {
         for (final row in conversationRows)
           row['id'] as String: row['title'] as String?,
@@ -105,7 +109,8 @@ final class SupabaseChatRepository implements ChatRepository {
           : await _client
                 .from('profiles')
                 .select('user_id, display_name')
-                .inFilter('user_id', others);
+                .inFilter('user_id', others)
+                .retriedOnce();
       final nameByUser = {
         for (final row in profileRows)
           row['user_id'] as String: row['display_name'] as String,
@@ -121,7 +126,8 @@ final class SupabaseChatRepository implements ChatRepository {
           .from('conversation_previews')
           .select(
             'conversation_id, body, created_at, attachment_path, sender_id, deleted',
-          );
+          )
+          .retriedOnce();
       final previewBy = <String, ({String body, DateTime at, String sender})>{
         for (final row in recent)
           row['conversation_id'] as String: (
@@ -188,14 +194,16 @@ final class SupabaseChatRepository implements ChatRepository {
       final rows = await _client
           .from('conversation_members')
           .select('user_id')
-          .eq('conversation_id', conversationId);
+          .eq('conversation_id', conversationId)
+          .retriedOnce();
       final ids = [for (final r in rows) r['user_id'] as String];
       if (ids.isEmpty) return const Ok([]);
       final profiles = await _client
           .from('profiles')
           .select('user_id, display_name, tag')
           .inFilter('user_id', ids)
-          .order('display_name', ascending: true);
+          .order('display_name', ascending: true)
+          .retriedOnce();
       return Ok([
         for (final p in profiles)
           Member(
@@ -219,7 +227,8 @@ final class SupabaseChatRepository implements ChatRepository {
           .not('attachment_path', 'is', null)
           // Newest first with a cap: what is lost is the oldest.
           .order('created_at', ascending: false)
-          .limit(_historyLimit);
+          .limit(_historyLimit)
+          .retriedOnce();
       return Ok(rows.map(_toMessage).toList());
     } catch (e) {
       return Err(_asFailure(e));
@@ -236,7 +245,8 @@ final class SupabaseChatRepository implements ChatRepository {
           .eq('conversation_id', conversationId)
           .or('body.ilike.*http://*,body.ilike.*https://*,body.ilike.*www.*')
           .order('created_at', ascending: false)
-          .limit(_historyLimit);
+          .limit(_historyLimit)
+          .retriedOnce();
       return Ok(rows.map(_toMessage).toList());
     } catch (e) {
       return Err(_asFailure(e));
@@ -266,7 +276,8 @@ final class SupabaseChatRepository implements ChatRepository {
           // which reads as working. Dropping the oldest is the honest
           // truncation.
           .order('created_at', ascending: false)
-          .limit(_historyLimit);
+          .limit(_historyLimit)
+          .retriedOnce();
       // The interface documents oldest-first, which is also what the screen
       // renders.
       // ponytail: one bounded page. If a conversation outgrows it, add

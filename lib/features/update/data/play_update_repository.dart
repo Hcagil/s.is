@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/failure.dart';
 import '../../../data/failures.dart';
+import '../../../data/postgrest_retry.dart';
 import '../domain/update_repository.dart';
 
 /// [UpdateRepository] backed by `app_config` and Google Play in-app updates.
@@ -31,7 +32,8 @@ final class PlayUpdateRepository implements UpdateRepository {
           .from('app_config')
           .select('min_supported_build')
           .eq('id', 1)
-          .single();
+          .single()
+          .retriedOnce();
       return Ok(row['min_supported_build'] as int);
     } catch (e) {
       return Err(readableFailure(e));

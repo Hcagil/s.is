@@ -87,6 +87,14 @@
 --     (tove reads everything a repository reads, through a connection
 --      that fails once, twice, or is not there at all; ugo is the other
 --      member of her conversation)
+--   sofi/tarik/umut test/integration/message_search_repository_test.dart
+--     (sofi and tarik search their shared history; umut is allowlisted and
+--      active but never in their conversations, so only membership can keep
+--      their messages out of his search -- and his own second sign-in is
+--      the replaced session that app access must refuse)
+--   vedat/yesim    test/integration/message_search_seam_test.dart
+--     (vedat's search controllers, wired the way main.dart wires them, search
+--      what he and yesim wrote)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -147,5 +155,10 @@ insert into app_private.allowlist(email) values
   ('hale@integration.test'),
   ('ivo@integration.test'),
   ('tove@integration.test'),
-  ('ugo@integration.test')
+  ('ugo@integration.test'),
+  ('sofi@integration.test'),
+  ('tarik@integration.test'),
+  ('umut@integration.test'),
+  ('vedat@integration.test'),
+  ('yesim@integration.test')
 on conflict do nothing;

@@ -279,23 +279,6 @@ class _Bubble extends StatelessWidget {
     // Square-ish corner on the sender's side marks whose bubble it is.
     const r = Radius.circular(8);
     const tail = Radius.circular(3);
-    // Embedded on the body's last line when it fits (below when it does
-    // not, see _LinkedText), or right-aligned on its own row when there is
-    // no body to attach it to. Null for a deleted message, which shows no
-    // time at all. Built as a style/label pair, not a single Text: when it
-    // rides the body, _LinkedText paints it twice -- once for real, once
-    // invisibly to reserve its room -- and only one of the two may carry
-    // its identifying key.
-    final timeLabel = message.isDeleted
-        ? null
-        : (message.isEdited
-              ? 'edited ${clockTime(message.createdAt)}'
-              : clockTime(message.createdAt));
-    final timeStyle = TextStyle(
-      fontSize: 11,
-      color: (mine ? Colors.white : brand.text).withValues(alpha: 0.6),
-    );
-    final timeKey = timeLabel == null ? null : ValueKey('time-${message.id}');
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -319,61 +302,39 @@ class _Bubble extends StatelessWidget {
                 )
               : null,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (message.deletion == MessageDeletion.placeholder)
-              Row(
-                key: ValueKey('deleted-${message.id}'),
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.block,
-                    size: 16,
-                    color: mine
-                        ? Colors.white70
-                        : brand.text.withValues(alpha: 0.6),
-                  ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      'This message was deleted',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontStyle: FontStyle.italic,
-                        color: mine
-                            ? Colors.white70
-                            : brand.text.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            if (message.forwarded)
-              Padding(
-                key: ValueKey('forwarded-${message.id}'),
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Row(
+        // Without this, a non-stretched Column still hands each child a
+        // *loose* constraint up to the Container's own maxWidth (320): any
+        // child that fills the space it is offered -- Align without a
+        // widthFactor does, below -- reports back a width of 320, so the
+        // Column (sized to its widest child) is 320 wide even for one short
+        // word. IntrinsicWidth measures the content first and passes that
+        // tight width down instead, so Align has nothing left to expand
+        // into.
+        child: IntrinsicWidth(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (message.deletion == MessageDeletion.placeholder)
+                Row(
+                  key: ValueKey('deleted-${message.id}'),
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      Icons.shortcut,
-                      size: 14,
+                      Icons.block,
+                      size: 16,
                       color: mine
                           ? Colors.white70
                           : brand.text.withValues(alpha: 0.6),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        'Forwarded',
+                        'This message was deleted',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 14,
                           fontStyle: FontStyle.italic,
                           color: mine
                               ? Colors.white70
@@ -383,119 +344,136 @@ class _Bubble extends StatelessWidget {
                     ),
                   ],
                 ),
-              ),
-            if (message.replyTo != null && !message.isDeleted)
-              Container(
-                key: ValueKey('quote-${message.id}'),
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                decoration: BoxDecoration(
-                  color: (mine ? Colors.white : brand.text).withValues(
-                    alpha: 0.12,
-                  ),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border(
-                    left: BorderSide(
-                      color: mine
-                          ? Colors.white
-                          : Theme.of(context).colorScheme.primary,
-                      width: 3,
-                    ),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (quotedName != null)
-                      Text(
-                        quotedName!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: mine
-                              ? Colors.white
-                              : Theme.of(context).colorScheme.primary,
-                        ),
+              if (message.forwarded)
+                Padding(
+                  key: ValueKey('forwarded-${message.id}'),
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.shortcut,
+                        size: 14,
+                        color: mine
+                            ? Colors.white70
+                            : brand.text.withValues(alpha: 0.6),
                       ),
-                    Text(
-                      quoteText(quoted),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: mine ? Colors.white : brand.text,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            if (sender != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(
-                  sender!,
-                  key: ValueKey('sender-${message.id}'),
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: personTint(context, message.senderId, ink: true),
-                  ),
-                ),
-              ),
-            // An image may be sent without a caption, so an empty body must
-            // render nothing at all rather than an empty line -- its time
-            // then rides on the attachment instead (overlaid, bottom
-            // right), the way a captionless photo message shows it
-            // everywhere else. A captioned one shows it on the body: the
-            // same line if it fits, its own line below if not (see
-            // _LinkedText). Either way it is drawn over the picture or the
-            // text, never in a row of its own -- a bare Align there is
-            // what stretched every bubble to the full 320 in the first
-            // place (Align without a widthFactor fills the *loose* width
-            // Column hands it, not the width of its widest sibling).
-            if (message.hasAttachment)
-              message.body.isEmpty && timeLabel != null
-                  ? Stack(
-                      children: [
-                        _Attachment(message),
-                        Positioned(
-                          right: 6,
-                          bottom: 6,
-                          child: Text(
-                            timeLabel,
-                            key: timeKey,
-                            style: timeStyle.copyWith(
-                              color: Colors.white,
-                              shadows: const [
-                                Shadow(blurRadius: 3, color: Colors.black87),
-                              ],
-                            ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Forwarded',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: mine
+                                ? Colors.white70
+                                : brand.text.withValues(alpha: 0.6),
                           ),
                         ),
-                      ],
-                    )
-                  : _Attachment(message),
-            if (message.body.isNotEmpty)
-              Padding(
-                padding: EdgeInsets.only(top: message.hasAttachment ? 8 : 0),
-                child: _LinkedText(
-                  message.body,
-                  key: ValueKey('body-${message.id}'),
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: mine ? Colors.white : brand.text,
+                      ),
+                    ],
                   ),
-                  linkColor: mine
-                      ? Colors.white
-                      : Theme.of(context).colorScheme.primary,
-                  trailing: timeLabel == null
-                      ? null
-                      : Text(timeLabel, style: timeStyle),
-                  trailingKey: timeKey,
                 ),
-              ),
-          ],
+              if (message.replyTo != null && !message.isDeleted)
+                Container(
+                  key: ValueKey('quote-${message.id}'),
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                  decoration: BoxDecoration(
+                    color: (mine ? Colors.white : brand.text).withValues(
+                      alpha: 0.12,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border(
+                      left: BorderSide(
+                        color: mine
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.primary,
+                        width: 3,
+                      ),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (quotedName != null)
+                        Text(
+                          quotedName!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: mine
+                                ? Colors.white
+                                : Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      Text(
+                        quoteText(quoted),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: mine ? Colors.white : brand.text,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (sender != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(
+                    sender!,
+                    key: ValueKey('sender-${message.id}'),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: personTint(context, message.senderId, ink: true),
+                    ),
+                  ),
+                ),
+              if (message.hasAttachment) _Attachment(message),
+              // An image may be sent without a caption, so an empty body must
+              // render nothing at all rather than an empty line.
+              if (message.body.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(top: message.hasAttachment ? 8 : 0),
+                  child: _LinkedText(
+                    message.body,
+                    key: ValueKey('body-${message.id}'),
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: mine ? Colors.white : brand.text,
+                    ),
+                    linkColor: mine
+                        ? Colors.white
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              if (!message.isDeleted)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      message.isEdited
+                          ? 'edited ${clockTime(message.createdAt)}'
+                          : clockTime(message.createdAt),
+                      key: ValueKey('time-${message.id}'),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: (mine ? Colors.white : brand.text).withValues(
+                          alpha: 0.6,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -912,22 +890,11 @@ class _LinkedText extends ConsumerStatefulWidget {
     super.key,
     required this.style,
     required this.linkColor,
-    this.trailing,
-    this.trailingKey,
   });
 
   final String text;
   final TextStyle style;
   final Color linkColor;
-
-  /// A chat bubble's time label, drawn bottom-right of this text: on its
-  /// last line when there is room, wrapped to its own line when there is
-  /// not (see the invisible placeholder this reserves room with, below).
-  /// Painted twice -- once invisibly, to reserve that room -- so its own
-  /// identifying key, if it needs one, goes in [trailingKey] instead of on
-  /// the widget itself: only the real, visible copy carries it.
-  final Widget? trailing;
-  final Key? trailingKey;
 
   @override
   ConsumerState<_LinkedText> createState() => _LinkedTextState();
@@ -962,7 +929,10 @@ class _LinkedTextState extends ConsumerState<_LinkedText> {
   Widget build(BuildContext context) {
     _clear();
     final segments = linkSegments(widget.text);
-    final spans = <InlineSpan>[];
+    if (segments.every((s) => s.link == null)) {
+      return Text(widget.text, style: widget.style);
+    }
+    final spans = <TextSpan>[];
     for (final s in segments) {
       final link = s.link;
       if (link == null) {
@@ -983,43 +953,6 @@ class _LinkedTextState extends ConsumerState<_LinkedText> {
         ),
       );
     }
-    final trailing = widget.trailing;
-    if (trailing != null) {
-      // An invisible copy of the label reserves its room at the end of the
-      // text flow: on the last line when there is space left on it, wrapped
-      // to a line of its own -- same as a trailing word would -- when there
-      // is not. The real label is then drawn over that reserved space.
-      // ColorFiltered, not Opacity: an unread bubble is told apart only by
-      // its edge now (read_status_bubble_test asserts nothing here reads as
-      // faded), and Opacity is what that dimming used to be drawn with.
-      spans.add(
-        WidgetSpan(
-          alignment: PlaceholderAlignment.baseline,
-          baseline: TextBaseline.alphabetic,
-          child: ColorFiltered(
-            colorFilter: const ColorFilter.mode(
-              Colors.transparent,
-              BlendMode.dstIn,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: trailing,
-            ),
-          ),
-        ),
-      );
-    }
-    final text = Text.rich(TextSpan(style: widget.style, children: spans));
-    if (trailing == null) return text;
-    return Stack(
-      children: [
-        text,
-        Positioned(
-          right: 0,
-          bottom: 0,
-          child: KeyedSubtree(key: widget.trailingKey, child: trailing),
-        ),
-      ],
-    );
+    return Text.rich(TextSpan(style: widget.style, children: spans));
   }
 }

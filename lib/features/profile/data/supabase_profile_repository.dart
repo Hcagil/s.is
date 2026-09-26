@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
 import '../../../data/failures.dart';
+import '../../../data/postgrest_retry.dart';
 import '../domain/own_profile.dart';
 import '../domain/profile_repository.dart';
 
@@ -44,7 +45,8 @@ final class SupabaseProfileRepository implements ProfileRepository {
           .from('profiles')
           .select(_columns)
           .eq('user_id', me)
-          .single();
+          .single()
+          .retriedOnce();
       return Ok(_toProfile(row));
     } catch (e) {
       return Err(_asFailure(e));

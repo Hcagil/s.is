@@ -302,61 +302,39 @@ class _Bubble extends StatelessWidget {
                 )
               : null,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (message.deletion == MessageDeletion.placeholder)
-              Row(
-                key: ValueKey('deleted-${message.id}'),
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.block,
-                    size: 16,
-                    color: mine
-                        ? Colors.white70
-                        : brand.text.withValues(alpha: 0.6),
-                  ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      'This message was deleted',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontStyle: FontStyle.italic,
-                        color: mine
-                            ? Colors.white70
-                            : brand.text.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            if (message.forwarded)
-              Padding(
-                key: ValueKey('forwarded-${message.id}'),
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Row(
+        // Without this, a non-stretched Column still hands each child a
+        // *loose* constraint up to the Container's own maxWidth (320): any
+        // child that fills the space it is offered -- Align without a
+        // widthFactor does, below -- reports back a width of 320, so the
+        // Column (sized to its widest child) is 320 wide even for one short
+        // word. IntrinsicWidth measures the content first and passes that
+        // tight width down instead, so Align has nothing left to expand
+        // into.
+        child: IntrinsicWidth(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (message.deletion == MessageDeletion.placeholder)
+                Row(
+                  key: ValueKey('deleted-${message.id}'),
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      Icons.shortcut,
-                      size: 14,
+                      Icons.block,
+                      size: 16,
                       color: mine
                           ? Colors.white70
                           : brand.text.withValues(alpha: 0.6),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        'Forwarded',
+                        'This message was deleted',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 14,
                           fontStyle: FontStyle.italic,
                           color: mine
                               ? Colors.white70
@@ -366,104 +344,136 @@ class _Bubble extends StatelessWidget {
                     ),
                   ],
                 ),
-              ),
-            if (message.replyTo != null && !message.isDeleted)
-              Container(
-                key: ValueKey('quote-${message.id}'),
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                decoration: BoxDecoration(
-                  color: (mine ? Colors.white : brand.text).withValues(
-                    alpha: 0.12,
-                  ),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border(
-                    left: BorderSide(
-                      color: mine
-                          ? Colors.white
-                          : Theme.of(context).colorScheme.primary,
-                      width: 3,
-                    ),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (quotedName != null)
-                      Text(
-                        quotedName!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: mine
-                              ? Colors.white
-                              : Theme.of(context).colorScheme.primary,
+              if (message.forwarded)
+                Padding(
+                  key: ValueKey('forwarded-${message.id}'),
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.shortcut,
+                        size: 14,
+                        color: mine
+                            ? Colors.white70
+                            : brand.text.withValues(alpha: 0.6),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Forwarded',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: mine
+                                ? Colors.white70
+                                : brand.text.withValues(alpha: 0.6),
+                          ),
                         ),
                       ),
-                    Text(
-                      quoteText(quoted),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: mine ? Colors.white : brand.text,
+                    ],
+                  ),
+                ),
+              if (message.replyTo != null && !message.isDeleted)
+                Container(
+                  key: ValueKey('quote-${message.id}'),
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                  decoration: BoxDecoration(
+                    color: (mine ? Colors.white : brand.text).withValues(
+                      alpha: 0.12,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border(
+                      left: BorderSide(
+                        color: mine
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.primary,
+                        width: 3,
                       ),
                     ),
-                  ],
-                ),
-              ),
-            if (sender != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(
-                  sender!,
-                  key: ValueKey('sender-${message.id}'),
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: personTint(context, message.senderId, ink: true),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (quotedName != null)
+                        Text(
+                          quotedName!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: mine
+                                ? Colors.white
+                                : Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      Text(
+                        quoteText(quoted),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: mine ? Colors.white : brand.text,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            if (message.hasAttachment) _Attachment(message),
-            // An image may be sent without a caption, so an empty body must
-            // render nothing at all rather than an empty line.
-            if (message.body.isNotEmpty)
-              Padding(
-                padding: EdgeInsets.only(top: message.hasAttachment ? 8 : 0),
-                child: _LinkedText(
-                  message.body,
-                  key: ValueKey('body-${message.id}'),
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: mine ? Colors.white : brand.text,
-                  ),
-                  linkColor: mine
-                      ? Colors.white
-                      : Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            if (!message.isDeleted)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Align(
-                  alignment: Alignment.centerRight,
+              if (sender != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
                   child: Text(
-                    message.isEdited
-                        ? 'edited ${clockTime(message.createdAt)}'
-                        : clockTime(message.createdAt),
-                    key: ValueKey('time-${message.id}'),
+                    sender!,
+                    key: ValueKey('sender-${message.id}'),
                     style: TextStyle(
-                      fontSize: 11,
-                      color: (mine ? Colors.white : brand.text).withValues(
-                        alpha: 0.6,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: personTint(context, message.senderId, ink: true),
+                    ),
+                  ),
+                ),
+              if (message.hasAttachment) _Attachment(message),
+              // An image may be sent without a caption, so an empty body must
+              // render nothing at all rather than an empty line.
+              if (message.body.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(top: message.hasAttachment ? 8 : 0),
+                  child: _LinkedText(
+                    message.body,
+                    key: ValueKey('body-${message.id}'),
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: mine ? Colors.white : brand.text,
+                    ),
+                    linkColor: mine
+                        ? Colors.white
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              if (!message.isDeleted)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      message.isEdited
+                          ? 'edited ${clockTime(message.createdAt)}'
+                          : clockTime(message.createdAt),
+                      key: ValueKey('time-${message.id}'),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: (mine ? Colors.white : brand.text).withValues(
+                          alpha: 0.6,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

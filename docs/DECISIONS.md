@@ -805,3 +805,17 @@ first time the member attaches one ("Allow photos"; "Open settings" once the
 member has refused twice), notifications once after first sign-in — skipped
 when the phone has already allowed them.
 
+
+## 2026-09-26 — Previews and reads stay fast as history grows; offline is said at once
+
+The chat list's preview view read every message ever sent (6.9 s at 50k
+messages, measured). It now takes the newest message per conversation the
+member belongs to, through the (conversation_id, created_at) index (5.5 ms).
+`messages_read` evaluates `has_app_access()` once per query, not per row.
+Same rows for every caller; a pgTAP plan guard fails if a sequential scan on
+messages comes back.
+
+A read retries at most once (`retriedOnce`), so a dead server is reported in
+about a second instead of ~7 s, while one network blip is still ridden out.
+Message bubbles hug their text again (a v0.13 time row had stretched every
+bubble to full width).

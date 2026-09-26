@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
 import '../../../data/failures.dart';
+import '../../../data/postgrest_retry.dart';
 import '../domain/notification_settings.dart';
 
 /// Settings and mutes live in the member's own rows; row-level security
@@ -29,7 +30,8 @@ final class SupabaseNotificationSettingsRepository
           .from('notification_settings')
           .select('enabled, preview')
           .eq('user_id', uid)
-          .maybeSingle();
+          .maybeSingle()
+          .retriedOnce();
       if (row == null) return const Ok(NotificationSettings());
       return Ok(
         NotificationSettings(
@@ -67,7 +69,8 @@ final class SupabaseNotificationSettingsRepository
       final rows = await _client
           .from('notification_mutes')
           .select('kind, target, until')
-          .eq('user_id', uid);
+          .eq('user_id', uid)
+          .retriedOnce();
       return Ok(
         rows
             .map(

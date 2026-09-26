@@ -48,9 +48,14 @@ final class PhotoManagerGallery implements Gallery {
 
   @override
   Future<List<GalleryPhoto>> recent({int count = 60}) async {
+    // Newest first. Without an explicit order photo_manager sends Android
+    // no sort at all and Android's default order comes back oldest first.
     final paths = await PhotoManager.getAssetPathList(
       type: RequestType.image,
       onlyAll: true,
+      filterOption: FilterOptionGroup(
+        orders: [const OrderOption(type: OrderOptionType.createDate)],
+      ),
     );
     if (paths.isEmpty) return const [];
     final assets = await paths.first.getAssetListPaged(page: 0, size: count);

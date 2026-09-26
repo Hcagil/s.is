@@ -700,7 +700,9 @@ class ChatSearchController extends Notifier<ChatSearchState> {
     final result = await ref
         .read(chatRepositoryProvider)
         .search(query, conversationId: conversationId);
-    if (result case Ok(:final value) when ref.mounted) {
+    if (result case Ok(:final value)
+        when ref.mounted &&
+            ref.read(openConversationProvider) == conversationId) {
       state = ChatSearchState(
         query: query,
         hits: value,
@@ -759,6 +761,8 @@ class ChatListSearchController extends Notifier<ChatListSearchState> {
   ChatListSearchState build() {
     // Fresh per account, like every other search/list here.
     ref.watch(currentUserIdProvider);
+    // Invalidates any request already in flight for the previous account.
+    _generation++;
     ref.onDispose(() => _debounce?.cancel());
     return const ChatListSearchState();
   }

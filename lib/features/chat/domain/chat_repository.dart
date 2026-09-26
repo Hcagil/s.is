@@ -147,9 +147,10 @@ abstract interface class ChatRepository {
   Future<Result<List<Message>>> search(String query, {String? conversationId});
 
   /// A window of messages around [anchor] in [conversationId], oldest first:
-  /// up to 50 older than it and 50 newer, [anchor] itself included. For
-  /// jumping to a search hit that predates the conversation screen's own
-  /// loaded history (see [messages]'s cap).
+  /// up to 50 at or before [anchor]'s instant (so [anchor] itself is
+  /// included -- a message sharing its exact instant counts as older) and up
+  /// to 50 strictly after it. For jumping to a search hit that predates the
+  /// conversation screen's own loaded history (see [messages]'s cap).
   Future<Result<List<Message>>> messagesAround(
     String conversationId,
     Message anchor,

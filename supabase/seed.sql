@@ -83,6 +83,10 @@
 --     (hale edits through the real long-press -> Edit -> composer flow; ivo's
 --      open chat and conversation list, wired as main.dart wires them, must
 --      show it live)
+--   tove/ugo       test/integration/quick_retry_integration_test.dart
+--     (tove reads everything a repository reads, through a connection
+--      that fails once, twice, or is not there at all; ugo is the other
+--      member of her conversation)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -141,5 +145,7 @@ insert into app_private.allowlist(email) values
   ('fitz@integration.test'),
   ('gale@integration.test'),
   ('hale@integration.test'),
-  ('ivo@integration.test')
+  ('ivo@integration.test'),
+  ('tove@integration.test'),
+  ('ugo@integration.test')
 on conflict do nothing;

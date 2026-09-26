@@ -183,6 +183,14 @@ class _Wired implements ChatRepository {
   @override
   Future<Result<Message>> editMessage(Message message, String body) =>
       live.editMessage(message, body);
+  @override
+  Future<Result<List<Message>>> search(
+    String query, {
+    String? conversationId,
+  }) => live.search(query, conversationId: conversationId);
+  @override
+  Future<Result<List<Message>>> messagesAround(String id, Message anchor) =>
+      live.messagesAround(id, anchor);
 }
 
 /// The overrides main.dart mounts, on [client]; only Google sign-in, the Play

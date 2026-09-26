@@ -540,6 +540,43 @@ class FakeChat implements ChatRepository {
     return Ok(edited);
   }
 
+  /// Every search asked for, in order.
+  final searches = <({String query, String? conversationId})>[];
+
+  /// Forces the outcome; left null it answers from [initial] per the contract.
+  Result<List<Message>>? searchResult;
+  Result<List<Message>>? messagesAroundResult;
+
+  @override
+  Future<Result<List<Message>>> search(
+    String query, {
+    String? conversationId,
+  }) async {
+    searches.add((query: query, conversationId: conversationId));
+    if (searchResult case final forced?) return forced;
+    return Ok(
+      searchRows(
+        initial.where(
+          (m) => conversationId == null || m.conversationId == conversationId,
+        ),
+        query,
+      ),
+    );
+  }
+
+  @override
+  Future<Result<List<Message>>> messagesAround(
+    String conversationId,
+    Message anchor,
+  ) async =>
+      messagesAroundResult ??
+      Ok(
+        aroundRows(
+          initial.where((m) => m.conversationId == conversationId),
+          anchor,
+        ),
+      );
+
   @override
   Future<Result<List<ReadMark>>> readMarks(String conversationId) async =>
       const Ok([]);
@@ -1237,6 +1274,61 @@ class ChatFake implements ChatRepository {
     _readMarksHold = null;
   }
 
+  /// Every search asked for, in order.
+  final searches = <({String query, String? conversationId})>[];
+
+  /// Forces the outcome. Left null it answers from [history] -- the rows the
+  /// caller may read -- with [searchRows]: all of them, or one conversation's.
+  Result<List<Message>>? searchResult;
+
+  final _searchHolds = <Completer<void>>[];
+
+  /// The next [search] not yet held stays in flight until the returned
+  /// completer completes, so answers can arrive in any order. Its answer is
+  /// the history as it stood when the query ran.
+  Completer<void> holdSearch() {
+    final c = Completer<void>();
+    _searchHolds.add(c);
+    return c;
+  }
+
+  @override
+  Future<Result<List<Message>>> search(
+    String query, {
+    String? conversationId,
+  }) async {
+    final Completer<void>? held = _searchHolds.isEmpty
+        ? null
+        : _searchHolds.removeAt(0);
+    searches.add((query: query, conversationId: conversationId));
+    final Result<List<Message>> answer =
+        searchResult ??
+        Ok(
+          searchRows(
+            conversationId == null
+                ? history.values.expand((rows) => rows)
+                : history[conversationId] ?? const <Message>[],
+            query,
+          ),
+        );
+    await _tick('search:$query');
+    if (held != null) await held.future;
+    return answer;
+  }
+
+  /// Forces the outcome; left null it answers from [history].
+  Result<List<Message>>? messagesAroundResult;
+
+  @override
+  Future<Result<List<Message>>> messagesAround(
+    String conversationId,
+    Message anchor,
+  ) async {
+    await _tick('around:$conversationId:${anchor.id}');
+    if (messagesAroundResult case final forced?) return forced;
+    return Ok(aroundRows(history[conversationId] ?? const [], anchor));
+  }
+
   @override
   Future<Result<List<ReadMark>>> readMarks(String conversationId) async {
     await _tick('readMarks:$conversationId');
@@ -1353,6 +1445,50 @@ Message editedCopy(Message stored, String body) => Message(
   forwarded: stored.forwarded,
   editedAt: DateTime.now(),
 );
+
+/// search_messages as the contract states it, over rows the caller may read:
+/// a trimmed query under two characters finds nothing; otherwise text that
+/// contains it after the Turkish fold (I, İ and ı all read as i), case-
+/// insensitively, taken literally; deleted and textless messages never
+/// match; newest first, at most 50.
+List<Message> searchRows(Iterable<Message> rows, String query) {
+  final q = foldForSearch(query.trim());
+  if (q.length < 2) return const [];
+  final hits = [
+    for (final m in rows)
+      if (!m.isDeleted &&
+          m.body.isNotEmpty &&
+          foldForSearch(m.body).contains(q))
+        m,
+  ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  return hits.take(50).toList();
+}
+
+String foldForSearch(String s) => s
+    .replaceAll('İ', 'i')
+    .replaceAll('I', 'i')
+    .replaceAll('ı', 'i')
+    .toLowerCase();
+
+/// The window messagesAround returns: up to 50 strictly older than [anchor],
+/// the anchor itself, up to 50 strictly newer, oldest first.
+List<Message> aroundRows(Iterable<Message> rows, Message anchor) {
+  final sorted = [...rows]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  final older = [
+    for (final m in sorted)
+      if (m.createdAt.isBefore(anchor.createdAt)) m,
+  ];
+  final newer = [
+    for (final m in sorted)
+      if (m.createdAt.isAfter(anchor.createdAt)) m,
+  ];
+  final self = sorted.where((m) => m.id == anchor.id);
+  return [
+    ...older.skip(older.length > 50 ? older.length - 50 : 0),
+    ...self,
+    ...newer.take(50),
+  ];
+}
 
 /// A 1x1 PNG: real bytes a real decoder accepts, which a made-up list is not.
 final pngBytes = base64Decode(

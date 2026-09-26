@@ -1,5 +1,5 @@
 begin;
-select plan(62);
+select plan(64);
 -- The plan checks below read planner statistics this transaction writes
 -- with ANALYZE. A concurrent (auto)vacuum of messages would overwrite
 -- pg_class.reltuples in place, mid-test; holding this lock keeps it out.
@@ -343,12 +343,22 @@ select as_s(1); select hit_count('istanbul', 'a5c00000-0000-0000-0000-0000000000
 insert into _scans values ('scoped',
   pg_stat_get_xact_numscans('public.messages'::regclass),
   pg_stat_get_xact_numscans('public.messages_search_trgm_idx'::regclass));
+select as_s(1); select hit_count('istanbul', 'a5c00000-0000-0000-0000-000000000004'); reset role;
+insert into _scans values ('foreign',
+  pg_stat_get_xact_numscans('public.messages'::regclass),
+  pg_stat_get_xact_numscans('public.messages_search_trgm_idx'::regclass));
 select is((select a.trgm > b.trgm from _scans a, _scans b where a.what = 'unscoped' and b.what = 'before'),
   true, 'an unscoped search uses messages_search_trgm_idx');
 select is((select a.seq - b.seq from _scans a, _scans b where a.what = 'unscoped' and b.what = 'before'),
   0::bigint, 'an unscoped search never scans messages sequentially');
 select is((select a.seq - b.seq from _scans a, _scans b where a.what = 'scoped' and b.what = 'unscoped'),
   0::bigint, 'a scoped search never scans messages sequentially');
+-- The foreign-conversation timing channel, structurally: naming a
+-- conversation the caller is not in is refused before messages is touched at
+-- all, so how many rows there match cannot show in how long it takes.
+select is((select (a.seq - b.seq, a.trgm - b.trgm)::text from _scans a, _scans b
+            where a.what = 'foreign' and b.what = 'scoped'),
+  '(0,0)', 'naming a foreign conversation never scans messages, by index or sequentially');
 
 -- 11 the plan's shape: the pattern is computed once, not per row -----------------
 -- search_messages' own query, planned the way a SQL function body is planned
@@ -389,6 +399,14 @@ select is((select string_agg(what || ': ' || line, E'\n')
               and line ~ '(escape_like|fold_search|btrim)'),
   null,
   'no Recheck Cond, Filter or Index Cond evaluates escape_like/fold_search per row');
+
+-- The definer re-applies membership twice, each enough alone: the bound to
+-- the caller's own conversations and app_private.is_member(), messages_read's
+-- own check. Results cannot tell one missing (the other still holds), so the
+-- plan does: dropping either is drift from the policy this function mirrors.
+select ok((select bool_and(plan ~ '\n\s*Filter: .*conversation_id = ANY \(\(InitPlan \d+\)\.col1\)'
+                       and plan ~ '\n\s*Filter: .*app_private\.is_member\(conversation_id\)') from _plans),
+  'every candidate row is checked against the caller''s conversations AND by is_member()');
 
 select * from finish();
 rollback;

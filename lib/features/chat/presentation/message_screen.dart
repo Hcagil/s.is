@@ -5,6 +5,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
@@ -274,6 +275,18 @@ class _Bubble extends StatelessWidget {
   /// The sender's name, shown above the first bubble of their run in a group.
   final String? sender;
 
+  // The bubble's own outer cap and the two insets that eat into it: 12 px
+  // padding, plus -- for a "mine" bubble only -- a 1.5 px border that is
+  // always laid out (even transparent, when read). _BodyWithTime measures
+  // its fits-inline decision against [_contentWidth], not a copy of these
+  // numbers, so the two cannot drift apart.
+  static const _maxWidth = 320.0;
+  static const _hPad = 12.0;
+  static const _borderWidth = 1.5;
+
+  double get _contentWidth =>
+      _maxWidth - 2 * _hPad - (mine ? 2 * _borderWidth : 0);
+
   @override
   Widget build(BuildContext context) {
     final brand = SisBrand.of(context);
@@ -284,9 +297,9 @@ class _Bubble extends StatelessWidget {
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         key: ValueKey('message-${message.id}'),
-        constraints: const BoxConstraints(maxWidth: 320),
+        constraints: const BoxConstraints(maxWidth: _maxWidth),
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: _hPad, vertical: 8),
         decoration: BoxDecoration(
           color: mine ? null : brand.theirs,
           gradient: mine ? brand.gradient : null,
@@ -298,7 +311,7 @@ class _Bubble extends StatelessWidget {
           ),
           border: mine
               ? Border.all(
-                  width: 1.5,
+                  width: _borderWidth,
                   color: unread ? brand.unreadEdge : Colors.transparent,
                 )
               : null,
@@ -346,93 +359,99 @@ class _Bubble extends StatelessWidget {
                   ],
                 ),
               if (message.forwarded)
-                Padding(
-                  key: ValueKey('forwarded-${message.id}'),
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.shortcut,
-                        size: 14,
-                        color: mine
-                            ? Colors.white70
-                            : brand.text.withValues(alpha: 0.6),
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          'Forwarded',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontStyle: FontStyle.italic,
-                            color: mine
-                                ? Colors.white70
-                                : brand.text.withValues(alpha: 0.6),
+                _IgnoreIntrinsicWidth(
+                  child: Padding(
+                    key: ValueKey('forwarded-${message.id}'),
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.shortcut,
+                          size: 14,
+                          color: mine
+                              ? Colors.white70
+                              : brand.text.withValues(alpha: 0.6),
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            'Forwarded',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                              color: mine
+                                  ? Colors.white70
+                                  : brand.text.withValues(alpha: 0.6),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               if (message.replyTo != null && !message.isDeleted)
-                Container(
-                  key: ValueKey('quote-${message.id}'),
-                  margin: const EdgeInsets.only(bottom: 6),
-                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                  decoration: BoxDecoration(
-                    color: (mine ? Colors.white : brand.text).withValues(
-                      alpha: 0.12,
-                    ),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border(
-                      left: BorderSide(
-                        color: mine
-                            ? Colors.white
-                            : Theme.of(context).colorScheme.primary,
-                        width: 3,
+                _IgnoreIntrinsicWidth(
+                  child: Container(
+                    key: ValueKey('quote-${message.id}'),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                    decoration: BoxDecoration(
+                      color: (mine ? Colors.white : brand.text).withValues(
+                        alpha: 0.12,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border(
+                        left: BorderSide(
+                          color: mine
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.primary,
+                          width: 3,
+                        ),
                       ),
                     ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (quotedName != null)
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (quotedName != null)
+                          Text(
+                            quotedName!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: mine
+                                  ? Colors.white
+                                  : Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
                         Text(
-                          quotedName!,
+                          quoteText(quoted),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: mine
-                                ? Colors.white
-                                : Theme.of(context).colorScheme.primary,
+                            fontSize: 13,
+                            color: mine ? Colors.white : brand.text,
                           ),
                         ),
-                      Text(
-                        quoteText(quoted),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: mine ? Colors.white : brand.text,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               if (sender != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(
-                    sender!,
-                    key: ValueKey('sender-${message.id}'),
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: personTint(context, message.senderId, ink: true),
+                _IgnoreIntrinsicWidth(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text(
+                      sender!,
+                      key: ValueKey('sender-${message.id}'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: personTint(context, message.senderId, ink: true),
+                      ),
                     ),
                   ),
                 ),
@@ -451,6 +470,7 @@ class _Bubble extends StatelessWidget {
                   linkColor: mine
                       ? Colors.white
                       : Theme.of(context).colorScheme.primary,
+                  maxContentWidth: _contentWidth,
                   topPadding: message.hasAttachment ? 8 : 0,
                   timeText: message.isEdited
                       ? 'edited ${clockTime(message.createdAt)}'
@@ -521,6 +541,7 @@ class _BodyWithTime extends StatelessWidget {
     required this.message,
     required this.bodyStyle,
     required this.linkColor,
+    required this.maxContentWidth,
     required this.topPadding,
     required this.timeText,
     required this.timeStyle,
@@ -529,14 +550,16 @@ class _BodyWithTime extends StatelessWidget {
   final Message message;
   final TextStyle bodyStyle;
   final Color linkColor;
+
+  /// The bubble's real content column: its outer cap minus padding and,
+  /// for a "mine" bubble, its always-laid-out border. Passed down from
+  /// [_Bubble], which is the one place that inset is defined, so this
+  /// widget never keeps its own copy of that arithmetic to drift from it.
+  final double maxContentWidth;
   final double topPadding;
   final String timeText;
   final TextStyle timeStyle;
 
-  // The bubble Container's maxWidth (320, see _Bubble) minus its horizontal
-  // padding (12 each side): the widest the body/time content is ever
-  // offered, matching what IntrinsicWidth ultimately clamps the bubble to.
-  static const _maxContentWidth = 320.0 - 24.0;
   static const _gap = 6.0;
 
   @override
@@ -555,9 +578,10 @@ class _BodyWithTime extends StatelessWidget {
       text: TextSpan(text: message.body, style: defaultStyle.merge(bodyStyle)),
       textDirection: direction,
       textScaler: scaler,
-    )..layout(maxWidth: _maxContentWidth);
+    )..layout(maxWidth: maxContentWidth);
     final lines = bodyPainter.computeLineMetrics();
     final lastLineWidth = lines.last.width;
+    final bodyHeight = bodyPainter.height;
     var bodyWidth = 0.0;
     for (final line in lines) {
       if (line.width > bodyWidth) bodyWidth = line.width;
@@ -567,7 +591,19 @@ class _BodyWithTime extends StatelessWidget {
       textDirection: direction,
       textScaler: scaler,
     )..layout();
-    final fits = lastLineWidth + _gap + timePainter.width <= _maxContentWidth;
+    final timeWidth = timePainter.width;
+    bodyPainter.dispose();
+    timePainter.dispose();
+
+    // ponytail: RTL always drops to the own-row layout below, never inline.
+    // The fits math above assumes a line's trailing edge is the column's
+    // right edge (true for LTR); measuring an RTL line's *visual* end would
+    // need glyph-level box positions, not just a summed width. Upgrade path:
+    // measure with getBoxesForSelection (as the qa Measured helper does) if
+    // RTL locales ever ship.
+    final fits =
+        direction != TextDirection.rtl &&
+        lastLineWidth + _gap + timeWidth <= maxContentWidth;
 
     final timeWidget = Text(
       timeText,
@@ -600,36 +636,108 @@ class _BodyWithTime extends StatelessWidget {
     // Widening to fit the time never needs more than the longest line
     // already wraps to (a longer earlier line already sets the bubble's
     // width) or the last line plus the time (a short, single-line message).
-    final targetWidth = math.max(
-      bodyWidth,
-      lastLineWidth + _gap + timePainter.width,
-    );
+    final targetWidth = math.max(bodyWidth, lastLineWidth + _gap + timeWidth);
     return Padding(
       padding: EdgeInsets.only(top: topPadding),
-      child: SizedBox(
-        width: targetWidth,
-        // A Stack's non-positioned child is offered a loose constraint up to
-        // the Stack's own width (targetWidth) and a Text/RenderParagraph
-        // fills whatever width it is offered (the same reason _Bubble wraps
-        // its Column in IntrinsicWidth above): pin the body to its own
-        // wrapped width so it never stretches into the room left for time.
-        child: Stack(
-          children: [
-            SizedBox(
-              width: bodyWidth,
-              child: _LinkedText(
-                message.body,
-                key: ValueKey('body-${message.id}'),
-                style: bodyStyle,
-                linkColor: linkColor,
-              ),
-            ),
-            Positioned(right: 0, bottom: 0, child: timeWidget),
-          ],
+      // A label/quote above the body can be wider than body+time, in which
+      // case IntrinsicWidth makes the whole bubble that wide -- but a fixed
+      // SizedBox here would still only claim targetWidth, stranding the
+      // time mid-bubble instead of at the content's right edge. This custom
+      // layout reports targetWidth for the intrinsic (hugging) pass -- same
+      // as a Text's own intrinsic width -- but at real layout time fills
+      // whatever width the column actually turns out to be, exactly the
+      // way a plain Text/RenderParagraph already behaves (see the
+      // IntrinsicWidth comment above): _Bubble's own hugging is unaffected,
+      // because in the common case (no wider sibling) that real width is
+      // targetWidth anyway.
+      child: CustomMultiChildLayout(
+        delegate: _BodyTimeLayout(
+          targetWidth: targetWidth,
+          bodyWidth: bodyWidth,
+          bodyHeight: bodyHeight,
         ),
+        children: [
+          LayoutId(
+            id: _BodyTimeSlot.body,
+            child: _LinkedText(
+              message.body,
+              key: ValueKey('body-${message.id}'),
+              style: bodyStyle,
+              linkColor: linkColor,
+            ),
+          ),
+          LayoutId(id: _BodyTimeSlot.time, child: timeWidget),
+        ],
       ),
     );
   }
+}
+
+enum _BodyTimeSlot { body, time }
+
+/// Lays the body out at its own (never stretched) [bodyWidth], and the time
+/// at the bottom-right of the real column -- [targetWidth] only when nothing
+/// wider forces the column open (see [_BodyWithTime]'s [CustomMultiChildLayout]
+/// comment for why a plain SizedBox can't do both jobs at once).
+class _BodyTimeLayout extends MultiChildLayoutDelegate {
+  _BodyTimeLayout({
+    required this.targetWidth,
+    required this.bodyWidth,
+    required this.bodyHeight,
+  });
+
+  final double targetWidth;
+  final double bodyWidth;
+  final double bodyHeight;
+
+  @override
+  Size getSize(BoxConstraints constraints) => Size(
+    constraints.hasBoundedWidth ? constraints.maxWidth : targetWidth,
+    bodyHeight,
+  );
+
+  @override
+  void performLayout(Size size) {
+    layoutChild(_BodyTimeSlot.body, BoxConstraints.tightFor(width: bodyWidth));
+    positionChild(_BodyTimeSlot.body, Offset.zero);
+    final timeSize = layoutChild(
+      _BodyTimeSlot.time,
+      BoxConstraints.loose(size),
+    );
+    positionChild(
+      _BodyTimeSlot.time,
+      Offset(size.width - timeSize.width, size.height - timeSize.height),
+    );
+  }
+
+  @override
+  bool shouldRelayout(covariant _BodyTimeLayout oldDelegate) =>
+      targetWidth != oldDelegate.targetWidth ||
+      bodyWidth != oldDelegate.bodyWidth ||
+      bodyHeight != oldDelegate.bodyHeight;
+}
+
+/// Only the body (and an attachment) should ever decide how wide a bubble
+/// hugs to; a reply's quote preview can hold a whole message and must not
+/// itself win that decision. This makes its child invisible to an ancestor
+/// `IntrinsicWidth`'s hug query (reporting no width need of its own) while
+/// leaving its real layout untouched: it is handed whatever width the
+/// bubble actually settles on -- driven by body/attachment -- and wraps
+/// (up to its own `maxLines`) inside that, same as any ordinary child.
+class _IgnoreIntrinsicWidth extends SingleChildRenderObjectWidget {
+  const _IgnoreIntrinsicWidth({required Widget super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderIgnoreIntrinsicWidth();
+}
+
+class _RenderIgnoreIntrinsicWidth extends RenderProxyBox {
+  @override
+  double computeMinIntrinsicWidth(double height) => 0;
+
+  @override
+  double computeMaxIntrinsicWidth(double height) => 0;
 }
 
 /// A message deleted for everyone within its first hour: it shrinks and

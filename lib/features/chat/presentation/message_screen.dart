@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' show ImageFilter;
 
@@ -437,43 +438,194 @@ class _Bubble extends StatelessWidget {
                 ),
               if (message.hasAttachment) _Attachment(message),
               // An image may be sent without a caption, so an empty body must
-              // render nothing at all rather than an empty line.
-              if (message.body.isNotEmpty)
-                Padding(
-                  padding: EdgeInsets.only(top: message.hasAttachment ? 8 : 0),
-                  child: _LinkedText(
-                    message.body,
-                    key: ValueKey('body-${message.id}'),
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: mine ? Colors.white : brand.text,
-                    ),
-                    linkColor: mine
-                        ? Colors.white
-                        : Theme.of(context).colorScheme.primary,
+              // render nothing at all rather than an empty line. A deleted
+              // message never shows a time, but (defensively) may still carry
+              // a body, so the two conditions stay independent below.
+              if (message.body.isNotEmpty && !message.isDeleted)
+                _BodyWithTime(
+                  message: message,
+                  bodyStyle: TextStyle(
+                    fontSize: 15,
+                    color: mine ? Colors.white : brand.text,
                   ),
-                ),
-              if (!message.isDeleted)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      message.isEdited
-                          ? 'edited ${clockTime(message.createdAt)}'
-                          : clockTime(message.createdAt),
-                      key: ValueKey('time-${message.id}'),
+                  linkColor: mine
+                      ? Colors.white
+                      : Theme.of(context).colorScheme.primary,
+                  topPadding: message.hasAttachment ? 8 : 0,
+                  timeText: message.isEdited
+                      ? 'edited ${clockTime(message.createdAt)}'
+                      : clockTime(message.createdAt),
+                  timeStyle: TextStyle(
+                    fontSize: 11,
+                    color: (mine ? Colors.white : brand.text).withValues(
+                      alpha: 0.6,
+                    ),
+                  ),
+                )
+              else ...[
+                if (message.body.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      top: message.hasAttachment ? 8 : 0,
+                    ),
+                    child: _LinkedText(
+                      message.body,
+                      key: ValueKey('body-${message.id}'),
                       style: TextStyle(
-                        fontSize: 11,
-                        color: (mine ? Colors.white : brand.text).withValues(
-                          alpha: 0.6,
+                        fontSize: 15,
+                        color: mine ? Colors.white : brand.text,
+                      ),
+                      linkColor: mine
+                          ? Colors.white
+                          : Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                if (!message.isDeleted)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        message.isEdited
+                            ? 'edited ${clockTime(message.createdAt)}'
+                            : clockTime(message.createdAt),
+                        key: ValueKey('time-${message.id}'),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: (mine ? Colors.white : brand.text).withValues(
+                            alpha: 0.6,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
+              ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A message body with its timestamp: inline at the end of the last line
+/// when it fits there (WhatsApp-style, "ok  12:04"), otherwise dropped to
+/// its own row below the body, bottom-right -- the layout the bubble used
+/// before this widget existed.
+///
+/// [body] and [time] are always built as two separate widgets carrying their
+/// original keys and exact text, never merged into one `Text`/`TextSpan`: a
+/// widget test finds each with `find.text()`.
+class _BodyWithTime extends StatelessWidget {
+  const _BodyWithTime({
+    required this.message,
+    required this.bodyStyle,
+    required this.linkColor,
+    required this.topPadding,
+    required this.timeText,
+    required this.timeStyle,
+  });
+
+  final Message message;
+  final TextStyle bodyStyle;
+  final Color linkColor;
+  final double topPadding;
+  final String timeText;
+  final TextStyle timeStyle;
+
+  // The bubble Container's maxWidth (320, see _Bubble) minus its horizontal
+  // padding (12 each side): the widest the body/time content is ever
+  // offered, matching what IntrinsicWidth ultimately clamps the bubble to.
+  static const _maxContentWidth = 320.0 - 24.0;
+  static const _gap = 6.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final direction = Directionality.of(context);
+    final scaler = MediaQuery.textScalerOf(context);
+    // Text/Text.rich merge the given style onto the ambient DefaultTextStyle
+    // (which is where the app's Manrope font family comes from); a bare
+    // TextStyle here would measure in the platform default font instead and
+    // report the wrong width.
+    final defaultStyle = DefaultTextStyle.of(context).style;
+    // ponytail: measured as one plain span rather than the linked spans
+    // _LinkedText actually renders -- a link's style only changes color and
+    // underline, never font size/weight/family, so the two wrap identically.
+    final bodyPainter = TextPainter(
+      text: TextSpan(text: message.body, style: defaultStyle.merge(bodyStyle)),
+      textDirection: direction,
+      textScaler: scaler,
+    )..layout(maxWidth: _maxContentWidth);
+    final lines = bodyPainter.computeLineMetrics();
+    final lastLineWidth = lines.last.width;
+    var bodyWidth = 0.0;
+    for (final line in lines) {
+      if (line.width > bodyWidth) bodyWidth = line.width;
+    }
+    final timePainter = TextPainter(
+      text: TextSpan(text: timeText, style: defaultStyle.merge(timeStyle)),
+      textDirection: direction,
+      textScaler: scaler,
+    )..layout();
+    final fits = lastLineWidth + _gap + timePainter.width <= _maxContentWidth;
+
+    final timeWidget = Text(
+      timeText,
+      key: ValueKey('time-${message.id}'),
+      style: timeStyle,
+    );
+
+    if (!fits) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(top: topPadding),
+            child: _LinkedText(
+              message.body,
+              key: ValueKey('body-${message.id}'),
+              style: bodyStyle,
+              linkColor: linkColor,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Align(alignment: Alignment.centerRight, child: timeWidget),
+          ),
+        ],
+      );
+    }
+
+    // Widening to fit the time never needs more than the longest line
+    // already wraps to (a longer earlier line already sets the bubble's
+    // width) or the last line plus the time (a short, single-line message).
+    final targetWidth = math.max(
+      bodyWidth,
+      lastLineWidth + _gap + timePainter.width,
+    );
+    return Padding(
+      padding: EdgeInsets.only(top: topPadding),
+      child: SizedBox(
+        width: targetWidth,
+        // A Stack's non-positioned child is offered a loose constraint up to
+        // the Stack's own width (targetWidth) and a Text/RenderParagraph
+        // fills whatever width it is offered (the same reason _Bubble wraps
+        // its Column in IntrinsicWidth above): pin the body to its own
+        // wrapped width so it never stretches into the room left for time.
+        child: Stack(
+          children: [
+            SizedBox(
+              width: bodyWidth,
+              child: _LinkedText(
+                message.body,
+                key: ValueKey('body-${message.id}'),
+                style: bodyStyle,
+                linkColor: linkColor,
+              ),
+            ),
+            Positioned(right: 0, bottom: 0, child: timeWidget),
+          ],
         ),
       ),
     );

@@ -1,5 +1,9 @@
 begin;
-select plan(59);
+select plan(62);
+-- The plan checks below read planner statistics this transaction writes
+-- with ANALYZE. A concurrent (auto)vacuum of messages would overwrite
+-- pg_class.reltuples in place, mid-test; holding this lock keeps it out.
+lock table public.messages in share update exclusive mode;
 
 -- public.search_messages(query, conversation) (v0.16): message search across
 -- all history, written from its contract:
@@ -345,6 +349,46 @@ select is((select a.seq - b.seq from _scans a, _scans b where a.what = 'unscoped
   0::bigint, 'an unscoped search never scans messages sequentially');
 select is((select a.seq - b.seq from _scans a, _scans b where a.what = 'scoped' and b.what = 'unscoped'),
   0::bigint, 'a scoped search never scans messages sequentially');
+
+-- 11 the plan's shape: the pattern is computed once, not per row -----------------
+-- search_messages' own query, planned the way a SQL function body is planned
+-- (parameters as parameters: a generic plan), run as its owner with ada's
+-- claims. The LIKE pattern must be an InitPlan -- computed once -- so the
+-- Recheck Cond and Filter never call escape_like/fold_search for every
+-- candidate row, and the unscoped search still starts from the trigram index.
+create or replace function plan_of(q text) returns text language plpgsql as $$
+declare r record; t text := '';
+begin
+  for r in execute 'explain (costs off) ' || q loop
+    t := t || r."QUERY PLAN" || E'\n';
+  end loop;
+  return t;
+end $$;
+select set_config('request.jwt.claims',
+  json_build_object('sub', '00000000-0000-0000-0000-0000000a5001', 'role', 'authenticated',
+    'email', 'ada@search.test', 'session_id', 'a5000000-0000-0000-0000-0000000a5001')::text, true);
+select set_config('plan_cache_mode', 'force_generic_plan', true);
+do $$
+begin
+  execute 'prepare search_body(text, uuid) as ' || (
+    select regexp_replace(regexp_replace(prosrc, '\mquery\M', '$1', 'g'), '\mconversation\M', '$2', 'g')
+      from pg_proc where oid = 'public.search_messages'::regproc);
+end $$;
+create temp table _plans (what text primary key, plan text) on commit drop;
+insert into _plans values
+  ('unscoped', plan_of($$execute search_body('istanbul', null)$$)),
+  ('scoped', plan_of($$execute search_body('istanbul', 'a5c00000-0000-0000-0000-000000000001')$$));
+deallocate search_body;
+select ok((select bool_and(plan ~ '\n\s*Recheck Cond: \(\(search_text ~~ (like_escape\()?\(InitPlan \d+\)\.col1') from _plans),
+  'the Recheck Cond compares search_text to an InitPlan: the pattern is computed once per search');
+select ok((select plan ~ 'Bitmap Index Scan on messages_search_trgm_idx' from _plans where what = 'unscoped'),
+  'an unscoped search starts from messages_search_trgm_idx');
+select is((select string_agg(what || ': ' || line, E'\n')
+             from _plans, regexp_split_to_table(plan, E'\n') line
+            where line ~ '^\s*(Recheck Cond|Filter|Index Cond):'
+              and line ~ '(escape_like|fold_search|btrim)'),
+  null,
+  'no Recheck Cond, Filter or Index Cond evaluates escape_like/fold_search per row');
 
 select * from finish();
 rollback;

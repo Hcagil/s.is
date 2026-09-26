@@ -93,34 +93,64 @@
 --    unchanged: they exist for their cost profile, not to replace it as the
 --    real authority check.
 --
---    Re-measured, same 50,000-row fixture as above, plus a SEPARATE
---    conversation the caller is not a member of, 20,000 messages, every one
---    matching "istanbul" (the densest possible foreign case for a shared
---    trigram index), EXPLAIN (ANALYZE, BUFFERS) as authenticated:
+--    That fix still left ~65ms at 20,000 foreign matches, first misread as
+--    the cost of walking the shared index. It was not (security-lead, F1
+--    second pass; escalation-lead confirmed with auto_explain on the
+--    function's own inner plan): the `set search_path = ''` on
+--    fold_search()/escape_like() stops them being inlined, and `query` is a
+--    parameter, not a constant, so the LIKE pattern
+--    `'%' || escape_like(fold_search(btrim($1))) || '%'` was never folded at
+--    plan time -- the Bitmap Heap Scan's Recheck Cond rebuilt it, three
+--    function calls and a like_escape(), for every candidate row, ~3.2us
+--    per foreign match. Fixed by building the pattern once, as an InitPlan
+--    (the scalar subquery in the WHERE clause below); the Index Cond still
+--    uses messages_search_trgm_idx, now against the InitPlan's value.
 --
---      conversation given explicitly, caller NOT a member of it: 17 buffer
---        hits, ~0.4-0.6ms, whatever the term -- rejected by the hoisted
---        is_member(conversation) check before the scan runs, same cost as
---        an empty table.
---      conversation null (search every conversation the caller belongs to),
---        with those 20,000 dense foreign matches present: ~1,750-1,985
---        buffer hits, ~65-68ms, steady across repeated (warm-cache) runs --
---        a real residual, NOT a function-call-per-row cost: the shared GIN
---        index's own posting lists for a globally common term still have to
---        be walked, and Postgres still bitmap-heap-fetches the foreign rows
---        it finds there before the (cheap) array check discards them, since
---        no index here lets it skip straight to "only the caller's own
---        conversations" within the trigram results. That scales with how
---        common the term is SYSTEM-WIDE, not with anything the caller could
---        not already infer by how long any shared search takes -- unlike
---        F1's per-row function-call cost, this is not a side channel onto
---        specific foreign content, and eliminating it entirely would need
---        the trigram index itself partitioned by conversation, which
---        membership changing over time rules out for a stored index. Left
---        as a known, now-small-relative-to-history-size cost rather than
---        built further: it does not grow per foreign MEMBER, only per
---        foreign MATCH of a given search term, and 20,000 dense matches in
---        one conversation is already an extreme case.
+--    Making the LIKE cheap exposed a second thing that had been hiding
+--    behind its cost: GIN's pending list. With fastupdate (the default),
+--    inserts go into an unordered pending list of up to 4MB that EVERY
+--    search must scan in full until a vacuum merges it into the index
+--    proper -- 623 pages for the pgTAP fixture's 6,000 unvacuumed rows --
+--    and gincostestimate() charges for it: 1,475 cost units for that fixture
+--    against 13 once merged. As long as the LIKE cost ~0.75 per row to the
+--    planner, every alternative (a Seq Scan, or messages_conversation_idx
+--    over the caller's whole history with the LIKE as a Filter) looked
+--    worse and the trigram index kept winning by accident; with the LIKE
+--    costed honestly, the planner switched to messages_conversation_idx,
+--    O(own history) per search, the exact plan this whole design exists to
+--    avoid. The index is created `with (fastupdate = off)`: rows go straight
+--    into the index, there is no pending list to scan or to price, and the
+--    trigram plan wins by 12x at fixture size. Cost: a single-row insert
+--    goes from 0.066ms to 0.118ms (median of 300, scratch DB) -- a chat
+--    message a human typed can afford 0.05ms.
+--
+--    Re-measured after both fixes: 5 own conversations of 10,000 fillers
+--    (50,000 rows, none matching), plus ONE conversation the caller is not a
+--    member of holding 100 "ankara", 1,000 "izmir" and 20,000 "istanbul"
+--    messages ("bursa" matches nothing anywhere). Median of 40 warm runs of
+--    search_messages() as an authenticated member, ms:
+--
+--      foreign matches           0       100     1,000    20,000
+--      conversation null        0.39    0.44     0.56      4.50   (was 62.75)
+--      own conversation given   0.43    0.45     0.58      4.32   (was 62.85)
+--      foreign conv given       0.39    0.39     0.39      0.40
+--
+--    What remains, stated plainly: ~0.2us per foreign match, ~4ms at 20,000
+--    dense matches. It is a bounded FREQUENCY ORACLE for a caller-chosen
+--    term: the shared trigram index's posting lists for that term are
+--    walked and the matching rows are heap-fetched before the leakproof
+--    array check discards the foreign ones, so how long a search takes
+--    still grows with how many messages the caller cannot see contain the
+--    term. It reveals at most an approximate count for terms the caller
+--    names, never which conversation, sender or text; and it is paid
+--    whether `conversation` is null OR names a conversation the caller IS a
+--    member of (the "own conversation" row above): the hoisted
+--    is_member(conversation) rejection covers only conversations the caller
+--    is NOT in. Closing it entirely would need the trigram index
+--    partitioned per conversation, which membership changing over time
+--    rules out for a stored index. security-lead's condition (2026-09-27)
+--    for accepting it is that it is documented here as exactly this, not as
+--    "no side channel".
 --
 -- 3. Access: has_app_access() and is_member(conversation_id) are both
 --    checked, explicitly, using the identical functions messages_read's
@@ -172,8 +202,12 @@ alter table public.messages
 -- Partial: a deleted message's search_text is fold_search('') = '', which
 -- could never match a 2+ character query anyway, but excluding it keeps the
 -- index itself smaller as more messages get deleted over time.
+-- fastupdate = off: see point 2 -- every search would otherwise scan the
+-- whole GIN pending list, and the planner, charging for that, stops choosing
+-- this index at all. Measured cost: +0.05ms per message insert.
 create index messages_search_trgm_idx on public.messages
   using gin (search_text extensions.gin_trgm_ops)
+  with (fastupdate = off)
   where deleted is null;
 
 -- security definer: see point 2 above. has_app_access() and is_member() are
@@ -210,7 +244,12 @@ language sql stable security definer set search_path = '' as $$
      and char_length(btrim(query)) >= 2
      and m.deleted is null
      and (conversation is null or m.conversation_id = conversation)
-     and m.search_text like '%' || public.escape_like(public.fold_search(btrim(query))) || '%' escape '\'
+     -- The pattern is a scalar subquery so it is built ONCE, as an InitPlan,
+     -- not once per candidate row: fold_search()/escape_like() carry a SET
+     -- search_path, which stops them being inlined, and `query` is a
+     -- parameter, not a constant, so nothing else folds this expression at
+     -- plan time -- see point 2.
+     and m.search_text like (select '%' || public.escape_like(public.fold_search(btrim(query))) || '%') escape '\'
    order by m.created_at desc
    limit 50
 $$;

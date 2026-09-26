@@ -11,6 +11,7 @@ import '../domain/message.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
 import '../domain/conversation.dart';
+import '../domain/highlight.dart';
 import 'message_screen.dart';
 import 'person_avatar.dart';
 
@@ -25,24 +26,47 @@ class ConversationList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final conversations = ref.watch(conversationListProvider);
+    final searchQuery = ref.watch(
+      chatListSearchProvider.select((s) => s.query),
+    );
+    // A search failure keeps whatever results were already on screen; only
+    // the notice is new.
+    ref.listen(chatListSearchProvider.select((s) => s.failure), (
+      previous,
+      next,
+    ) {
+      if (next != null) showSisNotice(context, next.message, isError: true);
+    });
     return Scaffold(
-      body: switch (conversations) {
-        AsyncData(:final value) when value.isEmpty => const _Empty(),
-        AsyncData(:final value) => RefreshIndicator(
-          onRefresh: () =>
-              ref.read(conversationListProvider.notifier).refresh(),
-          child: ListView.separated(
-            itemCount: value.length,
-            separatorBuilder: (_, _) => const Divider(),
-            itemBuilder: (context, i) => _ConversationTile(value[i]),
+      body: Column(
+        children: [
+          const _ListSearchField(),
+          Expanded(
+            child: searchQuery.isEmpty
+                ? switch (conversations) {
+                    AsyncData(:final value) when value.isEmpty =>
+                      const _Empty(),
+                    AsyncData(:final value) => RefreshIndicator(
+                      onRefresh: () =>
+                          ref.read(conversationListProvider.notifier).refresh(),
+                      child: ListView.separated(
+                        itemCount: value.length,
+                        separatorBuilder: (_, _) => const Divider(),
+                        itemBuilder: (context, i) =>
+                            _ConversationTile(value[i]),
+                      ),
+                    ),
+                    AsyncError(:final error) => _Failed(
+                      reason: reasonOf(error),
+                      onRetry: () =>
+                          ref.read(conversationListProvider.notifier).refresh(),
+                    ),
+                    _ => const Center(child: SisLoadingLogo(size: 40)),
+                  }
+                : const _SearchResults(),
           ),
-        ),
-        AsyncError(:final error) => _Failed(
-          reason: reasonOf(error),
-          onRetry: () => ref.read(conversationListProvider.notifier).refresh(),
-        ),
-        _ => const Center(child: SisLoadingLogo(size: 40)),
-      },
+        ],
+      ),
       floatingActionButton: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -402,4 +426,147 @@ class _Failed extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// "Search messages" above the chat list. Typing (debounced by the
+/// controller) replaces the list with [_SearchResults]; clearing it goes
+/// back to the plain list.
+class _ListSearchField extends ConsumerStatefulWidget {
+  const _ListSearchField();
+
+  @override
+  ConsumerState<_ListSearchField> createState() => _ListSearchFieldState();
+}
+
+class _ListSearchFieldState extends ConsumerState<_ListSearchField> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: TextField(
+        key: const ValueKey('list-search-field'),
+        controller: _controller,
+        onChanged: (text) {
+          ref.read(chatListSearchProvider.notifier).search(text);
+          setState(() {}); // only to show/hide the clear button below
+        },
+        decoration: InputDecoration(
+          hintText: 'Search messages',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _controller.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    _controller.clear();
+                    ref.read(chatListSearchProvider.notifier).clear();
+                    setState(() {});
+                  },
+                ),
+          filled: true,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(24),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Hits across every conversation for the chat list's own search box, newest
+/// first: each row names the conversation the hit is in (not the sender),
+/// with its snippet's matched text highlighted.
+class _SearchResults extends ConsumerWidget {
+  const _SearchResults();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(chatListSearchProvider);
+    final conversations = {
+      for (final c in ref.watch(conversationListProvider).value ?? const [])
+        c.id: c,
+    };
+    if (state.results.isEmpty) {
+      return const Center(child: Text('No messages found'));
+    }
+    return ListView.separated(
+      itemCount: state.results.length,
+      separatorBuilder: (_, _) => const Divider(),
+      itemBuilder: (context, i) {
+        final message = state.results[i];
+        final conversation = conversations[message.conversationId];
+        final label = conversation?.label ?? 'Conversation';
+        final seed =
+            conversation?.other?.userId ??
+            conversation?.id ??
+            message.conversationId;
+        return ListTile(
+          key: ValueKey('list-search-result-${message.id}'),
+          leading: PersonAvatar(label: label, seed: seed),
+          title: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Text.rich(
+            TextSpan(
+              children: _highlighted(
+                previewText(message),
+                state.query,
+                context,
+              ),
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: Text(previewTime(message.createdAt, DateTime.now())),
+          onTap: () => openConversation(
+            context,
+            ref,
+            message.conversationId,
+            title: conversation?.label,
+            otherUserId: conversation?.other?.userId,
+            group: conversation?.isGroup ?? false,
+            searchQuery: state.query,
+            searchHitId: message.id,
+          ),
+        );
+      },
+    );
+  }
+
+  /// [text] as spans, with every case-insensitive occurrence of [query]
+  /// styled as a highlight.
+  List<TextSpan> _highlighted(String text, String query, BuildContext context) {
+    final offsets = matchOffsets(text, query);
+    if (offsets.isEmpty) return [TextSpan(text: text)];
+    final length = query.trim().length;
+    final highlight = TextStyle(
+      fontWeight: FontWeight.w800,
+      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+    );
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    for (final start in offsets) {
+      if (start > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, start)));
+      }
+      spans.add(
+        TextSpan(text: text.substring(start, start + length), style: highlight),
+      );
+      cursor = start + length;
+    }
+    if (cursor < text.length) spans.add(TextSpan(text: text.substring(cursor)));
+    return spans;
+  }
 }

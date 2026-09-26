@@ -5,6 +5,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
@@ -18,10 +19,12 @@ import '../../notifications/application/push_controller.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
+import '../domain/highlight.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
 import '../domain/read_marks.dart';
 import 'attachment_sheet.dart';
+import 'chat_search_bar.dart';
 import 'conversation_list.dart';
 import 'message_actions.dart';
 import 'person_avatar.dart';
@@ -30,6 +33,9 @@ import 'profile_pages.dart';
 
 /// Opens [conversationId] and closes it again when the screen is popped, so
 /// the Realtime subscription lives exactly as long as the screen does.
+///
+/// [searchQuery] opens the screen with in-chat search already running that
+/// query, [searchHitId] current -- the chat list's own search leads here.
 Future<void> openConversation(
   BuildContext context,
   WidgetRef ref,
@@ -37,6 +43,8 @@ Future<void> openConversation(
   String? title,
   String? otherUserId,
   bool group = false,
+  String? searchQuery,
+  String? searchHitId,
 }) async {
   final list = ref.read(conversationListProvider.notifier);
   // A conversation can be opened from inside another (a group member's page
@@ -49,8 +57,13 @@ Future<void> openConversation(
   unawaited(ref.read(pushSourceProvider).clearConversation(conversationId));
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
-      builder: (_) =>
-          MessageScreen(title: title, otherUserId: otherUserId, group: group),
+      builder: (_) => MessageScreen(
+        title: title,
+        otherUserId: otherUserId,
+        group: group,
+        initialSearchQuery: searchQuery,
+        initialSearchHitId: searchHitId,
+      ),
     ),
   );
   // Again on leaving, so a message that landed while the screen was open is
@@ -91,12 +104,14 @@ String? _status(WidgetRef ref, String? other) {
 }
 
 /// The open conversation: its messages, and a composer.
-class MessageScreen extends ConsumerWidget {
+class MessageScreen extends ConsumerStatefulWidget {
   const MessageScreen({
     super.key,
     this.title,
     this.otherUserId,
     this.group = false,
+    this.initialSearchQuery,
+    this.initialSearchHitId,
   });
 
   final String? title;
@@ -108,8 +123,97 @@ class MessageScreen extends ConsumerWidget {
   /// for a group, where the header shows only who is typing.
   final String? otherUserId;
 
+  /// Opens the screen with in-chat search already running this query (the
+  /// chat list's own search leads here); null opens with the normal header.
+  final String? initialSearchQuery;
+
+  /// The hit made current once [initialSearchQuery] has run.
+  final String? initialSearchHitId;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MessageScreen> createState() => _MessageScreenState();
+}
+
+class _MessageScreenState extends ConsumerState<MessageScreen> {
+  final _scroll = ScrollController();
+  final _bubbleKeys = <String, GlobalKey>{};
+  late bool _searching =
+      widget.initialSearchQuery != null &&
+      widget.initialSearchQuery!.trim().isNotEmpty;
+
+  /// [widget.initialSearchHitId], until the search it came with produces
+  /// hits and it is made current -- then null.
+  late String? _pendingHitId = widget.initialSearchHitId;
+
+  // ponytail: bubbles vary in height (text length, attachments), so there is
+  // no exact item extent to jump to directly; this guess only needs to land
+  // close enough that the target bubble gets built, and ensureVisible below
+  // finishes the job exactly. Upgrade path: scrollable_positioned_list, if a
+  // very long conversation ever makes the guess land too far off.
+  static const _estimatedItemExtent = 72.0;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  GlobalKey _keyFor(String messageId) =>
+      _bubbleKeys.putIfAbsent(messageId, GlobalKey.new);
+
+  void _openSearch() => setState(() => _searching = true);
+
+  void _closeSearch() {
+    ref.read(chatSearchProvider.notifier).close();
+    ref.read(messagesProvider.notifier).returnToLive();
+    setState(() => _searching = false);
+  }
+
+  /// Brings [hit] on screen: loads the window around it first when it is
+  /// older than what is currently loaded.
+  Future<void> _goToHit(Message hit) async {
+    final loaded = ref.read(messagesProvider).value ?? const [];
+    if (!loaded.any((m) => m.id == hit.id)) {
+      final result = await ref
+          .read(messagesProvider.notifier)
+          .jumpToAround(hit);
+      if (result case Err(:final failure) when mounted) {
+        showSisNotice(context, failure.message, isError: true);
+        return;
+      }
+    }
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollTo(hit.id));
+  }
+
+  void _scrollTo(String messageId) {
+    if (!mounted || !_scroll.hasClients) return;
+    final list = ref.read(messagesProvider).value ?? const [];
+    final matchIndex = list.indexWhere((m) => m.id == messageId);
+    if (matchIndex < 0) return;
+    // The list is reversed: display index 0 is the newest, at the bottom.
+    final displayIndex = list.length - 1 - matchIndex;
+    final target = (displayIndex * _estimatedItemExtent).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    _scroll.jumpTo(target);
+    // The jump above only gets close; once the target bubble is actually
+    // built, bring it exactly into view.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _bubbleKeys[messageId]?.currentContext;
+      if (target != null) {
+        Scrollable.ensureVisible(
+          target,
+          alignment: 0.5,
+          duration: const Duration(milliseconds: 200),
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final messages = ref.watch(messagesProvider);
     // Whose messages are "mine" comes from the session, not from the screen.
     final me = switch (ref.watch(sessionControllerProvider).value) {
@@ -124,8 +228,29 @@ class MessageScreen extends ConsumerWidget {
       if (previous?.value?.lastOrNull?.id == latest.last.id) return;
       ref.read(typingProvider.notifier).messageFrom(latest.last.senderId);
     });
-    final status = _status(ref, otherUserId);
-    final names = group
+    // Whenever the current hit changes -- a fresh search, next/previous, or
+    // one selected before this screen even opened -- scroll to it.
+    ref.listen(chatSearchProvider.select((s) => s.current), (previous, next) {
+      if (next != null && next.id != previous?.id) {
+        unawaited(_goToHit(next));
+      }
+    });
+    // The chat list's own search opens this screen already asking for one
+    // particular hit; make it current as soon as its search (run by
+    // ChatSearchBar's own initState) produces results.
+    ref.listen(chatSearchProvider.select((s) => s.hits), (previous, next) {
+      final pending = _pendingHitId;
+      if (pending != null && next.any((m) => m.id == pending)) {
+        _pendingHitId = null;
+        ref.read(chatSearchProvider.notifier).select(pending);
+      }
+    });
+    final searchQuery = ref.watch(chatSearchProvider.select((s) => s.query));
+    final currentHitId = ref.watch(
+      chatSearchProvider.select((s) => s.current?.id),
+    );
+    final status = _status(ref, widget.otherUserId);
+    final names = widget.group
         ? {
             for (final m in ref.watch(membersProvider).value ?? const [])
               m.userId: m.displayName,
@@ -138,69 +263,88 @@ class MessageScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
-        title: InkWell(
-          key: const ValueKey('conversation-title'),
-          borderRadius: BorderRadius.circular(8),
-          onTap: () {
-            final id = conversationId;
-            if (id == null) return;
-            final page = group
-                ? GroupScreen(conversationId: id, title: title ?? 'Group')
-                : otherUserId == null
-                ? null
-                // Already in this chat: no Message button on their page.
-                : PersonScreen(
-                    userId: otherUserId!,
-                    fallbackName: title,
-                    showMessage: false,
-                  );
-            if (page == null) return;
-            Navigator.of(context)
-                .push(MaterialPageRoute<void>(builder: (_) => page));
-          },
-          child: SizedBox(
-            width: double.infinity,
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Row(
-                children: [
-                  PersonAvatar(
-                    label: title ?? 'Conversation',
-                    seed:
-                        otherUserId ??
-                        conversationId ??
-                        title ??
-                        'Conversation',
-                    radius: 18,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+        title: _searching
+            ? ChatSearchBar(
+                initialQuery: widget.initialSearchQuery,
+                onClose: _closeSearch,
+              )
+            : InkWell(
+                key: const ValueKey('conversation-title'),
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
+                  final id = conversationId;
+                  if (id == null) return;
+                  final page = widget.group
+                      ? GroupScreen(
+                          conversationId: id,
+                          title: widget.title ?? 'Group',
+                        )
+                      : widget.otherUserId == null
+                      ? null
+                      // Already in this chat: no Message button on their page.
+                      : PersonScreen(
+                          userId: widget.otherUserId!,
+                          fallbackName: widget.title,
+                          showMessage: false,
+                        );
+                  if (page == null) return;
+                  Navigator.of(context)
+                      .push(MaterialPageRoute<void>(builder: (_) => page));
+                },
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Row(
                       children: [
-                        Text(
-                          title ?? 'Conversation',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        PersonAvatar(
+                          label: widget.title ?? 'Conversation',
+                          seed:
+                              widget.otherUserId ??
+                              conversationId ??
+                              widget.title ??
+                              'Conversation',
+                          radius: 18,
                         ),
-                        if (status != null)
-                          Text(
-                            status,
-                            key: const ValueKey('conversation-status'),
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontWeight: FontWeight.w600,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.title ?? 'Conversation',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (status != null)
+                                Text(
+                                  status,
+                                  key: const ValueKey('conversation-status'),
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                 ),
+                            ],
                           ),
+                        ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-        ),
+        actions: _searching
+            ? null
+            : [
+                IconButton(
+                  key: const ValueKey('chat-search-button'),
+                  icon: const Icon(Icons.search),
+                  onPressed: _openSearch,
+                ),
+              ],
       ),
       body: SisGlow(
         child: SafeArea(
@@ -212,8 +356,13 @@ class MessageScreen extends ConsumerWidget {
                     child: Text('No messages yet. Say something.'),
                   ),
                   AsyncData(:final value) => ListView.builder(
+                    controller: _scroll,
                     // Newest at the bottom, which is where the composer is.
                     reverse: true,
+                    // Generous on purpose: a jump-to-hit needs the target
+                    // bubble built even when it is far from the current
+                    // scroll offset (see _scrollTo).
+                    scrollCacheExtent: ScrollCacheExtent.pixels(2000),
                     itemCount: value.length,
                     itemBuilder: (context, i) {
                       final index = value.length - 1 - i;
@@ -230,19 +379,21 @@ class MessageScreen extends ConsumerWidget {
                           (message.isPending ||
                               !isReadByAnyone(marks, message.createdAt));
                       final bubble = GestureDetector(
+                        key: _keyFor(message.id),
                         onLongPress: () => showMessageActions(
                           context,
                           ref,
                           message,
                           me: me,
-                          group: group,
+                          group: widget.group,
                         ),
                         child: _Bubble(
                           message,
                           key: ValueKey('read-$unread-${message.id}'),
                           mine: mine,
                           unread: unread,
-                          sender: group && !mine && startsRun(value, index)
+                          sender:
+                              widget.group && !mine && startsRun(value, index)
                               ? (names[message.senderId] ?? 'Member')
                               : null,
                           quoted: quoted,
@@ -251,6 +402,8 @@ class MessageScreen extends ConsumerWidget {
                               : quoted.senderId == me
                               ? 'You'
                               : (names[quoted.senderId] ?? 'Member'),
+                          highlightQuery: searchQuery,
+                          isCurrentHit: message.id == currentHitId,
                         ),
                       );
                       return message.deletion == MessageDeletion.vanished
@@ -288,6 +441,8 @@ class _Bubble extends StatelessWidget {
     this.sender,
     this.quoted,
     this.quotedName,
+    this.highlightQuery,
+    this.isCurrentHit = false,
   });
 
   final Message message;
@@ -304,17 +459,27 @@ class _Bubble extends StatelessWidget {
   /// The sender's name, shown above the first bubble of their run in a group.
   final String? sender;
 
+  /// The active in-chat search query, if any: every match in [message]'s
+  /// body is highlighted.
+  final String? highlightQuery;
+
+  /// This bubble is the search's current hit -- shown with the same amber
+  /// edge as an unread bubble, on either side.
+  final bool isCurrentHit;
+
   // The bubble's own outer cap and the two insets that eat into it: 12 px
-  // padding, plus -- for a "mine" bubble only -- a 1.5 px border that is
-  // always laid out (even transparent, when read). _BodyWithTime measures
-  // its fits-inline decision against [_contentWidth], not a copy of these
-  // numbers, so the two cannot drift apart.
+  // padding, plus -- for a "mine" bubble, or the current search hit -- a
+  // 1.5 px border that is always laid out (even transparent, when read).
+  // _BodyWithTime measures its fits-inline decision against [_contentWidth],
+  // not a copy of these numbers, so the two cannot drift apart.
   static const _maxWidth = 320.0;
   static const _hPad = 12.0;
   static const _borderWidth = 1.5;
 
+  bool get _hasBorder => mine || isCurrentHit;
+
   double get _contentWidth =>
-      _maxWidth - 2 * _hPad - (mine ? 2 * _borderWidth : 0);
+      _maxWidth - 2 * _hPad - (_hasBorder ? 2 * _borderWidth : 0);
 
   @override
   Widget build(BuildContext context) {
@@ -338,10 +503,12 @@ class _Bubble extends StatelessWidget {
             bottomLeft: mine ? r : tail,
             bottomRight: mine ? tail : r,
           ),
-          border: mine
+          border: _hasBorder
               ? Border.all(
                   width: _borderWidth,
-                  color: unread ? brand.unreadEdge : Colors.transparent,
+                  color: (unread || isCurrentHit)
+                      ? brand.unreadEdge
+                      : Colors.transparent,
                 )
               : null,
         ),
@@ -504,6 +671,7 @@ class _Bubble extends StatelessWidget {
                       alpha: 0.6,
                     ),
                   ),
+                  highlightQuery: highlightQuery,
                 )
               else ...[
                 if (message.body.isNotEmpty)
@@ -518,6 +686,7 @@ class _Bubble extends StatelessWidget {
                         fontSize: 15,
                         color: mine ? Colors.white : brand.text,
                       ),
+                      highlightQuery: highlightQuery,
                       linkColor: mine
                           ? Colors.white
                           : Theme.of(context).colorScheme.primary,
@@ -568,11 +737,16 @@ class _BodyWithTime extends StatelessWidget {
     required this.topPadding,
     required this.timeText,
     required this.timeStyle,
+    this.highlightQuery,
   });
 
   final Message message;
   final TextStyle bodyStyle;
   final Color linkColor;
+
+  /// The active in-chat search query, if any -- passed straight through to
+  /// both [_LinkedText]s below.
+  final String? highlightQuery;
 
   /// The bubble's real content column: its outer cap minus padding and,
   /// for a "mine" bubble, its always-laid-out border. Passed down from
@@ -646,6 +820,7 @@ class _BodyWithTime extends StatelessWidget {
               key: ValueKey('body-${message.id}'),
               style: bodyStyle,
               linkColor: linkColor,
+              highlightQuery: highlightQuery,
             ),
           ),
           Padding(
@@ -687,6 +862,7 @@ class _BodyWithTime extends StatelessWidget {
               key: ValueKey('body-${message.id}'),
               style: bodyStyle,
               linkColor: linkColor,
+              highlightQuery: highlightQuery,
             ),
           ),
           LayoutId(id: _BodyTimeSlot.time, child: timeWidget),
@@ -1150,11 +1326,16 @@ class _LinkedText extends ConsumerStatefulWidget {
     super.key,
     required this.style,
     required this.linkColor,
+    this.highlightQuery,
   });
 
   final String text;
   final TextStyle style;
   final Color linkColor;
+
+  /// The active in-chat search query, if any: every match is highlighted,
+  /// not just the current hit (see `_Bubble.isCurrentHit` for that).
+  final String? highlightQuery;
 
   @override
   ConsumerState<_LinkedText> createState() => _LinkedTextState();
@@ -1185,18 +1366,59 @@ class _LinkedTextState extends ConsumerState<_LinkedText> {
     }
   }
 
+  /// [text], split around every case-insensitive match of the active search
+  /// query and given a highlighted background. Unlike a link's style, this
+  /// never touches links (a match inside a link stays link-styled only --
+  /// known simplification, links are rare inside a search hit).
+  List<TextSpan> _highlightSpans(String text) {
+    final query = widget.highlightQuery;
+    if (query == null || query.trim().isEmpty) {
+      return [TextSpan(text: text)];
+    }
+    final offsets = matchOffsets(text, query);
+    if (offsets.isEmpty) {
+      return [TextSpan(text: text)];
+    }
+    final length = query.trim().length;
+    final spans = <TextSpan>[];
+    var start = 0;
+    for (final offset in offsets) {
+      if (start < offset) {
+        spans.add(TextSpan(text: text.substring(start, offset)));
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(offset, offset + length),
+          // The app's own "unread" amber, reused as the search highlight.
+          style: const TextStyle(
+            backgroundColor: Color(0xFFFFD54F),
+            color: Colors.black87,
+          ),
+        ),
+      );
+      start = offset + length;
+    }
+    if (start < text.length) {
+      spans.add(TextSpan(text: text.substring(start)));
+    }
+    return spans;
+  }
+
   @override
   Widget build(BuildContext context) {
     _clear();
     final segments = linkSegments(widget.text);
-    if (segments.every((s) => s.link == null)) {
+    final highlighting =
+        widget.highlightQuery != null &&
+        widget.highlightQuery!.trim().isNotEmpty;
+    if (segments.every((s) => s.link == null) && !highlighting) {
       return Text(widget.text, style: widget.style);
     }
     final spans = <TextSpan>[];
     for (final s in segments) {
       final link = s.link;
       if (link == null) {
-        spans.add(TextSpan(text: s.text));
+        spans.addAll(_highlightSpans(s.text));
         continue;
       }
       final tap = TapGestureRecognizer()..onTap = () => _open(link);

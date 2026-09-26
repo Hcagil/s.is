@@ -297,8 +297,13 @@ final messagesProvider =
 /// timestamp, and the insert comes back through Realtime like any other, so
 /// the sender's own message appears exactly once.
 class MessagesController extends AsyncNotifier<List<Message>> {
+  /// Whether the shown list is a [jumpToAround] snapshot rather than the
+  /// live, newest window.
+  bool _jumped = false;
+
   @override
   Future<List<Message>> build() async {
+    _jumped = false;
     final conversationId = ref.watch(openConversationProvider);
     if (conversationId == null) return const [];
 
@@ -532,6 +537,37 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     }
     return result;
   }
+
+  /// Replaces the shown messages with a window around [anchor] (oldest
+  /// first, anchor included) -- for jumping to a search hit older than what
+  /// is currently loaded. The [Err] reason is the caller's to show; state is
+  /// left as it was on failure. Call [returnToLive] to go back to the live,
+  /// newest window.
+  Future<Result<void>> jumpToAround(Message anchor) async {
+    final conversationId = ref.read(openConversationProvider);
+    if (conversationId == null) return const Err(DeniedFailure());
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .messagesAround(conversationId, anchor);
+    if (result case Ok(:final value)
+        when ref.mounted &&
+            ref.read(openConversationProvider) == conversationId) {
+      _jumped = true;
+      state = AsyncData(value);
+    }
+    return switch (result) {
+      Ok() => const Ok(null),
+      Err(:final failure) => Err(failure),
+    };
+  }
+
+  /// Back to the live, newest window -- undoes [jumpToAround]. A no-op when
+  /// nothing was jumped.
+  void returnToLive() {
+    if (!_jumped) return;
+    _jumped = false;
+    ref.invalidateSelf();
+  }
 }
 
 /// The message the composer is answering, or null. Cleared when another
@@ -718,6 +754,15 @@ class ChatSearchController extends Notifier<ChatSearchState> {
   /// Closes the search: no query, no hits, nothing current.
   void close() => state = const ChatSearchState();
 
+  /// Makes the hit with [messageId] current, when it is among [state.hits] --
+  /// for opening a conversation already jumped to one particular result (the
+  /// chat list's own search leads here). A no-op otherwise.
+  void select(String messageId) {
+    final index = state.hits.indexWhere((m) => m.id == messageId);
+    if (index < 0) return;
+    state = ChatSearchState(query: state.query, hits: state.hits, index: index);
+  }
+
   /// Moves toward an older hit (hits are newest first, so a higher index).
   void next() => _move(1);
 
@@ -736,12 +781,21 @@ class ChatSearchController extends Notifier<ChatSearchState> {
 
 /// The chat list's own search box: every conversation the caller belongs to.
 final class ChatListSearchState {
-  const ChatListSearchState({this.query = '', this.results = const []});
+  const ChatListSearchState({
+    this.query = '',
+    this.results = const [],
+    this.failure,
+  });
 
   final String query;
 
   /// Hits across every conversation, newest first.
   final List<Message> results;
+
+  /// The last search failure, if any -- for the screen to show as a notice
+  /// while [results] stays whatever it was before. Cleared by the next
+  /// search attempt, success or failure.
+  final Failure? failure;
 }
 
 final chatListSearchProvider =
@@ -780,8 +834,16 @@ class ChatListSearchController extends Notifier<ChatListSearchState> {
     _debounce = Timer(const Duration(milliseconds: 300), () async {
       final result = await ref.read(chatRepositoryProvider).search(query);
       if (!ref.mounted || generation != _generation) return;
-      if (result case Ok(:final value)) {
-        state = ChatListSearchState(query: query, results: value);
+      switch (result) {
+        case Ok(:final value):
+          state = ChatListSearchState(query: query, results: value);
+        case Err(:final failure):
+          // The list stays usable: only the failure is new, not the results.
+          state = ChatListSearchState(
+            query: query,
+            results: state.results,
+            failure: failure,
+          );
       }
     });
   }

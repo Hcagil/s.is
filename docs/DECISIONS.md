@@ -819,3 +819,9 @@ A read retries at most once (`retriedOnce`), so a dead server is reported in
 about a second instead of ~7 s, while one network blip is still ridden out.
 Message bubbles hug their text again (a v0.13 time row had stretched every
 bubble to full width).
+
+`conversation_members_read` got the same `has_app_access()` InitPlan wrap as
+`messages_read` above (5613 buffer hits/~50ms → 1240/~2.5ms at 400
+memberships), since `conversation_previews`'s LATERAL scans it per
+conversation. Every other live RLS policy with the same bare call in its
+USING/WITH CHECK got the identical wrap, predicate otherwise unchanged.

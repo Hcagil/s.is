@@ -825,3 +825,15 @@ bubble to full width).
 memberships), since `conversation_previews`'s LATERAL scans it per
 conversation. Every other live RLS policy with the same bare call in its
 USING/WITH CHECK got the identical wrap, predicate otherwise unchanged.
+
+## 2026-09-26 — The time sits on the last line when it fits
+
+Supersedes the time-on-its-own-row layout recorded above. When the body's
+last line, a 6 px gap and the time fit inside the bubble's content column,
+the time sits on that line at the bottom-right, as in WhatsApp; otherwise it
+keeps its own row. The column is the real one: 320 minus padding, and minus
+the 1.5 px unread edge on your own messages. The sender name, "Forwarded"
+label and reply quote still widen the bubble, and the time stays at the
+right edge. Body and time remain separate widgets, so each is found by its
+own text and key; one span holding both was rejected for that reason.
+Right-to-left text always uses the own row until an RTL locale ships.

@@ -5,7 +5,6 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
@@ -359,99 +358,93 @@ class _Bubble extends StatelessWidget {
                   ],
                 ),
               if (message.forwarded)
-                _IgnoreIntrinsicWidth(
-                  child: Padding(
-                    key: ValueKey('forwarded-${message.id}'),
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.shortcut,
-                          size: 14,
-                          color: mine
-                              ? Colors.white70
-                              : brand.text.withValues(alpha: 0.6),
-                        ),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            'Forwarded',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontStyle: FontStyle.italic,
-                              color: mine
-                                  ? Colors.white70
-                                  : brand.text.withValues(alpha: 0.6),
-                            ),
+                Padding(
+                  key: ValueKey('forwarded-${message.id}'),
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.shortcut,
+                        size: 14,
+                        color: mine
+                            ? Colors.white70
+                            : brand.text.withValues(alpha: 0.6),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Forwarded',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: mine
+                                ? Colors.white70
+                                : brand.text.withValues(alpha: 0.6),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               if (message.replyTo != null && !message.isDeleted)
-                _IgnoreIntrinsicWidth(
-                  child: Container(
-                    key: ValueKey('quote-${message.id}'),
-                    margin: const EdgeInsets.only(bottom: 6),
-                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                    decoration: BoxDecoration(
-                      color: (mine ? Colors.white : brand.text).withValues(
-                        alpha: 0.12,
-                      ),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border(
-                        left: BorderSide(
-                          color: mine
-                              ? Colors.white
-                              : Theme.of(context).colorScheme.primary,
-                          width: 3,
-                        ),
+                Container(
+                  key: ValueKey('quote-${message.id}'),
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                  decoration: BoxDecoration(
+                    color: (mine ? Colors.white : brand.text).withValues(
+                      alpha: 0.12,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border(
+                      left: BorderSide(
+                        color: mine
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.primary,
+                        width: 3,
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (quotedName != null)
-                          Text(
-                            quotedName!,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: mine
-                                  ? Colors.white
-                                  : Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (quotedName != null)
                         Text(
-                          quoteText(quoted),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                          quotedName!,
                           style: TextStyle(
-                            fontSize: 13,
-                            color: mine ? Colors.white : brand.text,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: mine
+                                ? Colors.white
+                                : Theme.of(context).colorScheme.primary,
                           ),
                         ),
-                      ],
-                    ),
+                      Text(
+                        quoteText(quoted),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: mine ? Colors.white : brand.text,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               if (sender != null)
-                _IgnoreIntrinsicWidth(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: Text(
-                      sender!,
-                      key: ValueKey('sender-${message.id}'),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: personTint(context, message.senderId, ink: true),
-                      ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(
+                    sender!,
+                    key: ValueKey('sender-${message.id}'),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: personTint(context, message.senderId, ink: true),
                     ),
                   ),
                 ),
@@ -715,29 +708,6 @@ class _BodyTimeLayout extends MultiChildLayoutDelegate {
       targetWidth != oldDelegate.targetWidth ||
       bodyWidth != oldDelegate.bodyWidth ||
       bodyHeight != oldDelegate.bodyHeight;
-}
-
-/// Only the body (and an attachment) should ever decide how wide a bubble
-/// hugs to; a reply's quote preview can hold a whole message and must not
-/// itself win that decision. This makes its child invisible to an ancestor
-/// `IntrinsicWidth`'s hug query (reporting no width need of its own) while
-/// leaving its real layout untouched: it is handed whatever width the
-/// bubble actually settles on -- driven by body/attachment -- and wraps
-/// (up to its own `maxLines`) inside that, same as any ordinary child.
-class _IgnoreIntrinsicWidth extends SingleChildRenderObjectWidget {
-  const _IgnoreIntrinsicWidth({required Widget super.child});
-
-  @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _RenderIgnoreIntrinsicWidth();
-}
-
-class _RenderIgnoreIntrinsicWidth extends RenderProxyBox {
-  @override
-  double computeMinIntrinsicWidth(double height) => 0;
-
-  @override
-  double computeMaxIntrinsicWidth(double height) => 0;
 }
 
 /// A message deleted for everyone within its first hour: it shrinks and

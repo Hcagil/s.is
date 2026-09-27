@@ -1178,28 +1178,38 @@ class _ComposerState extends ConsumerState<_Composer> {
     }
   }
 
-  /// Picks and sends an image, with whatever is typed as its caption.
+  /// Picks and sends one or more images, with whatever is typed as the
+  /// caption of the first one -- the rest go with no caption, one message
+  /// per photo, same as any photo sent from the grid.
   Future<void> _attach() async {
     if (_sending) return;
-    // The phone's own photos. Closing the sheet without choosing one sends
-    // nothing.
-    final image = await showAttachmentSheet(context);
-    if (image == null || !mounted) return;
+    // The phone's own photos, or another app's. Closing the sheet without
+    // choosing anything sends nothing.
+    final images = await showAttachmentSheet(context);
+    if (images.isEmpty || !mounted) return;
     setState(() => _sending = true);
-    final result = await ref
-        .read(messagesProvider.notifier)
-        .sendImage(body: _controller.text, chosen: image);
+    final body = _controller.text;
+    for (var i = 0; i < images.length; i++) {
+      final result = await ref
+          .read(messagesProvider.notifier)
+          .sendImage(body: i == 0 ? body : '', chosen: images[i]);
+      if (!mounted) return;
+      switch (result) {
+        case null:
+          // sendImage only answers null for a null `chosen`; images[i] is
+          // never null, so this never happens -- kept for exhaustiveness.
+          break;
+        case Ok():
+          break;
+        case Err(:final failure):
+          setState(() => _sending = false);
+          showSisNotice(context, failure.message, isError: true);
+          return;
+      }
+    }
     if (!mounted) return;
     setState(() => _sending = false);
-    // null means the member backed out of the picker: not a failure.
-    switch (result) {
-      case null:
-        return;
-      case Ok():
-        _controller.clear();
-      case Err(:final failure):
-        showSisNotice(context, failure.message, isError: true);
-    }
+    _controller.clear();
   }
 
   @override

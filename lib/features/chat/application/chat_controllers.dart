@@ -11,6 +11,7 @@ import '../../profile/application/profile_controller.dart';
 import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
+import '../domain/external_picker.dart';
 import '../domain/gallery.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
@@ -39,6 +40,13 @@ final attachmentUrlProvider = FutureProvider.autoDispose.family<Uri, String>((
 
 /// The phone's own photo library, for the attachment sheet's grid.
 final galleryProvider = Provider<Gallery>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Picks photos through another app on the phone (Google Photos, the
+/// maker's gallery, Files...), for the attachment sheet's "From an app"
+/// entry.
+final externalPickerProvider = Provider<ExternalPicker>(
   (_) => throw UnimplementedError('override in main'),
 );
 

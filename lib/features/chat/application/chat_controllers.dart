@@ -301,6 +301,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// live, newest window.
   bool _jumped = false;
 
+  /// The anchor id of the most recent [jumpToAround] call -- an answer for
+  /// any earlier one is dropped, even if it arrives later.
+  String? _requestedAnchorId;
+
   @override
   Future<List<Message>> build() async {
     _jumped = false;
@@ -546,12 +550,14 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   Future<Result<void>> jumpToAround(Message anchor) async {
     final conversationId = ref.read(openConversationProvider);
     if (conversationId == null) return const Err(DeniedFailure());
+    _requestedAnchorId = anchor.id;
     final result = await ref
         .read(chatRepositoryProvider)
         .messagesAround(conversationId, anchor);
     if (result case Ok(:final value)
         when ref.mounted &&
-            ref.read(openConversationProvider) == conversationId) {
+            ref.read(openConversationProvider) == conversationId &&
+            _requestedAnchorId == anchor.id) {
       _jumped = true;
       state = AsyncData(value);
     }

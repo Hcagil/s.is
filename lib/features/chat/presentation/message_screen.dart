@@ -152,6 +152,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   // very long conversation ever makes the guess land too far off.
   static const _estimatedItemExtent = 72.0;
 
+  /// Bumped by every `_goToHit`/`_closeSearch` call; a stale [_scrollTo]
+  /// loop (or a stale `jumpToAround` follow-up) checks this and stops as
+  /// soon as a newer call has superseded it.
+  int _generation = 0;
+
   @override
   void dispose() {
     _scroll.dispose();
@@ -163,53 +168,114 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
 
   void _openSearch() => setState(() => _searching = true);
 
-  void _closeSearch() {
+  Future<void> _closeSearch() async {
+    final generation = ++_generation;
     ref.read(chatSearchProvider.notifier).close();
     ref.read(messagesProvider.notifier).returnToLive();
     setState(() => _searching = false);
+    // The reload swaps the data under the same ListView/ScrollPosition and
+    // nothing else moves the scroll back to the newest message once it
+    // lands -- wait for it, then converge on it the same way as any hit.
+    final live = await ref.read(messagesProvider.future);
+    if (mounted && live.isNotEmpty && generation == _generation) {
+      await _scrollTo(live.last.id, generation);
+    }
   }
 
   /// Brings [hit] on screen: loads the window around it first when it is
   /// older than what is currently loaded.
   Future<void> _goToHit(Message hit) async {
-    final loaded = ref.read(messagesProvider).value ?? const [];
+    final generation = ++_generation;
+    // Awaited rather than read from `.value`: right after this screen opens,
+    // the live load can still be in flight, and reading a stale empty list
+    // here would wrongly treat an about-to-load hit as needing its own
+    // (redundant, racy) window -- see MessagesController.jumpToAround's
+    // anchor-id guard for the other half of that race.
+    final loaded = await ref.read(messagesProvider.future);
+    if (generation != _generation) return; // superseded while awaiting
     if (!loaded.any((m) => m.id == hit.id)) {
       final result = await ref
           .read(messagesProvider.notifier)
           .jumpToAround(hit);
+      if (generation != _generation) return; // superseded while awaiting
       if (result case Err(:final failure) when mounted) {
         showSisNotice(context, failure.message, isError: true);
         return;
       }
     }
-    if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollTo(hit.id));
+    if (!mounted || generation != _generation) return;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _scrollTo(hit.id, generation),
+    );
   }
 
-  void _scrollTo(String messageId) {
-    if (!mounted || !_scroll.hasClients) return;
+  /// Brings [messageId] on screen, converging on it even far from the
+  /// current position: bubbles vary too much in height for one guess to
+  /// reliably land inside the target's build/cache window on a list this
+  /// long. Each miss narrows a binary search using where a genuinely BUILT
+  /// neighbour landed (found via [_nearestBuiltIndex]) instead of guessing
+  /// again blind. [generation] stops this loop as soon as a newer
+  /// `_goToHit`/`_closeSearch` call has started -- two of these racing on
+  /// the same [_scroll] would otherwise fight each other.
+  Future<void> _scrollTo(String messageId, int generation) async {
+    if (!mounted || !_scroll.hasClients || generation != _generation) return;
     final list = ref.read(messagesProvider).value ?? const [];
     final matchIndex = list.indexWhere((m) => m.id == messageId);
     if (matchIndex < 0) return;
     // The list is reversed: display index 0 is the newest, at the bottom.
     final displayIndex = list.length - 1 - matchIndex;
-    final target = (displayIndex * _estimatedItemExtent).clamp(
-      0.0,
-      _scroll.position.maxScrollExtent,
-    );
-    _scroll.jumpTo(target);
-    // The jump above only gets close; once the target bubble is actually
-    // built, bring it exactly into view.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final target = _bubbleKeys[messageId]?.currentContext;
-      if (target != null) {
+    var low = 0.0;
+    var high = _scroll.position.maxScrollExtent;
+    var pixels = (displayIndex * _estimatedItemExtent).clamp(low, high);
+
+    for (var attempt = 0; attempt < 24; attempt++) {
+      if (!mounted || !_scroll.hasClients || generation != _generation) {
+        return;
+      }
+      _scroll.jumpTo(pixels);
+      await WidgetsBinding.instance.endOfFrame;
+      final ctx = _bubbleKeys[messageId]?.currentContext;
+      if (ctx != null && ctx.mounted) {
         Scrollable.ensureVisible(
-          target,
+          ctx,
           alignment: 0.5,
           duration: const Duration(milliseconds: 200),
         );
+        return;
       }
-    });
+      final nearest = _nearestBuiltIndex(list, matchIndex);
+      if (nearest == null) return;
+      // Larger matchIndex = newer = fewer pixels. A built neighbour newer
+      // than the target means the target needs MORE pixels (scroll deeper);
+      // older means it needs fewer.
+      if (nearest > matchIndex) {
+        low = pixels;
+      } else {
+        high = pixels;
+      }
+      if ((high - low).abs() < 1) return;
+      pixels = (low + high) / 2;
+    }
+  }
+
+  /// The index (in the same oldest-first [list] as [matchIndex]) of the
+  /// message nearest [matchIndex] that currently has a built, mounted
+  /// bubble -- or null if nothing is built at all. Scans outward from
+  /// [matchIndex] both ways so the closest built neighbour wins.
+  int? _nearestBuiltIndex(List<Message> list, int matchIndex) {
+    for (var distance = 0; distance < list.length; distance++) {
+      final before = matchIndex - distance;
+      if (before >= 0 && _bubbleKeys[list[before].id]?.currentContext != null) {
+        return before;
+      }
+      final after = matchIndex + distance;
+      if (after < list.length &&
+          after != before &&
+          _bubbleKeys[list[after].id]?.currentContext != null) {
+        return after;
+      }
+    }
+    return null;
   }
 
   @override
@@ -463,8 +529,9 @@ class _Bubble extends StatelessWidget {
   /// body is highlighted.
   final String? highlightQuery;
 
-  /// This bubble is the search's current hit -- shown with the same amber
-  /// edge as an unread bubble, on either side.
+  /// This bubble is the search's current hit -- shown with a purple edge,
+  /// on either side, distinct from the amber "unread" edge (which stays on
+  /// a merely-unread bubble that is not the current hit).
   final bool isCurrentHit;
 
   // The bubble's own outer cap and the two insets that eat into it: 12 px
@@ -506,9 +573,12 @@ class _Bubble extends StatelessWidget {
           border: _hasBorder
               ? Border.all(
                   width: _borderWidth,
-                  color: (unread || isCurrentHit)
-                      ? brand.unreadEdge
-                      : Colors.transparent,
+                  // The current hit is always the app's purple, distinct
+                  // from the amber "unread" edge -- even on a bubble that
+                  // is both unread and the current hit.
+                  color: isCurrentHit
+                      ? Theme.of(context).colorScheme.primary
+                      : (unread ? brand.unreadEdge : Colors.transparent),
                 )
               : null,
         ),

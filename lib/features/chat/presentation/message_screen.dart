@@ -1193,33 +1193,23 @@ class _ComposerState extends ConsumerState<_Composer> {
     if (picked.images.isEmpty || !mounted) return;
     setState(() => _sending = true);
     final body = _controller.text;
-    for (var i = 0; i < picked.images.length; i++) {
-      final result = await ref
-          .read(messagesProvider.notifier)
-          .sendImage(body: i == 0 ? body : '', chosen: picked.images[i]);
-      if (!mounted) return;
-      switch (result) {
-        case null:
-          // sendImage only answers null for a null `chosen`; picked.images[i]
-          // is never null, so this never happens -- kept for exhaustiveness.
-          break;
-        case Ok():
-          break;
-        case Err(:final failure):
-          setState(() => _sending = false);
-          showSisNotice(context, failure.message, isError: true);
-          return;
-      }
-    }
+    final result = await ref
+        .read(messagesProvider.notifier)
+        .sendImages(picked.images, body: body);
     if (!mounted) return;
     setState(() => _sending = false);
-    _controller.clear();
-    if (picked.dropped > 0) {
-      showSisNotice(
-        context,
-        'Only the first 10 photos were sent.',
-        isError: false,
-      );
+    switch (result) {
+      case Ok():
+        _controller.clear();
+        if (picked.dropped > 0) {
+          showSisNotice(
+            context,
+            'Only the first 10 photos were sent.',
+            isError: false,
+          );
+        }
+      case Err(:final failure):
+        showSisNotice(context, failure.message, isError: true);
     }
   }
 

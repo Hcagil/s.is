@@ -32,6 +32,9 @@ class Room {
   final Set<String> members;
   final String? title;
   final messages = <Message>[];
+
+  /// conversations.avatar_path; only [SessionChat.setGroupAvatar] writes it.
+  String? avatarPath;
 }
 
 /// The server: accounts, conversations, and who holds the session now.
@@ -66,8 +69,12 @@ class Backend {
       displayName: p.displayName,
       tag: p.tag,
       email: withEmail ? emails[userId] : null,
+      avatarPath: p.avatarPath,
     );
   }
+
+  /// The `avatars` bucket: path -> bytes. Reading needs a session.
+  final avatars = <String, Uint8List>{};
 
   /// A real call is never synchronous.
   Future<void> hop() => Future<void>.delayed(Duration.zero);
@@ -199,6 +206,7 @@ class SessionChat implements ChatRepository {
       lastMessage: last?.body,
       lastMessageAt: last?.createdAt,
       lastSenderId: last?.senderId,
+      avatarPath: r.avatarPath,
     );
   }
 
@@ -438,6 +446,35 @@ class SessionChat implements ChatRepository {
   }
 
   @override
+  Future<Result<Uint8List>> avatarBytes(String avatarPath) async {
+    final who = await _as('avatarBytes:$avatarPath');
+    if (who == null) return const Err(DeniedFailure());
+    final bytes = backend.avatars[avatarPath];
+    return bytes == null ? const Err(DeniedFailure()) : Ok(bytes);
+  }
+
+  int _avatarSeq = 0;
+
+  @override
+  Future<Result<void>> setGroupAvatar(
+    String conversationId,
+    PickedImage? image, {
+    String? previousPath,
+  }) async {
+    final who = await _as('setGroupAvatar:$conversationId');
+    final room = _roomFor(conversationId, who);
+    if (room == null || room.title == null) return const Err(DeniedFailure());
+    String? path;
+    if (image != null) {
+      path = 'group/$conversationId/${++_avatarSeq}.jpg';
+      backend.avatars[path] = image.bytes;
+    }
+    room.avatarPath = path;
+    if (previousPath != null) backend.avatars.remove(previousPath);
+    return const Ok(null);
+  }
+
+  @override
   Future<Result<void>> deleteForEveryone(Message message) async {
     final who = await _as('deleteForEveryone:${message.id}');
     if (who == null) return const Err(DeniedFailure());
@@ -552,8 +589,49 @@ class SessionProfile implements ProfileRepository {
         shareTyping: shareTyping ?? p.shareTyping,
         shareLastSeen: shareLastSeen ?? p.shareLastSeen,
         shareReadStatus: shareReadStatus ?? p.shareReadStatus,
+        avatarPath: p.avatarPath,
       ),
     );
+  }
+
+  int _avatarSeq = 0;
+
+  OwnProfile _withAvatar(String who, String? path) {
+    final p = backend.profiles[who]!;
+    return backend.profiles[who] = OwnProfile(
+      userId: who,
+      displayName: p.displayName,
+      tag: p.tag,
+      onboardingDone: p.onboardingDone,
+      sharePresence: p.sharePresence,
+      shareTyping: p.shareTyping,
+      shareLastSeen: p.shareLastSeen,
+      shareReadStatus: p.shareReadStatus,
+      avatarPath: path,
+    );
+  }
+
+  @override
+  Future<Result<OwnProfile>> setAvatar(
+    PickedImage image, {
+    String? previousPath,
+  }) async {
+    final who = await _as('setAvatar');
+    if (who == null) return const Err(DeniedFailure());
+    final path = 'profile/$who/${++_avatarSeq}.jpg';
+    backend.avatars[path] = image.bytes;
+    final updated = _withAvatar(who, path);
+    if (previousPath != null) backend.avatars.remove(previousPath);
+    return Ok(updated);
+  }
+
+  @override
+  Future<Result<OwnProfile>> removeAvatar(String previousPath) async {
+    final who = await _as('removeAvatar');
+    if (who == null) return const Err(DeniedFailure());
+    final updated = _withAvatar(who, null);
+    backend.avatars.remove(previousPath);
+    return Ok(updated);
   }
 
   @override

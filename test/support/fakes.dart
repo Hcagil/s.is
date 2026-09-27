@@ -490,6 +490,37 @@ class FakeChat implements ChatRepository {
     return Ok(objectBytes[attachmentPath] ?? pngBytes);
   }
 
+  /// Every path [avatarBytes] was asked for, in order.
+  final avatarRequests = <String>[];
+  Result<Uint8List>? avatarBytesResult;
+
+  @override
+  Future<Result<Uint8List>> avatarBytes(String avatarPath) async {
+    avatarRequests.add(avatarPath);
+    if (avatarBytesResult case final forced?) return forced;
+    if (!storedObjects.contains(avatarPath)) return const Err(DeniedFailure());
+    return Ok(objectBytes[avatarPath] ?? pngBytes);
+  }
+
+  /// Every [setGroupAvatar] call, in order.
+  final groupAvatarCalls =
+      <({String conversationId, PickedImage? image, String? previousPath})>[];
+  Result<void>? groupAvatarResult;
+
+  @override
+  Future<Result<void>> setGroupAvatar(
+    String conversationId,
+    PickedImage? image, {
+    String? previousPath,
+  }) async {
+    groupAvatarCalls.add((
+      conversationId: conversationId,
+      image: image,
+      previousPath: previousPath,
+    ));
+    return groupAvatarResult ?? const Ok(null);
+  }
+
   /// Every message handed to [deleteForEveryone], in order.
   final deletedMessages = <Message>[];
 
@@ -663,6 +694,7 @@ class ChatFake implements ChatRepository {
             lastMessageAt: m.createdAt,
             lastSenderId: m.senderId,
             unread: m.senderId == self ? c.unread : c.unread + 1,
+            avatarPath: c.avatarPath,
           ),
     ];
     rows.sort((a, b) {
@@ -715,6 +747,7 @@ class ChatFake implements ChatRepository {
             lastMessage: c.lastMessage,
             lastMessageAt: c.lastMessageAt,
             lastSenderId: c.lastSenderId,
+            avatarPath: c.avatarPath,
           ),
     ]);
     return const Ok(null);
@@ -1132,6 +1165,107 @@ class ChatFake implements ChatRepository {
     return Ok(objectBytes[attachmentPath] ?? pngBytes);
   }
 
+  /// Every path [avatarBytes] was asked for, in order -- a second request
+  /// for a path already shown is a cache the caller forgot to use.
+  final avatarRequests = <String>[];
+
+  /// Per-path refusals (DeniedFailure, NetworkFailure...) for a picture that
+  /// cannot be read while others can.
+  final avatarFailures = <String, Failure>{};
+  Completer<void>? _avatarHold;
+
+  /// The next [avatarBytes] calls stay in flight until [releaseAvatars]: a
+  /// slow download, so a caller showing a spinner or a blank is caught.
+  void holdAvatars() => _avatarHold = Completer<void>();
+  void releaseAvatars() {
+    _avatarHold?.complete();
+    _avatarHold = null;
+  }
+
+  @override
+  Future<Result<Uint8List>> avatarBytes(String avatarPath) async {
+    await _tick('avatarBytes:$avatarPath');
+    avatarRequests.add(avatarPath);
+    final held = _avatarHold;
+    if (held != null) await held.future;
+    if (avatarFailures[avatarPath] case final failure?) return Err(failure);
+    if (!storedObjects.contains(avatarPath)) {
+      return const Err(DeniedFailure());
+    }
+    return Ok(objectBytes[avatarPath] ?? pngBytes);
+  }
+
+  /// Every [setGroupAvatar] call, in order.
+  final groupAvatarCalls =
+      <({String conversationId, PickedImage? image, String? previousPath})>[];
+
+  /// Forces the outcome. Left null the fake answers like set_group_avatar
+  /// plus the bucket: refused (DeniedFailure) for a conversation the caller
+  /// is not in or for a 1:1; otherwise a NEW path under
+  /// `group/<conversation>/` every time (never reused, so no cache can serve
+  /// a stale picture), the conversation row updated -- which only the next
+  /// [conversations] read shows -- and [previousPath] deleted afterwards.
+  Result<void>? groupAvatarResult;
+  Completer<void>? _groupAvatarHold;
+  int _avatarSeq = 0;
+
+  /// The next [setGroupAvatar] stays in flight until [releaseGroupAvatar].
+  void holdGroupAvatar() => _groupAvatarHold = Completer<void>();
+  void releaseGroupAvatar() {
+    _groupAvatarHold?.complete();
+    _groupAvatarHold = null;
+  }
+
+  @override
+  Future<Result<void>> setGroupAvatar(
+    String conversationId,
+    PickedImage? image, {
+    String? previousPath,
+  }) async {
+    await _tick('setGroupAvatar:$conversationId');
+    groupAvatarCalls.add((
+      conversationId: conversationId,
+      image: image,
+      previousPath: previousPath,
+    ));
+    final held = _groupAvatarHold;
+    if (held != null) await held.future;
+    if (groupAvatarResult case final forced?) return forced;
+    final current = conversationsResult;
+    if (current is! Ok<List<Conversation>>) return const Err(DeniedFailure());
+    final row = current.value.where((c) => c.id == conversationId).firstOrNull;
+    if (row == null || !row.isGroup) return const Err(DeniedFailure());
+    if (image != null) {
+      if (rejectAvatar<void>(image) case final refused?) return refused;
+    }
+    String? path;
+    if (image != null) {
+      path = 'group/$conversationId/${++_avatarSeq}.jpg';
+      store(path, image.bytes);
+    }
+    conversationsResult = Ok([
+      for (final c in current.value)
+        if (c.id != conversationId)
+          c
+        else
+          Conversation(
+            id: c.id,
+            title: c.title,
+            other: c.other,
+            lastMessage: c.lastMessage,
+            lastMessageAt: c.lastMessageAt,
+            lastSenderId: c.lastSenderId,
+            unread: c.unread,
+            avatarPath: path,
+          ),
+    ]);
+    if (previousPath != null) {
+      storedObjects.remove(previousPath);
+      objectBytes.remove(previousPath);
+    }
+    return const Ok(null);
+  }
+
   /// Every message id [deleteForEveryone] was asked to delete, in order.
   final deleted = <String>[];
 
@@ -1514,6 +1648,14 @@ List<Message> aroundRows(Iterable<Message> rows, Message anchor) {
 }
 
 /// A 1x1 PNG: real bytes a real decoder accepts, which a made-up list is not.
+/// What the `avatars` bucket refuses: anything but a JPEG, or over 1 MB.
+Err<T>? rejectAvatar<T>(PickedImage image) {
+  if (image.contentType != 'image/jpeg' || image.bytes.length > 1024 * 1024) {
+    return const Err(ProviderFailure('That picture could not be used.'));
+  }
+  return null;
+}
+
 final pngBytes = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
 );
@@ -1649,6 +1791,27 @@ class GalleryFake implements Gallery {
       bytes: pngBytes,
       contentType: 'image/png',
       extension: 'png',
+    );
+  }
+
+  /// Every [loadSquare] call: which photo, at what size.
+  final squareLoads = <({String id, int size})>[];
+
+  /// Per-photo loadSquare() outcome; no entry gives a working 512 JPEG made
+  /// from [pngBytes] (the bytes stand in for the encoded square).
+  final Map<String, PickedImage?> squareResults = {};
+
+  @override
+  Future<PickedImage?> loadSquare(GalleryPhoto photo, {int size = 512}) async {
+    squareLoads.add((id: photo.id, size: size));
+    await _tick();
+    final gate = _loadGate;
+    if (gate != null) await gate.future;
+    if (squareResults.containsKey(photo.id)) return squareResults[photo.id];
+    return PickedImage(
+      bytes: pngBytes,
+      contentType: 'image/jpeg',
+      extension: 'jpg',
     );
   }
 
@@ -1847,7 +2010,68 @@ class ProfileFake implements ProfileRepository {
       shareTyping: shareTyping ?? profile.shareTyping,
       shareLastSeen: shareLastSeen ?? profile.shareLastSeen,
       shareReadStatus: shareReadStatus ?? profile.shareReadStatus,
+      avatarPath: profile.avatarPath,
     );
+    return Ok(profile);
+  }
+
+  /// Objects in the `avatars` bucket, by path. [setAvatar] adds one at a NEW
+  /// path every time; [previousPath] is removed only once the row points at
+  /// the new one.
+  final storedAvatars = <String, Uint8List>{};
+  int _avatarSeq = 0;
+  Result<OwnProfile>? avatarResult;
+  final avatarUploads = <({PickedImage image, String? previousPath})>[];
+  final avatarRemovals = <String>[];
+  Completer<void>? _avatar;
+
+  /// The next [setAvatar] / [removeAvatar] stays in flight until
+  /// [releaseAvatar]: the upload a progress line exists for.
+  void holdAvatar() => _avatar = Completer<void>();
+  void releaseAvatar() {
+    _avatar?.complete();
+    _avatar = null;
+  }
+
+  OwnProfile _withAvatar(String? path) => profile = OwnProfile(
+    userId: profile.userId,
+    displayName: profile.displayName,
+    tag: profile.tag,
+    onboardingDone: profile.onboardingDone,
+    sharePresence: profile.sharePresence,
+    shareTyping: profile.shareTyping,
+    shareLastSeen: profile.shareLastSeen,
+    shareReadStatus: profile.shareReadStatus,
+    avatarPath: path,
+  );
+
+  @override
+  Future<Result<OwnProfile>> setAvatar(
+    PickedImage image, {
+    String? previousPath,
+  }) async {
+    await _tick('setAvatar');
+    avatarUploads.add((image: image, previousPath: previousPath));
+    final held = _avatar;
+    if (held != null) await held.future;
+    if (avatarResult case final forced?) return forced;
+    if (rejectAvatar<OwnProfile>(image) case final refused?) return refused;
+    final path = 'profile/${profile.userId}/${++_avatarSeq}.jpg';
+    storedAvatars[path] = image.bytes;
+    _withAvatar(path);
+    if (previousPath != null) storedAvatars.remove(previousPath);
+    return Ok(profile);
+  }
+
+  @override
+  Future<Result<OwnProfile>> removeAvatar(String previousPath) async {
+    await _tick('removeAvatar');
+    avatarRemovals.add(previousPath);
+    final held = _avatar;
+    if (held != null) await held.future;
+    if (avatarResult case final forced?) return forced;
+    _withAvatar(null);
+    storedAvatars.remove(previousPath);
     return Ok(profile);
   }
 

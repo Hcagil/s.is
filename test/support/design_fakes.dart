@@ -215,6 +215,22 @@ class DesignChat implements ChatRepository {
   Future<Result<Uint8List>> attachmentBytes(String attachmentPath) async =>
       const Err(NetworkFailure('not in this test'));
 
+  /// Stored pictures by path; any other path is refused, as the bucket does.
+  final avatars = <String, Uint8List>{};
+
+  @override
+  Future<Result<Uint8List>> avatarBytes(String avatarPath) async {
+    final bytes = avatars[avatarPath];
+    return bytes == null ? const Err(DeniedFailure()) : Ok(bytes);
+  }
+
+  @override
+  Future<Result<void>> setGroupAvatar(
+    String conversationId,
+    PickedImage? image, {
+    String? previousPath,
+  }) async => const Err(NetworkFailure('not in this test'));
+
   @override
   Future<Result<void>> deleteForEveryone(Message message) async {
     final rows = history[message.conversationId];
@@ -348,8 +364,17 @@ class DesignProfile implements ProfileRepository {
       shareTyping: shareTyping ?? profile.shareTyping,
       shareLastSeen: shareLastSeen ?? profile.shareLastSeen,
       shareReadStatus: shareReadStatus ?? profile.shareReadStatus,
+      avatarPath: profile.avatarPath,
     ),
   );
+  @override
+  Future<Result<OwnProfile>> setAvatar(
+    PickedImage image, {
+    String? previousPath,
+  }) async => const Err(NetworkFailure('not in this test'));
+  @override
+  Future<Result<OwnProfile>> removeAvatar(String previousPath) async =>
+      const Err(NetworkFailure('not in this test'));
   @override
   Future<Result<bool>> isTagAvailable(String tag) async => const Ok(true);
 }

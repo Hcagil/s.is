@@ -177,6 +177,14 @@ class _Wired implements ChatRepository {
   Future<Result<Uint8List>> attachmentBytes(String path) =>
       live.attachmentBytes(path);
   @override
+  Future<Result<Uint8List>> avatarBytes(String path) => live.avatarBytes(path);
+  @override
+  Future<Result<void>> setGroupAvatar(
+    String conversationId,
+    PickedImage? image, {
+    String? previousPath,
+  }) => live.setGroupAvatar(conversationId, image, previousPath: previousPath);
+  @override
   Future<Result<void>> deleteForEveryone(Message message) =>
       live.deleteForEveryone(message);
 

@@ -200,4 +200,104 @@ void main() {
       });
     }
   });
+
+  // Every path the platform returned is the channel's to clean up, whatever
+  // happened while reading: a failed read anywhere is a failed pick, and no
+  // copy -- before or after the failure -- is left in the cache.
+  group('cleanup of the copies', () {
+    /// [f] unreadable to this process (the test container is not root).
+    Future<void> unreadable(File f) async {
+      final r = await Process.run('chmod', ['000', f.path]);
+      expect(r.exitCode, 0, reason: 'chmod failed: ${r.stderr}');
+      expect(
+        () => f.readAsBytesSync(),
+        throwsA(isA<FileSystemException>()),
+        reason: 'the fixture must really be unreadable (running as root?)',
+      );
+    }
+
+    test('attachments: the 2nd of 3 unreadable -> failed, and all three '
+        'copies are gone, the one after it included', () async {
+      final a = await copied('a.jpg', 1);
+      final b = await copied('b.jpg', 2);
+      final c = await copied('c.jpg', 3);
+      await unreadable(b);
+      platform(
+        () => {
+          'paths': [a.path, b.path, c.path],
+          'dropped': 0,
+        },
+      );
+
+      expect(await picker.pickAttachments(), isA<ExternalPickFailed>());
+      expect(a.existsSync(), isFalse, reason: 'read before the failure');
+      expect(b.existsSync(), isFalse, reason: 'the one that failed');
+      expect(c.existsSync(), isFalse, reason: 'never read, still returned');
+    });
+
+    test('attachments: a copy already missing -> failed without throwing, '
+        'the others deleted', () async {
+      final a = await copied('a.jpg', 1);
+      final gone = File('${dir.path}/gone.jpg');
+      final c = await copied('c.jpg', 3);
+      platform(
+        () => {
+          'paths': [a.path, gone.path, c.path],
+          'dropped': 0,
+        },
+      );
+
+      expect(await picker.pickAttachments(), isA<ExternalPickFailed>());
+      expect(a.existsSync(), isFalse);
+      expect(c.existsSync(), isFalse);
+    });
+
+    test('attachments: the very first copy missing -> failed, every other '
+        'copy deleted', () async {
+      final gone = File('${dir.path}/gone.jpg');
+      final b = await copied('b.jpg', 2);
+      final c = await copied('c.jpg', 3);
+      platform(
+        () => {
+          'paths': [gone.path, b.path, c.path],
+          'dropped': 0,
+        },
+      );
+
+      expect(await picker.pickAttachments(), isA<ExternalPickFailed>());
+      expect(b.existsSync(), isFalse);
+      expect(c.existsSync(), isFalse);
+    });
+
+    test('attachments: bytes no decoder can read -- the preview step gets '
+        'nothing to work with -- still leave no copy behind', () async {
+      final a = File('${dir.path}/a.jpg');
+      await a.writeAsBytes(utf8.encode('this is not a photo at all'));
+      final b = await copied('b.jpg', 2);
+      platform(
+        () => {
+          'paths': [a.path, b.path],
+          'dropped': 0,
+        },
+      );
+
+      await picker.pickAttachments();
+      expect(a.existsSync(), isFalse);
+      expect(b.existsSync(), isFalse);
+    });
+
+    test('picture: an unreadable copy -> failed, and it is deleted', () async {
+      final a = await copied('a.jpg', 7);
+      await unreadable(a);
+      platform(() => [a.path]);
+
+      expect(await picker.pickProfilePicture(), isA<ExternalPickFailed>());
+      expect(a.existsSync(), isFalse);
+    });
+
+    test('picture: a copy already missing -> failed, no throw', () async {
+      platform(() => ['${dir.path}/gone.jpg']);
+      expect(await picker.pickProfilePicture(), isA<ExternalPickFailed>());
+    });
+  });
 }

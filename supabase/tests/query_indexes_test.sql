@@ -1,5 +1,5 @@
 begin;
-select plan(32);
+select plan(34);
 
 -- conversation_previews and the messages_read policy, after they were made
 -- to scale with the caller's own conversations instead of the whole message
@@ -10,10 +10,12 @@ select plan(32);
 --     vanished (a placeholder still counts); never a row per fellow member,
 --     never another member's conversations, nothing without app access;
 --  2. messages_read refuses exactly who it refused before;
---  3. with a few thousand messages of history, the view and the history read
---     reach public.messages through its (conversation_id, created_at) index,
---     bounded to the conversation, never by scanning the table. Plan text,
---     not timings.
+--  3. with a few thousand messages of history, the view, the history read
+--     and an unscoped read reach public.messages through its
+--     (conversation_id, created_at) index, bounded to the caller's
+--     conversations (messages_read's `conversation_id = ANY (<her
+--     memberships, read once>)`, since 20260927150000), never by scanning
+--     the table. Plan text, not timings.
 --
 -- Fixtures: ada, ben, cid, dee share a group; ada+ben, cid+dee, ada+dee have
 -- direct chats; ada+cid have a chat whose only message vanished; ada+ben a
@@ -214,13 +216,43 @@ select unalike((select view_plan from plans), '%Seq Scan on messages%', 'the vie
 select ok((select view_plan ~ ('(Index (Only )?Scan( Backward)? using|Bitmap Index Scan on) ' || (select name from idx) || '\M')
              from plans),
           'the view reaches public.messages through its (conversation_id, created_at) index');
-select ok((select view_plan ~ 'Index Cond: \(conversation_id = ' from plans),
-          'the view''s index scan is bounded to one conversation at a time, not the whole index');
+-- messages_read's bound comes first: the caller's memberships, read once
+-- (an InitPlan), then the view's own join key, one conversation at a time.
+select ok((select view_plan ~ 'Index Cond: \(\(conversation_id = ANY \(\(InitPlan \d+\)\.col1\)\) AND \(conversation_id = cm\.conversation_id\)\)' from plans),
+          'the view''s index scan is bounded to her conversations and to one conversation at a time, not the whole index');
 select unalike((select history_plan from plans), '%Seq Scan on messages%', 'the history read does not scan public.messages');
 select ok((select history_plan ~ ('(Index (Only )?Scan( Backward)? using|Bitmap Index Scan on) ' || (select name from idx) || '\M')
-                  and history_plan ~ 'Index Cond: \(conversation_id = '
+                  and history_plan ~ 'Index Cond: \(\(conversation_id = ANY \(\(InitPlan \d+\)\.col1\)\) AND \(conversation_id = ''d0000000-0000-0000-0000-000000000010''::uuid\)\)'
              from plans),
           'the history read uses the index, bounded to its conversation');
+
+-- An unscoped read (no conversation named) is bounded by the policy alone.
+-- Cost-based: at the 3.2k rows above a scan of the whole table is still the
+-- cheaper plan for it (measured: seq 122 vs bitmap 180), and from about twice
+-- that the policy's bound wins. 240 more conversations of 40 messages, none
+-- of them ada's, put the table at 12.8k rows, well past the crossover.
+set local session_replication_role = replica;
+insert into public.conversations(id, title)
+  select ('e0000000-0000-0000-0000-0000000' || lpad(g::text, 5, '0'))::uuid, 'more ' || g
+    from generate_series(1, 240) g;
+insert into public.conversation_members(conversation_id, user_id)
+  select ('e0000000-0000-0000-0000-0000000' || lpad(g::text, 5, '0'))::uuid, '00000000-0000-0000-0000-00000000b002'
+    from generate_series(1, 240) g;
+insert into public.messages(conversation_id, sender_id, body, created_at)
+  select ('e0000000-0000-0000-0000-0000000' || lpad(g::text, 5, '0'))::uuid,
+         '00000000-0000-0000-0000-00000000b002', 'more ' || g || '/' || i, now() - make_interval(mins => i)
+    from generate_series(1, 240) g, generate_series(1, 40) i;
+set local session_replication_role = origin;
+analyze public.messages;
+analyze public.conversation_members;
+select as_qi(1);
+create temp table unscoped as select plan_of('select count(*) from public.messages') as p;
+reset role;
+select unalike((select p from unscoped), '%Seq Scan on messages%', 'an unscoped read does not scan public.messages');
+select ok((select p ~ ('(Index (Only )?Scan( Backward)? using|Bitmap Index Scan on) ' || (select name from idx) || '\M')
+                  and p ~ 'Index Cond: \(conversation_id = ANY \(\(InitPlan \d+\)\.col1\)\)'
+             from unscoped),
+          'an unscoped read uses the index, bounded to her conversations read once');
 
 select ok((select history_plan !~ 'Filter: [^\n]*has_app_access\(\)' from plans),
           'the history read checks has_app_access() once (an InitPlan), not in its per-row filter');

@@ -1,5 +1,5 @@
 begin;
-select plan(71);
+select plan(73);
 -- The plan checks below read planner statistics this transaction writes
 -- with ANALYZE. A concurrent (auto)vacuum of messages would overwrite
 -- pg_class.reltuples in place, mid-test; holding this lock keeps it out.
@@ -196,7 +196,7 @@ select is(hits('de 1%e'), 'code 1%e ok', '% matches a percent sign only, not "an
 select is(hits('le_a'), 'file_a.txt', '_ matches an underscore only, not "one character"');
 select is(hits('th\t'), 'path\to', '\ matches a backslash only, it escapes nothing');
 select is(hits('100%'), '100% sure', '"100%" finds only "100% sure", not "100 percent"');
-select is(hits('b_c'), 'ab_cd', '"b_c" finds "ab_cd", not "abxcd"');
+select is(hits('b_cd'), 'ab_cd', '"b_cd" finds "ab_cd", not "abxcd"');
 select is(hits('C:\sy'), 'C:\sys', '"C:\sy" matches a literal backslash, not "sy" alone');
 select is(hits('%%%'), '', 'a query of wildcards alone matches nothing');
 select is(hits('___'), '', 'nor does a query of underscores alone');
@@ -320,7 +320,7 @@ create or replace function eq_as(who text, uid uuid, sid text) returns void lang
 begin
   perform test_as(uid, sid);
   insert into _eq select who, t, rls_ids(t), search_ids(t)
-    from unnest(array['istanbul', 'dinner', 'secret', 'phrasing', '100%', 'b_c']) t;
+    from unnest(array['istanbul', 'dinner', 'secret', 'phrasing', '100%', 'b_cd']) t;
   execute 'reset role';
 end $$;
 select eq_as('ada (member)',       '00000000-0000-0000-0000-0000000a5001', 'a5000000-0000-0000-0000-0000000a5001');
@@ -398,6 +398,20 @@ select is((select a.blocks - b.blocks from _touch a, _touch b
 select is((select a.blocks > b.blocks from _touch a, _touch b
             where a.what = 'three' and b.what = 'short'),
   true, 'the measure is not vacuous: a three-character search does read them');
+
+-- The guard counts [[:alnum:]]; the index can only narrow by pg_trgm's word
+-- characters. Were any character [[:alnum:]] accepts not a word character
+-- to pg_trgm, three of it would pass the guard yet give the index nothing
+-- to narrow by -- the full scan the guard exists to prevent. Every code
+-- point, surrogates excepted.
+create temp table _alnum on commit drop as
+  select c from generate_series(1, 1114111) c
+   where (c < 55296 or c > 57343) and chr(c) ~ '[[:alnum:]]';
+select is((select count(*) from _alnum
+            where cardinality(extensions.show_trgm(repeat(chr(c), 3))) = 0),
+  0::bigint, 'every character [[:alnum:]] accepts is a pg_trgm word character');
+select cmp_ok((select count(*) from _alnum), '>', 1000::bigint,
+  'the sweep is not vacuous: [[:alnum:]] accepts letters and digits beyond ASCII');
 
 -- 11 the plan's shape: the pattern is computed once, not per row -----------------
 -- search_messages' own query, planned the way a SQL function body is planned

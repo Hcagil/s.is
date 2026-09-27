@@ -674,7 +674,7 @@ void main() {
       await t.tap(row('c1-20'));
       await settle(t, 40);
       expect(find.byType(MessageScreen), findsOneWidget);
-      expect(noticeSaying('No connection.'), findsWidgets);
+      expect(noticeSaying('No connection.'), findsOneWidget);
       expect(bubble('c1-599'), findsOneWidget, reason: 'messages stay');
       await drainNotice(t);
     });

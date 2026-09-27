@@ -22,9 +22,9 @@ void main() {
     });
 
     test('non-overlapping behavior', () {
-      expect(matchOffsets('aaaa', 'aa'), equals([0, 2]));
-      expect(matchOffsets('aaa', 'aa'), equals([0]));
-      expect(matchOffsets('banana', 'ana'), equals([1]));
+      expect(matchOffsets('aaaaaa', 'aaa'), equals([0, 3]));
+      expect(matchOffsets('aaaaa', 'aaa'), equals([0]));
+      expect(matchOffsets('bananana', 'anan'), equals([1]));
     });
 
     test('no matches', () {
@@ -49,17 +49,28 @@ void main() {
     });
 
     test('special regex characters are treated literally', () {
-      expect(matchOffsets('a.b.c', '.'), equals([1, 3]));
-      expect(matchOffsets('xa+by', 'a+b'), equals([1]));
-      expect(matchOffsets('f(x) g(x)', '(x)'), equals([1, 6]));
-      expect(matchOffsets('ab', '*'), equals([]));
+      expect(matchOffsets('abxcd b.cd', 'b.cd'), equals([6]));
+      expect(matchOffsets('abc ab+c', 'ab+c'), equals([4]));
+      expect(matchOffsets('f(xyz) g(xyz)', '(xyz)'), equals([1, 8]));
+      expect(matchOffsets('abc', 'a*bc'), equals([]));
     });
 
     test('UTF-16 code unit indices', () {
       // 😀 is a surrogate pair (2 code units)
       // String: 😀 x 😀 x
       // Indices: 0 1 2 3 4 5
-      expect(matchOffsets('😀x😀x', 'x'), equals([2, 5]));
+      expect(matchOffsets('😀xyz😀xyz', 'xyz'), equals([2, 7]));
+    });
+
+    test('fewer than three letters or digits: nothing, even where it '
+        'occurs', () {
+      expect(matchOffsets('a.b.c', '.'), equals([]));
+      expect(matchOffsets('aaaa', 'aa'), equals([]));
+      expect(matchOffsets('wait...', '...'), equals([]));
+      expect(matchOffsets('ha 😂😂😂', '😂😂😂'), equals([]));
+      expect(matchOffsets('a.. b', 'a..'), equals([]));
+      expect(matchOffsets('a b c', 'a b'), equals([]));
+      expect(matchOffsets('a b c', 'a b c'), equals([0]), reason: 'three');
     });
 
     test('query containing a space', () {

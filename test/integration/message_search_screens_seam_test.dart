@@ -281,6 +281,11 @@ void main() {
         int.parse((r['body'] as String).split(' ')[1]): r['id'] as String,
     };
     ids = [for (var i = 0; i < 600; i++) byIndex[i]!];
+    // Now, so this run's room tops vedat's list above earlier runs' rooms.
+    expect(
+      await yesim.send(conversationId: room, body: 'on top'),
+      isA<Ok<Message>>(),
+    );
     expect(ids, hasLength(600));
     await service.dispose();
   });

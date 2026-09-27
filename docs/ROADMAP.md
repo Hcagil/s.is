@@ -23,6 +23,7 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.17 | **done** 2026-09-27 — change your profile picture and a group's picture; shown everywhere the initials circle was |
 | v0.17.1 | **done** 2026-09-27 — the photo grid scrolls back past the newest 60 photos (attachments and picture picker) |
 | v0.18 | **done** 2026-09-27 — search inside a chat answers instantly from the phone; the server is asked only for older hits |
+| v0.18.1 | **done** 2026-09-27 — reloading the photo grid ("Allow more") never mixes in an old page or leaves it stuck loading |
 | later | E2EE | scheduled individually |
 
 ## Status

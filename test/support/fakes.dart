@@ -837,7 +837,11 @@ class ChatFake implements ChatRepository {
   Future<Result<List<Message>>> messages(String conversationId) async {
     await _tick('messages:$conversationId');
     if (_read != null) await _read!.future;
-    if (history[conversationId] case final rows?) return Ok(List.of(rows));
+    // The newest 500, oldest first -- the real read's cap; anything older is
+    // reached only through messagesAround.
+    if (history[conversationId] case final rows?) {
+      return Ok(rows.sublist(rows.length > 500 ? rows.length - 500 : 0));
+    }
     return messagesResult;
   }
 
@@ -1319,14 +1323,30 @@ class ChatFake implements ChatRepository {
   /// Forces the outcome; left null it answers from [history].
   Result<List<Message>>? messagesAroundResult;
 
+  final _aroundHolds = <Completer<void>>[];
+
+  /// The next [messagesAround] not yet held stays in flight until the
+  /// returned completer completes, so windows can arrive in any order.
+  Completer<void> holdAround() {
+    final c = Completer<void>();
+    _aroundHolds.add(c);
+    return c;
+  }
+
   @override
   Future<Result<List<Message>>> messagesAround(
     String conversationId,
     Message anchor,
   ) async {
+    final Completer<void>? held = _aroundHolds.isEmpty
+        ? null
+        : _aroundHolds.removeAt(0);
+    final answer =
+        messagesAroundResult ??
+        Ok(aroundRows(history[conversationId] ?? const [], anchor));
     await _tick('around:$conversationId:${anchor.id}');
-    if (messagesAroundResult case final forced?) return forced;
-    return Ok(aroundRows(history[conversationId] ?? const [], anchor));
+    if (held != null) await held.future;
+    return answer;
   }
 
   @override
@@ -1447,13 +1467,13 @@ Message editedCopy(Message stored, String body) => Message(
 );
 
 /// search_messages as the contract states it, over rows the caller may read:
-/// a trimmed query under two characters finds nothing; otherwise text that
+/// a trimmed query under three characters finds nothing; otherwise text that
 /// contains it after the Turkish fold (I, İ and ı all read as i), case-
 /// insensitively, taken literally; deleted and textless messages never
 /// match; newest first, at most 50.
 List<Message> searchRows(Iterable<Message> rows, String query) {
   final q = foldForSearch(query.trim());
-  if (q.length < 2) return const [];
+  if (q.length < 3) return const [];
   final hits = [
     for (final m in rows)
       if (!m.isDeleted &&

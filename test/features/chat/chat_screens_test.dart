@@ -97,10 +97,18 @@ String composerText(WidgetTester tester) => tester
     .text;
 
 /// Any visible text of real length — the difference between guidance and a
-/// blank screen, without pinning the wording.
-final guidance = find.byWidgetPredicate(
-  (w) => w is Text && (w.data ?? '').trim().length >= 15,
-);
+/// blank screen, without pinning the wording. Text inside the search field
+/// (its always-visible "Search messages" hint) is not guidance.
+final guidance = find.byElementPredicate((e) {
+  final w = e.widget;
+  if (w is! Text || (w.data ?? '').trim().length < 15) return false;
+  var inSearchField = false;
+  e.visitAncestorElements((a) {
+    inSearchField = a.widget.key == const ValueKey('list-search-field');
+    return !inSearchField;
+  });
+  return !inSearchField;
+});
 
 /// Raw exception and type names must never reach a member.
 void expectNoRawException(WidgetTester tester) {

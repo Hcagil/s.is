@@ -1,5 +1,5 @@
 begin;
-select plan(65);
+select plan(70);
 -- The plan checks below read planner statistics this transaction writes
 -- with ANALYZE. A concurrent (auto)vacuum of messages would overwrite
 -- pg_class.reltuples in place, mid-test; holding this lock keeps it out.
@@ -10,7 +10,9 @@ lock table public.messages in share update exclusive mode;
 --
 --  * case-insensitive and Turkish-safe: I, İ and ı all fold to i;
 --  * substring match; %, _ and \ are literal, never wildcards;
---  * a trimmed query under two characters returns no rows and no error;
+--  * a trimmed query under three characters returns no rows and no error,
+--    and never touches messages (pg_trgm cannot index a shorter pattern, so
+--    it would scan every row of the trigram index, every conversation's);
 --  * scoped to [conversation] when given, else every conversation the caller
 --    is a member of; a conversation the caller is not in -- or that does not
 --    exist -- never contributes a row, omitted or passed explicitly;
@@ -193,11 +195,11 @@ select is(hits('  din  '), 'dinner at eight', 'the query is trimmed before it is
 select is(hits('1%e'), 'code 1%e ok', '% matches a percent sign only, not "anything"');
 select is(hits('e_a'), 'file_a.txt', '_ matches an underscore only, not "one character"');
 select is(hits('h\t'), 'path\to', '\ matches a backslash only, it escapes nothing');
-select is(hits('0%'), '100% sure', '"0%" finds only "100% sure", not "100 percent"');
-select is(hits('a_'), 'a_b', '"a_" finds "a_b", not "axb"');
-select is(hits('\s'), 'C:\sys', '"\s" matches a literal backslash, not "s" alone');
-select is(hits('%%'), '', 'a query of wildcards alone matches nothing');
-select is(hits('__'), '', 'nor does a query of underscores alone');
+select is(hits('00%'), '100% sure', '"00%" finds only "100% sure", not "100 percent"');
+select is(hits('a_b'), 'a_b', '"a_b" finds "a_b", not "axb"');
+select is(hits('\sy'), 'C:\sys', '"\sy" matches a literal backslash, not "sy" alone');
+select is(hits('%%%'), '', 'a query of wildcards alone matches nothing');
+select is(hits('___'), '', 'nor does a query of underscores alone');
 
 -- 3 short queries -------------------------------------------------------------
 select lives_ok($$select public.search_messages('i')$$, 'a one-character query is not an error');
@@ -205,8 +207,12 @@ select is(hit_count('i'), 0::bigint, 'one character: no rows');
 select is(hit_count(' i '), 0::bigint, 'one character once trimmed: no rows');
 select is(hit_count(''), 0::bigint, 'empty: no rows');
 select is(hit_count('     '), 0::bigint, 'blank: no rows');
-select is(hit_count('in', 'a5c00000-0000-0000-0000-000000000001') > 0, true,
-  'two characters do search (control for the above)');
+select is(hit_count('in', 'a5c00000-0000-0000-0000-000000000001'), 0::bigint,
+  'two characters: no rows, though "in" is in "going to istanbul"');
+select is(hit_count(' in '), 0::bigint, 'two characters once trimmed: no rows');
+select is(hit_count('%%'), 0::bigint, 'two wildcards: no rows');
+select is(hit_count('ing', 'a5c00000-0000-0000-0000-000000000001') > 0, true,
+  'three characters do search (control for the above)');
 
 -- 4 deleted, textless and edited messages -------------------------------------
 select is(hits('quokka'), '', 'a message deleted for everyone never matches, vanished or placeholder');
@@ -310,7 +316,7 @@ create or replace function eq_as(who text, uid uuid, sid text) returns void lang
 begin
   perform test_as(uid, sid);
   insert into _eq select who, t, rls_ids(t), search_ids(t)
-    from unnest(array['istanbul', 'dinner', 'secret', 'phrasing', '0%', 'a_']) t;
+    from unnest(array['istanbul', 'dinner', 'secret', 'phrasing', '00%', 'a_b']) t;
   execute 'reset role';
 end $$;
 select eq_as('ada (member)',       '00000000-0000-0000-0000-0000000a5001', 'a5000000-0000-0000-0000-0000000a5001');
@@ -359,6 +365,34 @@ select is((select a.seq - b.seq from _scans a, _scans b where a.what = 'scoped' 
 select is((select (a.seq - b.seq, a.trgm - b.trgm)::text from _scans a, _scans b
             where a.what = 'foreign' and b.what = 'scoped'),
   '(0,0)', 'naming a foreign conversation never scans messages, by index or sequentially');
+-- Under three characters the trigram index has nothing to narrow by: a
+-- search that reached it would read every row it holds, every
+-- conversation's, before membership is checked -- work that grows with
+-- other people's messages. The guard must stop it before messages is
+-- touched at all, scoped or not.
+-- Scans of messages and of every index on it, and rows read from it, by
+-- this transaction. (Not blocks: planning alone reads the trigram index's
+-- metapage for its cost estimate, a constant that no row count moves.)
+create temp table _touch (what text primary key, blocks bigint) on commit drop;
+create or replace function _messages_blocks() returns bigint language sql as $$
+  select pg_stat_get_xact_numscans('public.messages'::regclass)
+       + pg_stat_get_xact_tuples_returned('public.messages'::regclass)
+       + pg_stat_get_xact_tuples_fetched('public.messages'::regclass)
+       + (select coalesce(sum(pg_stat_get_xact_numscans(i.indexrelid)), 0)
+            from pg_index i where i.indrelid = 'public.messages'::regclass)::bigint
+$$;
+insert into _touch values ('before_short', _messages_blocks());
+select as_s(1); select hit_count('in'); select hit_count(' fi '); reset role;
+select as_s(1); select hit_count('fi', 'a5c00000-0000-0000-0000-000000000005'); reset role;
+insert into _touch values ('short', _messages_blocks());
+select as_s(1); select hit_count('fil', 'a5c00000-0000-0000-0000-000000000005'); reset role;
+insert into _touch values ('three', _messages_blocks());
+select is((select a.blocks - b.blocks from _touch a, _touch b
+            where a.what = 'short' and b.what = 'before_short'),
+  0::bigint, 'a two-character search scans neither messages nor any index on it, and reads no row, scoped or not');
+select is((select a.blocks > b.blocks from _touch a, _touch b
+            where a.what = 'three' and b.what = 'short'),
+  true, 'the measure is not vacuous: a three-character search does read them');
 
 -- 11 the plan's shape: the pattern is computed once, not per row -----------------
 -- search_messages' own query, planned the way a SQL function body is planned

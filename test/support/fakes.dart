@@ -1766,14 +1766,38 @@ class GalleryFake implements Gallery {
     return access;
   }
 
+  /// Every recent() call, in call order: which page, of what size --
+  /// including a repeat that a correct sheet must never have made.
+  final recentPages = <({int page, int count})>[];
+
+  /// Pages whose recent() call fails (throws) for as long as they are in
+  /// here; remove one to let the next request for it succeed.
+  final Set<int> failingPages = {};
+
+  Completer<void>? _recentGate;
+
+  /// Every recent() call stays in flight until [releaseRecent]: a slow page,
+  /// long enough to scroll again and prove no second request is sent.
+  void holdRecent() => _recentGate = Completer<void>();
+  void releaseRecent() {
+    _recentGate?.complete();
+    _recentGate = null;
+  }
+
   @override
-  Future<List<GalleryPhoto>> recent({int count = 60}) async {
+  Future<List<GalleryPhoto>> recent({int page = 0, int count = 60}) async {
     recentCalls++;
+    recentPages.add((page: page, count: count));
     await _tick();
+    final gate = _recentGate;
+    if (gate != null) await gate.future;
+    if (failingPages.contains(page)) {
+      throw Exception('the photo library could not be read (page $page)');
+    }
     final visible = access == GalleryAccess.limited
         ? photos.where((p) => allowed.contains(p.id))
         : photos;
-    return visible.take(count).toList();
+    return visible.skip(page * count).take(count).toList();
   }
 
   @override

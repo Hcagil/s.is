@@ -21,6 +21,7 @@ import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
+import '../../support/gallery_paging.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 
@@ -490,6 +491,82 @@ void main() {
       expect(gallery.loadedIds, isEmpty);
       expect(composerText(tester), 'keep me');
       expect(find.byType(SisNotice), findsNothing);
+    });
+  });
+
+  group('scrolling back past the newest photos', () {
+    /// The sheet opened on a library of [n] photos, each read a little
+    /// late, like the platform.
+    Future<GalleryFake> openOn(
+      WidgetTester tester,
+      int n, {
+      GalleryAccess access = GalleryAccess.full,
+      Iterable<String> allowed = const [],
+    }) async {
+      final gallery = GalleryFake(
+        access: access,
+        photos: photoLibrary(n),
+        allowed: allowed,
+        latency: const Duration(milliseconds: 5),
+      );
+      await pump(tester, ChatFake(), gallery);
+      await tester.tap(find.byKey(const ValueKey('composer-attach')));
+      await steps(tester);
+      expect(find.byKey(const ValueKey('sheet-photo-p0')), findsOneWidget);
+      return gallery;
+    }
+
+    testWidgets('opens on the first page; asks for the next only near the '
+        'bottom', (tester) async {
+      final gallery = await openOn(tester, 200);
+      await expectNextPageOnlyNearBottom(tester, gallery);
+    });
+
+    testWidgets('scrolls to the end: every page once, in order, and a short '
+        'page ends it', (tester) async {
+      final gallery = await openOn(tester, 2 * pageSize + 25);
+      await expectPagesToEnd(tester, gallery, 2 * pageSize + 25);
+    });
+
+    testWidgets('a library of whole pages ends on the empty page after it, '
+        'keeping every photo', (tester) async {
+      final gallery = await openOn(tester, 2 * pageSize);
+      await expectPagesToEnd(tester, gallery, 2 * pageSize);
+      expect(find.text('No photos yet'), findsNothing);
+    });
+
+    testWidgets('a slow page shows the progress line and is asked for once', (
+      tester,
+    ) async {
+      final gallery = await openOn(tester, 200);
+      await expectSlowPage(tester, gallery);
+    });
+
+    testWidgets('a failed page says so, keeps the photos, and is retried on '
+        'the next scroll', (tester) async {
+      final gallery = await openOn(tester, 200);
+      await expectFailureAndRetry(tester, gallery, 200);
+    });
+
+    testWidgets('limited access pages through only the allowed photos', (
+      tester,
+    ) async {
+      final all = photoLibrary(300);
+      final allowed = [
+        for (var i = 0; i < all.length; i += 3) all[i].id,
+      ]; // p0, p3, p6 ... : 100 of them, pages of 60 + 40
+      final gallery = await openOn(
+        tester,
+        300,
+        access: GalleryAccess.limited,
+        allowed: allowed,
+      );
+
+      await scrollToEnd(tester);
+
+      expect(pagesAsked(gallery), [0, 1]);
+      expect(await gridOrder(tester), allowed);
+      expect(find.byKey(const ValueKey('sheet-allow-more')), findsOneWidget);
     });
   });
 }

@@ -41,6 +41,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/gallery_paging.dart' hide steps;
 import '../../support/sis_ui.dart';
 
 // Three real, distinct 4x4 PNGs: whose picture is shown is part of the check.
@@ -657,6 +658,53 @@ void main() {
       await settle(t);
       expect(byKey('avatar-choose'), findsNothing);
       expect(w.chat.groupAvatarCalls, isEmpty);
+    });
+  });
+
+  group('the picture picker scrolls back past the newest photos', () {
+    /// Settings > Profile > avatar > Choose photo, on a library of [n].
+    Future<World> openOn(WidgetTester t, int n) async {
+      final w = World();
+      w.gallery.photos = photoLibrary(n);
+      await home(t, w);
+      await openProfilePage(t);
+      await tapKey(t, 'profile-avatar');
+      await tapKey(t, 'avatar-choose');
+      expect(byKey('sheet-photo-p0'), findsOneWidget);
+      return w;
+    }
+
+    testWidgets('opens on the first page; asks for the next only near the '
+        'bottom', (t) async {
+      final w = await openOn(t, 200);
+      await expectNextPageOnlyNearBottom(t, w.gallery);
+    });
+
+    testWidgets('scrolls to the end, and a photo from the last page becomes '
+        'the picture', (t) async {
+      final w = await openOn(t, 2 * pageSize + 10);
+      w.gallery.thumbnails['p129'] = photoPng;
+      await expectPagesToEnd(t, w.gallery, 2 * pageSize + 10);
+
+      await jumpToBottom(t);
+      await settleImages(t);
+      await act(t, byKey('sheet-photo-p129'));
+      expect(w.gallery.squareLoads, [(id: 'p129', size: 512)]);
+      expect(w.profile.avatarUploads, hasLength(1));
+      await drainNotice(t);
+    });
+
+    testWidgets('a slow page shows the progress line and is asked for once', (
+      t,
+    ) async {
+      final w = await openOn(t, 200);
+      await expectSlowPage(t, w.gallery);
+    });
+
+    testWidgets('a failed page says so, keeps the photos, and is retried on '
+        'the next scroll', (t) async {
+      final w = await openOn(t, 200);
+      await expectFailureAndRetry(t, w.gallery, 200);
     });
   });
 }

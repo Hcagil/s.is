@@ -8,6 +8,7 @@ import android.provider.MediaStore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -96,9 +97,10 @@ class MainActivity : FlutterActivity() {
         val dropped = if (square) 0 else maxOf(0, allUris.size - MAX_ATTACHMENTS)
         val uris = if (square) allUris else allUris.take(MAX_ATTACHMENTS)
         pickExecutor.execute {
+            val processor = PickedImageProcessor(this@MainActivity)
+            val paths = mutableListOf<String>()
             try {
-                val processor = PickedImageProcessor(this@MainActivity)
-                val paths = uris.map { processor.process(it, square) }
+                for (uri in uris) paths.add(processor.process(uri, square))
                 runOnUiThread {
                     if (square) {
                         result.success(paths)
@@ -107,8 +109,12 @@ class MainActivity : FlutterActivity() {
                     }
                 }
             } catch (e: NotImageException) {
+                // Delete whatever was already produced before the failure --
+                // an orphaned output file otherwise leaks in the cache dir.
+                paths.forEach { File(it).delete() }
                 runOnUiThread { result.error("not_image", "Not a photo.", null) }
             } catch (e: Exception) {
+                paths.forEach { File(it).delete() }
                 runOnUiThread { result.error("unreadable", "Could not read the photo.", null) }
             }
         }

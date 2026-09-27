@@ -63,26 +63,31 @@ final class ExternalPickerChannel implements ExternalPicker {
     required bool withPreview,
   }) async {
     final images = <PickedImage>[];
-    for (final entry in paths) {
-      final file = File(entry! as String);
-      final Uint8List bytes;
-      try {
-        bytes = await file.readAsBytes();
-      } on FileSystemException {
-        return null;
+    try {
+      for (final entry in paths) {
+        final file = File(entry! as String);
+        final Uint8List bytes;
+        try {
+          bytes = await file.readAsBytes();
+        } on FileSystemException {
+          return null;
+        }
+        images.add(
+          PickedImage(
+            bytes: bytes,
+            contentType: 'image/jpeg',
+            extension: 'jpg',
+            preview: withPreview ? await tinyPreview(bytes) : null,
+          ),
+        );
       }
-      images.add(
-        PickedImage(
-          bytes: bytes,
-          contentType: 'image/jpeg',
-          extension: 'jpg',
-          preview: withPreview ? await tinyPreview(bytes) : null,
-        ),
-      );
-      try {
-        await file.delete();
-      } on FileSystemException {
-        // Cache cleanup only; a missed delete costs disk, not correctness.
+    } finally {
+      for (final entry in paths) {
+        try {
+          await File(entry! as String).delete();
+        } on FileSystemException {
+          // Cache cleanup only; a missed delete costs disk, not correctness.
+        }
       }
     }
     return images;

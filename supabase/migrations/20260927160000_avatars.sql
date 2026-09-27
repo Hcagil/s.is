@@ -68,7 +68,11 @@ grant execute on function app_private.avatar_path_readable(text) to authenticate
 -- Write/replace/delete: the caller's own path, or a group path for any of
 -- its members -- the same "any member may change it" rule the group's
 -- display name would follow if it were editable (start_group_conversation is
--- still the only writer of the name itself).
+-- still the only writer of the name itself). The 'group' branch also checks
+-- the conversation actually has a title: without it, any two members sharing
+-- a 1:1 could write and read a "group" picture under that 1:1's id, which
+-- set_group_avatar's own "not a group" check does not stop from ever
+-- reaching storage in the first place.
 create or replace function app_private.avatar_path_writable(object_name text)
 returns boolean language plpgsql stable security definer set search_path = '' as $$
 declare
@@ -81,11 +85,30 @@ begin
   return case kind
     when 'profile' then owner = (select auth.uid())
     when 'group' then app_private.is_member(owner)
+                       and exists (
+                         select 1 from public.conversations c
+                          where c.id = owner and c.title is not null)
     else false
   end;
 end $$;
 revoke all on function app_private.avatar_path_writable(text) from public, anon;
 grant execute on function app_private.avatar_path_writable(text) to authenticated;
+
+-- Shared by profiles_update_own and set_group_avatar below: [path] sits
+-- directly under [owner_prefix] (e.g. `profile/<uid>` or `group/<id>`) with
+-- exactly one more segment -- no extra `/`, and that segment is not empty or
+-- made only of dots (`.`, `..`), a path-traversal token nothing here ever
+-- resolves, but which has no business in a stored value regardless.
+create or replace function app_private.avatar_path_pinned(
+  path text,
+  owner_prefix text
+) returns boolean language sql immutable set search_path = '' as $$
+  select path like owner_prefix || '/%'
+     and array_length(regexp_split_to_array(path, '/'), 1) = 3
+     and split_part(path, '/', 3) !~ '^\.*$'
+$$;
+revoke all on function app_private.avatar_path_pinned(text, text) from public, anon;
+grant execute on function app_private.avatar_path_pinned(text, text) to authenticated;
 
 create policy avatars_read on storage.objects for select to authenticated
   using (bucket_id = 'avatars'
@@ -108,24 +131,25 @@ create policy avatars_remove on storage.objects for delete to authenticated
 -- the new one is written, same as a deleted attachment.
 
 -- Column-level write on the member's own row: same row policy profiles_
--- update_own already enforces (has_app_access() and user_id = auth.uid()),
--- extended to the new column. The policy is redefined (as rls_access_check_
--- once.sql already redefines it once) to also pin the value's shape to the
--- caller's own prefix -- exactly what messages_send does for attachment_path
--- (`split_part(attachment_path, '/', 1) = conversation_id::text`), so a
--- member can point their own row only at their own folder, never at a real
--- object under someone else's. avatar_path_readable at download time is the
--- actual authority either way (a foreign path a member sets anyway is only
--- ever as readable as it already was to the same viewer), but the column
--- should not need that second check to hold.
+-- update_own already enforces (has_app_access() and user_id = (select auth.
+-- uid())), extended to the new column. The policy is redefined (as
+-- rls_access_check_once.sql already redefines it once, and pins the wrapped
+-- form) to also pin the value's shape to the caller's own prefix -- exactly
+-- what messages_send does for attachment_path (`split_part(attachment_path,
+-- '/', 1) = conversation_id::text`), so a member can point their own row
+-- only at their own folder, never at a real object under someone else's.
+-- avatar_path_readable at download time is the actual authority either way
+-- (a foreign path a member sets anyway is only ever as readable as it
+-- already was to the same viewer), but the column should not need that
+-- second check to hold.
 drop policy profiles_update_own on public.profiles;
 create policy profiles_update_own on public.profiles for update to authenticated
-  using ((select app_private.has_app_access()) and user_id = auth.uid())
+  using ((select app_private.has_app_access()) and user_id = (select auth.uid()))
   with check (
     (select app_private.has_app_access())
-    and user_id = auth.uid()
+    and user_id = (select auth.uid())
     and (avatar_path is null
-         or avatar_path like 'profile/' || user_id::text || '/%')
+         or app_private.avatar_path_pinned(avatar_path, 'profile/' || user_id::text))
   );
 grant update (avatar_path) on public.profiles to authenticated;
 
@@ -155,7 +179,9 @@ begin
   end if;
   -- Same shape pin as profiles_update_own, for the same reason: the value
   -- can only name the caller's own group, never one it copies from another.
-  if path is not null and path not like 'group/' || conversation::text || '/%' then
+  if path is not null
+     and not app_private.avatar_path_pinned(path, 'group/' || conversation::text)
+  then
     raise exception 'invalid path' using errcode = '22023';
   end if;
   select avatar_path into previous

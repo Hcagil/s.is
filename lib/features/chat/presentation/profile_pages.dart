@@ -196,8 +196,16 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
         });
     if (!mounted) return;
     setState(() => _busy = false);
-    if (result case Err(:final failure)) {
-      showSisNotice(context, failure.message, isError: true);
+    switch (result) {
+      case Err(:final failure):
+        showSisNotice(context, failure.message, isError: true);
+      case Ok():
+        showSisNotice(
+          context,
+          choice is AvatarRemoved
+              ? 'Group picture removed'
+              : 'Group picture updated',
+        );
     }
   }
 

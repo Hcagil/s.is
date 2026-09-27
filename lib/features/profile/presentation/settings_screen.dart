@@ -9,7 +9,6 @@ import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
-import '../../chat/application/chat_controllers.dart';
 import '../../chat/presentation/avatar_sheet.dart';
 import '../../chat/presentation/person_avatar.dart';
 import '../../notifications/application/push_controller.dart';
@@ -187,8 +186,16 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     };
     if (!mounted) return;
     setState(() => _busy = false);
-    if (result case Err(:final failure)) {
-      showSisNotice(context, failure.message, isError: true);
+    switch (result) {
+      case Err(:final failure):
+        showSisNotice(context, failure.message, isError: true);
+      case Ok():
+        showSisNotice(
+          context,
+          choice is AvatarRemoved
+              ? 'Profile picture removed'
+              : 'Profile picture updated',
+        );
     }
   }
 
@@ -308,17 +315,17 @@ class AccountScreen extends ConsumerWidget {
                 // Read before leaving: this page is gone after the pop.
                 final push = ref.read(pushRegistrationProvider.notifier);
                 final session = ref.read(sessionControllerProvider.notifier);
-                final photos = ref.read(attachmentCacheProvider);
                 // Back to the root first: signing out swaps the root screen,
                 // and the settings pages above it would otherwise stay.
                 Navigator.of(context).popUntil((route) => route.isFirst);
                 // While still signed in: this phone stops receiving this
                 // account's notifications.
                 await push.forget();
-                await session.signOut();
                 // The next account on this phone must not inherit the last
-                // one's photos.
-                await photos.clear();
+                // one's photos: attachmentCacheOwnerProvider clears them as
+                // soon as this reaches SignedOut, on this path exactly as on
+                // any other the session can end on.
+                await session.signOut();
               },
               child: const Text('Sign out'),
             ),

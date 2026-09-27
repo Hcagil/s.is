@@ -47,6 +47,22 @@ final attachmentCacheProvider = Provider<AttachmentCache>(
   (_) => throw UnimplementedError('override in main'),
 );
 
+/// Wipes the cache above as soon as the session is found to have ended --
+/// signed out, or Denied (revoked or replaced on another device) -- so
+/// nothing of a previous member's photos or pictures survives on this phone.
+/// Mirrors pushInboxOwnerProvider's reach: every settled answer about the
+/// session, not only the explicit sign-out button, and `fireImmediately`
+/// catches a cold start that lands directly on one of those two states.
+final attachmentCacheOwnerProvider = Provider<void>((ref) {
+  ref.listen(sessionControllerProvider, (_, next) {
+    switch (next.value) {
+      case SignedOut() || Denied():
+        unawaited(ref.read(attachmentCacheProvider).clear());
+      case _:
+    }
+  }, fireImmediately: true);
+});
+
 /// One attachment's bytes: from this phone when they are here, otherwise
 /// downloaded once and kept. Replaces a signed URL per look, which fetched
 /// the whole photo again every time.

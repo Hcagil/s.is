@@ -431,6 +431,9 @@ final class SupabaseChatRepository implements ChatRepository {
     PickedImage? image, {
     String? previousPath,
   }) async {
+    // Set once the upload actually succeeds, so a failed upload is never
+    // "cleaned up" (there is nothing there to clean up).
+    String? uploaded;
     try {
       String? path;
       if (image != null) {
@@ -443,22 +446,41 @@ final class SupabaseChatRepository implements ChatRepository {
               image.bytes,
               fileOptions: FileOptions(contentType: image.contentType),
             );
+        uploaded = path;
       }
-      await _client.rpc(
+      // The server's own record of the previous path, not the caller's --
+      // the two can drift, and only the server's is ever right.
+      final removed = await _client.rpc(
         'set_group_avatar',
         params: {'conversation': conversationId, 'path': path},
-      );
-      if (previousPath != null) {
+      ) as String?;
+      if (removed != null) {
         try {
-          await _client.storage.from('avatars').remove([previousPath]);
+          await _client.storage.from('avatars').remove([removed]);
         } catch (_) {
           // Best-effort: the reference is already gone.
         }
       }
       return const Ok(null);
+    } on PostgrestException catch (e) {
+      if (uploaded != null) await _removeOrphanedAvatar(uploaded);
+      // Not a member of a group, or the conversation is a 1:1: the upload (if
+      // any) already happened and now points nowhere a row will ever read.
+      if (e.code == '22023') return const Err(DeniedFailure());
+      return Err(_asFailure(e));
     } catch (e) {
+      if (uploaded != null) await _removeOrphanedAvatar(uploaded);
       return Err(_asFailure(e));
     }
+  }
+
+  /// Best-effort cleanup of an avatar object whose write to `profiles` or
+  /// `conversations` never happened -- an unreachable server here already
+  /// means offline, not a second failure to report.
+  Future<void> _removeOrphanedAvatar(String path) async {
+    try {
+      await _client.storage.from('avatars').remove([path]);
+    } catch (_) {}
   }
 
   @override

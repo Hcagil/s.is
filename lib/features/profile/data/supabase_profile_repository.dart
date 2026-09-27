@@ -97,6 +97,9 @@ final class SupabaseProfileRepository implements ProfileRepository {
   }) async {
     final me = _client.auth.currentUser?.id;
     if (me == null) return const Err(DeniedFailure());
+    // Set once the upload actually succeeds, so a failed upload is never
+    // "cleaned up" (there is nothing there to clean up).
+    String? uploaded;
     try {
       final path =
           'profile/$me/${DateTime.now().microsecondsSinceEpoch}.${image.extension}';
@@ -107,6 +110,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
             image.bytes,
             fileOptions: FileOptions(contentType: image.contentType),
           );
+      uploaded = path;
       final row = await _client
           .from('profiles')
           .update({'avatar_path': path})
@@ -123,6 +127,13 @@ final class SupabaseProfileRepository implements ProfileRepository {
       }
       return Ok(_toProfile(row));
     } catch (e) {
+      if (uploaded != null) {
+        // The upload went up but the row never pointed at it: it must not
+        // stay behind as an orphan nobody will ever delete.
+        try {
+          await _client.storage.from('avatars').remove([uploaded]);
+        } catch (_) {}
+      }
       return Err(_asFailure(e));
     }
   }

@@ -7,6 +7,7 @@ import '../features/auth/application/session_controller.dart';
 import '../features/auth/domain/session_state.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/status_screens.dart';
+import '../features/chat/application/chat_controllers.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/notifications/application/push_controller.dart';
 import '../features/notifications/presentation/notification_explainer_screen.dart';
@@ -107,6 +108,11 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     // in the config-incomplete or startup-failure run of the app.
     if (session.value != null && session.value is! SetupRequired) {
       ref.listen(pushRegistrationProvider, (_, _) {});
+      // Same reach as the line above, for photos and pictures instead of
+      // notifications: attachmentCacheOwnerProvider clears the shared cache
+      // on any path a session can end on, not only the explicit sign-out
+      // button.
+      ref.listen(attachmentCacheOwnerProvider, (_, _) {});
     }
 
     final update = ref.watch(updateControllerProvider).value;

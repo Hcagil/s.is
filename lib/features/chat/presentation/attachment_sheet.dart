@@ -11,19 +11,21 @@ import '../domain/attachment.dart';
 import '../domain/external_picker.dart';
 import '../domain/gallery.dart';
 
-/// Shows the attachment sheet; an empty list when the member closes it or
-/// backs out without choosing a photo.
-Future<List<PickedImage>> showAttachmentSheet(
+/// Shows the attachment sheet; an empty `images` list when the member
+/// closes it or backs out without choosing a photo. `dropped` is how many
+/// more photos "From an app" offered beyond the cap -- 0 unless it was hit.
+Future<({List<PickedImage> images, int dropped})> showAttachmentSheet(
   BuildContext context, {
   bool square = false,
 }) async {
-  final result = await showModalBottomSheet<List<PickedImage>>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (_) => AttachmentSheet(square: square),
-  );
-  return result ?? const [];
+  final result =
+      await showModalBottomSheet<({List<PickedImage> images, int dropped})>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) => AttachmentSheet(square: square),
+      );
+  return result ?? (images: const <PickedImage>[], dropped: 0);
 }
 
 /// The phone's recent photos to send from. Asks for photo access the first
@@ -137,7 +139,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
       showSisNotice(context, 'That photo could not be opened.', isError: true);
       return;
     }
-    Navigator.of(context).pop([image]);
+    Navigator.of(context).pop((images: [image], dropped: 0));
   }
 
   Future<void> _selectMore() async {
@@ -160,8 +162,9 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     if (!mounted) return;
     setState(() => _opening = false);
     switch (result) {
-      case ExternalPickedImages(:final images) when images.isNotEmpty:
-        Navigator.of(context).pop(images);
+      case ExternalPickedImages(:final images, :final dropped)
+          when images.isNotEmpty:
+        Navigator.of(context).pop((images: images, dropped: dropped));
       case ExternalPickCancelled():
         return;
       case ExternalPickedImages() || ExternalPickFailed():

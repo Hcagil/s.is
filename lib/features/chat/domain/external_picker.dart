@@ -6,8 +6,14 @@ sealed class ExternalPickResult {}
 /// The member picked one or more photos, each already in the shape a grid
 /// photo is: ready to send or use as a picture.
 final class ExternalPickedImages implements ExternalPickResult {
-  const ExternalPickedImages(this.images);
+  const ExternalPickedImages(this.images, {this.dropped = 0});
   final List<PickedImage> images;
+
+  /// How many more photos the chosen app offered beyond
+  /// [ExternalPicker.maxAttachments] -- never opened or read, only counted.
+  /// Always 0 for [ExternalPicker.pickProfilePicture], which only ever asks
+  /// for one photo.
+  final int dropped;
 }
 
 /// The member closed the chooser, or the other app, without picking
@@ -31,6 +37,11 @@ final class ExternalPickFailed implements ExternalPickResult {
 /// [PickedImage]s it returns are in the exact same shape [Gallery.load] and
 /// [Gallery.loadSquare] return, so callers treat them identically.
 abstract interface class ExternalPicker {
+  /// The most [pickAttachments] ever returns in one pick. Anything the
+  /// chosen app offers beyond this is dropped before it is opened or read
+  /// (see [ExternalPickedImages.dropped]).
+  static const maxAttachments = 10;
+
   /// Opens the chooser for one or more photos -- however many the chosen
   /// app allows -- each at the long-edge-1600 JPEG shape used for a chat
   /// attachment.

@@ -25,27 +25,43 @@ final class ExternalPickerChannel implements ExternalPicker {
   final MethodChannel _channel;
 
   @override
-  Future<ExternalPickResult> pickAttachments() =>
-      _pick('pickAttachments', withPreview: true);
+  Future<ExternalPickResult> pickAttachments() async {
+    final Map<Object?, Object?>? raw;
+    try {
+      raw = await _channel.invokeMapMethod<String, Object?>('pickAttachments');
+    } on PlatformException {
+      return const ExternalPickFailed();
+    }
+    if (raw == null) return const ExternalPickCancelled();
+    final paths = raw['paths'] as List<Object?>?;
+    if (paths == null || paths.isEmpty) return const ExternalPickCancelled();
+    final dropped = raw['dropped'] as int? ?? 0;
+    final images = await _readFiles(paths, withPreview: true);
+    if (images == null) return const ExternalPickFailed();
+    return ExternalPickedImages(images, dropped: dropped);
+  }
 
   @override
-  Future<ExternalPickResult> pickProfilePicture() =>
-      _pick('pickProfilePicture', withPreview: false);
-
-  /// [method] answers with a list of file paths, an empty/null list when the
-  /// member cancelled, or throws a [PlatformException] (codes: `not_image`,
-  /// `unreadable`, `no_app`, `busy`) when what came back could not be used.
-  Future<ExternalPickResult> _pick(
-    String method, {
-    required bool withPreview,
-  }) async {
+  Future<ExternalPickResult> pickProfilePicture() async {
     final List<Object?>? paths;
     try {
-      paths = await _channel.invokeMethod<List<Object?>>(method);
+      paths = await _channel.invokeMethod<List<Object?>>('pickProfilePicture');
     } on PlatformException {
       return const ExternalPickFailed();
     }
     if (paths == null || paths.isEmpty) return const ExternalPickCancelled();
+    final images = await _readFiles(paths, withPreview: false);
+    if (images == null) return const ExternalPickFailed();
+    return ExternalPickedImages(images);
+  }
+
+  /// Reads every path in [paths] into a [PickedImage], deleting each file
+  /// once read. Null when any file could not be read -- the whole pick is
+  /// then treated as failed, never partially sent.
+  Future<List<PickedImage>?> _readFiles(
+    List<Object?> paths, {
+    required bool withPreview,
+  }) async {
     final images = <PickedImage>[];
     for (final entry in paths) {
       final file = File(entry! as String);
@@ -53,7 +69,7 @@ final class ExternalPickerChannel implements ExternalPicker {
       try {
         bytes = await file.readAsBytes();
       } on FileSystemException {
-        return const ExternalPickFailed();
+        return null;
       }
       images.add(
         PickedImage(
@@ -69,6 +85,6 @@ final class ExternalPickerChannel implements ExternalPicker {
         // Cache cleanup only; a missed delete costs disk, not correctness.
       }
     }
-    return ExternalPickedImages(images);
+    return images;
   }
 }

@@ -22,6 +22,7 @@ private const val REQUEST_PICTURE = 9102
 private const val MAX_EDGE = 1600
 private const val SQUARE_SIZE = 512
 private const val JPEG_QUALITY = 85
+private const val MAX_ATTACHMENTS = 10
 
 // Android's own app chooser for "From an app" (docs/DECISIONS.md,
 // 2026-09-28): ACTION_PICK on the images MediaStore URI, wrapped in
@@ -76,21 +77,25 @@ class MainActivity : FlutterActivity() {
             result.success(null)
             return
         }
-        val uris = mutableListOf<Uri>()
+        val allUris = mutableListOf<Uri>()
         val clip = data.clipData
         if (clip != null) {
-            for (i in 0 until clip.itemCount) uris.add(clip.getItemAt(i).uri)
+            for (i in 0 until clip.itemCount) allUris.add(clip.getItemAt(i).uri)
         } else {
-            data.data?.let { uris.add(it) }
+            data.data?.let { allUris.add(it) }
         }
-        if (uris.isEmpty()) {
+        if (allUris.isEmpty()) {
             result.success(null)
             return
         }
         val square = requestCode == REQUEST_PICTURE
+        // Capped before anything is opened: the extras' bytes are never
+        // read, so there is nothing of theirs to delete.
+        val dropped = if (square) 0 else maxOf(0, allUris.size - MAX_ATTACHMENTS)
+        val uris = if (square) allUris else allUris.take(MAX_ATTACHMENTS)
         try {
             val paths = uris.map { processImage(it, square) }
-            result.success(paths)
+            if (square) result.success(paths) else result.success(mapOf("paths" to paths, "dropped" to dropped))
         } catch (e: NotImageException) {
             result.error("not_image", "Not a photo.", null)
         } catch (e: Exception) {

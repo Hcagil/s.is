@@ -1185,19 +1185,19 @@ class _ComposerState extends ConsumerState<_Composer> {
     if (_sending) return;
     // The phone's own photos, or another app's. Closing the sheet without
     // choosing anything sends nothing.
-    final images = await showAttachmentSheet(context);
-    if (images.isEmpty || !mounted) return;
+    final picked = await showAttachmentSheet(context);
+    if (picked.images.isEmpty || !mounted) return;
     setState(() => _sending = true);
     final body = _controller.text;
-    for (var i = 0; i < images.length; i++) {
+    for (var i = 0; i < picked.images.length; i++) {
       final result = await ref
           .read(messagesProvider.notifier)
-          .sendImage(body: i == 0 ? body : '', chosen: images[i]);
+          .sendImage(body: i == 0 ? body : '', chosen: picked.images[i]);
       if (!mounted) return;
       switch (result) {
         case null:
-          // sendImage only answers null for a null `chosen`; images[i] is
-          // never null, so this never happens -- kept for exhaustiveness.
+          // sendImage only answers null for a null `chosen`; picked.images[i]
+          // is never null, so this never happens -- kept for exhaustiveness.
           break;
         case Ok():
           break;
@@ -1210,6 +1210,13 @@ class _ComposerState extends ConsumerState<_Composer> {
     if (!mounted) return;
     setState(() => _sending = false);
     _controller.clear();
+    if (picked.dropped > 0) {
+      showSisNotice(
+        context,
+        'Only the first 10 photos were sent.',
+        isError: false,
+      );
+    }
   }
 
   @override

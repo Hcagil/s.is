@@ -36,8 +36,10 @@ import 'fakes.dart'
         AttachmentCacheFake,
         PushRegistryFake,
         PushSourceFake,
+        aroundRows,
         editedCopy,
-        refuseEdit;
+        refuseEdit,
+        searchRows;
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
 
@@ -242,6 +244,24 @@ class DesignChat implements ChatRepository {
     deliver(edited);
     return Ok(edited);
   }
+
+  @override
+  Future<Result<List<Message>>> search(
+    String query, {
+    String? conversationId,
+  }) async => Ok(
+    searchRows(
+      conversationId == null
+          ? history.values.expand((rows) => rows)
+          : history[conversationId] ?? const <Message>[],
+      query,
+    ),
+  );
+  @override
+  Future<Result<List<Message>>> messagesAround(
+    String conversationId,
+    Message anchor,
+  ) async => Ok(aroundRows(history[conversationId] ?? const [], anchor));
 
   @override
   Future<Result<List<ReadMark>>> readMarks(String conversationId) async =>

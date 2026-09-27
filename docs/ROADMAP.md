@@ -17,6 +17,8 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.11 | Read status (mutual, like last seen; group "read by"); 1:1 header says just "typing…" | Your message turns from grey to normal when it is read |
 | v0.12 | One SIS notification grouping every chat, expandable like Telegram | Several messages from several chats arrive as one expandable notification |
 | after v0.9 | iOS | scheduled after v0.9 |
+| v0.15 | **done** 2026-09-26 — the time sits on a message's last line when it fits; the whole chat header opens the profile, with the avatar; gallery newest first (0.14.2); bubbles hug their text, offline in about a second, fast previews (0.14.1) |
+| v0.16 | in progress — message search in the chat list and inside a chat, over all history (server and data layer first, then the screens) |
 | later | E2EE | scheduled individually |
 
 ## Status

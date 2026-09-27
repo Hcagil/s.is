@@ -72,15 +72,35 @@ access and must still be able to stop that device receiving notifications;
 gating it on `has_app_access()` would strand notifications on a phone that can
 no longer open them.
 
+Message search, `public.search_messages(query, conversation)`, is a
+`security definer` RPC like the other public RPCs. The alternative,
+running it with the caller's rights under row-level security, can't be fast:
+`LIKE` and the trigram operators aren't leakproof, so RLS forces a scan of
+every message. So the function repeats `messages_read` explicitly:
+`has_app_access()` and `is_member(conversation_id)`, the same functions the
+policy calls. It also bounds the rows to the caller's memberships first, and
+refuses a named conversation the caller is not in before any scan. **Whenever
+`messages_read` changes, this function must change with it.** A pgTAP
+equivalence test (`message_search_test.sql`) fails if the two drift apart.
+
+Accepted residual: the search runs over one shared trigram index, so its
+duration still grows by about 0.2 µs for each match of the caller's chosen
+term in conversations they can't read (about 4 ms at 20,000 matches). It is
+a bounded frequency oracle, not content, and it is below mobile network
+jitter except at extreme counts. The fix ladder reached rung 3 on this
+before the residual was brought down to this size (2026-09-27).
+
 Presence and typing use **private** Realtime channels. RLS on
 `realtime.messages` opens exactly two topics — `presence:members` and
 `typing:<conversation id>` — to active members (and conversation members for
 typing), and the send side also requires the member's own sharing switch to be
 on. Any other private topic is refused.
 
-Realtime publishes **inserts only**: `realtime.apply_rls` evaluates row-level
+Realtime publishes **inserts and updates** (updates carry edits and "deleted
+for everyone"), never deletes: `realtime.apply_rls` evaluates row-level
 security for INSERT and UPDATE but delivers DELETE to every subscriber of the
-table without consulting it.
+table without consulting it. Generated columns such as `messages.search_text`
+are not published.
 
 ### Sign-in flow
 

@@ -23,7 +23,7 @@ import 'package:sis/features/presence/domain/presence_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/domain/profile_repository.dart';
 
-import 'fakes.dart' show editedCopy, refuseEdit;
+import 'fakes.dart' show aroundRows, editedCopy, refuseEdit, searchRows;
 
 /// One conversation as the database stores it.
 class Room {
@@ -473,6 +473,33 @@ class SessionChat implements ChatRepository {
       return refused;
     }
     return Ok(room.messages[i] = editedCopy(room.messages[i], body));
+  }
+
+  @override
+  Future<Result<List<Message>>> search(
+    String query, {
+    String? conversationId,
+  }) async {
+    final who = await _as('search:$query');
+    if (who == null) return const Ok([]);
+    return Ok(
+      searchRows([
+        for (final r in backend.rooms)
+          if (r.members.contains(who) &&
+              (conversationId == null || r.id == conversationId))
+            ...r.messages,
+      ], query),
+    );
+  }
+
+  @override
+  Future<Result<List<Message>>> messagesAround(
+    String conversationId,
+    Message anchor,
+  ) async {
+    final who = await _as('messagesAround:$conversationId');
+    final room = _roomFor(conversationId, who);
+    return Ok(room == null ? const [] : aroundRows(room.messages, anchor));
   }
 }
 

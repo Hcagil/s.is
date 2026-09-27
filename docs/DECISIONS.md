@@ -837,3 +837,21 @@ label and reply quote still widen the bubble, and the time stays at the
 right edge. Body and time remain separate widgets, so each is found by its
 own text and key; one span holding both was rejected for that reason.
 Right-to-left text always uses the own row until an RTL locale ships.
+
+## 2026-09-27 — Message search over all history, on the server
+
+The owner asked for search in the chat list (every chat) and inside a chat
+(highlight, ↑↓ between hits), over every message ever sent, not only the
+newest 500 the phone holds. Searching happens on the server: a folded copy of
+each message (`İ`, `I` and `ı` fold to `i`, then lower case) is a generated
+column, with a trigram index on it. `search_messages` returns up to 50 hits,
+newest first. `messagesAround` loads a window around a hit older than the
+loaded page.
+
+The search function is `security definer` and repeats `messages_read`
+explicitly (docs/SECURITY.md). Running it under RLS would have scanned every
+message on every search. Security review failed it twice on a timing side
+channel (how often a word appears in other people's chats). The fix ladder
+went to escalation. The pattern is now built once per search and the index
+has no pending list (`fastupdate = off`), which leaves a documented residual
+of about 0.2 µs per foreign match.

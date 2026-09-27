@@ -47,7 +47,7 @@ final class PhotoManagerGallery implements Gallery {
   Future<void> openSettings() => PhotoManager.openSetting();
 
   @override
-  Future<List<GalleryPhoto>> recent({int count = 60}) async {
+  Future<List<GalleryPhoto>> recent({int page = 0, int count = 60}) async {
     // Newest first. Without an explicit order photo_manager sends Android
     // no sort at all and Android's default order comes back oldest first.
     final paths = await PhotoManager.getAssetPathList(
@@ -58,7 +58,7 @@ final class PhotoManagerGallery implements Gallery {
       ),
     );
     if (paths.isEmpty) return const [];
-    final assets = await paths.first.getAssetListPaged(page: 0, size: count);
+    final assets = await paths.first.getAssetListPaged(page: page, size: count);
     return [for (final a in assets) GalleryPhoto(a.id)];
   }
 

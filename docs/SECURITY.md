@@ -72,6 +72,15 @@ access and must still be able to stop that device receiving notifications;
 gating it on `has_app_access()` would strand notifications on a phone that can
 no longer open them.
 
+`messages_read` bounds rows by the caller's own memberships:
+`conversation_id = any(array(select … from conversation_members where user_id =
+(select auth.uid())))`. That subquery runs under `conversation_members_read`,
+which requires `has_app_access()` and membership. So **changing
+`conversation_members_read` changes which messages are readable**. An
+equivalence test (`messages_read_equivalence_test.sql`) compares the rows with
+the explicit rule "has app access and is a member" for every kind of caller
+(2026-09-27).
+
 Message search, `public.search_messages(query, conversation)`, is a
 `security definer` RPC like the other public RPCs. The alternative,
 running it with the caller's rights under row-level security, can't be fast:

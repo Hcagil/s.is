@@ -344,6 +344,11 @@ void main() {
       expect(shown, hasLength(1));
       expect(shown.single.isError, isTrue);
       expect(find.text(capNotice), findsNothing);
+      expect(
+        composerText(tester),
+        'part way',
+        reason: 'a failed batch leaves the composer untouched',
+      );
       await drain(tester);
       expect(find.text(capNotice), findsNothing);
     });

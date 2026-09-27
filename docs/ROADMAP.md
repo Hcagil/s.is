@@ -21,6 +21,7 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.16 | **done** 2026-09-27 — message search in the chat list and inside a chat, over all history: highlight, ↑↓ between hits, jump to old messages; a search needs three letters or digits |
 | v0.16.1 | **done** 2026-09-27 — the signed-in user is checked once per query in every policy; message reads bounded by membership (history read 5× faster) |
 | v0.17 | **done** 2026-09-27 — change your profile picture and a group's picture; shown everywhere the initials circle was |
+| v0.17.1 | **done** 2026-09-27 — the photo grid scrolls back past the newest 60 photos (attachments and picture picker) |
 | later | E2EE | scheduled individually |
 
 ## Status

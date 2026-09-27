@@ -97,7 +97,7 @@ Message juice() {
 
 class World {
   World() {
-    final j = juice();
+    final j = juiced;
     chat
       ..conversationsResult = Ok([
         Conversation(
@@ -132,6 +132,8 @@ class World {
       ];
   }
 
+  /// Built once: a second juice() a minute boundary later is another time.
+  final juiced = juice();
   final chat = ChatFake(latency: const Duration(milliseconds: 2), self: 'u1');
 
   Widget app() => ProviderScope(
@@ -493,7 +495,7 @@ void main() {
       expect(tintOf(t, g, initialsOf('Club')), clubInList);
       expect(textUnder(g), contains('Club'));
       expect(textUnder(g), isNot(contains('Cem')));
-      final at = juice().createdAt.toLocal();
+      final at = w.juiced.createdAt.toLocal();
       expect(
         textUnder(g),
         contains('${two(at.hour)}:${two(at.minute)}'),

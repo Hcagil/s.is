@@ -14,6 +14,8 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
 private const val CHANNEL = "sis/external_picker"
@@ -34,6 +36,16 @@ private const val MAX_ATTACHMENTS = 10
 // filtering, so no <queries> manifest entry is needed.
 class MainActivity : FlutterActivity() {
     private var pendingResult: MethodChannel.Result? = null
+
+    // processImage() does file I/O, bitmap decode/rotate/scale and JPEG
+    // compression for up to 10 photos; on the main thread that risks
+    // freezing the UI or an ANR.
+    private val pickExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+
+    override fun onDestroy() {
+        pickExecutor.shutdown()
+        super.onDestroy()
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -93,17 +105,51 @@ class MainActivity : FlutterActivity() {
         // read, so there is nothing of theirs to delete.
         val dropped = if (square) 0 else maxOf(0, allUris.size - MAX_ATTACHMENTS)
         val uris = if (square) allUris else allUris.take(MAX_ATTACHMENTS)
-        try {
-            val paths = uris.map { processImage(it, square) }
-            if (square) result.success(paths) else result.success(mapOf("paths" to paths, "dropped" to dropped))
-        } catch (e: NotImageException) {
-            result.error("not_image", "Not a photo.", null)
-        } catch (e: Exception) {
-            result.error("unreadable", "Could not read the photo.", null)
+        pickExecutor.execute {
+            try {
+                val paths = uris.map { processImage(it, square) }
+                runOnUiThread {
+                    if (square) {
+                        result.success(paths)
+                    } else {
+                        result.success(mapOf("paths" to paths, "dropped" to dropped))
+                    }
+                }
+            } catch (e: NotImageException) {
+                runOnUiThread { result.error("not_image", "Not a photo.", null) }
+            } catch (e: Exception) {
+                runOnUiThread { result.error("unreadable", "Could not read the photo.", null) }
+            }
         }
     }
 
     private class NotImageException : Exception()
+
+    // Decodes [path] downsampled so its dimensions are close to but not
+    // under [target] in both axes, instead of decoding at full resolution
+    // first -- a 50 MP photo decoded at full size is roughly 200 MB as an
+    // ARGB_8888 bitmap.
+    private fun decodeSampledBitmap(path: String, target: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = calcInSampleSize(bounds.outWidth, bounds.outHeight, target, target)
+        }
+        return BitmapFactory.decodeFile(path, options)
+    }
+
+    private fun calcInSampleSize(width: Int, height: Int, reqWidth: Int, reqHeight: Int): Int {
+        var inSampleSize = 1
+        if (height > reqHeight || width > reqWidth) {
+            val halfHeight = height / 2
+            val halfWidth = width / 2
+            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
+    }
 
     // Copies [uri]'s bytes into the cache dir right away (its read grant is
     // temporary), then decodes, EXIF-rotates and resizes/crops it, and
@@ -125,7 +171,7 @@ class MainActivity : FlutterActivity() {
             } catch (e: Exception) {
                 ExifInterface.ORIENTATION_NORMAL
             }
-            var bitmap = BitmapFactory.decodeFile(raw.absolutePath) ?: throw NotImageException()
+            var bitmap = decodeSampledBitmap(raw.absolutePath, if (square) SQUARE_SIZE else MAX_EDGE) ?: throw NotImageException()
             bitmap = applyExifOrientation(bitmap, orientation)
             bitmap = if (square) centerCropSquare(bitmap, SQUARE_SIZE) else scaleLongEdge(bitmap, MAX_EDGE)
             val out = File(cacheDir, "picked_${System.nanoTime()}.jpg")

@@ -875,3 +875,19 @@ n/m and ↑ older / ↓ newer. Matches are highlighted and the current one gets
 a purple edge, distinct from the yellow unread edge. A hit older than the
 newest 500 loads the messages around it. Closing returns to the newest
 messages.
+
+## 2026-09-27 — Profile pictures for people and groups
+
+The owner asked for a changeable profile picture, and for groups to have
+one too. The owner left the details to the manager, who chose them
+WhatsApp-like:
+- You set or remove your own picture in Settings; any member sets or removes
+  a group's, like group names.
+- The picked photo is centre-cropped to 512 px JPEG by the platform, with no
+  crop screen.
+- It shows wherever the initials circle did, and the initials remain the
+  placeholder.
+- Who sees it: a person's picture follows the profile rule; a group's,
+  members only.
+- Storage and its rules are in docs/SECURITY.md. The phone's picture cache is
+  emptied whenever the session ends.

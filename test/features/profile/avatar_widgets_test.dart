@@ -663,9 +663,17 @@ void main() {
 
   group('the picture picker scrolls back past the newest photos', () {
     /// Settings > Profile > avatar > Choose photo, on a library of [n].
-    Future<World> openOn(WidgetTester t, int n) async {
+    Future<World> openOn(
+      WidgetTester t,
+      int n, {
+      GalleryAccess access = GalleryAccess.full,
+      Iterable<String> allowed = const [],
+    }) async {
       final w = World();
-      w.gallery.photos = photoLibrary(n);
+      w.gallery
+        ..photos = photoLibrary(n)
+        ..access = access
+        ..allowed = {...allowed};
       await home(t, w);
       await openProfilePage(t);
       await tapKey(t, 'profile-avatar');
@@ -705,6 +713,42 @@ void main() {
         'the next scroll', (t) async {
       final w = await openOn(t, 200);
       await expectFailureAndRetry(t, w.gallery, 200);
+    });
+
+    group('a reload from page 0 makes a page in flight a no-op', () {
+      Future<GalleryFake> openLimited(WidgetTester t, List<String> a) async {
+        final w = await openOn(
+          t,
+          reloadLibrary,
+          access: GalleryAccess.limited,
+          allowed: a,
+        );
+        return w.gallery;
+      }
+
+      for (final staleLast in [true, false]) {
+        final when = staleLast ? 'after' : 'before';
+        testWidgets('a stale page arriving $when the fresh page 0 is '
+            'dropped; paging restarts at page 1', (t) async {
+          final g = await openLimited(t, reloadAllowed);
+          await expectStalePageIgnored(t, g, staleLast: staleLast);
+        });
+
+        testWidgets('a stale page failing $when the fresh page 0 says '
+            'nothing and leaves the progress line alone', (t) async {
+          final g = await openLimited(t, reloadAllowed);
+          await expectStalePageIgnored(t, g, staleLast: staleLast, fails: true);
+        });
+      }
+
+      for (final newestFirst in [true, false]) {
+        testWidgets('two quick "Allow more" taps: only the newest reload '
+            'shows (${newestFirst ? 'newest' : 'oldest'} completes '
+            'first)', (t) async {
+          final g = await openLimited(t, ids(photoLibrary(reloadLibrary)));
+          await expectNewestReloadWins(t, g, newestFirst: newestFirst);
+        });
+      }
     });
   });
 }

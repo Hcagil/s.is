@@ -245,3 +245,165 @@ Future<void> expectFailureAndRetry(WidgetTester t, GalleryFake g, int n) async {
   expect(pagesAsked(g), [0, 1, for (var i = 1; i <= last; i++) i]);
   expect(await gridOrder(t), ids(photoLibrary(n)));
 }
+
+// A reload from page 0 -- "Allow more" here -- makes any page load already
+// in flight a no-op when it completes: it neither appends its photos, nor
+// advances the next page, nor changes the progress line, nor raises "Could
+// not load more photos." if it fails. Of two rapid reloads only the newest
+// applies. Afterwards the grid pages on normally from the fresh page 0.
+
+/// The library the reload scenarios open on, in limited access.
+const reloadLibrary = 200;
+
+/// What the member allowed before "Allow more": all but p5..p9.
+final reloadAllowed = [
+  for (var i = 0; i < reloadLibrary; i++)
+    if (i < 5 || i >= 10) 'p$i',
+];
+
+Future<void> tapAllowMore(WidgetTester t) async {
+  await t.tap(find.byKey(const ValueKey('sheet-allow-more')));
+}
+
+/// The sheet is open on page 0 of [g]: limited access to [reloadAllowed] of
+/// photoLibrary(reloadLibrary). Page 1 is in flight when the member taps
+/// "Allow more" and adds p5..p9. The stale page 1 then
+/// completes -- after the fresh page 0 arrived ([staleLast]) or before --
+/// with photos, or with an error ([fails]); either way it changes nothing.
+Future<void> expectStalePageIgnored(
+  WidgetTester t,
+  GalleryFake g, {
+  required bool staleLast,
+  bool fails = false,
+}) async {
+  const stale = 1, fresh = 2; // indexes into g.recentPages
+  g.reRequestAdds = {for (var i = 5; i < 10; i++) 'p$i'};
+  if (fails) g.failingPages.add(1);
+  g.holdRecent();
+  await jumpToBottom(t);
+  expect(pagesAsked(g), [0, 1]);
+  expect(find.byType(SisProgressLine), findsOneWidget);
+
+  await tapAllowMore(t);
+  await steps(t);
+  expect(pagesAsked(g), [0, 1, 0], reason: '"Allow more" reloads page 0');
+  expect(g.heldRecentCalls, [stale, fresh]);
+
+  Future<void> releaseStale() async {
+    final line = find.byType(SisProgressLine).evaluate().length;
+    final waits = sisWait.evaluate().length;
+    g.releaseRecentCall(stale);
+    await steps(t);
+    expect(
+      find.byType(SisProgressLine).evaluate().length,
+      line,
+      reason: 'the stale page must not change the progress line',
+    );
+    expect(sisWait.evaluate().length, waits);
+    expect(
+      notice,
+      findsNothing,
+      reason: 'a stale page is not the grid\'s: its failure says nothing',
+    );
+    expect(pagesAsked(g), [0, 1, 0], reason: 'nothing retried or advanced');
+  }
+
+  if (!staleLast) await releaseStale();
+  g.releaseRecentCall(fresh);
+  await steps(t);
+  expect(find.byKey(const ValueKey('sheet-photo-p5')), findsOneWidget);
+  if (staleLast) await releaseStale();
+  expect(
+    find.byType(SisProgressLine),
+    findsNothing,
+    reason: 'nothing of this grid is loading',
+  );
+
+  // Still holding: walking the grid to its end asks for the next page but
+  // cannot append it, so this is exactly what the grid holds now.
+  expect(
+    await gridOrder(t),
+    ids(photoLibrary(pageSize)),
+    reason: 'exactly the fresh page 0: no stale photos, no duplicates',
+  );
+  expect(pagesAsked(g), [
+    0,
+    1,
+    0,
+    1,
+  ], reason: 'paging restarts from the fresh page 0: page 1 is next');
+  expect(notice, findsNothing);
+
+  g.failingPages.clear();
+  g.releaseRecent();
+  await steps(t);
+  await scrollToEnd(t);
+  expect(pagesAsked(g), [0, 1, 0, 1, 2, 3]);
+  expect(await gridOrder(t), ids(photoLibrary(reloadLibrary)));
+  expect(notice, findsNothing);
+}
+
+/// The sheet is open on page 0 of [g]: limited access to all of
+/// photoLibrary(reloadLibrary). The member taps "Allow more" twice in quick
+/// succession: two reloads of page 0 race. The older one completes
+/// ([newestFirst]: after the newer one, else before it) with photos the
+/// newer one does not have; only the newer one ever shows.
+Future<void> expectNewestReloadWins(
+  WidgetTester t,
+  GalleryFake g, {
+  required bool newestFirst,
+}) async {
+  const older = 1, newer = 2; // indexes into g.recentPages
+  final library = photoLibrary(reloadLibrary);
+  // What the older reload finds: a photo the newer one never has.
+  final olderLibrary = [const GalleryPhoto('stale'), ...library];
+  // What the newer reload finds, and what the grid pages through after.
+  final newerLibrary = library.skip(20).toList();
+  g.allowed = {'stale', ...ids(library)};
+  g.holdRecent();
+
+  // Two taps within one frame: the button is still on screen for both.
+  await tapAllowMore(t);
+  await tapAllowMore(t);
+  await steps(t);
+  expect(pagesAsked(g), [
+    0,
+    0,
+    0,
+  ], reason: 'two quick taps on "Allow more": two reloads of page 0');
+  expect(g.heldRecentCalls, [older, newer]);
+
+  Future<void> releaseOlder() async {
+    g.photos = olderLibrary;
+    g.releaseRecentCall(older);
+    await steps(t);
+    expect(
+      find.byKey(const ValueKey('sheet-photo-stale')),
+      findsNothing,
+      reason: 'the older reload was superseded: its page must never show',
+    );
+  }
+
+  if (!newestFirst) await releaseOlder();
+  g.photos = newerLibrary;
+  g.releaseRecentCall(newer);
+  await steps(t);
+  expect(find.byKey(const ValueKey('sheet-photo-p20')), findsOneWidget);
+  if (newestFirst) await releaseOlder();
+  g.photos = newerLibrary;
+
+  expect(
+    await gridOrder(t),
+    ids(newerLibrary.take(pageSize)),
+    reason: 'the newest reload\'s page 0, and only it',
+  );
+  expect(pagesAsked(g), [0, 0, 0, 1]);
+  expect(find.byType(SisProgressLine), findsOneWidget);
+
+  g.releaseRecent();
+  await steps(t);
+  await scrollToEnd(t);
+  expect(pagesAsked(g), [0, 0, 0, 1, 2, 3]);
+  expect(await gridOrder(t), ids(newerLibrary));
+  expect(notice, findsNothing);
+}

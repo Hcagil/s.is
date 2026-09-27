@@ -568,5 +568,51 @@ void main() {
       expect(await gridOrder(tester), allowed);
       expect(find.byKey(const ValueKey('sheet-allow-more')), findsOneWidget);
     });
+
+    group('a reload from page 0 makes a page in flight a no-op', () {
+      Future<GalleryFake> openLimited(WidgetTester tester, List<String> a) =>
+          openOn(
+            tester,
+            reloadLibrary,
+            access: GalleryAccess.limited,
+            allowed: a,
+          );
+
+      for (final staleLast in [true, false]) {
+        final when = staleLast ? 'after' : 'before';
+        testWidgets('a stale page arriving $when the fresh page 0 is '
+            'dropped; paging restarts at page 1', (tester) async {
+          final gallery = await openLimited(tester, reloadAllowed);
+          await expectStalePageIgnored(tester, gallery, staleLast: staleLast);
+        });
+
+        testWidgets('a stale page failing $when the fresh page 0 says '
+            'nothing and leaves the progress line alone', (tester) async {
+          final gallery = await openLimited(tester, reloadAllowed);
+          await expectStalePageIgnored(
+            tester,
+            gallery,
+            staleLast: staleLast,
+            fails: true,
+          );
+        });
+      }
+
+      for (final newestFirst in [true, false]) {
+        testWidgets('two quick "Allow more" taps: only the newest reload '
+            'shows (${newestFirst ? 'newest' : 'oldest'} completes '
+            'first)', (tester) async {
+          final gallery = await openLimited(
+            tester,
+            ids(photoLibrary(reloadLibrary)),
+          );
+          await expectNewestReloadWins(
+            tester,
+            gallery,
+            newestFirst: newestFirst,
+          );
+        });
+      }
+    });
   });
 }

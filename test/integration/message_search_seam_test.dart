@@ -71,6 +71,18 @@ class _Counted implements ChatRepository {
   final searches = <String>[];
   final lags = <Duration>[];
 
+  // The open conversation's real 500-message read and its live feed: what
+  // in-chat search answers from before it asks the server.
+  @override
+  Future<Result<List<Message>>> messages(String id) => live.messages(id);
+  @override
+  Future<Result<Stream<Message>>> incoming(String id) => live.incoming(id);
+  @override
+  Future<Result<List<Message>>> messagesAround(String id, Message anchor) =>
+      live.messagesAround(id, anchor);
+  @override
+  Future<Result<void>> markRead(String id) => live.markRead(id);
+
   @override
   Future<Result<List<Message>>> search(
     String query, {
@@ -212,26 +224,120 @@ void main() {
       expect(c.read(chatSearchProvider).hits.map((m) => m.id), [inGroup.id]);
     });
 
-    test('offline: the failure is returned as the offline sentence and the '
-        'last search stays', () async {
+    test('loaded: the real messages answer at once, folded like the server '
+        '(İ, I, ı), with no request; ↑ past the oldest asks once and the '
+        'real answer merges without duplicates', () async {
       final counted = _Counted(vedat);
       final c = wired(counted);
+      c.listen(messagesProvider, (_, _) {});
       c.read(openConversationProvider.notifier).open(direct);
+      await c.read(messagesProvider.future);
+      final search = c.read(chatSearchProvider.notifier);
+
+      expect(await search.search('istanbul $_tag'), isA<Ok<void>>());
+      var s = c.read(chatSearchProvider);
+      expect(s.hits.map((m) => m.id), hitsInDirect.reversed.map((m) => m.id));
+      expect(s.serverAnswered, isFalse);
+      expect(counted.searches, isEmpty, reason: 'answered from the phone');
+
+      search.next();
+      search.next();
+      expect(c.read(chatSearchProvider).index, 2);
+      expect(counted.searches, isEmpty, reason: 'walking local hits');
+      search.next(); // past the oldest local hit
+      await _until(
+        () => c.read(chatSearchProvider).serverAnswered,
+        'the server never answered the ↑',
+      );
+      expect(counted.searches, ['istanbul $_tag']);
+      s = c.read(chatSearchProvider);
+      expect(
+        s.hits.map((m) => m.id),
+        hitsInDirect.reversed.map((m) => m.id),
+        reason: 'the server\'s rows are the same messages: each shown once',
+      );
+      expect(s.index, 2, reason: 'nothing older: stays on the oldest');
+      search.next();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(counted.searches, hasLength(1), reason: 'never asked again');
+    });
+
+    test('switching chats: while the room\'s real messages load, the direct '
+        'chat\'s loaded messages never answer for the room', () async {
+      final counted = _Counted(vedat);
+      final c = wired(counted);
+      c.listen(messagesProvider, (_, _) {});
+      c.read(openConversationProvider.notifier).open(direct);
+      await c.read(messagesProvider.future);
+
+      c.read(openConversationProvider.notifier).open(room);
+      final search = c.read(chatSearchProvider.notifier);
+      final pending = search.search('istanbul $_tag');
+      expect(
+        c.read(chatSearchProvider).hits.where((m) => m.conversationId != room),
+        isEmpty,
+        reason: 'the direct chat\'s hits shown in the room',
+      );
+      await pending;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(c.read(chatSearchProvider).hits.map((m) => m.id), [inGroup.id]);
+    });
+
+    test('offline: a loaded hit still answers; a search with none fails with '
+        'the offline sentence and shows its own (empty) truth, never the '
+        'previous query\'s hits', () async {
+      final counted = _Counted(vedat);
+      final c = wired(counted);
+      c.listen(messagesProvider, (_, _) {});
+      c.read(openConversationProvider.notifier).open(direct);
+      await c.read(messagesProvider.future);
       final search = c.read(chatSearchProvider.notifier);
       expect(await search.search('istanbul $_tag'), isA<Ok<void>>());
-      search.next();
-      final before = c.read(chatSearchProvider);
+      expect(c.read(chatSearchProvider).hits, hasLength(3));
 
       counted.live = offline; // the connection drops
-      final result = await search.search('unrelated $_tag');
+      expect(await search.search('unrelated $_tag'), isA<Ok<void>>());
+      expect(c.read(chatSearchProvider).hits.single.body, 'unrelated $_tag');
+      expect(counted.searches, isEmpty, reason: 'no network needed');
+
+      final result = await search.search('nowhere $_tag');
       expect(result, isA<Err<void>>());
       final failure = (result as Err<void>).failure;
       expect(failure, isA<NetworkFailure>());
       expect((failure as NetworkFailure).message, offlineMessage);
       final after = c.read(chatSearchProvider);
-      expect(after.query, 'istanbul $_tag');
-      expect(after.hits.map((m) => m.id), before.hits.map((m) => m.id));
-      expect(after.index, 1);
+      expect(after.query, 'nowhere $_tag');
+      expect(after.hits, isEmpty);
+      expect(after.index, -1);
+      expect(after.serverAnswered, isFalse, reason: 'not "No results"');
+    });
+
+    test('no loaded hit: the real server answers for this chat only; a slow '
+        'answer to a replaced query never lands', () async {
+      final counted = _Counted(vedat)..lags.add(const Duration(seconds: 2));
+      final c = wired(counted);
+      c.listen(messagesProvider, (_, _) {});
+      c.read(openConversationProvider.notifier).open(direct);
+      await c.read(messagesProvider.future);
+      final search = c.read(chatSearchProvider.notifier);
+
+      final slow = search.search('nowhere $_tag'); // asks, answers late
+      await _until(() => counted.searches.length == 1, 'never asked');
+      await search.search('istanbul $_tag'); // local
+      await slow;
+      final s = c.read(chatSearchProvider);
+      expect(s.query, 'istanbul $_tag');
+      expect(s.hits, hasLength(3), reason: 'the late "nothing" dropped');
+      expect(s.serverAnswered, isFalse);
+
+      await search.search('nowhere $_tag');
+      expect(c.read(chatSearchProvider).serverAnswered, isTrue);
+      expect(c.read(chatSearchProvider).hits, isEmpty);
+      c.read(openConversationProvider.notifier).open(room);
+      await c.read(messagesProvider.future);
+      await search.search('$_tag in the group');
+      expect(counted.searches, hasLength(2), reason: 'loaded in the room');
+      expect(c.read(chatSearchProvider).hits.single.id, inGroup.id);
     });
   });
 

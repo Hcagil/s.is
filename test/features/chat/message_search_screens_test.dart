@@ -700,18 +700,19 @@ void main() {
         expect(byKey(k), findsOneWidget, reason: k);
       }
       await type(t, 'chat-search-field', 'apple');
-      expect(count(), '1/6');
+      expect(count(), '1/4+', reason: 'the four loaded hits; more may exist');
     });
 
-    testWidgets('searches this chat only; n/m from the newest; the newest '
-        'hit current and in view', (t) async {
+    testWidgets('searches this chat only, from what the phone holds: n/m+ '
+        'from the newest, the newest hit current and in view, no request', (
+      t,
+    ) async {
       final w = World();
       await home(t, w);
       await openChat(t, 'c1');
       await openSearch(t, 'apple');
-      expect(w.chat.searches.last.query, 'apple');
-      expect(w.chat.searches.last.conversationId, 'c1');
-      expect(count(), '1/6');
+      expect(w.chat.searches, isEmpty, reason: 'loaded hits need no server');
+      expect(count(), '1/4+', reason: 'the group\'s apple juice is not here');
       inView(t, 'c1-595');
     });
 
@@ -731,11 +732,21 @@ void main() {
         inView(t, id);
       }
 
-      // Newest to oldest: 595 590 550 150 (loaded) 40 20 (not loaded).
+      // Newest to oldest: 595 590 550 150 (loaded: "n/4+") then, once the
+      // server is asked from the oldest loaded hit, 40 20 (not loaded: "n/6").
       for (final (i, id) in c1Hits.indexed.skip(1)) {
         final previous = c1Hits[i - 1];
         final emphasised = edges(t, previous);
-        await step('chat-search-older', '${i + 1}/6', id);
+        expect(
+          w.chat.searches,
+          i <= 4 ? isEmpty : hasLength(1),
+          reason: 'asked only when stepping past the oldest loaded hit',
+        );
+        await step(
+          'chat-search-older',
+          i < 4 ? '${i + 1}/4+' : '${i + 1}/6',
+          id,
+        );
         if (bubble(previous).evaluate().isNotEmpty) {
           notCurrent[previous] = edges(t, previous);
           expect(
@@ -752,7 +763,7 @@ void main() {
       expect(count(), '6/6', reason: 'stops at the oldest');
       inView(t, 'c1-20');
 
-      // And back up, across the boundary again.
+      // And back up, across the boundary again: exact now, never asking.
       for (final (i, id) in c1Hits.indexed.toList().reversed.skip(1)) {
         await step('chat-search-newer', '${i + 1}/6', id);
       }
@@ -760,6 +771,7 @@ void main() {
       await settle(t, 20);
       expect(count(), '1/6', reason: 'stops at the newest');
       inView(t, 'c1-595');
+      expect(w.chat.searches, hasLength(1), reason: 'answered once, for good');
     });
 
     testWidgets('matches are highlighted in every bubble -- mine and theirs, '
@@ -784,11 +796,11 @@ void main() {
       // inline (550), mine long (150), mine and theirs never loaded (40, 20).
       await t.tap(byKey('chat-search-older'));
       await settle(t, 40);
-      expect(count(), '2/6');
+      expect(count(), '2/4+');
       for (final (i, n) in [550, 150, 40, 20].indexed) {
         await t.tap(byKey('chat-search-older'));
         await settle(t, 40);
-        expect(count(), '${i + 3}/6');
+        expect(count(), i < 2 ? '${i + 3}/4+' : '${i + 3}/6');
         standsOut(bubble('c1-$n'), appleBodies[n]!, 'apple');
       }
     });
@@ -807,13 +819,13 @@ void main() {
         await home(t, w);
         await openChat(t, 'c1');
         await openSearch(t, 'apple');
-        expect(count(), '1/6');
+        expect(count(), '1/4+');
         final theirsCurrent = edges(t, 'c1-595');
         final mineNot = edges(t, 'c1-590');
 
         await t.tap(byKey('chat-search-older'));
         await settle(t, 40);
-        expect(count(), '2/6');
+        expect(count(), '2/4+');
         final theirsNot = edges(t, 'c1-595');
         final mineCurrent = edges(t, 'c1-590');
         expect(
@@ -845,11 +857,11 @@ void main() {
       );
 
       await type(t, 'chat-search-field', 'app');
-      expect(w.chat.searches.map((s) => s.query), ['app']);
-      expect(count(), '1/6');
+      expect(w.chat.searches, isEmpty, reason: 'answered from the phone');
+      expect(count(), '1/4+');
 
       await type(t, 'chat-search-field', ' ap ');
-      expect(w.chat.searches, hasLength(1), reason: 'trimmed: two again');
+      expect(w.chat.searches, isEmpty, reason: 'trimmed: two again');
       expect(count(), isEmpty);
       expect(
         drawn(bubble('c1-595')).where((c) => c.$2?.backgroundColor != null),
@@ -929,7 +941,7 @@ void main() {
         await t.tap(byKey('chat-search-older'));
         await settle(t, 40);
       }
-      expect(count(), '4/6');
+      expect(count(), '4/4+');
       final before = shownIds(t);
       expect(before, contains('c1-150'));
       expect(before, isNot(contains('c1-40')), reason: 'fixture: not loaded');
@@ -939,6 +951,189 @@ void main() {
       expect(noticeSaying('No connection.'), findsOneWidget);
       expect(shownIds(t), before, reason: 'the previous messages stay');
       expect(t.takeException(), isNull);
+      await drainNotice(t);
+    });
+  });
+
+  // v0.18: the in-chat counter tells the member what is known. "n/m+" while
+  // only the phone's loaded messages have answered, exact "n/m" once the
+  // server has; empty while nothing is known; "No results" only after the
+  // server also found nothing.
+  group('in-chat search answers instantly', () {
+    testWidgets('the loaded hits show on the very next frame, highlighted, '
+        'without waiting for anything', (t) async {
+      t.view.physicalSize = const Size(800, 2400);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final w = World();
+      await home(t, w);
+      await openChat(t, 'c1');
+      await t.tap(byKey('chat-search-button'));
+      await settle(t, 10);
+      final plain = drawn(bubble('c1-590'));
+      await t.enterText(editable('chat-search-field'), 'apple');
+      await t.pump(); // one frame, no time passes
+      expect(count(), '1/4+');
+      highlightedExactly(plain, drawn(bubble('c1-590')), 'apple', 'c1-590');
+      await settle(t);
+      expect(w.chat.searches, isEmpty);
+    });
+
+    testWidgets('no loaded hit: the counter stays empty (not "No results") '
+        'until the server answers, then shows its exact count', (t) async {
+      final w = World();
+      await home(t, w);
+      await openChat(t, 'c1');
+      final held = w.chat.holdSearch();
+      await openSearch(t, 'apple pie'); // only c1-20: not loaded
+      expect(w.chat.searches.single.query, 'apple pie');
+      expect(w.chat.searches.single.conversationId, 'c1');
+      expect(count(), isEmpty, reason: 'nothing known yet');
+      expect(find.text('No results'), findsNothing);
+      held.complete();
+      await settle(t, 40);
+      expect(count(), '1/1');
+      inView(t, 'c1-20');
+    });
+
+    testWidgets('nothing anywhere: empty while asking, "No results" only once '
+        'the server found nothing too', (t) async {
+      final w = World();
+      await home(t, w);
+      await openChat(t, 'c1');
+      final held = w.chat.holdSearch();
+      await openSearch(t, 'zebra');
+      expect(count(), isEmpty);
+      expect(find.text('No results'), findsNothing);
+      held.complete();
+      await settle(t);
+      expect(count(), 'No results');
+    });
+
+    testWidgets('↑ on the oldest loaded hit when the server has nothing '
+        'older: exact count, stays put, asks once', (t) async {
+      final w = World();
+      await home(t, w);
+      await openChat(t, 'c1');
+      await openSearch(t, 'green apple'); // only c1-590
+      expect(count(), '1/1+');
+      expect(w.chat.searches, isEmpty);
+      await t.tap(byKey('chat-search-older'));
+      await settle(t, 40);
+      expect(w.chat.searches.map((s) => s.query), ['green apple']);
+      expect(count(), '1/1', reason: 'the server\'s own copy, not a second');
+      inView(t, 'c1-590');
+      await t.tap(byKey('chat-search-older'));
+      await settle(t, 40);
+      expect(count(), '1/1');
+      expect(w.chat.searches, hasLength(1));
+    });
+
+    testWidgets('after jumping to an old hit, a new query answers from the '
+        'chat\'s newest 500 and starts at its newest hit', (t) async {
+      final w = World();
+      await home(t, w);
+      await openChat(t, 'c1');
+      await openSearch(t, 'apple');
+      for (var i = 0; i < 4; i++) {
+        await t.tap(byKey('chat-search-older'));
+        await settle(t, 40);
+      }
+      expect(count(), '5/6');
+      expect(shownIds(t), contains('c1-59'), reason: 'fixture: jumped to 40');
+      // "hay 59" is hay 591-594, 596-599 in the newest 500, and hay 59
+      // (only in the jumped window).
+      await type(t, 'chat-search-field', 'hay 59');
+      await settle(t, 40);
+      expect(count(), '1/8+');
+      inView(t, 'c1-599');
+    });
+
+    testWidgets('a late answer for a query since replaced never shows', (
+      t,
+    ) async {
+      final w = World();
+      await home(t, w);
+      await openChat(t, 'c1');
+      final held = w.chat.holdSearch();
+      await openSearch(t, 'zebra');
+      await type(t, 'chat-search-field', 'apple');
+      expect(count(), '1/4+');
+      held.complete();
+      await settle(t, 40);
+      expect(count(), '1/4+', reason: 'zebra\'s "nothing" must not land');
+      expect(w.chat.searches.map((s) => s.query), ['zebra']);
+    });
+
+    testWidgets('a late ↑ answer for a query since replaced never shows', (
+      t,
+    ) async {
+      final w = World();
+      await home(t, w);
+      await openChat(t, 'c1');
+      await openSearch(t, 'apple');
+      for (var i = 0; i < 3; i++) {
+        await t.tap(byKey('chat-search-older'));
+        await settle(t, 40);
+      }
+      expect(count(), '4/4+');
+      final held = w.chat.holdSearch();
+      await t.tap(byKey('chat-search-older'));
+      await settle(t, 10);
+      expect(w.chat.searches.map((s) => s.query), ['apple']);
+      await type(t, 'chat-search-field', 'green apple');
+      expect(count(), '1/1+');
+      held.complete();
+      await settle(t, 40);
+      expect(count(), '1/1+', reason: 'apple\'s answer must not land');
+    });
+
+    testWidgets('the server fails for a query with no loaded hit: SIS notice, '
+        'the previous query\'s hits and highlights gone, no "No results"', (
+      t,
+    ) async {
+      final w = World();
+      await home(t, w);
+      await openChat(t, 'c1');
+      await t.tap(byKey('chat-search-button'));
+      await settle(t, 10);
+      final plain = drawn(bubble('c1-595'));
+      await type(t, 'chat-search-field', 'apple');
+      expect(count(), '1/4+');
+      w.chat.searchResult = offline();
+      await type(t, 'chat-search-field', 'apple pie');
+      expect(noticeSaying(offlineText), findsOneWidget);
+      expect(count(), isEmpty, reason: 'not "No results", not apple\'s 1/4+');
+      expect(find.text('No results'), findsNothing);
+      expect(
+        drawn(bubble('c1-595')).map((c) => c.$2),
+        plain.map((c) => c.$2),
+        reason: 'apple\'s highlight is not apple pie\'s',
+      );
+      await drainNotice(t);
+    });
+
+    testWidgets('the server fails on ↑ past the oldest loaded hit: SIS notice, '
+        'still on it, still "+"', (t) async {
+      final w = World();
+      await home(t, w);
+      await openChat(t, 'c1');
+      await openSearch(t, 'apple');
+      for (var i = 0; i < 3; i++) {
+        await t.tap(byKey('chat-search-older'));
+        await settle(t, 40);
+      }
+      expect(count(), '4/4+');
+      w.chat.searchResult = offline();
+      await t.tap(byKey('chat-search-older'));
+      await settle(t, 40);
+      expect(count(), '4/4+');
+      inView(t, 'c1-150');
+      expect(
+        noticeSaying(offlineText),
+        findsOneWidget,
+        reason: 'the ↑ press asked the server and it failed: say so',
+      );
       await drainNotice(t);
     });
   });

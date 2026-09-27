@@ -1,6 +1,7 @@
 @Tags(['integration'])
 library;
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -122,14 +123,31 @@ class _Switch implements ChatRepository {
   bool aroundOffline = false;
   final arounds = <String>[];
 
+  /// Every search asked, in order: (query, conversation).
+  final searches = <(String, String?)>[];
+  List<String> inChat(String room) => [
+    for (final (q, c) in searches)
+      if (c == room) q,
+  ];
+
+  /// While set, a search's real answer is held until it completes.
+  Completer<void>? gate;
+
   @override
   Future<Result<List<Message>>> search(
     String query, {
     String? conversationId,
-  }) => (searchOffline ? dead : live).search(
-    query,
-    conversationId: conversationId,
-  );
+  }) async {
+    searches.add((query, conversationId));
+    final held = gate;
+    final r = await (searchOffline ? dead : live).search(
+      query,
+      conversationId: conversationId,
+    );
+    if (held != null) await held.future;
+    return r;
+  }
+
   @override
   Future<Result<List<Message>>> messagesAround(String id, Message anchor) {
     arounds.add(anchor.id);
@@ -429,7 +447,8 @@ void main() {
     await t.tap(byKey('chat-search-button'));
     await settle(t);
     await t.enterText(editable('chat-search-field'), _tag);
-    await until(t, () => count() == '1/4', 'the in-chat count');
+    // 590 and 150 are loaded; 40 and 20 are not, and only the server knows.
+    await until(t, () => count() == '1/2+', 'the in-chat count');
   }
 
   testWidgets('list search -> tap a hit older than the newest 500 -> the chat '
@@ -470,12 +489,13 @@ void main() {
   testWidgets('in-chat: the newest hit, then ↑ to a loaded hit far up the '
       'list -- each in view', (t) async {
     try {
-      await mount(t);
+      final chat = await mount(t);
       await openRoomSearch(t);
       await settle(t);
       expect(inView(t, 590), isTrue, reason: where(t, 590));
-      await step(t, 'chat-search-older', '2/4');
+      await step(t, 'chat-search-older', '2/2+');
       expect(inView(t, 150), isTrue, reason: where(t, 150));
+      expect(chat.inChat(room), isEmpty, reason: 'answered from the phone');
     } finally {
       await shutDown(t);
     }
@@ -486,8 +506,12 @@ void main() {
     try {
       final chat = await mount(t);
       await openRoomSearch(t);
-      await step(t, 'chat-search-older', '2/4');
+      await step(t, 'chat-search-older', '2/2+');
+      expect(chat.inChat(room), isEmpty, reason: 'loaded hits ask nothing');
+      // Past the oldest loaded hit: the real server is asked, once, and its
+      // four rows (two of them already shown) merge into four hits.
       await step(t, 'chat-search-older', '3/4');
+      expect(chat.inChat(room), [_tag]);
       expect(inView(t, 40), isTrue, reason: 'unloaded: ${where(t, 40)}');
       expect(chat.arounds, contains(ids[40]), reason: 'loaded around it');
       await step(t, 'chat-search-older', '4/4');
@@ -501,6 +525,7 @@ void main() {
       expect(inView(t, 150), isTrue, reason: 'back out: ${where(t, 150)}');
       await step(t, 'chat-search-newer', '1/4');
       expect(inView(t, 590), isTrue, reason: where(t, 590));
+      expect(chat.inChat(room), [_tag], reason: 'answered once, for good');
     } finally {
       await shutDown(t);
     }
@@ -511,7 +536,7 @@ void main() {
     try {
       await mount(t);
       await openRoomSearch(t);
-      await step(t, 'chat-search-older', '2/4');
+      await step(t, 'chat-search-older', '2/2+');
       await step(t, 'chat-search-older', '3/4');
       await step(t, 'chat-search-older', '4/4');
       final sent = await t.runAsync(
@@ -591,7 +616,7 @@ void main() {
           .toList();
       final before = shown();
       await t.tap(byKey('chat-search-older')); // 150: loaded
-      await until(t, () => count() == '2/4', '2/4');
+      await until(t, () => count() == '2/2+', '2/2+');
       await settle(t);
       await t.tap(byKey('chat-search-older')); // 40: not loaded
       await until(
@@ -601,6 +626,132 @@ void main() {
       );
       expect(noticeSaying(offlineMessage), findsOneWidget);
       expect(shown(), before, reason: 'the previous messages stay');
+      await t.pump(const Duration(seconds: 4));
+    } finally {
+      await shutDown(t);
+    }
+  }, timeout: const Timeout(Duration(minutes: 3)));
+
+  /// Opens the room's search with nothing typed yet.
+  Future<void> openRoom(WidgetTester t) async {
+    await until(
+      t,
+      () => byKey('conversation-$room').evaluate().isNotEmpty,
+      'the room in the list',
+    );
+    await t.tap(byKey('conversation-$room'));
+    await until(
+      t,
+      () => bubble(599).evaluate().isNotEmpty,
+      'the newest message',
+    );
+    await t.tap(byKey('chat-search-button'));
+    await settle(t);
+  }
+
+  Future<void> typeInChat(WidgetTester t, String q) async {
+    await t.enterText(editable('chat-search-field'), q);
+    await t.pump();
+  }
+
+  testWidgets('in-chat, nothing loaded matches: the count stays empty (not '
+      '"No results") until the real server answers for this room, then is '
+      'exact; nothing anywhere: "No results" only after it answers', (t) async {
+    try {
+      final chat = await mount(t);
+      await openRoom(t);
+      chat.gate = Completer<void>();
+      await typeInChat(t, 'hit 20 $_tag'); // only the unloaded 20
+      await until(t, () => chat.inChat(room).isNotEmpty, 'the request');
+      await settle(t);
+      expect(chat.inChat(room), ['hit 20 $_tag']);
+      expect(count(), isEmpty, reason: 'nothing known yet');
+      chat.gate!.complete();
+      chat.gate = null;
+      await until(t, () => count() == '1/1', 'the server\'s exact count');
+      await until(t, () => inView(t, 20), 'hit 20 on screen');
+
+      chat.gate = Completer<void>();
+      await typeInChat(t, 'nowhere $_tag');
+      await until(t, () => chat.inChat(room).length == 2, 'the request');
+      await settle(t);
+      expect(count(), isEmpty);
+      expect(find.text('No results'), findsNothing);
+      chat.gate!.complete();
+      chat.gate = null;
+      await until(t, () => count() == 'No results', '"No results"');
+    } finally {
+      await shutDown(t);
+    }
+  }, timeout: const Timeout(Duration(minutes: 3)));
+
+  testWidgets('in-chat: a late real answer to a query since replaced by a '
+      'loaded one never shows', (t) async {
+    try {
+      final chat = await mount(t);
+      await openRoom(t);
+      chat.gate = Completer<void>();
+      await typeInChat(t, 'hit 20 $_tag');
+      await until(t, () => chat.inChat(room).isNotEmpty, 'the request');
+      await typeInChat(t, _tag);
+      await until(t, () => count() == '1/2+', 'the loaded hits');
+      chat.gate!.complete();
+      chat.gate = null;
+      await settle(t);
+      await settle(t);
+      expect(count(), '1/2+', reason: 'hit 20\'s answer must not land');
+      expect(chat.inChat(room), ['hit 20 $_tag'], reason: '_tag: loaded');
+      expect(inView(t, 590), isTrue, reason: where(t, 590));
+    } finally {
+      await shutDown(t);
+    }
+  }, timeout: const Timeout(Duration(minutes: 3)));
+
+  testWidgets('in-chat offline, nothing loaded matches: the SIS notice, the '
+      'previous query\'s hits gone, never "No results"', (t) async {
+    try {
+      final chat = await mount(t);
+      await openRoom(t);
+      await typeInChat(t, _tag);
+      await until(t, () => count() == '1/2+', 'the loaded hits');
+      chat.searchOffline = true;
+      await typeInChat(t, 'hit 20 $_tag');
+      await until(
+        t,
+        () => find.byType(SisNotice).evaluate().isNotEmpty,
+        'the notice',
+      );
+      expect(noticeSaying(offlineMessage), findsOneWidget);
+      expect(count(), isEmpty, reason: 'not _tag\'s 1/2+, not "No results"');
+      final container = ProviderScope.containerOf(
+        t.element(find.byType(MessageScreen)),
+      );
+      expect(container.read(chatSearchProvider).hits, isEmpty);
+      await t.pump(const Duration(seconds: 4));
+    } finally {
+      await shutDown(t);
+    }
+  }, timeout: const Timeout(Duration(minutes: 3)));
+
+  testWidgets('in-chat offline, ↑ past the oldest loaded hit: the SIS notice, '
+      'still on it, still "+"', (t) async {
+    try {
+      final chat = await mount(t);
+      await openRoom(t);
+      await typeInChat(t, _tag);
+      await until(t, () => count() == '1/2+', 'the loaded hits');
+      await step(t, 'chat-search-older', '2/2+');
+      chat.searchOffline = true;
+      await t.tap(byKey('chat-search-older'));
+      await until(t, () => chat.inChat(room).isNotEmpty, 'the request');
+      await settle(t);
+      expect(count(), '2/2+');
+      expect(inView(t, 150), isTrue, reason: where(t, 150));
+      expect(
+        noticeSaying(offlineMessage),
+        findsOneWidget,
+        reason: 'the ↑ press asked the server and it failed: say so',
+      );
       await t.pump(const Duration(seconds: 4));
     } finally {
       await shutDown(t);

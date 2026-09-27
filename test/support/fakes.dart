@@ -1774,26 +1774,49 @@ class GalleryFake implements Gallery {
   /// here; remove one to let the next request for it succeed.
   final Set<int> failingPages = {};
 
-  Completer<void>? _recentGate;
+  bool _holdingRecent = false;
+  final Map<int, Completer<void>> _heldRecent = {};
 
-  /// Every recent() call stays in flight until [releaseRecent]: a slow page,
-  /// long enough to scroll again and prove no second request is sent.
-  void holdRecent() => _recentGate = Completer<void>();
+  /// Every recent() call from now on stays in flight until [releaseRecent]
+  /// (or, one at a time, [releaseRecentCall]): a slow page, long enough to
+  /// scroll again and prove no second request is sent.
+  void holdRecent() => _holdingRecent = true;
+
+  /// Lets every held recent() call complete, and stops holding new ones.
   void releaseRecent() {
-    _recentGate?.complete();
-    _recentGate = null;
+    _holdingRecent = false;
+    for (final gate in _heldRecent.values) {
+      gate.complete();
+    }
+    _heldRecent.clear();
   }
+
+  /// Lets only the held recent() call at [call] (its index in [recentPages])
+  /// complete; later calls are still held. Pages arrive out of order the way
+  /// a slow platform query can.
+  void releaseRecentCall(int call) {
+    final gate = _heldRecent.remove(call);
+    if (gate == null) throw StateError('recent() call $call is not held');
+    gate.complete();
+  }
+
+  /// The indexes (into [recentPages]) of the recent() calls still held.
+  Iterable<int> get heldRecentCalls => _heldRecent.keys;
 
   @override
   Future<List<GalleryPhoto>> recent({int page = 0, int count = 60}) async {
-    recentCalls++;
+    final call = recentCalls++;
     recentPages.add((page: page, count: count));
     await _tick();
-    final gate = _recentGate;
-    if (gate != null) await gate.future;
+    if (_holdingRecent) {
+      final gate = _heldRecent[call] = Completer<void>();
+      await gate.future;
+    }
     if (failingPages.contains(page)) {
       throw Exception('the photo library could not be read (page $page)');
     }
+    // Read when the call completes: a held call delivers the library as it
+    // is at release, so a test can make each held call's answer distinct.
     final visible = access == GalleryAccess.limited
         ? photos.where((p) => allowed.contains(p.id))
         : photos;

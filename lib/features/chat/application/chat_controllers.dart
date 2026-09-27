@@ -255,13 +255,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     ]);
   }
 
-  /// Also drops the cached [membersProvider] snapshot: whenever this list
-  /// has reason to re-read the server (cold start, refresh, a message
-  /// anywhere), someone's profile picture may have changed too, and the
-  /// next read of membersProvider should not still be the one from before
-  /// this session's first load.
   Future<List<Conversation>> _load() async {
-    ref.invalidate(membersProvider);
     return switch (await ref.read(chatRepositoryProvider).conversations()) {
       Ok(:final value) => value,
       Err(:final failure) => throw failure,

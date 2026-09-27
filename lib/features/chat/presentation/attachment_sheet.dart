@@ -94,6 +94,9 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
       _loading = false;
       _nextPage = 1;
       _hasMore = photos.length == _pageSize;
+      // A page still in flight from the old generation never clears this
+      // itself (it returns early above), so the reload owns the reset.
+      _loadingMore = false;
     });
   }
 

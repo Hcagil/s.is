@@ -1,5 +1,5 @@
 begin;
-select plan(70);
+select plan(71);
 -- The plan checks below read planner statistics this transaction writes
 -- with ANALYZE. A concurrent (auto)vacuum of messages would overwrite
 -- pg_class.reltuples in place, mid-test; holding this lock keeps it out.
@@ -10,8 +10,8 @@ lock table public.messages in share update exclusive mode;
 --
 --  * case-insensitive and Turkish-safe: I, İ and ı all fold to i;
 --  * substring match; %, _ and \ are literal, never wildcards;
---  * a trimmed query under three characters returns no rows and no error,
---    and never touches messages (pg_trgm cannot index a shorter pattern, so
+--  * a query with fewer than three letters or digits (after trimming and
+--    folding) returns no rows and no error, and never touches messages (pg_trgm cannot index a shorter pattern, so
 --    it would scan every row of the trigram index, every conversation's);
 --  * scoped to [conversation] when given, else every conversation the caller
 --    is a member of; a conversation the caller is not in -- or that does not
@@ -127,8 +127,8 @@ with rows(tag, conv, sender, body, mins) as (values
   ('pct2',      1, 2, '100% sure',                 58.5),
   ('und',       1, 2, 'file_a.txt',                57),
   ('und_decoy', 1, 2, 'fileXa.txt',                56),
-  ('und2',      1, 1, 'a_b',                       57.5),
-  ('und2_decoy',1, 1, 'axb',                       56.5),
+  ('und2',      1, 1, 'ab_cd',                     57.5),
+  ('und2_decoy',1, 1, 'abxcd',                     56.5),
   ('bsl',       1, 1, 'path\to',                   55),
   ('bsl_decoy', 1, 1, 'pathto',                    54),
   ('bsl2',      1, 2, 'C:\sys',                    55.5),
@@ -192,12 +192,12 @@ select is(hits('din'), 'dinner at eight', 'a substring matches: "din" finds "din
 select is(hits('  din  '), 'dinner at eight', 'the query is trimmed before it is matched');
 
 -- 2 wildcards are literal ---------------------------------------------------
-select is(hits('1%e'), 'code 1%e ok', '% matches a percent sign only, not "anything"');
-select is(hits('e_a'), 'file_a.txt', '_ matches an underscore only, not "one character"');
-select is(hits('h\t'), 'path\to', '\ matches a backslash only, it escapes nothing');
-select is(hits('00%'), '100% sure', '"00%" finds only "100% sure", not "100 percent"');
-select is(hits('a_b'), 'a_b', '"a_b" finds "a_b", not "axb"');
-select is(hits('\sy'), 'C:\sys', '"\sy" matches a literal backslash, not "sy" alone');
+select is(hits('de 1%e'), 'code 1%e ok', '% matches a percent sign only, not "anything"');
+select is(hits('le_a'), 'file_a.txt', '_ matches an underscore only, not "one character"');
+select is(hits('th\t'), 'path\to', '\ matches a backslash only, it escapes nothing');
+select is(hits('100%'), '100% sure', '"100%" finds only "100% sure", not "100 percent"');
+select is(hits('b_c'), 'ab_cd', '"b_c" finds "ab_cd", not "abxcd"');
+select is(hits('C:\sy'), 'C:\sys', '"C:\sy" matches a literal backslash, not "sy" alone');
 select is(hits('%%%'), '', 'a query of wildcards alone matches nothing');
 select is(hits('___'), '', 'nor does a query of underscores alone');
 
@@ -211,6 +211,10 @@ select is(hit_count('in', 'a5c00000-0000-0000-0000-000000000001'), 0::bigint,
   'two characters: no rows, though "in" is in "going to istanbul"');
 select is(hit_count(' in '), 0::bigint, 'two characters once trimmed: no rows');
 select is(hit_count('%%'), 0::bigint, 'two wildcards: no rows');
+select is((select string_agg(q || '=' || hit_count(q), ' ')
+             from unnest(array['%%%', '...', '!!!', '😂😂😂', 'a..', 'a b', ' . 1 . ']) q),
+  '%%%=0 ...=0 !!!=0 😂😂😂=0 a..=0 a b=0  . 1 . =0',
+  'fewer than three letters or digits, whatever else surrounds them: no rows');
 select is(hit_count('ing', 'a5c00000-0000-0000-0000-000000000001') > 0, true,
   'three characters do search (control for the above)');
 
@@ -316,7 +320,7 @@ create or replace function eq_as(who text, uid uuid, sid text) returns void lang
 begin
   perform test_as(uid, sid);
   insert into _eq select who, t, rls_ids(t), search_ids(t)
-    from unnest(array['istanbul', 'dinner', 'secret', 'phrasing', '00%', 'a_b']) t;
+    from unnest(array['istanbul', 'dinner', 'secret', 'phrasing', '100%', 'b_c']) t;
   execute 'reset role';
 end $$;
 select eq_as('ada (member)',       '00000000-0000-0000-0000-0000000a5001', 'a5000000-0000-0000-0000-0000000a5001');
@@ -382,14 +386,15 @@ create or replace function _messages_blocks() returns bigint language sql as $$
             from pg_index i where i.indrelid = 'public.messages'::regclass)::bigint
 $$;
 insert into _touch values ('before_short', _messages_blocks());
-select as_s(1); select hit_count('in'); select hit_count(' fi '); reset role;
+select as_s(1); select hit_count('in'); select hit_count(' fi ');
+  select hit_count(q) from unnest(array['%%%', '...', '!!!', '😂😂😂', 'a..', 'a b']) q; reset role;
 select as_s(1); select hit_count('fi', 'a5c00000-0000-0000-0000-000000000005'); reset role;
 insert into _touch values ('short', _messages_blocks());
 select as_s(1); select hit_count('fil', 'a5c00000-0000-0000-0000-000000000005'); reset role;
 insert into _touch values ('three', _messages_blocks());
 select is((select a.blocks - b.blocks from _touch a, _touch b
             where a.what = 'short' and b.what = 'before_short'),
-  0::bigint, 'a two-character search scans neither messages nor any index on it, and reads no row, scoped or not');
+  0::bigint, 'a search with fewer than three letters or digits scans neither messages nor any index on it, and reads no row, scoped or not');
 select is((select a.blocks > b.blocks from _touch a, _touch b
             where a.what = 'three' and b.what = 'short'),
   true, 'the measure is not vacuous: a three-character search does read them');

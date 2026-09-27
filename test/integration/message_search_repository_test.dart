@@ -193,7 +193,7 @@ void main() {
           if (m.body.contains(_tag)) m.id,
       ];
       expect(await ids('$_tag 100%'), [pct.id]);
-      expect(await ids('0% s'), [pct.id]);
+      expect(await ids('00% su'), [pct.id]);
       expect(await ids('$_tag a_'), [und.id]);
       expect(await ids(r'\sys ' + _tag), [bsl.id]);
       expect(await ids('%%%'), isEmpty);
@@ -204,7 +204,10 @@ void main() {
       'a query under three characters is Ok and empty, never a failure',
       () async {
         await send(sofi, sofiTarik, 'ab $_tag');
-        for (final q in ['', ' ', 'a', ' a ', '\n', 'ab', ' ab ', 'ab\n']) {
+        for (final q in [
+          '', ' ', 'a', ' a ', '\n', 'ab', ' ab ', 'ab\n', //
+          '%%%', '...', '!!!', '😂😂😂', 'a..',
+        ]) {
           expect(
             await sofi.search(q),
             isA<Ok<List<Message>>>().having((r) => r.value, 'value', isEmpty),

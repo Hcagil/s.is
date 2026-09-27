@@ -71,10 +71,18 @@ void main() {
     expect(results(), ['b2', 'a1'], reason: 'every conversation, newest first');
   });
 
-  testWidgets('one or two characters (trimmed) ask nothing and show nothing', (
-    tester,
-  ) async {
-    for (final q in ['x', 'xa', ' xa ', 'xa\n']) {
+  testWidgets('fewer than three letters or digits ask nothing and show '
+      'nothing', (tester) async {
+    for (final q in [
+      'x',
+      'xa',
+      ' xa ',
+      'xa\n',
+      '...',
+      '%%%',
+      '😂😂😂',
+      'x..',
+    ]) {
       notifier().search(q);
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump();

@@ -1467,13 +1467,16 @@ Message editedCopy(Message stored, String body) => Message(
 );
 
 /// search_messages as the contract states it, over rows the caller may read:
-/// a trimmed query under three characters finds nothing; otherwise text that
+/// a query with fewer than three letters or digits finds nothing; otherwise
+/// text that
 /// contains it after the Turkish fold (I, İ and ı all read as i), case-
 /// insensitively, taken literally; deleted and textless messages never
 /// match; newest first, at most 50.
 List<Message> searchRows(Iterable<Message> rows, String query) {
   final q = foldForSearch(query.trim());
-  if (q.length < 3) return const [];
+  if (RegExp(r'[\p{L}\p{N}]', unicode: true).allMatches(q).length < 3) {
+    return const [];
+  }
   final hits = [
     for (final m in rows)
       if (!m.isDeleted &&

@@ -95,6 +95,13 @@
 --   vedat/yesim    test/integration/message_search_seam_test.dart
 --     (vedat's search controllers, wired the way main.dart wires them, search
 --      what he and yesim wrote)
+--   avi/bea/cem    test/integration/avatar_repository_test.dart
+--     (avi and bea set, read, replace and remove pictures; cem is allowlisted
+--      and active but in none of their groups, so only membership can keep a
+--      group's picture from him)
+--   deniz/ece      test/integration/avatar_seam_test.dart
+--     (deniz's controllers, wired the way main.dart wires them, set his own
+--      and his group's picture; ece is the other member)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -160,5 +167,10 @@ insert into app_private.allowlist(email) values
   ('tarik@integration.test'),
   ('umut@integration.test'),
   ('vedat@integration.test'),
-  ('yesim@integration.test')
+  ('yesim@integration.test'),
+  ('avi@integration.test'),
+  ('bea@integration.test'),
+  ('cem@integration.test'),
+  ('deniz@integration.test'),
+  ('ece@integration.test')
 on conflict do nothing;

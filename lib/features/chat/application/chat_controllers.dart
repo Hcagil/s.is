@@ -733,7 +733,7 @@ class ChatSearchController extends Notifier<ChatSearchState> {
   Future<Result<void>> search(String query) async {
     final conversationId = ref.read(openConversationProvider);
     if (conversationId == null) return const Err(DeniedFailure());
-    if (query.trim().length < 3) {
+    if (!isSearchable(query)) {
       state = ChatSearchState(query: query, hits: const [], index: -1);
       return const Ok(null);
     }
@@ -826,11 +826,11 @@ class ChatListSearchController extends Notifier<ChatListSearchState> {
   }
 
   /// Debounces [query] ~300ms, then searches every conversation the caller
-  /// belongs to. Fewer than 3 trimmed characters -- including empty --
+  /// belongs to. Fewer than three letters or digits -- including empty --
   /// clears the results at once, with no round trip.
   void search(String query) {
     _debounce?.cancel();
-    if (query.trim().length < 3) {
+    if (!isSearchable(query)) {
       _generation++;
       state = const ChatListSearchState();
       return;

@@ -1,68 +1,83 @@
--- v0.16 follow-up: raise search_messages' minimum query length from two
--- characters to three. Owner-approved 2026-09-27, on a security-lead dynamic
--- probe (Low): pg_trgm cannot derive an index condition from a LIKE pattern
--- shorter than three characters (a trigram needs three characters to exist
--- at all), so a 2-character query fell through to a full, unselective scan
--- of messages_search_trgm_idx -- every row in the table, in every
--- conversation, not just the caller's own -- rather than the targeted
--- bitmap scan a 3+ character query gets. Two costs, both independent of
--- `conversation` (scoped or unscoped, both pay it): a DoS surface (~0.23us
--- per row measured by security-lead, so ~22.7ms at 100,000 foreign rows and
--- ~230ms at 1,000,000, from a search term as short as two characters and as
--- cheap to send as any other), and a timing side channel leaking the
--- database's total message volume regardless of the caller's own
--- membership.
+-- v0.16 follow-up: search_messages runs only for a query with at least three
+-- letters or digits. Owner rule "search starts at 3 characters", refined
+-- 2026-09-27 after two security-lead dynamic probes (F-DYN-1, F-DYN-1b):
+-- the length that matters to pg_trgm is not characters but WORD characters.
 --
--- The existing length guard, `char_length(btrim(query)) >= 2`, already sits
--- in the WHERE clause as a bare (unwrapped) condition -- unlike
--- has_app_access() and is_member(conversation) just above it, it is not
--- wrapped in a scalar subquery. That turns out not to matter for THIS qual:
--- it references no column of `messages` and calls only immutable functions
--- on the function's own parameter, so Postgres's planner treats it as a
--- pseudoconstant (a clause with no Vars) and hoists it into a one-time
--- gating check ahead of the scan on its own, the same way a bare `false` in
--- a WHERE clause short-circuits a query -- confirmed below by EXPLAIN
--- (ANALYZE, BUFFERS) showing zero buffer hits on `messages` once the guard
--- rejects the query. The problem was never that the guard failed to gate;
--- it is that two characters PASSED it, and a passing 2-character query still
--- reached the trigram index with a pattern too short for it to help.
--- Raising the threshold to three removes that gap: nothing shorter than
--- three characters reaches the scan at all, and everything that does is
--- long enough for pg_trgm to produce a real Index Cond.
+-- Why: pg_trgm builds the Index Cond for `search_text like '%q%'` by
+-- splitting the pattern into runs of word characters (letters and digits,
+-- get_wildcard_part in trgm_op.c), padding each run with two spaces on the
+-- left unless it directly follows a wildcard and one space on the right
+-- unless it directly precedes one, and taking trigrams of the padded runs.
+-- If that yields no trigram at all, gin_extract_query falls back to
+-- GIN_SEARCH_MODE_ALL: it walks the whole of messages_search_trgm_idx and
+-- rechecks EVERY message in the table against the LIKE -- every
+-- conversation's rows, not just the caller's -- before the leakproof
+-- membership bound discards them. So a symbol-only query (`%%%`, `...`,
+-- `!!!`, three emoji) has no run at all, and `a..` has one run, `a`,
+-- preceded by the leading `%` (no left pad) and followed by `.` (one right
+-- pad): "a " -- two characters, no trigram, full scan. Both pass a
+-- `char_length(btrim(query)) >= 3` guard. The previous version of this
+-- migration raised the character count from 2 to 3 and closed only the
+-- 1-2 character case; F-DYN-1b showed the same full scan from 3+ symbols,
+-- whether `conversation` is given or not. The costs are the ones F-DYN-1
+-- named: a DoS surface growing with total message volume, and a timing side
+-- channel leaking that volume to any member.
 --
--- Measured myself against this branch's own local stack (`explain (analyze,
--- buffers)` via `select * from search_messages(...)`, authenticated as a
--- member with zero of their own messages), a fixture conversation the
--- caller is NOT a member of, filled with 0 / 20,000 / 100,000 messages all
--- containing the probe term "probe" (single runs; timings settle further
--- once buffers are warm, the buffer counts -- the point being made -- do
--- not):
+-- The guard now counts letters and digits: strip everything that is not
+-- [[:alnum:]] and require three left. Three word characters always give at
+-- least one trigram: either they sit in one run of length three, or there
+-- is a second run, and a second run is never preceded by a wildcard, so it
+-- gets the two-space left pad ("  b" is a trigram). Verified in this
+-- database's locale (ICU en-US for regexes, libc en_US.UTF-8 for pg_trgm --
+-- they are different classifiers): a sweep of every code point below
+-- U+30000 found NO character that [[:alnum:]] accepts and pg_trgm does not
+-- treat as a word character (the only unsafe direction; 1,661 combining
+-- marks go the harmless other way). Turkish İ ı ş ğ ç ö ü are word
+-- characters for both. On a libc-collated database both sides are the same
+-- iswalnum(), so the subset property holds there trivially. btrim and
+-- fold_search are not needed in the guard: whitespace is not alnum and
+-- folding does not change whether a character is a letter.
 --
---                              0 foreign    20,000 foreign   100,000 foreign
---   2-char "pr", threshold 2   5.85ms/535b     5.36ms/830b     23.57ms/2646b
---     (no usable Index Cond for a 2-char pattern: a full scan of
---      messages_search_trgm_idx, buffers and time both climbing with total
---      row count -- this is the DoS/timing leak security-lead measured;
---      23.57ms at 100,000 matches security-lead's own ~22.7ms independently)
---   2-char "pr", threshold 3   3.89ms/356b     0.66ms/124b      0.65ms/114b
---     (char_length(btrim($1)) >= 3 -> false: a pseudoconstant qual with no
---      Vars, hoisted into a one-time gating check ahead of the scan, same as
---      a rejected `conversation` id already was -- buffers and time do NOT
---      grow with foreign row count; the one elevated first run is
---      parse/catalog-cache warmup, not scan work, and disappears on repeat)
---   3-char "pro", threshold 3  3.30ms/24b      3.19ms/409b      14.85ms/1961b
---     (unaffected by this change either way: the previous migration's own
---      documented residual cost -- the trigram index IS used, matching
---      foreign rows are still heap-fetched before the leakproof array bound
---      discards them, restated here only to show 3-char is untouched)
+-- The guard stays a bare qual referencing no column of `messages`, so the
+-- planner keeps hoisting it into the One-Time Filter ahead of the scan (the
+-- EXPLAIN below shows the Bitmap Index Scan as "never executed" when it
+-- rejects). regexp_replace is immutable, so nothing else changes about how
+-- the query is planned.
 --
--- 2-char (and, by the same gate, 1-char and empty) is now ~independent of
--- table size, matching a rejected `conversation` id's cost; 3-char is
--- unchanged. Nothing else about
--- search_messages changes: security definer, search_path, the one-time
--- is_member(conversation) check, the any(array(memberships)) leakproof
--- bound, the per-row is_member(m.conversation_id) check, and the InitPlan
--- pattern for the LIKE value are all identical to the previous migration.
+-- Measured 2026-09-27, `explain (analyze, buffers)` of the function body as
+-- the definer with a member's JWT claims, generic plan (as the SQL function
+-- itself plans), a foreign conversation the caller is not a member of
+-- filled with 0 / 20,000 / 100,000 messages; shared blocks, and ms:
+--
+--                                   0 foreign     20,000 foreign  100,000 foreign
+--   `%%%` `...` `!!!` emoji `a..`
+--     char_length(btrim) >= 3       730b/0.9ms    1204b/5.4ms     3037b/24ms
+--       (Bitmap Index Scan actual rows=102,647, "Rows Removed by Index
+--        Recheck: 102,625": the whole index and heap, climbing with volume;
+--        own-conversation scope identical: 731 / 1205 / 3038b)
+--     alnum count >= 3              9b/0.3ms      9b/0.3ms        9b/0.3ms
+--       (One-Time Filter false, scan never executed; own scope 10b)
+--   `abc`                           34b/0.5ms     34b/0.5ms       34b/0.5ms  (both guards)
+--   `a b c` `a.b.c` `1 2 3`         18-20b/0.3ms  same            same       (both guards)
+--   `şğü` `İıi`                     12b/0.3ms     same            same       (both guards)
+--   `pro` `probe`                   37-45b        424-438b        1975-2017b (both guards)
+--       (the previous migration's documented residual: matching foreign
+--        rows are heap-fetched before the leakproof bound discards them;
+--        unchanged here)
+--   `pr` `..a` `a b`                9b/0.3ms      same            same
+--       (rejected: under three letters or digits)
+--
+-- End to end through search_messages() as `authenticated` at 100,000
+-- foreign rows: `%%%` / `a..` / emoji 3038-3073b, 24ms before; 10-27b,
+-- 0.4-0.5ms after. `abc` 35b before and after.
+--
+-- Nothing else about search_messages changes: security definer,
+-- search_path, the one-time is_member(conversation) check, the
+-- any(array(memberships)) leakproof bound, the per-row
+-- is_member(m.conversation_id) check and the InitPlan for the LIKE value
+-- are all identical to the previous migration. The app applies the same
+-- rule client-side (isSearchable in the chat domain) so a symbol-only query
+-- never makes the round trip; this guard is the one that is enforced.
 create or replace function public.search_messages(query text, conversation uuid default null)
 returns table (
   id uuid, conversation_id uuid, sender_id uuid, body text, created_at timestamptz,
@@ -91,15 +106,14 @@ language sql stable security definer set search_path = '' as $$
                   where cm.user_id = auth.uid())
          )
      and app_private.is_member(m.conversation_id)
-     -- Raised from 2 to 3 (this migration's header): below 3 characters
-     -- pg_trgm cannot derive an Index Cond from the LIKE pattern below, so a
-     -- passing-but-short query forced a full, unselective scan of the
-     -- shared trigram index across every conversation's messages, not just
-     -- the caller's own -- a DoS surface and a timing leak of total message
-     -- volume. This clause references no column of `messages`, so the
-     -- planner hoists it into a one-time gating check ahead of the scan,
-     -- same as a rejected `conversation` above.
-     and char_length(btrim(query)) >= 3
+     -- At least three letters or digits (this migration's header): fewer,
+     -- or symbols only, can leave pg_trgm with no trigram to look up, and
+     -- the LIKE below then degrades to a full scan of the shared trigram
+     -- index across every conversation's messages -- a DoS surface and a
+     -- timing leak of total message volume. This clause references no
+     -- column of `messages`, so the planner hoists it into a one-time
+     -- gating check ahead of the scan, same as a rejected `conversation`.
+     and char_length(regexp_replace(query, '[^[:alnum:]]', '', 'g')) >= 3
      and m.deleted is null
      and (conversation is null or m.conversation_id = conversation)
      -- The pattern is a scalar subquery so it is built ONCE, as an InitPlan,

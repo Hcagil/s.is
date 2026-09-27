@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../application/chat_controllers.dart';
+import '../domain/message.dart';
 
 /// The in-chat search bar: replaces the conversation header's title/actions
 /// while search is open. Back/close, the query field, an "n/m" (or "No
@@ -86,7 +87,7 @@ class _ChatSearchBarState extends ConsumerState<ChatSearchBar> {
             },
           ),
         ),
-        if (state.query.trim().length >= 3)
+        if (isSearchable(state.query))
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(

@@ -1,13 +1,16 @@
+import 'message.dart';
+
 /// Case-insensitive start offsets where [query] occurs in [text] --
-/// non-overlapping, in order. Empty when [query] is blank.
+/// non-overlapping, in order. Empty unless [query] is [isSearchable]: a
+/// query the app never searches highlights nothing either.
 ///
 /// For highlighting a search hit in a chat bubble or a list snippet. This is
 /// a plain lowercase compare, not the server's Turkish-safe folding (see
 /// `ChatRepository.search`): it only needs to agree with the characters the
 /// member actually typed and is looking at, not the server's broader match.
 List<int> matchOffsets(String text, String query) {
+  if (!isSearchable(query)) return const [];
   final trimmed = query.trim();
-  if (trimmed.isEmpty) return const [];
   final lowerText = text.toLowerCase();
   final lowerQuery = trimmed.toLowerCase();
   final offsets = <int>[];

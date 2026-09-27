@@ -34,7 +34,6 @@ class _ChatSearchBarState extends ConsumerState<ChatSearchBar> {
   late final TextEditingController _controller = TextEditingController(
     text: widget.initialQuery ?? '',
   );
-  Timer? _debounce;
 
   @override
   void initState() {
@@ -47,7 +46,6 @@ class _ChatSearchBarState extends ConsumerState<ChatSearchBar> {
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -62,6 +60,9 @@ class _ChatSearchBarState extends ConsumerState<ChatSearchBar> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(chatSearchProvider);
+    ref.listen(chatSearchProvider.select((s) => s.failure), (previous, next) {
+      if (next != null) showSisNotice(context, next.message, isError: true);
+    });
     return Row(
       children: [
         IconButton(
@@ -78,13 +79,7 @@ class _ChatSearchBarState extends ConsumerState<ChatSearchBar> {
               hintText: 'Search in this chat',
               border: InputBorder.none,
             ),
-            onChanged: (text) {
-              _debounce?.cancel();
-              _debounce = Timer(
-                const Duration(milliseconds: 300),
-                () => _search(text),
-              );
-            },
+            onChanged: (text) => unawaited(_search(text)),
           ),
         ),
         if (isSearchable(state.query))
@@ -92,8 +87,8 @@ class _ChatSearchBarState extends ConsumerState<ChatSearchBar> {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(
               state.hits.isEmpty
-                  ? 'No results'
-                  : '${state.index + 1}/${state.hits.length}',
+                  ? (state.serverAnswered ? 'No results' : '')
+                  : '${state.index + 1}/${state.hits.length}${state.serverAnswered ? '' : '+'}',
               key: const ValueKey('chat-search-count'),
             ),
           ),

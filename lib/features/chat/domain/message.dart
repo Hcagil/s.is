@@ -135,6 +135,17 @@ const deleteForEveryoneWindow = Duration(hours: 6);
 /// deleted" stays in its place.
 enum MessageDeletion { vanished, placeholder }
 
+/// Mirrors public.fold_search exactly: İ, I and ı all fold to plain 'i',
+/// then the rest is lowercased -- so "istanbul" matches "İstanbul",
+/// "ISTANBUL" and "ıstanbul" the same way the server's search does.
+String foldSearch(String input) {
+  return input
+      .replaceAll('İ', 'i')
+      .replaceAll('I', 'i')
+      .replaceAll('ı', 'i')
+      .toLowerCase();
+}
+
 /// Whether [query] is worth a search: at least three letters or digits (any
 /// script) once trimmed. Symbol-only or emoji-only queries never search --
 /// the server's search_messages enforces the same rule, so this only saves

@@ -891,3 +891,24 @@ WhatsApp-like:
   members only.
 - Storage and its rules are in docs/SECURITY.md. The phone's picture cache is
   emptied whenever the session ends.
+
+## 2026-09-27 — Instant search inside a chat (phone first, then server)
+
+The owner asked for search to run on the phone, to reduce database load, and
+said "if needed we will change it to instant-local-then-server". The design
+review (feature-lead) found that a full on-phone index would download every
+member's whole history, which costs the server more than on-demand search.
+So the owner's fallback was taken.
+- Inside a chat, hits come instantly from the messages already on the phone
+  (the newest 500 of that chat).
+- The server is asked only when there is no local hit, or when the member
+  steps ↑ past the oldest local hit. The counter shows "+" until the server
+  has answered.
+- A new query after a jump first returns the chat to its newest messages.
+- Chat-list search stays on the server.
+
+Accepted limitation: `foldSearch` (Dart) and `fold_search` (Postgres ICU)
+differ for 410 rare code points (Cherokee, Georgian Mtavruli, some
+Cyrillic/Latin extensions and similar) and Greek final sigma. Turkish letters
+and every dotted/dotless i sequence match. The instant hits can differ from
+the server's only for those scripts; a pinned test fails on any new drift.

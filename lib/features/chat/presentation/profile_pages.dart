@@ -63,7 +63,7 @@ class PersonScreen extends ConsumerWidget {
               label: name,
               seed: userId,
               radius: 48,
-              avatarPath: member?.avatarPath ?? fallbackAvatarPath,
+              avatarPath: fallbackAvatarPath ?? member?.avatarPath,
             ),
             const SizedBox(height: 12),
             Text(

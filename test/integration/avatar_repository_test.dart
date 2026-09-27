@@ -64,8 +64,42 @@ SupabaseClient _client() => SupabaseClient(
   authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
 );
 
-Future<SupabaseClient> _signedIn(String email, {bool activate = true}) async {
-  final client = _client();
+/// A real client whose connection to one endpoint can be cut on demand --
+/// what a device sees when the network drops right after an upload. Storage
+/// keeps working; only the RPC or the profiles table stops answering (the
+/// request goes to a name the server does not have, and fails there).
+class _Faulty extends SupabaseClient {
+  _Faulty()
+    : super(
+        _url,
+        _key,
+        authOptions: const AuthClientOptions(
+          authFlowType: AuthFlowType.implicit,
+        ),
+      );
+
+  bool rpcDown = false;
+  bool profilesDown = false;
+
+  @override
+  PostgrestFilterBuilder<T> rpc<T>(
+    String fn, {
+    Map<String, dynamic>? params,
+    dynamic get = false,
+  }) => super.rpc(rpcDown ? '${fn}_unreachable' : fn, params: params, get: get);
+
+  @override
+  SupabaseQueryBuilder from(String table) => super.from(
+    profilesDown && table == 'profiles' ? 'profiles_unreachable' : table,
+  );
+}
+
+Future<SupabaseClient> _signedIn(
+  String email, {
+  bool activate = true,
+  SupabaseClient? over,
+}) async {
+  final client = over ?? _client();
   try {
     await client.auth.signInWithPassword(email: email, password: _password);
   } on AuthException {
@@ -104,13 +138,14 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = null;
 
-  late SupabaseClient avi, bea, cem, stranger, anon;
+  late SupabaseClient avi, bea, stranger, anon;
+  late _Faulty cem;
   late String aviId, beaId;
 
   setUpAll(() async {
     avi = await _signedIn('avi@integration.test');
     bea = await _signedIn('bea@integration.test');
-    cem = await _signedIn('cem@integration.test');
+    cem = await _signedIn('cem@integration.test', over: _Faulty()) as _Faulty;
     // Signs in with Google-like ease but is on no allowlist.
     stranger = await _signedIn(
       'stranger-avatars@integration.test',
@@ -317,8 +352,97 @@ void main() {
     final direct = _ok(await aviChat.startDirectConversation(beaId));
     final refused = _err(await aviChat.setGroupAvatar(direct, _jpeg(20)));
     expect(refused, isA<DeniedFailure>());
+    expect(
+      await _objects(avi, 'group/$direct'),
+      isEmpty,
+      reason: 'a refused 1:1 picture was left in storage',
+    );
     final row = _ok(await aviChat.conversations())
         .singleWhere((c) => c.id == direct);
     expect(row.avatarPath, isNull);
+  });
+
+  test('the group\'s previous picture deleted is the one the server had, '
+      'not a stale path the caller passed', () async {
+    final aviChat = SupabaseChatRepository(avi);
+    final beaChat = SupabaseChatRepository(bea);
+    final group = _ok(
+      await aviChat.startGroupConversation(
+        title: 'stale previous',
+        memberIds: [beaId],
+      ),
+    );
+    Future<String?> current() async =>
+        _ok(await aviChat.conversations())
+            .singleWhere((c) => c.id == group)
+            .avatarPath;
+
+    _ok(await aviChat.setGroupAvatar(group, _jpeg(30)));
+    final p1 = (await current())!;
+    _ok(await beaChat.setGroupAvatar(group, _jpeg(31), previousPath: p1));
+    final p2 = (await current())!;
+
+    // avi's screen still thinks p1 is current (it is long gone).
+    _ok(await aviChat.setGroupAvatar(group, _jpeg(32), previousPath: p1));
+    final p3 = (await current())!;
+    expect(await _objects(avi, 'group/$group'), [
+      p3,
+    ], reason: 'the picture the server replaced ($p2) was left behind');
+
+    // No previous path at all: the server's still goes.
+    _ok(await aviChat.setGroupAvatar(group, null));
+    expect(await _objects(avi, 'group/$group'), isEmpty);
+  });
+
+  test(
+    'a group picture whose RPC never lands is not left in storage',
+    () async {
+      final cemChat = SupabaseChatRepository(cem);
+      final group = _ok(
+        await cemChat.startGroupConversation(
+          title: 'rpc drops',
+          memberIds: [beaId],
+        ),
+      );
+      cem.rpcDown = true;
+      try {
+        _err(await cemChat.setGroupAvatar(group, _jpeg(40)));
+      } finally {
+        cem.rpcDown = false;
+      }
+      expect(
+        await _objects(cem, 'group/$group'),
+        isEmpty,
+        reason:
+            'the upload went up, the row never pointed at it, and it stayed',
+      );
+      final row = _ok(await cemChat.conversations())
+          .singleWhere((c) => c.id == group);
+      expect(row.avatarPath, isNull);
+    },
+  );
+
+  test('an own picture whose profile update never lands is not left in '
+      'storage, and the profile keeps its picture', () async {
+    final profiles = SupabaseProfileRepository(cem);
+    final cemId = cem.auth.currentUser!.id;
+    if (_ok(await profiles.load()).avatarPath case final p?) {
+      _ok(await profiles.removeAvatar(p));
+    }
+    final left = await _objects(cem, 'profile/$cemId');
+    if (left.isNotEmpty) await cem.storage.from('avatars').remove(left);
+    final kept = _ok(await profiles.setAvatar(_jpeg(50))).avatarPath!;
+
+    cem.profilesDown = true;
+    try {
+      _err(await profiles.setAvatar(_jpeg(51), previousPath: kept));
+    } finally {
+      cem.profilesDown = false;
+    }
+    expect(await _objects(cem, 'profile/$cemId'), [
+      kept,
+    ], reason: 'an orphan was left, or the kept picture was deleted');
+    expect(_ok(await profiles.load()).avatarPath, kept);
+    _ok(await profiles.removeAvatar(kept));
   });
 }

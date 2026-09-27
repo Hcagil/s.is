@@ -481,7 +481,11 @@ void main() {
       w.profile.releaseAvatar();
       await steps(t);
       expect(find.byType(SisProgressLine), findsNothing);
-      expect(notice, findsOneWidget, reason: 'success is not reported');
+      expect(
+        noticeSaying('Profile picture updated'),
+        findsOneWidget,
+        reason: 'success is not reported',
+      );
       expectPicture(byKey('profile-avatar'), pngBytes, 'profile page');
       await back(t);
       expectPicture(byKey('settings-profile'), pngBytes, 'settings card');
@@ -502,6 +506,7 @@ void main() {
 
       final upload = w.profile.avatarUploads.single;
       expect(upload.previousPath, mePath);
+      expect(noticeSaying('Profile picture updated'), findsOneWidget);
       expect(w.profile.profile.avatarPath, isNot(mePath));
       expect(w.bucket.containsKey(mePath), isFalse);
       expectPicture(byKey('profile-avatar'), pngBytes, 'after');
@@ -519,7 +524,11 @@ void main() {
       await act(t, byKey('avatar-remove'));
       expect(w.profile.avatarRemovals, [mePath]);
       expect(w.bucket.containsKey(mePath), isFalse);
-      expect(notice, findsOneWidget, reason: 'removal is not reported');
+      expect(
+        noticeSaying('Profile picture removed'),
+        findsOneWidget,
+        reason: 'removal is not reported',
+      );
       expectInitials(byKey('profile-avatar'), 'Maya Kaya', 'after remove');
       await back(t);
       expectInitials(byKey('settings-profile'), 'Maya Kaya', 'settings card');
@@ -538,6 +547,7 @@ void main() {
       await act(t, byKey('sheet-photo-p1'));
 
       expect(noticeSaying('No connection'), findsOneWidget);
+      expect(noticeSaying('Profile picture updated'), findsNothing);
       expect(find.byType(SisProgressLine), findsNothing);
       expectPicture(byKey('profile-avatar'), red, 'after a failed upload');
       expect(t.takeException(), isNull);
@@ -553,6 +563,7 @@ void main() {
       await tapKey(t, 'profile-avatar');
       await act(t, byKey('avatar-remove'));
       expect(noticeSaying('No connection'), findsOneWidget);
+      expect(noticeSaying('Profile picture removed'), findsNothing);
       expectPicture(byKey('profile-avatar'), red, 'after a failed removal');
       await drainNotice(t);
     });
@@ -589,7 +600,7 @@ void main() {
       expect(call.conversationId, 'g1');
       expect(call.image?.contentType, 'image/jpeg');
       expect(call.previousPath, isNull);
-      expect(notice, findsOneWidget);
+      expect(noticeSaying('Group picture updated'), findsOneWidget);
       expectPicture(byKey('group-avatar'), pngBytes, 'group page');
       Navigator.of(t.element(find.byType(GroupScreen)))
           .popUntil((r) => r.isFirst);
@@ -612,6 +623,7 @@ void main() {
       expect(call.image, isNull);
       expect(call.previousPath, clubPath);
       expect(w.bucket.containsKey(clubPath), isFalse);
+      expect(noticeSaying('Group picture removed'), findsOneWidget);
       expectInitials(byKey('group-avatar'), 'Club', 'after remove');
       await drainNotice(t);
     });
@@ -627,6 +639,7 @@ void main() {
       await act(t, byKey('sheet-photo-p1'));
 
       expect(notice, findsOneWidget, reason: 'the refusal is not reported');
+      expect(noticeSaying('Group picture updated'), findsNothing);
       expectPicture(byKey('group-avatar'), blue, 'after a refusal');
       expect(t.takeException(), isNull);
       await drainNotice(t);

@@ -1207,7 +1207,8 @@ class ChatFake implements ChatRepository {
   /// is not in or for a 1:1; otherwise a NEW path under
   /// `group/<conversation>/` every time (never reused, so no cache can serve
   /// a stale picture), the conversation row updated -- which only the next
-  /// [conversations] read shows -- and [previousPath] deleted afterwards.
+  /// [conversations] read shows -- and the row's previous picture deleted
+  /// afterwards (the server's record, not the caller's [previousPath]).
   Result<void>? groupAvatarResult;
   Completer<void>? _groupAvatarHold;
   int _avatarSeq = 0;
@@ -1262,7 +1263,9 @@ class ChatFake implements ChatRepository {
             avatarPath: path,
           ),
     ]);
-    if (previousPath != null) avatarBucket.remove(previousPath);
+    // Like the real one: the object deleted is the one the server's row
+    // pointed at, whatever (possibly stale) path the caller passed.
+    if (row.avatarPath case final previous?) avatarBucket.remove(previous);
     return const Ok(null);
   }
 

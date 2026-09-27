@@ -12,7 +12,7 @@
 --   fay  -- allowlisted and active with a picture, then delisted;
 --   robo -- signed in, never allowlisted.
 begin;
-select plan(83);
+select plan(100);
 
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
   ('00000000-0000-0000-0000-0000000a9001', 'av-ann@example.test', now(), '{"full_name":"Ann"}'),
@@ -159,6 +159,29 @@ select throws_ok(
   $$update public.profiles set avatar_path = 'profile/00000000-0000-0000-0000-0000000a9001'
      where user_id = '00000000-0000-0000-0000-0000000a9001'$$,
   '42501', null, 'a path that is only her folder name, with no file, is refused');
+-- Exactly profile/<own id>/<one file>: no climbing out, no sub-folders, no
+-- empty or all-dots file name.
+select throws_ok(
+  format($$update public.profiles set avatar_path = %L
+            where user_id = '00000000-0000-0000-0000-0000000a9001'$$, v.path),
+  '42501', null, 'the profile path pin refuses ' || v.what)
+  from (values
+    ('profile/00000000-0000-0000-0000-0000000a9001/../00000000-0000-0000-0000-0000000a9002/1.jpg', 'a .. climb into bob''s folder'),
+    ('profile/00000000-0000-0000-0000-0000000a9001/sub/1.jpg', 'a sub-folder'),
+    ('profile/00000000-0000-0000-0000-0000000a9001//1.jpg', 'a doubled slash'),
+    ('profile/00000000-0000-0000-0000-0000000a9001/', 'an empty file name'),
+    ('profile/00000000-0000-0000-0000-0000000a9001/..', 'a .. file name'),
+    ('profile/00000000-0000-0000-0000-0000000a9001/.', 'a . file name'),
+    ('profile/00000000-0000-0000-0000-0000000a9001/...', 'an all-dots file name')
+  ) v(path, what);
+select lives_ok(
+  $$update public.profiles set avatar_path = 'profile/00000000-0000-0000-0000-0000000a9001/.hidden.v2.jpg'
+     where user_id = '00000000-0000-0000-0000-0000000a9001'$$,
+  'control: a file name with dots in it (not all dots) is accepted');
+select lives_ok(
+  $$update public.profiles set avatar_path = 'profile/00000000-0000-0000-0000-0000000a9001/1.jpg'
+     where user_id = '00000000-0000-0000-0000-0000000a9001'$$,
+  'ann points back at her real picture');
 select lives_ok(
   $$update public.profiles set avatar_path = 'profile/00000000-0000-0000-0000-0000000a9001/evil.jpg'
      where user_id = '00000000-0000-0000-0000-0000000a9002'$$,
@@ -201,6 +224,9 @@ select throws_ok($$select av_put('group/11111111-2222-3333-4444-555555555555/x.j
                  '42501', null, 'nobody uploads into a conversation that does not exist');
 select throws_ok($$select av_put('group/not-a-uuid/x.jpg')$$,
                  '42501', null, 'a malformed group key is refused by policy, not a cast error');
+-- ann IS a member of d1; only "group paths need a group" can refuse this.
+select throws_ok(format($$select av_put('group/' || %L || '/1.jpg')$$, (select id from _d1)),
+                 '42501', null, 'a member of a 1:1 cannot upload under group/<that 1:1>/');
 reset role;
 select av_as('02');
 select lives_ok($$select av_put('group/c9000000-0000-0000-0000-0000000000a1/2.jpg')$$,
@@ -261,6 +287,18 @@ select throws_ok($$select public.set_group_avatar('c9000000-0000-0000-0000-00000
 select throws_ok($$select public.set_group_avatar('c9000000-0000-0000-0000-0000000000a1',
                                                   'group/c9000000-0000-0000-0000-0000000000a1')$$,
                  null, null, 'a path that is only the group''s folder name, with no file, is refused');
+select throws_ok(
+  format($$select public.set_group_avatar('c9000000-0000-0000-0000-0000000000a1', %L)$$, v.path),
+  null, null, 'the group path pin refuses ' || v.what)
+  from (values
+    ('group/c9000000-0000-0000-0000-0000000000a1/../c9000000-0000-0000-0000-0000000000b2/1.jpg', 'a .. climb into g2''s folder'),
+    ('group/c9000000-0000-0000-0000-0000000000a1/sub/1.jpg', 'a sub-folder'),
+    ('group/c9000000-0000-0000-0000-0000000000a1//1.jpg', 'a doubled slash'),
+    ('group/c9000000-0000-0000-0000-0000000000a1/', 'an empty file name'),
+    ('group/c9000000-0000-0000-0000-0000000000a1/..', 'a .. file name'),
+    ('group/c9000000-0000-0000-0000-0000000000a1/.', 'a . file name'),
+    ('group/c9000000-0000-0000-0000-0000000000a1/...', 'an all-dots file name')
+  ) v(path, what);
 reset role;
 select av_as('04');
 select throws_ok($$select public.set_group_avatar('c9000000-0000-0000-0000-0000000000a1',

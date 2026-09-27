@@ -17,8 +17,8 @@ select plan(30);
 --     memberships once (messages_read_equivalence_test.sql proves it shows
 --     the same rows as before); its current text is pinned instead. And
 --     profiles_update_own, which since 20260927160000 also pins avatar_path
---     under the owner's own profile/<uid>/ prefix (avatars_test.sql proves
---     what that clause refuses);
+--     to exactly profile/<own uid>/<one file> (avatars_test.sql proves what
+--     that clause refuses);
 --  3. plan text: a member reading conversation_members and
 --     conversation_previews evaluates has_app_access() in an InitPlan, never
 --     in a per-row Filter;
@@ -94,7 +94,7 @@ CASE kind
 END)$e$),
   ('public', 'notification_settings', 'notification_settings_own', $e$PERMISSIVE|{authenticated}|ALL|(app_private.has_app_access() AND (user_id = ( SELECT auth.uid() AS uid)))|(app_private.has_app_access() AND (user_id = ( SELECT auth.uid() AS uid)))$e$),
   ('public', 'profiles', 'profiles_read', $e$PERMISSIVE|{authenticated}|SELECT|(app_private.has_app_access() AND app_private.is_allowed(user_id))|<null>$e$),
-  ('public', 'profiles', 'profiles_update_own', $e$PERMISSIVE|{authenticated}|UPDATE|(app_private.has_app_access() AND (user_id = auth.uid()))|(app_private.has_app_access() AND (user_id = auth.uid()) AND ((avatar_path IS NULL) OR (avatar_path ~~ (('profile/'::text || (user_id)::text) || '/%'::text))))$e$),
+  ('public', 'profiles', 'profiles_update_own', $e$PERMISSIVE|{authenticated}|UPDATE|(app_private.has_app_access() AND (user_id = auth.uid()))|(app_private.has_app_access() AND (user_id = auth.uid()) AND ((avatar_path IS NULL) OR app_private.avatar_path_pinned(avatar_path, ('profile/'::text || (user_id)::text))))$e$),
   ('realtime', 'messages', 'realtime_receive', $e$PERMISSIVE|{authenticated}|SELECT|(app_private.has_app_access() AND (((realtime.topic() = 'presence:members'::text) AND (extension = 'presence'::text)) OR ((extension = 'broadcast'::text) AND app_private.is_member(app_private.typing_conversation(realtime.topic()))) OR ((extension = 'broadcast'::text) AND app_private.is_member(app_private.reads_conversation(realtime.topic())) AND app_private.shares_read_status())))|<null>$e$),
   ('realtime', 'messages', 'realtime_send', $e$PERMISSIVE|{authenticated}|INSERT|<null>|(app_private.has_app_access() AND (((realtime.topic() = 'presence:members'::text) AND (extension = 'presence'::text) AND app_private.shares_presence()) OR ((extension = 'broadcast'::text) AND app_private.is_member(app_private.typing_conversation(realtime.topic())) AND app_private.shares_typing())))$e$),
   ('storage', 'objects', 'attachments_read', $e$PERMISSIVE|{authenticated}|SELECT|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND app_private.is_member_of_path(name))|<null>$e$),

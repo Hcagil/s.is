@@ -31,6 +31,15 @@ import 'person_avatar.dart';
 import 'photo_viewer.dart';
 import 'profile_pages.dart';
 
+/// The chat header's picture: the group's own, or the other member's for a
+/// 1:1. Null while the list has not loaded [conversationId] yet.
+String? _headerAvatar(WidgetRef ref, String? conversationId) {
+  final conversation = (ref.watch(conversationListProvider).value ?? const [])
+      .where((c) => c.id == conversationId)
+      .firstOrNull;
+  return conversation?.avatarPath ?? conversation?.other?.avatarPath;
+}
+
 /// Opens [conversationId] and closes it again when the screen is popped, so
 /// the Realtime subscription lives exactly as long as the screen does.
 ///
@@ -371,6 +380,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                               widget.title ??
                               'Conversation',
                           radius: 18,
+                          avatarPath: _headerAvatar(ref, conversationId),
                         ),
                         const SizedBox(width: 10),
                         Expanded(

@@ -55,7 +55,7 @@ final class SupabaseChatRepository implements ChatRepository {
       // profiles is readable by any active member; RLS keeps it to the group.
       final rows = await _client
           .from('profiles')
-          .select('user_id, display_name, tag')
+          .select('user_id, display_name, tag, avatar_path')
           .neq('user_id', me)
           .order('display_name')
           .retriedOnce();
@@ -65,6 +65,7 @@ final class SupabaseChatRepository implements ChatRepository {
             userId: row['user_id'] as String,
             displayName: row['display_name'] as String,
             tag: row['tag'] as String?,
+            avatarPath: row['avatar_path'] as String?,
           ),
       ]);
     } catch (e) {
@@ -88,11 +89,15 @@ final class SupabaseChatRepository implements ChatRepository {
       // caller's own conversations, same as the membership rows.
       final conversationRows = await _client
           .from('conversations')
-          .select('id, title')
+          .select('id, title, avatar_path')
           .retriedOnce();
       final titleById = {
         for (final row in conversationRows)
           row['id'] as String: row['title'] as String?,
+      };
+      final avatarPathById = {
+        for (final row in conversationRows)
+          row['id'] as String: row['avatar_path'] as String?,
       };
 
       final otherByConversation = <String, String>{};
@@ -111,12 +116,16 @@ final class SupabaseChatRepository implements ChatRepository {
           ? const <Map<String, dynamic>>[]
           : await _client
                 .from('profiles')
-                .select('user_id, display_name')
+                .select('user_id, display_name, avatar_path')
                 .inFilter('user_id', others)
                 .retriedOnce();
       final nameByUser = {
         for (final row in profileRows)
           row['user_id'] as String: row['display_name'] as String,
+      };
+      final avatarByUser = {
+        for (final row in profileRows)
+          row['user_id'] as String: row['avatar_path'] as String?,
       };
 
       // Newest first, so the first row seen for a conversation is its preview.
@@ -164,11 +173,13 @@ final class SupabaseChatRepository implements ChatRepository {
                     userId: otherByConversation[id]!,
                     displayName:
                         nameByUser[otherByConversation[id]!] ?? 'Member',
+                    avatarPath: avatarByUser[otherByConversation[id]!],
                   ),
             lastMessage: previewBy[id]?.body,
             lastMessageAt: previewBy[id]?.at,
             lastSenderId: previewBy[id]?.sender,
             unread: unreadBy[id] ?? 0,
+            avatarPath: avatarPathById[id],
           ),
       ];
       // Conversations with no messages yet sort last.
@@ -203,7 +214,7 @@ final class SupabaseChatRepository implements ChatRepository {
       if (ids.isEmpty) return const Ok([]);
       final profiles = await _client
           .from('profiles')
-          .select('user_id, display_name, tag')
+          .select('user_id, display_name, tag, avatar_path')
           .inFilter('user_id', ids)
           .order('display_name', ascending: true)
           .retriedOnce();
@@ -213,6 +224,7 @@ final class SupabaseChatRepository implements ChatRepository {
             userId: p['user_id'] as String,
             displayName: p['display_name'] as String,
             tag: p['tag'] as String?,
+            avatarPath: p['avatar_path'] as String?,
           ),
       ]);
     } catch (e) {
@@ -414,6 +426,42 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   @override
+  Future<Result<void>> setGroupAvatar(
+    String conversationId,
+    PickedImage? image, {
+    String? previousPath,
+  }) async {
+    try {
+      String? path;
+      if (image != null) {
+        path =
+            'group/$conversationId/${DateTime.now().microsecondsSinceEpoch}.${image.extension}';
+        await _client.storage
+            .from('avatars')
+            .uploadBinary(
+              path,
+              image.bytes,
+              fileOptions: FileOptions(contentType: image.contentType),
+            );
+      }
+      await _client.rpc(
+        'set_group_avatar',
+        params: {'conversation': conversationId, 'path': path},
+      );
+      if (previousPath != null) {
+        try {
+          await _client.storage.from('avatars').remove([previousPath]);
+        } catch (_) {
+          // Best-effort: the reference is already gone.
+        }
+      }
+      return const Ok(null);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
   Future<Result<Message>> sendImage({
     required String conversationId,
     required PickedImage image,
@@ -469,6 +517,19 @@ final class SupabaseChatRepository implements ChatRepository {
           .from('attachments')
           .download(attachmentPath);
       await _cache.write(attachmentPath, bytes);
+      return Ok(bytes);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<Uint8List>> avatarBytes(String avatarPath) async {
+    final cached = await _cache.read(avatarPath);
+    if (cached != null) return Ok(cached);
+    try {
+      final bytes = await _client.storage.from('avatars').download(avatarPath);
+      await _cache.write(avatarPath, bytes);
       return Ok(bytes);
     } catch (e) {
       return Err(_asFailure(e));

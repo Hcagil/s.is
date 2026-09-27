@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/failure.dart';
 import '../../../data/failures.dart';
 import '../../../data/postgrest_retry.dart';
+import '../../chat/domain/attachment.dart';
 import '../domain/own_profile.dart';
 import '../domain/profile_repository.dart';
 
@@ -13,7 +14,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
   final SupabaseClient _client;
 
   static const _columns =
-      'user_id, display_name, tag, onboarding_done, share_presence, share_typing, share_last_seen, share_read_status';
+      'user_id, display_name, tag, onboarding_done, share_presence, share_typing, share_last_seen, share_read_status, avatar_path';
 
   Failure _asFailure(Object e) => switch (e) {
     PostgrestException(:final code) when code == '23505' =>
@@ -34,6 +35,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
     shareTyping: row['share_typing'] as bool,
     shareLastSeen: row['share_last_seen'] as bool,
     shareReadStatus: row['share_read_status'] as bool,
+    avatarPath: row['avatar_path'] as String?,
   );
 
   @override
@@ -82,6 +84,65 @@ final class SupabaseProfileRepository implements ProfileRepository {
           .eq('user_id', me)
           .select(_columns)
           .single();
+      return Ok(_toProfile(row));
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<OwnProfile>> setAvatar(
+    PickedImage image, {
+    String? previousPath,
+  }) async {
+    final me = _client.auth.currentUser?.id;
+    if (me == null) return const Err(DeniedFailure());
+    try {
+      final path =
+          'profile/$me/${DateTime.now().microsecondsSinceEpoch}.${image.extension}';
+      await _client.storage
+          .from('avatars')
+          .uploadBinary(
+            path,
+            image.bytes,
+            fileOptions: FileOptions(contentType: image.contentType),
+          );
+      final row = await _client
+          .from('profiles')
+          .update({'avatar_path': path})
+          .eq('user_id', me)
+          .select(_columns)
+          .single();
+      if (previousPath != null) {
+        try {
+          await _client.storage.from('avatars').remove([previousPath]);
+        } catch (_) {
+          // Best-effort: the reference is already gone; an orphaned object
+          // costs storage, not correctness.
+        }
+      }
+      return Ok(_toProfile(row));
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<OwnProfile>> removeAvatar(String previousPath) async {
+    final me = _client.auth.currentUser?.id;
+    if (me == null) return const Err(DeniedFailure());
+    try {
+      final row = await _client
+          .from('profiles')
+          .update({'avatar_path': null})
+          .eq('user_id', me)
+          .select(_columns)
+          .single();
+      try {
+        await _client.storage.from('avatars').remove([previousPath]);
+      } catch (_) {
+        // Best-effort, as above.
+      }
       return Ok(_toProfile(row));
     } catch (e) {
       return Err(_asFailure(e));

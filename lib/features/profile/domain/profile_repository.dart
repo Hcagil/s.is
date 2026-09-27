@@ -1,4 +1,5 @@
 import '../../../core/failure.dart';
+import '../../chat/domain/attachment.dart';
 import 'own_profile.dart';
 
 /// The signed-in member's own profile. Every write is pinned to the caller by
@@ -18,6 +19,20 @@ abstract interface class ProfileRepository {
     bool? shareLastSeen,
     bool? shareReadStatus,
   });
+
+  /// Uploads [image] as the member's own picture, replacing any previous one,
+  /// and returns the updated profile. [previousPath] (the profile's
+  /// avatarPath before this call, if any) is deleted from storage after the
+  /// new one is written -- the caller already has it from the current state
+  /// and passing it here avoids an extra round trip.
+  Future<Result<OwnProfile>> setAvatar(
+    PickedImage image, {
+    String? previousPath,
+  });
+
+  /// Clears the member's picture (avatarPath becomes null) and deletes
+  /// [previousPath] from storage.
+  Future<Result<OwnProfile>> removeAvatar(String previousPath);
 
   /// Whether [tag] is free for this member (their own current tag counts as
   /// free). Advisory: the server's unique index is the authority.

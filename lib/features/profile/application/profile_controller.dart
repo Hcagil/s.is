@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
+import '../../chat/domain/attachment.dart';
 import '../domain/own_profile.dart';
 import '../domain/profile_repository.dart';
 
@@ -94,4 +95,29 @@ class OwnProfileController extends AsyncNotifier<OwnProfile> {
   /// Advisory availability for the tag field.
   Future<Result<bool>> checkTag(String tag) =>
       ref.read(profileRepositoryProvider).isTagAvailable(tag);
+
+  /// Uploads [image] as the member's own picture, replacing any previous one.
+  Future<Result<OwnProfile>> setAvatar(PickedImage image) async {
+    final previous = state.value?.avatarPath;
+    final result = await ref
+        .read(profileRepositoryProvider)
+        .setAvatar(image, previousPath: previous);
+    if (result case Ok(:final value) when ref.mounted) {
+      state = AsyncData(value);
+    }
+    return result;
+  }
+
+  /// Clears the member's picture.
+  Future<Result<OwnProfile>> removeAvatar() async {
+    final previous = state.value?.avatarPath;
+    if (previous == null) return Ok(state.requireValue);
+    final result = await ref
+        .read(profileRepositoryProvider)
+        .removeAvatar(previous);
+    if (result case Ok(:final value) when ref.mounted) {
+      state = AsyncData(value);
+    }
+    return result;
+  }
 }

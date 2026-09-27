@@ -6,6 +6,7 @@ import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../application/chat_controllers.dart';
 import '../domain/message.dart';
+import 'person_avatar.dart';
 
 /// Lets the member pick one or more chats and sends [message] to each,
 /// marked as forwarded.
@@ -84,10 +85,11 @@ class _ForwardPickerState extends ConsumerState<_ForwardPicker> {
                               ? _picked.add(c.id)
                               : _picked.remove(c.id),
                         ),
-                        secondary: Icon(
-                          c.isGroup
-                              ? Icons.group_outlined
-                              : Icons.person_outline,
+                        secondary: PersonAvatar(
+                          label: c.label,
+                          seed: c.other?.userId ?? c.id,
+                          radius: 20,
+                          avatarPath: c.avatarPath ?? c.other?.avatarPath,
                         ),
                         title: Text(c.label),
                       ),

@@ -12,19 +12,26 @@ import '../domain/gallery.dart';
 
 /// Shows the attachment sheet; null when the member closes it or backs out
 /// without choosing a photo.
-Future<PickedImage?> showAttachmentSheet(BuildContext context) =>
-    showModalBottomSheet<PickedImage>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => const AttachmentSheet(),
-    );
+Future<PickedImage?> showAttachmentSheet(
+  BuildContext context, {
+  bool square = false,
+}) => showModalBottomSheet<PickedImage>(
+  context: context,
+  isScrollControlled: true,
+  showDragHandle: true,
+  builder: (_) => AttachmentSheet(square: square),
+);
 
 /// The phone's recent photos to send from. Asks for photo access the first
 /// time it opens; when access is missing or partial, shows SIS's own screen
 /// for it instead of the phone's photos.
 class AttachmentSheet extends ConsumerStatefulWidget {
-  const AttachmentSheet({super.key});
+  const AttachmentSheet({super.key, this.square = false});
+
+  /// True when picking a profile/group picture: the chosen photo is loaded
+  /// as a centre-cropped square instead of the long-edge resize used for a
+  /// chat photo.
+  final bool square;
 
   @override
   ConsumerState<AttachmentSheet> createState() => _AttachmentSheetState();
@@ -60,7 +67,9 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
   Future<void> _choose(GalleryPhoto p) async {
     if (_opening) return;
     setState(() => _opening = true);
-    final image = await ref.read(galleryProvider).load(p);
+    final image = widget.square
+        ? await ref.read(galleryProvider).loadSquare(p)
+        : await ref.read(galleryProvider).load(p);
     if (!mounted) return;
     setState(() => _opening = false);
     if (image == null) {

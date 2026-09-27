@@ -98,6 +98,23 @@ final class PhotoManagerGallery implements Gallery {
   }
 
   @override
+  Future<PickedImage?> loadSquare(GalleryPhoto photo, {int size = 512}) async {
+    final e = await AssetEntity.fromId(photo.id);
+    if (e == null) return null;
+    final bytes = await e.thumbnailDataWithSize(
+      ThumbnailSize.square(size),
+      format: ThumbnailFormat.jpeg,
+      quality: 85,
+    );
+    if (bytes == null) return null;
+    return PickedImage(
+      bytes: bytes,
+      contentType: 'image/jpeg',
+      extension: 'jpg',
+    );
+  }
+
+  @override
   Future<void> selectMore() =>
       PhotoManager.presentLimited(type: RequestType.image);
 }

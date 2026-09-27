@@ -86,6 +86,18 @@ abstract interface class ChatRepository {
     required List<String> memberIds,
   });
 
+  /// Sets [conversationId]'s picture to [image], or clears it when null.
+  /// Any member may call this, like a member-editable group name would be.
+  /// [previousPath] (the group's avatarPath before this call, if any) is
+  /// deleted from storage after the change succeeds. The server refuses
+  /// (DeniedFailure) for a caller who is not a member, or for a 1:1
+  /// conversation (which never has a picture of its own).
+  Future<Result<void>> setGroupAvatar(
+    String conversationId,
+    PickedImage? image, {
+    String? previousPath,
+  });
+
   /// Uploads [image] into [conversationId] and sends it, with an optional
   /// caption in [body].
   ///
@@ -114,6 +126,11 @@ abstract interface class ChatRepository {
   /// The photo at [attachmentPath]: from this phone's cache when it is there,
   /// otherwise downloaded once (members of its conversation only) and kept.
   Future<Result<Uint8List>> attachmentBytes(String attachmentPath);
+
+  /// The picture at [avatarPath] (a profile's or a group's): from this
+  /// phone's cache when it is there, otherwise downloaded once (only to
+  /// someone who could already read its owner) and kept.
+  Future<Result<Uint8List>> avatarBytes(String avatarPath);
 
   /// How far each other member has read, where read status is shared.
   Future<Result<List<ReadMark>>> readMarks(String conversationId);

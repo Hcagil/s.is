@@ -45,6 +45,10 @@ abstract interface class Gallery {
   /// it cannot be read.
   Future<PickedImage?> load(GalleryPhoto photo);
 
+  /// The photo ready to use as a picture: a square centre-crop at [size] px,
+  /// JPEG, EXIF stripped. Null when it cannot be read.
+  Future<PickedImage?> loadSquare(GalleryPhoto photo, {int size = 512});
+
   /// With limited access, lets the member add photos to what they allowed
   /// (Android 14+ system sheet).
   Future<void> selectMore();

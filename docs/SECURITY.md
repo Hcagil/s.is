@@ -83,12 +83,32 @@ refuses a named conversation the caller is not in before any scan. **Whenever
 `messages_read` changes, this function must change with it.** A pgTAP
 equivalence test (`message_search_test.sql`) fails if the two drift apart.
 
+A search needs at least three letters or digits: the function strips
+everything that is not `[[:alnum:]]` and refuses the query if fewer than
+three remain, in a check that runs before any scan. With fewer, or with
+symbols, punctuation or emoji only, pg_trgm can find no trigram in the
+pattern and falls back to reading the whole shared index, every
+conversation's messages, on every call. That rule is safe only while every
+character `[[:alnum:]]` accepts is also a word character to pg_trgm. The two
+use different classifiers (ICU for regular expressions, libc for pg_trgm), so
+the property depends on the Postgres image. It was verified over every Unicode
+code point on 17.6.1.167 with ICU 15.1, and must be re-verified when that
+image changes.
+
 Accepted residual: the search runs over one shared trigram index, so its
-duration still grows by about 0.2 µs for each match of the caller's chosen
-term in conversations they can't read (about 4 ms at 20,000 matches). It is
-a bounded frequency oracle, not content, and it is below mobile network
-jitter except at extreme counts. The fix ladder reached rung 3 on this
-before the residual was brought down to this size (2026-09-27).
+duration still grows by about 0.2 µs for every message, in conversations the
+caller can't read, that contains all of the query's trigrams. That set
+includes every real match and can be much larger: `o o o` matches nothing but
+touches every message that contains the word "o". It reaches about 24 ms at
+100,000 such messages, whether the caller searches everywhere or one of their
+own conversations. A named conversation the caller is not in costs nothing.
+The residual is a bounded frequency oracle for trigrams the caller chooses.
+It reveals roughly how many unreadable messages share them, never which
+conversation, sender or text. It is also a load cost that grows with total
+message volume, available only to allowlisted users with an active session.
+Closing it would need a trigram index per conversation, which changing
+membership rules out. The fix ladder reached rung 3 on this twice
+(2026-09-27).
 
 Presence and typing use **private** Realtime channels. RLS on
 `realtime.messages` opens exactly two topics — `presence:members` and

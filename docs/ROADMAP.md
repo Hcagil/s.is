@@ -18,7 +18,7 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.12 | One SIS notification grouping every chat, expandable like Telegram | Several messages from several chats arrive as one expandable notification |
 | after v0.9 | iOS | scheduled after v0.9 |
 | v0.15 | **done** 2026-09-26 — the time sits on a message's last line when it fits; the whole chat header opens the profile, with the avatar; gallery newest first (0.14.2); bubbles hug their text, offline in about a second, fast previews (0.14.1) |
-| v0.16 | in progress — message search in the chat list and inside a chat, over all history (server and data layer first, then the screens) |
+| v0.16 | **done** 2026-09-27 — message search in the chat list and inside a chat, over all history: highlight, ↑↓ between hits, jump to old messages; a search needs three letters or digits |
 | later | E2EE | scheduled individually |
 
 ## Status

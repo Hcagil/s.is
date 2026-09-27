@@ -81,6 +81,21 @@ class PhotoPlatform {
   /// Android hands back when the query names no order.
   List<Shot> shots = const [];
 
+  /// With [Platform.limited], the ids the member selected: the platform
+  /// answers every query (and every count) as if the rest did not exist.
+  Set<String> selected = const {};
+
+  /// What any query can see: nothing at all without a grant, as Android's
+  /// MediaStore answers an app that holds no read permission.
+  List<Shot> get _visible => switch (state) {
+    Platform.authorized => shots,
+    Platform.limited => [
+      for (final s in shots)
+        if (selected.contains(s.id)) s,
+    ],
+    _ => const [],
+  };
+
   /// Every album-list request and every asset query, as sent.
   final List<MethodCall> albumCalls = [];
   final List<MethodCall> assetCalls = [];
@@ -88,7 +103,7 @@ class PhotoPlatform {
   /// The shots as MediaStore sorts them for [option].
   List<Shot> _sorted(Object? option) {
     final order = firstOrder(option);
-    final out = [...shots];
+    final out = [..._visible];
     if (order == null) return out; // storage order: the owner's bug
     final (date, asc) = order;
     int key(Shot s) => switch (date) {
@@ -125,19 +140,19 @@ class PhotoPlatform {
               'id': 'isAll',
               'name': 'Recent',
               'isAll': true,
-              'assetCount': shots.length,
+              'assetCount': _visible.length,
             },
             if (args['onlyAll'] != true)
               {
                 'id': 'camera',
                 'name': 'Camera',
                 'isAll': false,
-                'assetCount': shots.length,
+                'assetCount': _visible.length,
               },
           ],
         };
       case 'getAssetCountFromPath':
-        return shots.length;
+        return _visible.length;
       case 'getAssetListPaged':
         assetCalls.add(call);
         final size = args['size'] as int;
@@ -335,6 +350,90 @@ void main() {
       ];
       final photos = await const PhotoManagerGallery().recent();
       expect(photos.map((p) => p.id), ['a', 'c', 'b']);
+    });
+
+    group('a page at a time', () {
+      // 150 photos added in a scrambled order: storage order is not date
+      // order, so a page cut from the wrong order shows.
+      final many = [
+        for (var i = 0; i < 150; i++) Shot('s$i', 1000 + (i * 37) % 150, i),
+      ];
+      // Newest added first: what every page must be a slice of.
+      final newestFirst = [...many]..sort((a, b) => b.added - a.added);
+      List<String> slice(int from, int to) => [
+        for (final s in newestFirst.sublist(from, to)) s.id,
+      ];
+
+      setUp(() => phone.shots = many);
+
+      Future<List<String>> page(int n, {int count = 60}) async => [
+        for (final p in await const PhotoManagerGallery().recent(
+          page: n,
+          count: count,
+        ))
+          p.id,
+      ];
+
+      test('page n is the n-th slice of the newest-first list', () async {
+        expect(await page(0), slice(0, 60));
+        expect(await page(1), slice(60, 120));
+        expect(
+          await page(2),
+          slice(120, 150),
+          reason: 'the last page is short: that is how the end shows',
+        );
+        expect(await page(3), isEmpty, reason: 'past the end is empty');
+      });
+
+      test('pages follow count, not a fixed size', () async {
+        expect(await page(3, count: 7), slice(21, 28));
+      });
+
+      test('every page is asked in creation-date, descending order', () async {
+        await page(0);
+        await page(1);
+        await page(2);
+        expect(phone.assetCalls, isNotEmpty);
+        for (final call in phone.assetCalls) {
+          expect(firstOrder((call.arguments as Map)['option']), (
+            'added',
+            false,
+          ), reason: 'each page is cut from the same newest-first order');
+        }
+      });
+
+      test(
+        'pages put together are the whole library: no repeats, no gaps',
+        () async {
+          final all = [for (var n = 0; n < 4; n++) ...await page(n, count: 40)];
+          expect(all, slice(0, 150));
+        },
+      );
+
+      test('limited access pages through only the selected photos', () async {
+        phone
+          ..state = Platform.limited
+          ..answer = Platform.limited
+          ..selected = {
+            for (var i = 0; i < 150; i += 2) 's$i', // 75 of them
+          };
+        final selected = [
+          for (final s in newestFirst)
+            if (phone.selected.contains(s.id)) s.id,
+        ];
+
+        expect(await page(0), selected.sublist(0, 60));
+        expect(await page(1), selected.sublist(60, 75));
+        expect(await page(2), isEmpty);
+      });
+
+      test('without access every page is empty', () async {
+        phone
+          ..state = Platform.denied
+          ..answer = Platform.denied;
+        expect(await page(0), isEmpty);
+        expect(await page(1), isEmpty);
+      });
     });
   });
 }

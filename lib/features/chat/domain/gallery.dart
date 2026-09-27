@@ -35,8 +35,11 @@ abstract interface class Gallery {
   /// again.
   Future<GalleryAccess> requestAccess();
 
-  /// The newest photos the member allowed, newest first; empty without access.
-  Future<List<GalleryPhoto>> recent({int count = 60});
+  /// A page of the newest photos the member allowed, newest first; empty
+  /// once [page] is past the end (or without access). [page] is 0-based;
+  /// each page holds up to [count] photos. A page shorter than [count]
+  /// means there is no next page.
+  Future<List<GalleryPhoto>> recent({int page = 0, int count = 60});
 
   /// A small square-ish version for the grid, or null when it cannot be read.
   Future<Uint8List?> thumbnail(GalleryPhoto photo, {int size = 240});

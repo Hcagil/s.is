@@ -38,15 +38,42 @@ class AttachmentSheet extends ConsumerStatefulWidget {
 }
 
 class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
+  static const _pageSize = 60;
+  // Trigger the next page this many pixels before the grid's physical end,
+  // so the page is ready before the member reaches it.
+  static const _loadMoreThreshold = 600.0;
+
   GalleryAccess? _access;
   List<GalleryPhoto> _photos = const [];
   bool _loading = true;
   bool _opening = false;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  int _nextPage = 0;
+  final _scroll = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_onScroll);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _scroll
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_hasMore || _loadingMore || _loading) return;
+    if (!_scroll.hasClients) return;
+    final position = _scroll.position;
+    if (position.pixels >= position.maxScrollExtent - _loadMoreThreshold) {
+      _loadMore();
+    }
   }
 
   Future<void> _load() async {
@@ -54,14 +81,36 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     final access = await gallery.requestAccess();
     final photos =
         access == GalleryAccess.full || access == GalleryAccess.limited
-        ? await gallery.recent()
+        ? await gallery.recent(count: _pageSize)
         : const <GalleryPhoto>[];
     if (!mounted) return;
     setState(() {
       _access = access;
       _photos = photos;
       _loading = false;
+      _nextPage = 1;
+      _hasMore = photos.length == _pageSize;
     });
+  }
+
+  Future<void> _loadMore() async {
+    setState(() => _loadingMore = true);
+    try {
+      final page = await ref
+          .read(galleryProvider)
+          .recent(page: _nextPage, count: _pageSize);
+      if (!mounted) return;
+      setState(() {
+        _photos = [..._photos, ...page];
+        _nextPage++;
+        _hasMore = page.length == _pageSize;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingMore = false);
+      showSisNotice(context, 'Could not load more photos.', isError: true);
+    }
   }
 
   Future<void> _choose(GalleryPhoto p) async {
@@ -131,6 +180,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     final Widget body = _photos.isEmpty
         ? const Center(child: Text('No photos yet'))
         : GridView.builder(
+            controller: _scroll,
             padding: const EdgeInsets.all(2),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
@@ -154,6 +204,10 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
         children: [
           header,
           Expanded(child: body),
+          SizedBox(
+            height: 3,
+            child: _loadingMore ? const SisProgressLine() : null,
+          ),
         ],
       ),
     );

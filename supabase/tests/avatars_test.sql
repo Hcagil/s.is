@@ -12,7 +12,7 @@
 --   fay  -- allowlisted and active with a picture, then delisted;
 --   robo -- signed in, never allowlisted.
 begin;
-select plan(100);
+select plan(101);
 
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
   ('00000000-0000-0000-0000-0000000a9001', 'av-ann@example.test', now(), '{"full_name":"Ann"}'),
@@ -224,6 +224,15 @@ select throws_ok($$select av_put('group/11111111-2222-3333-4444-555555555555/x.j
                  '42501', null, 'nobody uploads into a conversation that does not exist');
 select throws_ok($$select av_put('group/not-a-uuid/x.jpg')$$,
                  '42501', null, 'a malformed group key is refused by policy, not a cast error');
+-- A group/ object under a 1:1 id, planted by the service role: its members
+-- still may not read it -- a 1:1 has no picture of its own.
+reset role;
+insert into storage.objects(bucket_id, name, owner_id, metadata)
+  select 'avatars', 'group/' || id || '/planted.jpg', '00000000-0000-0000-0000-0000000a9004', '{"size":3}'
+    from _d1;
+select av_as('01');
+select is(av_sees('group/' || (select id from _d1) || '/planted.jpg'), 0::bigint,
+          'a member of a 1:1 cannot read a group/<that 1:1>/ object');
 -- ann IS a member of d1; only "group paths need a group" can refuse this.
 select throws_ok(format($$select av_put('group/' || %L || '/1.jpg')$$, (select id from _d1)),
                  '42501', null, 'a member of a 1:1 cannot upload under group/<that 1:1>/');

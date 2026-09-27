@@ -6,6 +6,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
@@ -64,19 +65,45 @@ SupabaseClient _client() => SupabaseClient(
   authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
 );
 
+/// A connection that can lose the reply to a request the server has already
+/// run: the request goes out and commits, and the device sees the connection
+/// drop instead of the answer -- the "may have committed" case.
+class _Lossy extends http.BaseClient {
+  final _inner = http.Client();
+  bool Function(http.BaseRequest request)? dropReplyTo;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final response = await _inner.send(request);
+    if (dropReplyTo?.call(request) ?? false) {
+      await response.stream.drain<void>();
+      throw http.ClientException(
+        'Connection closed while receiving data',
+        request.url,
+      );
+    }
+    return response;
+  }
+}
+
 /// A real client whose connection to one endpoint can be cut on demand --
 /// what a device sees when the network drops right after an upload. Storage
 /// keeps working; only the RPC or the profiles table stops answering (the
 /// request goes to a name the server does not have, and fails there).
 class _Faulty extends SupabaseClient {
-  _Faulty()
+  _Faulty() : this._(_Lossy());
+  _Faulty._(this.lossy)
     : super(
         _url,
         _key,
+        httpClient: lossy,
         authOptions: const AuthClientOptions(
           authFlowType: AuthFlowType.implicit,
         ),
       );
+
+  /// The client's one connection, which can lose a reply.
+  final _Lossy lossy;
 
   bool rpcDown = false;
   bool profilesDown = false;
@@ -444,5 +471,60 @@ void main() {
     ], reason: 'an orphan was left, or the kept picture was deleted');
     expect(_ok(await profiles.load()).avatarPath, kept);
     _ok(await profiles.removeAvatar(kept));
+  });
+
+  test('a group picture whose RPC reply is lost (it may have committed) is '
+      'kept: the row points at it and members are served it', () async {
+    final cemChat = SupabaseChatRepository(cem);
+    final group = _ok(
+      await cemChat.startGroupConversation(
+        title: 'reply lost',
+        memberIds: [beaId],
+      ),
+    );
+    cem.lossy.dropReplyTo = (r) => r.url.path.endsWith('/rpc/set_group_avatar');
+    try {
+      final failure = _err(await cemChat.setGroupAvatar(group, _jpeg(60)));
+      expect(failure, isNot(isA<DeniedFailure>()));
+    } finally {
+      cem.lossy.dropReplyTo = null;
+    }
+    final stored = await _objects(cem, 'group/$group');
+    expect(stored, hasLength(1), reason: 'the committed picture was deleted');
+    final row = _ok(await SupabaseChatRepository(bea).conversations())
+        .singleWhere((c) => c.id == group);
+    expect(row.avatarPath, stored.single);
+    expect(
+      _ok(await SupabaseChatRepository(bea).avatarBytes(stored.single)),
+      _jpeg(60).bytes,
+    );
+  });
+
+  test('an own picture whose profile-update reply is lost (it may have '
+      'committed) is kept: the profile points at it', () async {
+    final profiles = SupabaseProfileRepository(cem);
+    final cemId = cem.auth.currentUser!.id;
+    if (_ok(await profiles.load()).avatarPath case final p?) {
+      _ok(await profiles.removeAvatar(p));
+    }
+    final left = await _objects(cem, 'profile/$cemId');
+    if (left.isNotEmpty) await cem.storage.from('avatars').remove(left);
+
+    cem.lossy.dropReplyTo = (r) =>
+        r.method == 'PATCH' && r.url.path.endsWith('/rest/v1/profiles');
+    try {
+      final failure = _err(await profiles.setAvatar(_jpeg(70)));
+      expect(failure, isNot(isA<DeniedFailure>()));
+    } finally {
+      cem.lossy.dropReplyTo = null;
+    }
+    final stored = await _objects(cem, 'profile/$cemId');
+    expect(stored, hasLength(1), reason: 'the committed picture was deleted');
+    expect(_ok(await profiles.load()).avatarPath, stored.single);
+    expect(
+      _ok(await SupabaseChatRepository(bea).avatarBytes(stored.single)),
+      _jpeg(70).bytes,
+    );
+    _ok(await profiles.removeAvatar(stored.single));
   });
 }

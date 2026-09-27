@@ -50,6 +50,9 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
   bool _loadingMore = false;
   bool _hasMore = true;
   int _nextPage = 0;
+  // Bumped by every _load(); a _loadMore() in flight when a reload starts
+  // discards its own stale result instead of appending it onto page 0.
+  int _generation = 0;
   final _scroll = ScrollController();
 
   @override
@@ -77,13 +80,14 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
   }
 
   Future<void> _load() async {
+    final generation = ++_generation;
     final gallery = ref.read(galleryProvider);
     final access = await gallery.requestAccess();
     final photos =
         access == GalleryAccess.full || access == GalleryAccess.limited
         ? await gallery.recent(count: _pageSize)
         : const <GalleryPhoto>[];
-    if (!mounted) return;
+    if (!mounted || generation != _generation) return;
     setState(() {
       _access = access;
       _photos = photos;
@@ -94,12 +98,13 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
   }
 
   Future<void> _loadMore() async {
+    final generation = _generation;
     setState(() => _loadingMore = true);
     try {
       final page = await ref
           .read(galleryProvider)
           .recent(page: _nextPage, count: _pageSize);
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _photos = [..._photos, ...page];
         _nextPage++;
@@ -107,7 +112,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
         _loadingMore = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() => _loadingMore = false);
       showSisNotice(context, 'Could not load more photos.', isError: true);
     }

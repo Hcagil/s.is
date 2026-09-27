@@ -141,7 +141,7 @@ abstract interface class ChatRepository {
   /// and Turkish-safely (the server folds İ, I and ı together before
   /// comparing, so "istanbul" finds "İstanbul", "ISTANBUL" and "ıstanbul").
   /// Scoped to [conversationId] when given, otherwise every conversation the
-  /// caller is a member of. [query] shorter than two characters after
+  /// caller is a member of. [query] shorter than three characters after
   /// trimming returns an empty list, never a failure. Capped at 50 hits, like
   /// every other capped read here.
   Future<Result<List<Message>>> search(String query, {String? conversationId});

@@ -193,18 +193,21 @@ void main() {
           if (m.body.contains(_tag)) m.id,
       ];
       expect(await ids('$_tag 100%'), [pct.id]);
-      expect(await ids('0% s'), [pct.id]);
+      expect(await ids('00% su'), [pct.id]);
       expect(await ids('$_tag a_'), [und.id]);
       expect(await ids(r'\sys ' + _tag), [bsl.id]);
-      expect(await ids('%%'), isEmpty);
-      expect(await ids('__'), isEmpty);
+      expect(await ids('%%%'), isEmpty);
+      expect(await ids('___'), isEmpty);
     });
 
     test(
-      'a query under two characters is Ok and empty, never a failure',
+      'a query under three characters is Ok and empty, never a failure',
       () async {
-        await send(sofi, sofiTarik, 'a $_tag');
-        for (final q in ['', ' ', 'a', ' a ', '\n']) {
+        await send(sofi, sofiTarik, 'ab $_tag');
+        for (final q in [
+          '', ' ', 'a', ' a ', '\n', 'ab', ' ab ', 'ab\n', //
+          '%%%', '...', '!!!', '😂😂😂', 'a..',
+        ]) {
           expect(
             await sofi.search(q),
             isA<Ok<List<Message>>>().having((r) => r.value, 'value', isEmpty),
@@ -212,8 +215,18 @@ void main() {
           );
         }
         expect(
-          await sofi.search('a', conversationId: sofiTarik),
+          await sofi.search('ab', conversationId: sofiTarik),
           isA<Ok<List<Message>>>().having((r) => r.value, 'value', isEmpty),
+        );
+        expect(
+          _ok(await sofi.search('ab ', conversationId: sofiTarik)),
+          isEmpty,
+          reason: 'trimmed first',
+        );
+        expect(
+          _ok(await sofi.search('ab ${_tag[0]}', conversationId: sofiTarik)),
+          isNotEmpty,
+          reason: 'three characters do search (control)',
         );
       },
     );

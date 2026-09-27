@@ -123,6 +123,33 @@ void main() {
       },
     );
 
+    test('fewer than three letters or digits: no request, no hits', () async {
+      container.read(openConversationProvider.notifier).open('c1');
+      final notifier = container.read(chatSearchProvider.notifier);
+      await notifier.search('hello');
+      expect(container.read(chatSearchProvider).hits, hasLength(3));
+      final asked = chat.searches.length;
+      for (final q in [
+        'h',
+        'he',
+        ' he ',
+        'he\n',
+        '...',
+        '!!!',
+        '😂😂😂',
+        'h..',
+      ]) {
+        final result = await notifier.search(q);
+        expect(result, isA<Ok<void>>(), reason: '"$q" is not a failure');
+        expect(chat.searches.length, asked, reason: '"$q" asks nothing');
+        final state = container.read(chatSearchProvider);
+        expect(state.hits, isEmpty, reason: '"$q" shows no hits');
+        expect(state.current, isNull, reason: '"$q"');
+      }
+      await notifier.search('hel');
+      expect(chat.searches.length, asked + 1, reason: 'three characters do');
+    });
+
     test(
       'next() and previous() navigate correctly and clamp at ends',
       () async {

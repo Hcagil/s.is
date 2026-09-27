@@ -134,3 +134,10 @@ const deleteForEveryoneWindow = Duration(hours: 6);
 /// message vanishes as if never sent; after that, "This message was
 /// deleted" stays in its place.
 enum MessageDeletion { vanished, placeholder }
+
+/// Whether [query] is worth a search: at least three letters or digits (any
+/// script) once trimmed. Symbol-only or emoji-only queries never search --
+/// the server's search_messages enforces the same rule, so this only saves
+/// the round trip.
+bool isSearchable(String query) =>
+    RegExp(r'[\p{L}\p{N}]', unicode: true).allMatches(query.trim()).length >= 3;

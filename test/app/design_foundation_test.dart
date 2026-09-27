@@ -357,9 +357,21 @@ void main() {
       testWidgets('every tile shows its initials in a circle', (t) async {
         useBrightness(t, b);
         await pumpSignedIn(t);
+        // The chat list's own scrollable; the search field above it has one
+        // of its own.
+        final list = find
+            .ancestor(
+              of: byKey('conversation-${initialsById.keys.first}'),
+              matching: find.byType(Scrollable),
+            )
+            .first;
         for (final MapEntry(key: id, value: initials) in initialsById.entries) {
           final f = textUnder('conversation-$id', initials);
-          await t.scrollUntilVisible(byKey('conversation-$id'), 100);
+          await t.scrollUntilVisible(
+            byKey('conversation-$id'),
+            100,
+            scrollable: list,
+          );
           expect(f, findsOneWidget, reason: '$id should read $initials');
           expect(inCircle(f), isTrue, reason: '$id initials are not round');
         }

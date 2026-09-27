@@ -855,3 +855,23 @@ channel (how often a word appears in other people's chats). The fix ladder
 went to escalation. The pattern is now built once per search and the index
 has no pending list (`fastupdate = off`), which leaves a documented residual
 of about 0.2 µs per foreign match.
+
+## 2026-09-27 — A search needs three letters or digits; search screens
+
+security-lead's manual attack tests on the local stack, run for v0.16
+instead of Strix (the owner declined Strix: host install, Docker socket
+access, an outside LLM key), found that a query with no trigram (1–2
+characters, or symbols and emoji only) made `search_messages` read the whole
+shared index, every conversation's messages, on every call. The owner chose
+"search starts at 3 letters". The fix ladder went to escalation twice. The
+rule is now three letters or digits, checked on the server before any scan
+and in the app (`isSearchable`) before any request. Whatever remains is
+documented in docs/SECURITY.md.
+
+The screens: a search field above the chat list, with results showing the
+chat, a highlighted snippet and the time; tapping one opens the chat at that
+message. Inside a chat, a 🔍 button turns the header into a search bar with
+n/m and ↑ older / ↓ newer. Matches are highlighted and the current one gets
+a purple edge, distinct from the yellow unread edge. A hit older than the
+newest 500 loads the messages around it. Closing returns to the newest
+messages.

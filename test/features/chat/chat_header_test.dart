@@ -154,12 +154,15 @@ Color tintOf(WidgetTester t, Finder root, String initials) {
   return found!;
 }
 
+/// The search button at the header's right.
+Finder get searchButton => byKey('chat-search-button');
+
 /// The point in the empty space far right of a short name: on the name's
-/// line, 24 px in from the AppBar's right edge.
+/// line, just short of the search button (the title area ends there).
 Offset farRight(WidgetTester t, String name) {
-  final bar = t.getRect(appBar);
+  final button = t.getRect(searchButton);
   final text = t.getRect(headerName(name));
-  final at = Offset(bar.right - 24, text.center.dy);
+  final at = Offset(button.left - 20, text.center.dy);
   expect(
     at.dx,
     greaterThan(text.right + 100),
@@ -228,23 +231,31 @@ void main() {
       await t.pageBack();
       await settle(t);
       expect(find.byType(PersonScreen), findsNothing);
-      final bar = t.getRect(appBar);
-      await tapAt(t, Offset(bar.right - 24, t.getCenter(status).dy));
+      await tapAt(
+        t,
+        Offset(t.getRect(searchButton).left - 20, t.getCenter(status).dy),
+      );
       expect(find.byType(PersonScreen), findsOneWidget);
     });
 
-    testWidgets('conversation-title spans from the avatar to the right edge '
-        'and is an ink-rippling area', (t) async {
+    testWidgets('conversation-title spans from after the back arrow to the '
+        'search button and is an ink-rippling area', (t) async {
       final w = World();
       await openChat(t, w, 'c1');
       final area = t.getRect(byKey('conversation-title'));
-      final bar = t.getRect(appBar);
+      final back = t.getRect(
+        find.descendant(of: appBar, matching: find.byType(BackButton)),
+      );
+      final button = t.getRect(searchButton);
       final avatar = t.getRect(headerAvatar);
       final name = t.getRect(headerName('Bob Stone'));
 
       expect(area.left, lessThanOrEqualTo(avatar.left), reason: 'avatar');
-      // The title slot ends at the AppBar's right padding (16 px).
-      expect(area.right, greaterThanOrEqualTo(bar.right - 16));
+      expect(area.left, greaterThanOrEqualTo(back.right), reason: 'back');
+      // The title slot ends at the toolbar's spacing (16 px) before the
+      // button, and never covers it.
+      expect(area.right, greaterThanOrEqualTo(button.left - 16));
+      expect(area.right, lessThanOrEqualTo(button.left));
       expect(area.right - name.right, greaterThan(100));
 
       // The ripple: an InkWell holding the avatar, as wide as the area.
@@ -257,8 +268,8 @@ void main() {
       expect(inks, findsWidgets, reason: 'no ink ripple around the header');
       expect(
         t.getRect(inks.first).right,
-        greaterThanOrEqualTo(bar.right - 16),
-        reason: 'the ripple does not reach the right edge',
+        greaterThanOrEqualTo(button.left - 16),
+        reason: 'the ripple does not reach the search button',
       );
     });
   });
@@ -398,7 +409,7 @@ void main() {
       await t.tap(title);
       await t.pumpAndSettle();
       await t.tapAt(
-        Offset(t.getRect(appBar).right - 24, t.getCenter(title).dy),
+        Offset(t.getRect(searchButton).left - 20, t.getCenter(title).dy),
       );
       await t.pumpAndSettle();
       expect(profileOpen, isFalse);

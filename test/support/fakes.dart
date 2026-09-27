@@ -1182,6 +1182,11 @@ class ChatFake implements ChatRepository {
     _avatarHold = null;
   }
 
+  /// The `avatars` bucket: path -> bytes. Share one map with
+  /// [ProfileFake.storedAvatars] so a picture the member sets is the one
+  /// every screen downloads, as on the one real bucket.
+  Map<String, Uint8List> avatarBucket = {};
+
   @override
   Future<Result<Uint8List>> avatarBytes(String avatarPath) async {
     await _tick('avatarBytes:$avatarPath');
@@ -1189,10 +1194,8 @@ class ChatFake implements ChatRepository {
     final held = _avatarHold;
     if (held != null) await held.future;
     if (avatarFailures[avatarPath] case final failure?) return Err(failure);
-    if (!storedObjects.contains(avatarPath)) {
-      return const Err(DeniedFailure());
-    }
-    return Ok(objectBytes[avatarPath] ?? pngBytes);
+    final bytes = avatarBucket[avatarPath];
+    return bytes == null ? const Err(DeniedFailure()) : Ok(bytes);
   }
 
   /// Every [setGroupAvatar] call, in order.
@@ -1241,7 +1244,7 @@ class ChatFake implements ChatRepository {
     String? path;
     if (image != null) {
       path = 'group/$conversationId/${++_avatarSeq}.jpg';
-      store(path, image.bytes);
+      avatarBucket[path] = image.bytes;
     }
     conversationsResult = Ok([
       for (final c in current.value)
@@ -1259,10 +1262,7 @@ class ChatFake implements ChatRepository {
             avatarPath: path,
           ),
     ]);
-    if (previousPath != null) {
-      storedObjects.remove(previousPath);
-      objectBytes.remove(previousPath);
-    }
+    if (previousPath != null) avatarBucket.remove(previousPath);
     return const Ok(null);
   }
 
@@ -1888,7 +1888,9 @@ class ProfileFake implements ProfileRepository {
     OwnProfile? profile,
     Iterable<String> takenByOthers = const [],
     this.latency = Duration.zero,
-  }) : profile =
+    Map<String, Uint8List>? bucket,
+  }) : storedAvatars = bucket ?? {},
+       profile =
            profile ??
            const OwnProfile(
              userId: 'u1',
@@ -2018,7 +2020,7 @@ class ProfileFake implements ProfileRepository {
   /// Objects in the `avatars` bucket, by path. [setAvatar] adds one at a NEW
   /// path every time; [previousPath] is removed only once the row points at
   /// the new one.
-  final storedAvatars = <String, Uint8List>{};
+  final Map<String, Uint8List> storedAvatars;
   int _avatarSeq = 0;
   Result<OwnProfile>? avatarResult;
   final avatarUploads = <({PickedImage image, String? previousPath})>[];

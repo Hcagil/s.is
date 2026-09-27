@@ -109,7 +109,24 @@ create policy avatars_remove on storage.objects for delete to authenticated
 
 -- Column-level write on the member's own row: same row policy profiles_
 -- update_own already enforces (has_app_access() and user_id = auth.uid()),
--- extended to the new column.
+-- extended to the new column. The policy is redefined (as rls_access_check_
+-- once.sql already redefines it once) to also pin the value's shape to the
+-- caller's own prefix -- exactly what messages_send does for attachment_path
+-- (`split_part(attachment_path, '/', 1) = conversation_id::text`), so a
+-- member can point their own row only at their own folder, never at a real
+-- object under someone else's. avatar_path_readable at download time is the
+-- actual authority either way (a foreign path a member sets anyway is only
+-- ever as readable as it already was to the same viewer), but the column
+-- should not need that second check to hold.
+drop policy profiles_update_own on public.profiles;
+create policy profiles_update_own on public.profiles for update to authenticated
+  using ((select app_private.has_app_access()) and user_id = auth.uid())
+  with check (
+    (select app_private.has_app_access())
+    and user_id = auth.uid()
+    and (avatar_path is null
+         or avatar_path like 'profile/' || user_id::text || '/%')
+  );
 grant update (avatar_path) on public.profiles to authenticated;
 
 -- Conversations have no update policy: nothing about a conversation is
@@ -134,6 +151,11 @@ begin
     raise exception 'not permitted' using errcode = '42501';
   end if;
   if path is not null and char_length(path) not between 3 and 400 then
+    raise exception 'invalid path' using errcode = '22023';
+  end if;
+  -- Same shape pin as profiles_update_own, for the same reason: the value
+  -- can only name the caller's own group, never one it copies from another.
+  if path is not null and path not like 'group/' || conversation::text || '/%' then
     raise exception 'invalid path' using errcode = '22023';
   end if;
   select avatar_path into previous

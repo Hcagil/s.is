@@ -46,7 +46,10 @@ revoke all on function app_private.avatar_path_owner(text) from public, anon;
 grant execute on function app_private.avatar_path_owner(text) to authenticated;
 
 -- Read: whoever could already read the picture's owner -- profiles_read's
--- rule for a profile picture, membership for a group's.
+-- rule for a profile picture, membership for a group's. The 'group' branch
+-- also checks the conversation actually has a title, symmetric with
+-- avatar_path_writable below and for the same reason: without it, two
+-- members of a 1:1 could read a "group" picture stored under that 1:1's id.
 create or replace function app_private.avatar_path_readable(object_name text)
 returns boolean language plpgsql stable security definer set search_path = '' as $$
 declare
@@ -59,6 +62,9 @@ begin
   return case kind
     when 'profile' then app_private.is_allowed(owner)
     when 'group' then app_private.is_member(owner)
+                       and exists (
+                         select 1 from public.conversations c
+                          where c.id = owner and c.title is not null)
     else false
   end;
 end $$;
@@ -103,7 +109,7 @@ create or replace function app_private.avatar_path_pinned(
   path text,
   owner_prefix text
 ) returns boolean language sql immutable set search_path = '' as $$
-  select path like owner_prefix || '/%'
+  select starts_with(path, owner_prefix || '/')
      and array_length(regexp_split_to_array(path, '/'), 1) = 3
      and split_part(path, '/', 3) !~ '^\.*$'
 $$;
@@ -184,9 +190,15 @@ begin
   then
     raise exception 'invalid path' using errcode = '22023';
   end if;
+  -- Locked: two members replacing the picture at once must not both read the
+  -- same "previous" value and each delete only what the OTHER just wrote,
+  -- leaving neither's upload ever removed. The second caller's select waits
+  -- for the first's update to commit, so it reads what the first actually
+  -- left behind.
   select avatar_path into previous
     from public.conversations
-   where id = conversation and title is not null;
+   where id = conversation and title is not null
+     for update;
   if not found then
     raise exception 'not a group' using errcode = '22023';
   end if;

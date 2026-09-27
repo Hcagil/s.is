@@ -463,13 +463,18 @@ final class SupabaseChatRepository implements ChatRepository {
       }
       return const Ok(null);
     } on PostgrestException catch (e) {
+      // The server ran and definitely refused: the transaction rolled back,
+      // so the upload (if any) points nowhere a row will ever read, and
+      // removing it now is safe.
       if (uploaded != null) await _removeOrphanedAvatar(uploaded);
-      // Not a member of a group, or the conversation is a 1:1: the upload (if
-      // any) already happened and now points nowhere a row will ever read.
+      // Not a member of a group, or the conversation is a 1:1.
       if (e.code == '22023') return const Err(DeniedFailure());
       return Err(_asFailure(e));
     } catch (e) {
-      if (uploaded != null) await _removeOrphanedAvatar(uploaded);
+      // Unreachable server, a dropped connection, a timeout: the RPC may have
+      // committed and only the reply was lost. Deleting here could delete a
+      // picture the server already started serving to everyone else -- worse
+      // than leaving a possible orphan behind, so this never cleans up.
       return Err(_asFailure(e));
     }
   }

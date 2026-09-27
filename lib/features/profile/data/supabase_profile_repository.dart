@@ -126,14 +126,22 @@ final class SupabaseProfileRepository implements ProfileRepository {
         }
       }
       return Ok(_toProfile(row));
-    } catch (e) {
+    } on PostgrestException catch (e) {
+      // The server ran and definitely refused (RLS, a constraint, or the
+      // update matching no row): the transaction rolled back, so the upload
+      // (if any) went up but the row never pointed at it, and it is safe to
+      // remove now.
       if (uploaded != null) {
-        // The upload went up but the row never pointed at it: it must not
-        // stay behind as an orphan nobody will ever delete.
         try {
           await _client.storage.from('avatars').remove([uploaded]);
         } catch (_) {}
       }
+      return Err(_asFailure(e));
+    } catch (e) {
+      // Unreachable server, a dropped connection, a timeout: the update may
+      // have committed and only the reply was lost. Deleting here could
+      // delete the picture the row now actually points to -- worse than
+      // leaving a possible orphan behind, so this never cleans up.
       return Err(_asFailure(e));
     }
   }

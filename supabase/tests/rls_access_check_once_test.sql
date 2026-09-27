@@ -1,17 +1,21 @@
 begin;
-select plan(28);
+select plan(30);
 
 -- Every RLS policy that gates on app_private.has_app_access() calls it as a
 -- scalar subquery, (select app_private.has_app_access()), so the planner runs
--- it once per query as an InitPlan instead of once per row. Four things are
--- pinned here:
+-- it once per query as an InitPlan instead of once per row; since
+-- 20260927140000 the same holds for auth.uid(), called as (select auth.uid()).
+-- Four things are pinned here:
 --
---  1. catalog: no policy anywhere calls has_app_access() bare -- a policy
---     added later without the wrapper fails this file;
---  2. the wrapper is the only change: each policy's predicate, with the
---     wrapper normalised back to the bare call, is exactly the text the
+--  1. catalog: no policy anywhere calls has_app_access() or auth.uid() bare
+--     -- a policy added later without the wrapper fails this file;
+--  2. the wrapper is the only change: each policy's predicate, with both
+--     wrappers normalised back to the bare call, is exactly the text the
 --     policy had before (captured from pg_policies at 20260926130000), and
---     its command, roles and permissiveness are the same;
+--     its command, roles and permissiveness are the same. The one exception
+--     is messages_read, rewritten at 20260927150000 to read the caller's
+--     memberships once (messages_read_equivalence_test.sql proves it shows
+--     the same rows as before); its current text is pinned instead;
 --  3. plan text: a member reading conversation_members and
 --     conversation_previews evaluates has_app_access() in an InitPlan, never
 --     in a per-row Filter;
@@ -36,21 +40,40 @@ select cmp_ok(
           ~ '\( SELECT app_private\.has_app_access\(\) AS has_app_access\)'),
   '>=', 17, 'the 17 gated policies carry the wrapped call');
 
+-- ... nor auth.uid() (20260927140000).
+create function pg_temp.uid_unwrapped(expr text) returns text language sql immutable as $$
+  select regexp_replace(coalesce(expr, ''), '\(\s*SELECT auth\.uid\(\) AS \w+\)', '', 'g')
+$$;
+select is_empty(
+  $$select format('%s.%s.%s', schemaname, tablename, policyname)
+      from pg_policies
+     where pg_temp.uid_unwrapped(qual) ~ 'auth\.uid\('
+        or pg_temp.uid_unwrapped(with_check) ~ 'auth\.uid\('$$,
+  'no policy calls auth.uid() outside a scalar subquery');
+select cmp_ok(
+  (select count(*)::int from pg_policies
+    where coalesce(qual, '') || coalesce(with_check, '') ~ '\( SELECT auth\.uid\(\) AS uid\)'),
+  '>=', 10, 'the 10 policies that name the caller carry the wrapped auth.uid()');
+
 -- 2 each predicate is otherwise unchanged ------------------------------------
 -- Expected: permissive|roles|cmd|qual|with_check as pg_policies deparsed them
--- before the wrapper (messages_read was already wrapped then). Both sides are
--- normalised back to the bare call, so only a change beyond the wrapper shows.
+-- before the wrappers (messages_read: its text since 20260927150000). Both
+-- sides are normalised back to the bare calls, so only a change beyond the
+-- wrappers shows.
 create function pg_temp.bare(expr text) returns text language sql immutable as $$
-  select regexp_replace(expr,
+  select regexp_replace(regexp_replace(expr,
            '\( SELECT app_private\.has_app_access\(\) AS has_app_access\)',
-           'app_private.has_app_access()', 'g')
+           'app_private.has_app_access()', 'g'),
+           '\( SELECT auth\.uid\(\) AS uid\)', 'auth.uid()', 'g')
 $$;
 create temp table expected(schemaname name, tablename name, policyname name, def text);
 insert into expected values
   ('public', 'app_config', 'app_config_read', $e$PERMISSIVE|{authenticated}|SELECT|app_private.has_app_access()|<null>$e$),
   ('public', 'conversation_members', 'conversation_members_read', $e$PERMISSIVE|{authenticated}|SELECT|(app_private.has_app_access() AND app_private.is_member(conversation_id))|<null>$e$),
   ('public', 'conversations', 'conversations_read', $e$PERMISSIVE|{authenticated}|SELECT|(app_private.has_app_access() AND app_private.is_member(id))|<null>$e$),
-  ('public', 'messages', 'messages_read', $e$PERMISSIVE|{authenticated}|SELECT|(( SELECT app_private.has_app_access() AS has_app_access) AND app_private.is_member(conversation_id))|<null>$e$),
+  ('public', 'messages', 'messages_read', $e$PERMISSIVE|{authenticated}|SELECT|(( SELECT app_private.has_app_access() AS has_app_access) AND (conversation_id = ANY (ARRAY( SELECT cm.conversation_id
+   FROM conversation_members cm
+  WHERE (cm.user_id = ( SELECT auth.uid() AS uid))))))|<null>$e$),
   ('public', 'messages', 'messages_send', $e$PERMISSIVE|{authenticated}|INSERT|<null>|(app_private.has_app_access() AND (sender_id = auth.uid()) AND app_private.is_member(conversation_id) AND ((attachment_path IS NULL) OR ((split_part(attachment_path, '/'::text, 1) = (conversation_id)::text) AND app_private.owns_attachment(attachment_path))) AND ((reply_to IS NULL) OR app_private.in_conversation(reply_to, conversation_id)))$e$),
   ('public', 'notification_mutes', 'notification_mutes_change', $e$PERMISSIVE|{authenticated}|UPDATE|(app_private.has_app_access() AND (user_id = ( SELECT auth.uid() AS uid)))|(app_private.has_app_access() AND (user_id = ( SELECT auth.uid() AS uid)) AND
 CASE kind

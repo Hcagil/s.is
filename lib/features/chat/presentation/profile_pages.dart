@@ -26,6 +26,7 @@ class PersonScreen extends ConsumerWidget {
     super.key,
     required this.userId,
     this.fallbackName,
+    this.fallbackAvatarPath,
     this.showMessage = true,
   });
 
@@ -33,6 +34,9 @@ class PersonScreen extends ConsumerWidget {
 
   /// Shown until (or if never) the member list names them.
   final String? fallbackName;
+
+  /// Shown until (or if never) a live lookup finds their picture.
+  final String? fallbackAvatarPath;
 
   /// Off when the page was opened from your chat with them: you are there.
   final bool showMessage;
@@ -59,7 +63,7 @@ class PersonScreen extends ConsumerWidget {
               label: name,
               seed: userId,
               radius: 48,
-              avatarPath: member?.avatarPath,
+              avatarPath: member?.avatarPath ?? fallbackAvatarPath,
             ),
             const SizedBox(height: 12),
             Text(
@@ -317,6 +321,7 @@ class _MembersTab extends ConsumerWidget {
                         builder: (_) => PersonScreen(
                           userId: m.userId,
                           fallbackName: m.displayName,
+                          fallbackAvatarPath: m.avatarPath,
                         ),
                       ),
                     ),

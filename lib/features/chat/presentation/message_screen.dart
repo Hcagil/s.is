@@ -360,6 +360,10 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                       : PersonScreen(
                           userId: widget.otherUserId!,
                           fallbackName: widget.title,
+                          fallbackAvatarPath: _headerAvatar(
+                            ref,
+                            conversationId,
+                          ),
                           showMessage: false,
                         );
                   if (page == null) return;

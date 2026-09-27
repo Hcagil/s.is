@@ -1,0 +1,89 @@
+-- Perf: qa-lead (2026-09-26, after #45) asked whether app_private.is_member()
+-- -- a security definer function, so not inlined -- can be replaced with an
+-- equivalent, hoistable form on the remaining per-row cost of the chat-list/
+-- history hot path, watching for RLS recursion on conversation_members and
+-- for semantic drift (NULLs, removed members). Investigated for all three
+-- callers of is_member() in a table policy: conversation_members_read,
+-- conversations_read, messages_read.
+--
+-- conversation_members_read: NOT changed. Its own comment (20260922120000)
+-- already explains why is_member() is security definer in the first place --
+-- "a membership policy that read conversation_members to decide who may read
+-- conversation_members would recurse". The hoisted form search_messages()
+-- uses (`conversation_id = any(array(select ... from conversation_members
+-- where user_id = ...))`) reads conversation_members itself; written into
+-- conversation_members_read's own policy that is exactly the self-reference
+-- the security definer function exists to avoid. Left as is_member(conversation_id).
+--
+-- conversations_read: NOT changed. Measured (below, fixture 3): 0.528ms/38
+-- buffers before, 0.599ms/38 buffers after -- a regression, not a win. The
+-- table is bounded by total conversations, not messages, so is_member(id)
+-- here never scales with history; there is nothing to hoist a fix for.
+--
+-- messages_read: CHANGED, to the array form (this migration). is_member() is
+-- security definer and does not read conversation_members through RLS, so no
+-- recursion risk applies to a table other than conversation_members itself.
+-- Semantics: conversation_members has (conversation_id, user_id) as its
+-- primary key and both columns are not null, and messages.conversation_id is
+-- not null (FK to conversations), so
+--   exists(select 1 from conversation_members where conversation_id = X and user_id = U)
+-- and
+--   X = any(array(select conversation_id from conversation_members where user_id = U))
+-- return the same boolean for every X and U, read at the same instant --
+-- identically true for a current member, identically false for a removed one
+-- or one who never joined. No is_member() call is kept alongside the array
+-- check (unlike search_messages()'s two membership checks): that function
+-- keeps both because a shared trigram GIN index makes the LIKE scan reach
+-- rows in foreign conversations before any leakproof bound can be applied,
+-- so a second, independent check narrows what a timing side channel can
+-- reveal. messages_read has no such scan to protect against: the array bound
+-- is a leakproof, sargable equality against messages_conversation_idx, so a
+-- foreign row is never fetched at all, which is strictly tighter than
+-- is_member() alone (a Filter applied only after the fetch).
+--
+-- Measured, EXPLAIN (ANALYZE, BUFFERS) as `authenticated` with a member's JWT
+-- claims, 20 conversations / 50,000 messages (2,500 each) / caller a member
+-- of 5 (the brief's numbers), before -> after:
+--
+--   1. messages_read alone: the conversation screen's own history read (one
+--      of the caller's conversations, newest 500 of its 2,500):
+--        14.607ms / 5817 buffers -> 2.744ms / 864 buffers (5.3x / 6.7x).
+--      Cause: conversation_id was already pinned to one value by the Index
+--      Cond, but is_member(conversation_id) still ran once per fetched row
+--      (2,500 times) -- each invocation its own security-definer query
+--      against conversation_members, touching buffers of its own. The array
+--      form needs no per-row invocation.
+--
+--   2. Worst case, a full scan (`select count(*) from messages`, no
+--      conversation given): 243.571ms / 63,282 buffers -> 2.251ms / 898
+--      buffers (108x / 70x). is_member() run once per candidate row (50,000
+--      times) forced a Seq Scan (the qual isn't sargable); the array form is
+--      leakproof and sargable, so the planner switches to a Bitmap Index
+--      Scan on messages_conversation_idx with `conversation_id = ANY(array)`
+--      as the Index Cond -- rows outside the caller's conversations are
+--      never fetched.
+--
+--   3. conversation_previews (the chat list's own LATERAL over messages,
+--      unaffected by policy on conversation_members but reading messages
+--      through this one): 1.087ms / 102 buffers -> 1.379ms / 113 buffers, a
+--      small, fixed-size regression (~0.3ms) -- building the array is one
+--      extra InitPlan against the caller's own memberships (5 rows here),
+--      hoisted once for the whole query (not once per conversation
+--      previewed: confirmed in the plan by `loops=1` on that InitPlan).
+--      Bounded by the caller's own membership count, not by history size, so
+--      it does not grow as the chat list's data does.
+--
+--   4. conversations_read, unchanged by this migration but measured for
+--      comparison: 0.528ms / 38 buffers -> 0.599ms / 38 buffers (see above;
+--      this migration does not apply the change here).
+--
+-- Net: a small, bounded, one-time cost on the chat list against a large win
+-- that grows with total history on the conversation-history read and on any
+-- query that is not already narrowed to one conversation -- accepted.
+drop policy messages_read on public.messages;
+create policy messages_read on public.messages for select to authenticated
+  using ((select app_private.has_app_access())
+         and conversation_id = any (
+               array(select cm.conversation_id from public.conversation_members cm
+                      where cm.user_id = (select auth.uid()))
+             ));

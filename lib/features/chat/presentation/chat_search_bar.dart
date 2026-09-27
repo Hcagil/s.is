@@ -60,6 +60,9 @@ class _ChatSearchBarState extends ConsumerState<ChatSearchBar> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(chatSearchProvider);
+    ref.listen(chatSearchProvider.select((s) => s.failure), (previous, next) {
+      if (next != null) showSisNotice(context, next.message, isError: true);
+    });
     return Row(
       children: [
         IconButton(

@@ -348,6 +348,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// live, newest window.
   bool _jumped = false;
 
+  /// True while [jumpToAround] has replaced the shown list with an old
+  /// window; false once live (including before any jump at all).
+  bool get isJumped => _jumped;
+
   /// The anchor id of the most recent [jumpToAround] call -- an answer for
   /// any earlier one is dropped, even if it arrives later.
   String? _requestedAnchorId;
@@ -749,6 +753,7 @@ final class ChatSearchState {
     this.hits = const [],
     this.index = -1,
     this.serverAnswered = false,
+    this.failure,
   });
 
   /// What was searched for; empty means the search box is closed.
@@ -767,6 +772,13 @@ final class ChatSearchState {
   /// be incomplete -- the search bar shows a '+' and stepping past the
   /// oldest hit asks the server.
   final bool serverAnswered;
+
+  /// A failure from asking the server while stepping past the oldest local
+  /// hit -- the search bar shows it once, as a notice. Reset by the next
+  /// state change (a new search, a move, a fresh answer); never set by
+  /// [ChatSearchController.search] itself, whose own failure already goes
+  /// straight back to its caller.
+  final Failure? failure;
 
   Message? get current =>
       index >= 0 && index < hits.length ? hits[index] : null;
@@ -806,7 +818,22 @@ class ChatSearchController extends Notifier<ChatSearchState> {
       state = ChatSearchState(query: query);
       return const Ok(null);
     }
-    final local = _localHits(query);
+    final messages = ref.read(messagesProvider.notifier);
+    if (messages.isJumped) {
+      // A new query is about the chat's current, live state -- not whatever
+      // old window a previous hit jumped to. Go back to the newest 500 first
+      // (same as closing search does), and wait for it: there is nothing
+      // local to show from an old, replaced window.
+      state = ChatSearchState(query: query);
+      messages.returnToLive();
+      await ref.read(messagesProvider.future);
+      if (!ref.mounted ||
+          ref.read(openConversationProvider) != conversationId ||
+          state.query != query) {
+        return const Ok(null);
+      }
+    }
+    final local = _localHits(conversationId, query);
     state = ChatSearchState(
       query: query,
       hits: local,
@@ -818,15 +845,20 @@ class ChatSearchController extends Notifier<ChatSearchState> {
     return const Ok(null);
   }
 
-  /// Messages already loaded for the open conversation whose body contains
+  /// Messages already loaded for [conversationId] whose body contains
   /// [query], newest first -- deleted/vanished and attachment-only (empty
   /// body) messages excluded, exactly what the server's own search excludes.
-  List<Message> _localHits(String query) {
+  /// [messagesProvider] keeps the previous conversation's list visible while
+  /// a newly opened one is still loading, so [conversationId] is checked
+  /// here too, not just at the call site -- otherwise a chat just left can
+  /// answer for the one just opened.
+  List<Message> _localHits(String conversationId, String query) {
     final loaded = ref.read(messagesProvider).value ?? const <Message>[];
     final folded = foldSearch(query);
     return [
       for (final m in loaded.reversed)
-        if (!m.isDeleted &&
+        if (m.conversationId == conversationId &&
+            !m.isDeleted &&
             m.body.isNotEmpty &&
             foldSearch(m.body).contains(folded))
           m,
@@ -923,10 +955,24 @@ class ChatSearchController extends Notifier<ChatSearchState> {
     if (conversationId == null) return;
     final query = state.query;
     final before = state.hits.length;
-    await _askServer(conversationId, query);
+    final result = await _askServer(conversationId, query);
     if (!ref.mounted ||
         ref.read(openConversationProvider) != conversationId ||
         state.query != query) {
+      return;
+    }
+    if (result case Err(:final failure)) {
+      // Unlike search()'s own failure, nothing awaits this call directly
+      // (next() is fire-and-forget) -- carried in state instead, for the
+      // search bar to show as a notice. Hits/index/serverAnswered are left
+      // exactly as they were: a failed step forward is not an answer.
+      state = ChatSearchState(
+        query: state.query,
+        hits: state.hits,
+        index: state.index,
+        serverAnswered: state.serverAnswered,
+        failure: failure,
+      );
       return;
     }
     if (state.hits.length > before) _move(1);

@@ -42,7 +42,7 @@ class ConversationList extends ConsumerWidget {
         children: [
           const _ListSearchField(),
           Expanded(
-            child: searchQuery.isEmpty
+            child: searchQuery.trim().length < 3
                 ? switch (conversations) {
                     AsyncData(:final value) when value.isEmpty =>
                       const _Empty(),

@@ -86,7 +86,7 @@ class _ChatSearchBarState extends ConsumerState<ChatSearchBar> {
             },
           ),
         ),
-        if (state.query.trim().isNotEmpty)
+        if (state.query.trim().length >= 3)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(

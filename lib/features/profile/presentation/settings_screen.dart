@@ -9,7 +9,7 @@ import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
-import '../../chat/application/chat_controllers.dart';
+import '../../chat/presentation/avatar_sheet.dart';
 import '../../chat/presentation/person_avatar.dart';
 import '../../notifications/application/push_controller.dart';
 import '../../notifications/presentation/notification_pages.dart';
@@ -118,6 +118,7 @@ class SettingsScreen extends StatelessWidget {
               label: profile.displayName,
               seed: profile.userId,
               radius: 28,
+              avatarPath: profile.avatarPath,
             ),
             title: Text(
               profile.displayName,
@@ -159,15 +160,65 @@ class SettingsScreen extends StatelessWidget {
 }
 
 /// Display name and tag.
-class ProfileSettingsScreen extends ConsumerWidget {
+class ProfileSettingsScreen extends ConsumerStatefulWidget {
   const ProfileSettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => _WithProfile(
+  ConsumerState<ProfileSettingsScreen> createState() =>
+      _ProfileSettingsScreenState();
+}
+
+class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
+  bool _busy = false;
+
+  Future<void> _changeAvatar(OwnProfile profile) async {
+    final choice = await showAvatarSheet(
+      context,
+      hasAvatar: profile.avatarPath != null,
+    );
+    if (choice == null || !mounted) return;
+    setState(() => _busy = true);
+    final result = switch (choice) {
+      AvatarPicked(:final image) =>
+        await ref.read(ownProfileProvider.notifier).setAvatar(image),
+      AvatarRemoved() =>
+        await ref.read(ownProfileProvider.notifier).removeAvatar(),
+    };
+    if (!mounted) return;
+    setState(() => _busy = false);
+    switch (result) {
+      case Err(:final failure):
+        showSisNotice(context, failure.message, isError: true);
+      case Ok():
+        showSisNotice(
+          context,
+          choice is AvatarRemoved
+              ? 'Profile picture removed'
+              : 'Profile picture updated',
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _WithProfile(
     title: 'Profile',
     builder: (context, profile) => ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        Center(
+          child: GestureDetector(
+            key: const ValueKey('profile-avatar'),
+            onTap: _busy ? null : () => _changeAvatar(profile),
+            child: PersonAvatar(
+              label: profile.displayName,
+              seed: profile.userId,
+              radius: 48,
+              avatarPath: profile.avatarPath,
+            ),
+          ),
+        ),
+        SizedBox(height: 3, child: _busy ? const SisProgressLine() : null),
+        const SizedBox(height: 20),
         ProfileForm(
           // Rebuilt from the saved profile, so the fields show what is
           // stored rather than what was typed.
@@ -264,17 +315,17 @@ class AccountScreen extends ConsumerWidget {
                 // Read before leaving: this page is gone after the pop.
                 final push = ref.read(pushRegistrationProvider.notifier);
                 final session = ref.read(sessionControllerProvider.notifier);
-                final photos = ref.read(attachmentCacheProvider);
                 // Back to the root first: signing out swaps the root screen,
                 // and the settings pages above it would otherwise stay.
                 Navigator.of(context).popUntil((route) => route.isFirst);
                 // While still signed in: this phone stops receiving this
                 // account's notifications.
                 await push.forget();
-                await session.signOut();
                 // The next account on this phone must not inherit the last
-                // one's photos.
-                await photos.clear();
+                // one's photos: attachmentCacheOwnerProvider clears them as
+                // soon as this reaches SignedOut, on this path exactly as on
+                // any other the session can end on.
+                await session.signOut();
               },
               child: const Text('Sign out'),
             ),

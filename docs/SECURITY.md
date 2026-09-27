@@ -81,6 +81,27 @@ equivalence test (`messages_read_equivalence_test.sql`) compares the rows with
 the explicit rule "has app access and is a member" for every kind of caller
 (2026-09-27).
 
+Profile and group pictures live in the private `avatars` bucket (JPEG only,
+1 MB max). Object keys have exactly two forms, `profile/<user id>/<file>` and
+`group/<conversation id>/<file>`, and any other shape resolves to no owner and
+is refused. Reading a picture requires allowlist access, an active session,
+and the same right as the thing it belongs to: a profile picture follows
+`profiles_read`; a group picture requires membership, and only a group (never
+a 1:1) can have one. Uploading or deleting is limited to the caller's own
+`profile/<own id>/` folder, or to a group the caller belongs to. Objects are
+never overwritten: there is no update policy, and each change uploads a new
+file and removes the old one. The stored `avatar_path` values are pinned by
+`app_private.avatar_path_pinned` to exactly one file directly under the
+owner's own folder. `profiles_update_own` applies the pin to the member's own
+row. The security-definer RPC `set_group_avatar` applies it to a group after
+checking allowlist access, the active session and membership; it locks the
+row and returns the path it replaced, so the client can delete that file.
+The app deletes a just-uploaded file only after a definite server refusal,
+never after a network failure, because the change may have committed. The
+phone's photo and picture cache is emptied whenever the session ends,
+including when the phone was replaced elsewhere. Accepted: files left behind
+by deleted or delisted accounts are unreadable but not yet removed (roadmap).
+
 Message search, `public.search_messages(query, conversation)`, is a
 `security definer` RPC like the other public RPCs. The alternative,
 running it with the caller's rights under row-level security, can't be fast:

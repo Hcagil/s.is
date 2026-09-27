@@ -5,6 +5,7 @@ final class Member {
     required this.displayName,
     this.tag,
     this.email,
+    this.avatarPath,
   });
 
   final String userId;
@@ -17,4 +18,7 @@ final class Member {
   /// The Google account's address. Known only for the signed-in member
   /// (Settings > Account); never sent for anyone else.
   final String? email;
+
+  /// Storage path of their picture, or null for none.
+  final String? avatarPath;
 }

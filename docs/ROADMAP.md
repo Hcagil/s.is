@@ -19,6 +19,8 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | after v0.9 | iOS | scheduled after v0.9 |
 | v0.15 | **done** 2026-09-26 — the time sits on a message's last line when it fits; the whole chat header opens the profile, with the avatar; gallery newest first (0.14.2); bubbles hug their text, offline in about a second, fast previews (0.14.1) |
 | v0.16 | **done** 2026-09-27 — message search in the chat list and inside a chat, over all history: highlight, ↑↓ between hits, jump to old messages; a search needs three letters or digits |
+| v0.16.1 | **done** 2026-09-27 — the signed-in user is checked once per query in every policy; message reads bounded by membership (history read 5× faster) |
+| v0.17 | **done** 2026-09-27 — change your profile picture and a group's picture; shown everywhere the initials circle was |
 | later | E2EE | scheduled individually |
 
 ## Status
@@ -40,3 +42,7 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.13 | **done** 2026-09-25 — edit your own message or photo caption for 6 hours; "edited" next to the time; no history; each bubble shows its time |
 | v0.14 | **done** 2026-09-25 — everything visible is SIS's own design: notice pill, logo loader, SIS switches and choices, SIS licences page; no Android photo picker; permissions asked once behind SIS screens |
 | later | in progress — image attachments shipped as a demo; push has its database half, and needs a Firebase project before it can send (docs/DELIVERY.md) |
+
+- Cleanup job: remove stored pictures and attachments of deleted or delisted
+  accounts, and uploads orphaned by a network failure (security review
+  2026-09-27; unreadable, only storage).

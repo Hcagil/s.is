@@ -13,6 +13,7 @@ import '../../presence/application/presence_controllers.dart';
 import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
 import '../domain/message.dart';
+import 'avatar_sheet.dart';
 import 'conversation_list.dart';
 import 'message_screen.dart';
 import 'person_avatar.dart';
@@ -54,7 +55,12 @@ class PersonScreen extends ConsumerWidget {
         appBar: AppBar(),
         body: Column(
           children: [
-            PersonAvatar(label: name, seed: userId, radius: 48),
+            PersonAvatar(
+              label: name,
+              seed: userId,
+              radius: 48,
+              avatarPath: member?.avatarPath,
+            ),
             const SizedBox(height: 12),
             Text(
               name,
@@ -156,8 +162,9 @@ class _Status extends ConsumerWidget {
   }
 }
 
-/// A group's page: its members, photos and links. View only.
-class GroupScreen extends ConsumerWidget {
+/// A group's page: its members, photos and links. Any member may change or
+/// remove its picture, the same as a member-editable group name would be.
+class GroupScreen extends ConsumerStatefulWidget {
   const GroupScreen({
     super.key,
     required this.conversationId,
@@ -168,12 +175,53 @@ class GroupScreen extends ConsumerWidget {
   final String title;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GroupScreen> createState() => _GroupScreenState();
+}
+
+class _GroupScreenState extends ConsumerState<GroupScreen> {
+  bool _busy = false;
+
+  Future<void> _changeAvatar(String? avatarPath) async {
+    final choice = await showAvatarSheet(
+      context,
+      hasAvatar: avatarPath != null,
+    );
+    if (choice == null || !mounted) return;
+    setState(() => _busy = true);
+    final result = await ref
+        .read(conversationListProvider.notifier)
+        .setGroupAvatar(widget.conversationId, switch (choice) {
+          AvatarPicked(:final image) => image,
+          AvatarRemoved() => null,
+        });
+    if (!mounted) return;
+    setState(() => _busy = false);
+    switch (result) {
+      case Err(:final failure):
+        showSisNotice(context, failure.message, isError: true);
+      case Ok():
+        showSisNotice(
+          context,
+          choice is AvatarRemoved
+              ? 'Group picture removed'
+              : 'Group picture updated',
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final conversationId = widget.conversationId;
+    final title = widget.title;
     final members = ref.watch(conversationMembersProvider(conversationId));
     final names = {
       for (final m in members.value ?? const <Member>[])
         m.userId: m.displayName,
     };
+    final avatarPath = (ref.watch(conversationListProvider).value ?? const [])
+        .where((c) => c.id == conversationId)
+        .firstOrNull
+        ?.avatarPath;
     final theme = Theme.of(context);
     return DefaultTabController(
       length: 3,
@@ -181,7 +229,17 @@ class GroupScreen extends ConsumerWidget {
         appBar: AppBar(),
         body: Column(
           children: [
-            PersonAvatar(label: title, seed: conversationId, radius: 48),
+            GestureDetector(
+              key: const ValueKey('group-avatar'),
+              onTap: _busy ? null : () => _changeAvatar(avatarPath),
+              child: PersonAvatar(
+                label: title,
+                seed: conversationId,
+                radius: 48,
+                avatarPath: avatarPath,
+              ),
+            ),
+            SizedBox(height: 3, child: _busy ? const SisProgressLine() : null),
             const SizedBox(height: 12),
             Text(
               title,
@@ -245,6 +303,7 @@ class _MembersTab extends ConsumerWidget {
                 label: m.displayName,
                 seed: m.userId,
                 online: online.contains(m.userId),
+                avatarPath: m.avatarPath,
               ),
               title: Text(
                 m.userId == me ? '${m.displayName} (you)' : m.displayName,

@@ -401,9 +401,17 @@ void main() {
       );
       await tester.pump();
 
-      // Read status has its own calls; only the message calls matter here.
-      List<String> messageCalls() =>
-          chat.calls.where((c) => !c.startsWith('read')).toList();
+      // Read status has its own calls, and the header reads the chat list
+      // (for the group's picture) through the list's own controller; only
+      // the message calls matter here.
+      List<String> messageCalls() => chat.calls
+          .where(
+            (c) =>
+                !c.startsWith('read') &&
+                c != 'incomingAll' &&
+                c != 'conversations',
+          )
+          .toList();
       expect(messageCalls(), [
         'incoming:c1',
       ], reason: 'a read before the subscription is confirmed loses messages');

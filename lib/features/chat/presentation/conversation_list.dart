@@ -265,6 +265,7 @@ class _MemberPicker extends ConsumerWidget {
                   seed: m.userId,
                   online: false,
                   dotKey: ValueKey('picker-online-${m.userId}'),
+                  avatarPath: m.avatarPath,
                 ),
                 title: Text(m.displayName),
                 subtitle: m.tag == null ? null : Text('@${m.tag}'),
@@ -310,6 +311,7 @@ class _ConversationTile extends ConsumerWidget {
                 .watch(onlineMembersProvider)
                 .contains(conversation.other!.userId),
         dotKey: ValueKey('online-${conversation.id}'),
+        avatarPath: conversation.avatarPath ?? conversation.other?.avatarPath,
       ),
       title: Text(
         conversation.label,
@@ -511,7 +513,12 @@ class _SearchResults extends ConsumerWidget {
             message.conversationId;
         return ListTile(
           key: ValueKey('list-search-result-${message.id}'),
-          leading: PersonAvatar(label: label, seed: seed),
+          leading: PersonAvatar(
+            label: label,
+            seed: seed,
+            avatarPath:
+                conversation?.avatarPath ?? conversation?.other?.avatarPath,
+          ),
           title: Text(
             label,
             maxLines: 1,

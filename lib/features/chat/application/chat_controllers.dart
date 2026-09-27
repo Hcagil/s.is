@@ -47,6 +47,22 @@ final attachmentCacheProvider = Provider<AttachmentCache>(
   (_) => throw UnimplementedError('override in main'),
 );
 
+/// Wipes the cache above as soon as the session is found to have ended --
+/// signed out, or Denied (revoked or replaced on another device) -- so
+/// nothing of a previous member's photos or pictures survives on this phone.
+/// Mirrors pushInboxOwnerProvider's reach: every settled answer about the
+/// session, not only the explicit sign-out button, and `fireImmediately`
+/// catches a cold start that lands directly on one of those two states.
+final attachmentCacheOwnerProvider = Provider<void>((ref) {
+  ref.listen(sessionControllerProvider, (_, next) {
+    switch (next.value) {
+      case SignedOut() || Denied():
+        unawaited(ref.read(attachmentCacheProvider).clear());
+      case _:
+    }
+  }, fireImmediately: true);
+});
+
 /// One attachment's bytes: from this phone when they are here, otherwise
 /// downloaded once and kept. Replaces a signed URL per look, which fetched
 /// the whole photo again every time.
@@ -57,6 +73,18 @@ final attachmentBytesProvider = FutureProvider.autoDispose
       return switch (await ref
           .read(chatRepositoryProvider)
           .attachmentBytes(path)) {
+        Ok(:final value) => value,
+        Err(:final failure) => throw failure,
+      };
+    }, retry: (_, _) => null);
+
+/// One profile's or group's picture: from this phone when it is here,
+/// otherwise downloaded once and kept. A changed picture is a new storage
+/// path (never an overwrite), so this is never stale.
+final avatarBytesProvider = FutureProvider.autoDispose
+    .family<Uint8List, String>((ref, path) async {
+      ref.watch(currentUserIdProvider);
+      return switch (await ref.read(chatRepositoryProvider).avatarBytes(path)) {
         Ok(:final value) => value,
         Err(:final failure) => throw failure,
       };
@@ -269,6 +297,25 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
         .startGroupConversation(title: title, memberIds: memberIds);
     if (result is Ok<String>) {
       await refresh();
+    }
+    return result;
+  }
+
+  /// Sets or clears [conversationId]'s picture; any member may call this.
+  /// Re-reads the list quietly on success, same as [markRead].
+  Future<Result<void>> setGroupAvatar(
+    String conversationId,
+    PickedImage? image,
+  ) async {
+    final previous = (state.value ?? const <Conversation>[])
+        .where((c) => c.id == conversationId)
+        .firstOrNull
+        ?.avatarPath;
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .setGroupAvatar(conversationId, image, previousPath: previous);
+    if (result is Ok && ref.mounted) {
+      await reloadQuietly();
     }
     return result;
   }

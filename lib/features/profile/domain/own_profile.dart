@@ -9,6 +9,7 @@ final class OwnProfile {
     this.shareTyping = true,
     this.shareLastSeen = true,
     this.shareReadStatus = true,
+    this.avatarPath,
   });
 
   final String userId;
@@ -35,6 +36,9 @@ final class OwnProfile {
   /// Whether others may see when this member has read their messages.
   /// Mutual, like last seen: while it is off, this member sees nobody's.
   final bool shareReadStatus;
+
+  /// Storage path of the member's own picture, or null for none.
+  final String? avatarPath;
 }
 
 /// Longest display name the database accepts.

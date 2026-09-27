@@ -16,6 +16,7 @@ final class Conversation {
     this.lastMessageAt,
     this.lastSenderId,
     this.unread = 0,
+    this.avatarPath,
   });
 
   final String id;
@@ -36,6 +37,9 @@ final class Conversation {
   /// Messages from others since the member last opened this conversation.
   final int unread;
 
+  /// The group's own picture, or null for none (and always null for a 1:1 -- see [other]).
+  final String? avatarPath;
+
   /// The same conversation with a newer message as its preview; [unread]
   /// grows by one when [counts] (a message from someone else, arriving while
   /// this conversation is not open).
@@ -48,6 +52,7 @@ final class Conversation {
         lastMessageAt: message.createdAt,
         lastSenderId: message.senderId,
         unread: counts ? unread + 1 : unread,
+        avatarPath: avatarPath,
       );
 
   /// The same conversation with nothing unread.
@@ -58,6 +63,7 @@ final class Conversation {
     lastMessage: lastMessage,
     lastMessageAt: lastMessageAt,
     lastSenderId: lastSenderId,
+    avatarPath: avatarPath,
   );
 
   bool get isGroup => title != null;

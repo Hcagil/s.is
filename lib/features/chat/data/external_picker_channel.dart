@@ -10,7 +10,8 @@ import 'tiny_preview.dart';
 /// (MainActivity.kt): it starts Android's own app chooser, copies whatever
 /// comes back into this app's cache right away -- a content URI's read
 /// grant is temporary -- and hands back file paths already processed to the
-/// shape [ExternalPicker] promises (long-edge-1600 or 512 centre-crop JPEG).
+/// shape [ExternalPicker] promises (long-edge-1600 for an attachment,
+/// long-edge-2048 for a picture's crop source).
 /// This class only reads those files into memory and deletes them; no image
 /// processing happens in Dart. Thin on purpose (ARCHITECTURE rule 4):
 /// verified on a device, not by a unit test.

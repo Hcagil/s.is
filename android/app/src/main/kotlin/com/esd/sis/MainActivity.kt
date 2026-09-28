@@ -7,6 +7,7 @@ import android.net.Uri
 import android.provider.MediaStore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.util.concurrent.ExecutorService
@@ -16,6 +17,8 @@ private const val CHANNEL = "sis/external_picker"
 private const val REQUEST_ATTACHMENTS = 9101
 private const val REQUEST_PICTURE = 9102
 private const val MAX_ATTACHMENTS = 10
+private const val ATTACHMENT_EDGE = 1600
+private const val PICTURE_EDGE = 2048
 
 // Android's own app chooser for "From an app" (docs/DECISIONS.md,
 // 2026-09-28): ACTION_PICK on the images MediaStore URI, wrapped in
@@ -45,6 +48,7 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "pickAttachments" -> startPick(multiple = true, requestCode = REQUEST_ATTACHMENTS, result = result)
                     "pickProfilePicture" -> startPick(multiple = false, requestCode = REQUEST_PICTURE, result = result)
+                    "cropPicture" -> cropPicture(call, result)
                     else -> result.notImplemented()
                 }
             }
@@ -91,18 +95,18 @@ class MainActivity : FlutterActivity() {
             result.success(null)
             return
         }
-        val square = requestCode == REQUEST_PICTURE
+        val isPicture = requestCode == REQUEST_PICTURE
         // Capped before anything is opened: the extras' bytes are never
         // read, so there is nothing of theirs to delete.
-        val dropped = if (square) 0 else maxOf(0, allUris.size - MAX_ATTACHMENTS)
-        val uris = if (square) allUris else allUris.take(MAX_ATTACHMENTS)
+        val dropped = if (isPicture) 0 else maxOf(0, allUris.size - MAX_ATTACHMENTS)
+        val uris = if (isPicture) allUris else allUris.take(MAX_ATTACHMENTS)
         pickExecutor.execute {
             val processor = PickedImageProcessor(this@MainActivity)
             val paths = mutableListOf<String>()
             try {
-                for (uri in uris) paths.add(processor.process(uri, square))
+                for (uri in uris) paths.add(processor.process(uri, if (isPicture) PICTURE_EDGE else ATTACHMENT_EDGE))
                 runOnUiThread {
-                    if (square) {
+                    if (isPicture) {
                         result.success(paths)
                     } else {
                         result.success(mapOf("paths" to paths, "dropped" to dropped))
@@ -116,6 +120,32 @@ class MainActivity : FlutterActivity() {
             } catch (e: Exception) {
                 paths.forEach { File(it).delete() }
                 runOnUiThread { result.error("unreadable", "Could not read the photo.", null) }
+            }
+        }
+    }
+
+    // Crops a picture-source file into a picture, off the main thread; not
+    // part of the pick/onActivityResult flow above, so it never touches
+    // pendingResult.
+    private fun cropPicture(call: MethodCall, result: MethodChannel.Result) {
+        val args = call.arguments as? Map<*, *>
+        val path = args?.get("path") as? String
+        val left = (args?.get("left") as? Number)?.toDouble()
+        val top = (args?.get("top") as? Number)?.toDouble()
+        val right = (args?.get("right") as? Number)?.toDouble()
+        val bottom = (args?.get("bottom") as? Number)?.toDouble()
+        val size = (args?.get("size") as? Number)?.toInt() ?: 640
+        val quality = (args?.get("quality") as? Number)?.toInt() ?: 82
+        if (path == null || left == null || top == null || right == null || bottom == null) {
+            result.error("bad_args", "Missing crop arguments.", null)
+            return
+        }
+        pickExecutor.execute {
+            try {
+                val output = PickedImageProcessor(this@MainActivity).crop(path, left, top, right, bottom, size, quality)
+                runOnUiThread { result.success(output) }
+            } catch (e: Exception) {
+                runOnUiThread { result.error("crop_failed", "Could not crop the photo.", null) }
             }
         }
     }

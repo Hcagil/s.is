@@ -10,8 +10,6 @@ import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.roundToInt
 
-private const val MAX_EDGE = 1600
-private const val SQUARE_SIZE = 512
 private const val JPEG_QUALITY = 85
 
 class NotImageException : Exception()
@@ -25,7 +23,7 @@ class PickedImageProcessor(private val context: Context) {
     // temporary), then decodes, EXIF-rotates and resizes/crops it, and
     // writes the result as a JPEG back into the cache dir. Returns the
     // final file's absolute path.
-    fun process(uri: Uri, square: Boolean): String {
+    fun process(uri: Uri, maxEdge: Int): String {
         val resolver = context.contentResolver
         val type = resolver.getType(uri)
         if (type != null && !type.startsWith("image/")) throw NotImageException()
@@ -41,9 +39,9 @@ class PickedImageProcessor(private val context: Context) {
             } catch (e: Exception) {
                 ExifInterface.ORIENTATION_NORMAL
             }
-            var bitmap = decodeSampledBitmap(raw.absolutePath, if (square) SQUARE_SIZE else MAX_EDGE) ?: throw NotImageException()
+            var bitmap = decodeSampledBitmap(raw.absolutePath, maxEdge) ?: throw NotImageException()
             bitmap = applyExifOrientation(bitmap, orientation)
-            bitmap = if (square) centerCropSquare(bitmap, SQUARE_SIZE) else scaleLongEdge(bitmap, MAX_EDGE)
+            bitmap = scaleLongEdge(bitmap, maxEdge)
             val out = File(context.cacheDir, "picked_${System.nanoTime()}.jpg")
             FileOutputStream(out).use { fos -> bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, fos) }
             bitmap.recycle()
@@ -105,16 +103,43 @@ class PickedImageProcessor(private val context: Context) {
         return scaled
     }
 
-    private fun centerCropSquare(bitmap: Bitmap, size: Int): Bitmap {
-        val w = bitmap.width
-        val h = bitmap.height
-        val edge = minOf(w, h)
-        val x = (w - edge) / 2
-        val y = (h - edge) / 2
-        val cropped = Bitmap.createBitmap(bitmap, x, y, edge, edge)
-        if (cropped !== bitmap) bitmap.recycle()
-        val scaled = if (edge == size) cropped else Bitmap.createScaledBitmap(cropped, size, size, true)
-        if (scaled !== cropped) cropped.recycle()
-        return scaled
+    // Crops the JPEG at [sourcePath] (already an upright, decoded, long-edge
+    // capped photo -- no EXIF to re-apply, produced by process() above) to
+    // the rectangle given by fractions of its width/height, then scales
+    // that square to [outputSize] and writes it as a JPEG at [quality].
+    // Returns the new file's absolute path. Does not delete [sourcePath] --
+    // the caller owns that file, same as MainActivity does for process()'s
+    // output.
+    fun crop(
+        sourcePath: String,
+        left: Double,
+        top: Double,
+        right: Double,
+        bottom: Double,
+        outputSize: Int,
+        quality: Int,
+    ): String {
+        val bitmap = BitmapFactory.decodeFile(sourcePath) ?: throw NotImageException()
+        try {
+            val w = bitmap.width
+            val h = bitmap.height
+            val x = (left * w).roundToInt().coerceIn(0, w - 1)
+            val y = (top * h).roundToInt().coerceIn(0, h - 1)
+            val cropW = ((right - left) * w).roundToInt().coerceIn(1, w - x)
+            val cropH = ((bottom - top) * h).roundToInt().coerceIn(1, h - y)
+            val cropped = Bitmap.createBitmap(bitmap, x, y, cropW, cropH)
+            val scaled = if (cropW == outputSize && cropH == outputSize) {
+                cropped
+            } else {
+                Bitmap.createScaledBitmap(cropped, outputSize, outputSize, true)
+            }
+            if (scaled !== cropped) cropped.recycle()
+            val out = File(context.cacheDir, "cropped_${System.nanoTime()}.jpg")
+            FileOutputStream(out).use { fos -> scaled.compress(Bitmap.CompressFormat.JPEG, quality, fos) }
+            scaled.recycle()
+            return out.absolutePath
+        } finally {
+            bitmap.recycle()
+        }
     }
 }

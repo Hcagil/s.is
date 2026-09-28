@@ -19,6 +19,7 @@ import 'package:sis/features/chat/domain/external_picker.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/picture_cropper.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/notifications/domain/notification_settings.dart';
 import 'package:sis/features/notifications/domain/push.dart';
@@ -1845,22 +1846,23 @@ class GalleryFake implements Gallery {
     );
   }
 
-  /// Every [loadSquare] call: which photo, at what size.
-  final squareLoads = <({String id, int size})>[];
+  /// Every photo id [loadForCrop] was asked for, in call order.
+  final cropLoads = <String>[];
 
-  /// Per-photo loadSquare() outcome; no entry gives a working 512 JPEG made
-  /// from [pngBytes] (the bytes stand in for the encoded square).
-  final Map<String, PickedImage?> squareResults = {};
+  /// Per-photo loadForCrop() outcome. An id with no entry gives a working,
+  /// decodable, non-square source ([photoPng], 320x240); mapped to null
+  /// means "cannot be opened".
+  final Map<String, PickedImage?> cropSources = {};
 
   @override
-  Future<PickedImage?> loadSquare(GalleryPhoto photo, {int size = 512}) async {
-    squareLoads.add((id: photo.id, size: size));
+  Future<PickedImage?> loadForCrop(GalleryPhoto photo) async {
+    cropLoads.add(photo.id);
     await _tick();
     final gate = _loadGate;
     if (gate != null) await gate.future;
-    if (squareResults.containsKey(photo.id)) return squareResults[photo.id];
+    if (cropSources.containsKey(photo.id)) return cropSources[photo.id];
     return PickedImage(
-      bytes: pngBytes,
+      bytes: photoPng,
       contentType: 'image/jpeg',
       extension: 'jpg',
     );
@@ -2906,5 +2908,126 @@ class ExternalPickerFake implements ExternalPicker {
     return one == null
         ? const ExternalPickCancelled()
         : ExternalPickedImages([one]);
+  }
+}
+
+/// A real, decodable [width]x[height] grayscale PNG of one [shade]: a photo
+/// whose size is known, so what a screen does with that size can be checked.
+Uint8List pngOf(int width, int height, {int shade = 128}) {
+  final crcTable = List<int>.generate(256, (n) {
+    var c = n;
+    for (var k = 0; k < 8; k++) {
+      c = c & 1 == 1 ? 0xEDB88320 ^ (c >> 1) : c >> 1;
+    }
+    return c;
+  });
+  int crc(List<int> bytes) {
+    var c = 0xFFFFFFFF;
+    for (final b in bytes) {
+      c = crcTable[(c ^ b) & 0xFF] ^ (c >> 8);
+    }
+    return c ^ 0xFFFFFFFF;
+  }
+
+  List<int> u32(int v) => [
+    v >> 24 & 0xFF,
+    v >> 16 & 0xFF,
+    v >> 8 & 0xFF,
+    v & 0xFF,
+  ];
+  List<int> chunk(String type, List<int> data) {
+    final body = [...ascii.encode(type), ...data];
+    return [...u32(data.length), ...body, ...u32(crc(body))];
+  }
+
+  final row = [0, ...List.filled(width, shade)];
+  final raw = [for (var y = 0; y < height; y++) ...row];
+  return Uint8List.fromList([
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, //
+    ...chunk('IHDR', [...u32(width), ...u32(height), 8, 0, 0, 0, 0]),
+    ...chunk('IDAT', zlib.encode(raw)),
+    ...chunk('IEND', const []),
+  ]);
+}
+
+/// One [PictureCropper.crop] call, as the crop screen made it.
+typedef CropCall = ({
+  Uint8List source,
+  double left,
+  double top,
+  double right,
+  double bottom,
+  int size,
+  int quality,
+});
+
+/// The phone's crop-and-encode, written from the [PictureCropper] contract:
+/// it takes time, it can be held in flight, and it refuses what the real
+/// one cannot do -- a rectangle outside the photo (any fraction outside
+/// 0..1, or an empty one) gives null, as a native crop past the bitmap's
+/// edge does. [fails] makes every call give null, the "could not be read"
+/// answer.
+class PictureCropperFake implements PictureCropper {
+  PictureCropperFake({
+    this.latency = const Duration(milliseconds: 30),
+    Uint8List? output,
+  }) : output = output ?? pngOf(640, 640, shade: 200);
+
+  final Duration latency;
+
+  /// The encoded square every successful crop returns (a real 640x640
+  /// image; the bytes stand in for the JPEG).
+  Uint8List output;
+
+  /// When true, every crop gives null.
+  bool fails = false;
+
+  /// Every call, in order -- including one a correct screen never makes.
+  final calls = <CropCall>[];
+
+  Completer<void>? _hold;
+
+  /// The next crop stays in flight until [release].
+  void hold() => _hold = Completer<void>();
+  void release() {
+    _hold?.complete();
+    _hold = null;
+  }
+
+  @override
+  Future<PickedImage?> crop(
+    Uint8List source, {
+    required double left,
+    required double top,
+    required double right,
+    required double bottom,
+    int size = 640,
+    int quality = 82,
+  }) async {
+    calls.add((
+      source: source,
+      left: left,
+      top: top,
+      right: right,
+      bottom: bottom,
+      size: size,
+      quality: quality,
+    ));
+    await Future<void>.delayed(latency);
+    final held = _hold;
+    if (held != null) await held.future;
+    // Float noise from the screen's arithmetic is not a crop past the edge.
+    bool inside(double v) => v >= -1e-9 && v <= 1 + 1e-9;
+    if (fails ||
+        ![left, top, right, bottom].every(inside) ||
+        right <= left ||
+        bottom <= top) {
+      return null;
+    }
+    return PickedImage(
+      bytes: output,
+      contentType: 'image/jpeg',
+      extension: 'jpg',
+    );
   }
 }

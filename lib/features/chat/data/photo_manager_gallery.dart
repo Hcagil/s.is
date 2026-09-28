@@ -16,6 +16,10 @@ final class PhotoManagerGallery implements Gallery {
   /// Long edge of a sent photo, as for the system picker.
   static const _maxEdge = 1600;
 
+  /// Long edge of a picture's crop source: big enough to crop a good
+  /// picture from, small enough to decode and hold in memory.
+  static const _cropEdge = 2048;
+
   /// photo_manager (and Android) never says "permanently denied" directly:
   /// the OS silently stops showing its own prompt once the member has
   /// refused once already. So: remember that a refusal was shown, and read
@@ -98,11 +102,21 @@ final class PhotoManagerGallery implements Gallery {
   }
 
   @override
-  Future<PickedImage?> loadSquare(GalleryPhoto photo, {int size = 512}) async {
+  Future<PickedImage?> loadForCrop(GalleryPhoto photo) async {
     final e = await AssetEntity.fromId(photo.id);
     if (e == null) return null;
+    final w = e.width, h = e.height;
+    final long = w > h ? w : h;
+    final size = long == 0
+        ? const ThumbnailSize(_cropEdge, _cropEdge)
+        : long <= _cropEdge
+        ? ThumbnailSize(w, h)
+        : ThumbnailSize(
+            (w * _cropEdge / long).round(),
+            (h * _cropEdge / long).round(),
+          );
     final bytes = await e.thumbnailDataWithSize(
-      ThumbnailSize.square(size),
+      size,
       format: ThumbnailFormat.jpeg,
       quality: 85,
     );

@@ -11,6 +11,7 @@ import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../../chat/presentation/avatar_sheet.dart';
 import '../../chat/presentation/person_avatar.dart';
+import '../../chat/presentation/photo_viewer.dart';
 import '../../notifications/application/push_controller.dart';
 import '../../notifications/presentation/notification_pages.dart';
 import '../../presence/application/presence_controllers.dart';
@@ -206,15 +207,32 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       padding: const EdgeInsets.all(24),
       children: [
         Center(
-          child: GestureDetector(
-            key: const ValueKey('profile-avatar'),
-            onTap: _busy ? null : () => _changeAvatar(profile),
-            child: PersonAvatar(
-              label: profile.displayName,
-              seed: profile.userId,
-              radius: 48,
-              avatarPath: profile.avatarPath,
-            ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              GestureDetector(
+                key: const ValueKey('profile-avatar'),
+                onTap: profile.avatarPath == null
+                    ? null
+                    : () => openPhotoViewer(
+                        context,
+                        [profile.avatarPath!],
+                        0,
+                        isAvatar: true,
+                      ),
+                child: PersonAvatar(
+                  label: profile.displayName,
+                  seed: profile.userId,
+                  radius: 48,
+                  avatarPath: profile.avatarPath,
+                ),
+              ),
+              AvatarEditBadge(
+                key: const ValueKey('profile-avatar-edit'),
+                busy: _busy,
+                onTap: () => _changeAvatar(profile),
+              ),
+            ],
           ),
         ),
         SizedBox(height: 3, child: _busy ? const SisProgressLine() : null),

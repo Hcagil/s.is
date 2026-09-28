@@ -9,20 +9,32 @@ import 'conversation_list.dart';
 Future<void> openPhotoViewer(
   BuildContext context,
   List<String> paths,
-  int index,
-) => Navigator.of(context).push(
+  int index, {
+  bool isAvatar = false,
+}) => Navigator.of(context).push(
   MaterialPageRoute<void>(
-    builder: (_) => PhotoViewer(paths: paths, initialIndex: index),
+    builder: (_) =>
+        PhotoViewer(paths: paths, initialIndex: index, isAvatar: isAvatar),
   ),
 );
 
 /// Full-screen photos, dark whatever the theme: photos read best on black.
 class PhotoViewer extends StatefulWidget {
-  const PhotoViewer({super.key, required this.paths, this.initialIndex = 0});
+  const PhotoViewer({
+    super.key,
+    required this.paths,
+    this.initialIndex = 0,
+    this.isAvatar = false,
+  });
 
-  /// Attachment storage paths, in the order the caller shows them.
+  /// Attachment storage paths, in the order the caller shows them -- or, when
+  /// [isAvatar], avatar storage paths (there is only ever one).
   final List<String> paths;
   final int initialIndex;
+
+  /// True when [paths] are avatar-bucket pictures (profile or group), read
+  /// through [avatarBytesProvider] instead of [attachmentBytesProvider].
+  final bool isAvatar;
 
   @override
   State<PhotoViewer> createState() => _PhotoViewerState();
@@ -56,21 +68,26 @@ class _PhotoViewerState extends State<PhotoViewer> {
         controller: _pages,
         itemCount: widget.paths.length,
         onPageChanged: (i) => setState(() => _index = i),
-        itemBuilder: (context, i) => _Photo(widget.paths[i]),
+        itemBuilder: (context, i) =>
+            _Photo(widget.paths[i], isAvatar: widget.isAvatar),
       ),
     );
   }
 }
 
 class _Photo extends ConsumerWidget {
-  const _Photo(this.path);
+  const _Photo(this.path, {required this.isAvatar});
 
   final String path;
+  final bool isAvatar;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     const white = TextStyle(color: Colors.white70);
-    return switch (ref.watch(attachmentBytesProvider(path))) {
+    final bytesValue = isAvatar
+        ? ref.watch(avatarBytesProvider(path))
+        : ref.watch(attachmentBytesProvider(path));
+    return switch (bytesValue) {
       AsyncData(:final value) => InteractiveViewer(
         maxScale: 5,
         child: Center(

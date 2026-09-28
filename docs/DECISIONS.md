@@ -938,6 +938,23 @@ the choice to another app.
   re-encoded as JPEG in the background, so a large photo cannot exhaust
   memory or freeze the screen, and no location or camera data is uploaded.
 
+## 2026-09-28 — Pictures like WhatsApp: a crop screen and a larger square
+
+The owner asked to see a profile or group picture full size when tapping
+it, and chose to do it the way WhatsApp does, all the way: one stored file.
+This replaces two points of "Profile pictures for people and groups"
+(2026-09-27): the automatic centre crop and the 512 px size.
+- Setting a picture opens an SIS crop screen: the photo under a square
+  frame, moved and zoomed with the fingers; "Use" confirms, back cancels.
+  The first framing is the centre, as before.
+- Still one stored file per picture, now a 640 px square JPEG (typically
+  60–120 KB, far under the bucket's 1 MB limit), cropped, scaled and
+  re-encoded on the phone, so no location or camera data leaves it.
+- Lists, headers and pages draw that same file at their own small size.
+- Tapping the picture on a person's page, a group's page or Settings >
+  Profile opens it full screen in SIS's photo viewer.
+- Pictures set before this version stay 512 px until they are set again.
+- The bucket, object keys and access rules are unchanged.
 ## 2026-09-28 — Swipe a message to act on it
 
 The owner asked for message actions to open by swiping, WhatsApp-like, and

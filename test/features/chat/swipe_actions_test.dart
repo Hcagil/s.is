@@ -1,11 +1,12 @@
 // Swiping a message to act on it, through the real MessageScreen, from the
 // decision "Swipe a message to act on it" (docs/DECISIONS.md): the bubble
-// follows the finger to the right, snaps open past a threshold with one
-// haptic tick, and a row of the allowed actions appears above it; the row
-// closes on an action, a tap elsewhere, a swipe back or a scroll; one row is
-// open at a time; long press does nothing; deleted and pending bubbles do not
-// swipe; a screen reader gets the same actions. Written from the contract,
-// never from how the widgets are built.
+// follows the finger to the right; released past a threshold, a row of the
+// allowed actions opens above it with one haptic tick, and on every release
+// the bubble springs back to its place; dragging never closes the row, which
+// closes on an action, a tap elsewhere, a scroll or another row opening; one
+// row is open at a time; long press does nothing; deleted and pending bubbles
+// do not swipe; a screen reader gets the same actions. Written from the
+// contract, never from how the widgets are built.
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -236,8 +237,8 @@ void main() {
       expect(haptics, isEmpty);
     });
 
-    testWidgets('released at the threshold, it settles open at 64 with one '
-        'selection tick', (tester) async {
+    testWidgets('released at the threshold, the row opens with one selection '
+        'tick and the bubble springs back to its place', (tester) async {
       final haptics = recordHaptics(tester);
       await pump(tester, chatWith([msg('m1', from: bob.userId)]));
       final start = left(tester, bubble('m1'));
@@ -246,13 +247,13 @@ void main() {
       await g.up();
       await tester.pumpAndSettle();
 
-      expect(left(tester, bubble('m1')) - start, threshold);
-      expect(row('m1'), findsOneWidget);
+      expect(left(tester, bubble('m1')), start, reason: 'springs back to 0');
+      expect(row('m1'), findsOneWidget, reason: 'the row stays open');
       expect(haptics, ['HapticFeedbackType.selectionClick']);
     });
 
-    testWidgets('dragged to the clamp and released, it settles back to 64, '
-        'still one tick', (tester) async {
+    testWidgets('dragged to the clamp and released, it springs back to its '
+        'place, still one tick', (tester) async {
       final haptics = recordHaptics(tester);
       await pump(tester, chatWith([msg('m1', from: bob.userId)]));
       final start = left(tester, bubble('m1'));
@@ -262,11 +263,41 @@ void main() {
         await g.moveBy(const Offset(10, 0));
         await tester.pump();
       }
+      expect(left(tester, bubble('m1')) - start, clamp);
       await g.up();
       await tester.pumpAndSettle();
 
-      expect(left(tester, bubble('m1')) - start, threshold);
+      expect(left(tester, bubble('m1')), start);
+      expect(row('m1'), findsOneWidget);
       expect(haptics, ['HapticFeedbackType.selectionClick']);
+    });
+
+    testWidgets('on release the row is open at once while the bubble eases '
+        'back over 180 ms', (tester) async {
+      final haptics = recordHaptics(tester);
+      await pump(tester, chatWith([msg('m1', from: bob.userId)]));
+      final start = left(tester, bubble('m1'));
+
+      final g = await holdAt(tester, 'm1', clamp);
+      await g.up();
+      await tester.pump(); // the first frame after release starts the ease
+      expect(row('m1'), findsOneWidget, reason: 'open at release');
+      expect(haptics, ['HapticFeedbackType.selectionClick']);
+
+      await tester.pump(const Duration(milliseconds: 90));
+      final mid = left(tester, bubble('m1')) - start;
+      expect(mid, greaterThan(0), reason: 'animates, does not jump');
+      expect(
+        mid,
+        lessThan(clamp / 2),
+        reason: 'easeOut: past half the way home at half the time',
+      );
+      expect(row('m1'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 90));
+      await tester.pump();
+      expect(left(tester, bubble('m1')), start, reason: 'home by 180 ms');
+      expect(row('m1'), findsOneWidget);
     });
 
     testWidgets('the row is not built mid-drag, even past the threshold', (
@@ -282,16 +313,21 @@ void main() {
       expect(row('m1'), findsOneWidget);
     });
 
-    testWidgets('the row sits above the bubble', (tester) async {
+    testWidgets('the row sits above the bubble at its resting place', (
+      tester,
+    ) async {
       await pump(tester, chatWith([msg('m1', from: bob.userId)]));
+      final start = left(tester, bubble('m1'));
       await open(tester, 'm1');
+      expect(left(tester, bubble('m1')), start);
       expect(
         tester.getRect(row('m1')).bottom,
         lessThanOrEqualTo(tester.getRect(bubble('m1')).top),
       );
     });
 
-    testWidgets('a drag left on an open bubble closes it', (tester) async {
+    testWidgets('a drag left on an open bubble leaves it open', (tester) async {
+      final haptics = recordHaptics(tester);
       await pump(tester, chatWith([msg('m1', from: bob.userId)]));
       final start = left(tester, bubble('m1'));
       await open(tester, 'm1');
@@ -299,9 +335,29 @@ void main() {
       await tester.drag(bubble('m1'), const Offset(-120, 0));
       await tester.pumpAndSettle();
 
-      expect(row('m1'), findsNothing);
+      expect(row('m1'), findsOneWidget);
       expect(left(tester, bubble('m1')), start);
+      expect(haptics, ['HapticFeedbackType.selectionClick']);
     });
+
+    for (final travel in [30.0, clamp]) {
+      testWidgets('an open bubble dragged right again by $travel px stays '
+          'open, springs back, and does not tick again', (tester) async {
+        final haptics = recordHaptics(tester);
+        await pump(tester, chatWith([msg('m1', from: bob.userId)]));
+        final start = left(tester, bubble('m1'));
+        await open(tester, 'm1');
+        expect(haptics, hasLength(1));
+
+        final g = await holdAt(tester, 'm1', travel);
+        await g.up();
+        await tester.pumpAndSettle();
+
+        expect(row('m1'), findsOneWidget);
+        expect(left(tester, bubble('m1')), start);
+        expect(haptics, ['HapticFeedbackType.selectionClick']);
+      });
+    }
 
     testWidgets('a mostly vertical drag on a bubble scrolls the list and '
         'does not swipe', (tester) async {
@@ -729,6 +785,24 @@ void main() {
       expect(m.events, isEmpty);
       expect(row('x'), findsNothing);
       handle.dispose();
+    });
+
+    testWidgets('dragging an open bubble either way reports nothing and '
+        'leaves it open', (tester) async {
+      final m = await mount(tester, const [MessageAction.reply]);
+      await open(tester, 'x');
+      expect(m.events, [true]);
+      // Centred here, so the open row can shift the resting x: measure it.
+      final rest = left(tester, bubble('x'));
+
+      await tester.drag(bubble('x'), const Offset(-120, 0));
+      await tester.pumpAndSettle();
+      await tester.drag(bubble('x'), swipeOpen);
+      await tester.pumpAndSettle();
+
+      expect(m.events, [true], reason: 'no close, no second open');
+      expect(row('x'), findsOneWidget);
+      expect(left(tester, bubble('x')), rest);
     });
 
     testWidgets('opening reports it, a box reports its action, and another '

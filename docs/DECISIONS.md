@@ -967,9 +967,11 @@ long press" (v0.10).
   only on your own messages within 6 hours, and so on).
 - The row opens once the bubble has travelled 64 px, about 1.3 cm of finger
   after Flutter's touch slop; one number to tune after trying it on a phone.
+- On release the bubble always springs back to its place (owner, after
+  trying 0.21.0 on a phone: the bubble must not stay shifted); the row stays
+  open above it.
 - The row stays open until an action is chosen, the member taps elsewhere,
-  drags the bubble back left (any distance) or scrolls. One row is open at a
-  time.
+  scrolls, or opens another message's row. One row is open at a time.
 - Long press on a message no longer does anything.
 - Photo messages swipe like text. "This message was deleted" bubbles and
   SIS notices do not swipe.

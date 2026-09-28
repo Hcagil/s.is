@@ -11,7 +11,7 @@
 --
 -- Enforced in two places that must agree, same as avatar_path_readable
 -- already does for the profiles_read/membership rule: the path itself
--- (profiles_public view, below) and the storage read policy
+-- (profiles_public function, below) and the storage read policy
 -- (avatar_path_readable, redefined below). A member who cannot see a path in
 -- the first place obviously cannot download it either, but a member who CAN
 -- see the row must still be refused the object when the picture's owner set
@@ -67,9 +67,26 @@ update public.profiles set avatar_object = avatar_path where avatar_path is not 
 -- visibility, so ANY select of it -- including one an old build makes with
 -- no idea this migration exists -- already reflects the current setting.
 -- BEFORE trigger: sets NEW directly, no second statement, no recursion.
+--
+-- C1 (security re-gate, 2026-09-28): a v0.21 build still writes the OLD way
+-- -- `.update({'avatar_path': path})` to set a picture, `.update({
+-- 'avatar_path': null})` to remove one -- with no idea avatar_object exists.
+-- It must keep working (never force an update): when avatar_path is the
+-- column that actually changed and avatar_object did not, treat the write as
+-- targeting avatar_object -- same value, same pin check on the way out
+-- (profiles_update_own's WITH CHECK runs against this trigger's output, so
+-- an old build writing outside its own folder is still refused). The masking
+-- assignment below then runs on that adopted value exactly as it would for a
+-- current build writing avatar_object directly, so a null clears both
+-- columns and a same-folder path shows or hides per the current
+-- avatar_visibility.
 create or replace function app_private.sync_legacy_avatar_path() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
+  if tg_op = 'UPDATE' and new.avatar_path is distinct from old.avatar_path
+     and new.avatar_object is not distinct from old.avatar_object then
+    new.avatar_object := new.avatar_path;
+  end if;
   new.avatar_path := case when new.avatar_visibility = 'everyone'
                            then new.avatar_object else null end;
   return new;
@@ -77,14 +94,15 @@ end $$;
 revoke all on function app_private.sync_legacy_avatar_path() from public, anon, authenticated;
 
 create trigger profiles_sync_legacy_avatar_path
-  before insert or update of avatar_object, avatar_visibility on public.profiles
+  before insert or update of avatar_path, avatar_object, avatar_visibility on public.profiles
   for each row execute function app_private.sync_legacy_avatar_path();
 
--- Client write access moves from avatar_path to avatar_object -- the pinned
--- column is now the real one; avatar_path is server-maintained only from
--- here. avatar_visibility stays writable (an owner may always change their
+-- Client write access: avatar_object is the pinned column current builds
+-- write; avatar_path stays grant-update (avatars.sql) so a v0.21 build can
+-- still set/remove its own picture the old way (C1, above) -- the trigger
+-- adopts that write into avatar_object before the row policy's pin check
+-- runs. avatar_visibility stays writable (an owner may always change their
 -- own setting); its SELECT grant is handled below, with avatar_object's.
-revoke update (avatar_path) on public.profiles from authenticated;
 grant update (avatar_object) on public.profiles to authenticated;
 grant update (avatar_visibility) on public.profiles to authenticated;
 
@@ -163,6 +181,13 @@ grant execute on function public.own_profile() to authenticated;
 -- through a read this function, profiles_public or find_by_tag already
 -- gated, but a member who could never otherwise learn the owner's id had no
 -- business being handed the path regardless.
+--
+-- I1 (security re-gate, 2026-09-28): "everyone" must be a superset of
+-- "contacts", so a reader the owner has saved sees an 'everyone' picture
+-- even when can_reach is false (e.g. the owner saved a tag-find result but
+-- never messaged them, or the contact was saved before any shared
+-- conversation) -- also OR the same "owner saved reader" check the
+-- 'contacts' branch below uses.
 -- 'contacts': only readers the OWNER has saved -- and, as of F4, only when
 -- the owner is still allowed (hoisted below, applies to both branches).
 -- 'nobody': only the owner.
@@ -174,7 +199,11 @@ language sql stable security definer set search_path = '' as $$
         where p.user_id = owner
           and app_private.is_allowed(owner)
           and (
-            (p.avatar_visibility = 'everyone' and app_private.can_reach(owner))
+            (p.avatar_visibility = 'everyone' and (
+               app_private.can_reach(owner)
+               or exists (select 1 from public.contacts c
+                           where c.owner_id = owner
+                             and c.contact_id = (select auth.uid()))))
             or (p.avatar_visibility = 'contacts'
                 and exists (select 1 from public.contacts c
                              where c.owner_id = owner
@@ -305,3 +334,25 @@ begin
 end $$;
 revoke all on function public.find_by_tag(text) from public, anon;
 grant execute on function public.find_by_tag(text) to authenticated;
+
+-- L1 (security re-gate, 2026-09-28): a tag_finds row keeps a picture
+-- reachable via can_reach/found_by_tag forever, including after the found
+-- member renames their tag -- the finder never searched the NEW tag, so
+-- nothing about this find is still true. AFTER trigger, WHEN clause does the
+-- "actually changed" filter so a same-value UPDATE of tag (e.g. a no-op
+-- save) does not scan tag_finds for nothing. Chats and contacts the find led
+-- to are untouched -- can_reach's other branches (shares_conversation,
+-- is_contact) do not depend on tag_finds at all.
+create or replace function app_private.clear_tag_finds_on_rename() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  delete from app_private.tag_finds where found_id = new.user_id;
+  return new;
+end $$;
+revoke all on function app_private.clear_tag_finds_on_rename() from public, anon, authenticated;
+
+create trigger profiles_clear_tag_finds_on_rename
+  after update of tag on public.profiles
+  for each row
+  when (new.tag is distinct from old.tag)
+  execute function app_private.clear_tag_finds_on_rename();

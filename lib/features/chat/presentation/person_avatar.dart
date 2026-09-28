@@ -57,7 +57,9 @@ class PersonAvatar extends ConsumerWidget {
                 bytes,
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
-                cacheWidth: (radius * 2).round(),
+                cacheWidth:
+                    (radius * 2 * MediaQuery.devicePixelRatioOf(context))
+                        .round(),
               ),
             ),
           );
@@ -84,4 +86,39 @@ class PersonAvatar extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// The small camera badge over an avatar circle, positioned like the brand
+/// dot: for editing the picture. [onTap] is null while [busy].
+class AvatarEditBadge extends StatelessWidget {
+  const AvatarEditBadge({super.key, required this.onTap, this.busy = false});
+
+  final VoidCallback? onTap;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    right: -2,
+    bottom: -2,
+    child: GestureDetector(
+      onTap: busy ? null : onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primary,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Theme.of(context).colorScheme.surface,
+            width: 2,
+          ),
+        ),
+        child: const Icon(
+          Icons.camera_alt_rounded,
+          size: 16,
+          color: Colors.white,
+        ),
+      ),
+    ),
+  );
 }

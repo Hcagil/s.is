@@ -227,30 +227,10 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                   avatarPath: profile.avatarPath,
                 ),
               ),
-              Positioned(
-                right: -2,
-                bottom: -2,
-                child: GestureDetector(
-                  key: const ValueKey('profile-avatar-edit'),
-                  onTap: _busy ? null : () => _changeAvatar(profile),
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.surface,
-                        width: 2,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.camera_alt_rounded,
-                      size: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
+              AvatarEditBadge(
+                key: const ValueKey('profile-avatar-edit'),
+                busy: _busy,
+                onTap: () => _changeAvatar(profile),
               ),
             ],
           ),

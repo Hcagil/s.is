@@ -265,30 +265,10 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                     avatarPath: avatarPath,
                   ),
                 ),
-                Positioned(
-                  right: -2,
-                  bottom: -2,
-                  child: GestureDetector(
-                    key: const ValueKey('group-avatar-edit'),
-                    onTap: _busy ? null : () => _changeAvatar(avatarPath),
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: theme.colorScheme.surface,
-                          width: 2,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.camera_alt_rounded,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+                AvatarEditBadge(
+                  key: const ValueKey('group-avatar-edit'),
+                  busy: _busy,
+                  onTap: () => _changeAvatar(avatarPath),
                 ),
               ],
             ),

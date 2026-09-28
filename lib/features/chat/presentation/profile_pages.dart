@@ -52,6 +52,7 @@ class PersonScreen extends ConsumerWidget {
     final direct = (ref.watch(conversationListProvider).value ?? const [])
         .where((c) => !c.isGroup && c.other?.userId == userId)
         .firstOrNull;
+    final avatarPath = fallbackAvatarPath ?? member?.avatarPath;
     final theme = Theme.of(context);
     return DefaultTabController(
       length: 2,
@@ -59,11 +60,22 @@ class PersonScreen extends ConsumerWidget {
         appBar: AppBar(),
         body: Column(
           children: [
-            PersonAvatar(
-              label: name,
-              seed: userId,
-              radius: 48,
-              avatarPath: fallbackAvatarPath ?? member?.avatarPath,
+            GestureDetector(
+              key: const ValueKey('person-avatar'),
+              onTap: avatarPath == null
+                  ? null
+                  : () => openPhotoViewer(
+                      context,
+                      [avatarPath],
+                      0,
+                      isAvatar: true,
+                    ),
+              child: PersonAvatar(
+                label: name,
+                seed: userId,
+                radius: 48,
+                avatarPath: avatarPath,
+              ),
             ),
             const SizedBox(height: 12),
             Text(
@@ -233,15 +245,52 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
         appBar: AppBar(),
         body: Column(
           children: [
-            GestureDetector(
-              key: const ValueKey('group-avatar'),
-              onTap: _busy ? null : () => _changeAvatar(avatarPath),
-              child: PersonAvatar(
-                label: title,
-                seed: conversationId,
-                radius: 48,
-                avatarPath: avatarPath,
-              ),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                GestureDetector(
+                  key: const ValueKey('group-avatar'),
+                  onTap: avatarPath == null
+                      ? null
+                      : () => openPhotoViewer(
+                          context,
+                          [avatarPath],
+                          0,
+                          isAvatar: true,
+                        ),
+                  child: PersonAvatar(
+                    label: title,
+                    seed: conversationId,
+                    radius: 48,
+                    avatarPath: avatarPath,
+                  ),
+                ),
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: GestureDetector(
+                    key: const ValueKey('group-avatar-edit'),
+                    onTap: _busy ? null : () => _changeAvatar(avatarPath),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: theme.colorScheme.surface,
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.camera_alt_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             SizedBox(height: 3, child: _busy ? const SisProgressLine() : null),
             const SizedBox(height: 12),

@@ -15,6 +15,7 @@ import '../domain/external_picker.dart';
 import '../domain/gallery.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
+import '../domain/picture_cropper.dart';
 import '../domain/read_marks.dart';
 
 final chatRepositoryProvider = Provider<ChatRepository>(
@@ -47,6 +48,12 @@ final galleryProvider = Provider<Gallery>(
 /// maker's gallery, Files...), for the attachment sheet's "From an app"
 /// entry.
 final externalPickerProvider = Provider<ExternalPicker>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Crops a picture on the phone into the final square JPEG, for the crop
+/// screen.
+final pictureCropperProvider = Provider<PictureCropper>(
   (_) => throw UnimplementedError('override in main'),
 );
 

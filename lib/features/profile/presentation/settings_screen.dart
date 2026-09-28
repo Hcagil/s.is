@@ -11,6 +11,7 @@ import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../../chat/presentation/avatar_sheet.dart';
 import '../../chat/presentation/person_avatar.dart';
+import '../../chat/presentation/photo_viewer.dart';
 import '../../notifications/application/push_controller.dart';
 import '../../notifications/presentation/notification_pages.dart';
 import '../../presence/application/presence_controllers.dart';
@@ -206,15 +207,52 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       padding: const EdgeInsets.all(24),
       children: [
         Center(
-          child: GestureDetector(
-            key: const ValueKey('profile-avatar'),
-            onTap: _busy ? null : () => _changeAvatar(profile),
-            child: PersonAvatar(
-              label: profile.displayName,
-              seed: profile.userId,
-              radius: 48,
-              avatarPath: profile.avatarPath,
-            ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              GestureDetector(
+                key: const ValueKey('profile-avatar'),
+                onTap: profile.avatarPath == null
+                    ? null
+                    : () => openPhotoViewer(
+                        context,
+                        [profile.avatarPath!],
+                        0,
+                        isAvatar: true,
+                      ),
+                child: PersonAvatar(
+                  label: profile.displayName,
+                  seed: profile.userId,
+                  radius: 48,
+                  avatarPath: profile.avatarPath,
+                ),
+              ),
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: GestureDetector(
+                  key: const ValueKey('profile-avatar-edit'),
+                  onTap: _busy ? null : () => _changeAvatar(profile),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.surface,
+                        width: 2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt_rounded,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         SizedBox(height: 3, child: _busy ? const SisProgressLine() : null),

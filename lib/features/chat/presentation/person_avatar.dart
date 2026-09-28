@@ -57,6 +57,7 @@ class PersonAvatar extends ConsumerWidget {
                 bytes,
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
+                cacheWidth: (radius * 2).round(),
               ),
             ),
           );

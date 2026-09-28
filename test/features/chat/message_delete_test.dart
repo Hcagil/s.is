@@ -1,4 +1,4 @@
-// Widget tests for deleting a message for everyone: the long-press sheet,
+// Widget tests for deleting a message for everyone: the swipe action row,
 // the confirm dialog, and how a placeholder or a vanishing message renders.
 // Written from the contract: what a member sees and what the repository is
 // asked to do -- never how the widgets are built.
@@ -67,33 +67,38 @@ Future<ProviderContainer> pump(WidgetTester tester, ChatFake chat) async {
 
 void main() {
   group('the delete sheet', () {
-    testWidgets('long-press on your own message, under 6h, opens it', (
+    testWidgets('a swipe on your own message, under 6h, opens it', (
       tester,
     ) async {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', from: me.userId)]);
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('action-delete')), findsOneWidget);
     });
 
-    testWidgets('long-press on somebody else\'s message opens nothing', (
+    testWidgets('a swipe on somebody else\'s message offers no delete', (
       tester,
     ) async {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', from: bob.userId)]);
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
 
+      expect(
+        find.byKey(const ValueKey('action-reply')),
+        findsOneWidget,
+        reason: 'the row did open',
+      );
       expect(find.byKey(const ValueKey('action-delete')), findsNothing);
     });
 
-    testWidgets('long-press on your own message over 6h opens nothing', (
+    testWidgets('a swipe on your own message over 6h offers no delete', (
       tester,
     ) async {
       final chat = ChatFake()
@@ -106,9 +111,14 @@ void main() {
         ]);
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
 
+      expect(
+        find.byKey(const ValueKey('action-reply')),
+        findsOneWidget,
+        reason: 'the row did open',
+      );
       expect(find.byKey(const ValueKey('action-delete')), findsNothing);
     });
 
@@ -117,7 +127,7 @@ void main() {
         ..messagesResult = Ok([msg('m1', from: me.userId)]);
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('action-delete')));
       await tester.pumpAndSettle();
@@ -142,7 +152,7 @@ void main() {
       final chat = ChatFake()..history['c1'] = [msg('m1', from: me.userId)];
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('action-delete')));
       await tester.pumpAndSettle();
@@ -170,7 +180,7 @@ void main() {
         );
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('action-delete')));
       await tester.pumpAndSettle();

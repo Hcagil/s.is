@@ -21,10 +21,11 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/sis_ui.dart';
 import '../support/service_key.dart';
 
 /// Editing through the real UI, across the seam a unit test cannot reach:
-/// hale long-presses her message, picks Edit, changes the text in the
+/// hale swipes her message, picks Edit, changes the text in the
 /// composer and sends -- over the real repository and the real edit_message.
 /// Ivo, mounted at once with his chat open AND his conversation list on
 /// screen, both wired as main.dart wires them, must see the edit arrive live
@@ -166,12 +167,11 @@ void main() {
   }
 
   Future<void> edit(WidgetTester t, String id, String body) async {
-    await t.longPress(within('a', find.byKey(ValueKey('message-$id'))));
-    await settle(t);
-    expect(
-      find.byKey(const ValueKey('action-edit')),
-      findsOneWidget,
-      reason: 'the sheet never offered Edit for $id',
+    await t.drag(within('a', find.byKey(ValueKey('message-$id'))), swipeOpen);
+    await until(
+      t,
+      () => find.byKey(const ValueKey('action-edit')).evaluate().isNotEmpty,
+      'the action row never offered Edit for $id',
     );
     await t.tap(find.byKey(const ValueKey('action-edit')));
     await settle(t);

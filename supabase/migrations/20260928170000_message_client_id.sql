@@ -9,8 +9,8 @@
 -- id was withheld by the same column-level grant that keeps created_at
 -- server-assigned (20260922120000_chat.sql), bundled with it for the
 -- back-dating risk created_at carries. id carries no such risk: a client
--- can only ever propose a fresh random uuid, never overwrite another
--- message's history (there is no update or delete policy, and a duplicate
--- id is rejected by the primary key, not silently accepted). Added here on
--- its own rather than reopening that migration.
+-- may propose any uuid; the primary key refuses one that already exists,
+-- and there is no update or delete policy, so it can never overwrite
+-- another message's history, only fail to insert. Added here on its own
+-- rather than reopening that migration.
 grant insert (id) on public.messages to authenticated;

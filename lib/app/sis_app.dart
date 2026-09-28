@@ -8,6 +8,7 @@ import '../features/auth/domain/session_state.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/status_screens.dart';
 import '../features/chat/application/chat_controllers.dart';
+import '../features/chat/application/chat_drafts.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/notifications/application/push_controller.dart';
 import '../features/notifications/presentation/notification_explainer_screen.dart';
@@ -81,9 +82,17 @@ class _SessionGateState extends ConsumerState<SessionGate> {
   void initState() {
     super.initState();
     // A build released, or a flexible download finished, while the app was
-    // backgrounded is otherwise never seen again without a restart.
+    // backgrounded is otherwise never seen again without a restart. Queued
+    // sends resume the same way: paused while backgrounded, retried at once
+    // for every waiting chat on return (see SendQueueController.pauseForBackground
+    // / resumeForeground) rather than waiting out whatever backoff delay was
+    // left.
     _lifecycle = AppLifecycleListener(
-      onResume: () => ref.read(updateControllerProvider.notifier).recheck(),
+      onResume: () {
+        ref.read(updateControllerProvider.notifier).recheck();
+        ref.read(sendQueueProvider.notifier).resumeForeground();
+      },
+      onHide: () => ref.read(sendQueueProvider.notifier).pauseForBackground(),
     );
   }
 

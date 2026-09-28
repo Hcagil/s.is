@@ -202,6 +202,34 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     state = next;
   }
 
+  /// Cancels every scheduled retry without touching what is queued -- a
+  /// chat waiting out a network failure just waits silently until
+  /// [resumeForeground], instead of burning through backoff attempts (or
+  /// waking the OS) while nobody can see the result. Wired from
+  /// `AppLifecycleListener.onHide` in app/sis_app.dart's `SessionGate`.
+  void pauseForBackground() {
+    for (final t in _timers.values) {
+      t.cancel();
+    }
+    _timers.clear();
+  }
+
+  /// Retries every conversation with something still queued at once, from a
+  /// fresh backoff ladder -- returning to the app should feel like normal
+  /// sending, not like waiting out whatever was left of the previous delay.
+  /// Wired from `AppLifecycleListener.onResume` in app/sis_app.dart's
+  /// `SessionGate`, the same hook that already rechecks for an update.
+  void resumeForeground() {
+    _retries.clear();
+    for (final t in _timers.values) {
+      t.cancel();
+    }
+    _timers.clear();
+    for (final conversationId in _queues.keys.toList()) {
+      unawaited(_drain(conversationId));
+    }
+  }
+
   /// Sends [conversationId]'s queued items to the server, one at a time, in
   /// order. A network-type failure ([NetworkFailure.retryable]) leaves the queue
   /// exactly as it was -- nothing removed, nothing sent back to the draft,
@@ -265,13 +293,18 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     _draining.remove(conversationId);
   }
 
-  // ponytail: a fixed delay ladder capped at 30s, no separate connectivity
-  // signal -- a retry that still fails just reschedules the next one, so
-  // sending resumes on its own once the connection returns without needing
-  // to know that directly. Upgrade path: hook a connectivity or Realtime
-  // reconnect signal to retry at once instead of waiting out the current
-  // delay.
-  static const _backoffSteps = [1, 2, 4, 8, 16, 30];
+  // ponytail: a fixed delay ladder capped at 5s (owner: 30s left a message
+  // waiting too long after reconnecting) -- paused while the app is
+  // backgrounded (pauseForBackground) and every waiting chat is retried at
+  // once on resume (resumeForeground), so the ladder itself only ever has
+  // to cover a foreground blip. No Realtime-reconnect hook: this app
+  // exposes no "socket reconnected" signal to application/ code today (the
+  // realtime client's own status callbacks live behind supabase_flutter,
+  // which only data/ may import); wiring one would mean a new
+  // ChatRepository method, out of scope here. App-resume already covers
+  // the common case (phone regains a signal while backgrounded); upgrade
+  // path: add such a method if a foreground drop turns out to matter too.
+  static const _backoffSteps = [1, 2, 4, 5];
 
   Duration _backoff(int attempt) {
     final step = attempt - 1 < _backoffSteps.length

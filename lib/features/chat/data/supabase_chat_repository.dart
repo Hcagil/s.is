@@ -337,15 +337,21 @@ final class SupabaseChatRepository implements ChatRepository {
     } on PostgrestException catch (e) {
       if (e.code == '23505') {
         // This id is already stored: an earlier attempt's insert reached
-        // the server but its answer was lost. Not a failure -- the same
-        // send, read back. messages_read applies to this select exactly as
-        // it would have to the original insert's response.
+        // the server but its answer was lost. Read it back and accept it
+        // as ours only if it truly is -- same sender, same conversation,
+        // same text -- never on trust alone.
         try {
           final row = await _client
               .from('messages')
               .select(_messageColumns)
               .eq('id', id)
               .single();
+          final isOurs =
+              row['sender_id'] == me &&
+              row['conversation_id'] == conversationId &&
+              row['body'] == trimmed &&
+              (replyTo == null || row['reply_to'] == replyTo);
+          if (!isOurs) return const Err(DeniedFailure());
           return Ok(_toMessage(row));
         } catch (e2) {
           return Err(_asFailure(e2));

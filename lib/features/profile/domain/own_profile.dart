@@ -1,3 +1,9 @@
+/// Who may see this member's profile picture. Everyone here already means
+/// "everyone who can see the profile at all" -- see docs/DECISIONS.md,
+/// "Contacts, exact-tag search, and who sees your picture". One-way: hiding
+/// yours never hides anyone else's from you.
+enum AvatarVisibility { everyone, contacts, nobody }
+
 /// The signed-in member's own profile: what onboarding and settings edit.
 final class OwnProfile {
   const OwnProfile({
@@ -10,6 +16,7 @@ final class OwnProfile {
     this.shareLastSeen = true,
     this.shareReadStatus = true,
     this.avatarPath,
+    this.avatarVisibility = AvatarVisibility.everyone,
   });
 
   final String userId;
@@ -39,6 +46,10 @@ final class OwnProfile {
 
   /// Storage path of the member's own picture, or null for none.
   final String? avatarPath;
+
+  /// Who may see [avatarPath]. Default matches today's behaviour (everyone
+  /// who can see the profile at all).
+  final AvatarVisibility avatarVisibility;
 }
 
 /// Longest display name the database accepts.

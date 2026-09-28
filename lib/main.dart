@@ -18,6 +18,7 @@ import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/native_picture_cropper.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
+import 'features/chat/data/supabase_contacts_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
 import 'features/notifications/application/notification_settings_controller.dart';
 import 'features/notifications/application/push_controller.dart';
@@ -80,6 +81,9 @@ Future<void> main() async {
           ),
           chatRepositoryProvider.overrideWithValue(
             SupabaseChatRepository(client, cache: attachmentCache),
+          ),
+          contactsRepositoryProvider.overrideWithValue(
+            SupabaseContactsRepository(client),
           ),
           attachmentCacheProvider.overrideWithValue(attachmentCache),
           galleryProvider.overrideWithValue(const PhotoManagerGallery()),

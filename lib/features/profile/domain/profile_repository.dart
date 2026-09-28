@@ -10,6 +10,8 @@ abstract interface class ProfileRepository {
   /// Saves whichever fields are given. A tag taken by someone else between
   /// the availability check and this call comes back as an [Err] with a
   /// reason, never as a partial save: the update is one statement.
+  ///
+  /// Only given fields change; [avatarVisibility] follows the same rule.
   Future<Result<OwnProfile>> save({
     String? displayName,
     String? tag,
@@ -18,6 +20,7 @@ abstract interface class ProfileRepository {
     bool? shareTyping,
     bool? shareLastSeen,
     bool? shareReadStatus,
+    AvatarVisibility? avatarVisibility,
   });
 
   /// Uploads [image] as the member's own picture, replacing any previous one,

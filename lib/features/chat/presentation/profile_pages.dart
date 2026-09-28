@@ -43,7 +43,7 @@ class PersonScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final member = (ref.watch(membersProvider).value ?? const <Member>[])
+    final member = (ref.watch(yourPeopleProvider).value ?? const <Member>[])
         .where((m) => m.userId == userId)
         .firstOrNull;
     final name = member?.displayName ?? fallbackName ?? 'Member';
@@ -101,6 +101,8 @@ class PersonScreen extends ConsumerWidget {
                 label: const Text('Message'),
               ),
             ],
+            const SizedBox(height: 8),
+            _ContactButton(userId),
             // Muting a person silences them in every chat, groups included.
             MuteTile(kind: MuteKind.person, target: userId),
             const SizedBox(height: 12),
@@ -145,6 +147,42 @@ class PersonScreen extends ConsumerWidget {
       }
     }
     await openConversation(context, ref, id, title: name, otherUserId: userId);
+  }
+}
+
+/// "Add to contacts" / "Remove from contacts". Hidden for the caller's own
+/// page and while the caller's own contacts are still loading, so it never
+/// shows one label and then flips to the other moments later.
+class _ContactButton extends ConsumerWidget {
+  const _ContactButton(this.userId);
+
+  final String userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ids = ref.watch(contactsControllerProvider).value;
+    if (ids == null || userId == ref.watch(currentUserIdProvider)) {
+      return const SizedBox.shrink();
+    }
+    final isContact = ids.contains(userId);
+    return OutlinedButton.icon(
+      key: const ValueKey('person-contact-toggle'),
+      onPressed: () async {
+        final notifier = ref.read(contactsControllerProvider.notifier);
+        final result = isContact
+            ? await notifier.remove(userId)
+            : await notifier.add(userId);
+        if (result case Err(:final failure) when context.mounted) {
+          showSisNotice(context, failure.message, isError: true);
+        }
+      },
+      icon: Icon(
+        isContact
+            ? Icons.person_remove_outlined
+            : Icons.person_add_alt_1_outlined,
+      ),
+      label: Text(isContact ? 'Remove from contacts' : 'Add to contacts'),
+    );
   }
 }
 

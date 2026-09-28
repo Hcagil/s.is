@@ -46,6 +46,19 @@ Future<void> _setSharing(
   }
 }
 
+Future<void> _setAvatarVisibility(
+  BuildContext context,
+  WidgetRef ref,
+  AvatarVisibility value,
+) async {
+  final result = await ref
+      .read(ownProfileProvider.notifier)
+      .setAvatarVisibility(value);
+  if (result case Err(:final failure) when context.mounted) {
+    showSisNotice(context, failure.message, isError: true);
+  }
+}
+
 void _open(BuildContext context, Widget page) =>
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
 
@@ -293,6 +306,39 @@ class PrivacyScreen extends ConsumerWidget {
           subtitle: "While this is off, you can't see when others read yours.",
           value: profile.shareReadStatus,
           onChanged: (on) => _setSharing(context, ref, readStatus: on),
+        ),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'Profile picture visibility',
+            style: Theme.of(context).textTheme.titleSmall
+                ?.copyWith(color: Theme.of(context).colorScheme.primary),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Column(
+          children: [
+            for (final v in AvatarVisibility.values)
+              SisChoiceCard<AvatarVisibility>(
+                key: ValueKey('avatar-visibility-${v.name}'),
+                value: v,
+                groupValue: profile.avatarVisibility,
+                onChanged: (v) => _setAvatarVisibility(context, ref, v),
+                title: switch (v) {
+                  AvatarVisibility.everyone => 'Everyone',
+                  AvatarVisibility.contacts => 'My contacts',
+                  AvatarVisibility.nobody => 'Nobody',
+                },
+                subtitle: switch (v) {
+                  AvatarVisibility.everyone =>
+                    'Anyone who can see your profile',
+                  AvatarVisibility.contacts => 'Only people you have saved',
+                  AvatarVisibility.nobody =>
+                    "Only you -- others see your initials",
+                },
+              ),
+          ],
         ),
       ],
     ),

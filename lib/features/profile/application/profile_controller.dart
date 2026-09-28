@@ -60,6 +60,7 @@ class OwnProfileController extends AsyncNotifier<OwnProfile> {
     bool? shareTyping,
     bool? shareLastSeen,
     bool? shareReadStatus,
+    AvatarVisibility? avatarVisibility,
   }) async {
     final result = await ref
         .read(profileRepositoryProvider)
@@ -71,6 +72,7 @@ class OwnProfileController extends AsyncNotifier<OwnProfile> {
           shareTyping: shareTyping,
           shareLastSeen: shareLastSeen,
           shareReadStatus: shareReadStatus,
+          avatarVisibility: avatarVisibility,
         );
     if (result case Ok(:final value) when ref.mounted) {
       state = AsyncData(value);
@@ -91,6 +93,10 @@ class OwnProfileController extends AsyncNotifier<OwnProfile> {
     shareLastSeen: lastSeen,
     shareReadStatus: readStatus,
   );
+
+  /// Changes who may see the member's profile picture.
+  Future<Result<OwnProfile>> setAvatarVisibility(AvatarVisibility value) =>
+      _save(avatarVisibility: value);
 
   /// Advisory availability for the tag field.
   Future<Result<bool>> checkTag(String tag) =>

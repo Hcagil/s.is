@@ -99,7 +99,8 @@ String? _status(WidgetRef ref, String? other) {
     if (other != null) return 'typing…';
     if (typing.length > 1) return '${typing.length} people are typing…';
     final names = {
-      for (final m in ref.watch(membersProvider).value ?? const []) m.userId: m,
+      for (final m in ref.watch(yourPeopleProvider).value ?? const [])
+        m.userId: m,
     };
     final who = names[typing.first]?.displayName;
     return who == null ? 'typing…' : '$who is typing…';
@@ -346,7 +347,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     final status = _status(ref, widget.otherUserId);
     final names = widget.group
         ? {
-            for (final m in ref.watch(membersProvider).value ?? const [])
+            for (final m in ref.watch(yourPeopleProvider).value ?? const [])
               m.userId: m.displayName,
           }
         : const <String, String>{};
@@ -1474,7 +1475,7 @@ class _ReplyBar extends ConsumerWidget {
     final me = ref.watch(currentUserIdProvider);
     final name = message.senderId == me
         ? 'You'
-        : (ref.watch(membersProvider).value ?? const [])
+        : (ref.watch(yourPeopleProvider).value ?? const [])
                   .where((m) => m.userId == message.senderId)
                   .firstOrNull
                   ?.displayName ??

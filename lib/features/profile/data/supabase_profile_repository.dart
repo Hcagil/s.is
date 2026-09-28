@@ -14,7 +14,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
   final SupabaseClient _client;
 
   static const _columns =
-      'user_id, display_name, tag, onboarding_done, share_presence, share_typing, share_last_seen, share_read_status, avatar_path';
+      'user_id, display_name, tag, onboarding_done, share_presence, share_typing, share_last_seen, share_read_status, avatar_path, avatar_visibility';
 
   Failure _asFailure(Object e) => switch (e) {
     PostgrestException(:final code) when code == '23505' =>
@@ -36,6 +36,9 @@ final class SupabaseProfileRepository implements ProfileRepository {
     shareLastSeen: row['share_last_seen'] as bool,
     shareReadStatus: row['share_read_status'] as bool,
     avatarPath: row['avatar_path'] as String?,
+    avatarVisibility: AvatarVisibility.values.byName(
+      row['avatar_visibility'] as String,
+    ),
   );
 
   @override
@@ -64,6 +67,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
     bool? shareTyping,
     bool? shareLastSeen,
     bool? shareReadStatus,
+    AvatarVisibility? avatarVisibility,
   }) async {
     final me = _client.auth.currentUser?.id;
     if (me == null) return const Err(DeniedFailure());
@@ -75,6 +79,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
       'share_typing': ?shareTyping,
       'share_last_seen': ?shareLastSeen,
       'share_read_status': ?shareReadStatus,
+      'avatar_visibility': ?avatarVisibility?.name,
     };
     if (changes.isEmpty) return load();
     try {

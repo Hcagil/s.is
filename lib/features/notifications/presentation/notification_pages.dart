@@ -124,7 +124,7 @@ class _MutedList extends ConsumerWidget {
     if (active.isEmpty) {
       return const ListTile(title: Text('Nothing is muted'), enabled: false);
     }
-    final members = ref.watch(membersProvider).value ?? const [];
+    final members = ref.watch(yourPeopleProvider).value ?? const [];
     final conversations = ref.watch(conversationListProvider).value ?? const [];
 
     Future<void> unmute(MuteKind kind, String target) async {

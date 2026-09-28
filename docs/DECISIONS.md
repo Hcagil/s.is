@@ -1082,3 +1082,7 @@ member chooses who sees their profile picture.
 - Accepted leftovers: who is online stays visible to every member (v0.4),
   and a picture link someone generated before the owner narrowed the
   setting works until it expires (the app does not create such links).
+- A tag find is forgotten when the found member changes their tag, so a
+  member can shed people who only ever found them by tag. "Everyone" always
+  includes what "My contacts" allows. Older builds can still set and remove
+  their own picture (their write is mapped to the new column).

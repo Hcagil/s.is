@@ -51,10 +51,14 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     bucket, keyed `<conversation_id>/<file>`. The storage policies ask the same
     membership question the table policies ask, so there is one access rule and
     not two that can drift.
-  - `profiles` rows are readable only for an allowlisted account the caller
-    can **reach** (`app_private.can_reach`): themselves, someone sharing a
-    conversation, a saved contact, or someone the caller found by exact tag
-    (`app_private.tag_finds`, written by `find_by_tag`). Clients may select
+  - `profiles` rows are readable only for an allowlisted account that is the
+    caller, shares a conversation with the caller, or is a contact the
+    caller saved; a tag find alone does not open the row (`find_by_tag`
+    returns its own single row). **Reach** (`app_private.can_reach`) is those
+    three plus someone the caller found by exact tag (`app_private.tag_finds`,
+    written by `find_by_tag`, cleared when the found member changes their
+    tag); it gates contacts insert, `start_*`, `last_seen_of` and the
+    `everyone` picture. Clients may select
     every column except `avatar_object` (the real picture path) and
     `avatar_visibility`; the owner reads those through `own_profile()`.
     `profiles.avatar_path` is a server-maintained copy for older builds: the
@@ -70,8 +74,10 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     `RLMT1` beyond. `is_tag_available` has its own budget (60 per 10 minutes).
   - Profile pictures: `app_private.avatar_visible_to(owner)` — the owner
     always; otherwise the owner must be allowlisted and either `everyone` and
-    reachable, or `contacts` and the owner saved the reader; `nobody` is the
-    owner only. Enforced twice with the same function: `profiles_public()` /
+    (reachable or saved by the owner), or `contacts` and the owner saved the
+    reader; `nobody` is the owner only. Older builds that write
+    `avatar_path` directly have the write mapped onto `avatar_object` by the
+    same trigger, under the same folder pin. Enforced twice with the same function: `profiles_public()` /
     `find_by_tag` mask the path, and the `avatars` storage read policy
     refuses the object (download, sign, list).
   - `start_direct_conversation`, `start_group_conversation` (every invitee)

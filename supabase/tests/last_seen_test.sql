@@ -1,5 +1,5 @@
 begin;
-select plan(91);
+select plan(93);
 
 -- Last seen (v0.4): public.touch_last_seen() records the caller, and
 -- public.last_seen_of(person) answers only when EVERY gate holds:
@@ -39,6 +39,20 @@ insert into app_private.allowlist(email) values
   ('ada@lastseen.test'), ('ben@lastseen.test'), ('cal@lastseen.test'),
   ('dot@lastseen.test'), ('eve@lastseen.test'), ('fay@lastseen.test'),
   ('ivy@lastseen.test'), ('gus@lastseen.test');
+-- v0.22.0: last_seen_of also requires reach. Seed exactly the viewer -> viewed
+-- pairs this file asks about, as tag finds, so every negative below still
+-- fails only its own gate. ben has NO reach to dot: that is the reach gate's
+-- negative (section 3b).
+insert into app_private.tag_finds(finder, found_id) values
+  ('00000000-0000-0000-0000-0000000cc001', '00000000-0000-0000-0000-0000000cc002'),
+  ('00000000-0000-0000-0000-0000000cc001', '00000000-0000-0000-0000-0000000cc003'),
+  ('00000000-0000-0000-0000-0000000cc001', '00000000-0000-0000-0000-0000000cc004'),
+  ('00000000-0000-0000-0000-0000000cc001', '00000000-0000-0000-0000-0000000cc005'),
+  ('00000000-0000-0000-0000-0000000cc003', '00000000-0000-0000-0000-0000000cc002'),
+  ('00000000-0000-0000-0000-0000000cc006', '00000000-0000-0000-0000-0000000cc002'),
+  ('00000000-0000-0000-0000-0000000cc007', '00000000-0000-0000-0000-0000000cc002'),
+  ('00000000-0000-0000-0000-0000000cc008', '00000000-0000-0000-0000-0000000cc002'),
+  ('00000000-0000-0000-0000-0000000cc009', '00000000-0000-0000-0000-0000000cc002');
 insert into auth.sessions (id, user_id, created_at, updated_at) values
   ('ec000000-0000-0000-0000-0000000cc001', '00000000-0000-0000-0000-0000000cc001', now(), now()),
   ('ec000000-0000-0000-0000-0000000cc002', '00000000-0000-0000-0000-0000000cc002', now(), now()),
@@ -189,6 +203,25 @@ select is(public.last_seen_of('00000000-0000-0000-0000-0000000cc003'), null,
 select lives_ok($$select public.last_seen_of('00000000-0000-0000-0000-00000000dead')$$,
                 'an unknown id does not raise');
 select is(public.last_seen_of('00000000-0000-0000-0000-00000000dead'), null, 'an unknown id is null');
+reset role;
+
+-- 3b reach: ben is active, allowlisted and sharing; dot is allowlisted,
+-- sharing and has a time (ada just saw it). ben has never shared a chat with
+-- dot, saved her or found her by tag, so the reach gate alone answers null.
+select test_as('00000000-0000-0000-0000-0000000cc002', 'ec000000-0000-0000-0000-0000000cc002');
+select is(public.last_seen_of('00000000-0000-0000-0000-0000000cc004'), null,
+          'ben, sharing but with no reach to dot, sees null');
+reset role;
+insert into app_private.tag_finds(finder, found_id)
+  values ('00000000-0000-0000-0000-0000000cc002', '00000000-0000-0000-0000-0000000cc004');
+select test_as('00000000-0000-0000-0000-0000000cc002', 'ec000000-0000-0000-0000-0000000cc002');
+select is(public.last_seen_of('00000000-0000-0000-0000-0000000cc004'), '2026-09-02 10:00+00'::timestamptz,
+          'control: once ben has found dot by tag, he sees her time');
+reset role;
+delete from app_private.tag_finds
+ where finder = '00000000-0000-0000-0000-0000000cc002' and found_id = '00000000-0000-0000-0000-0000000cc004';
+select test_as('00000000-0000-0000-0000-0000000cc001', 'ec000000-0000-0000-0000-0000000cc001');
+
 -- no way round the functions
 select throws_ok($$select * from app_private.last_seen$$, '42501', null, 'a member cannot read the table');
 select throws_ok($$insert into app_private.last_seen values ('00000000-0000-0000-0000-0000000cc002', now())$$,

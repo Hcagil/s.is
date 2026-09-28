@@ -270,7 +270,7 @@ void main() {
       final veraTag = (result as Ok<OwnProfile>).value.tag;
 
       final members = await ProviderContainer.test(overrides: xena.overrides)
-          .read(membersProvider.future);
+          .read(yourPeopleProvider.future);
       final seen = members.firstWhere(
         (m) => m.userId == vera.userId,
         orElse: () => fail('vera vanished from the member list'),

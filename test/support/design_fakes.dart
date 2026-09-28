@@ -355,6 +355,7 @@ class DesignProfile implements ProfileRepository {
     bool? shareTyping,
     bool? shareLastSeen,
     bool? shareReadStatus,
+    AvatarVisibility? avatarVisibility,
   }) async => Ok(
     profile = OwnProfile(
       userId: profile.userId,
@@ -366,6 +367,7 @@ class DesignProfile implements ProfileRepository {
       shareLastSeen: shareLastSeen ?? profile.shareLastSeen,
       shareReadStatus: shareReadStatus ?? profile.shareReadStatus,
       avatarPath: profile.avatarPath,
+      avatarVisibility: avatarVisibility ?? profile.avatarVisibility,
     ),
   );
   @override

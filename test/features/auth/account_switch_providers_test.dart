@@ -207,14 +207,14 @@ void main() {
     });
   });
 
-  testWidgets('membersProvider is "everyone else" for the new account', (
+  testWidgets('yourPeopleProvider is "everyone else" for the new account', (
     t,
   ) async {
     final p = await signedInAsHeybana(t);
-    p.c.listen(membersProvider, (_, _) {});
+    p.c.listen(yourPeopleProvider, (_, _) {});
     await settle(t);
     Set<String> members() =>
-        ids(p.c.read(membersProvider).requireValue, (m) => m.userId);
+        ids(p.c.read(yourPeopleProvider).requireValue, (m) => m.userId);
     expect(members(), {cagilhay, deniz});
 
     await switchTo(t, p, cagilhay);

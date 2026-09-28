@@ -200,7 +200,7 @@ void main() {
       // alive, exactly as the app does: they are never read signed out.
       home = true;
       c.listen(ownProfileProvider, (_, _) {});
-      c.listen(membersProvider, (_, _) {});
+      c.listen(yourPeopleProvider, (_, _) {});
       c.listen(conversationListProvider, (_, _) {});
     }
     // Let the rebuilds start before waiting for them to finish: a provider
@@ -208,7 +208,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 200));
     await until(
       () =>
-          !c.read(membersProvider).isLoading &&
+          !c.read(yourPeopleProvider).isLoading &&
           !c.read(conversationListProvider).isLoading &&
           !c.read(ownProfileProvider).isLoading,
       'the providers to settle',
@@ -221,7 +221,7 @@ void main() {
   }
 
   Set<String> members() => {
-    for (final m in c.read(membersProvider).requireValue) m.userId,
+    for (final m in c.read(yourPeopleProvider).requireValue) m.userId,
   };
   Set<String> listed() => {
     for (final x in c.read(conversationListProvider).requireValue) x.id,

@@ -202,7 +202,7 @@ void main() {
     expect(await deniz.picture(p1), _jpeg(1).bytes);
 
     // ece finds it where the member list and the 1:1 carry it.
-    final seen = (await ece.container.read(membersProvider.future))
+    final seen = (await ece.container.read(yourPeopleProvider.future))
         .singleWhere((m) => m.userId == deniz.id)
         .avatarPath;
     expect(seen, p1);

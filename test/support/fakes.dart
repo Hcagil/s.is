@@ -14,6 +14,7 @@ import 'package:sis/features/auth/domain/auth_repository.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
+import 'package:sis/features/chat/domain/contacts_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/external_picker.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
@@ -1989,6 +1990,7 @@ class ProfileFake implements ProfileRepository {
           bool? shareTyping,
           bool? shareLastSeen,
           bool? shareReadStatus,
+          AvatarVisibility? avatarVisibility,
         })
       >[];
   List<String> get checks => [
@@ -2043,6 +2045,7 @@ class ProfileFake implements ProfileRepository {
     bool? shareTyping,
     bool? shareLastSeen,
     bool? shareReadStatus,
+    AvatarVisibility? avatarVisibility,
   }) async {
     await _tick('save');
     saves.add((
@@ -2053,6 +2056,7 @@ class ProfileFake implements ProfileRepository {
       shareTyping: shareTyping,
       shareLastSeen: shareLastSeen,
       shareReadStatus: shareReadStatus,
+      avatarVisibility: avatarVisibility,
     ));
     final held = _save;
     if (held != null) await held.future;
@@ -2078,6 +2082,7 @@ class ProfileFake implements ProfileRepository {
       shareLastSeen: shareLastSeen ?? profile.shareLastSeen,
       shareReadStatus: shareReadStatus ?? profile.shareReadStatus,
       avatarPath: profile.avatarPath,
+      avatarVisibility: avatarVisibility ?? profile.avatarVisibility,
     );
     return Ok(profile);
   }
@@ -2110,6 +2115,7 @@ class ProfileFake implements ProfileRepository {
     shareLastSeen: profile.shareLastSeen,
     shareReadStatus: profile.shareReadStatus,
     avatarPath: path,
+    avatarVisibility: profile.avatarVisibility,
   );
 
   @override
@@ -3041,5 +3047,125 @@ class PictureCropperFake implements PictureCropper {
       contentType: 'image/jpeg',
       extension: 'jpg',
     );
+  }
+}
+
+/// [ContactsRepository] the way the server behaves, derived from the contract
+/// (docs/SECURITY.md, "contacts" and "find_by_tag"), not from the app code:
+///
+/// * [findByTag] is an exact match on the stored tag after dropping a leading
+///   `@` and folding case -- never a prefix -- over [directory], never the
+///   caller; a hit is remembered in [found] (it gives reach).
+/// * a member has [findBudget] finds; after that every find is refused with
+///   the rate-limit failure, however long the test waits.
+/// * [add] succeeds only for someone the caller can reach: a chat partner
+///   ([reachable]), someone found, or someone already saved. It is idempotent.
+/// * every call takes [latency], so nothing is ever instantly ready, and a
+///   find can be held in flight with [holdFind].
+class ContactsFake implements ContactsRepository {
+  ContactsFake({
+    Iterable<Member> directory = const [],
+    Iterable<String> reachable = const [],
+    Iterable<String> saved = const [],
+    this.me = 'u1',
+    this.latency = const Duration(milliseconds: 5),
+    this.findBudget = 20,
+  }) : directory = {for (final m in directory) m.userId: m},
+       reachable = {...reachable},
+       saved = {...saved};
+
+  final String me;
+  final Duration latency;
+  final int findBudget;
+
+  /// Every allowlisted member, by id: who a tag can find.
+  final Map<String, Member> directory;
+
+  /// Ids the caller shares a conversation with.
+  final Set<String> reachable;
+
+  /// The caller's saved contacts: the server's rows.
+  final Set<String> saved;
+
+  /// Members the caller has found by tag.
+  final found = <String>{};
+
+  /// Call log, in order: `find:<tag>`, `add:<id>`, `remove:<id>`, `ids`.
+  final calls = <String>[];
+  int get finds => calls.where((c) => c.startsWith('find:')).length;
+
+  /// Force an outcome; left null the fake answers from its own state.
+  Result<Member?>? findResult;
+  Result<void>? addResult;
+  Result<void>? removeResult;
+  Result<Set<String>>? idsResult;
+
+  /// Called after the server state changed (a save or a removal), so a world
+  /// can re-derive what `profiles_public()` would now return.
+  void Function()? onChanged;
+
+  Completer<void>? _find;
+  void holdFind() => _find = Completer<void>();
+  void releaseFind() {
+    _find?.complete();
+    _find = null;
+  }
+
+  Future<void> _tick(String call) async {
+    calls.add(call);
+    await Future<void>.delayed(latency);
+  }
+
+  static const rateLimited = ProviderFailure(
+    'Too many searches, try again later.',
+  );
+
+  @override
+  Future<Result<Member?>> findByTag(String tag) async {
+    await _tick('find:$tag');
+    final held = _find;
+    if (held != null) await held.future;
+    if (findResult case final forced?) return forced;
+    if (finds > findBudget) return const Err(rateLimited);
+    final t = tag.trim();
+    final wanted = (t.startsWith('@') ? t.substring(1) : t).toLowerCase();
+    for (final m in directory.values) {
+      if (m.userId != me && m.tag == wanted) {
+        found.add(m.userId);
+        return Ok(m);
+      }
+    }
+    return const Ok(null);
+  }
+
+  @override
+  Future<Result<void>> add(String userId) async {
+    await _tick('add:$userId');
+    if (addResult case final forced?) return forced;
+    final canReach =
+        reachable.contains(userId) ||
+        found.contains(userId) ||
+        saved.contains(userId);
+    if (userId == me || !directory.containsKey(userId) || !canReach) {
+      return const Err(DeniedFailure());
+    }
+    saved.add(userId);
+    onChanged?.call();
+    return const Ok(null);
+  }
+
+  @override
+  Future<Result<void>> remove(String userId) async {
+    await _tick('remove:$userId');
+    if (removeResult case final forced?) return forced;
+    saved.remove(userId);
+    onChanged?.call();
+    return const Ok(null);
+  }
+
+  @override
+  Future<Result<Set<String>>> ids() async {
+    await _tick('ids');
+    return idsResult ?? Ok({...saved});
   }
 }

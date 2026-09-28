@@ -13,6 +13,7 @@ import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
+import 'features/chat/data/external_picker_channel.dart';
 import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
@@ -81,6 +82,9 @@ Future<void> main() async {
           ),
           attachmentCacheProvider.overrideWithValue(attachmentCache),
           galleryProvider.overrideWithValue(const PhotoManagerGallery()),
+          externalPickerProvider.overrideWithValue(
+            const ExternalPickerChannel(),
+          ),
           presenceRepositoryProvider.overrideWithValue(
             SupabasePresenceRepository(client),
           ),

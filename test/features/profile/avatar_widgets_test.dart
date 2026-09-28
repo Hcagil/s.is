@@ -139,6 +139,7 @@ class World {
         ..thumbnails['p1'] = photoPng
         ..thumbnails['p2'] = photoPng;
   final photos = AttachmentCacheFake();
+  final picker = ExternalPickerFake();
 
   Widget app() => ProviderScope(
     overrides: [
@@ -154,6 +155,7 @@ class World {
       presenceRepositoryProvider.overrideWithValue(PresenceFake()),
       profileRepositoryProvider.overrideWithValue(profile),
       galleryProvider.overrideWithValue(gallery),
+      externalPickerProvider.overrideWithValue(picker),
       attachmentCacheProvider.overrideWithValue(photos),
       linkOpenerProvider.overrideWithValue(LinkOpenerFake()),
       pushSourceProvider.overrideWithValue(PushSourceFake()),

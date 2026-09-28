@@ -8,19 +8,25 @@ import '../../../app/notice.dart';
 import '../../../app/theme.dart';
 import '../application/chat_controllers.dart';
 import '../domain/attachment.dart';
+import '../domain/external_picker.dart';
 import '../domain/gallery.dart';
 
-/// Shows the attachment sheet; null when the member closes it or backs out
-/// without choosing a photo.
-Future<PickedImage?> showAttachmentSheet(
+/// Shows the attachment sheet; an empty `images` list when the member
+/// closes it or backs out without choosing a photo. `dropped` is how many
+/// more photos "From an app" offered beyond the cap -- 0 unless it was hit.
+Future<({List<PickedImage> images, int dropped})> showAttachmentSheet(
   BuildContext context, {
   bool square = false,
-}) => showModalBottomSheet<PickedImage>(
-  context: context,
-  isScrollControlled: true,
-  showDragHandle: true,
-  builder: (_) => AttachmentSheet(square: square),
-);
+}) async {
+  final result =
+      await showModalBottomSheet<({List<PickedImage> images, int dropped})>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) => AttachmentSheet(square: square),
+      );
+  return result ?? (images: const <PickedImage>[], dropped: 0);
+}
 
 /// The phone's recent photos to send from. Asks for photo access the first
 /// time it opens; when access is missing or partial, shows SIS's own screen
@@ -133,7 +139,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
       showSisNotice(context, 'That photo could not be opened.', isError: true);
       return;
     }
-    Navigator.of(context).pop(image);
+    Navigator.of(context).pop((images: [image], dropped: 0));
   }
 
   Future<void> _selectMore() async {
@@ -141,6 +147,29 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     if (!mounted) return;
     setState(() => _loading = true);
     await _load();
+  }
+
+  /// Hands photo selection to another app on the phone. [widget.square]
+  /// asks for exactly one photo (a picture); otherwise as many as the
+  /// chosen app allows.
+  Future<void> _fromApp() async {
+    if (_opening) return;
+    setState(() => _opening = true);
+    final picker = ref.read(externalPickerProvider);
+    final result = widget.square
+        ? await picker.pickProfilePicture()
+        : await picker.pickAttachments();
+    if (!mounted) return;
+    setState(() => _opening = false);
+    switch (result) {
+      case ExternalPickedImages(:final images, :final dropped)
+          when images.isNotEmpty:
+        Navigator.of(context).pop((images: images, dropped: dropped));
+      case ExternalPickCancelled():
+        return;
+      case ExternalPickedImages() || ExternalPickFailed():
+        showSisNotice(context, 'That could not be opened.', isError: true);
+    }
   }
 
   @override
@@ -163,6 +192,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
             _load();
           },
           onOpenSettings: () => ref.read(galleryProvider).openSettings(),
+          onFromApp: _fromApp,
           onNotNow: () => Navigator.of(context).pop(),
         ),
       );
@@ -173,14 +203,25 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Text('Photos', style: Theme.of(context).textTheme.titleMedium),
-          const Spacer(),
+          Expanded(
+            child: Text(
+              'Photos',
+              style: Theme.of(context).textTheme.titleMedium,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           if (limited)
             TextButton(
               key: const ValueKey('sheet-allow-more'),
               onPressed: _selectMore,
               child: const Text('Allow more'),
             ),
+          IconButton(
+            key: const ValueKey('sheet-from-app'),
+            onPressed: _fromApp,
+            icon: const Icon(Icons.apps_rounded),
+            tooltip: 'From an app',
+          ),
         ],
       ),
     );
@@ -231,12 +272,14 @@ class _PhotoAccessRequest extends StatelessWidget {
     required this.onAllow,
     required this.onOpenSettings,
     required this.onNotNow,
+    required this.onFromApp,
   });
 
   final bool permanentlyDenied;
   final VoidCallback onAllow;
   final VoidCallback onOpenSettings;
   final VoidCallback onNotNow;
+  final VoidCallback onFromApp;
 
   @override
   Widget build(BuildContext context) {
@@ -286,6 +329,13 @@ class _PhotoAccessRequest extends StatelessWidget {
                         permanentlyDenied ? 'Open settings' : 'Allow photos',
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    key: const ValueKey('sheet-from-app'),
+                    onPressed: onFromApp,
+                    icon: const Icon(Icons.apps_rounded, size: 18),
+                    label: const Text('From an app'),
                   ),
                   const SizedBox(height: 8),
                   TextButton(

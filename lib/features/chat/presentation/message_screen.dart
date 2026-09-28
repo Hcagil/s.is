@@ -1182,25 +1182,32 @@ class _ComposerState extends ConsumerState<_Composer> {
     }
   }
 
-  /// Picks and sends an image, with whatever is typed as its caption.
+  /// Picks and sends one or more images, with whatever is typed as the
+  /// caption of the first one -- the rest go with no caption, one message
+  /// per photo, same as any photo sent from the grid.
   Future<void> _attach() async {
     if (_sending) return;
-    // The phone's own photos. Closing the sheet without choosing one sends
-    // nothing.
-    final image = await showAttachmentSheet(context);
-    if (image == null || !mounted) return;
+    // The phone's own photos, or another app's. Closing the sheet without
+    // choosing anything sends nothing.
+    final picked = await showAttachmentSheet(context);
+    if (picked.images.isEmpty || !mounted) return;
     setState(() => _sending = true);
+    final body = _controller.text;
     final result = await ref
         .read(messagesProvider.notifier)
-        .sendImage(body: _controller.text, chosen: image);
+        .sendImages(picked.images, body: body);
     if (!mounted) return;
     setState(() => _sending = false);
-    // null means the member backed out of the picker: not a failure.
     switch (result) {
-      case null:
-        return;
       case Ok():
         _controller.clear();
+        if (picked.dropped > 0) {
+          showSisNotice(
+            context,
+            'Only the first 10 photos were sent.',
+            isError: false,
+          );
+        }
       case Err(:final failure):
         showSisNotice(context, failure.message, isError: true);
     }

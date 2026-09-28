@@ -61,8 +61,8 @@ Future<AvatarChoice?> showAvatarSheet(
       return const AvatarRemoved();
     case 'choose':
       if (!context.mounted) return null;
-      final image = await showAttachmentSheet(context, square: true);
-      return image == null ? null : AvatarPicked(image);
+      final picked = await showAttachmentSheet(context, square: true);
+      return picked.images.isEmpty ? null : AvatarPicked(picked.images.first);
     default:
       return null;
   }

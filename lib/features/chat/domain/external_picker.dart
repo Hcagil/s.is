@@ -35,7 +35,7 @@ final class ExternalPickFailed implements ExternalPickResult {
 ///
 /// Its own boundary (like [Gallery]) because it is a platform capability;
 /// [PickedImage]s it returns are in the exact same shape [Gallery.load] and
-/// [Gallery.loadSquare] return, so callers treat them identically.
+/// [Gallery.loadForCrop] return, so callers treat them identically.
 abstract interface class ExternalPicker {
   /// The most [pickAttachments] ever returns in one pick. Anything the
   /// chosen app offers beyond this is dropped before it is opened or read
@@ -47,7 +47,8 @@ abstract interface class ExternalPicker {
   /// attachment.
   Future<ExternalPickResult> pickAttachments();
 
-  /// Opens the chooser for exactly one photo, returned as the 512 px
-  /// centre-crop JPEG shape used for a profile/group picture.
+  /// Opens the chooser for exactly one photo, returned uncropped and
+  /// upright, ready for the crop screen -- the same shape [Gallery.loadForCrop]
+  /// returns.
   Future<ExternalPickResult> pickProfilePicture();
 }

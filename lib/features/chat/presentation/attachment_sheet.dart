@@ -35,8 +35,8 @@ class AttachmentSheet extends ConsumerStatefulWidget {
   const AttachmentSheet({super.key, this.square = false});
 
   /// True when picking a profile/group picture: the chosen photo is loaded
-  /// as a centre-cropped square instead of the long-edge resize used for a
-  /// chat photo.
+  /// uncropped, ready for the crop screen, instead of the long-edge resize
+  /// used for a chat photo.
   final bool square;
 
   @override
@@ -131,7 +131,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     if (_opening) return;
     setState(() => _opening = true);
     final image = widget.square
-        ? await ref.read(galleryProvider).loadSquare(p)
+        ? await ref.read(galleryProvider).loadForCrop(p)
         : await ref.read(galleryProvider).load(p);
     if (!mounted) return;
     setState(() => _opening = false);

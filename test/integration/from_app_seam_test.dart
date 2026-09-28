@@ -4,6 +4,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' show Tristate;
 
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
@@ -358,8 +359,9 @@ void main() {
         await eceClient.dispose();
       });
 
-      testWidgets('a picture from an app is stored and becomes the profile\'s '
-          'picture, with photo access refused', (t) async {
+      testWidgets('a picture from an app, framed and used on the crop screen, '
+          'is stored and becomes the profile\'s picture, with photo access '
+          'refused', (t) async {
         t.view.physicalSize = const Size(1080, 2340);
         t.view.devicePixelRatio = 2.625;
         addTearDown(t.view.reset);
@@ -373,6 +375,12 @@ void main() {
             extension: 'jpg',
           );
         final cache = AttachmentCacheFake();
+        // The square the crop screen's "Use" makes: a byte after the
+        // picked JPEG's end tells it apart from what the other app handed
+        // back.
+        final cropper = PictureCropperFake(
+          output: Uint8List.fromList([..._jpeg, 7]),
+        );
 
         await t.pumpWidget(
           ProviderScope(
@@ -396,6 +404,7 @@ void main() {
               profileRepositoryProvider.overrideWithValue(profiles),
               galleryProvider.overrideWithValue(gallery),
               externalPickerProvider.overrideWithValue(picker),
+              pictureCropperProvider.overrideWithValue(cropper),
               pushSourceProvider.overrideWithValue(PushSourceFake()),
               pushRegistryProvider.overrideWithValue(PushRegistryFake()),
             ],
@@ -412,9 +421,22 @@ void main() {
 
         await tap('home-settings');
         await tap('settings-profile');
-        await tap('profile-avatar');
+        await tap('profile-avatar-edit');
         await tap('avatar-choose');
         await tap('sheet-from-app');
+        await until(
+          t,
+          () =>
+              shows(byKey('crop-use')) &&
+              t
+                      .getSemantics(byKey('crop-use'))
+                      .getSemanticsData()
+                      .flagsCollection
+                      .isEnabled ==
+                  Tristate.isTrue,
+          'the crop screen offering Use',
+        );
+        await tap('crop-use');
 
         String? stored;
         for (var i = 0; i < 100 && stored == null; i++) {
@@ -426,12 +448,17 @@ void main() {
 
         expect(picker.pictureCalls, 1);
         expect(picker.attachmentCalls, 0);
+        expect(
+          cropper.calls.single.source,
+          _jpeg,
+          reason: 'the crop screen did not crop the picked photo',
+        );
         expect(stored, startsWith('profile/${_uid(eceClient)}/'));
         final bytes = await t.runAsync(() => chat.avatarBytes(stored!));
         expect(
-          listEquals(_ok(bytes!, 'reading the picture'), _jpeg),
+          listEquals(_ok(bytes!, 'reading the picture'), cropper.output),
           isTrue,
-          reason: 'the stored picture is not the one picked',
+          reason: 'the stored picture is not the cropped square',
         );
         expect(gallery.accessRequests, 1, reason: 'only opening the sheet');
         expect(gallery.openSettingsCalls, 0);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/attachment.dart';
 import 'attachment_sheet.dart';
+import 'crop_screen.dart';
 
 /// What the avatar sheet decided: a new picture to upload, a request to
 /// remove the current one, or null when the member closed the sheet without
@@ -62,7 +63,9 @@ Future<AvatarChoice?> showAvatarSheet(
     case 'choose':
       if (!context.mounted) return null;
       final picked = await showAttachmentSheet(context, square: true);
-      return picked.images.isEmpty ? null : AvatarPicked(picked.images.first);
+      if (picked.images.isEmpty || !context.mounted) return null;
+      final cropped = await openCropScreen(context, picked.images.first);
+      return cropped == null ? null : AvatarPicked(cropped);
     default:
       return null;
   }

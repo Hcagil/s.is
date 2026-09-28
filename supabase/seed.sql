@@ -102,6 +102,9 @@
 --   deniz/ece      test/integration/avatar_seam_test.dart
 --     (deniz's controllers, wired the way main.dart wires them, set his own
 --      and his group's picture; ece is the other member)
+--   bram/dora/eli/finn test/integration/fast_start_seam_test.dart
+--     (bram's chat list read in two stages and the app opening over a slow
+--      connection; dora and eli are in his chats, finn is in none)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -172,5 +175,9 @@ insert into app_private.allowlist(email) values
   ('bea@integration.test'),
   ('cem@integration.test'),
   ('deniz@integration.test'),
-  ('ece@integration.test')
+  ('ece@integration.test'),
+  ('bram@integration.test'),
+  ('dora@integration.test'),
+  ('eli@integration.test'),
+  ('finn@integration.test')
 on conflict do nothing;

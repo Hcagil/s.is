@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/controls.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
@@ -12,6 +13,8 @@ import '../../notifications/presentation/notification_pages.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
+import '../application/group_controller.dart';
+import '../domain/group_member.dart';
 import '../domain/message.dart';
 import 'avatar_sheet.dart';
 import 'conversation_list.dart';
@@ -272,6 +275,13 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
       for (final m in members.value ?? const <Member>[])
         m.userId: m.displayName,
     };
+    // Current members only -- a departed member still has a row (was_member
+    // keeps their history readable), but does not belong in "N members".
+    final currentCount = ref
+        .watch(groupRosterProvider(conversationId))
+        .value
+        ?.where((m) => !m.hasLeft)
+        .length;
     final avatarPath = (ref.watch(conversationListProvider).value ?? const [])
         .where((c) => c.id == conversationId)
         .firstOrNull
@@ -319,9 +329,9 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                 fontWeight: FontWeight.w800,
               ),
             ),
-            if (members.value case final list?)
+            if (currentCount case final count?)
               Text(
-                list.length == 1 ? '1 member' : '${list.length} members',
+                count == 1 ? '1 member' : '$count members',
                 key: const ValueKey('group-count'),
                 style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               ),
@@ -355,6 +365,92 @@ class _MembersTab extends ConsumerWidget {
 
   final String conversationId;
 
+  Future<void> _remove(
+    BuildContext context,
+    WidgetRef ref,
+    GroupMember m,
+  ) async {
+    final result = await ref
+        .read(groupControllerProvider)
+        .removeMember(conversationId, m.member.userId);
+    if (!context.mounted) return;
+    switch (result) {
+      case Ok():
+        showSisNotice(context, '${m.member.displayName} removed');
+      case Err(:final failure):
+        showSisNotice(context, failure.message, isError: true);
+    }
+  }
+
+  Future<void> _setAdmin(
+    BuildContext context,
+    WidgetRef ref,
+    GroupMember m,
+    bool isAdmin,
+  ) async {
+    final result = await ref
+        .read(groupControllerProvider)
+        .setAdmin(conversationId, m.member.userId, isAdmin: isAdmin);
+    if (!context.mounted) return;
+    switch (result) {
+      case Ok():
+        showSisNotice(
+          context,
+          isAdmin
+              ? '${m.member.displayName} is now an admin'
+              : '${m.member.displayName} is no longer an admin',
+        );
+      case Err(:final failure):
+        showSisNotice(context, failure.message, isError: true);
+    }
+  }
+
+  Future<void> _leave(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Leave group?'),
+        content: const Text(
+          'You can still see the messages up to now, but you will not '
+          'receive anything new.',
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('leave-cancel'),
+            onPressed: () => Navigator.of(dialog).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('leave-confirm'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialog).colorScheme.error,
+              foregroundColor: Theme.of(dialog).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.of(dialog).pop(true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final result = await ref
+        .read(groupControllerProvider)
+        .leave(conversationId);
+    if (!context.mounted) return;
+    switch (result) {
+      case Ok(:final value):
+        showSisNotice(
+          context,
+          value
+              ? "Left the group. Unsent messages weren't sent."
+              : 'Left the group',
+        );
+        Navigator.of(context).pop();
+      case Err(:final failure):
+        showSisNotice(context, failure.message, isError: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final me = switch (ref.watch(sessionControllerProvider).value) {
@@ -363,37 +459,258 @@ class _MembersTab extends ConsumerWidget {
     };
     final online = ref.watch(onlineMembersProvider);
     return _Async(
-      ref.watch(conversationMembersProvider(conversationId)),
+      ref.watch(groupRosterProvider(conversationId)),
       empty: 'No members',
-      builder: (members) => ListView(
-        children: [
-          for (final m in members)
-            ListTile(
-              key: ValueKey('group-member-${m.userId}'),
-              leading: PersonAvatar(
-                label: m.displayName,
-                seed: m.userId,
-                online: online.contains(m.userId),
-                avatarPath: m.avatarPath,
+      builder: (roster) {
+        final current = [
+          for (final m in roster)
+            if (!m.hasLeft) m,
+        ];
+        final departed = [
+          for (final m in roster)
+            if (m.hasLeft) m,
+        ];
+        final amAdmin =
+            current.where((m) => m.member.userId == me).firstOrNull?.isAdmin ??
+            false;
+        return ListView(
+          children: [
+            if (amAdmin)
+              ListTile(
+                key: const ValueKey('add-members'),
+                leading: const Icon(Icons.person_add_alt_1_outlined),
+                title: const Text('Add members'),
+                onTap: () => showAddMembersSheet(
+                  context,
+                  ref,
+                  conversationId,
+                  current: {for (final m in current) m.member.userId},
+                ),
               ),
-              title: Text(
-                m.userId == me ? '${m.displayName} (you)' : m.displayName,
-              ),
-              subtitle: m.tag == null ? null : Text('@${m.tag}'),
-              // Your own row leads nowhere; everyone else's to their page.
-              onTap: m.userId == me
-                  ? null
-                  : () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => PersonScreen(
-                          userId: m.userId,
-                          fallbackName: m.displayName,
-                          fallbackAvatarPath: m.avatarPath,
+            for (final m in current)
+              ListTile(
+                key: ValueKey('group-member-${m.member.userId}'),
+                leading: PersonAvatar(
+                  label: m.member.displayName,
+                  seed: m.member.userId,
+                  online: online.contains(m.member.userId),
+                  avatarPath: m.member.avatarPath,
+                ),
+                title: Text(
+                  m.member.userId == me
+                      ? '${m.member.displayName} (you)'
+                      : m.member.displayName,
+                ),
+                subtitle: Text(
+                  [
+                    if (m.isAdmin) 'Admin',
+                    if (m.member.tag != null) '@${m.member.tag}',
+                  ].join(' · '),
+                ),
+                trailing: amAdmin && m.member.userId != me
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            key: ValueKey('toggle-admin-${m.member.userId}'),
+                            icon: Icon(
+                              m.isAdmin
+                                  ? Icons.remove_moderator_outlined
+                                  : Icons.admin_panel_settings_outlined,
+                            ),
+                            tooltip: m.isAdmin
+                                ? 'Remove as admin'
+                                : 'Make admin',
+                            onPressed: () =>
+                                _setAdmin(context, ref, m, !m.isAdmin),
+                          ),
+                          IconButton(
+                            key: ValueKey('remove-member-${m.member.userId}'),
+                            icon: const Icon(Icons.person_remove_outlined),
+                            tooltip: 'Remove',
+                            onPressed: () => _remove(context, ref, m),
+                          ),
+                        ],
+                      )
+                    : null,
+                // Your own row leads nowhere; everyone else's to their page.
+                onTap: m.member.userId == me
+                    ? null
+                    : () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => PersonScreen(
+                            userId: m.member.userId,
+                            fallbackName: m.member.displayName,
+                            fallbackAvatarPath: m.member.avatarPath,
+                          ),
                         ),
                       ),
+              ),
+            if (departed.isNotEmpty) ...[
+              const Divider(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: Text(
+                  'Left',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              for (final m in departed)
+                ListTile(
+                  key: ValueKey('group-member-${m.member.userId}'),
+                  leading: Opacity(
+                    opacity: .5,
+                    child: PersonAvatar(
+                      label: m.member.displayName,
+                      seed: m.member.userId,
+                      avatarPath: m.member.avatarPath,
                     ),
+                  ),
+                  title: Text(
+                    m.member.displayName,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  subtitle: Text(
+                    m.leftReason == LeftReason.removed ? 'Removed' : 'Left',
+                  ),
+                ),
+            ],
+            const Divider(),
+            ListTile(
+              key: const ValueKey('leave-group'),
+              leading: Icon(
+                Icons.logout,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                'Leave group',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              onTap: () => _leave(context, ref),
             ),
-        ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// The admin's "Add members" sheet: pick from your people, not already in
+/// the group, plus the "Show old messages?" choice each pick gets.
+Future<void> showAddMembersSheet(
+  BuildContext context,
+  WidgetRef ref,
+  String conversationId, {
+  required Set<String> current,
+}) => showModalBottomSheet<void>(
+  context: context,
+  isScrollControlled: true,
+  builder: (_) => _AddMembersSheet(conversationId, current: current),
+);
+
+class _AddMembersSheet extends ConsumerStatefulWidget {
+  const _AddMembersSheet(this.conversationId, {required this.current});
+
+  final String conversationId;
+  final Set<String> current;
+
+  @override
+  ConsumerState<_AddMembersSheet> createState() => _AddMembersSheetState();
+}
+
+class _AddMembersSheetState extends ConsumerState<_AddMembersSheet> {
+  final _chosen = <Member>{};
+  bool _withHistory = false;
+  bool _busy = false;
+
+  Future<void> _add() async {
+    setState(() => _busy = true);
+    final result = await ref.read(groupControllerProvider).addMembers(
+      widget.conversationId,
+      [for (final m in _chosen) m.userId],
+      withHistory: _withHistory,
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    switch (result) {
+      case Ok():
+        Navigator.of(context).pop();
+        showSisNotice(context, 'Added to the group');
+      case Err(:final failure):
+        showSisNotice(context, failure.message, isError: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final people = ref.watch(yourPeopleProvider);
+    final choices = switch (people) {
+      AsyncData(:final value) => [
+        for (final m in value)
+          if (!widget.current.contains(m.userId)) m,
+      ],
+      _ => null,
+    };
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Add members', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            SisSwitchTile(
+              title: 'Show old messages?',
+              subtitle: 'Off shows only messages sent from now on.',
+              value: _withHistory,
+              onChanged: (v) => setState(() => _withHistory = v),
+            ),
+            Flexible(
+              child: switch (choices) {
+                null => const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: SisLoadingLogo(size: 40)),
+                ),
+                [] => const ListTile(title: Text('Nobody left to add')),
+                final list => ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final m in list)
+                      CheckboxListTile(
+                        key: ValueKey('add-member-${m.userId}'),
+                        value: _chosen.any((c) => c.userId == m.userId),
+                        title: Text(m.displayName),
+                        subtitle: m.tag == null ? null : Text('@${m.tag}'),
+                        onChanged: (on) => setState(() {
+                          if (on ?? false) {
+                            _chosen.add(m);
+                          } else {
+                            _chosen.removeWhere((c) => c.userId == m.userId);
+                          }
+                        }),
+                      ),
+                  ],
+                ),
+              },
+            ),
+            const SizedBox(height: 8),
+            FilledButton(
+              key: const ValueKey('add-members-confirm'),
+              onPressed: _chosen.isEmpty || _busy ? null : _add,
+              child: Text(_busy ? 'Adding…' : 'Add'),
+            ),
+          ],
+        ),
       ),
     );
   }

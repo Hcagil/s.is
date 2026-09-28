@@ -443,6 +443,10 @@ class _ConversationTile extends ConsumerWidget {
     };
     final scheme = Theme.of(context).colorScheme;
     final unread = conversation.unread > 0;
+    // A group left or been removed from: read-only history, nothing new can
+    // ever arrive, so the tile is greyed like a departed member's name
+    // elsewhere in that same group.
+    final left = conversation.hasLeft;
     return ListTile(
       key: ValueKey('conversation-${conversation.id}'),
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
@@ -460,8 +464,10 @@ class _ConversationTile extends ConsumerWidget {
       ),
       title: Text(
         conversation.label,
+        key: left ? ValueKey('left-${conversation.id}') : null,
         style: TextStyle(
           fontWeight: unread ? FontWeight.w800 : FontWeight.w700,
+          color: left ? scheme.onSurfaceVariant : null,
         ),
       ),
       subtitle: conversation.lastMessage == null
@@ -479,6 +485,8 @@ class _ConversationTile extends ConsumerWidget {
                       color: scheme.onSurface,
                       fontWeight: FontWeight.w600,
                     )
+                  : left
+                  ? TextStyle(color: scheme.onSurfaceVariant)
                   : null,
             ),
       trailing: conversation.lastMessageAt == null

@@ -9,6 +9,7 @@ import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/status_screens.dart';
 import '../features/chat/application/chat_controllers.dart';
 import '../features/chat/application/chat_drafts.dart';
+import '../features/chat/application/group_controller.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/notifications/application/push_controller.dart';
 import '../features/notifications/presentation/notification_explainer_screen.dart';
@@ -126,6 +127,10 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       // on any path a session can end on, not only the explicit sign-out
       // button.
       ref.listen(attachmentCacheOwnerProvider, (_, _) {});
+      // Drops a conversation's queue and draft the moment it is found to be
+      // one the member has left or been removed from -- see
+      // leftConversationGuardProvider's own doc for why this is silent.
+      ref.listen(leftConversationGuardProvider, (_, _) {});
     }
 
     final update = ref.watch(updateControllerProvider).value;

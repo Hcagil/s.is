@@ -12,6 +12,7 @@ import '../../auth/domain/member.dart';
 import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
+import '../domain/group_event.dart';
 import '../domain/group_member.dart';
 import '../domain/message.dart';
 import '../domain/read_marks.dart';
@@ -375,6 +376,36 @@ final class SupabaseChatRepository implements ChatRepository {
         },
       );
       return const Ok(null);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<List<GroupEvent>>> groupEvents(String conversationId) async {
+    try {
+      // group_events_read scopes this to a current admin of the conversation;
+      // anyone else, and any 1:1, simply gets no rows -- never a refusal.
+      final rows = await _client
+          .from('group_events')
+          .select('id, conversation_id, kind, actor_id, subject_id, created_at')
+          .eq('conversation_id', conversationId)
+          .retriedOnce();
+      return Ok([
+        for (final row in rows)
+          GroupEvent(
+            id: row['id'] as String,
+            conversationId: row['conversation_id'] as String,
+            kind: switch (row['kind'] as String) {
+              'removed' => GroupEventKind.removed,
+              'added' => GroupEventKind.added,
+              _ => GroupEventKind.left,
+            },
+            subjectId: row['subject_id'] as String,
+            actorId: row['actor_id'] as String?,
+            createdAt: DateTime.parse(row['created_at'] as String),
+          ),
+      ]);
     } catch (e) {
       return Err(_asFailure(e));
     }

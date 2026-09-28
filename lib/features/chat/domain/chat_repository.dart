@@ -4,6 +4,7 @@ import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
 import 'attachment.dart';
 import 'conversation.dart';
+import 'group_event.dart';
 import 'group_member.dart';
 import 'message.dart';
 import 'read_marks.dart';
@@ -63,6 +64,12 @@ abstract interface class ChatRepository {
     String memberId, {
     required bool isAdmin,
   });
+
+  /// "X left" / "X was removed" / "X was added" for [conversationId], in any
+  /// order. Admin-only: the server's row-level security already refuses the
+  /// rows to anyone else, so a non-admin (or a 1:1) simply gets an empty
+  /// list, never a failure.
+  Future<Result<List<GroupEvent>>> groupEvents(String conversationId);
 
   /// Messages with a photo in [conversationId], newest first, capped like
   /// [messages].

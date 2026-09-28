@@ -1,8 +1,25 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 /// The longest body the database will accept, per the check constraint on
 /// `public.messages.body`.
 const int maxMessageLength = 4000;
+
+/// A random RFC 4122 v4 UUID, lowercase and hyphenated -- generated on the
+/// phone as a text message's id, so a retried send after a lost answer is
+/// idempotent: the server sees the same id twice and the second insert is a
+/// primary-key conflict, read back as success, never a duplicate message.
+String randomMessageId() {
+  final random = math.Random.secure();
+  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 10xx
+  String hex(int start, int end) => bytes
+      .sublist(start, end)
+      .map((b) => b.toRadixString(16).padLeft(2, '0'))
+      .join();
+  return '${hex(0, 4)}-${hex(4, 6)}-${hex(6, 8)}-${hex(8, 10)}-${hex(10, 16)}';
+}
 
 /// Whether [body] alone would be accepted as a message.
 ///

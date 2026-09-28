@@ -1063,3 +1063,10 @@ member chooses who sees their profile picture.
   decision.
 - "Share a chat" means current membership; when leaving a group arrives
   (v0.23), a member who left stops counting.
+- "Everyone" for a picture means any active member who can reach the
+  profile, including someone who just found you by exact tag (a narrower
+  rule would break the tag result itself); a picture's path is only ever
+  handed out through a checked read.
+- Contacts are one-way: saving someone lets you see them; their "My
+  contacts" picture setting means people *they* saved. The tag lookup allows
+  20 searches per 10 minutes per member.

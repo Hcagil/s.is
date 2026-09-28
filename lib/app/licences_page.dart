@@ -58,6 +58,9 @@ class SisLicencesPage extends StatelessWidget {
             for (final package in packages)
               ListTile(
                 title: Text(package),
+                subtitle: byPackage[package]!.length > 1
+                    ? Text('${byPackage[package]!.length} licences')
+                    : null,
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -96,8 +99,21 @@ class _PackageLicencePage extends StatelessWidget {
                 children: [
                   for (final paragraph in entry.paragraphs)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(paragraph.text),
+                      padding:
+                          paragraph.indent == LicenseParagraph.centeredIndent
+                          ? const EdgeInsets.only(bottom: 12)
+                          : EdgeInsetsDirectional.only(
+                              start: 16.0 * paragraph.indent,
+                              bottom: 12,
+                            ),
+                      child: paragraph.indent == LicenseParagraph.centeredIndent
+                          ? Center(
+                              child: Text(
+                                paragraph.text,
+                                textAlign: TextAlign.center,
+                              ),
+                            )
+                          : Text(paragraph.text),
                     ),
                 ],
               ),

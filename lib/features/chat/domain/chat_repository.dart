@@ -4,6 +4,7 @@ import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
 import 'attachment.dart';
 import 'conversation.dart';
+import 'group_member.dart';
 import 'message.dart';
 import 'read_marks.dart';
 
@@ -27,6 +28,41 @@ abstract interface class ChatRepository {
 
   /// Everyone in [conversationId], the caller included, by display name.
   Future<Result<List<Member>>> conversationMembers(String conversationId);
+
+  /// The full roster of [conversationId], including anyone who has left or
+  /// been removed (greyed in the app), for a GROUP only. The server refuses
+  /// (DeniedFailure) for a 1:1 or for a conversation the caller was never in.
+  Future<Result<List<GroupMember>>> groupRoster(String conversationId);
+
+  /// Leaves [conversationId] (a group only). The conversation stays in the
+  /// caller's list afterwards, read-only up to the moment they left. Refused
+  /// (DeniedFailure) for a 1:1 or when the caller is not a current member.
+  Future<Result<void>> leaveGroup(String conversationId);
+
+  /// Removes [memberId] from [conversationId] (a group only). Admin-only,
+  /// and never the caller's own id (leave instead). Refused otherwise.
+  Future<Result<void>> removeMember(String conversationId, String memberId);
+
+  /// Adds each of [memberIds] to [conversationId] (a group only), admin-only.
+  /// [withHistory] chooses whether each new (or returning) member can read
+  /// the group's existing history or only messages from now on. Each id must
+  /// already be reachable by the caller (the contacts/reach rule) and
+  /// allowlisted; one that is not fails the whole call. Already-current
+  /// members are silently skipped.
+  Future<Result<void>> addMembers(
+    String conversationId,
+    List<String> memberIds, {
+    required bool withHistory,
+  });
+
+  /// Makes [memberId] an admin of [conversationId], or unmakes one,
+  /// admin-only. Refused when this would leave the group with no admin at
+  /// all.
+  Future<Result<void>> setAdmin(
+    String conversationId,
+    String memberId, {
+    required bool isAdmin,
+  });
 
   /// Messages with a photo in [conversationId], newest first, capped like
   /// [messages].

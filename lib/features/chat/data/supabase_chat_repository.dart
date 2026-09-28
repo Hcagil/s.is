@@ -12,6 +12,7 @@ import '../../auth/domain/member.dart';
 import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
+import '../domain/group_member.dart';
 import '../domain/message.dart';
 import '../domain/read_marks.dart';
 
@@ -89,7 +90,7 @@ final class SupabaseChatRepository implements ChatRepository {
         // side's row.
         _client
             .from('conversation_members')
-            .select('conversation_id, user_id')
+            .select('conversation_id, user_id, left_at')
             .retriedOnce(),
         // Titles distinguish a group from a 1:1; RLS scopes this to the
         // caller's own conversations, same as the membership rows.
@@ -110,10 +111,29 @@ final class SupabaseChatRepository implements ChatRepository {
       };
 
       final otherByConversation = <String, String>{};
+      // The caller's own left_at, per conversation. A member who left and
+      // was later re-added can hold more than one row for the same
+      // conversation (the old row is kept, never rewritten): a current row
+      // (left_at null) always wins over a past one, and among only-past
+      // rows the most recent left_at wins.
+      final myLeftAtByConversation = <String, DateTime?>{};
       for (final row in memberRows) {
         final userId = row['user_id'] as String;
-        if (userId == me) continue;
-        otherByConversation[row['conversation_id'] as String] = userId;
+        final conversationId = row['conversation_id'] as String;
+        if (userId != me) {
+          otherByConversation[conversationId] = userId;
+          continue;
+        }
+        final leftAt = row['left_at'] == null
+            ? null
+            : DateTime.parse(row['left_at'] as String);
+        final known = myLeftAtByConversation[conversationId];
+        final knownIsCurrent =
+            myLeftAtByConversation.containsKey(conversationId) && known == null;
+        if (knownIsCurrent) continue; // a current row already wins outright
+        if (leftAt == null || known == null || leftAt.isAfter(known)) {
+          myLeftAtByConversation[conversationId] = leftAt;
+        }
       }
       // A group is listed by its title, so it needs no "other" member; only
       // 1:1 conversations do.
@@ -194,6 +214,7 @@ final class SupabaseChatRepository implements ChatRepository {
             lastSenderId: previewBy[id]?.sender,
             unread: unreadBy[id] ?? 0,
             avatarPath: avatarPathById[id],
+            hasLeft: myLeftAtByConversation[id] != null,
           ),
       ];
       // Conversations with no messages yet sort last.
@@ -241,6 +262,119 @@ final class SupabaseChatRepository implements ChatRepository {
             avatarPath: p['avatar_path'] as String?,
           ),
       ]);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<List<GroupMember>>> groupRoster(String conversationId) async {
+    try {
+      // RLS returns these rows only to a caller who is or was in the
+      // conversation, current members and past ones alike -- exactly what
+      // the roster's "left" section needs.
+      final rows = await _client
+          .from('conversation_members')
+          .select('user_id, role, left_at, left_reason')
+          .eq('conversation_id', conversationId)
+          .retriedOnce();
+      final ids = [for (final r in rows) r['user_id'] as String];
+      if (ids.isEmpty) return const Ok([]);
+      final profiles = await _client
+          .rpc('profiles_public', params: const {}, get: true)
+          .inFilter('user_id', ids)
+          .select('user_id, display_name, tag, avatar_path')
+          .retriedOnce();
+      final byId = {for (final p in profiles) p['user_id'] as String: p};
+      return Ok([
+        for (final row in rows)
+          GroupMember(
+            member: Member(
+              userId: row['user_id'] as String,
+              displayName:
+                  byId[row['user_id']]?['display_name'] as String? ?? 'Member',
+              tag: byId[row['user_id']]?['tag'] as String?,
+              avatarPath: byId[row['user_id']]?['avatar_path'] as String?,
+            ),
+            isAdmin: row['role'] == 'admin',
+            leftReason: row['left_at'] == null
+                ? null
+                : (row['left_reason'] == 'removed'
+                      ? LeftReason.removed
+                      : LeftReason.left),
+          ),
+      ]);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<void>> leaveGroup(String conversationId) async {
+    try {
+      await _client.rpc(
+        'leave_group',
+        params: {'conversation': conversationId},
+      );
+      return const Ok(null);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<void>> removeMember(
+    String conversationId,
+    String memberId,
+  ) async {
+    try {
+      await _client.rpc(
+        'remove_member',
+        params: {'conversation': conversationId, 'member': memberId},
+      );
+      return const Ok(null);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<void>> addMembers(
+    String conversationId,
+    List<String> memberIds, {
+    required bool withHistory,
+  }) async {
+    try {
+      await _client.rpc(
+        'add_members',
+        params: {
+          'conversation': conversationId,
+          'members': memberIds,
+          'with_history': withHistory,
+        },
+      );
+      return const Ok(null);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<void>> setAdmin(
+    String conversationId,
+    String memberId, {
+    required bool isAdmin,
+  }) async {
+    try {
+      await _client.rpc(
+        'set_admin',
+        params: {
+          'conversation': conversationId,
+          'member': memberId,
+          'is_admin': isAdmin,
+        },
+      );
+      return const Ok(null);
     } catch (e) {
       return Err(_asFailure(e));
     }

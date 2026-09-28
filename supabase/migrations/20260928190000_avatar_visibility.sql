@@ -22,26 +22,149 @@
 -- its own picture, and still receives every avatar_path it did before this
 -- (now possibly null, which they already render as initials -- avatar_path
 -- has been nullable since v0.17).
-
+--
+-- Security-lead findings F2 and F4 (2026-09-28) landed on this same
+-- migration rather than a follow-on, since it had not shipped yet:
+--
+-- F2: `profiles.avatar_path` and `avatar_visibility` were plain columns, so
+-- RLS's row-level grant (anyone sharing a conversation or holding a contact)
+-- leaked BOTH the real path and the setting regardless of what the setting
+-- said -- a 'nobody' owner's picture and choice were readable to anyone who
+-- could read the row at all. Fixed by splitting the path in two: the real
+-- value moves to a new column, `avatar_object`, with no client SELECT grant
+-- at all (only a security-definer function may read it for someone other
+-- than its owner, and only when avatar_visible_to agrees); `avatar_path`
+-- stays, but becomes a trigger-maintained shadow that holds the real value
+-- ONLY while the owner's setting is 'everyone' and is null otherwise -- so
+-- an old build (v0.21) selecting `avatar_path` straight off `profiles`, with
+-- no idea `avatar_visibility` or masking exist, sees exactly what
+-- avatar_visible_to's 'everyone' branch would show it anyway, and nothing
+-- when the owner chose fewer people. `avatar_visibility` itself has no safe
+-- masked value (it is not owner-dependent the way a path can be nulled), so
+-- its SELECT grant is revoked outright; the owner reads and writes their own
+-- through the new `own_profile()` RPC below, which bypasses the revoke the
+-- same way every other security-definer function here bypasses RLS: it runs
+-- as the table owner, not as `authenticated`.
+--
+-- F4: avatar_visible_to's 'contacts' branch checked contacts but not
+-- is_allowed(owner); the 'everyone' branch already had it. Hoisted the
+-- check out so it applies once, to every branch but the owner's own.
 alter table public.profiles
   add column avatar_visibility text not null default 'everyone'
     check (avatar_visibility in ('everyone', 'contacts', 'nobody'));
+
+-- The real, unmasked path. Same shape check avatar_path always had.
+-- Backfilled from avatar_path: every existing row's avatar_visibility is
+-- 'everyone' (the column default, just added, before any owner has had a
+-- chance to change it), so the existing avatar_path value is exactly what
+-- avatar_object should hold.
+alter table public.profiles
+  add column avatar_object text
+  check (avatar_object is null or char_length(avatar_object) between 3 and 400);
+update public.profiles set avatar_object = avatar_path where avatar_path is not null;
+
+-- avatar_path becomes a maintained shadow of avatar_object, masked by
+-- visibility, so ANY select of it -- including one an old build makes with
+-- no idea this migration exists -- already reflects the current setting.
+-- BEFORE trigger: sets NEW directly, no second statement, no recursion.
+create or replace function app_private.sync_legacy_avatar_path() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  new.avatar_path := case when new.avatar_visibility = 'everyone'
+                           then new.avatar_object else null end;
+  return new;
+end $$;
+revoke all on function app_private.sync_legacy_avatar_path() from public, anon, authenticated;
+
+create trigger profiles_sync_legacy_avatar_path
+  before insert or update of avatar_object, avatar_visibility on public.profiles
+  for each row execute function app_private.sync_legacy_avatar_path();
+
+-- Client write access moves from avatar_path to avatar_object -- the pinned
+-- column is now the real one; avatar_path is server-maintained only from
+-- here. avatar_visibility stays writable (an owner may always change their
+-- own setting); its SELECT grant is handled below, with avatar_object's.
+revoke update (avatar_path) on public.profiles from authenticated;
+grant update (avatar_object) on public.profiles to authenticated;
 grant update (avatar_visibility) on public.profiles to authenticated;
+
+-- profiles_update_own (avatars.sql) pinned avatar_path to the caller's own
+-- folder; redefined to pin avatar_object instead, same shape check
+-- (avatar_path_pinned), same reasoning.
+drop policy profiles_update_own on public.profiles;
+create policy profiles_update_own on public.profiles for update to authenticated
+  using ((select app_private.has_app_access()) and user_id = (select auth.uid()))
+  with check (
+    (select app_private.has_app_access())
+    and user_id = (select auth.uid())
+    and (avatar_object is null
+         or app_private.avatar_path_pinned(avatar_object, 'profile/' || user_id::text))
+  );
+
+-- F2: profiles' table-level SELECT grant (identity_and_access.sql) covers
+-- every column, present or future, including avatar_visibility and
+-- avatar_object -- a column-level REVOKE cannot narrow a table-level GRANT
+-- in Postgres, so the only way to withhold a column is to revoke the
+-- table-level grant and re-grant explicitly by column. Every column that
+-- was previously selectable stays selectable; avatar_visibility and
+-- avatar_object simply are not re-granted. RLS (profiles_read) still
+-- decides which ROWS come back; this narrows which COLUMNS of those rows
+-- do. The owner's own row is unaffected in practice: own_profile() below
+-- reads it as the table owner, not as `authenticated`.
+revoke select on public.profiles from authenticated;
+grant select (
+  user_id, display_name, created_at, tag, onboarding_done,
+  share_presence, share_typing, share_last_seen, share_read_status,
+  avatar_path
+) on public.profiles to authenticated;
+
+-- The owner's own settings and picture, unmasked -- the only way the app
+-- reads avatar_visibility or its own avatar_object now that both lost their
+-- client SELECT grant. Security definer: runs as the table owner, so the
+-- revoke above does not apply to it: it filters to the caller's own row
+-- itself instead. Same shape as `_columns` in supabase_profile_repository.
+-- dart's old `.select(_columns)` -- the app's load()/save()/setAvatar()/
+-- removeAvatar() all call this now instead of selecting the columns
+-- directly.
+create or replace function public.own_profile()
+returns table (
+  user_id uuid,
+  display_name text,
+  tag text,
+  onboarding_done boolean,
+  share_presence boolean,
+  share_typing boolean,
+  share_last_seen boolean,
+  share_read_status boolean,
+  avatar_path text,
+  avatar_visibility text
+) language sql stable security definer set search_path = '' as $$
+  select p.user_id, p.display_name, p.tag, p.onboarding_done,
+         p.share_presence, p.share_typing, p.share_last_seen, p.share_read_status,
+         p.avatar_object, p.avatar_visibility
+    from public.profiles p
+   where p.user_id = (select auth.uid())
+     and app_private.has_app_access()
+$$;
+revoke all on function public.own_profile() from public, anon;
+grant execute on function public.own_profile() to authenticated;
 
 -- Whether the caller may see [owner]'s picture right now (not their row --
 -- profiles_read decides that separately, and avatar visibility is scoped to
 -- readers of the row already except for one deliberate widening below).
 --
--- 'everyone': ANY active allowlisted member, not only someone who can
--- already read the profile ROW. Today's default behaviour for everyone who
--- has not changed it, and the same rule that lets a fresh find_by_tag result
--- show a picture at the moment it is found -- before the finder has added
--- the person or started a chat, so before shares_conversation/is_contact
--- would otherwise pass. The object's key is a random path under the owner's
--- own folder (see avatars.sql), never discoverable except through a read
--- this function, profiles_public or find_by_tag already gated -- so this is
--- exactly as wide as "any active member who can name the file", not wider.
--- 'contacts': only readers the OWNER has saved.
+-- 'everyone': any member who can REACH the owner (F1/can_reach), not only
+-- someone who can already read the profile ROW -- the same rule that lets a
+-- fresh find_by_tag result show a picture at the moment it is found, before
+-- the finder has added the person or started a chat (found_by_tag, one of
+-- can_reach's own branches, is what makes that true). Was "any active
+-- allowlisted member" with no reach requirement at all (F1): the object's
+-- key is a random path under the owner's own folder, discoverable only
+-- through a read this function, profiles_public or find_by_tag already
+-- gated, but a member who could never otherwise learn the owner's id had no
+-- business being handed the path regardless.
+-- 'contacts': only readers the OWNER has saved -- and, as of F4, only when
+-- the owner is still allowed (hoisted below, applies to both branches).
 -- 'nobody': only the owner.
 create or replace function app_private.avatar_visible_to(owner uuid) returns boolean
 language sql stable security definer set search_path = '' as $$
@@ -49,8 +172,9 @@ language sql stable security definer set search_path = '' as $$
      or exists (
        select 1 from public.profiles p
         where p.user_id = owner
+          and app_private.is_allowed(owner)
           and (
-            (p.avatar_visibility = 'everyone' and app_private.is_allowed(owner))
+            (p.avatar_visibility = 'everyone' and app_private.can_reach(owner))
             or (p.avatar_visibility = 'contacts'
                 and exists (select 1 from public.contacts c
                              where c.owner_id = owner
@@ -61,9 +185,7 @@ revoke all on function app_private.avatar_visible_to(uuid) from public, anon;
 grant execute on function app_private.avatar_visible_to(uuid) to authenticated;
 
 -- Storage: the same test the app now uses to decide whether to even show the
--- path (profiles_public, find_by_tag). Was app_private.is_allowed(owner)
--- alone -- exactly what avatar_visible_to's 'everyone' branch still is, so
--- this only narrows the 'contacts' and 'nobody' cases.
+-- path (profiles_public, find_by_tag).
 create or replace function app_private.avatar_path_readable(object_name text)
 returns boolean language plpgsql stable security definer set search_path = '' as $$
 declare
@@ -83,29 +205,53 @@ begin
   end;
 end $$;
 
--- A view PostgREST can select from directly, in place of the bare `profiles`
--- table, wherever the app shows someone ELSE's picture: `avatar_path` is
--- null for a reader avatar_visible_to refuses, same as no picture at all --
--- the app already renders a null avatar_path as the initials circle, so
--- nothing new is needed there, and a cached copy of a picture that just
--- became hidden is simply never looked up again once its path stops being
--- returned. security_invoker (the default, stated for clarity) means row
--- visibility still comes from profiles_read on the underlying table; this
--- only narrows one column further.
-create or replace view public.profiles_public
-  with (security_invoker = true) as
-select
-  p.user_id,
-  p.display_name,
-  p.tag,
-  case when app_private.avatar_visible_to(p.user_id) then p.avatar_path else null end
-    as avatar_path
-from public.profiles p;
-grant select on public.profiles_public to authenticated;
+-- In place of the bare `profiles` table, wherever the app shows someone
+-- ELSE's picture: `avatar_path` is null for a reader avatar_visible_to
+-- refuses, same as no picture at all -- the app already renders a null
+-- avatar_path as the initials circle, so nothing new is needed there, and a
+-- cached copy of a picture that just became hidden is simply never looked up
+-- again once its path stops being returned.
+--
+-- A SECURITY DEFINER FUNCTION, not a security_invoker VIEW as first written:
+-- the view read `p.avatar_object` inside its masking CASE, and Postgres
+-- requires the QUERYING role to hold column SELECT on every column a
+-- security_invoker view references to plan the query at all -- regardless
+-- of whether the CASE ends up returning it -- so the view broke the moment
+-- avatar_object's client grant was revoked (F2): every call failed
+-- `permission denied for table profiles`, caught only by testing this
+-- migration end-to-end through PostgREST, not by db lint or the pgTAP
+-- suite. The fix already used everywhere else a masked or privileged read is
+-- needed (find_by_tag, last_seen_of, own_profile): run as the table owner,
+-- which needs no column grant, and repeat profiles_read's own row rule
+-- explicitly instead of relying on RLS pass-through. `stable` so PostgREST
+-- still serves it over GET with the same query parameters (select, eq, neq,
+-- in, order) the app already sends -- a stable or immutable function is
+-- queryable exactly like a view or table, not only callable as an RPC POST.
+-- Table-level grants default to anon/authenticated on a new relation the
+-- same way they do on a new table (F7) -- so execute is revoked first, then
+-- granted only to authenticated, same shape as every other RPC here.
+drop view if exists public.profiles_public;
+create or replace function public.profiles_public()
+returns table (user_id uuid, display_name text, tag text, avatar_path text)
+language sql stable security definer set search_path = '' as $$
+  select p.user_id, p.display_name, p.tag,
+         case when app_private.avatar_visible_to(p.user_id) then p.avatar_object else null end
+    from public.profiles p
+   where app_private.has_app_access()
+     and app_private.is_allowed(p.user_id)
+     and (p.user_id = (select auth.uid())
+          or app_private.shares_conversation(p.user_id)
+          or app_private.is_contact(p.user_id))
+$$;
+revoke all on function public.profiles_public() from public, anon;
+grant execute on function public.profiles_public() to authenticated;
 
 -- find_by_tag's own picture, masked the same way (its row bypasses
 -- profiles_read entirely -- security definer -- so it must apply the same
--- rule itself rather than inherit it).
+-- rule itself rather than inherit it). Full redefinition, not just the
+-- returned expression: this is the same function contacts.sql defines
+-- (lock, per-kind rate limit, tag_finds bookkeeping), reading avatar_object
+-- instead of avatar_path now that avatar_object exists.
 create or replace function public.find_by_tag(search_tag text)
 returns table (user_id uuid, display_name text, tag text, avatar_path text)
 language plpgsql volatile security definer set search_path = '' as $$
@@ -113,15 +259,19 @@ declare
   me        uuid := auth.uid();
   candidate text;
   recent    int;
+  hit       uuid;
 begin
   if not app_private.has_app_access() then
     raise exception 'not permitted' using errcode = '42501';
   end if;
 
+  perform pg_advisory_xact_lock(hashtextextended('find_by_tag:' || me::text, 0));
+
   delete from app_private.tag_lookups t
-   where t.user_id = me and t.called_at < now() - interval '10 minutes';
-  insert into app_private.tag_lookups(user_id) values (me);
-  select count(*) into recent from app_private.tag_lookups t where t.user_id = me;
+   where t.user_id = me and t.kind = 'find' and t.called_at < now() - interval '10 minutes';
+  insert into app_private.tag_lookups(user_id, kind) values (me, 'find');
+  select count(*) into recent from app_private.tag_lookups t
+   where t.user_id = me and t.kind = 'find';
   if recent > 20 then
     raise exception 'too many searches' using errcode = 'RLMT1';
   end if;
@@ -131,14 +281,27 @@ begin
     return;
   end if;
 
+  select p.user_id into hit
+    from public.profiles p
+   where p.tag = candidate
+     and p.user_id <> me
+     and app_private.is_allowed(p.user_id)
+   limit 1;
+  if hit is null then
+    return;
+  end if;
+
+  -- Recorded BEFORE the masked select below, so this same call's
+  -- avatar_visible_to (via can_reach -> found_by_tag) already sees it and a
+  -- fresh 'everyone' result shows its picture immediately.
+  insert into app_private.tag_finds(finder, found_id) values (me, hit)
+    on conflict (finder, found_id) do update set found_at = now();
+
   return query
     select p.user_id, p.display_name, p.tag,
-           case when app_private.avatar_visible_to(p.user_id) then p.avatar_path else null end
+           case when app_private.avatar_visible_to(p.user_id) then p.avatar_object else null end
       from public.profiles p
-     where p.tag = candidate
-       and p.user_id <> me
-       and app_private.is_allowed(p.user_id)
-     limit 1;
+     where p.user_id = hit;
 end $$;
 revoke all on function public.find_by_tag(text) from public, anon;
 grant execute on function public.find_by_tag(text) to authenticated;

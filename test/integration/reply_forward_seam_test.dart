@@ -23,6 +23,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/fakes.dart';
 import '../support/sis_ui.dart';
 import '../support/service_key.dart';
+import '../support/reach.dart';
 
 /// Two members' message screens, mounted at once over the real repository:
 /// reid replies to a message through the actual swipe -> action row -> type
@@ -115,6 +116,7 @@ void main() {
       displayName: 'Cora',
     );
 
+    await findByTag(reidClient!, [bethClient!, coraClient!]);
     final s1 = await reid.startDirectConversation(bethMember.userId);
     c1 = (s1 as Ok<String>).value;
     final s2 = await reid.startDirectConversation(coraMember.userId);

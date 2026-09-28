@@ -31,6 +31,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../features/profile/avatar_widgets_test.dart' show avatarIn, picturesIn;
 import '../support/fakes.dart';
+import '../support/reach.dart';
 
 /// A person's page shows the picture its caller knows, on the real stack:
 /// deniz sets a picture AFTER ece's app has read the member list, so ece's
@@ -164,6 +165,7 @@ void main() {
     final ece = SupabaseChatRepository(eceClient);
     final deniz = SupabaseChatRepository(denizClient);
     final (group, direct) = (await t.runAsync(() async {
+      await findByTag(eceClient, [denizClient]);
       await _pictureless(denizClient);
       final g = _ok(
         await ece.startGroupConversation(

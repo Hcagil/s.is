@@ -32,6 +32,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// Unread counts through the real stack: [SupabaseChatRepository.markRead]
 /// and `conversations().unread` against the real RPCs, and the seam the
@@ -303,6 +304,8 @@ void main() {
     unaId = unaClient!.auth.currentUser!.id;
     ottoId = ottoClient!.auth.currentUser!.id;
 
+    await findByTag(unaClient!, [ottoClient!]);
+    await findByTag(piaClient!, [ottoClient!]);
     direct = (await una.startDirectConversation(ottoId) as Ok<String>).value;
     piaOtto = (await pia.startDirectConversation(ottoId) as Ok<String>).value;
     groupId = (await una.startGroupConversation(

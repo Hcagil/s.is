@@ -18,6 +18,7 @@ import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// The live conversation list against the real stack: the REAL
 /// [ConversationListController] on the REAL [SupabaseChatRepository], with
@@ -230,6 +231,8 @@ void main() {
     roseId = roseClient!.auth.currentUser!.id;
     samId = samClient!.auth.currentUser!.id;
 
+    await findByTag(roseClient!, [samClient!]);
+    await findByTag(tessClient!, [samClient!]);
     roseSam = (await rose.startDirectConversation(samId) as Ok<String>).value;
     tessSam = (await tess.startDirectConversation(samId) as Ok<String>).value;
     roseGroup = (await rose.startGroupConversation(

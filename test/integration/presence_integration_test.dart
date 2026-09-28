@@ -17,6 +17,8 @@ import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/reach.dart';
+
 /// Online status and typing against the real stack: the REAL controllers on
 /// the REAL [SupabasePresenceRepository], over real private Realtime channels
 /// that the server authorises with the policies on realtime.messages.
@@ -218,6 +220,7 @@ void main() {
     yara = Account(await _signedIn('yara@integration.test'));
     zane = Account(await _signedIn('zane@integration.test'));
     abby = Account(await _signedIn('abby@integration.test'));
+    await findByTag(yara.client, [zane.client]);
     final started = await SupabaseChatRepository(yara.client)
         .startDirectConversation(zane.id);
     cid = (started as Ok<String>).value;

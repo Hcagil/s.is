@@ -11,6 +11,8 @@ import 'package:sis/features/notifications/data/supabase_notification_settings_r
 import 'package:sis/features/notifications/domain/notification_settings.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/reach.dart';
+
 /// [SupabaseNotificationSettingsRepository] against a real local Supabase:
 /// query shaping and row-level security over `notification_settings` and
 /// `notification_mutes` (supabase/migrations/20260924120000_notification_settings.sql).
@@ -111,6 +113,7 @@ void main() {
     annId = _uid(annClient!);
 
     // A conversation cleo is really a member of, for the "in it" mute case.
+    await findByTag(cleoClient!, [annClient!]);
     sharedConversation = _ok(
       await SupabaseChatRepository(cleoClient!).startDirectConversation(annId),
       'starting a conversation',

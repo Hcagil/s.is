@@ -36,6 +36,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/dead_host.dart';
 import '../support/fakes.dart';
 import '../support/service_key.dart';
+import '../support/reach.dart';
 
 /// Message search's screens on their seams (v0.16), the whole app mounted as
 /// main.dart mounts it for vedat: the real chat, presence and profile
@@ -287,6 +288,7 @@ void main() {
         .from('profiles')
         .update({'onboarding_done': true})
         .eq('user_id', vedatId);
+    await findByTag(vedatClient, [yesimClient]);
     room = (await vedat.startGroupConversation(
       title: 'jump',
       memberIds: [yesimId],

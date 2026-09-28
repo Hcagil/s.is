@@ -27,6 +27,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
 import '../support/fakes.dart';
+import '../support/reach.dart';
 
 /// A text message shown the moment it is sent (2026-09-28), on the sender's
 /// own MessageScreen over the real [SupabaseChatRepository]: the server's
@@ -220,6 +221,7 @@ void main() {
     umutClient = await _signedIn('umut@integration.test');
     zaneClient = await _signedIn('zane@integration.test');
     umut = Member(userId: umutClient.auth.currentUser!.id, displayName: 'Umut');
+    await findByTag(umutClient, [zaneClient]);
     final started = await SupabaseChatRepository(umutClient)
         .startDirectConversation(zaneClient.auth.currentUser!.id);
     conversationId = (started as Ok<String>).value;

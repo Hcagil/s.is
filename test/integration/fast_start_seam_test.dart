@@ -29,6 +29,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/reach.dart';
 
 /// The app opening faster (v0.21.4, docs/DECISIONS.md 2026-09-28) against the
 /// real local stack: the REAL [SupabaseChatRepository] and
@@ -223,6 +224,7 @@ void main() {
 
     chat = SupabaseChatRepository(bram);
     final doraChat = SupabaseChatRepository(dora);
+    await findByTag(bram, [dora, eli]);
     withDora = _ok(await chat.startDirectConversation(doraId));
     withEli = _ok(await chat.startDirectConversation(eliId));
     groupTitle = _stamp('fast start');

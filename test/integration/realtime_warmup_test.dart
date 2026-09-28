@@ -7,6 +7,8 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/reach.dart';
+
 /// A readiness probe, not a test of the app.
 ///
 /// After `supabase start` (or a reset) the Realtime service accepts a
@@ -56,6 +58,7 @@ void main() {
       await bob.dispose();
     });
 
+    await findByTag(ann, [bob]);
     final repo = SupabaseChatRepository(ann);
     final started = await repo.startDirectConversation(
       bob.auth.currentUser!.id,

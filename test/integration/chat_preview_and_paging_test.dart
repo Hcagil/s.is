@@ -11,6 +11,8 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/reach.dart';
+
 /// Two behaviours of [SupabaseChatRepository] that only the real stack can
 /// show: what the conversation list previews, and what a conversation longer
 /// than the read limit returns.
@@ -125,6 +127,7 @@ void main() {
     oliveClient = await _signedIn('olive@integration.test');
     olive = SupabaseChatRepository(oliveClient!);
 
+    await findByTag(oliveClient!, [peteClient!, quinnClient!]);
     final withPete = await olive.startDirectConversation(
       peteClient!.auth.currentUser!.id,
     );

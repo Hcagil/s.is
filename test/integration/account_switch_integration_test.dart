@@ -22,6 +22,8 @@ import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/reach.dart';
+
 /// Two accounts, one after the other, on ONE client — one phone.
 ///
 /// The widget tests replay the owner's report over fakes that share a
@@ -128,16 +130,21 @@ void main() {
 
   setUpAll(() async {
     // jude and kara each have a conversation with lena the other is not in.
+    final tags = <String, String>{};
     for (final (email, set) in [
       ('jude@integration.test', (String id) => judeId = id),
       ('kara@integration.test', (String id) => karaId = id),
     ]) {
       final other = await elsewhere(email);
       set(other.auth.currentUser!.id);
+      tags[other.auth.currentUser!.id] = await tagOf(other);
       await other.dispose();
     }
     lena = await elsewhere('lena@integration.test');
     lenaId = lena!.auth.currentUser!.id;
+    for (final MapEntry(key: id, value: tag) in tags.entries) {
+      await findTag(lena!, tag, id: id);
+    }
     final fromLena = SupabaseChatRepository(lena!);
     judeWithLena =
         (await fromLena.startDirectConversation(judeId) as Ok<String>).value;

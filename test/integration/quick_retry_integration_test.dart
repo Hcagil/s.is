@@ -18,6 +18,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// Every table read the repositories make, over a connection that misbehaves
 /// the way a phone's does:
@@ -166,6 +167,7 @@ void main() {
     tove = await _signedIn('tove@integration.test', recorder);
     final ugo = await _signedIn('ugo@integration.test');
     clients.addAll([tove, ugo]);
+    await findByTag(tove, [ugo]);
     final chat = SupabaseChatRepository(tove);
     final started = await chat.startDirectConversation(
       ugo.auth.currentUser!.id,

@@ -31,6 +31,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/reach.dart';
 
 /// Setting a picture through the crop screen, on the real stack: the whole
 /// app as main.dart mounts it, with only the platform pieces faked where
@@ -146,6 +147,7 @@ void main() {
   setUpAll(() async {
     aClient = await _signedIn('deniz@integration.test');
     bClient = await _signedIn('ece@integration.test');
+    await findByTag(aClient, [bClient]);
     await _pictureless(aClient);
     groupId = _ok(
       await SupabaseChatRepository(

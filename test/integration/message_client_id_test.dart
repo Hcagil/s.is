@@ -9,6 +9,8 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/reach.dart';
+
 /// A text message carries the id the phone made for it, so a retried send
 /// is idempotent (docs/DECISIONS.md, "Unsent text stays in each chat").
 /// Against the real local stack: [SupabaseChatRepository.send] stores the
@@ -74,6 +76,8 @@ void main() {
     vedatClient = await _signedIn('vedat@integration.test');
     umut = SupabaseChatRepository(umutClient);
     zane = SupabaseChatRepository(zaneClient);
+    await findByTag(umutClient, [zaneClient, vedatClient]);
+    await findByTag(zaneClient, [vedatClient]);
     umutZane = await direct(umut, zaneClient);
     umutVedat = await direct(umut, vedatClient);
     zaneVedat = await direct(zane, vedatClient);

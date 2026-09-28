@@ -11,6 +11,8 @@ import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/reach.dart';
+
 /// A real 1x1 PNG: the bucket checks the mime type against real bytes.
 final _png = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -77,6 +79,8 @@ void main() {
     bob = SupabaseChatRepository(bobClient!);
     carl = SupabaseChatRepository(carlClient!);
 
+    await findByTag(annClient!, [bobClient!, carlClient!]);
+    await findByTag(bobClient!, [carlClient!]);
     final s1 = await ann.startDirectConversation(
       bobClient!.auth.currentUser!.id,
     );

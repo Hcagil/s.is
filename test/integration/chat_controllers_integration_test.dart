@@ -14,6 +14,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// The controller seam against the real stack.
 ///
@@ -136,6 +137,7 @@ void main() {
     deadSignedInClient = await deadButSignedIn(carolClient!);
     offlineSignedIn = ChatRepositoryOwner(deadSignedInClient!);
 
+    await findByTag(carolClient!, [danClient!]);
     final started = await carol.repository.startDirectConversation(dan.userId);
     expect(started, isA<Ok<String>>());
     conversationId = (started as Ok<String>).value;

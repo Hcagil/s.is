@@ -9,6 +9,8 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/reach.dart';
+
 /// Regression: an insert event that carries no row must not reach
 /// `_toMessage`'s casts, and must not disturb the stream for anything that
 /// arrives after it.
@@ -98,6 +100,7 @@ void main() {
     final ann = SupabaseChatRepository(annClient!);
     final bob = SupabaseChatRepository(bobClient!);
 
+    await findByTag(annClient!, [bobClient!]);
     final started = await ann.startDirectConversation(
       bobClient!.auth.currentUser!.id,
     );

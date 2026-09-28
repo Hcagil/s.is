@@ -25,6 +25,7 @@ import 'package:sis/features/presence/data/supabase_presence_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/reach.dart';
 
 /// The message screen mounted exactly as `main.dart` wires it, over a real
 /// [SupabaseChatRepository] and a real [FileAttachmentCache] on a temporary
@@ -161,6 +162,7 @@ void main() {
       displayName: 'Xena',
     );
 
+    await findByTag(waltClient, [xenaClient]);
     final started = await walt.startDirectConversation(xenaMember.userId);
     expect(started, isA<Ok<String>>());
     conversationId = (started as Ok<String>).value;

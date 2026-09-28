@@ -26,6 +26,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/fakes.dart';
 import '../support/service_key.dart';
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// Image attachments against the real stack: a real upload into a private
 /// bucket, real storage row-level security, a real signed URL fetched over
@@ -168,6 +169,7 @@ void main() {
     noah = SupabaseChatRepository(noahClient!);
     offline = SupabaseChatRepository(deadClient!);
 
+    await findByTag(liamClient!, [miaClient!]);
     final started = await liam.startDirectConversation(
       miaClient!.auth.currentUser!.id,
     );

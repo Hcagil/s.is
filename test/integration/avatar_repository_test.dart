@@ -14,6 +14,8 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/reach.dart';
+
 /// Profile and group pictures against the real stack: the private `avatars`
 /// bucket and its policies, profiles.avatar_path, set_group_avatar(), and the
 /// repositories' own query shaping -- upload, read by someone allowed, refusal
@@ -181,6 +183,12 @@ void main() {
     anon = _client();
     aviId = avi.auth.currentUser!.id;
     beaId = bea.auth.currentUser!.id;
+    // Since v0.22.0 a profile and its "everyone" picture are open to people
+    // who share a chat: bea finds avi and starts their 1:1, so each is among
+    // the other's people. cem invites bea to groups, so he finds her.
+    await findByTag(bea, [avi]);
+    _ok(await SupabaseChatRepository(bea).startDirectConversation(aviId));
+    await findByTag(cem, [bea]);
   });
 
   // Every test starts with avi pictureless and her folder empty, whatever an

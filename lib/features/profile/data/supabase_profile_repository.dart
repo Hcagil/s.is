@@ -46,7 +46,9 @@ final class SupabaseProfileRepository implements ProfileRepository {
     if (me == null) return const Err(DeniedFailure());
     try {
       final rows =
-          await _client.rpc('own_profile', get: true).retriedOnce()
+          await _client
+                  .rpc('own_profile', params: const {}, get: true)
+                  .retriedOnce()
               as List<dynamic>;
       if (rows.isEmpty) return const Err(DeniedFailure());
       return Ok(_toProfile(rows[0] as Map<String, dynamic>));

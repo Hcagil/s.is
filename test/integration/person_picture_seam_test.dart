@@ -281,6 +281,27 @@ void main() {
     await t.runAsync(
       () => container.read(conversationListProvider.notifier).refresh(),
     );
+    // The 1:1 tops the list (its message is the newest), but tapping the
+    // group, second, ran ensureVisible, which aligns that row to the top
+    // whenever the list can scroll: with ece's groups from earlier runs it
+    // can, and the 1:1 is left offstage above it. Scroll back up to it, as
+    // ece would.
+    await until(() => shows(byKey('conversation-$group')), 'the list again');
+    await t.scrollUntilVisible(
+      byKey('conversation-$direct'),
+      -100,
+      scrollable: find
+          .ancestor(
+            // Any row in view: finders skip the ones scrolled away.
+            of: find.byWidgetPredicate((w) {
+              final k = w.key;
+              return k is ValueKey<String> &&
+                  RegExp(r'^conversation-[0-9a-f-]{36}$').hasMatch(k.value);
+            }).first,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tap('conversation-$direct');
     await until(() => shows(find.byType(MessageScreen)), 'the 1:1');
     await tap('conversation-title');

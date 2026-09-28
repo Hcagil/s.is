@@ -307,11 +307,24 @@ void main() {
         int.parse((r['body'] as String).split(' ')[1]): r['id'] as String,
     };
     ids = [for (var i = 0; i < 600; i++) byIndex[i]!];
+    // Realtime reads inserts off the WAL in order and checks who subscribes
+    // as it reads them, not as they were written. On a busy stack (CI) it
+    // can still be reading the 600 above when a screen joins, and hands that
+    // screen backdated rows as arrivals; a jumped-to hit is pushed up by
+    // each, and off screen by enough ("never happened: the old hit on
+    // screen", count still 4/4). So wait until it has read past them:
+    // 'on top', written after them, arrives.
+    final probe = await yesim.incoming(room);
+    final arrived = (probe as Ok<Stream<Message>>).value
+        .firstWhere((m) => m.body == 'on top')
+        .timeout(const Duration(seconds: 30));
     // Now, so this run's room tops vedat's list above earlier runs' rooms.
     expect(
       await yesim.send(conversationId: room, body: 'on top'),
       isA<Ok<Message>>(),
     );
+    await arrived;
+    await yesimClient.removeAllChannels();
     expect(ids, hasLength(600));
     await service.dispose();
   });

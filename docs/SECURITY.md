@@ -29,6 +29,41 @@ Postgres Row Level Security is the only authority. The client is untrusted.
   - `conversations`, `conversation_members`, `messages` — every policy is
     `has_app_access()` **and** membership. A conversation is a group when it
     has a `title`; a 1:1 has a unique `direct_key`.
+  - **Membership windows (v0.23).** `conversation_members` keeps history:
+    `role` (`admin`|`member`), `left_at`/`left_reason` (null = current),
+    `history_from`. Leaving or removal keeps the row; a returning member gets
+    a new row, so one person can have several windows. `is_member` = a
+    current row (every action: send, edit, delete, reply, group picture,
+    typing, read marks, admin actions); `was_member` = any row (the
+    conversation row itself). Messages are readable only inside a window —
+    `app_private.message_readable(m)`: `history_from ≤ created_at` and, for a
+    past row, `created_at ≤ left_at`. `messages_read`, `search_messages`,
+    attachment reads (plus the uploader's own object while a member) and the
+    reply check all use it. `unread_counts`, push and the `typing:`/`reads:`
+    topics use current membership only; `mark_read` never marks past
+    `left_at`. Seeing other members' rows and names requires the two
+    memberships to have overlapped in time, so a departed member never learns
+    who joined later and a member added without history never sees who left
+    before. `add_members(with_history=false)` sets `history_from = now()`.
+  - **Admins.** `leave_group`, `remove_member`, `add_members`, `set_admin`
+    are security-definer RPCs: allowlist + active session, groups only (a 1:1
+    is refused), admin actions need a current admin, invitees must be
+    allowlisted and reachable (all or nothing). Each takes a per-group
+    advisory lock first, and a deferred constraint trigger refuses any
+    transaction that leaves a group with members but no admin. The group's
+    creator is its admin; the last admin leaving promotes the
+    longest-standing current member; the sole admin cannot be demoted; an
+    admin cannot remove themselves.
+  - **`group_events`** (left/removed/added): RLS, SELECT only for current
+    admins and only from their own `history_from`, written only by those
+    RPCs, not in the Realtime publication, never read by previews, unread
+    counts, search or push.
+  - Accepted leftovers (v0.23): a private Realtime channel joined before
+    leaving keeps receiving typing and read broadcasts until it is rejoined
+    (authorisation is checked at join; the same holds for a revoked session;
+    the app leaves those channels as soon as it sees it has left); a message
+    edited within its 6-hour window after someone left shows the edit to
+    them.
   - `messages` inserts: `authenticated` may insert exactly `id,
     conversation_id, sender_id, body, attachment_path, attachment_preview,
     reply_to, forwarded`; `created_at`, `deleted`, `deleted_at` and
@@ -159,8 +194,8 @@ Message search, `public.search_messages(query, conversation)`, is a
 running it with the caller's rights under row-level security, can't be fast:
 `LIKE` and the trigram operators aren't leakproof, so RLS forces a scan of
 every message. So the function repeats `messages_read` explicitly:
-`has_app_access()` and `is_member(conversation_id)`, the same functions the
-policy calls. It also bounds the rows to the caller's memberships first, and
+`has_app_access()` and `app_private.message_readable(m)`, the same functions
+the policy calls. It also bounds the rows to the caller's memberships first, and
 refuses a named conversation the caller is not in before any scan. **Whenever
 `messages_read` changes, this function must change with it.** A pgTAP
 equivalence test (`message_search_test.sql`) fails if the two drift apart.

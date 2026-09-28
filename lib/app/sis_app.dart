@@ -48,6 +48,10 @@ class _AllowedGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Starts alongside the profile load below rather than only once Home is
+    // reached, so the two round trips race instead of running one after the
+    // other. Its value is unused here; HomeScreen reads it once shown.
+    ref.listen(conversationListProvider, (_, _) {});
     return switch (ref.watch(ownProfileProvider)) {
       AsyncData(:final value) when !value.onboardingDone => OnboardingScreen(
         profile: value,

@@ -16,6 +16,7 @@ import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
@@ -274,6 +275,23 @@ void main() {
     await switchTo(t, p, cagilhay);
     expect(p.c.read(messagesProvider).requireValue, isEmpty);
     expect(p.chat.liveIncoming, isEmpty, reason: 'old subscription kept');
+  });
+
+  testWidgets('draftsProvider starts empty for the new account', (t) async {
+    final p = await signedInAsHeybana(t);
+    p.c.listen(draftsProvider, (_, _) {});
+    p.c.read(draftsProvider.notifier)
+      ..setText('c-ac', 'for heybana only')
+      ..setText('c-ab', 'also hers');
+    await settle(t);
+    expect(p.c.read(draftsProvider), hasLength(2), reason: 'precondition');
+
+    await switchTo(t, p, cagilhay);
+    expect(
+      p.c.read(draftsProvider),
+      isEmpty,
+      reason: 'the last account\'s unsent text shows under the new one',
+    );
   });
 
   testWidgets('typingProvider closes the old account\'s channel', (t) async {

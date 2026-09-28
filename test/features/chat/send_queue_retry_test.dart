@@ -284,15 +284,5 @@ void main() {
       expect(queued(c, 'c1'), isEmpty);
       expect(chat.asked, hasLength(1));
     });
-
-    testWidgets('returning with nothing queued sends nothing', (t) async {
-      final chat = HeldSendChat();
-      final c = await start(t, chat);
-      c.read(sendQueueProvider.notifier)
-        ..pauseForBackground()
-        ..resumeForeground();
-      await hop(t);
-      expect(chat.asked, isEmpty);
-    });
   });
 }

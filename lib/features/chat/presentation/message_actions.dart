@@ -9,98 +9,34 @@ import '../domain/message.dart';
 import '../domain/read_marks.dart';
 import 'forward_sheet.dart';
 
-/// What a long press on a message offers: reply, forward, and -- for your
-/// own message under 6 hours old -- delete for everyone. Nothing opens when
-/// there is nothing to offer.
-Future<void> showMessageActions(
+/// Carries out [action] on [message] -- the same behaviour the long-press
+/// menu used to run, now reached by swiping instead. Which actions are
+/// offered for a message at all is decided once, by
+/// `allowedMessageActions` in `../domain/message.dart`; this function never
+/// re-checks that -- it trusts the caller offered only an allowed action.
+Future<void> runMessageAction(
   BuildContext context,
   WidgetRef ref,
-  Message message, {
-  required String? me,
-  bool group = false,
-}) async {
-  final canDelete =
-      me != null && message.canDeleteForEveryone(me, DateTime.now());
-  final canEdit = me != null && message.canEdit(me, DateTime.now());
-  // Reply and forward need a stored message with something in it.
-  final canShare = !message.isPending && !message.isDeleted;
-  // In a group, who has read your message (where read status is shared).
-  final canSeeReaders = group && me != null && message.isFrom(me) && canShare;
-  if (!canDelete && !canShare && !canEdit) return;
-
-  final action = await showModalBottomSheet<String>(
-    context: context,
-    showDragHandle: true,
-    builder: (sheet) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (canSeeReaders)
-            ListTile(
-              key: const ValueKey('action-read-by'),
-              leading: const Icon(Icons.done_all),
-              title: const Text('Read by'),
-              onTap: () => Navigator.of(sheet).pop('read-by'),
-            ),
-          if (canShare) ...[
-            ListTile(
-              key: const ValueKey('action-reply'),
-              leading: const Icon(Icons.reply),
-              title: const Text('Reply'),
-              onTap: () => Navigator.of(sheet).pop('reply'),
-            ),
-            ListTile(
-              key: const ValueKey('action-forward'),
-              leading: const Icon(Icons.shortcut),
-              title: const Text('Forward'),
-              onTap: () => Navigator.of(sheet).pop('forward'),
-            ),
-          ],
-          if (canEdit)
-            ListTile(
-              key: const ValueKey('action-edit'),
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('Edit'),
-              onTap: () => Navigator.of(sheet).pop('edit'),
-            ),
-          if (canDelete)
-            ListTile(
-              key: const ValueKey('action-delete'),
-              leading: Icon(
-                Icons.delete_outline,
-                color: Theme.of(sheet).colorScheme.error,
-              ),
-              title: Text(
-                'Delete for everyone',
-                style: TextStyle(color: Theme.of(sheet).colorScheme.error),
-              ),
-              onTap: () => Navigator.of(sheet).pop('delete'),
-            ),
-        ],
-      ),
-    ),
-  );
-
-  if (!context.mounted) return;
+  Message message,
+  MessageAction action,
+) async {
   switch (action) {
-    case 'reply':
+    case MessageAction.reply:
       ref.read(editingProvider.notifier).clear();
       ref.read(replyingToProvider.notifier).start(message);
       return;
-    case 'edit':
+    case MessageAction.edit:
       ref.read(replyingToProvider.notifier).clear();
       ref.read(editingProvider.notifier).start(message);
       return;
-    case 'forward':
+    case MessageAction.forward:
       await showForwardSheet(context, ref, message);
       return;
-    case 'read-by':
+    case MessageAction.readBy:
       await _showReaders(context, ref, message);
       return;
-    case 'delete':
+    case MessageAction.delete:
       break;
-    default:
-      return;
   }
   if (!context.mounted) return;
 

@@ -33,6 +33,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/sis_ui.dart';
 import '../support/dead_host.dart';
 
 /// Read status on its seams, wired as main.dart wires it: the REAL
@@ -642,9 +643,9 @@ void main() {
         );
         expect(yellow(t, message.id), isFalse);
 
-        await t.longPress(bubble(message.id));
+        await t.drag(bubble(message.id), swipeOpen);
         await t.pumpAndSettle();
-        await t.tap(find.text('Read by'));
+        await t.tap(find.byKey(const ValueKey('action-read-by')));
         await t.pumpAndSettle();
         final now = DateTime.now();
         for (final id in [theoId, wrenId]) {

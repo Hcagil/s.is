@@ -25,6 +25,7 @@ import '../domain/message.dart';
 import '../domain/read_marks.dart';
 import 'attachment_sheet.dart';
 import 'chat_search_bar.dart';
+import 'swipeable_message.dart';
 import 'conversation_list.dart';
 import 'message_actions.dart';
 import 'person_avatar.dart';
@@ -146,6 +147,11 @@ class MessageScreen extends ConsumerStatefulWidget {
 class _MessageScreenState extends ConsumerState<MessageScreen> {
   final _scroll = ScrollController();
   final _bubbleKeys = <String, GlobalKey>{};
+
+  /// The id of the message whose swipe action row is currently open, or
+  /// null. At most one bubble's row is open at a time; scrolling the list
+  /// closes it (see [initState]), as does a tap anywhere else in the list.
+  final _openSwipeId = ValueNotifier<String?>(null);
   late bool _searching =
       widget.initialSearchQuery != null &&
       widget.initialSearchQuery!.trim().isNotEmpty;
@@ -167,8 +173,20 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   int _generation = 0;
 
   @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_closeSwipeOnScroll);
+  }
+
+  void _closeSwipeOnScroll() {
+    if (_openSwipeId.value != null) _openSwipeId.value = null;
+  }
+
+  @override
   void dispose() {
+    _scroll.removeListener(_closeSwipeOnScroll);
     _scroll.dispose();
+    _openSwipeId.dispose();
     super.dispose();
   }
 
@@ -431,77 +449,98 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
           child: Column(
             children: [
               Expanded(
-                child: switch (messages) {
-                  AsyncData(:final value) when value.isEmpty => const Center(
-                    child: Text('No messages yet. Say something.'),
-                  ),
-                  AsyncData(:final value) => ListView.builder(
-                    controller: _scroll,
-                    // Newest at the bottom, which is where the composer is.
-                    reverse: true,
-                    // Generous on purpose: a jump-to-hit needs the target
-                    // bubble built even when it is far from the current
-                    // scroll offset (see _scrollTo).
-                    scrollCacheExtent: ScrollCacheExtent.pixels(2000),
-                    itemCount: value.length,
-                    itemBuilder: (context, i) {
-                      final index = value.length - 1 - i;
-                      final message = value[index];
-                      final mine = me != null && message.isFrom(me);
-                      final quoted = message.replyTo == null
-                          ? null
-                          : value
-                                .where((m) => m.id == message.replyTo)
-                                .firstOrNull;
-                      final unread =
-                          mine &&
-                          !message.isDeleted &&
-                          (message.isPending ||
-                              !isReadByAnyone(marks, message.createdAt));
-                      final bubble = GestureDetector(
-                        key: _keyFor(message.id),
-                        onLongPress: () => showMessageActions(
-                          context,
-                          ref,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () => _openSwipeId.value = null,
+                  child: switch (messages) {
+                    AsyncData(:final value) when value.isEmpty => const Center(
+                      child: Text('No messages yet. Say something.'),
+                    ),
+                    AsyncData(:final value) => ListView.builder(
+                      controller: _scroll,
+                      // Newest at the bottom, which is where the composer is.
+                      reverse: true,
+                      // Generous on purpose: a jump-to-hit needs the target
+                      // bubble built even when it is far from the current
+                      // scroll offset (see _scrollTo).
+                      scrollCacheExtent: ScrollCacheExtent.pixels(2000),
+                      itemCount: value.length,
+                      itemBuilder: (context, i) {
+                        final index = value.length - 1 - i;
+                        final message = value[index];
+                        final mine = me != null && message.isFrom(me);
+                        final quoted = message.replyTo == null
+                            ? null
+                            : value
+                                  .where((m) => m.id == message.replyTo)
+                                  .firstOrNull;
+                        final unread =
+                            mine &&
+                            !message.isDeleted &&
+                            (message.isPending ||
+                                !isReadByAnyone(marks, message.createdAt));
+                        final allowedActions = allowedMessageActions(
                           message,
                           me: me,
+                          now: DateTime.now(),
                           group: widget.group,
-                        ),
-                        child: _Bubble(
-                          message,
-                          key: ValueKey('read-$unread-${message.id}'),
+                        );
+                        final bubble = SwipeableMessage(
+                          key: _keyFor(message.id),
+                          messageId: message.id,
                           mine: mine,
-                          unread: unread,
-                          sender:
-                              widget.group && !mine && startsRun(value, index)
-                              ? (names[message.senderId] ?? 'Member')
-                              : null,
-                          quoted: quoted,
-                          quotedName: quoted == null
-                              ? null
-                              : quoted.senderId == me
-                              ? 'You'
-                              : (names[quoted.senderId] ?? 'Member'),
-                          highlightQuery: searchQuery,
-                          isCurrentHit: message.id == currentHitId,
-                        ),
-                      );
-                      return message.deletion == MessageDeletion.vanished
-                          ? _Vanishing(
-                              key: ValueKey('vanish-${message.id}'),
-                              child: bubble,
-                            )
-                          : bubble;
-                    },
-                  ),
-                  AsyncError(:final error) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Text(reasonOf(error), textAlign: TextAlign.center),
+                          actions: allowedActions,
+                          openId: _openSwipeId,
+                          onOpenChanged: (open) {
+                            if (open) {
+                              _openSwipeId.value = message.id;
+                            } else if (_openSwipeId.value == message.id) {
+                              _openSwipeId.value = null;
+                            }
+                          },
+                          onAction: (action) {
+                            _openSwipeId.value = null;
+                            runMessageAction(context, ref, message, action);
+                          },
+                          child: _Bubble(
+                            message,
+                            key: ValueKey('read-$unread-${message.id}'),
+                            mine: mine,
+                            unread: unread,
+                            sender:
+                                widget.group && !mine && startsRun(value, index)
+                                ? (names[message.senderId] ?? 'Member')
+                                : null,
+                            quoted: quoted,
+                            quotedName: quoted == null
+                                ? null
+                                : quoted.senderId == me
+                                ? 'You'
+                                : (names[quoted.senderId] ?? 'Member'),
+                            highlightQuery: searchQuery,
+                            isCurrentHit: message.id == currentHitId,
+                          ),
+                        );
+                        return message.deletion == MessageDeletion.vanished
+                            ? _Vanishing(
+                                key: ValueKey('vanish-${message.id}'),
+                                child: bubble,
+                              )
+                            : bubble;
+                      },
                     ),
-                  ),
-                  _ => const Center(child: SisLoadingLogo()),
-                },
+                    AsyncError(:final error) => Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          reasonOf(error),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                    _ => const Center(child: SisLoadingLogo()),
+                  },
+                ),
               ),
               const _Composer(),
             ],

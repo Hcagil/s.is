@@ -21,13 +21,14 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/sis_ui.dart';
 import '../support/service_key.dart';
 
 /// Two members' message screens, mounted at once over the real repository:
-/// reid replies to a message through the actual long-press -> sheet -> type
+/// reid replies to a message through the actual swipe -> action row -> type
 /// -> send flow and sees the quote on his own screen; he then forwards a
 /// real photo, sent moments before, to a SECOND conversation through the
-/// actual long-press -> forward sheet -> pick -> send flow, and cora's own,
+/// actual swipe -> forward sheet -> pick -> send flow, and cora's own,
 /// separately mounted screen over that second conversation must show it
 /// arrive, marked Forwarded, with a photo that actually loads for her.
 ///
@@ -222,7 +223,7 @@ void main() {
       // (the forward sheet included) into ONE overlay that sits above both
       // panes' ProviderScopes -- fatal for the forward sheet, a
       // ConsumerStatefulWidget that reads conversationListProvider at build
-      // time, unlike the plain long-press sheet reused from v0.10A.
+      // time, unlike the swipe action row.
       await t.pumpWidget(
         Directionality(
           textDirection: TextDirection.ltr,
@@ -267,13 +268,18 @@ void main() {
       );
 
       // -- forward, through the real UI (done FIRST: a clean screen, no
-      // prior keyboard/focus/scroll state to disturb the long-press) -------
+      // prior keyboard/focus/scroll state to disturb the swipe) -------
       final photoFinder = within(
         'a',
         find.byKey(ValueKey('message-${photoMessage.id}')),
       );
-      await t.longPress(photoFinder);
-      await settle(t);
+      await t.drag(photoFinder, swipeOpen);
+      await until(
+        t,
+        () =>
+            find.byKey(const ValueKey('action-forward')).evaluate().isNotEmpty,
+        'the action row to open on the photo',
+      );
       await t.tap(find.byKey(const ValueKey('action-forward')));
       await settle(t);
       // The picker's checkboxes come from a real conversationListProvider
@@ -327,8 +333,12 @@ void main() {
         'a',
         find.byKey(ValueKey('message-${quotedMessage.id}')),
       );
-      await t.longPress(quotedFinder);
-      await settle(t);
+      await t.drag(quotedFinder, swipeOpen);
+      await until(
+        t,
+        () => find.byKey(const ValueKey('action-reply')).evaluate().isNotEmpty,
+        'the action row to open on the quoted message',
+      );
       await t.tap(find.byKey(const ValueKey('action-reply')));
       await settle(t);
       expect(
@@ -367,6 +377,17 @@ void main() {
         findsOneWidget,
         reason: 'the quote must carry the original message\'s own text',
       );
+      // And the server holds it as a reply to that message: the swipe's
+      // Reply reached the repository with its target.
+      final stored = await t.runAsync(
+        () => service
+            .from('messages')
+            .select('reply_to')
+            .eq('conversation_id', c1)
+            .eq('body', 'sounds good')
+            .single(),
+      );
+      expect(stored!['reply_to'], quotedMessage.id);
 
       // -- cora's own, separately mounted screen sees it arrive live -------
       await until(

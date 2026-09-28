@@ -1,4 +1,4 @@
-// Widget tests for replying and forwarding: the long-press sheet's offer,
+// Widget tests for replying and forwarding: the swipe action row's offer,
 // the reply bar, the quoted bubble, and the forward picker. Written from the
 // contract -- what a member sees and what the repository is asked to do --
 // never how the widgets are built.
@@ -73,14 +73,14 @@ Future<ProviderContainer> pump(WidgetTester tester, ChatFake chat) async {
 }
 
 void main() {
-  group('what long-press offers', () {
+  group('what a swipe offers', () {
     testWidgets('a stored message from someone else offers reply and forward, '
         'never delete', (tester) async {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', from: bob.userId)]);
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('action-reply')), findsOneWidget);
@@ -95,7 +95,7 @@ void main() {
         ..messagesResult = Ok([msg('m1', from: me.userId)]);
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('action-reply')), findsOneWidget);
@@ -121,7 +121,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
       }
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
@@ -145,7 +145,7 @@ void main() {
           ]);
         await pump(tester, chat);
 
-        await tester.longPress(find.byKey(const ValueKey('message-m1')));
+        await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
         await tester.pumpAndSettle();
 
         expect(find.byKey(const ValueKey('action-reply')), findsNothing);
@@ -166,7 +166,7 @@ void main() {
         ]);
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('action-reply')));
       await tester.pumpAndSettle();
@@ -183,7 +183,7 @@ void main() {
         ..messagesResult = Ok([msg('m1', from: me.userId)]);
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('action-reply')));
       await tester.pumpAndSettle();
@@ -196,7 +196,7 @@ void main() {
         ..messagesResult = Ok([msg('m1', from: bob.userId)]);
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('action-reply')));
       await tester.pumpAndSettle();
@@ -214,7 +214,7 @@ void main() {
         ..messagesResult = Ok([msg('m1', from: bob.userId)]);
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('action-reply')));
       await tester.pumpAndSettle();
@@ -240,7 +240,7 @@ void main() {
         );
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('action-reply')));
       await tester.pumpAndSettle();
@@ -324,7 +324,7 @@ void main() {
       final chat = chatWithConversations();
       await pump(tester, chat);
 
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('action-forward')));
       await tester.pumpAndSettle();
@@ -338,7 +338,7 @@ void main() {
         'the count', (tester) async {
       final chat = chatWithConversations();
       await pump(tester, chat);
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('action-forward')));
       await tester.pumpAndSettle();
@@ -363,7 +363,7 @@ void main() {
     ) async {
       final chat = chatWithConversations();
       await pump(tester, chat);
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('action-forward')));
       await tester.pumpAndSettle();
@@ -384,7 +384,7 @@ void main() {
     ) async {
       final chat = chatWithConversations();
       await pump(tester, chat);
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('action-forward')));
       await tester.pumpAndSettle();
@@ -404,7 +404,7 @@ void main() {
       final chat = chatWithConversations()
         ..forwardResult = const Err(ProviderFailure('not your chat'));
       await pump(tester, chat);
-      await tester.longPress(find.byKey(const ValueKey('message-m1')));
+      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('action-forward')));
       await tester.pumpAndSettle();

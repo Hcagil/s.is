@@ -1,4 +1,4 @@
-// Editing a message, as the member sees it: when the long-press sheet offers
+// Editing a message, as the member sees it: when the swipe action row offers
 // Edit, the edit bar and the prefilled composer, cancel, save, the empty
 // caption rule, Edit vs Reply, a refused edit, and the bubble's time with its
 // "edited" mark. Written from the contract -- what is on screen and what the
@@ -105,23 +105,23 @@ String textIn(WidgetTester tester, Finder of) => [
     (e.widget as RichText).text.toPlainText(),
 ].join(' ');
 
-Future<void> longPress(WidgetTester tester, String id) async {
-  await tester.longPress(bubble(id));
+Future<void> swipe(WidgetTester tester, String id) async {
+  await tester.drag(bubble(id), swipeOpen);
   await tester.pumpAndSettle();
 }
 
 Future<void> startEdit(WidgetTester tester, String id) async {
-  await longPress(tester, id);
+  await swipe(tester, id);
   await tester.tap(editAction);
   await tester.pumpAndSettle();
 }
 
 void main() {
-  group('what long-press offers', () {
+  group('what a swipe offers', () {
     testWidgets('your own fresh text message offers Edit', (tester) async {
       final chat = ChatFake(self: me.userId)..history['c1'] = [msg('m1')];
       await pump(tester, chat);
-      await longPress(tester, 'm1');
+      await swipe(tester, 'm1');
       expect(editAction, findsOneWidget);
     });
 
@@ -134,7 +134,7 @@ void main() {
         ]
         ..store('c1/1.png');
       await pump(tester, chat);
-      await longPress(tester, 'p1');
+      await swipe(tester, 'p1');
       expect(editAction, findsOneWidget);
     });
 
@@ -142,8 +142,8 @@ void main() {
       final chat = ChatFake(self: me.userId)
         ..history['c1'] = [msg('m1', from: bob.userId)];
       await pump(tester, chat);
-      await longPress(tester, 'm1');
-      expect(replyAction, findsOneWidget, reason: 'the sheet did open');
+      await swipe(tester, 'm1');
+      expect(replyAction, findsOneWidget, reason: 'the row did open');
       expect(editAction, findsNothing);
     });
 
@@ -151,8 +151,8 @@ void main() {
       final chat = ChatFake(self: me.userId)
         ..history['c1'] = [msg('m1', forwarded: true)];
       await pump(tester, chat);
-      await longPress(tester, 'm1');
-      expect(replyAction, findsOneWidget, reason: 'the sheet did open');
+      await swipe(tester, 'm1');
+      expect(replyAction, findsOneWidget, reason: 'the row did open');
       expect(editAction, findsNothing);
     });
 
@@ -169,8 +169,8 @@ void main() {
           ),
         ];
       await pump(tester, chat);
-      await longPress(tester, 'm1');
-      expect(replyAction, findsOneWidget, reason: 'the sheet did open');
+      await swipe(tester, 'm1');
+      expect(replyAction, findsOneWidget, reason: 'the row did open');
       expect(editAction, findsNothing);
     });
 
@@ -180,7 +180,7 @@ void main() {
           msg('m1', body: '', deletion: MessageDeletion.placeholder),
         ];
       await pump(tester, chat);
-      await tester.longPress(find.byKey(const ValueKey('deleted-m1')));
+      await tester.drag(find.byKey(const ValueKey('deleted-m1')), swipeOpen);
       await tester.pumpAndSettle();
       expect(editAction, findsNothing);
     });
@@ -192,7 +192,7 @@ void main() {
         ..history['c1'] = [msg('m1', pending: true)];
       await pump(tester, chat, settle: false);
       await frames(tester);
-      await tester.longPress(bubble('m1'));
+      await tester.drag(bubble('m1'), swipeOpen);
       await frames(tester);
       expect(editAction, findsNothing);
     });
@@ -334,7 +334,7 @@ void main() {
         self: me.userId,
       )..history['c1'] = [msg('m1', from: bob.userId), msg('m2', body: 'mine')];
       await pump(tester, chat);
-      await longPress(tester, 'm1');
+      await swipe(tester, 'm1');
       await tester.tap(replyAction);
       await tester.pumpAndSettle();
       expect(replyBar, findsOneWidget);
@@ -353,7 +353,7 @@ void main() {
       await startEdit(tester, 'm2');
       expect(editBar, findsOneWidget);
 
-      await longPress(tester, 'm1');
+      await swipe(tester, 'm1');
       await tester.tap(replyAction);
       await tester.pumpAndSettle();
 
@@ -367,7 +367,7 @@ void main() {
     final chat = ChatFake(self: me.userId)
       ..history['c1'] = [msg('m1', from: bob.userId), msg('m2', body: 'mine')];
     await pump(tester, chat);
-    await longPress(tester, 'm1');
+    await swipe(tester, 'm1');
     await tester.tap(replyAction);
     await tester.pumpAndSettle();
     await startEdit(tester, 'm2');

@@ -1,4 +1,4 @@
-// "Read by", from the product rule: in a group, touching your own message
+// "Read by", from the product rule: in a group, swiping your own message
 // shows who has read it and when (the time as lastSeenLabel words it), and
 // "Nobody yet" when nobody has. Only members who share read status can be
 // listed. Run under TZ=JST-9 like every unit test: the times below are UTC
@@ -18,6 +18,7 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/domain/last_seen.dart';
 
 import '../../support/fakes.dart';
+import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -77,14 +78,18 @@ Future<void> pump(
 }
 
 Future<void> touch(WidgetTester t) async {
-  await t.longPress(find.byKey(const ValueKey('message-m1')));
+  await t.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
   await t.pumpAndSettle();
 }
 
 Future<void> openReadBy(WidgetTester t) async {
   await touch(t);
-  expect(find.text('Read by'), findsOneWidget, reason: 'no "Read by" offered');
-  await t.tap(find.text('Read by'));
+  expect(
+    find.byKey(const ValueKey('action-read-by')),
+    findsOneWidget,
+    reason: 'no "Read by" offered',
+  );
+  await t.tap(find.byKey(const ValueKey('action-read-by')));
   await t.pumpAndSettle();
 }
 
@@ -159,7 +164,12 @@ void main() {
       ReadMark(userId: 'u3', shares: true, readAt: cemRead),
     ], from: 'u2');
     await touch(t);
-    expect(find.text('Read by'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('action-reply')),
+      findsOneWidget,
+      reason: 'the row did open',
+    );
+    expect(find.byKey(const ValueKey('action-read-by')), findsNothing);
   });
 
   testWidgets('a 1:1 offers no "Read by": the bubble already says it', (
@@ -169,6 +179,11 @@ void main() {
       ReadMark(userId: 'u2', shares: true, readAt: bobRead),
     ], group: false);
     await touch(t);
-    expect(find.text('Read by'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('action-reply')),
+      findsOneWidget,
+      reason: 'the row did open',
+    );
+    expect(find.byKey(const ValueKey('action-read-by')), findsNothing);
   });
 }

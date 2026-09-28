@@ -1,6 +1,6 @@
 // Finders and waits for SIS's own UI: the pulsing logo and brand line that
 // replace Android's spinners, and the notice pill that replaces SnackBar.
-import 'dart:ui' show CheckedState, SemanticsFlags, Tristate;
+import 'dart:ui' show CheckedState, Offset, SemanticsFlags, Tristate;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/controls.dart';
@@ -57,3 +57,9 @@ bool choiceSelected(WidgetTester t, Finder f) {
   return flags.isSelected == Tristate.isTrue ||
       flags.isChecked == CheckedState.isTrue;
 }
+
+/// A drag right far enough to open a message's action row. The bubble
+/// stops at its 88 px clamp, past the 64 px threshold. The drag recognizer
+/// keeps the first touch-slop (~18 px) of finger travel, so a drag of 80 px
+/// moves the bubble only about 60 px and does not open it.
+const swipeOpen = Offset(120, 0);

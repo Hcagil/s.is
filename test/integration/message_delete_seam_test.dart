@@ -19,11 +19,12 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/sis_ui.dart';
 import '../support/service_key.dart';
 
 /// Two members' message screens, mounted at once over the real repository,
 /// exercising the seam a unit test cannot: A deletes her own message through
-/// the actual long-press -> sheet -> confirm flow, and B's OPEN screen must
+/// the actual swipe -> action row -> confirm flow, and B's OPEN screen must
 /// see the result arrive live over Realtime -- vanished within the hour,
 /// a placeholder afterwards.
 ///
@@ -313,12 +314,17 @@ void main() {
       'both screens to load the seeded messages',
     );
 
-    // A deletes the recent message, through the real UI: long-press,
-    // the sheet, the confirm dialog.
-    await t.longPress(
+    // A deletes the recent message, through the real UI: a swipe, the
+    // action row, the confirm dialog.
+    await t.drag(
       within('a', find.byKey(ValueKey('message-${recentMessage.id}'))),
+      swipeOpen,
     );
-    await settle(t);
+    await until(
+      t,
+      () => find.byKey(const ValueKey('action-delete')).evaluate().isNotEmpty,
+      'the action row to open for the recent message',
+    );
     await t.tap(find.byKey(const ValueKey('action-delete')));
     await settle(t);
     await t.tap(find.byKey(const ValueKey('delete-confirm')));
@@ -363,14 +369,14 @@ void main() {
 
     // The backdated message: over an hour old, so deleting it leaves a
     // placeholder rather than nothing.
-    await t.longPress(
+    await t.drag(
       within('a', find.byKey(ValueKey('message-${oldMessage.id}'))),
+      swipeOpen,
     );
-    await settle(t);
-    expect(
-      find.byKey(const ValueKey('action-delete')),
-      findsOneWidget,
-      reason: 'the sheet never opened for the second message',
+    await until(
+      t,
+      () => find.byKey(const ValueKey('action-delete')).evaluate().isNotEmpty,
+      'the action row never opened for the second message',
     );
     await t.tap(find.byKey(const ValueKey('action-delete')));
     await settle(t);

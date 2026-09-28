@@ -27,6 +27,7 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.18.2 | a person's profile page shows their picture, including one set or changed during the session |
 | v0.19 | pick photos through a gallery app of your choice, for attachments and for profile and group pictures |
 | v0.20 | pictures like WhatsApp: choose the square on a crop screen; tap a picture to see it full screen |
+| v0.21 | swipe a message right to open its actions in a row above it; long press no longer used |
 | later | E2EE | scheduled individually |
 
 ## Status

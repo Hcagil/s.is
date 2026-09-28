@@ -25,6 +25,7 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.18 | **done** 2026-09-27 — search inside a chat answers instantly from the phone; the server is asked only for older hits |
 | v0.18.1 | **done** 2026-09-27 — reloading the photo grid ("Allow more") never mixes in an old page or leaves it stuck loading |
 | v0.18.2 | a person's profile page shows their picture, including one set or changed during the session |
+| v0.19 | pick photos through a gallery app of your choice, for attachments and for profile and group pictures |
 | later | E2EE | scheduled individually |
 
 ## Status

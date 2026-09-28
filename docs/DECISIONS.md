@@ -912,3 +912,28 @@ differ for 410 rare code points (Cherokee, Georgian Mtavruli, some
 Cyrillic/Latin extensions and similar) and Greek final sigma. Turkish letters
 and every dotted/dotless i sequence match. The instant hits can differ from
 the server's only for those scripts; a pinned test fails on any new drift.
+
+## 2026-09-28 — Pick photos through a gallery app of your choice
+
+The owner asked for a way to pick photos in the gallery app they prefer,
+for attachments and for profile and group pictures. This is a deliberate,
+owner-requested exception to "Everything visible is SIS's own design"
+(2026-09-25): SIS's own grid stays the default, and one extra entry hands
+the choice to another app.
+- The attachment sheet and the picture picker each get a "From an app"
+  entry. Tapping it shows Android's app chooser listing the gallery apps on
+  the phone (Google Photos, the maker's gallery, Files...); the member picks
+  one, selects there, and the photos come back into SIS.
+- Attachments accept up to 10 photos per pick, where the chosen app allows
+  several; beyond 10, the first 10 are sent and an SIS notice says so. A
+  picture takes one. What comes back goes through
+  the same path as a photo from the grid: the send preview and caption for
+  attachments, the 512 px centre crop for pictures.
+- It needs no photo permission, so it is also offered when the member has
+  refused photo access.
+- Android's own photo picker stays out: the entry lists apps, it does not
+  open the system photo picker. The guard test keeps refusing image_picker.
+- Photos only: anything that is not an image is refused with an SIS notice.
+- The photos are copied, scaled down while decoding, turned upright and
+  re-encoded as JPEG in the background, so a large photo cannot exhaust
+  memory or freeze the screen, and no location or camera data is uploaded.

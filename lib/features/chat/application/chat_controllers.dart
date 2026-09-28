@@ -11,6 +11,7 @@ import '../../profile/application/profile_controller.dart';
 import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
+import '../domain/external_picker.dart';
 import '../domain/gallery.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
@@ -39,6 +40,13 @@ final attachmentUrlProvider = FutureProvider.autoDispose.family<Uri, String>((
 
 /// The phone's own photo library, for the attachment sheet's grid.
 final galleryProvider = Provider<Gallery>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Picks photos through another app on the phone (Google Photos, the
+/// maker's gallery, Files...), for the attachment sheet's "From an app"
+/// entry.
+final externalPickerProvider = Provider<ExternalPicker>(
   (_) => throw UnimplementedError('override in main'),
 );
 
@@ -551,6 +559,34 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       if (ref.mounted) ref.read(replyingToProvider.notifier).clear();
     }
     return result;
+  }
+
+  /// Sends [images] to the open conversation, one message per photo, in
+  /// order -- [body] as the caption of the first only, the rest with none.
+  /// Stops at the first [Err] and returns it; otherwise returns [Ok(null)]
+  /// once every image has been sent. An empty [images] sends nothing and
+  /// returns [Ok(null)] at once.
+  Future<Result<void>> sendImages(
+    List<PickedImage> images, {
+    String body = '',
+  }) async {
+    for (var i = 0; i < images.length; i++) {
+      final result = await sendImage(
+        body: i == 0 ? body : '',
+        chosen: images[i],
+      );
+      switch (result) {
+        case null:
+          // sendImage only answers null for a null `chosen`; images[i] is
+          // never null, so this never happens -- kept for exhaustiveness.
+          break;
+        case Ok():
+          break;
+        case Err(:final failure):
+          return Err(failure);
+      }
+    }
+    return const Ok(null);
   }
 
   /// A short-lived URL for an attachment, or an [Err] with its reason.

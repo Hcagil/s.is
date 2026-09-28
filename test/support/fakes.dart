@@ -15,6 +15,7 @@ import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/external_picker.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -2840,5 +2841,70 @@ class NotificationSettingsFake implements NotificationSettingsRepository {
         if (m.kind != kind || m.target != target) m,
     ];
     return const Ok(null);
+  }
+}
+
+/// Another app on the phone, reached through Android's chooser, written from
+/// the [ExternalPicker] contract: the chooser, the other app and the copy
+/// back all take time; the member may back out; what comes back may not be
+/// a photo; and a pick is never more than [ExternalPicker.maxAttachments] --
+/// whatever the chosen app offers beyond that is only counted as dropped.
+class ExternalPickerFake implements ExternalPicker {
+  ExternalPickerFake({this.latency = const Duration(milliseconds: 40)});
+
+  /// How long the round trip through the other app takes.
+  final Duration latency;
+
+  /// What the member selects in the other app for [pickAttachments], before
+  /// the cap. Null: they back out. Ignored while [failure] is set.
+  List<PickedImage>? offered;
+
+  /// What the member selects for [pickProfilePicture]. Null: they back out.
+  PickedImage? picture;
+
+  /// When true, what came back is not a readable photo.
+  bool failure = false;
+
+  int attachmentCalls = 0;
+  int pictureCalls = 0;
+
+  Completer<void>? _hold;
+
+  /// The next pick stays in the other app until [release].
+  void hold() => _hold = Completer<void>();
+  void release() {
+    _hold?.complete();
+    _hold = null;
+  }
+
+  Future<void> _roundTrip() async {
+    await Future<void>.delayed(latency);
+    final held = _hold;
+    if (held != null) await held.future;
+  }
+
+  @override
+  Future<ExternalPickResult> pickAttachments() async {
+    attachmentCalls++;
+    await _roundTrip();
+    if (failure) return const ExternalPickFailed();
+    final all = offered;
+    if (all == null || all.isEmpty) return const ExternalPickCancelled();
+    const cap = ExternalPicker.maxAttachments;
+    return ExternalPickedImages(
+      all.take(cap).toList(),
+      dropped: all.length > cap ? all.length - cap : 0,
+    );
+  }
+
+  @override
+  Future<ExternalPickResult> pickProfilePicture() async {
+    pictureCalls++;
+    await _roundTrip();
+    if (failure) return const ExternalPickFailed();
+    final one = picture;
+    return one == null
+        ? const ExternalPickCancelled()
+        : ExternalPickedImages([one]);
   }
 }

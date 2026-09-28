@@ -59,6 +59,29 @@ void main() {
     });
   }
 
+  // 2026-09-28: "From an app" hands the choice to another app through
+  // Android's app chooser. That is the member's own gallery, not an
+  // Android-drawn picker: the native side must list apps, never open the
+  // system photo picker.
+  test('the native side never opens Android\'s photo picker', () {
+    final systemPicker = RegExp(
+      r'ACTION_PICK_IMAGES|PickVisualMedia|PickMultipleVisualMedia|'
+      r'photopicker|image_picker|ImagePicker',
+    );
+    final native = Directory('android/app/src/main')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.kt') || f.path.endsWith('.java'))
+        .toList();
+    expect(native, isNotEmpty, reason: 'no native code found to scan');
+    final hits = [
+      for (final f in native)
+        for (final (i, line) in code(f.readAsStringSync()).split('\n').indexed)
+          if (systemPicker.hasMatch(line)) '${f.path}:${i + 1}: ${line.trim()}',
+    ];
+    expect(hits, isEmpty, reason: 'the system photo picker is not SIS\'s');
+  });
+
   test('image_picker is not a dependency any more', () {
     expect(
       File('pubspec.yaml').readAsStringSync(),

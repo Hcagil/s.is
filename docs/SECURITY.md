@@ -40,7 +40,8 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     message id to be server-generated or unpredictable** — never key an
     authorisation decision, storage path or topic on it. The app treats a
     duplicate-key answer as "already sent" only when the stored row is the
-    caller's own, in the same conversation, with the same body and reply;
+    caller's own, in the same conversation, with the same body (and, when
+    the retried message is a reply, the same reply target);
     otherwise the send fails. Accepted leftover risk: a member who already
     knows a message id learns whether that message exists.
   - Drafts and queued unsent messages live in the app's memory only; if they

@@ -707,7 +707,9 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         case Err(:final failure):
           final stopped = List<_PendingSend>.of(_queue);
           _queue.clear();
-          if (stillHere) _restoreAfterFailure(stopped, failure);
+          if (ref.mounted) {
+            _restoreAfterFailure(conversationId, stopped, failure);
+          }
           for (final s in stopped) {
             s.completer.complete(result);
           }
@@ -716,20 +718,35 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     _draining = false;
   }
 
-  /// Removes every pending bubble in [stopped], restores the earliest one's
-  /// reply target (if any) to [replyingToProvider], and tells
-  /// [sendFailureProvider] to put every body back in the composer with one
-  /// notice.
-  void _restoreAfterFailure(List<_PendingSend> stopped, Failure failure) {
+  /// Removes every pending bubble in [stopped] (harmless if [conversationId]
+  /// is no longer the one shown: [state] then belongs to a different
+  /// conversation or none, and none of [stopped]'s ids are in it). While
+  /// [conversationId] is still the open one, the earliest reply target (if
+  /// any) also goes back to [replyingToProvider] live, same as before. It is
+  /// always stashed in [sendFailureProvider] too, keyed by [conversationId],
+  /// so a composer that was not open for this failure -- or was not even
+  /// mounted yet -- restores it the next time that conversation opens.
+  void _restoreAfterFailure(
+    String conversationId,
+    List<_PendingSend> stopped,
+    Failure failure,
+  ) {
     _removePending({for (final s in stopped) s.message.id});
     final reply = stopped
         .map((s) => s.replyTo)
         .whereType<Message>()
         .firstOrNull;
-    if (reply != null) ref.read(replyingToProvider.notifier).start(reply);
+    if (reply != null &&
+        ref.mounted &&
+        ref.read(openConversationProvider) == conversationId) {
+      ref.read(replyingToProvider.notifier).start(reply);
+    }
     ref
         .read(sendFailureProvider.notifier)
-        .emit(SendFailure([for (final s in stopped) s.body], failure));
+        .emit(
+          conversationId,
+          SendFailure([for (final s in stopped) s.body], reply, failure),
+        );
   }
 
   /// Drops every message in [current] whose id is in [ids].
@@ -817,32 +834,48 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   }
 }
 
-/// Text bodies that failed to send, in the order they were typed, and why --
-/// for the composer to put them back and show one notice. Set by
-/// [MessagesController] when the server refuses a queued send; cleared by
-/// the composer once shown.
+/// Text bodies that failed to send in one conversation, in the order they
+/// were typed, why, and who they were replying to (if anyone) -- for that
+/// conversation's composer to put them back and show one notice. Kept per
+/// conversation (not just the one currently open) because the server can
+/// answer after the member has already left -- see
+/// [MessagesController._restoreAfterFailure].
 final class SendFailure {
-  const SendFailure(this.bodies, this.failure);
+  const SendFailure(this.bodies, this.replyTo, this.failure);
 
   final List<String> bodies;
+  final Message? replyTo;
   final Failure failure;
 }
 
-final sendFailureProvider = NotifierProvider<SendFailureNotifier, SendFailure?>(
-  SendFailureNotifier.new,
-);
+/// [SendFailure]s waiting to be shown, keyed by conversation id. A
+/// conversation's entry survives a member leaving before the server
+/// answered, and is consumed (read once, then removed) by that
+/// conversation's composer the next time it is open, live or not.
+final sendFailureProvider =
+    NotifierProvider<SendFailureNotifier, Map<String, SendFailure>>(
+      SendFailureNotifier.new,
+    );
 
-class SendFailureNotifier extends Notifier<SendFailure?> {
+class SendFailureNotifier extends Notifier<Map<String, SendFailure>> {
   @override
-  SendFailure? build() {
-    // Belongs to whichever conversation set it; a new one starts clean.
-    ref.watch(openConversationProvider);
-    return null;
+  Map<String, SendFailure> build() {
+    // Per account: a new account never sees a previous one's failed sends.
+    ref.watch(currentUserIdProvider);
+    return const {};
   }
 
-  void emit(SendFailure value) => state = value;
+  void emit(String conversationId, SendFailure value) =>
+      state = {...state, conversationId: value};
 
-  void clear() => state = null;
+  /// Removes and returns [conversationId]'s stashed failure, if any -- so a
+  /// composer that has just shown it never shows it again.
+  SendFailure? consume(String conversationId) {
+    final value = state[conversationId];
+    if (value == null) return null;
+    state = {...state}..remove(conversationId);
+    return value;
+  }
 }
 
 /// The message the composer is answering, or null. Cleared when another

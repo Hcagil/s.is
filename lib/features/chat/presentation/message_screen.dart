@@ -788,11 +788,9 @@ class _Bubble extends StatelessWidget {
                       : Theme.of(context).colorScheme.primary,
                   maxContentWidth: _contentWidth,
                   topPadding: message.hasAttachment ? 8 : 0,
-                  timeText: message.sending
-                      ? '🕐'
-                      : (message.isEdited
-                            ? 'edited ${clockTime(message.createdAt)}'
-                            : clockTime(message.createdAt)),
+                  timeText: message.isEdited
+                      ? 'edited ${clockTime(message.createdAt)}'
+                      : clockTime(message.createdAt),
                   timeStyle: TextStyle(
                     fontSize: 11,
                     color: (mine ? Colors.white : brand.text).withValues(
@@ -855,7 +853,10 @@ class _Bubble extends StatelessWidget {
 ///
 /// [body] and [time] are always built as two separate widgets carrying their
 /// original keys and exact text, never merged into one `Text`/`TextSpan`: a
-/// widget test finds each with `find.text()`.
+/// widget test finds each with `find.text()` -- except a still-sending
+/// bubble ([Message.sending]), whose time slot is an [Icon]
+/// (`Icons.schedule_rounded`) under the same `time-<id>` key, found with
+/// `find.byIcon`/`find.byKey` instead.
 class _BodyWithTime extends StatelessWidget {
   const _BodyWithTime({
     required this.message,
@@ -887,6 +888,11 @@ class _BodyWithTime extends StatelessWidget {
 
   static const _gap = 6.0;
 
+  /// The pending-send icon's size, in place of the clock time while
+  /// [Message.sending] -- close to [timeStyle]'s usual font size (11) so it
+  /// reads as about the same weight in the same corner.
+  static const _clockSize = 12.0;
+
   @override
   Widget build(BuildContext context) {
     final direction = Directionality.of(context);
@@ -911,14 +917,22 @@ class _BodyWithTime extends StatelessWidget {
     for (final line in lines) {
       if (line.width > bodyWidth) bodyWidth = line.width;
     }
-    final timePainter = TextPainter(
-      text: TextSpan(text: timeText, style: defaultStyle.merge(timeStyle)),
-      textDirection: direction,
-      textScaler: scaler,
-    )..layout();
-    final timeWidth = timePainter.width;
+    // Still sending: a small SIS icon takes the time's place -- never an
+    // emoji, which draws from the phone's own font -- sized directly
+    // rather than measured as text.
+    double timeWidth;
+    if (message.sending) {
+      timeWidth = _clockSize;
+    } else {
+      final timePainter = TextPainter(
+        text: TextSpan(text: timeText, style: defaultStyle.merge(timeStyle)),
+        textDirection: direction,
+        textScaler: scaler,
+      )..layout();
+      timeWidth = timePainter.width;
+      timePainter.dispose();
+    }
     bodyPainter.dispose();
-    timePainter.dispose();
 
     // ponytail: RTL always drops to the own-row layout below, never inline.
     // The fits math above assumes a line's trailing edge is the column's
@@ -930,11 +944,14 @@ class _BodyWithTime extends StatelessWidget {
         direction != TextDirection.rtl &&
         lastLineWidth + _gap + timeWidth <= maxContentWidth;
 
-    final timeWidget = Text(
-      timeText,
-      key: ValueKey('time-${message.id}'),
-      style: timeStyle,
-    );
+    final timeWidget = message.sending
+        ? Icon(
+            Icons.schedule_rounded,
+            key: ValueKey('time-${message.id}'),
+            size: _clockSize,
+            color: timeStyle.color,
+          )
+        : Text(timeText, key: ValueKey('time-${message.id}'), style: timeStyle);
 
     if (!fits) {
       return Column(
@@ -1196,9 +1213,43 @@ class _ComposerState extends ConsumerState<_Composer> {
   bool _sending = false;
 
   @override
+  void initState() {
+    super.initState();
+    // A queued send for this conversation may have failed while the member
+    // was elsewhere; restore it once the composer for it exists again.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final conversationId = ref.read(openConversationProvider);
+      if (conversationId == null) return;
+      final failure = ref
+          .read(sendFailureProvider.notifier)
+          .consume(conversationId);
+      if (failure != null) _applyFailure(failure);
+    });
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Puts a failed queued send's text and reply target back, and shows one
+  /// notice -- whether the failure was caught live (the composer was
+  /// already open when the server answered) or was waiting from before the
+  /// composer existed (see [initState]).
+  void _applyFailure(SendFailure failure) {
+    final restored = failure.bodies.join('\n');
+    _controller.text = _controller.text.isEmpty
+        ? restored
+        : '$restored\n${_controller.text}';
+    _controller.selection = TextSelection.collapsed(
+      offset: _controller.text.length,
+    );
+    if (failure.replyTo != null) {
+      ref.read(replyingToProvider.notifier).start(failure.replyTo!);
+    }
+    if (mounted) showSisNotice(context, failure.failure.message, isError: true);
   }
 
   void _send() {
@@ -1284,22 +1335,19 @@ class _ComposerState extends ConsumerState<_Composer> {
         _controller.clear();
       }
     });
-    // A queued send that failed: every unsent body comes back, oldest
-    // first. If the composer is empty it becomes exactly that; if the
-    // member has since typed something new, the restored text is prepended
-    // -- it was typed earlier, so it belongs before what is there now. One
-    // notice for the whole stopped queue, not one per message.
+    // A queued send for this conversation failed while the composer was
+    // already open: every unsent body comes back, oldest first (prepended
+    // if the member has since typed something new -- it was typed earlier,
+    // so it belongs first), the reply target too, one notice for the whole
+    // stopped queue. [initState] covers the same failure resolving after
+    // the member had already left.
     ref.listen(sendFailureProvider, (previous, next) {
-      if (next == null) return;
-      final restored = next.bodies.join('\n');
-      _controller.text = _controller.text.isEmpty
-          ? restored
-          : '$restored\n${_controller.text}';
-      _controller.selection = TextSelection.collapsed(
-        offset: _controller.text.length,
-      );
-      showSisNotice(context, next.failure.message, isError: true);
-      ref.read(sendFailureProvider.notifier).clear();
+      final conversationId = ref.read(openConversationProvider);
+      if (conversationId == null) return;
+      final failure = ref
+          .read(sendFailureProvider.notifier)
+          .consume(conversationId);
+      if (failure != null) _applyFailure(failure);
     });
     return Container(
       decoration: BoxDecoration(

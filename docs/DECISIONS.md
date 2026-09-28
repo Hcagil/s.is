@@ -1095,3 +1095,25 @@ member chooses who sees their profile picture.
   member can shed people who only ever found them by tag. "Everyone" always
   includes what "My contacts" allows. Older builds can still set and remove
   their own picture (their write is mapped to the new column).
+
+## 2026-09-29 — Leaving a group, removing members, and admins
+
+The owner decided how people leave groups and who manages them, WhatsApp-like.
+- **Admins.** A group's creator is its admin. An admin can make other
+  members admins. Only admins add or remove members. If the last admin
+  leaves, the longest-standing remaining member becomes admin, so a group is
+  never left unmanaged.
+- **Leaving and removal.** Any member can leave; an admin can remove anyone
+  but themselves (they leave instead). The person who left or was removed
+  keeps the group in their chat list, read-only, with the messages up to the
+  moment they left; they receive nothing newer, and their write box is
+  disabled. Unsent messages still queued for that group are dropped with one
+  notice, and its draft is cleared.
+- **What others see.** The departed person's past messages stay visible to
+  everyone, with their name shown greyed. A line "Ayla left" or "Ayla was
+  removed" appears in the chat for admins only.
+- **Adding people.** An admin adds someone (new, or someone who left before)
+  and chooses whether they see the old messages or only messages from now on.
+  An admin can add only people they can reach (contacts rule, 2026-09-28).
+- **Reach.** Someone who left no longer counts as sharing that chat.
+- 1:1 chats have no admins and no leaving.

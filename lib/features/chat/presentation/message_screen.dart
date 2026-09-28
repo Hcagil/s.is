@@ -25,6 +25,7 @@ import '../domain/message.dart';
 import '../domain/read_marks.dart';
 import 'attachment_sheet.dart';
 import 'chat_search_bar.dart';
+import 'swipeable_message.dart';
 import 'conversation_list.dart';
 import 'message_actions.dart';
 import 'person_avatar.dart';
@@ -146,6 +147,11 @@ class MessageScreen extends ConsumerStatefulWidget {
 class _MessageScreenState extends ConsumerState<MessageScreen> {
   final _scroll = ScrollController();
   final _bubbleKeys = <String, GlobalKey>{};
+
+  /// The id of the message whose swipe action row is currently open, or
+  /// null. At most one bubble's row is open at a time; scrolling the list
+  /// closes it (see [initState]), as does a tap anywhere else in the list.
+  final _openSwipeId = ValueNotifier<String?>(null);
   late bool _searching =
       widget.initialSearchQuery != null &&
       widget.initialSearchQuery!.trim().isNotEmpty;
@@ -167,8 +173,20 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   int _generation = 0;
 
   @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_closeSwipeOnScroll);
+  }
+
+  void _closeSwipeOnScroll() {
+    if (_openSwipeId.value != null) _openSwipeId.value = null;
+  }
+
+  @override
   void dispose() {
+    _scroll.removeListener(_closeSwipeOnScroll);
     _scroll.dispose();
+    _openSwipeId.dispose();
     super.dispose();
   }
 
@@ -458,15 +476,29 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                           !message.isDeleted &&
                           (message.isPending ||
                               !isReadByAnyone(marks, message.createdAt));
-                      final bubble = GestureDetector(
+                      final allowedActions = allowedMessageActions(
+                        message,
+                        me: me,
+                        now: DateTime.now(),
+                        group: widget.group,
+                      );
+                      final bubble = SwipeableMessage(
                         key: _keyFor(message.id),
-                        onLongPress: () => showMessageActions(
-                          context,
-                          ref,
-                          message,
-                          me: me,
-                          group: widget.group,
-                        ),
+                        messageId: message.id,
+                        mine: mine,
+                        actions: allowedActions,
+                        openId: _openSwipeId,
+                        onOpenChanged: (open) {
+                          if (open) {
+                            _openSwipeId.value = message.id;
+                          } else if (_openSwipeId.value == message.id) {
+                            _openSwipeId.value = null;
+                          }
+                        },
+                        onAction: (action) {
+                          _openSwipeId.value = null;
+                          runMessageAction(context, ref, message, action);
+                        },
                         child: _Bubble(
                           message,
                           key: ValueKey('read-$unread-${message.id}'),

@@ -937,3 +937,21 @@ the choice to another app.
 - The photos are copied, scaled down while decoding, turned upright and
   re-encoded as JPEG in the background, so a large photo cannot exhaust
   memory or freeze the screen, and no location or camera data is uploaded.
+
+## 2026-09-28 — Swipe a message to act on it
+
+The owner asked for message actions to open by swiping, WhatsApp-like, and
+decided the details. This replaces the long press of "Message actions by
+long press" (v0.10).
+- Every message bubble swipes right and follows the finger. Past a
+  threshold it snaps to a resting offset with a light haptic tick, and a row
+  of separate SIS boxes appears above it, side by side: only the actions
+  allowed for that message (reply, forward, edit and delete for everyone
+  only on your own messages within 6 hours, and so on).
+- The row stays open until an action is chosen, the member taps elsewhere,
+  swipes back or scrolls. One row is open at a time.
+- Long press on a message no longer does anything.
+- Photo messages swipe like text. "This message was deleted" bubbles and
+  SIS notices do not swipe.
+- A screen reader offers the same actions on each bubble as its own
+  actions, so nobody depends on the gesture.

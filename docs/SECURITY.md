@@ -38,19 +38,25 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     conversation row itself). Messages are readable only inside a window —
     `app_private.message_readable(m)`: `history_from ≤ created_at` and, for a
     past row, `created_at ≤ left_at`. `messages_read`, `search_messages`,
-    attachment reads (plus the uploader's own object while a member) and the
-    reply check all use it. `unread_counts`, push and the `typing:`/`reads:`
+    attachment reads (plus the uploader's own object at any time if she was
+    ever a member — before her message exists and after `delete_message`)
+    and the reply check all use it. `unread_counts`, push and the `typing:`/`reads:`
     topics use current membership only; `mark_read` never marks past
-    `left_at`. Seeing other members' rows and names requires the two
-    memberships to have overlapped in time, so a departed member never learns
+    `left_at`. Seeing another member's row and name requires the caller's
+    readable window (`history_from` to `left_at`) to overlap that row's
+    presence (`joined_at` to `left_at`), so a departed member never learns
     who joined later and a member added without history never sees who left
-    before. `add_members(with_history=false)` sets `history_from = now()`.
+    before; a member added with history sees everyone who has ever been in
+    the group. `add_members(with_history=false)` sets `history_from = now()`.
   - **Admins.** `leave_group`, `remove_member`, `add_members`, `set_admin`
     are security-definer RPCs: allowlist + active session, groups only (a 1:1
     is refused), admin actions need a current admin, invitees must be
     allowlisted and reachable (all or nothing). Each takes a per-group
-    advisory lock first, and a deferred constraint trigger refuses any
-    transaction that leaves a group with members but no admin. The group's
+    advisory lock first; a deferred constraint trigger on role and
+    membership changes refuses any transaction that leaves a group with
+    members but no admin; and when an account is deleted, or anyone leaves
+    while no other admin would remain, the longest-standing current member
+    is promoted. The group's
     creator is its admin; the last admin leaving promotes the
     longest-standing current member; the sole admin cannot be demoted; an
     admin cannot remove themselves.
@@ -63,7 +69,8 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     (authorisation is checked at join; the same holds for a revoked session;
     the app leaves those channels as soon as it sees it has left); a message
     edited within its 6-hour window after someone left shows the edit to
-    them.
+    them; a departed member still sees later leaves, removals and role
+    changes of members whose time in the group overlapped hers.
   - `messages` inserts: `authenticated` may insert exactly `id,
     conversation_id, sender_id, body, attachment_path, attachment_preview,
     reply_to, forwarded`; `created_at`, `deleted`, `deleted_at` and

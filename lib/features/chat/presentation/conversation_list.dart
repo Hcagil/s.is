@@ -327,11 +327,7 @@ class _MemberPickerState extends ConsumerState<_MemberPicker> {
                 suffixIcon: IconButton(
                   key: const ValueKey('find-by-tag-submit'),
                   icon: _searching
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? const SisLoadingLogo(size: 18)
                       : const Icon(Icons.search),
                   onPressed: _searching ? null : _search,
                 ),

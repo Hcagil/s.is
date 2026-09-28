@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
 import '../../../data/failures.dart';
+import '../../../data/postgrest_retry.dart';
 import '../../chat/domain/attachment.dart';
 import '../domain/own_profile.dart';
 import '../domain/profile_repository.dart';
@@ -44,7 +45,9 @@ final class SupabaseProfileRepository implements ProfileRepository {
     final me = _client.auth.currentUser?.id;
     if (me == null) return const Err(DeniedFailure());
     try {
-      final rows = await _client.rpc('own_profile') as List<dynamic>;
+      final rows =
+          await _client.rpc('own_profile', get: true).retriedOnce()
+              as List<dynamic>;
       if (rows.isEmpty) return const Err(DeniedFailure());
       return Ok(_toProfile(rows[0] as Map<String, dynamic>));
     } catch (e) {

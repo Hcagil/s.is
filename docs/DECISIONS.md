@@ -977,3 +977,20 @@ long press" (v0.10).
   SIS notices do not swipe.
 - A screen reader offers the same actions on each bubble as its own
   actions, so nobody depends on the gesture.
+
+## 2026-09-28 — Your text message appears the moment you send it
+
+The owner reported that sending feels slow "when I click send". Measured:
+the server's work for one message (access rules, the notification queue,
+the insert) is 5–10 ms; the rest is the phone-to-server round trip, which
+the app showed as nothing at all, because a text message was added to the
+chat only after the server answered (since v0.2). Photos already appear at
+once (2026-09-24); text now does too, WhatsApp-like.
+- Tapping send shows your message at once with a small clock mark and
+  empties the composer; the clock goes when the server has it.
+- Messages sent in quick succession go out one at a time, in the order they
+  were typed, so the chat order never changes.
+- The server's copy replaces the pending one; the message is never shown
+  twice, whichever arrives first (the answer or the live update).
+- If a send fails, the pending message disappears, its text (and the message
+  it replied to) come back to the composer, and an SIS notice says why.

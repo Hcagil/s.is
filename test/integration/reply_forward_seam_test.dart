@@ -281,10 +281,28 @@ void main() {
       // fixed settle() is not a bound on a real network round trip, only on
       // a local sheet/dialog transition. Waited for explicitly, the same
       // way every other real-data appearance in this file is.
+      final target = find.byKey(ValueKey('forward-$c2'));
+      final anyTarget = find.byWidgetPredicate((w) {
+        final k = w.key;
+        return k is ValueKey<String> &&
+            RegExp(r'^forward-[0-9a-f-]{36}$').hasMatch(k.value);
+      });
       await until(
         t,
-        () => find.byKey(ValueKey('forward-$c2')).evaluate().isNotEmpty,
-        'the forward picker to load the target conversation',
+        () => anyTarget.evaluate().isNotEmpty,
+        'the forward picker to load reid\'s conversations',
+      );
+      // The picker is a lazily built list, most recent first; c2 was emptied
+      // above, so it sorts last, and every earlier run of
+      // reply_forward_repository_test.dart leaves reid one more group above
+      // it. On a stack that is not fresh it is below the fold: scroll to it,
+      // as reid would.
+      await t.scrollUntilVisible(
+        target,
+        100,
+        scrollable: find
+            .ancestor(of: anyTarget.first, matching: find.byType(Scrollable))
+            .first,
       );
       expect(find.byKey(ValueKey('forward-$c1')), findsNothing);
 

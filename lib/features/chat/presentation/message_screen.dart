@@ -1230,16 +1230,27 @@ class _ComposerState extends ConsumerState<_Composer> {
     final id = ref.read(openConversationProvider);
     _conversationId = id;
     if (id == null) return;
+    // Applying the draft touches other providers (replyingToProvider via
+    // _applyDraft, draftsProvider via consumeFailure) -- unsafe
+    // synchronously here, since initState runs as part of the first build.
+    // Deferred to right after that frame: the same restore path build()'s
+    // listener below uses when a queued send's failure resolves while this
+    // composer is already open.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _restoreDraft(id);
+    });
+  }
+
+  /// Applies [id]'s draft (text + reply target) and shows its pending
+  /// failure notice, if any, exactly once. The one restore path, used both
+  /// right after opening ([initState]) and while already open (the
+  /// [draftsProvider] listener in [build]).
+  void _restoreDraft(String id) {
     final drafts = ref.read(draftsProvider.notifier);
     _applyDraft(drafts.draftFor(id));
-    // A queued send for this conversation may have failed while the member
-    // was elsewhere; the notice is shown once, here or from the listener in
-    // build() below -- the same draft entry either way, not two mechanisms.
     final failure = drafts.consumeFailure(id);
-    if (failure != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) showSisNotice(context, failure.message, isError: true);
-      });
+    if (failure != null && mounted) {
+      showSisNotice(context, failure.message, isError: true);
     }
   }
 
@@ -1364,8 +1375,18 @@ class _ComposerState extends ConsumerState<_Composer> {
     if (id != null) {
       // The member started or cleared a reply outside this composer (a
       // message's own reply action) -- kept in the draft too, live.
+      // [ReplyingTo] itself watches openConversationProvider and resets to
+      // null on ANY change to it, including this composer's own conversation
+      // closing (back) -- not just an explicit clear. Once that has
+      // happened this listener's `id` is no longer the open conversation, so
+      // this null is not the member clearing anything and must not
+      // overwrite the reply target already saved in the draft.
       ref.listen(replyingToProvider, (previous, next) {
-        if (_applyingDraft || ref.read(editingProvider) != null) return;
+        if (_applyingDraft ||
+            ref.read(editingProvider) != null ||
+            ref.read(openConversationProvider) != id) {
+          return;
+        }
         _applyingDraft = true;
         ref.read(draftsProvider.notifier).setReply(id, next);
         _applyingDraft = false;
@@ -1378,11 +1399,7 @@ class _ComposerState extends ConsumerState<_Composer> {
       // this is the composer's one restore path, not two.
       ref.listen(draftsProvider.select((m) => m[id]), (previous, next) {
         if (_applyingDraft) return;
-        _applyDraft(next ?? const Draft());
-        final failure = ref.read(draftsProvider.notifier).consumeFailure(id);
-        if (failure != null && mounted) {
-          showSisNotice(context, failure.message, isError: true);
-        }
+        _restoreDraft(id);
       });
     }
     return Container(

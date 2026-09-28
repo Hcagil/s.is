@@ -147,6 +147,12 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
   final _retries = <String, int>{};
   final _timers = <String, Timer>{};
 
+  /// True from [pauseForBackground] to [resumeForeground] -- while paused,
+  /// [_drain] leaves a retryable failure queued without scheduling a new
+  /// timer, so a send that fails just as the app backgrounds does not wake
+  /// it later on its own; [resumeForeground] retries everything at once.
+  bool _paused = false;
+
   @override
   Map<String, List<Message>> build() {
     ref.watch(currentUserIdProvider);
@@ -208,6 +214,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
   /// waking the OS) while nobody can see the result. Wired from
   /// `AppLifecycleListener.onHide` in app/sis_app.dart's `SessionGate`.
   void pauseForBackground() {
+    _paused = true;
     for (final t in _timers.values) {
       t.cancel();
     }
@@ -220,6 +227,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
   /// Wired from `AppLifecycleListener.onResume` in app/sis_app.dart's
   /// `SessionGate`, the same hook that already rechecks for an update.
   void resumeForeground() {
+    _paused = false;
     _retries.clear();
     for (final t in _timers.values) {
       t.cancel();
@@ -269,6 +277,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
             final attempt = (_retries[conversationId] ?? 0) + 1;
             _retries[conversationId] = attempt;
             _draining.remove(conversationId);
+            if (_paused) return;
             _timers[conversationId]?.cancel();
             _timers[conversationId] = Timer(_backoff(attempt), () {
               _timers.remove(conversationId);

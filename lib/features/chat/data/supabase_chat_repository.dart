@@ -345,7 +345,12 @@ final class SupabaseChatRepository implements ChatRepository {
               .from('messages')
               .select(_messageColumns)
               .eq('id', id)
-              .single();
+              .maybeSingle()
+              .retriedOnce();
+          // No row visible: either it truly is not there, or RLS is hiding
+          // a row this sender cannot see -- both read as "not yours", never
+          // a network failure.
+          if (row == null) return const Err(DeniedFailure());
           final isOurs =
               row['sender_id'] == me &&
               row['conversation_id'] == conversationId &&

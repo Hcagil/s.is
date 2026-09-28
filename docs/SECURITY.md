@@ -51,9 +51,37 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     bucket, keyed `<conversation_id>/<file>`. The storage policies ask the same
     membership question the table policies ask, so there is one access rule and
     not two that can drift.
-  - `profiles` is readable only for accounts that are **themselves on the
-    allowlist** — anyone who completes Google sign-in gets a row, and without
-    that clause a member could enumerate every account that ever signed in.
+  - `profiles` rows are readable only for an allowlisted account the caller
+    can **reach** (`app_private.can_reach`): themselves, someone sharing a
+    conversation, a saved contact, or someone the caller found by exact tag
+    (`app_private.tag_finds`, written by `find_by_tag`). Clients may select
+    every column except `avatar_object` (the real picture path) and
+    `avatar_visibility`; the owner reads those through `own_profile()`.
+    `profiles.avatar_path` is a server-maintained copy for older builds: the
+    real path only while the owner's picture setting is `everyone`, null
+    otherwise. The app reads other people through `profiles_public()`
+    (security definer, repeats the row rule, masks the path).
+  - `contacts(owner_id, contact_id)`: one-way, owner-only read/insert/delete;
+    inserting requires the contact be allowlisted and reachable.
+  - `find_by_tag(tag)` is the one deliberate way to reach a stranger: exact
+    match on the stored tag after folding (case, Turkish/Latin letters, a
+    leading @), never prefix or wildcard; at most 20 calls per 10 minutes per
+    member (`app_private.tag_lookups`, serialised by an advisory lock),
+    `RLMT1` beyond. `is_tag_available` has its own budget (60 per 10 minutes).
+  - Profile pictures: `app_private.avatar_visible_to(owner)` — the owner
+    always; otherwise the owner must be allowlisted and either `everyone` and
+    reachable, or `contacts` and the owner saved the reader; `nobody` is the
+    owner only. Enforced twice with the same function: `profiles_public()` /
+    `find_by_tag` mask the path, and the `avatars` storage read policy
+    refuses the object (download, sign, list).
+  - `start_direct_conversation`, `start_group_conversation` (every invitee)
+    and `last_seen_of` also require `can_reach`, so an account id learned
+    elsewhere unlocks nothing.
+  - Accepted leftovers: presence (`presence:members`) keys are account ids
+    and stay visible to every member; a signed picture link created while the
+    picture was visible works until it expires (the app never creates one).
+  - Every new view or function exposed to clients revokes `anon` and
+    defaults, and grants only what `authenticated` needs.
 
 ### Privileged surfaces
 

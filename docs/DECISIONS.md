@@ -1070,3 +1070,15 @@ member chooses who sees their profile picture.
 - Contacts are one-way: saving someone lets you see them; their "My
   contacts" picture setting means people *they* saved. The tag lookup allows
   20 searches per 10 minutes per member.
+- **Reach** (after the security probes): one rule decides whom a member can
+  reach — themselves, someone they share a chat or group with, a contact, or
+  someone they found by exact tag (the server remembers the find). Adding a
+  contact, starting a chat, inviting to a group, seeing an "Everyone" picture
+  and last seen all require it, so harvested account ids unlock nothing.
+- The real picture path is kept where clients cannot read it; the old
+  `avatar_path` column carries it only for "Everyone" pictures, so older app
+  builds keep working and see initials otherwise. Older builds can no longer
+  start chats with people they have not reached; existing chats work.
+- Accepted leftovers: who is online stays visible to every member (v0.4),
+  and a picture link someone generated before the owner narrowed the
+  setting works until it expires (the app does not create such links).

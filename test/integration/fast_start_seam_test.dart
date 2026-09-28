@@ -359,13 +359,13 @@ void main() {
         'conversation_members',
         'conversation_previews',
         'conversations',
-        'profiles',
+        'profiles_public',
         'unread_counts',
       ], reason: 'not the same five reads');
       _Req one(String t) => reqs.singleWhere((r) => r.table == t);
       final first = [one('conversation_members'), one('conversations')];
       final second = [
-        one('profiles'),
+        one('profiles_public'),
         one('conversation_previews'),
         one('unread_counts'),
       ];
@@ -471,7 +471,7 @@ void main() {
     // A profiles read that overlaps the list's first group can only be the
     // member's own profile: the other members' names wait for that group.
     expect(
-      reqs.any((r) => r.table == 'profiles' && r.overlaps(members)),
+      reqs.any((r) => r.table == 'own_profile' && r.overlaps(members)),
       isTrue,
       reason: 'the profile and the list were read one after the other: $reqs',
     );

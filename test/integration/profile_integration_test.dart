@@ -25,6 +25,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// Tags, names and onboarding through the real stack.
 ///
@@ -142,6 +143,14 @@ void main() {
     vera = Account(veraClient!);
     walt = Account(waltClient!);
     xena = Account(xenaClient!);
+    // Since v0.22.0 a profile and last seen are open to people who share a
+    // chat: vera finds xena and starts their 1:1.
+    await findByTag(veraClient!, [xenaClient!]);
+    expect(
+      await SupabaseChatRepository(veraClient!)
+          .startDirectConversation(xena.userId),
+      isA<Ok<String>>(),
+    );
     offline = Account(deadClient!);
   });
 
@@ -335,7 +344,7 @@ void main() {
           'onboarding_done': !before.onboardingDone,
         })
         .eq('user_id', walt.userId)
-        .select();
+        .select('user_id');
 
     expect(rows, isEmpty, reason: 'vera rewrote walt\'s profile');
     final after = await walt.reload();

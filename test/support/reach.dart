@@ -8,14 +8,28 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// The signed-in member's own current tag.
+import 'service_key.dart';
+
+const _url = String.fromEnvironment(
+  'SUPABASE_TEST_URL',
+  defaultValue: 'http://host.docker.internal:54321',
+);
+
+/// The signed-in member's current tag, read with the service key: the member
+/// may not hold an active session yet (or any more), and the tag is what the
+/// other member would have been told.
 Future<String> tagOf(SupabaseClient client) async {
-  final own = await client
-      .from('profiles')
-      .select('tag')
-      .eq('user_id', client.auth.currentUser!.id)
-      .single();
-  return own['tag'] as String;
+  final service = SupabaseClient(_url, serviceKey());
+  try {
+    final row = await service
+        .from('profiles')
+        .select('tag')
+        .eq('user_id', client.auth.currentUser!.id)
+        .single();
+    return row['tag'] as String;
+  } finally {
+    await service.dispose();
+  }
 }
 
 /// [from] finds the member [id] by their exact [tag].

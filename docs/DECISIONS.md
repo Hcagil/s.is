@@ -1037,3 +1037,13 @@ connection to be fully joined before the list was even asked for.
   after leaving a group exists (owner, v0.23).
 - The chat list no longer shows "Draft: …" for a chat with unsent text
   (owner); the draft stays in that chat's write box.
+
+## 2026-09-28 — The licences page shows each licence as written
+
+The owner reported the licences page content was wrong. The page (SIS's own,
+2026-09-25) dropped each paragraph's layout: centred lines (copyright
+headers) were left-aligned and indented clauses lost their indent, so
+licences read as one flattened block. Now centred paragraphs are centred and
+each indent level is 16 px; a package with several licences shows how many.
+Checked against the app's real bundled list (209 packages): none missing,
+none shown twice.

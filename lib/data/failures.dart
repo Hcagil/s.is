@@ -22,17 +22,23 @@ const genericMessage = 'Something went wrong. Try again.';
 Failure readableFailure(Object e) {
   log('$e', name: 'sis.data', error: e);
 
-  final message = switch (e) {
-    IOException() || TimeoutException() || ClientException() => offlineMessage,
-    AuthRetryableFetchException() => offlineMessage,
+  final retryable = switch (e) {
+    IOException() || TimeoutException() || ClientException() => true,
+    AuthRetryableFetchException() => true,
     // A refused Realtime socket: the SocketException comes wrapped.
-    WebSocketChannelException() => offlineMessage,
-    PostgrestException() ||
-    StorageException() ||
-    AuthException() => serverMessage,
-    RealtimeSubscribeStatus.timedOut => offlineMessage,
-    _ => genericMessage,
+    WebSocketChannelException() => true,
+    PostgrestException() || StorageException() || AuthException() => false,
+    RealtimeSubscribeStatus.timedOut => true,
+    _ => false,
   };
+  final message = retryable
+      ? offlineMessage
+      : switch (e) {
+          PostgrestException() ||
+          StorageException() ||
+          AuthException() => serverMessage,
+          _ => genericMessage,
+        };
 
-  return NetworkFailure(message);
+  return NetworkFailure(message, retryable: retryable);
 }

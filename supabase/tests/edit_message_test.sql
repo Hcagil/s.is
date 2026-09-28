@@ -144,9 +144,9 @@ select set_eq(
   $$select column_name::text from information_schema.column_privileges
      where table_schema = 'public' and table_name = 'messages'
        and grantee = 'authenticated' and privilege_type = 'INSERT'$$,
-  $$values ('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
+  $$values ('id'),('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
            ('reply_to'),('forwarded')$$,
-  'authenticated still inserts exactly the same seven columns -- never edited_at');
+  'authenticated inserts exactly these eight columns (id since 20260928170000) -- never edited_at');
 select test_as('00000000-0000-0000-0000-0000000ed001', 'ed000000-0000-0000-0000-0000000ed001');
 select throws_ok(format($$update public.messages set body = 'sneaky', edited_at = now() where id = %L$$,
                         (select txt from _m)),

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 
@@ -68,15 +69,25 @@ void main() {
     });
   });
 
-  group('send() carries the reply and clears it only on success', () {
+  group('a queued send carries the reply and clears it', () {
+    Future<void> flush() async {
+      for (var i = 0; i < 5; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+
     test('passes the replying message\'s id as replyTo', () async {
       final fake = FakeChat();
       final c = make(fake);
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
-      c.read(replyingToProvider.notifier).start(msg('quoted'));
+      final quoted = msg('quoted');
+      c.read(replyingToProvider.notifier).start(quoted);
 
-      await c.read(messagesProvider.notifier).send('hello');
+      c
+          .read(sendQueueProvider.notifier)
+          .enqueue('c1', body: 'hello', replyTo: quoted);
+      await flush();
       expect(fake.sentReplyTo, ['quoted']);
     });
 
@@ -86,19 +97,20 @@ void main() {
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
 
-      await c.read(messagesProvider.notifier).send('hello');
+      c.read(sendQueueProvider.notifier).enqueue('c1', body: 'hello');
+      await flush();
       expect(fake.sentReplyTo, [null]);
     });
 
-    test('a successful send clears replyingToProvider', () async {
-      final fake = FakeChat();
-      final c = make(fake);
+    test('sending clears replyingToProvider at once', () {
+      final c = make(FakeChat());
       c.read(openConversationProvider.notifier).open('c1');
-      await c.read(messagesProvider.future);
-      c.read(replyingToProvider.notifier).start(msg('quoted'));
+      final quoted = msg('quoted');
+      c.read(replyingToProvider.notifier).start(quoted);
 
-      final result = await c.read(messagesProvider.notifier).send('hello');
-      expect(result, isA<Ok<Message>>());
+      c
+          .read(sendQueueProvider.notifier)
+          .enqueue('c1', body: 'hello', replyTo: quoted);
       expect(
         c.read(replyingToProvider),
         isNull,
@@ -106,7 +118,7 @@ void main() {
       );
     });
 
-    test('a refused send leaves replyingToProvider untouched', () async {
+    test('a refused send brings the reply target back with the text', () async {
       final fake = FakeChat()..sendResult = const Err(DeniedFailure());
       final c = make(fake);
       c.read(openConversationProvider.notifier).open('c1');
@@ -114,13 +126,17 @@ void main() {
       final quoted = msg('quoted');
       c.read(replyingToProvider.notifier).start(quoted);
 
-      final result = await c.read(messagesProvider.notifier).send('hello');
-      expect(result, isA<Err<Message>>());
+      c
+          .read(sendQueueProvider.notifier)
+          .enqueue('c1', body: 'hello', replyTo: quoted);
+      await flush();
+      final draft = c.read(draftsProvider.notifier).draftFor('c1');
       expect(
-        c.read(replyingToProvider),
+        draft.replyTo,
         quoted,
         reason: 'nothing was sent: whatever was typed, and the reply, stays',
       );
+      expect(draft.text, 'hello');
     });
   });
 

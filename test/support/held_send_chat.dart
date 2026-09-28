@@ -11,15 +11,18 @@ const me = Member(userId: 'u1', displayName: 'Maya');
 
 /// One send the server has been asked for, still waiting for its answer.
 class Ask {
-  Ask(this.conversationId, this.body, this.replyTo, int n)
+  Ask(this.id, this.conversationId, this.body, this.replyTo)
     : stored = Message(
-        id: 'srv-$n',
+        id: id,
         conversationId: conversationId,
         senderId: me.userId,
         body: body.trim(),
         createdAt: DateTime.now(),
         replyTo: replyTo,
       );
+
+  /// The id the phone chose; the server stores the row under it.
+  final String id;
   final String conversationId;
   final String body;
   final String? replyTo;
@@ -44,11 +47,12 @@ class HeldSendChat extends ChatFake {
 
   @override
   Future<Result<Message>> send({
+    required String id,
     required String conversationId,
     required String body,
     String? replyTo,
   }) async {
-    final ask = Ask(conversationId, body, replyTo, asked.length + 1);
+    final ask = Ask(id, conversationId, body, replyTo);
     asked.add(ask);
     inFlight++;
     if (inFlight > maxInFlight) maxInFlight = inFlight;

@@ -317,6 +317,7 @@ class SessionChat implements ChatRepository {
 
   @override
   Future<Result<Message>> send({
+    required String id,
     required String conversationId,
     required String body,
     String? replyTo,
@@ -325,7 +326,7 @@ class SessionChat implements ChatRepository {
     final r = _roomFor(conversationId, who);
     if (r == null) return const Err(DeniedFailure());
     final m = Message(
-      id: 'm${r.messages.length + 1}-${r.id}',
+      id: id,
       conversationId: r.id,
       senderId: who!,
       body: body.trim(),

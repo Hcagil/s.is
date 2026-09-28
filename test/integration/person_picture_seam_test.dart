@@ -26,6 +26,7 @@ import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
+import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../features/profile/avatar_widgets_test.dart' show avatarIn, picturesIn;
@@ -172,8 +173,22 @@ void main() {
         'creating the group',
       );
       final d = _ok(await ece.startDirectConversation(denizId), 'the 1:1');
-      _ok(await deniz.send(conversationId: g, body: _stamp('g')), 'send');
-      _ok(await deniz.send(conversationId: d, body: _stamp('d')), 'send');
+      _ok(
+        await deniz.send(
+          id: randomMessageId(),
+          conversationId: g,
+          body: _stamp('g'),
+        ),
+        'send',
+      );
+      _ok(
+        await deniz.send(
+          id: randomMessageId(),
+          conversationId: d,
+          body: _stamp('d'),
+        ),
+        'send',
+      );
       return (g, d);
     }))!;
 

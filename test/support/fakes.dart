@@ -274,18 +274,24 @@ class FakeChat implements ChatRepository {
     return messagesResult ?? Ok(initial);
   }
 
+  /// The client-made id of every send, in order -- a retry repeats one.
+  final sentIds = <String>[];
+
   @override
   Future<Result<Message>> send({
+    required String id,
     required String conversationId,
     required String body,
     String? replyTo,
   }) async {
     sent.add(body);
+    sentIds.add(id);
     sentReplyTo.add(replyTo);
+    // Like the database: the row is stored under the id the phone chose.
     return sendResult ??
         Ok(
           Message(
-            id: 'sent-${sent.length}',
+            id: id,
             conversationId: conversationId,
             senderId: 'me',
             body: body.trim(),
@@ -880,18 +886,24 @@ class ChatFake implements ChatRepository {
     return messagesResult;
   }
 
+  /// The client-made id of every send, in order -- a retry repeats one.
+  final sentIds = <String>[];
+
   @override
   Future<Result<Message>> send({
+    required String id,
     required String conversationId,
     required String body,
     String? replyTo,
   }) async {
     await _tick('send:$conversationId');
     sent.add((conversationId: conversationId, body: body, replyTo: replyTo));
+    sentIds.add(id);
+    // Like the database: the row is stored under the id the phone chose.
     return sendResult ??
         Ok(
           Message(
-            id: 'sent-${sent.length}',
+            id: id,
             conversationId: conversationId,
             senderId: 'me',
             body: body.trim(),

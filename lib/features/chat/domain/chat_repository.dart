@@ -39,13 +39,22 @@ abstract interface class ChatRepository {
   /// Messages in [conversationId], oldest first.
   Future<Result<List<Message>>> messages(String conversationId);
 
-  /// Sends [body] to [conversationId] and returns the stored message.
+  /// Sends [body] to [conversationId] as message [id] and returns the
+  /// stored message.
   ///
-  /// The sender is the signed-in member; the server assigns the id and the
-  /// timestamp, and returns the row it wrote. Returning it matters: a sender
-  /// must never depend on the Realtime echo to see their own message, or a
-  /// slow or dropped subscription means they send into silence.
+  /// [id] is generated on the phone (see `randomMessageId` in
+  /// `domain/message.dart`), not assigned by the server, so a retried call
+  /// with the same [id] after a lost answer is idempotent: the second
+  /// insert is a primary-key conflict, and the implementation reads the
+  /// already-stored row back as [Ok] instead of writing a duplicate or
+  /// reporting a failure.
+  ///
+  /// The sender is the signed-in member; the server assigns the timestamp
+  /// and returns the row it wrote. Returning it matters: a sender must
+  /// never depend on the Realtime echo to see their own message, or a slow
+  /// or dropped subscription means they send into silence.
   Future<Result<Message>> send({
+    required String id,
     required String conversationId,
     required String body,
     String? replyTo,

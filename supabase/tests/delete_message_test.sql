@@ -234,9 +234,9 @@ select set_eq(
   $$select column_name::text from information_schema.column_privileges
      where table_schema = 'public' and table_name = 'messages'
        and grantee = 'authenticated' and privilege_type = 'INSERT'$$,
-  $$values ('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
+  $$values ('id'),('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
            ('reply_to'),('forwarded')$$,
-  'authenticated may still insert only these seven columns -- never deleted or deleted_at '
+  'authenticated may still insert only these eight columns -- never deleted or deleted_at '
   '(20260924150000_reply_and_forward.sql added reply_to and forwarded)');
 select is((select count(*) from information_schema.column_privileges
             where table_schema = 'public' and table_name = 'messages'

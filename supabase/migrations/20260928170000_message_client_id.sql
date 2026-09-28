@@ -1,0 +1,16 @@
+-- Client-generated message ids, for the offline send queue (SIS v0.21.3).
+--
+-- A queued text send can reach the server while its answer is lost (the
+-- connection drops after the insert but before the response arrives); the
+-- app retries the same send with the same id, and a primary-key conflict on
+-- retry is then read back as success instead of writing a duplicate -- see
+-- SendQueueController and SupabaseChatRepository.send.
+--
+-- id was withheld by the same column-level grant that keeps created_at
+-- server-assigned (20260922120000_chat.sql), bundled with it for the
+-- back-dating risk created_at carries. id carries no such risk: a client
+-- may propose any uuid; the primary key refuses one that already exists,
+-- and there is no update or delete policy, so it can never overwrite
+-- another message's history, only fail to insert. Added here on its own
+-- rather than reopening that migration.
+grant insert (id) on public.messages to authenticated;

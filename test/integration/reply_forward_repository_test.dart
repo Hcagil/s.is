@@ -108,12 +108,14 @@ void main() {
   group('reply', () {
     test('replyTo is stored and read back as Message.replyTo', () async {
       final quoted = await ann.send(
+        id: randomMessageId(),
         conversationId: c1,
         body: 'quoted ${DateTime.now().microsecondsSinceEpoch}',
       );
       final quotedId = (quoted as Ok<Message>).value.id;
 
       final reply = await bob.send(
+        id: randomMessageId(),
         conversationId: c1,
         body: 'replying ${DateTime.now().microsecondsSinceEpoch}',
         replyTo: quotedId,
@@ -130,12 +132,14 @@ void main() {
       'a reply naming a message of another conversation is refused',
       () async {
         final elsewhere = await ann.send(
+          id: randomMessageId(),
           conversationId: c2,
           body: 'lives in c2 ${DateTime.now().microsecondsSinceEpoch}',
         );
         final elsewhereId = (elsewhere as Ok<Message>).value.id;
 
         final refused = await ann.send(
+          id: randomMessageId(),
           conversationId: c1,
           body: 'should not land',
           replyTo: elsewhereId,
@@ -149,7 +153,11 @@ void main() {
     test('a text message forwarded to two conversations creates two forwarded '
         'copies with the same body', () async {
       final body = 'fwd me ${DateTime.now().microsecondsSinceEpoch}';
-      final original = await ann.send(conversationId: c1, body: body);
+      final original = await ann.send(
+        id: randomMessageId(),
+        conversationId: c1,
+        body: body,
+      );
       final message = (original as Ok<Message>).value;
 
       final result = await ann.forward(message, [c2, c3]);
@@ -219,6 +227,7 @@ void main() {
     test('forwarding into a conversation the forwarder is not in fails '
         'with a readable failure', () async {
       final sent = await ann.send(
+        id: randomMessageId(),
         conversationId: c1,
         body: 'trying to reach bc ${DateTime.now().microsecondsSinceEpoch}',
       );

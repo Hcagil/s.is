@@ -74,7 +74,11 @@ void main() {
     var attempt = 0;
     while (seen.isEmpty && DateTime.now().isBefore(deadline)) {
       attempt++;
-      await repo.send(conversationId: conversationId, body: 'warmup $attempt');
+      await repo.send(
+        id: randomMessageId(),
+        conversationId: conversationId,
+        body: 'warmup $attempt',
+      );
       for (var i = 0; i < 20 && seen.isEmpty; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 250));
       }

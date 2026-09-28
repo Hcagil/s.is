@@ -9,7 +9,7 @@
 -- by `has_app_access()`. A stranger would fail the first gate and prove
 -- nothing about the rest.
 begin;
-select plan(36);
+select plan(35);
 
 -- fixtures ------------------------------------------------------------------
 -- ann, bob: members of the conversation. dan: allowlisted and ACTIVE but not
@@ -219,15 +219,9 @@ select throws_ok(
          repeat('x', 4001), (select conv from _fx) || '/photo4.jpg'),
   '23514', null, 'an attachment does not lift the caption length limit');
 
--- 7 the insert grant still excludes the server-assigned columns -------------
--- Adding attachment_path to the column grant is the moment id and created_at
--- get handed back by accident.
-select throws_ok(
-  format($$insert into public.messages(id, conversation_id, sender_id, body, attachment_path)
-           values (gen_random_uuid(), %L, %L, '', %L)$$,
-         (select conv from _fx), '00000000-0000-0000-0000-00000000aa01',
-         (select conv from _fx) || '/photo5.jpg'),
-  '42501', null, 'a member still cannot choose the message id');
+-- 7 the insert grant still excludes created_at ------------------------------
+-- The id is the member's to choose since 20260928170000_message_client_id.sql
+-- (covered in message_client_id_test.sql); created_at stays the server's.
 select throws_ok(
   format($$insert into public.messages(conversation_id, sender_id, body, attachment_path, created_at)
            values (%L, %L, '', %L, '2000-01-01')$$,
@@ -239,10 +233,10 @@ select set_eq(
   $$select column_name::text from information_schema.column_privileges
      where table_schema = 'public' and table_name = 'messages'
        and grantee = 'authenticated' and privilege_type = 'INSERT'$$,
-  $$values ('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
+  $$values ('id'),('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
            ('reply_to'),('forwarded')$$,
-  'authenticated may insert exactly conversation_id, sender_id, body, attachment_path, '
-  'attachment_preview, reply_to, forwarded (20260924150000_reply_and_forward.sql)');
+  'authenticated may insert exactly id, conversation_id, sender_id, body, attachment_path, '
+  'attachment_preview, reply_to, forwarded (20260928170000_message_client_id.sql)');
 
 -- 8 losing the active session closes the attachment too ---------------------
 -- ann is still a member, so membership cannot be what stops her here.

@@ -237,10 +237,18 @@ void main() {
     // because the fake clock this binding installs never advances on its
     // own to run whatever retry/backoff timer the SDK is waiting on.
     final recent = await t.runAsync(
-      () => opal.send(conversationId: conversationId, body: recentBody),
+      () => opal.send(
+        id: randomMessageId(),
+        conversationId: conversationId,
+        body: recentBody,
+      ),
     );
     final old = await t.runAsync(
-      () => opal.send(conversationId: conversationId, body: oldBody),
+      () => opal.send(
+        id: randomMessageId(),
+        conversationId: conversationId,
+        body: oldBody,
+      ),
     );
     expect(recent, isA<Ok<Message>>());
     expect(old, isA<Ok<Message>>());

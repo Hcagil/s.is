@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
@@ -108,10 +109,16 @@ class _RealtimeDown implements ChatRepository {
   Future<Result<List<Message>>> messages(String id) => live.messages(id);
   @override
   Future<Result<Message>> send({
+    required String id,
     required String conversationId,
     required String body,
     String? replyTo,
-  }) => live.send(conversationId: conversationId, body: body, replyTo: replyTo);
+  }) => live.send(
+    id: id,
+    conversationId: conversationId,
+    body: body,
+    replyTo: replyTo,
+  );
   @override
   Future<Result<void>> forward(Message message, List<String> ids) =>
       live.forward(message, ids);
@@ -230,11 +237,19 @@ void main() {
       memberIds: [samId],
     ) as Ok<String>).value;
     expect(
-      await rose.send(conversationId: roseSam, body: _stamp('seed')),
+      await rose.send(
+        id: randomMessageId(),
+        conversationId: roseSam,
+        body: _stamp('seed'),
+      ),
       isA<Ok<Message>>(),
     );
     expect(
-      await tess.send(conversationId: tessSam, body: _stamp('seed')),
+      await tess.send(
+        id: randomMessageId(),
+        conversationId: tessSam,
+        body: _stamp('seed'),
+      ),
       isA<Ok<Message>>(),
     );
   });
@@ -249,7 +264,11 @@ void main() {
   /// Puts [roseGroup] on top of rose's list, so a move to the top is a move.
   Future<void> groupOnTop() async {
     expect(
-      await rose.send(conversationId: roseGroup, body: _stamp('bump')),
+      await rose.send(
+        id: randomMessageId(),
+        conversationId: roseGroup,
+        body: _stamp('bump'),
+      ),
       isA<Ok<Message>>(),
     );
   }
@@ -277,8 +296,16 @@ void main() {
         // moment it resolves must arrive.
         final direct = _stamp('direct');
         final grouped = _stamp('group');
-        await sam.send(conversationId: roseSam, body: direct);
-        await sam.send(conversationId: roseGroup, body: grouped);
+        await sam.send(
+          id: randomMessageId(),
+          conversationId: roseSam,
+          body: direct,
+        );
+        await sam.send(
+          id: randomMessageId(),
+          conversationId: roseGroup,
+          body: grouped,
+        );
 
         await eventually<List<Message>>(
           () => seen,
@@ -312,8 +339,16 @@ void main() {
 
         final secret = _stamp('not for tess');
         final hers = _stamp('for tess');
-        await sam.send(conversationId: roseSam, body: secret);
-        await sam.send(conversationId: tessSam, body: hers);
+        await sam.send(
+          id: randomMessageId(),
+          conversationId: roseSam,
+          body: secret,
+        );
+        await sam.send(
+          id: randomMessageId(),
+          conversationId: tessSam,
+          body: hers,
+        );
 
         // Positive controls on both sides: rose's stream carried the secret,
         // and tess's is live — it carried the later message meant for her.
@@ -354,7 +389,11 @@ void main() {
       );
 
       final body = _stamp('live');
-      await sam.send(conversationId: roseSam, body: body);
+      await sam.send(
+        id: randomMessageId(),
+        conversationId: roseSam,
+        body: body,
+      );
 
       final list = await eventually<List<Conversation>>(
         () => _list(container),
@@ -381,10 +420,7 @@ void main() {
         await container.read(messagesProvider.future);
 
         final body = _stamp('mine');
-        expect(
-          await container.read(messagesProvider.notifier).send(body),
-          isA<Ok<Message>>(),
-        );
+        container.read(sendQueueProvider.notifier).enqueue(roseSam, body: body);
 
         final top = (await eventually<List<Conversation>>(
           () => _list(container),
@@ -411,7 +447,7 @@ void main() {
         expect(_list(container).map((c) => c.id), isNot(contains(id)));
 
         final body = _stamp('hello rose');
-        await sam.send(conversationId: id, body: body);
+        await sam.send(id: randomMessageId(), conversationId: id, body: body);
 
         final list = await eventually<List<Conversation>>(
           () => _list(container),
@@ -431,7 +467,11 @@ void main() {
       addTearDown(tessList.dispose);
 
       final secret = _stamp('rose only');
-      await sam.send(conversationId: roseSam, body: secret);
+      await sam.send(
+        id: randomMessageId(),
+        conversationId: roseSam,
+        body: secret,
+      );
       await eventually<List<Conversation>>(
         () => _list(roseList),
         (l) => l.isNotEmpty && l.first.lastMessage == secret,
@@ -439,7 +479,11 @@ void main() {
       );
 
       final hers = _stamp('tess only');
-      await sam.send(conversationId: tessSam, body: hers);
+      await sam.send(
+        id: randomMessageId(),
+        conversationId: tessSam,
+        body: hers,
+      );
       await eventually<List<Conversation>>(
         () => _list(tessList),
         (l) => l.isNotEmpty && l.first.lastMessage == hers,
@@ -475,7 +519,11 @@ void main() {
 
         // The fallback then keeps it current.
         final body = _stamp('quiet');
-        await sam.send(conversationId: roseSam, body: body);
+        await sam.send(
+          id: randomMessageId(),
+          conversationId: roseSam,
+          body: body,
+        );
         await container.read(conversationListProvider.notifier).reloadQuietly();
         expect(_list(container).first.lastMessage, body);
       },

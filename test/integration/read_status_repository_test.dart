@@ -215,7 +215,11 @@ void main() {
 
   group('readMarks', () {
     test('two members who both share see how far the other has read', () async {
-      final sent = await priya.send(conversationId: club, body: _stamp('m'));
+      final sent = await priya.send(
+        id: randomMessageId(),
+        conversationId: club,
+        body: _stamp('m'),
+      );
       final message = (sent as Ok<Message>).value;
       expect(await quinlan.markRead(club), isA<Ok<void>>());
 
@@ -279,7 +283,11 @@ void main() {
       expect(shared, isNotNull, reason: 'control: the shared read is shown');
 
       await share(quinlanClient, false);
-      final sent = await priya.send(conversationId: club, body: _stamp('off'));
+      final sent = await priya.send(
+        id: randomMessageId(),
+        conversationId: club,
+        body: _stamp('off'),
+      );
       final message = (sent as Ok<Message>).value;
       expect(await quinlan.markRead(club), isA<Ok<void>>());
       await share(quinlanClient, true);
@@ -320,6 +328,7 @@ void main() {
       "a sharing member's read arrives, as that member, with its time",
       () async {
         final sent = await priya.send(
+          id: randomMessageId(),
           conversationId: direct,
           body: _stamp('r'),
         );

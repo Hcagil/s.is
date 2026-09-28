@@ -305,6 +305,7 @@ final class SupabaseChatRepository implements ChatRepository {
 
   @override
   Future<Result<Message>> send({
+    required String id,
     required String conversationId,
     required String body,
     String? replyTo,
@@ -316,12 +317,15 @@ final class SupabaseChatRepository implements ChatRepository {
       return const Err(DeniedFailure());
     }
     try {
-      // id and created_at are withheld by the column-level grant; the server
-      // assigns both, and returns the row so the caller need not wait for the
-      // Realtime echo to display it.
+      // created_at is withheld by the column-level grant; the server
+      // assigns it, and returns the row so the caller need not wait for
+      // the Realtime echo to display it. id comes from the caller
+      // (randomMessageId) so a retried send after a lost answer is
+      // idempotent -- see the unique_violation branch below.
       final row = await _client
           .from('messages')
           .insert({
+            'id': id,
             'conversation_id': conversationId,
             'sender_id': me,
             'body': trimmed,
@@ -330,6 +334,35 @@ final class SupabaseChatRepository implements ChatRepository {
           .select(_messageColumns)
           .single();
       return Ok(_toMessage(row));
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+        // This id is already stored: an earlier attempt's insert reached
+        // the server but its answer was lost. Read it back and accept it
+        // as ours only if it truly is -- same sender, same conversation,
+        // same text -- never on trust alone.
+        try {
+          final row = await _client
+              .from('messages')
+              .select(_messageColumns)
+              .eq('id', id)
+              .maybeSingle()
+              .retriedOnce();
+          // No row visible: either it truly is not there, or RLS is hiding
+          // a row this sender cannot see -- both read as "not yours", never
+          // a network failure.
+          if (row == null) return const Err(DeniedFailure());
+          final isOurs =
+              row['sender_id'] == me &&
+              row['conversation_id'] == conversationId &&
+              row['body'] == trimmed &&
+              (replyTo == null || row['reply_to'] == replyTo);
+          if (!isOurs) return const Err(DeniedFailure());
+          return Ok(_toMessage(row));
+        } catch (e2) {
+          return Err(_asFailure(e2));
+        }
+      }
+      return Err(_asFailure(e));
     } catch (e) {
       return Err(_asFailure(e));
     }

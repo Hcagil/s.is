@@ -191,7 +191,11 @@ void main() {
 
       final quotedBody = 'seam quoted ${DateTime.now().microsecondsSinceEpoch}';
       final quoted = await t.runAsync(
-        () => reid.send(conversationId: c1, body: quotedBody),
+        () => reid.send(
+          id: randomMessageId(),
+          conversationId: c1,
+          body: quotedBody,
+        ),
       );
       expect(quoted, isA<Ok<Message>>());
       final quotedMessage = (quoted! as Ok<Message>).value;

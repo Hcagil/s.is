@@ -135,21 +135,33 @@ void main() {
       'erin to frank two $stamp',
     ]) {
       expect(
-        await oldPhone.send(conversationId: withFrank, body: body),
+        await oldPhone.send(
+          id: randomMessageId(),
+          conversationId: withFrank,
+          body: body,
+        ),
         isA<Ok<Message>>(),
       );
       historyWithFrank.add(body);
     }
     final fromFrank = 'frank to erin $stamp';
     expect(
-      await frank.send(conversationId: withFrank, body: fromFrank),
+      await frank.send(
+        id: randomMessageId(),
+        conversationId: withFrank,
+        body: fromFrank,
+      ),
       isA<Ok<Message>>(),
     );
     historyWithFrank.add(fromFrank);
 
     final toGrace = 'erin to grace $stamp';
     expect(
-      await oldPhone.send(conversationId: withGrace, body: toGrace),
+      await oldPhone.send(
+        id: randomMessageId(),
+        conversationId: withGrace,
+        body: toGrace,
+      ),
       isA<Ok<Message>>(),
     );
     historyWithGrace.add(toGrace);
@@ -169,7 +181,11 @@ void main() {
     // for a reason that has nothing to do with the access gate.
     final ping = 'ping while still active $stamp';
     expect(
-      await frank.send(conversationId: withFrank, body: ping),
+      await frank.send(
+        id: randomMessageId(),
+        conversationId: withFrank,
+        body: ping,
+      ),
       isA<Ok<Message>>(),
     );
     historyWithFrank.add(ping);
@@ -243,7 +259,11 @@ void main() {
   test('the new phone can send, and the other member reads it', () async {
     final body = 'from the new phone $stamp';
     expect(
-      await newPhone.send(conversationId: withFrank, body: body),
+      await newPhone.send(
+        id: randomMessageId(),
+        conversationId: withFrank,
+        body: body,
+      ),
       isA<Ok<Message>>(),
     );
     expect(bodiesOf(await frank.messages(withFrank)), contains(body));
@@ -266,7 +286,11 @@ void main() {
   test('the old phone cannot send', () async {
     final body = 'from the old phone $stamp';
     expect(
-      await oldPhone.send(conversationId: withFrank, body: body),
+      await oldPhone.send(
+        id: randomMessageId(),
+        conversationId: withFrank,
+        body: body,
+      ),
       isA<Err<Message>>(),
     );
     // Refused, not merely hidden from the sender.
@@ -280,7 +304,11 @@ void main() {
         .timeout(const Duration(seconds: 20));
 
     expect(
-      await newPhone.send(conversationId: withFrank, body: body),
+      await newPhone.send(
+        id: randomMessageId(),
+        conversationId: withFrank,
+        body: body,
+      ),
       isA<Ok<Message>>(),
     );
     await control; // the server has fanned this row out to its subscribers
@@ -311,6 +339,7 @@ void main() {
       expect(bodiesOf(await oldPhone.messages(withFrank)), isEmpty);
       expect(
         await oldPhone.send(
+          id: randomMessageId(),
           conversationId: withFrank,
           body: 'after refresh $stamp',
         ),

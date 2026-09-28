@@ -185,7 +185,11 @@ void main() {
     test('a text message previews as its body', () async {
       final body = 'text ${DateTime.now().microsecondsSinceEpoch}';
       expect(
-        await olive.send(conversationId: previewConversation, body: body),
+        await olive.send(
+          id: randomMessageId(),
+          conversationId: previewConversation,
+          body: body,
+        ),
         isA<Ok<Message>>(),
       );
 
@@ -199,7 +203,11 @@ void main() {
       // string, and the text below it was shown as the newest message.
       final older = 'older text ${DateTime.now().microsecondsSinceEpoch}';
       expect(
-        await olive.send(conversationId: previewConversation, body: older),
+        await olive.send(
+          id: randomMessageId(),
+          conversationId: previewConversation,
+          body: older,
+        ),
         isA<Ok<Message>>(),
       );
 
@@ -251,7 +259,11 @@ void main() {
       );
       final newer = 'newer ${DateTime.now().microsecondsSinceEpoch}';
       expect(
-        await olive.send(conversationId: previewConversation, body: newer),
+        await olive.send(
+          id: randomMessageId(),
+          conversationId: previewConversation,
+          body: newer,
+        ),
         isA<Ok<Message>>(),
       );
 
@@ -270,7 +282,11 @@ void main() {
       // renders "No messages yet" while plainly having messages.
       final quiet = 'quiet ${DateTime.now().microsecondsSinceEpoch}';
       expect(
-        await olive.send(conversationId: previewConversation, body: quiet),
+        await olive.send(
+          id: randomMessageId(),
+          conversationId: previewConversation,
+          body: quiet,
+        ),
         isA<Ok<Message>>(),
       );
 
@@ -355,7 +371,11 @@ void main() {
     test('still shows a message sent now, at the end of the list', () async {
       final body = 'after the cap ${DateTime.now().microsecondsSinceEpoch}';
       expect(
-        await olive.send(conversationId: longConversation, body: body),
+        await olive.send(
+          id: randomMessageId(),
+          conversationId: longConversation,
+          body: body,
+        ),
         isA<Ok<Message>>(),
       );
 

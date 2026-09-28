@@ -5,10 +5,16 @@ sealed class Failure {
 }
 
 final class NetworkFailure extends Failure {
-  const NetworkFailure(this.message);
+  const NetworkFailure(this.message, {this.retryable = false});
 
   @override
   final String message;
+
+  /// Whether this is worth retrying without asking the member again: no
+  /// connection or the server did not answer in time, rather than the
+  /// server answering with a refusal. Set by `readableFailure` in
+  /// `lib/data/failures.dart`, the one place that classifies an SDK error.
+  final bool retryable;
 }
 
 final class DeniedFailure extends Failure {

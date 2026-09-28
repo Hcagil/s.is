@@ -116,7 +116,11 @@ void main() {
     String conversation,
     String body,
   ) async {
-    final r = await as.send(conversationId: conversation, body: body);
+    final r = await as.send(
+      id: randomMessageId(),
+      conversationId: conversation,
+      body: body,
+    );
     expect(r, isA<Ok<Message>>(), reason: 'send failed: $r');
     return (r as Ok<Message>).value;
   }

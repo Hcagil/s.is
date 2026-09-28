@@ -141,10 +141,16 @@ class _Wired implements ChatRepository {
   Future<Result<List<Message>>> messages(String id) => live.messages(id);
   @override
   Future<Result<Message>> send({
+    required String id,
     required String conversationId,
     required String body,
     String? replyTo,
-  }) => live.send(conversationId: conversationId, body: body, replyTo: replyTo);
+  }) => live.send(
+    id: id,
+    conversationId: conversationId,
+    body: body,
+    replyTo: replyTo,
+  );
   @override
   Future<Result<Stream<Message>>> incoming(String id) => live.incoming(id);
   @override
@@ -338,7 +344,11 @@ void main() {
     }
 
     Future<Message> sent(String id) async {
-      final r = await sana.send(conversationId: id, body: _stamp('mine'));
+      final r = await sana.send(
+        id: randomMessageId(),
+        conversationId: id,
+        body: _stamp('mine'),
+      );
       return (r as Ok<Message>).value;
     }
 
@@ -568,7 +578,11 @@ void main() {
     }) async {
       await tall(t);
       final sent = await t.runAsync(
-        () => sana.send(conversationId: id, body: _stamp('mine')),
+        () => sana.send(
+          id: randomMessageId(),
+          conversationId: id,
+          body: _stamp('mine'),
+        ),
       );
       final message = (sent! as Ok<Message>).value;
       await t.pumpWidget(app(chat: chat));

@@ -127,9 +127,9 @@ select set_eq(
   $$select column_name::text from information_schema.column_privileges
      where table_schema = 'public' and table_name = 'messages'
        and grantee = 'authenticated' and privilege_type = 'INSERT'$$,
-  $$values ('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
+  $$values ('id'),('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
            ('reply_to'),('forwarded')$$,
-  'authenticated may insert exactly the original five columns plus reply_to and forwarded');
+  'authenticated may insert exactly the original five columns plus reply_to, forwarded and id');
 select is((select count(*) from information_schema.column_privileges
             where table_schema = 'public' and table_name = 'messages'
               and grantee = 'authenticated' and privilege_type = 'UPDATE'), 0::bigint,

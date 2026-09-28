@@ -27,6 +27,7 @@ import 'package:sis/features/presence/data/supabase_presence_repository.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:sis/features/update/application/update_controller.dart';
+import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
@@ -154,8 +155,9 @@ void main() {
     );
     // A message puts it at the top of ece's long list, on screen.
     _ok(
-      await SupabaseChatRepository(aClient)
-          .send(conversationId: groupId, body: 'crop seam'),
+      await SupabaseChatRepository(
+        aClient,
+      ).send(id: randomMessageId(), conversationId: groupId, body: 'crop seam'),
       'the first message',
     );
   });

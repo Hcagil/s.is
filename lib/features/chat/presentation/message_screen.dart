@@ -19,6 +19,7 @@ import '../../notifications/application/push_controller.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
+import '../application/chat_drafts.dart';
 import '../domain/highlight.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
@@ -1212,44 +1213,67 @@ class _ComposerState extends ConsumerState<_Composer> {
   final _controller = TextEditingController();
   bool _sending = false;
 
+  /// This composer's conversation is fixed for its whole lifetime: opening
+  /// a different one always pushes a new [MessageScreen] (see
+  /// [openConversation]), never swaps this one's provider underneath it.
+  String? _conversationId;
+
+  /// True for the span of code that copies a draft INTO the controller or
+  /// [replyingToProvider] -- the two listeners below must not echo that
+  /// copy straight back into the draft store as if the member had typed or
+  /// replied to it themselves.
+  bool _applyingDraft = false;
+
   @override
   void initState() {
     super.initState();
-    // A queued send for this conversation may have failed while the member
-    // was elsewhere; restore it once the composer for it exists again.
+    final id = ref.read(openConversationProvider);
+    _conversationId = id;
+    if (id == null) return;
+    // Applying the draft touches other providers (replyingToProvider via
+    // _applyDraft, draftsProvider via consumeFailure) -- unsafe
+    // synchronously here, since initState runs as part of the first build.
+    // Deferred to right after that frame: the same restore path build()'s
+    // listener below uses when a queued send's failure resolves while this
+    // composer is already open.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final conversationId = ref.read(openConversationProvider);
-      if (conversationId == null) return;
-      final failure = ref
-          .read(sendFailureProvider.notifier)
-          .consume(conversationId);
-      if (failure != null) _applyFailure(failure);
+      if (mounted) _restoreDraft(id);
     });
+  }
+
+  /// Applies [id]'s draft (text + reply target) and shows its pending
+  /// failure notice, if any, exactly once. The one restore path, used both
+  /// right after opening ([initState]) and while already open (the
+  /// [draftsProvider] listener in [build]).
+  void _restoreDraft(String id) {
+    final drafts = ref.read(draftsProvider.notifier);
+    _applyDraft(drafts.draftFor(id));
+    final failure = drafts.consumeFailure(id);
+    if (failure != null && mounted) {
+      showSisNotice(context, failure.message, isError: true);
+    }
+  }
+
+  /// Copies [draft]'s text and reply target onto the composer, without
+  /// re-triggering the write-back listeners below (see [_applyingDraft]).
+  void _applyDraft(Draft draft) {
+    _applyingDraft = true;
+    if (_controller.text != draft.text) {
+      _controller.text = draft.text;
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
+    }
+    if (draft.replyTo != null) {
+      ref.read(replyingToProvider.notifier).start(draft.replyTo!);
+    }
+    _applyingDraft = false;
   }
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
-  }
-
-  /// Puts a failed queued send's text and reply target back, and shows one
-  /// notice -- whether the failure was caught live (the composer was
-  /// already open when the server answered) or was waiting from before the
-  /// composer existed (see [initState]).
-  void _applyFailure(SendFailure failure) {
-    final restored = failure.bodies.join('\n');
-    _controller.text = _controller.text.isEmpty
-        ? restored
-        : '$restored\n${_controller.text}';
-    _controller.selection = TextSelection.collapsed(
-      offset: _controller.text.length,
-    );
-    if (failure.replyTo != null) {
-      ref.read(replyingToProvider.notifier).start(failure.replyTo!);
-    }
-    if (mounted) showSisNotice(context, failure.failure.message, isError: true);
   }
 
   void _send() {
@@ -1265,12 +1289,18 @@ class _ComposerState extends ConsumerState<_Composer> {
       unawaited(_saveEdit(editing, body));
       return;
     }
-    // Optimistic: MessagesController.send shows the pending bubble and
-    // queues the round trip; the composer clears at once and does not wait
-    // for it, so it stays usable while a send is in flight. A failure comes
-    // back through sendFailureProvider (see the listener in build()).
+    final id = _conversationId;
+    if (id == null) return;
+    // Optimistic: SendQueueController shows the pending bubble and queues
+    // the round trip (retrying on its own if offline); the composer clears
+    // at once and does not wait for it, so it stays usable while a send is
+    // in flight. It also ends this conversation's draft and the reply
+    // target -- a failure comes back through draftsProvider (see the
+    // listener in build()).
     _controller.clear();
-    unawaited(ref.read(messagesProvider.notifier).send(body));
+    ref
+        .read(sendQueueProvider.notifier)
+        .enqueue(id, body: body, replyTo: ref.read(replyingToProvider));
   }
 
   Future<void> _saveEdit(Message editing, String body) async {
@@ -1323,6 +1353,7 @@ class _ComposerState extends ConsumerState<_Composer> {
 
   @override
   Widget build(BuildContext context) {
+    final id = _conversationId;
     final replying = ref.watch(replyingToProvider);
     final editing = ref.watch(editingProvider);
     ref.listen(editingProvider, (previous, next) {
@@ -1332,23 +1363,45 @@ class _ComposerState extends ConsumerState<_Composer> {
           offset: _controller.text.length,
         );
       } else if (next == null && previous != null) {
-        _controller.clear();
+        // Edit mode is never a draft: whatever was drafted before editing
+        // began (nothing, if the box was empty) comes back now, not the
+        // edited text.
+        final draft = id == null
+            ? const Draft()
+            : ref.read(draftsProvider.notifier).draftFor(id);
+        _applyDraft(draft);
       }
     });
-    // A queued send for this conversation failed while the composer was
-    // already open: every unsent body comes back, oldest first (prepended
-    // if the member has since typed something new -- it was typed earlier,
-    // so it belongs first), the reply target too, one notice for the whole
-    // stopped queue. [initState] covers the same failure resolving after
-    // the member had already left.
-    ref.listen(sendFailureProvider, (previous, next) {
-      final conversationId = ref.read(openConversationProvider);
-      if (conversationId == null) return;
-      final failure = ref
-          .read(sendFailureProvider.notifier)
-          .consume(conversationId);
-      if (failure != null) _applyFailure(failure);
-    });
+    if (id != null) {
+      // The member started or cleared a reply outside this composer (a
+      // message's own reply action) -- kept in the draft too, live.
+      // [ReplyingTo] itself watches openConversationProvider and resets to
+      // null on ANY change to it, including this composer's own conversation
+      // closing (back) -- not just an explicit clear. Once that has
+      // happened this listener's `id` is no longer the open conversation, so
+      // this null is not the member clearing anything and must not
+      // overwrite the reply target already saved in the draft.
+      ref.listen(replyingToProvider, (previous, next) {
+        if (_applyingDraft ||
+            ref.read(editingProvider) != null ||
+            ref.read(openConversationProvider) != id) {
+          return;
+        }
+        _applyingDraft = true;
+        ref.read(draftsProvider.notifier).setReply(id, next);
+        _applyingDraft = false;
+      });
+      // A queued send for this conversation failed while the composer was
+      // already open: its bodies are already prepended into the draft
+      // (DraftsController.restoreFailure) -- reflect that here and show
+      // the notice once. [initState] covers the same failure resolving
+      // before this composer existed; both read the same draft entry, so
+      // this is the composer's one restore path, not two.
+      ref.listen(draftsProvider.select((m) => m[id]), (previous, next) {
+        if (_applyingDraft) return;
+        _restoreDraft(id);
+      });
+    }
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -1386,6 +1439,9 @@ class _ComposerState extends ConsumerState<_Composer> {
                     if (text.isNotEmpty) {
                       ref.read(typingProvider.notifier).signalTyping();
                     }
+                    if (id == null || _applyingDraft) return;
+                    if (ref.read(editingProvider) != null) return;
+                    ref.read(draftsProvider.notifier).setText(id, text);
                   },
                   decoration: const InputDecoration(
                     hintText: 'Message',

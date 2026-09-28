@@ -29,6 +29,24 @@ Postgres Row Level Security is the only authority. The client is untrusted.
   - `conversations`, `conversation_members`, `messages` — every policy is
     `has_app_access()` **and** membership. A conversation is a group when it
     has a `title`; a 1:1 has a unique `direct_key`.
+  - `messages` inserts: `authenticated` may insert exactly `id,
+    conversation_id, sender_id, body, attachment_path, attachment_preview,
+    reply_to, forwarded`; `created_at`, `deleted`, `deleted_at` and
+    `edited_at` stay server-assigned, and there is no UPDATE or DELETE
+    privilege (edits and deletes go through `edit_message` /
+    `delete_message`). The `id` is proposed by the phone (a random v4 UUID),
+    so a send queued offline can be retried safely: the primary key refuses
+    an id that already exists. Any UUID is accepted, so **nothing may trust a
+    message id to be server-generated or unpredictable** — never key an
+    authorisation decision, storage path or topic on it. The app treats a
+    duplicate-key answer as "already sent" only when the stored row is the
+    caller's own, in the same conversation, with the same body (and, when
+    the retried message is a reply, the same reply target);
+    otherwise the send fails. Accepted leftover risk: a member who already
+    knows a message id learns whether that message exists.
+  - Drafts and queued unsent messages live in the app's memory only; if they
+    are ever stored on the phone (planned with the stored chat list), they are
+    personal data under the on-phone storage posture.
   - `messages.attachment_path` points into the private `attachments` storage
     bucket, keyed `<conversation_id>/<file>`. The storage policies ask the same
     membership question the table policies ask, so there is one access rule and

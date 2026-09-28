@@ -209,10 +209,18 @@ void main() {
 
     final stamp = '${DateTime.now().microsecondsSinceEpoch}';
     final older = (await t.runAsync(
-      () => hale.send(conversationId: conversationId, body: 'older $stamp'),
+      () => hale.send(
+        id: randomMessageId(),
+        conversationId: conversationId,
+        body: 'older $stamp',
+      ),
     ))!;
     final newest = (await t.runAsync(
-      () => hale.send(conversationId: conversationId, body: 'newest $stamp'),
+      () => hale.send(
+        id: randomMessageId(),
+        conversationId: conversationId,
+        body: 'newest $stamp',
+      ),
     ))!;
     final olderId = (older as Ok<Message>).value.id;
     final newestId = (newest as Ok<Message>).value.id;

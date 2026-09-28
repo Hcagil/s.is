@@ -99,6 +99,7 @@ void main() {
 
   Future<Message> sent(String body, {String? conversation}) async {
     final r = await edie.send(
+      id: randomMessageId(),
       conversationId: conversation ?? edieFitz,
       body: body,
     );
@@ -182,7 +183,11 @@ void main() {
 
     // Positive control: gale's subscription is live -- fitz writes to her.
     final control = _stamp('fitz to gale');
-    await fitz.send(conversationId: fitzGale, body: control);
+    await fitz.send(
+      id: randomMessageId(),
+      conversationId: fitzGale,
+      body: control,
+    );
     final deadline = DateTime.now().add(const Duration(seconds: 20));
     while (!received.any((m) => m.body == control)) {
       if (DateTime.now().isAfter(deadline)) {

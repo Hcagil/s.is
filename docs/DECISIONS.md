@@ -1018,3 +1018,20 @@ when you come back.
 - Drafts and queued messages live while the app runs; they are not kept
   after the phone closes the app (storing them on the phone comes with the
   stored chat list, v0.23).
+
+## 2026-09-28 — The app opens faster: start-up requests run side by side
+
+The owner reported that opening SIS after it was closed takes more than 5
+seconds. Measured: the server's queries are fast; the time went to about nine
+requests made strictly one after another before the chat list could show,
+each paying a phone-to-server round trip, plus waiting for the live-update
+connection to be fully joined before the list was even asked for.
+- Requests that do not need each other's answers run at the same time: your
+  own profile and the chat list once you are known to be signed in, and the
+  other members' names, the last-message previews and the unread counts once
+  the chats are known.
+- The chat list is fetched while the live-update connection is still being
+  set up; anything that arrives meanwhile is held and applied after, so no
+  message is lost.
+- The next step, showing the last chat list instantly from the phone, comes
+  after leaving a group exists (owner, v0.23).

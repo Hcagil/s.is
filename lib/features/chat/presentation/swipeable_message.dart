@@ -12,7 +12,7 @@ import '../domain/message.dart';
 const double swipeActionThreshold = 64.0;
 
 /// A little extra travel past [swipeActionThreshold] the finger may drag to,
-/// purely for feel -- release always settles at 0 or [swipeActionThreshold].
+/// purely for feel -- release always settles back to 0.
 const double _swipeOverdrag = 24.0;
 
 /// The icon shown on [action]'s box, reused by the swipe row and (as a
@@ -86,8 +86,11 @@ class SwipeableMessage extends StatefulWidget {
   /// The id of the message whose row is currently open, or null.
   final ValueListenable<String?> openId;
 
-  /// Called with true when this bubble's row commits open, and with false
-  /// when it closes (by drag, or because [openId] moved to another message).
+  /// Called with true when this bubble's row commits open.
+  ///
+  /// It is never called with false from this widget; closing happens only
+  /// via the parent moving [openId] away, which this widget picks up itself
+  /// through [openId]'s listener, not through this callback.
   final ValueChanged<bool> onOpenChanged;
 
   /// Called when a box in this bubble's row (or its matching screen-reader
@@ -131,14 +134,13 @@ class _SwipeableMessageState extends State<SwipeableMessage> {
     if (shouldBeOpen != _open && !_dragging) {
       setState(() {
         _open = shouldBeOpen;
-        _dragDx = _open ? swipeActionThreshold : 0;
       });
     }
   }
 
   void _onDragStart(DragStartDetails _) {
     _dragging = true;
-    _dragDx = _open ? swipeActionThreshold : 0;
+    _dragDx = 0;
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
@@ -155,17 +157,17 @@ class _SwipeableMessageState extends State<SwipeableMessage> {
     final wasOpen = _open;
     setState(() {
       _dragging = false;
-      _open = willOpen;
-      _dragDx = willOpen ? swipeActionThreshold : 0;
+      _open = _open || willOpen;
+      _dragDx = 0;
     });
     if (willOpen && !wasOpen) HapticFeedback.selectionClick();
-    if (willOpen != wasOpen) widget.onOpenChanged(willOpen);
+    if (willOpen && !wasOpen) widget.onOpenChanged(true);
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.actions.isEmpty) return widget.child;
-    final offset = _dragging ? _dragDx : (_open ? swipeActionThreshold : 0.0);
+    final offset = _dragging ? _dragDx : 0.0;
     return Semantics(
       customSemanticsActions: {
         for (final action in widget.actions)

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -157,6 +158,14 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     ref.watch(currentUserIdProvider);
     final buffered = <Message>[];
     var loaded = false;
+    // True for as long as THIS build is the current one. ref.mounted alone
+    // cannot tell that apart from the Notifier being disposed outright: a
+    // rebuild (e.g. an account change) reuses the same Notifier, so
+    // ref.mounted stays true for a build already replaced by a newer one.
+    // Registered synchronously, before the join below starts, so it is set
+    // the moment this build is replaced OR the Notifier is disposed.
+    var alive = true;
+    ref.onDispose(() => alive = false);
     // The Realtime join can take up to 15s and must never gate the list: it
     // starts alongside the fetch below instead of being awaited first.
     // Nothing can arrive before the join itself completes, and the
@@ -164,29 +173,43 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     // here (see _inserts), so whichever of the join or the load finishes
     // first, nothing sent during the race is lost.
     unawaited(
-      ref.read(chatRepositoryProvider).incomingAll().then((opened) {
-        if (opened case Ok(:final value)) {
-          final sub = value.listen(
-            (message) {
-              if (!loaded) {
-                buffered.add(message);
-              } else {
-                _apply(message);
+      ref
+          .read(chatRepositoryProvider)
+          .incomingAll()
+          .then((opened) {
+            if (opened case Ok(:final value)) {
+              if (!alive) {
+                // This build was replaced or disposed while the join was
+                // still out: listen only long enough to cancel, which tears
+                // the channel down through the same onCancel -> leaveChannel
+                // path a normal cancel uses, rather than leaving a live
+                // subscription nothing owns.
+                unawaited(value.listen((_) {}).cancel());
+                return;
               }
-            },
-            // A dropped subscription only stops live updates; the re-read on
-            // returning from a conversation still keeps the list current.
-            onError: (Object _) {},
-          );
-          if (ref.mounted) {
-            ref.onDispose(sub.cancel);
-          } else {
-            // The provider was disposed while the join was still in flight;
-            // nothing needs this subscription any more.
-            sub.cancel();
-          }
-        }
-      }),
+              final sub = value.listen(
+                (message) {
+                  if (!loaded) {
+                    buffered.add(message);
+                  } else {
+                    _apply(message);
+                  }
+                },
+                // A dropped subscription only stops live updates; the
+                // re-read on returning from a conversation still keeps the
+                // list current.
+                onError: (Object _) {},
+              );
+              ref.onDispose(sub.cancel);
+            }
+          })
+          .catchError((Object e, StackTrace st) {
+            // A join that throws before it can even answer Err (e.g.
+            // _client.channel() itself) only costs the live part, same as
+            // an Err from incomingAll() and a dropped subscription later --
+            // the list still loads and refresh() still works.
+            log('$e', name: 'sis.chat', error: e, stackTrace: st);
+          }),
     );
     var list = await _load();
     loaded = true;

@@ -132,6 +132,12 @@ Deno.test({
       await as(oldBuild.id, oldBuild.email, oldBuild.session,
         (tx) => tx`select public.register_device_token(${oldBuild.token}, 'android')`);
 
+      // v0.22.0: starting a conversation needs reach. Seed exactly the pairs
+      // this fixture starts, as tag finds (not contacts, which would also
+      // open rows and pictures), as the service role.
+      await sql`insert into app_private.tag_finds(finder, found_id)
+                values (${sender.id}, ${newBuild.id}), (${sender.id}, ${oldBuild.id})`;
+
       const [{ id: conversationId }] = await as(sender.id, sender.email, sender.session,
         (tx) => tx`select public.start_group_conversation(${title}, ${[newBuild.id, oldBuild.id]}::uuid[]) as id`);
       const [{ id: messageId }] = await as(sender.id, sender.email, sender.session,
@@ -196,6 +202,7 @@ Deno.test({
       }
     } finally {
       await sql.begin(async (tx) => {
+        await tx`delete from app_private.tag_finds where finder in ${sql(people.map((p) => p.id))}`;
         await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((p) => p.id))}`;
         await tx`delete from app_private.allowlist where email in ${sql(people.map((p) => p.email))}`;
       }).catch(() => {});

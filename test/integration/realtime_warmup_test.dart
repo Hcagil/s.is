@@ -58,7 +58,15 @@ void main() {
       await bob.dispose();
     });
 
-    await findByTag(ann, [bob]);
+    // Bob reads his own tag with his own session: CI runs this probe before
+    // it passes the service key, so reach.dart's tagOf is not available here.
+    final bobId = bob.auth.currentUser!.id;
+    final bobTag = await bob
+        .from('profiles')
+        .select('tag')
+        .eq('user_id', bobId)
+        .single();
+    await findTag(ann, bobTag['tag'] as String, id: bobId);
     final repo = SupabaseChatRepository(ann);
     final started = await repo.startDirectConversation(
       bob.auth.currentUser!.id,

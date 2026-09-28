@@ -570,6 +570,7 @@ class SessionProfile implements ProfileRepository {
     bool? shareTyping,
     bool? shareLastSeen,
     bool? shareReadStatus,
+    AvatarVisibility? avatarVisibility,
   }) async {
     final who = await _as('save');
     if (who == null) return const Err(DeniedFailure());
@@ -591,6 +592,7 @@ class SessionProfile implements ProfileRepository {
         shareLastSeen: shareLastSeen ?? p.shareLastSeen,
         shareReadStatus: shareReadStatus ?? p.shareReadStatus,
         avatarPath: p.avatarPath,
+        avatarVisibility: avatarVisibility ?? p.avatarVisibility,
       ),
     );
   }
@@ -609,6 +611,7 @@ class SessionProfile implements ProfileRepository {
       shareLastSeen: p.shareLastSeen,
       shareReadStatus: p.shareReadStatus,
       avatarPath: path,
+      avatarVisibility: p.avatarVisibility,
     );
   }
 

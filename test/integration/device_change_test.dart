@@ -11,6 +11,8 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/reach.dart';
+
 /// Changing the phone, against the real stack.
 ///
 /// The product rule is two statements at once: history follows the member, and
@@ -120,6 +122,7 @@ void main() {
     frank = SupabaseChatRepository(frankClient!);
     oldSessionId = sessionIdOf(oldPhoneClient!);
 
+    await findByTag(oldPhoneClient!, [frankClient!, graceClient!]);
     withFrank = (await oldPhone.startDirectConversation(
       frankClient!.auth.currentUser!.id,
     ) as Ok<String>).value;

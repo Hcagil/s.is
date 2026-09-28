@@ -35,6 +35,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/fakes.dart';
 import '../support/sis_ui.dart';
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// Read status on its seams, wired as main.dart wires it: the REAL
 /// [ReadMarksController] over the real chat and profile repositories, the
@@ -285,6 +286,7 @@ void main() {
     sanaId = sanaClient.auth.currentUser!.id;
     theoId = theoClient.auth.currentUser!.id;
     wrenId = wrenClient.auth.currentUser!.id;
+    await findByTag(sanaClient, [theoClient, wrenClient]);
     direct = (await sana.startDirectConversation(theoId) as Ok<String>).value;
     club = (await sana.startGroupConversation(
       title: _stamp('reads club'),

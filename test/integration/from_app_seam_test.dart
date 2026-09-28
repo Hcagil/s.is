@@ -35,6 +35,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
 import '../support/fakes.dart';
+import '../support/reach.dart';
 
 /// "From an app" on the real stack. The platform (the other app, reached
 /// through Android's chooser) is the only fake: an [ExternalPickerFake] at
@@ -186,6 +187,7 @@ void main() {
       xenaClient = await _signedIn('xena@integration.test');
       walt = SupabaseChatRepository(waltClient);
       xena = Member(userId: _uid(xenaClient), displayName: 'Xena');
+      await findByTag(waltClient, [xenaClient]);
       conversationId = _ok(
         await walt.startDirectConversation(xena.userId),
         'the 1:1',

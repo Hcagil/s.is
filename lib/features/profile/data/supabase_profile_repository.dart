@@ -13,9 +13,6 @@ final class SupabaseProfileRepository implements ProfileRepository {
 
   final SupabaseClient _client;
 
-  static const _columns =
-      'user_id, display_name, tag, onboarding_done, share_presence, share_typing, share_last_seen, share_read_status, avatar_path';
-
   Failure _asFailure(Object e) => switch (e) {
     PostgrestException(:final code) when code == '23505' =>
       const ProviderFailure('That tag was just taken. Pick another.'),
@@ -23,6 +20,8 @@ final class SupabaseProfileRepository implements ProfileRepository {
       const ProviderFailure('That name or tag is not allowed.'),
     PostgrestException(:final code) when code == '42501' =>
       const DeniedFailure(),
+    PostgrestException(:final code) when code == 'RLMT1' =>
+      const ProviderFailure('Too many searches, try again later.'),
     _ => readableFailure(e),
   };
 
@@ -36,6 +35,9 @@ final class SupabaseProfileRepository implements ProfileRepository {
     shareLastSeen: row['share_last_seen'] as bool,
     shareReadStatus: row['share_read_status'] as bool,
     avatarPath: row['avatar_path'] as String?,
+    avatarVisibility: AvatarVisibility.values.byName(
+      row['avatar_visibility'] as String,
+    ),
   );
 
   @override
@@ -43,13 +45,13 @@ final class SupabaseProfileRepository implements ProfileRepository {
     final me = _client.auth.currentUser?.id;
     if (me == null) return const Err(DeniedFailure());
     try {
-      final row = await _client
-          .from('profiles')
-          .select(_columns)
-          .eq('user_id', me)
-          .single()
-          .retriedOnce();
-      return Ok(_toProfile(row));
+      final rows =
+          await _client
+                  .rpc('own_profile', params: const {}, get: true)
+                  .retriedOnce()
+              as List<dynamic>;
+      if (rows.isEmpty) return const Err(DeniedFailure());
+      return Ok(_toProfile(rows[0] as Map<String, dynamic>));
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -64,6 +66,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
     bool? shareTyping,
     bool? shareLastSeen,
     bool? shareReadStatus,
+    AvatarVisibility? avatarVisibility,
   }) async {
     final me = _client.auth.currentUser?.id;
     if (me == null) return const Err(DeniedFailure());
@@ -75,16 +78,12 @@ final class SupabaseProfileRepository implements ProfileRepository {
       'share_typing': ?shareTyping,
       'share_last_seen': ?shareLastSeen,
       'share_read_status': ?shareReadStatus,
+      'avatar_visibility': ?avatarVisibility?.name,
     };
     if (changes.isEmpty) return load();
     try {
-      final row = await _client
-          .from('profiles')
-          .update(changes)
-          .eq('user_id', me)
-          .select(_columns)
-          .single();
-      return Ok(_toProfile(row));
+      await _client.from('profiles').update(changes).eq('user_id', me);
+      return await load();
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -111,12 +110,10 @@ final class SupabaseProfileRepository implements ProfileRepository {
             fileOptions: FileOptions(contentType: image.contentType),
           );
       uploaded = path;
-      final row = await _client
+      await _client
           .from('profiles')
-          .update({'avatar_path': path})
-          .eq('user_id', me)
-          .select(_columns)
-          .single();
+          .update({'avatar_object': path})
+          .eq('user_id', me);
       if (previousPath != null) {
         try {
           await _client.storage.from('avatars').remove([previousPath]);
@@ -125,7 +122,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
           // costs storage, not correctness.
         }
       }
-      return Ok(_toProfile(row));
+      return await load();
     } on PostgrestException catch (e) {
       // The server ran and definitely refused (RLS, a constraint, or the
       // update matching no row): the transaction rolled back, so the upload
@@ -151,18 +148,16 @@ final class SupabaseProfileRepository implements ProfileRepository {
     final me = _client.auth.currentUser?.id;
     if (me == null) return const Err(DeniedFailure());
     try {
-      final row = await _client
+      await _client
           .from('profiles')
-          .update({'avatar_path': null})
-          .eq('user_id', me)
-          .select(_columns)
-          .single();
+          .update({'avatar_object': null})
+          .eq('user_id', me);
       try {
         await _client.storage.from('avatars').remove([previousPath]);
       } catch (_) {
         // Best-effort, as above.
       }
-      return Ok(_toProfile(row));
+      return await load();
     } catch (e) {
       return Err(_asFailure(e));
     }

@@ -24,6 +24,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// The controllers that set a picture, wired as main.dart wires them: the
 /// Supabase repositories over one signed-in client, the chat repository and
@@ -164,6 +165,13 @@ void main() {
     denizClient = await _signedIn('deniz@integration.test');
     eceClient = await _signedIn('ece@integration.test');
     deadClient = await deadButSignedIn(denizClient);
+    // Since v0.22.0 a profile is open only to people who share a chat (or
+    // saved it): ece finds deniz and starts their 1:1, which also lets deniz
+    // invite ece to a group.
+    await findByTag(eceClient, [denizClient]);
+    final direct = await SupabaseChatRepository(eceClient)
+        .startDirectConversation(denizClient.auth.currentUser!.id);
+    expect(direct, isA<Ok<String>>());
   });
 
   // Every test starts with deniz pictureless and his folder empty.
@@ -202,7 +210,7 @@ void main() {
     expect(await deniz.picture(p1), _jpeg(1).bytes);
 
     // ece finds it where the member list and the 1:1 carry it.
-    final seen = (await ece.container.read(membersProvider.future))
+    final seen = (await ece.container.read(yourPeopleProvider.future))
         .singleWhere((m) => m.userId == deniz.id)
         .avatarPath;
     expect(seen, p1);

@@ -18,6 +18,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// Every table read the repositories make, over a connection that misbehaves
 /// the way a phone's does:
@@ -49,6 +50,11 @@ const _password = 'integration-password';
 /// three retries take 1 + 2 + 4 = 7 s.
 const _quick = Duration(milliseconds: 2500);
 
+const _readOnlyRpcs = {
+  '/rest/v1/rpc/profiles_public',
+  '/rest/v1/rpc/own_profile',
+};
+
 /// A client in front of the real network that fails the first [failures]
 /// attempts of every PostgREST table read (GET/HEAD under /rest/v1/) -- or,
 /// with [only] set, just the reads of that one table path -- and counts every
@@ -70,9 +76,14 @@ class _Flaky extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
+    // Since v0.22.0 two reads are read-only RPCs (other members through
+    // profiles_public, the own row through own_profile): still reads, and
+    // held to the same one-quick-retry rule.
     final read =
         request.url.path.startsWith('/rest/v1/') &&
-        (request.method == 'GET' || request.method == 'HEAD');
+        (request.method == 'GET' ||
+            request.method == 'HEAD' ||
+            _readOnlyRpcs.contains(request.url.path));
     if (read) {
       final path = request.url.path;
       attempts[path] = (attempts[path] ?? 0) + 1;
@@ -166,6 +177,7 @@ void main() {
     tove = await _signedIn('tove@integration.test', recorder);
     final ugo = await _signedIn('ugo@integration.test');
     clients.addAll([tove, ugo]);
+    await findByTag(tove, [ugo]);
     final chat = SupabaseChatRepository(tove);
     final started = await chat.startDirectConversation(
       ugo.auth.currentUser!.id,

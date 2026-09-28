@@ -17,6 +17,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// Last seen against the real stack: [SupabasePresenceRepository]'s two RPCs,
 /// [SupabaseProfileRepository]'s share_last_seen column, and the REAL
@@ -177,6 +178,9 @@ void main() {
   setUpAll(() async {
     lars = Account(await _signedIn('lars@integration.test'));
     mona = Account(await _signedIn('mona@integration.test'));
+    // Since v0.22.0 last seen needs reach: mona finds lars by tag (only
+    // that pair; the stranger below never finds anyone).
+    await findByTag(mona.client, [lars.client]);
   });
 
   setUp(() async {
@@ -291,7 +295,7 @@ void main() {
           .from('profiles')
           .update({'share_last_seen': false})
           .eq('user_id', lars.id)
-          .select();
+          .select('user_id');
       expect(rows, isEmpty, reason: 'mona changed lars\'s profile');
       expect(okValue(await mona.presence.lastSeenOf(lars.id)), aboutNow());
       expect(

@@ -88,7 +88,7 @@ Future<void> _showReaders(
 ) {
   final marks = ref.read(readMarksProvider).value ?? const <ReadMark>[];
   final names = {
-    for (final m in ref.read(membersProvider).value ?? const [])
+    for (final m in ref.read(yourPeopleProvider).value ?? const [])
       m.userId: m.displayName,
   };
   final readers = [

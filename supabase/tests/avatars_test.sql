@@ -25,6 +25,15 @@ insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) value
 insert into app_private.allowlist(email) values
   ('av-ann@example.test'), ('av-bob@example.test'), ('av-cy@example.test'),
   ('av-dan@example.test'), ('av-eve@example.test'), ('av-fay@example.test');
+-- v0.22.0: starting a conversation and seeing an "everyone" picture need
+-- reach. Seed exactly the pairs the fixtures use, as tag finds (not contacts,
+-- which would also open rows and hide regressions elsewhere): ann starts d1
+-- with dan; dan's control read of fay's picture; cy's control read of ann's
+-- picture after she leaves g1 (her only shared conversation with ann).
+insert into app_private.tag_finds(finder, found_id) values
+  ('00000000-0000-0000-0000-0000000a9001', '00000000-0000-0000-0000-0000000a9004'),
+  ('00000000-0000-0000-0000-0000000a9004', '00000000-0000-0000-0000-0000000a9006'),
+  ('00000000-0000-0000-0000-0000000a9003', '00000000-0000-0000-0000-0000000a9001');
 insert into auth.sessions (id, user_id, created_at, updated_at) values
   ('a9a9a9a9-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000a9001', now(), now()),
   ('a9a9a9a9-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000a9002', now(), now()),

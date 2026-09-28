@@ -15,12 +15,15 @@ import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
+import 'package:sis/features/chat/data/supabase_contacts_repository.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/data/supabase_presence_repository.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../support/reach.dart';
 
 /// Two accounts, one after the other, on ONE client — one phone.
 ///
@@ -128,16 +131,30 @@ void main() {
 
   setUpAll(() async {
     // jude and kara each have a conversation with lena the other is not in.
+    final tags = <String, String>{};
     for (final (email, set) in [
       ('jude@integration.test', (String id) => judeId = id),
       ('kara@integration.test', (String id) => karaId = id),
     ]) {
       final other = await elsewhere(email);
       set(other.auth.currentUser!.id);
+      tags[other.auth.currentUser!.id] = await tagOf(other);
+      if (email.startsWith('kara')) {
+        // kara saves jude (one-way), so each list is told apart: kara's
+        // people are lena and jude, jude's are lena alone.
+        await findTag(other, tags[judeId]!, id: judeId);
+        expect(
+          await SupabaseContactsRepository(other).add(judeId),
+          isA<Ok<void>>(),
+        );
+      }
       await other.dispose();
     }
     lena = await elsewhere('lena@integration.test');
     lenaId = lena!.auth.currentUser!.id;
+    for (final MapEntry(key: id, value: tag) in tags.entries) {
+      await findTag(lena!, tag, id: id);
+    }
     final fromLena = SupabaseChatRepository(lena!);
     judeWithLena =
         (await fromLena.startDirectConversation(judeId) as Ok<String>).value;
@@ -200,7 +217,7 @@ void main() {
       // alive, exactly as the app does: they are never read signed out.
       home = true;
       c.listen(ownProfileProvider, (_, _) {});
-      c.listen(membersProvider, (_, _) {});
+      c.listen(yourPeopleProvider, (_, _) {});
       c.listen(conversationListProvider, (_, _) {});
     }
     // Let the rebuilds start before waiting for them to finish: a provider
@@ -208,7 +225,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 200));
     await until(
       () =>
-          !c.read(membersProvider).isLoading &&
+          !c.read(yourPeopleProvider).isLoading &&
           !c.read(conversationListProvider).isLoading &&
           !c.read(ownProfileProvider).isLoading,
       'the providers to settle',
@@ -221,7 +238,7 @@ void main() {
   }
 
   Set<String> members() => {
-    for (final m in c.read(membersProvider).requireValue) m.userId,
+    for (final m in c.read(yourPeopleProvider).requireValue) m.userId,
   };
   Set<String> listed() => {
     for (final x in c.read(conversationListProvider).requireValue) x.id,
@@ -230,7 +247,10 @@ void main() {
   test('the second account on the phone gets its own members and '
       'conversations, and the first gets hers back', () async {
     await signInAs('jude@integration.test', judeId);
-    expect(members(), containsAll([karaId, lenaId]));
+    // Since v0.22.0 "members" is your people: lena shares a chat with jude,
+    // kara shares nothing with her.
+    expect(members(), contains(lenaId));
+    expect(members(), isNot(contains(karaId)));
     expect(members(), isNot(contains(judeId)));
     expect(listed(), contains(judeWithLena));
     expect(listed(), isNot(contains(karaWithLena)));
@@ -259,7 +279,8 @@ void main() {
     await signOut();
     await signInAs('jude@integration.test', judeId);
     expect(members(), isNot(contains(judeId)));
-    expect(members(), contains(karaId));
+    expect(members(), contains(lenaId));
+    expect(members(), isNot(contains(karaId)), reason: 'still kara\'s list');
     expect(listed(), contains(judeWithLena));
     expect(listed(), isNot(contains(karaWithLena)));
     expect(c.read(ownProfileProvider).requireValue.userId, judeId);

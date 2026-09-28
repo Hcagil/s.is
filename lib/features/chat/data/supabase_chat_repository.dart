@@ -52,11 +52,14 @@ final class SupabaseChatRepository implements ChatRepository {
     final me = _uid;
     if (me == null) return const Err(DeniedFailure());
     try {
-      // profiles is readable by any active member; RLS keeps it to the group.
+      // profiles_public is readable to the same people profiles_read allows
+      // (a contact, or someone the caller shares a conversation with); its
+      // avatar_path is additionally null when the picture's own owner has
+      // hidden it from this caller.
       final rows = await _client
-          .from('profiles')
-          .select('user_id, display_name, tag, avatar_path')
+          .rpc('profiles_public', params: const {}, get: true)
           .neq('user_id', me)
+          .select('user_id, display_name, tag, avatar_path')
           .order('display_name')
           .retriedOnce();
       return Ok([
@@ -124,9 +127,9 @@ final class SupabaseChatRepository implements ChatRepository {
         others.isEmpty
             ? Future.value(const <Map<String, dynamic>>[])
             : _client
-                  .from('profiles')
-                  .select('user_id, display_name, avatar_path')
+                  .rpc('profiles_public', params: const {}, get: true)
                   .inFilter('user_id', others)
+                  .select('user_id, display_name, avatar_path')
                   .retriedOnce(),
         // Newest first, so the first row seen for a conversation is its
         // preview. One row per conversation, from a view that does the
@@ -224,9 +227,9 @@ final class SupabaseChatRepository implements ChatRepository {
       final ids = [for (final r in rows) r['user_id'] as String];
       if (ids.isEmpty) return const Ok([]);
       final profiles = await _client
-          .from('profiles')
-          .select('user_id, display_name, tag, avatar_path')
+          .rpc('profiles_public', params: const {}, get: true)
           .inFilter('user_id', ids)
+          .select('user_id, display_name, tag, avatar_path')
           .order('display_name', ascending: true)
           .retriedOnce();
       return Ok([

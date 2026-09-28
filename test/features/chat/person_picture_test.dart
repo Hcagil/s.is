@@ -2,7 +2,7 @@
 // is not visible on the user profile"). Written from the contract:
 //
 //  - PersonScreen's picture: the caller's fallbackAvatarPath first, else the
-//    person's entry in membersProvider; the caller's wins when both exist and
+//    person's entry in yourPeopleProvider; the caller's wins when both exist and
 //    differ. Neither -> initials. A picture that cannot be downloaded ->
 //    initials. Never blank, never a spinner.
 //  - The two callers that know a picture pass it: the 1:1 header

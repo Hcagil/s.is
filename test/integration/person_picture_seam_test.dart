@@ -31,10 +31,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../features/profile/avatar_widgets_test.dart' show avatarIn, picturesIn;
 import '../support/fakes.dart';
+import '../support/reach.dart';
 
 /// A person's page shows the picture its caller knows, on the real stack:
 /// deniz sets a picture AFTER ece's app has read the member list, so ece's
-/// membersProvider holds a snapshot without it. ece then reaches deniz's page
+/// yourPeopleProvider holds a snapshot without it. ece then reaches deniz's page
 /// (b) from a group's Members tab -- the conversation's member read, fresh
 /// from the real tables -- and (a) from their 1:1's header after the list
 /// reloads -- the conversation list's row. Each time the page shows the
@@ -164,6 +165,7 @@ void main() {
     final ece = SupabaseChatRepository(eceClient);
     final deniz = SupabaseChatRepository(denizClient);
     final (group, direct) = (await t.runAsync(() async {
+      await findByTag(eceClient, [denizClient]);
       await _pictureless(denizClient);
       final g = _ok(
         await ece.startGroupConversation(
@@ -255,13 +257,13 @@ void main() {
     final container = ProviderScope.containerOf(t.element(find.byType(SisApp)));
 
     // ece's member list, read before deniz has a picture.
-    container.listen(membersProvider, (_, _) {});
+    container.listen(yourPeopleProvider, (_, _) {});
     String? denizInMembers() => container
-        .read(membersProvider)
+        .read(yourPeopleProvider)
         .value
         ?.singleWhere((m) => m.userId == denizId)
         .avatarPath;
-    await until(() => container.read(membersProvider).hasValue, 'members');
+    await until(() => container.read(yourPeopleProvider).hasValue, 'members');
     expect(denizInMembers(), isNull);
 
     final path = (await t.runAsync(() async {

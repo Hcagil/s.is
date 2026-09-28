@@ -217,8 +217,13 @@ select test_as('7a000001-0000-4000-8000-000000000001', '7b000000-0000-4000-8000-
 select is(public.activate_session(), true, 'm1 is active');
 select is((select count(*) from public.profiles where tag = 'hidden_robo'), 0::bigint,
   'fixture: m1 cannot see the row holding hidden_robo');
+-- v0.22.0: m2 is a stranger to m1, so RLS hides m2's row too; the fixture
+-- is checked as the setup role. The answer below is then about a real row m1
+-- cannot read, exactly like hidden_robo.
+reset role;
 select is((select count(*) from public.profiles where tag = 'avail_two'), 1::bigint,
-  'fixture: m1 can see the row holding avail_two');
+  'fixture: an allowlisted member holds avail_two');
+select test_as('7a000001-0000-4000-8000-000000000001', '7b000000-0000-4000-8000-000000000001');
 
 select is(public.is_tag_available('hidden_robo'), false,
   'a tag held by an account RLS hides is still not available');

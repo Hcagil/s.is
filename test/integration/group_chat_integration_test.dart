@@ -11,6 +11,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// Groups through the real stack.
 ///
@@ -99,6 +100,8 @@ void main() {
     jackClient = await signedIn('jack@integration.test');
     kimClient = await signedIn('kim@integration.test');
     deadClient = deadHostClient();
+    // hank invites ivy and jack; kim is never found, so she stays unreachable.
+    await findByTag(hankClient!, [ivyClient!, jackClient!]);
     hank = ChatRepositoryOwner(hankClient!);
     ivy = ChatRepositoryOwner(ivyClient!);
     jack = ChatRepositoryOwner(jackClient!);

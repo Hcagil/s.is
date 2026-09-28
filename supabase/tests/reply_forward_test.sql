@@ -45,6 +45,14 @@ insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) value
 insert into app_private.allowlist(email) values
   ('rf-ann@example.com'), ('rf-bob@example.com'), ('rf-carl@example.com'),
   ('rf-vic@example.com'), ('rf-dee@example.com');
+-- v0.22.0: starting a conversation needs reach. Seed exactly the pairs the
+-- fixtures start, as tag finds (not contacts, which would also open rows and
+-- pictures and hide regressions elsewhere).
+insert into app_private.tag_finds(finder, found_id) values
+  ('00000000-0000-0000-0000-0000000af001', '00000000-0000-0000-0000-0000000af002'),
+  ('00000000-0000-0000-0000-0000000af001', '00000000-0000-0000-0000-0000000af003'),
+  ('00000000-0000-0000-0000-0000000af001', '00000000-0000-0000-0000-0000000af004'),
+  ('00000000-0000-0000-0000-0000000af002', '00000000-0000-0000-0000-0000000af003');
 insert into auth.sessions (id, user_id, created_at, updated_at) values
   ('af000000-0000-0000-0000-0000000af001', '00000000-0000-0000-0000-0000000af001', now(), now()),
   ('af000000-0000-0000-0000-0000000af002', '00000000-0000-0000-0000-0000000af002', now(), now()),

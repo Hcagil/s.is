@@ -14,6 +14,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// The controller seam against the real stack.
 ///
@@ -136,6 +137,7 @@ void main() {
     deadSignedInClient = await deadButSignedIn(carolClient!);
     offlineSignedIn = ChatRepositoryOwner(deadSignedInClient!);
 
+    await findByTag(carolClient!, [danClient!]);
     final started = await carol.repository.startDirectConversation(dan.userId);
     expect(started, isA<Ok<String>>());
     conversationId = (started as Ok<String>).value;
@@ -169,7 +171,7 @@ void main() {
 
   test('members lists the other member through the real query', () async {
     final container = containerFor(carol);
-    final members = await container.read(membersProvider.future);
+    final members = await container.read(yourPeopleProvider.future);
 
     expect(
       members.map((m) => m.userId),
@@ -342,10 +344,10 @@ void main() {
 
   test('a broken connection fails members with a reason', () async {
     final container = containerFor(offlineSignedIn);
-    container.listen(membersProvider, (_, _) {});
+    container.listen(yourPeopleProvider, (_, _) {});
 
     final state = await eventually<AsyncValue<List<Member>>>(
-      () => container.read(membersProvider),
+      () => container.read(yourPeopleProvider),
       (s) => !s.isLoading,
       reason: 'the member picker spun forever on an unreachable server',
     );

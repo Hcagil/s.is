@@ -50,6 +50,13 @@ insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) value
 insert into app_private.allowlist(email) values
   ('nina@push.test'), ('omar@push.test'), ('pia@push.test'), ('quin@push.test'),
   ('sam@push.test'), ('tess@push.test'), ('uma@push.test');   -- rhea on purpose absent
+-- v0.22.0: starting a conversation needs reach. Seed exactly the pairs the
+-- fixtures start, as tag finds (not contacts, which would also open rows and
+-- pictures and hide regressions elsewhere).
+insert into app_private.tag_finds(finder, found_id) values
+  ('00000000-0000-0000-0000-0000000fd001', '00000000-0000-0000-0000-0000000fd002'),
+  ('00000000-0000-0000-0000-0000000fd001', '00000000-0000-0000-0000-0000000fd003'),
+  ('00000000-0000-0000-0000-0000000fd001', '00000000-0000-0000-0000-0000000fd004');
 
 -- omar's and uma's second phones are newer than their first; now() is the
 -- transaction timestamp, so "two hours ago" is the only way to order them.

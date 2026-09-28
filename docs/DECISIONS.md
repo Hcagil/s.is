@@ -1047,3 +1047,51 @@ licences read as one flattened block. Now centred paragraphs are centred and
 each indent level is 16 px; a package with several licences shows how many.
 Checked against the app's real bundled list (209 packages): none missing,
 none shown twice.
+## 2026-09-28 — Contacts, exact-tag search, and who sees your picture
+
+The owner decided that New chat must stop listing every member, and that a
+member chooses who sees their profile picture.
+- **Contacts.** A member can add someone to their contacts (on the person's
+  page, or after finding them) and remove them. Only the member sees their
+  own contacts list.
+- **New chat** shows "your people": your contacts and the people you share
+  a chat or group with, by name. Anyone else is found only by typing their
+  exact tag; that returns one person or nothing, never suggestions, and the
+  lookup is rate-limited so the member list cannot be guessed. The group
+  composer and the forward picker use the same people.
+- **Who can see a profile** (name, tag, picture path): yourself, people you
+  share a chat or group with, your contacts, and the one person an exact-tag
+  lookup returned. Everyone else is hidden by the server, not only by the app.
+- **Profile picture privacy** (Settings > Privacy): Everyone / My contacts /
+  Nobody, default Everyone. One-way, like WhatsApp (hiding yours does not
+  hide others' from you). "My contacts" means people you saved; sharing a
+  group does not count. Those excluded see the initials circle; the server
+  refuses them the picture's path and the stored picture itself. Group
+  pictures are unchanged.
+- Phone contacts (matching the phone's address book) are a later, separate
+  decision.
+- "Share a chat" means current membership; when leaving a group arrives
+  (v0.23), a member who left stops counting.
+- "Everyone" for a picture means any active member who can reach the
+  profile, including someone who just found you by exact tag (a narrower
+  rule would break the tag result itself); a picture's path is only ever
+  handed out through a checked read.
+- Contacts are one-way: saving someone lets you see them; their "My
+  contacts" picture setting means people *they* saved. The tag lookup allows
+  20 searches per 10 minutes per member.
+- **Reach** (after the security probes): one rule decides whom a member can
+  reach — themselves, someone they share a chat or group with, a contact, or
+  someone they found by exact tag (the server remembers the find). Adding a
+  contact, starting a chat, inviting to a group, seeing an "Everyone" picture
+  and last seen all require it, so harvested account ids unlock nothing.
+- The real picture path is kept where clients cannot read it; the old
+  `avatar_path` column carries it only for "Everyone" pictures, so older app
+  builds keep working and see initials otherwise. Older builds can no longer
+  start chats with people they have not reached; existing chats work.
+- Accepted leftovers: who is online stays visible to every member (v0.4),
+  and a picture link someone generated before the owner narrowed the
+  setting works until it expires (the app does not create such links).
+- A tag find is forgotten when the found member changes their tag, so a
+  member can shed people who only ever found them by tag. "Everyone" always
+  includes what "My contacts" allows. Older builds can still set and remove
+  their own picture (their write is mapped to the new column).

@@ -7,6 +7,8 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/reach.dart';
+
 /// A readiness probe, not a test of the app.
 ///
 /// After `supabase start` (or a reset) the Realtime service accepts a
@@ -56,6 +58,15 @@ void main() {
       await bob.dispose();
     });
 
+    // Bob reads his own tag with his own session: CI runs this probe before
+    // it passes the service key, so reach.dart's tagOf is not available here.
+    final bobId = bob.auth.currentUser!.id;
+    final bobTag = await bob
+        .from('profiles')
+        .select('tag')
+        .eq('user_id', bobId)
+        .single();
+    await findTag(ann, bobTag['tag'] as String, id: bobId);
     final repo = SupabaseChatRepository(ann);
     final started = await repo.startDirectConversation(
       bob.auth.currentUser!.id,

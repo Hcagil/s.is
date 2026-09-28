@@ -11,6 +11,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/service_key.dart';
+import '../support/reach.dart';
 
 /// [SupabaseChatRepository.editMessage] against the real local stack: the
 /// real edit_message RPC, the row it returns, the UPDATE Realtime then
@@ -81,6 +82,8 @@ void main() {
     edie = SupabaseChatRepository(edieClient!);
     fitz = SupabaseChatRepository(fitzClient!);
     gale = SupabaseChatRepository(galeClient!);
+    await findByTag(edieClient!, [fitzClient!]);
+    await findByTag(fitzClient!, [galeClient!]);
     edieFitz = (await edie.startDirectConversation(
       fitzClient!.auth.currentUser!.id,
     ) as Ok<String>).value;

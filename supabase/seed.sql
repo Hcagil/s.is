@@ -105,6 +105,12 @@
 --   bram/dora/eli/finn test/integration/fast_start_seam_test.dart
 --     (bram's chat list read in two stages and the app opening over a slow
 --      connection; dora and eli are in his chats, finn is in none)
+--   selin/tuna/ulas/veli/yunus/zehra test/integration/contacts_integration_test.dart
+--     (selin finds tuna by exact tag, saves him and chats; tuna shares
+--      nothing with anyone until then, so only the find can open the way.
+--      ulas and veli each spend one lookup budget in a 200-call burst, so
+--      they must be fresh: the suite needs a freshly reset stack, as CI has.
+--      yunus plays an older build; zehra hides her picture from selin)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -179,5 +185,11 @@ insert into app_private.allowlist(email) values
   ('bram@integration.test'),
   ('dora@integration.test'),
   ('eli@integration.test'),
-  ('finn@integration.test')
+  ('finn@integration.test'),
+  ('selin@integration.test'),
+  ('tuna@integration.test'),
+  ('ulas@integration.test'),
+  ('veli@integration.test'),
+  ('yunus@integration.test'),
+  ('zehra@integration.test')
 on conflict do nothing;

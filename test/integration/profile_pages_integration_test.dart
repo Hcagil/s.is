@@ -29,6 +29,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// The profile pages' three reads through the real stack --
 /// [SupabaseChatRepository.conversationMembers], `sharedMedia` and
@@ -205,6 +206,7 @@ void main() {
     gusClient = await _signedIn('gus@integration.test');
     hugoClient = await _signedIn('hugo@integration.test');
     inesClient = await _signedIn('ines@integration.test');
+    await findByTag(fernClient!, [gusClient!, hugoClient!]);
     deadClient = deadHostClient();
     fern = SupabaseChatRepository(fernClient!);
     gus = SupabaseChatRepository(gusClient!);

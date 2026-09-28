@@ -12,6 +12,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// The search controllers on the real repository against the local stack,
 /// wired as main.dart wires them: chatRepositoryProvider overridden with
@@ -128,6 +129,7 @@ void main() {
     deadClient = await deadButSignedIn(vedatClient!);
     offline = SupabaseChatRepository(deadClient!);
     final yesimId = yesimClient!.auth.currentUser!.id;
+    await findByTag(vedatClient!, [yesimClient!]);
     direct = (await vedat.startDirectConversation(yesimId) as Ok<String>).value;
     room = (await vedat.startGroupConversation(
       title: 'search $_tag',

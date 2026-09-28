@@ -8,6 +8,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/service_key.dart';
+import '../support/reach.dart';
 
 /// [SupabaseChatRepository.search] and [SupabaseChatRepository.messagesAround]
 /// against the real local stack: the real search_messages RPC and its
@@ -91,6 +92,8 @@ void main() {
     tarik = SupabaseChatRepository(tarikClient!);
     umut = SupabaseChatRepository(umutClient!);
     sofiId = sofiClient!.auth.currentUser!.id;
+    await findByTag(sofiClient!, [tarikClient!]);
+    await findByTag(umutClient!, [tarikClient!]);
     sofiTarik = (await sofi.startDirectConversation(
       tarikClient!.auth.currentUser!.id,
     ) as Ok<String>).value;

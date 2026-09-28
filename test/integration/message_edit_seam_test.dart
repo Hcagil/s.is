@@ -23,6 +23,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/fakes.dart';
 import '../support/sis_ui.dart';
 import '../support/service_key.dart';
+import '../support/reach.dart';
 
 /// Editing through the real UI, across the seam a unit test cannot reach:
 /// hale swipes her message, picks Edit, changes the text in the
@@ -99,6 +100,7 @@ void main() {
       userId: ivoClient!.auth.currentUser!.id,
       displayName: 'Ivo',
     );
+    await findByTag(haleClient!, [ivoClient!]);
     final started = await hale.startDirectConversation(ivoMember.userId);
     conversationId = (started as Ok<String>).value;
   });

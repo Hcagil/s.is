@@ -25,6 +25,12 @@ insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) value
   ('00000000-0000-0000-0000-0000000000a7', 'grace@example.com', now(), '{"full_name":"Grace"}');
 insert into app_private.allowlist(email) values
   ('erin@example.com'), ('frank@example.com'), ('grace@example.com');
+-- v0.22.0: starting a conversation needs reach. Seed exactly the pairs the
+-- fixtures start, as tag finds (not contacts, which would also open rows and
+-- pictures and hide regressions elsewhere).
+insert into app_private.tag_finds(finder, found_id) values
+  ('00000000-0000-0000-0000-0000000000e5', '00000000-0000-0000-0000-0000000000f6'),
+  ('00000000-0000-0000-0000-0000000000e5', '00000000-0000-0000-0000-0000000000a7');
 
 -- now() is the transaction timestamp, so the new phone and the tie-break phone
 -- are created at exactly the same instant, and the old phone two hours earlier.

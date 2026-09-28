@@ -13,6 +13,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
+import '../support/reach.dart';
 
 /// [SupabaseChatRepository.readMarks], `.readUpdates` and `.markRead` against
 /// the real local stack: the real RPCs and the real Realtime broadcast that
@@ -175,6 +176,7 @@ void main() {
     priyaId = priyaClient.auth.currentUser!.id;
     quinlanId = quinlanClient.auth.currentUser!.id;
     remyId = remyClient.auth.currentUser!.id;
+    await findByTag(priyaClient, [quinlanClient, remyClient]);
     club = (await priya.startGroupConversation(
       title: _stamp('reads'),
       memberIds: [quinlanId, remyId],

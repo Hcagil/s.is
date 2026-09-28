@@ -21,6 +21,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/fakes.dart';
 import '../support/sis_ui.dart';
 import '../support/service_key.dart';
+import '../support/reach.dart';
 
 /// Two members' message screens, mounted at once over the real repository,
 /// exercising the seam a unit test cannot: A deletes her own message through
@@ -101,6 +102,7 @@ void main() {
       displayName: 'Russ',
     );
 
+    await findByTag(opalClient!, [russClient!]);
     final started = await opal.startDirectConversation(russMember.userId);
     expect(started, isA<Ok<String>>());
     conversationId = (started as Ok<String>).value;

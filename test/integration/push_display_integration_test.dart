@@ -19,6 +19,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/service_key.dart';
+import '../support/reach.dart';
 
 /// Which kind of push a phone is sent, decided by how it registered.
 ///
@@ -117,9 +118,11 @@ void main() {
     service = SupabaseClient(_url, serviceKey());
     final oren = await _signedIn('oren@integration.test');
     orenId = oren.auth.currentUser!.id;
+    final orenTag = await tagOf(oren);
     await oren.dispose();
     nell = await _signedIn('nell@integration.test');
     expect(await nell.rpc('activate_session'), isTrue);
+    await findTag(nell, orenTag, id: orenId);
     final started = await SupabaseChatRepository(nell)
         .startDirectConversation(orenId);
     conversation = (started as Ok<String>).value;

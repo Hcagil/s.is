@@ -994,3 +994,21 @@ once (2026-09-24); text now does too, WhatsApp-like.
   twice, whichever arrives first (the answer or the live update).
 - If a send fails, the pending message disappears, its text (and the message
   it replied to) come back to the composer, and an SIS notice says why.
+
+## 2026-09-28 — Unsent text stays in each chat
+
+The owner: messages you tapped send on are sent, even if you leave the chat;
+text you typed but did not send stays in that chat's write box and is there
+when you come back.
+- Each chat keeps its own draft: the typed text and the message being
+  replied to. Leaving the chat keeps it; opening the chat puts it back.
+  Sending or clearing the box ends it.
+- A message that could not be sent goes back into that chat's draft (before
+  anything typed since), with the notice, the same way.
+- Each chat sends through its own queue, in typed order, so a slow send in
+  one chat never holds up another, and a failure in one chat never stops
+  another's messages.
+- Reopening a chat while its messages are still sending shows them with the
+  clock until the server has them.
+- Drafts live while the app runs; they are not kept after the app is closed
+  by the phone (to keep that, drafts would need storing on the phone).

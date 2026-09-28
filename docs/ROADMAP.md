@@ -30,6 +30,7 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.21 | swipe a message right to open its actions in a row above it; long press no longer used |
 | v0.21.1 | after a swipe the message springs back to its place; the action row stays above it |
 | v0.21.2 | a text message appears the moment you tap send |
+| v0.21.3 | unsent text stays in each chat's write box; each chat sends through its own queue |
 | later | E2EE | scheduled individually |
 
 ## Status

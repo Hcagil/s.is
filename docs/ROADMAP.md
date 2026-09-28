@@ -32,6 +32,7 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.21.2 | a text message appears the moment you tap send |
 | v0.21.3 | unsent text stays in each chat's write box; each chat sends through its own queue |
 | v0.21.4 | the app opens faster: start-up requests run side by side |
+| v0.22 | contacts; new chat shows your people and finds others by exact tag; who sees your picture: everyone, contacts, nobody |
 | later | E2EE | scheduled individually |
 
 ## Status

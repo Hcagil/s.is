@@ -1037,3 +1037,29 @@ connection to be fully joined before the list was even asked for.
   after leaving a group exists (owner, v0.23).
 - The chat list no longer shows "Draft: …" for a chat with unsent text
   (owner); the draft stays in that chat's write box.
+
+## 2026-09-28 — Contacts, exact-tag search, and who sees your picture
+
+The owner decided that New chat must stop listing every member, and that a
+member chooses who sees their profile picture.
+- **Contacts.** A member can add someone to their contacts (on the person's
+  page, or after finding them) and remove them. Only the member sees their
+  own contacts list.
+- **New chat** shows "your people": your contacts and the people you share
+  a chat or group with, by name. Anyone else is found only by typing their
+  exact tag; that returns one person or nothing, never suggestions, and the
+  lookup is rate-limited so the member list cannot be guessed. The group
+  composer and the forward picker use the same people.
+- **Who can see a profile** (name, tag, picture path): yourself, people you
+  share a chat or group with, your contacts, and the one person an exact-tag
+  lookup returned. Everyone else is hidden by the server, not only by the app.
+- **Profile picture privacy** (Settings > Privacy): Everyone / My contacts /
+  Nobody, default Everyone. One-way, like WhatsApp (hiding yours does not
+  hide others' from you). "My contacts" means people you saved; sharing a
+  group does not count. Those excluded see the initials circle; the server
+  refuses them the picture's path and the stored picture itself. Group
+  pictures are unchanged.
+- Phone contacts (matching the phone's address book) are a later, separate
+  decision.
+- "Share a chat" means current membership; when leaving a group arrives
+  (v0.23), a member who left stops counting.

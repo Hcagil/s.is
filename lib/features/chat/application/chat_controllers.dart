@@ -352,12 +352,41 @@ final messagesProvider =
       retry: _never,
     );
 
+/// One text message queued or in flight to the server -- see
+/// [MessagesController.send] and [MessagesController._drain].
+class _PendingSend {
+  _PendingSend({
+    required this.message,
+    required this.body,
+    required this.replyTo,
+  });
+
+  /// The pending bubble shown in [MessagesController]'s state.
+  final Message message;
+
+  /// The body exactly as typed, for the repository call and for restoring
+  /// the composer on failure.
+  final String body;
+
+  /// Who this answers, if anyone -- restored to [replyingToProvider] on
+  /// failure.
+  final Message? replyTo;
+
+  final completer = Completer<Result<Message>>();
+}
+
 /// Messages of the open conversation, oldest first.
 ///
-/// The initial read and the Realtime stream are merged by message id. Nothing
-/// is appended optimistically on send: the server assigns the id and the
-/// timestamp, and the insert comes back through Realtime like any other, so
-/// the sender's own message appears exactly once.
+/// The initial read and the Realtime stream are merged by message id.
+/// Sending a text message (or a photo, since v0.9) is optimistic: a pending
+/// bubble shows the moment [MessagesController.send] is called, before the
+/// server has answered, and several sent in quick succession queue behind
+/// one another so the server sees them -- and times them -- in the order
+/// they were typed (see [MessagesController.send] and
+/// [MessagesController._drain]). The server's own row then replaces the
+/// pending bubble in place, whichever answer arrives first -- the POST
+/// response or the Realtime echo of the same insert -- so the sender's own
+/// message appears exactly once, never twice.
 class MessagesController extends AsyncNotifier<List<Message>> {
   /// Whether the shown list is a [jumpToAround] snapshot rather than the
   /// live, newest window.
@@ -370,6 +399,14 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// The anchor id of the most recent [jumpToAround] call -- an answer for
   /// any earlier one is dropped, even if it arrives later.
   String? _requestedAnchorId;
+
+  /// Text sends not yet answered by the server, oldest first -- see [send].
+  final _queue = <_PendingSend>[];
+
+  /// True while [_drain] is walking [_queue]; a second call while one is
+  /// already running is a no-op, the running one picks up whatever was
+  /// added meanwhile on its next turn.
+  bool _draining = false;
 
   @override
   Future<List<Message>> build() async {
@@ -600,25 +637,135 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   Future<Result<Uri>> attachmentUrl(String path) =>
       ref.read(chatRepositoryProvider).attachmentUrl(path);
 
-  /// Sends [body] to the open conversation. The [Err] reason is shown by the
-  /// composer.
+  /// Sends [body] to the open conversation.
   ///
-  /// The stored message is appended as soon as the server returns it, rather
-  /// than waiting for the Realtime echo: a sender must see their own message
-  /// even when the subscription is slow or gone. The echo is then discarded
-  /// by the id check in [_append].
+  /// Shown at once as a pending bubble (a small clock mark instead of the
+  /// time), and the composer's reply bar is cleared at once too -- the same
+  /// optimism [sendImage] already has for a photo. Several calls in quick
+  /// succession are serialized here, not by the caller: each waits its turn
+  /// in [_queue], so the server sees them -- and times them -- in the order
+  /// they were typed, even though the composer never waits for one to
+  /// finish before accepting the next.
+  ///
+  /// On [Ok] the pending bubble is replaced in place by the stored message,
+  /// or simply dropped if the Realtime echo of the same row already landed
+  /// first -- the same id-based dedupe [_append] already applies to every
+  /// other insert, [sendImage] included.
+  ///
+  /// On [Err] the pending bubble -- and every one still queued behind it,
+  /// since sends are strictly ordered -- is removed, the earliest one's
+  /// reply target is restored to [replyingToProvider], and
+  /// [sendFailureProvider] is set with every unsent body so the composer can
+  /// put them back and show one notice. The queue does not continue past a
+  /// failure.
   Future<Result<Message>> send(String body) async {
     final conversationId = ref.read(openConversationProvider);
     if (conversationId == null) return const Err(DeniedFailure());
-    final replyTo = ref.read(replyingToProvider)?.id;
-    final result = await ref
-        .read(chatRepositoryProvider)
-        .send(conversationId: conversationId, body: body, replyTo: replyTo);
-    if (result case Ok(:final value)) {
-      _append(value);
-      if (ref.mounted) ref.read(replyingToProvider.notifier).clear();
+    final replyTo = ref.read(replyingToProvider);
+    final pending = Message(
+      id: 'pending-${DateTime.now().microsecondsSinceEpoch}',
+      conversationId: conversationId,
+      senderId: _me ?? '',
+      body: body.trim(),
+      createdAt: DateTime.now(),
+      sending: true,
+      replyTo: replyTo?.id,
+    );
+    _append(pending);
+    if (ref.mounted) ref.read(replyingToProvider.notifier).clear();
+    final item = _PendingSend(message: pending, body: body, replyTo: replyTo);
+    _queue.add(item);
+    unawaited(_drain());
+    return item.completer.future;
+  }
+
+  /// Sends every [_queue]d message to the server, one at a time, in order.
+  Future<void> _drain() async {
+    if (_draining) return;
+    _draining = true;
+    while (_queue.isNotEmpty) {
+      final item = _queue.first;
+      final conversationId = item.message.conversationId;
+      final result = await ref
+          .read(chatRepositoryProvider)
+          .send(
+            conversationId: conversationId,
+            body: item.body,
+            replyTo: item.replyTo?.id,
+          );
+      // The conversation this was sent for may no longer be the open one
+      // (or the notifier may be gone) by the time the server answers; the
+      // call itself cannot be undone, only the local bookkeeping below is
+      // skipped so a stale answer never touches another conversation's list.
+      final stillHere =
+          ref.mounted && ref.read(openConversationProvider) == conversationId;
+      switch (result) {
+        case Ok(:final value):
+          _queue.removeAt(0);
+          if (stillHere) _replacePending(item.message.id, value);
+          item.completer.complete(result);
+        case Err(:final failure):
+          final stopped = List<_PendingSend>.of(_queue);
+          _queue.clear();
+          if (stillHere) _restoreAfterFailure(stopped, failure);
+          for (final s in stopped) {
+            s.completer.complete(result);
+          }
+      }
     }
-    return result;
+    _draining = false;
+  }
+
+  /// Removes every pending bubble in [stopped], restores the earliest one's
+  /// reply target (if any) to [replyingToProvider], and tells
+  /// [sendFailureProvider] to put every body back in the composer with one
+  /// notice.
+  void _restoreAfterFailure(List<_PendingSend> stopped, Failure failure) {
+    _removePending({for (final s in stopped) s.message.id});
+    final reply = stopped
+        .map((s) => s.replyTo)
+        .whereType<Message>()
+        .firstOrNull;
+    if (reply != null) ref.read(replyingToProvider.notifier).start(reply);
+    ref
+        .read(sendFailureProvider.notifier)
+        .emit(SendFailure([for (final s in stopped) s.body], failure));
+  }
+
+  /// Drops every message in [current] whose id is in [ids].
+  void _removePending(Set<String> ids) {
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData([
+      for (final m in current)
+        if (!ids.contains(m.id)) m,
+    ]);
+  }
+
+  /// Replaces the pending bubble [pendingId] with the server's [stored]
+  /// message, in place -- or, if the Realtime echo of the same row already
+  /// landed first, simply drops the pending copy so it is never shown
+  /// twice. [_append]'s own id check then discards a later echo of the same
+  /// row.
+  void _replacePending(String pendingId, Message stored) {
+    final current = state.value;
+    if (current == null) return;
+    if (current.any((m) => m.id == stored.id)) {
+      state = AsyncData([
+        for (final m in current)
+          if (m.id != pendingId) m,
+      ]);
+      return;
+    }
+    final i = current.indexWhere((m) => m.id == pendingId);
+    if (i < 0) {
+      _append(stored);
+      return;
+    }
+    state = AsyncData([
+      for (final m in current)
+        if (m.id == pendingId) stored else m,
+    ]);
   }
 
   /// Sends a copy of [message] to each of [conversationIds]; the chat list
@@ -668,6 +815,34 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     _jumped = false;
     ref.invalidateSelf();
   }
+}
+
+/// Text bodies that failed to send, in the order they were typed, and why --
+/// for the composer to put them back and show one notice. Set by
+/// [MessagesController] when the server refuses a queued send; cleared by
+/// the composer once shown.
+final class SendFailure {
+  const SendFailure(this.bodies, this.failure);
+
+  final List<String> bodies;
+  final Failure failure;
+}
+
+final sendFailureProvider = NotifierProvider<SendFailureNotifier, SendFailure?>(
+  SendFailureNotifier.new,
+);
+
+class SendFailureNotifier extends Notifier<SendFailure?> {
+  @override
+  SendFailure? build() {
+    // Belongs to whichever conversation set it; a new one starts clean.
+    ref.watch(openConversationProvider);
+    return null;
+  }
+
+  void emit(SendFailure value) => state = value;
+
+  void clear() => state = null;
 }
 
 /// The message the composer is answering, or null. Cleared when another

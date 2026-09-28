@@ -628,10 +628,13 @@ class _Bubble extends StatelessWidget {
                   width: _borderWidth,
                   // The current hit is always the app's purple, distinct
                   // from the amber "unread" edge -- even on a bubble that
-                  // is both unread and the current hit.
+                  // is both unread and the current hit. A still-sending
+                  // text message shows a clock mark instead of this edge.
                   color: isCurrentHit
                       ? Theme.of(context).colorScheme.primary
-                      : (unread ? brand.unreadEdge : Colors.transparent),
+                      : (unread && !message.sending
+                            ? brand.unreadEdge
+                            : Colors.transparent),
                 )
               : null,
         ),
@@ -785,9 +788,11 @@ class _Bubble extends StatelessWidget {
                       : Theme.of(context).colorScheme.primary,
                   maxContentWidth: _contentWidth,
                   topPadding: message.hasAttachment ? 8 : 0,
-                  timeText: message.isEdited
-                      ? 'edited ${clockTime(message.createdAt)}'
-                      : clockTime(message.createdAt),
+                  timeText: message.sending
+                      ? '🕐'
+                      : (message.isEdited
+                            ? 'edited ${clockTime(message.createdAt)}'
+                            : clockTime(message.createdAt)),
                   timeStyle: TextStyle(
                     fontSize: 11,
                     color: (mine ? Colors.white : brand.text).withValues(
@@ -1196,7 +1201,7 @@ class _ComposerState extends ConsumerState<_Composer> {
     super.dispose();
   }
 
-  Future<void> _send() async {
+  void _send() {
     final body = _controller.text;
     final editing = ref.read(editingProvider);
     // The same rule the database enforces, applied before the round trip. A
@@ -1205,17 +1210,30 @@ class _ComposerState extends ConsumerState<_Composer> {
         ? body.trim().length <= maxMessageLength
         : isSendableBody(body);
     if (_sending || !bodyOk) return;
+    if (editing != null) {
+      unawaited(_saveEdit(editing, body));
+      return;
+    }
+    // Optimistic: MessagesController.send shows the pending bubble and
+    // queues the round trip; the composer clears at once and does not wait
+    // for it, so it stays usable while a send is in flight. A failure comes
+    // back through sendFailureProvider (see the listener in build()).
+    _controller.clear();
+    unawaited(ref.read(messagesProvider.notifier).send(body));
+  }
+
+  Future<void> _saveEdit(Message editing, String body) async {
     setState(() => _sending = true);
-    final result = editing == null
-        ? await ref.read(messagesProvider.notifier).send(body)
-        : await ref.read(messagesProvider.notifier).editMessage(editing, body);
+    final result = await ref
+        .read(messagesProvider.notifier)
+        .editMessage(editing, body);
     if (!mounted) return;
     setState(() => _sending = false);
     switch (result) {
       case Ok():
         // Cleared only on success, so nothing a member typed is lost.
         _controller.clear();
-        if (editing != null) ref.read(editingProvider.notifier).clear();
+        ref.read(editingProvider.notifier).clear();
       case Err(:final failure):
         showSisNotice(context, failure.message, isError: true);
     }
@@ -1265,6 +1283,23 @@ class _ComposerState extends ConsumerState<_Composer> {
       } else if (next == null && previous != null) {
         _controller.clear();
       }
+    });
+    // A queued send that failed: every unsent body comes back, oldest
+    // first. If the composer is empty it becomes exactly that; if the
+    // member has since typed something new, the restored text is prepended
+    // -- it was typed earlier, so it belongs before what is there now. One
+    // notice for the whole stopped queue, not one per message.
+    ref.listen(sendFailureProvider, (previous, next) {
+      if (next == null) return;
+      final restored = next.bodies.join('\n');
+      _controller.text = _controller.text.isEmpty
+          ? restored
+          : '$restored\n${_controller.text}';
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
+      showSisNotice(context, next.failure.message, isError: true);
+      ref.read(sendFailureProvider.notifier).clear();
     });
     return Container(
       decoration: BoxDecoration(

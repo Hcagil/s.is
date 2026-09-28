@@ -59,6 +59,7 @@ final class Message {
     this.editedAt,
     this.replyTo,
     this.forwarded = false,
+    this.sending = false,
   });
 
   final String id;
@@ -84,6 +85,11 @@ final class Message {
 
   /// A copy of a message from another conversation.
   final bool forwarded;
+
+  /// True for a text-only message shown at once, before the server has
+  /// answered -- like [localImage] but with nothing to display in the
+  /// bubble itself, only the pending state ([isPending]).
+  final bool sending;
 
   /// Set when the sender deleted it for everyone; its content is gone.
   final MessageDeletion? deletion;
@@ -114,8 +120,10 @@ final class Message {
       !forwarded &&
       now.difference(createdAt) < deleteForEveryoneWindow;
 
-  /// Still on its way to the server.
-  bool get isPending => localImage != null && attachmentPath == null;
+  /// Still on its way to the server: a photo shown from the phone before
+  /// the upload lands, or a text message shown before the server answers.
+  bool get isPending =>
+      sending || (localImage != null && attachmentPath == null);
 
   /// Whether [userId] wrote this message; decides which side it is drawn on.
   bool isFrom(String userId) => senderId == userId;

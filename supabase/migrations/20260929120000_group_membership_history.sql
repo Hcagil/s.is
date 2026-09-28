@@ -115,6 +115,59 @@ revoke all on function app_private.was_member(uuid), app_private.is_admin(uuid)
 grant execute on function app_private.was_member(uuid), app_private.is_admin(uuid)
   to authenticated;
 
+-- security-lead F2: this migration added admins, but never redefined
+-- start_group_conversation (still the definition from contacts.sql) -- so a
+-- brand new group's own creator was inserted with the plain column default,
+-- role = 'member', and every new group had NO admin at all. Redefined here,
+-- identical to the contacts.sql version except the membership insert: the
+-- caller goes in as 'admin', everyone else as 'member', still one INSERT
+-- statement (now() is still evaluated once, so joined_at is still identical
+-- across the founding members -- see this migration's backfill comment).
+create or replace function public.start_group_conversation(
+  title   text,
+  members uuid[]
+) returns uuid language plpgsql security definer set search_path = '' as $$
+declare
+  me      uuid := auth.uid();
+  clean   text := btrim(coalesce(title, ''));
+  invited uuid[];
+  cid     uuid;
+begin
+  if not app_private.has_app_access() then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
+  if char_length(clean) < 1 or char_length(clean) > 80 then
+    raise exception 'a group needs a title' using errcode = '22023';
+  end if;
+
+  select array_agg(distinct m) into invited
+    from unnest(coalesce(members, '{}'::uuid[])) as m
+   where m is distinct from me;
+
+  if invited is null or array_length(invited, 1) < 1 then
+    raise exception 'a group needs at least one other member'
+      using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1 from unnest(invited) as m
+     where m is null or not app_private.is_allowed(m) or not app_private.can_reach(m)
+  ) then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
+
+  insert into public.conversations(title) values (clean) returning id into cid;
+  insert into public.conversation_members(conversation_id, user_id, role)
+    select cid, me, 'admin'
+    union all
+    select cid, m, 'member' from unnest(invited) as m;
+  return cid;
+end $$;
+revoke all on function public.start_group_conversation(text, uuid[])
+  from public, anon;
+grant execute on function public.start_group_conversation(text, uuid[])
+  to authenticated;
+
 -- message_readable: the one place that decides whether [m] falls inside the
 -- caller's own membership window for its conversation -- current member:
 -- created_at >= history_from, no upper bound; departed member: history_from
@@ -135,16 +188,35 @@ $$;
 revoke all on function app_private.message_readable(public.messages) from public, anon;
 grant execute on function app_private.message_readable(public.messages) to authenticated;
 
--- Reads: conversations and conversation_members --------------------------
--- A departed member keeps seeing the conversation row (title, avatar) and
--- the member list (including who has left) -- was_member, not is_member.
+-- security-lead F8: in_conversation (reply_and_forward.sql) gates a reply's
+-- quote target -- messages_send's WITH CHECK calls it as
+-- `reply_to is null or in_conversation(reply_to, conversation_id)`. It never
+-- changed with this migration, so a CURRENT member (already required
+-- separately by messages_send) could still reply to any message that merely
+-- EXISTS in the conversation, including one outside their own readable
+-- window (added without history, replying to something sent before they
+-- joined; or a rejoined member's old, unrelated window). Redefined to also
+-- require message_readable(m.*) on the target -- a reply can now only quote
+-- a message the replier could actually read.
+create or replace function app_private.in_conversation(message uuid, conversation uuid)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select app_private.is_member(conversation)
+     and exists (select 1 from public.messages m
+                  where m.id = message and m.conversation_id = conversation
+                    and app_private.message_readable(m.*))
+$$;
+
+-- Reads: conversations ----------------------------------------------------
+-- A departed member keeps seeing the conversation row (title, avatar) --
+-- was_member, not is_member.
 drop policy conversations_read on public.conversations;
 create policy conversations_read on public.conversations for select to authenticated
   using ((select app_private.has_app_access()) and app_private.was_member(id));
 
-drop policy conversation_members_read on public.conversation_members;
-create policy conversation_members_read on public.conversation_members for select to authenticated
-  using ((select app_private.has_app_access()) and app_private.was_member(conversation_id));
+-- conversation_members_read is defined further down (search "F4"), once
+-- overlaps_my_membership exists: was_member alone let anyone who was EVER
+-- in a conversation see every row of it, of everyone, with no window --
+-- security-lead F4.
 
 -- Reads: messages -----------------------------------------------------------
 -- Keeps the 20260927150000 leakproof pre-filter (the caller's own
@@ -168,26 +240,39 @@ create policy messages_read on public.messages for select to authenticated
 
 -- Reads: attachments ---------------------------------------------------------
 -- Write stays current-member-only (is_member_of_path, unchanged, chat.sql).
--- Read moves from is_member (current only) to was_member (current or past):
--- a departed member's read-only history still shows the photos in it.
 --
--- Deliberately NOT tied to a live message's own message_readable() window
--- (tried first; reverted): the upload happens before the message insert
--- (docs/DECISIONS.md, "the pair cannot be atomic"), so an object can exist
--- in storage with no message referencing it yet, and pgTAP already pins the
--- uploader reading her own object back at that moment (attachments_test.sql
--- "the uploader reads back her own object") and a sender reading back an
--- object she just told delete_message to forget (delete_message_test.sql
--- "the object is gone", read AFTER the message's attachment_path is
--- nulled). Both are real, tested flows a message-tied check would have
--- broken. The app only ever learns an attachment_path through a message it
--- already fetched under messages_read's own, tighter window, so this
--- storage-level check staying at was_member -- current-or-past membership
--- of the conversation, not per-message -- is a defence-in-depth boundary,
--- not the primary one; it still refuses anyone who was never in the
--- conversation at all.
-create or replace function app_private.attachment_readable(object_name text)
-returns boolean language plpgsql stable security definer set search_path = '' as $$
+-- Read: security-lead F1 (HIGH, real probe on the stack) -- the first
+-- attempt here (this migration, before review) was plain was_member: current
+-- or past membership of the conversation, no window at all. Storage select
+-- covers download, sign AND list, and an object's own name is guessable
+-- (`<conversation>/<micros>-<uid8>.<ext>`), so that let a departed/removed
+-- member, a member added without history, or a rejoined member with a fresh
+-- (narrower) window read a photo from OUTSIDE what messages_read would ever
+-- show them.
+--
+-- Fixed to exactly two cases, an OR, so BOTH keep working:
+--  1. The UPLOADER reads back HER OWN object while it exists in storage but
+--     before any message references it yet (upload happens before the
+--     message insert, docs/DECISIONS.md, "the pair cannot be atomic") --
+--     gated on owner_id (the object's own uploader, passed in from the
+--     policy) AND was_member (still needs to have been in the conversation
+--     at all; not time-windowed, since there is no message yet to window
+--     against). This is also what keeps a sender reading back an object she
+--     just told delete_message to forget (delete_message_test.sql "the
+--     object is gone", read AFTER the message's attachment_path is nulled):
+--     she is still the object's owner_id.
+--  2. ANYONE ELSE (or the uploader, after upload, once a message exists) may
+--     read it only through a message.attachment_path that actually names
+--     this object AND falls inside THEIR OWN message_readable() window --
+--     the exact same window messages_read itself applies, so a departed/
+--     removed/no-history/rejoined member is refused exactly the photos
+--     messages_read would already refuse them the message for.
+-- messages_attachment_path_key (delete_for_everyone.sql) is already the
+-- unique partial index this join needs (attachment_path, where not null).
+create or replace function app_private.attachment_readable(
+  object_name text,
+  object_owner_id text
+) returns boolean language plpgsql stable security definer set search_path = '' as $$
 declare
   head text := (storage.foldername(object_name))[1];
 begin
@@ -196,20 +281,29 @@ begin
   then
     return false;
   end if;
-  return app_private.was_member(head::uuid);
+  return (object_owner_id = auth.uid()::text and app_private.was_member(head::uuid))
+      or exists (
+           select 1 from public.messages m
+            where m.attachment_path = object_name
+              and app_private.message_readable(m.*)
+         );
 end $$;
-revoke all on function app_private.attachment_readable(text) from public, anon;
-grant execute on function app_private.attachment_readable(text) to authenticated;
+revoke all on function app_private.attachment_readable(text, text) from public, anon;
+grant execute on function app_private.attachment_readable(text, text) to authenticated;
 
 drop policy attachments_read on storage.objects;
 create policy attachments_read on storage.objects for select to authenticated
   using (bucket_id = 'attachments'
          and (select app_private.has_app_access())
-         and app_private.attachment_readable(name));
+         and app_private.attachment_readable(name, owner_id));
 
--- A group's picture, read: a departed member keeps seeing it (the chat list
--- tile in their read-only history), so the group branch moves from is_member
--- to was_member. The 'profile' branch (avatar_visible_to) is untouched.
+-- A group's picture, read: security-lead F7 -- the first version here
+-- (before review) moved the group branch to was_member, but the app already
+-- falls back to initials whenever a picture is simply absent (avatar_path
+-- null), and a departed member has no need to keep seeing a group's
+-- current picture (it can change after they leave). Reverted to is_member
+-- (current only): a departed member sees initials, like a group with no
+-- picture at all. The 'profile' branch (avatar_visible_to) is untouched.
 create or replace function app_private.avatar_path_readable(object_name text)
 returns boolean language plpgsql stable security definer set search_path = '' as $$
 declare
@@ -221,7 +315,7 @@ begin
   end if;
   return case kind
     when 'profile' then app_private.avatar_visible_to(owner)
-    when 'group' then app_private.was_member(owner)
+    when 'group' then app_private.is_member(owner)
                        and exists (
                          select 1 from public.conversations c
                           where c.id = owner and c.title is not null)
@@ -256,6 +350,19 @@ $$;
 -- built on it, and reach and "can I still see a name already in a chat I'm
 -- in" are different questions that happened to share one function before
 -- this migration.
+-- security-lead F4: the first version above (before review) matched on
+-- ANY of my rows against ANY of their rows for the conversation, with no
+-- window at all -- so a departed member could see the name of someone who
+-- only joined after they left (never actually together), and a member
+-- added without history could see someone who left before they even
+-- joined. Fixed to an interval-overlap test between MY readable window
+-- ([my history_from, my left_at or infinity]) and THEIR presence window
+-- ([their joined_at, their left_at or infinity]): standard "do these two
+-- ranges overlap" (a1<=b2 and b1<=a2). With history (history_from =
+-- -infinity), my window covers everything back to the start, so it still
+-- overlaps a departed sender's whole presence -- "added-with-history still
+-- sees departed senders' names" holds by construction, not as a special
+-- case.
 create or replace function app_private.shared_conversation_ever(other uuid) returns boolean
 language sql stable security definer set search_path = '' as $$
   select exists (
@@ -264,10 +371,53 @@ language sql stable security definer set search_path = '' as $$
       join public.conversation_members theirs
         on theirs.conversation_id = mine.conversation_id
      where mine.user_id = (select auth.uid())
-       and theirs.user_id = other)
+       and theirs.user_id = other
+       and mine.history_from <= coalesce(theirs.left_at, 'infinity'::timestamptz)
+       and theirs.joined_at <= coalesce(mine.left_at, 'infinity'::timestamptz))
 $$;
 revoke all on function app_private.shared_conversation_ever(uuid) from public, anon;
 grant execute on function app_private.shared_conversation_ever(uuid) to authenticated;
+
+-- security-lead F4, second half: conversation_members_read itself had the
+-- same gap -- was_member(conversation_id) let anyone who was EVER in a
+-- conversation see EVERY row of it, current and past, of everyone,
+-- regardless of whether their own window ever overlapped that row's
+-- presence. Redefined below (search for "F4" again) once was_member's
+-- caller is available; the overlap test itself is the same shape as
+-- shared_conversation_ever, against the TARGET ROW's own joined_at/left_at
+-- rather than a second table alias -- kept as its own security definer
+-- function rather than an inline self-join on conversation_members, for
+-- the same reason is_member always has been one (chat.sql): a policy on
+-- conversation_members reading conversation_members to decide conversation_
+-- members' own visibility is exactly the shape that function exists to
+-- avoid inlining.
+create or replace function app_private.overlaps_my_membership(
+  conversation uuid,
+  other_joined timestamptz,
+  other_left timestamptz
+) returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.conversation_members mine
+     where mine.conversation_id = conversation
+       and mine.user_id = (select auth.uid())
+       and mine.history_from <= coalesce(other_left, 'infinity'::timestamptz)
+       and other_joined <= coalesce(mine.left_at, 'infinity'::timestamptz)
+  )
+$$;
+revoke all on function app_private.overlaps_my_membership(uuid, timestamptz, timestamptz)
+  from public, anon;
+grant execute on function app_private.overlaps_my_membership(uuid, timestamptz, timestamptz)
+  to authenticated;
+
+drop policy conversation_members_read on public.conversation_members;
+create policy conversation_members_read on public.conversation_members for select to authenticated
+  using (
+    (select app_private.has_app_access())
+    and (
+      user_id = (select auth.uid())
+      or app_private.overlaps_my_membership(conversation_id, joined_at, left_at)
+    )
+  );
 
 -- profiles_read / profiles_public, redefined to use shared_conversation_ever
 -- instead of shares_conversation -- same reasoning as immediately above.
@@ -415,10 +565,11 @@ begin
   end if;
 end $$;
 
--- read_marks: callable by a departed member too (was_member, not is_member),
--- so their own read-only view can still show who had read what up to when
--- they left. Reported members are CURRENT only -- a departed member's own
--- read state stops being surfaced to others once they have left.
+-- read_marks: security-lead F6 -- the first version here (before review)
+-- gated on was_member, so a departed caller still got back every current
+-- member's read mark. Reverted to is_member (current only): a departed
+-- caller now gets no rows at all, same shape as unread_counts below (they
+-- accrue nothing new to read either).
 create or replace function public.read_marks(conversation uuid)
 returns table (user_id uuid, shares boolean, read_at timestamptz)
 language sql stable security definer set search_path = '' as $$
@@ -436,7 +587,7 @@ language sql stable security definer set search_path = '' as $$
      and cm.user_id <> auth.uid()
      and cm.left_at is null
      and app_private.has_app_access()
-     and app_private.was_member(conversation)
+     and app_private.is_member(conversation)
 $$;
 
 -- unread_counts: scoped to the caller's CURRENT row only (a departed member
@@ -509,8 +660,24 @@ create table public.group_events (
 create index group_events_conversation_idx on public.group_events(conversation_id, created_at);
 alter table public.group_events enable row level security;
 revoke all on public.group_events from anon, authenticated;
+-- security-lead F9: is_admin(conversation_id) alone had no lower time bound
+-- -- an admin added without history could read "X left" events from before
+-- they ever joined, which messages_read would never show them the
+-- corresponding history for. Bounded to the admin's own CURRENT row's
+-- history_from (is_admin already implies a current admin row exists);
+-- coalesced to 'infinity' if somehow none is found, so the policy denies
+-- rather than defaults open.
 create policy group_events_read on public.group_events for select to authenticated
-  using ((select app_private.has_app_access()) and app_private.is_admin(conversation_id));
+  using (
+    (select app_private.has_app_access())
+    and app_private.is_admin(conversation_id)
+    and created_at >= coalesce(
+      (select cm.history_from from public.conversation_members cm
+        where cm.conversation_id = group_events.conversation_id
+          and cm.user_id = (select auth.uid())
+          and cm.left_at is null),
+      'infinity'::timestamptz)
+  );
 grant select on public.group_events to authenticated;
 
 -- leave_group -----------------------------------------------------------
@@ -571,6 +738,12 @@ grant execute on function public.leave_group(uuid) to authenticated;
 -- An admin removes anyone but themselves (they leave instead -- self-removal
 -- is refused so the caller learns to use leave_group, which also carries the
 -- last-admin rule). Never on a 1:1.
+--
+-- security-lead F3 (MEDIUM, probed concurrently: remove/remove,
+-- demote/demote, leave/self-demote): locked per conversation, as the very
+-- first statement, same advisory key leave_group already uses -- two admin
+-- actions on the same group can no longer race past each other's is_admin()
+-- check.
 create or replace function public.remove_member(conversation uuid, member uuid)
 returns void language plpgsql security definer set search_path = '' as $$
 declare
@@ -578,6 +751,7 @@ declare
   grp    text;
   target public.conversation_members;
 begin
+  perform pg_advisory_xact_lock(hashtextextended('group_admin:' || conversation::text, 0));
   if not app_private.has_app_access() then
     raise exception 'not permitted' using errcode = '42501';
   end if;
@@ -618,6 +792,13 @@ grant execute on function public.remove_member(uuid, uuid) to authenticated;
 -- see this migration's header comment for why. with_history chooses that
 -- fresh window's floor: true = '-infinity' (the group's whole history from
 -- their point of view), false = now() (only from here on).
+--
+-- security-lead F3: locked first, same key leave_group/remove_member use.
+-- security-lead F11: a null element used to reach the plain insert below
+-- and fail as a raw not-null constraint violation (23502) instead of a
+-- clean refusal -- checked explicitly now, before the reachability check
+-- (`x <> me` is never true for a null x, so the reachability exists() alone
+-- silently let a null slip through unexamined).
 create or replace function public.add_members(
   conversation uuid,
   members      uuid[],
@@ -629,6 +810,7 @@ declare
   from_ts timestamptz := case when with_history then '-infinity'::timestamptz else now() end;
   m       uuid;
 begin
+  perform pg_advisory_xact_lock(hashtextextended('group_admin:' || conversation::text, 0));
   if not app_private.has_app_access() then
     raise exception 'not permitted' using errcode = '42501';
   end if;
@@ -640,6 +822,9 @@ begin
     raise exception 'not permitted' using errcode = '42501';
   end if;
 
+  if exists (select 1 from unnest(coalesce(members, '{}'::uuid[])) as x where x is null) then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
   if exists (
     select 1 from unnest(coalesce(members, '{}'::uuid[])) as x
      where x <> me and (not app_private.is_allowed(x) or not app_private.can_reach(x))
@@ -670,6 +855,10 @@ grant execute on function public.add_members(uuid, uuid[], boolean) to authentic
 -- directly from "a group is never left unmanaged" -- leave_group's own
 -- promotion exists for exactly this invariant, and a demotion should not be
 -- a back door around it).
+--
+-- security-lead F3: locked first, same key leave_group/remove_member/
+-- add_members use, so a demote racing another demote (or a leave) cannot
+-- both see an admin remaining and leave none.
 create or replace function public.set_admin(conversation uuid, member uuid, is_admin boolean)
 returns void language plpgsql security definer set search_path = '' as $$
 declare
@@ -677,6 +866,7 @@ declare
   target public.conversation_members;
   admins int;
 begin
+  perform pg_advisory_xact_lock(hashtextextended('group_admin:' || conversation::text, 0));
   if not app_private.has_app_access() then
     raise exception 'not permitted' using errcode = '42501';
   end if;
@@ -709,3 +899,39 @@ begin
 end $$;
 revoke all on function public.set_admin(uuid, uuid, boolean) from public, anon;
 grant execute on function public.set_admin(uuid, uuid, boolean) to authenticated;
+
+-- Belt-and-suspenders: security-lead F3, second half -- the advisory locks
+-- above stop the three RPCs racing EACH OTHER, but say nothing about a
+-- future write to conversation_members that does not go through one of
+-- them (a bug, a manual fix, a later migration). A deferred constraint
+-- trigger checks, once at commit (not per intermediate row state within one
+-- transaction -- a demote immediately followed by a promote in the same
+-- transaction never trips it), that no GROUP with any current member is
+-- left with zero current admins. Never fires for a 1:1 (no title) or an
+-- empty/fully-departed group (nobody left to need an admin).
+create or replace function app_private.group_needs_admin_check() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  conv uuid := coalesce(new.conversation_id, old.conversation_id);
+begin
+  if exists (select 1 from public.conversations c where c.id = conv and c.title is not null)
+     and exists (
+       select 1 from public.conversation_members
+        where conversation_id = conv and left_at is null
+     )
+     and not exists (
+       select 1 from public.conversation_members
+        where conversation_id = conv and left_at is null and role = 'admin'
+     )
+  then
+    raise exception 'a group must always have an admin' using errcode = '23514';
+  end if;
+  return null;
+end $$;
+revoke all on function app_private.group_needs_admin_check() from public, anon, authenticated;
+
+create constraint trigger conversation_members_admin_guard
+  after insert or update on public.conversation_members
+  deferrable initially deferred
+  for each row
+  execute function app_private.group_needs_admin_check();

@@ -15,12 +15,14 @@
 // gallery boundaries, one avatars "bucket" shared by both repositories as the
 // one real bucket is. Run under TZ=JST-9 like every unit test.
 import 'dart:convert';
+import 'dart:ui' show Tristate;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/loading.dart';
+import 'package:sis/app/notice.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
@@ -31,8 +33,10 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/domain/initials.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/presentation/crop_screen.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/chat/presentation/person_avatar.dart';
+import 'package:sis/features/chat/presentation/photo_viewer.dart';
 import 'package:sis/features/chat/presentation/profile_pages.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
@@ -140,6 +144,7 @@ class World {
         ..thumbnails['p2'] = photoPng;
   final photos = AttachmentCacheFake();
   final picker = ExternalPickerFake();
+  final cropper = PictureCropperFake();
 
   Widget app() => ProviderScope(
     overrides: [
@@ -156,6 +161,7 @@ class World {
       profileRepositoryProvider.overrideWithValue(profile),
       galleryProvider.overrideWithValue(gallery),
       externalPickerProvider.overrideWithValue(picker),
+      pictureCropperProvider.overrideWithValue(cropper),
       attachmentCacheProvider.overrideWithValue(photos),
       linkOpenerProvider.overrideWithValue(LinkOpenerFake()),
       pushSourceProvider.overrideWithValue(PushSourceFake()),
@@ -220,8 +226,52 @@ Future<void> openGroupPage(WidgetTester t) async {
   expect(find.byType(GroupScreen), findsOneWidget);
 }
 
+/// Lets the crop screen's photo decode (in the engine, outside the fake
+/// clock) until "Use" is offered.
+Future<void> untilCropReady(WidgetTester t) async {
+  for (var i = 0; i < 100; i++) {
+    await t.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await t.pump(const Duration(milliseconds: 20));
+    final use = byKey('crop-use');
+    if (use.evaluate().isNotEmpty &&
+        t.getSemantics(use).getSemanticsData().flagsCollection.isEnabled ==
+            Tristate.isTrue) {
+      await steps(t, 30);
+      return;
+    }
+  }
+  fail('the crop screen never offered Use');
+}
+
+/// On the crop screen: waits for the photo, taps "Use" and lets the crop
+/// and the upload it starts run -- without settling, so a notice is still
+/// there to check.
+Future<void> cropAndUse(WidgetTester t) async {
+  expect(find.byType(CropScreen), findsOneWidget, reason: 'no crop screen');
+  await untilCropReady(t);
+  await t.tap(byKey('crop-use'));
+  await steps(t, 30);
+}
+
+/// Leaves the crop screen with back, and lets it close.
+Future<void> backOutOfCrop(WidgetTester t) async {
+  expect(find.byType(CropScreen), findsOneWidget, reason: 'no crop screen');
+  await untilCropReady(t);
+  await t.pageBack();
+  await steps(t, 30);
+  expect(find.byType(CropScreen), findsNothing);
+}
+
+Future<void> openPersonPage(WidgetTester t) async {
+  await tapKey(t, 'conversation-c1');
+  await tapKey(t, 'conversation-title');
+  expect(find.byType(PersonScreen), findsOneWidget);
+}
+
 /// The image an image-bearing widget paints, unwrapped from any resize.
-ImageProvider? _providerOf(Widget w) {
+ImageProvider? _providerOf(Widget w, {bool unwrap = true}) {
   ImageProvider? p;
   if (w is Image) {
     p = w.image;
@@ -234,7 +284,7 @@ ImageProvider? _providerOf(Widget w) {
   } else if (w is Ink && w.decoration is BoxDecoration) {
     p = (w.decoration as BoxDecoration?)?.image?.image;
   }
-  while (p is ResizeImage) {
+  while (unwrap && p is ResizeImage) {
     p = p.imageProvider;
   }
   return p;
@@ -251,6 +301,22 @@ List<Uint8List> picturesIn(Finder scope) => [
           )
           .evaluate())
     if (_providerOf(e.widget) case final MemoryImage m) m.bytes,
+];
+
+/// The sizes the avatar circle in [site] asks its picture to be decoded at
+/// (cacheWidth/cacheHeight), in image pixels.
+List<int> decodeEdges(WidgetTester t, Finder site) => [
+  for (final e
+      in find
+          .descendant(
+            of: avatarIn(site),
+            matching: find.byWidgetPredicate(
+              (w) => _providerOf(w, unwrap: false) is ResizeImage,
+            ),
+          )
+          .evaluate())
+    if (_providerOf(e.widget, unwrap: false) case final ResizeImage r)
+      ?(r.width ?? r.height),
 ];
 
 /// The one avatar circle in [site].
@@ -427,14 +493,14 @@ void main() {
   });
 
   group('Settings > Profile: your own picture', () {
-    testWidgets('with none set, the sheet offers Choose photo and no Remove; '
-        'closing it changes nothing', (t) async {
+    testWidgets('the camera badge opens the sheet: with none set, Choose '
+        'photo and no Remove; closing it changes nothing', (t) async {
       final w = World();
       await home(t, w);
       await openProfilePage(t);
       expectInitials(byKey('profile-avatar'), 'Maya Kaya', 'profile page');
 
-      await tapKey(t, 'profile-avatar');
+      await tapKey(t, 'profile-avatar-edit');
       expect(byKey('avatar-choose'), findsOneWidget);
       expect(byKey('avatar-remove'), findsNothing);
       await t.tapAt(const Offset(20, 20));
@@ -444,40 +510,45 @@ void main() {
       expect(w.profile.avatarRemovals, isEmpty);
     });
 
-    testWidgets('choosing a photo uploads its 512 px square JPEG with a '
-        'progress line, reports it, and shows it here and on the card', (
-      t,
-    ) async {
+    testWidgets('choosing a photo opens the crop screen on its uncropped '
+        'source; Use uploads exactly the cropper\'s square with a progress '
+        'line, reports it, and shows it here and on the card', (t) async {
       final w = World();
       await home(t, w);
       await openProfilePage(t);
       w.profile.holdAvatar();
 
-      await tapKey(t, 'profile-avatar');
+      await tapKey(t, 'profile-avatar-edit');
       await tapKey(t, 'avatar-choose');
       expect(
         byKey('sheet-photo-p1'),
         findsOneWidget,
         reason: 'the app\'s own gallery sheet did not open',
       );
-      await t.tap(byKey('sheet-photo-p1'));
-      await steps(t);
+      await act(t, byKey('sheet-photo-p1'));
 
-      expect(w.gallery.squareLoads, [
-        (id: 'p1', size: 512),
-      ], reason: 'not the 512 px square');
+      expect(w.gallery.cropLoads, ['p1'], reason: 'not the crop source');
       expect(
         w.gallery.loadedIds,
         isEmpty,
-        reason: 'the full-size photo was loaded instead of the square',
+        reason: 'the attachment shape was loaded instead of the crop source',
       );
+      expect(w.profile.avatarUploads, isEmpty, reason: 'uploaded before Use');
+
+      await cropAndUse(t);
+      final crop = w.cropper.calls.single;
+      expect(crop.source, photoPng, reason: 'cropped something else');
       expect(
         find.byType(SisProgressLine),
         findsOneWidget,
         reason: 'no progress line while uploading',
       );
-      expect(w.profile.avatarUploads, hasLength(1));
       final upload = w.profile.avatarUploads.single;
+      expect(
+        upload.image.bytes,
+        w.cropper.output,
+        reason: 'the upload is not what the cropper made',
+      );
       expect(upload.image.contentType, 'image/jpeg');
       expect(upload.previousPath, isNull);
 
@@ -489,9 +560,9 @@ void main() {
         findsOneWidget,
         reason: 'success is not reported',
       );
-      expectPicture(byKey('profile-avatar'), pngBytes, 'profile page');
+      expectPicture(byKey('profile-avatar'), w.cropper.output, 'profile page');
       await back(t);
-      expectPicture(byKey('settings-profile'), pngBytes, 'settings card');
+      expectPicture(byKey('settings-profile'), w.cropper.output, 'card');
       await drainNotice(t);
     });
 
@@ -502,18 +573,67 @@ void main() {
       await openProfilePage(t);
       expectPicture(byKey('profile-avatar'), red, 'before');
 
-      await tapKey(t, 'profile-avatar');
+      await tapKey(t, 'profile-avatar-edit');
       expect(byKey('avatar-remove'), findsOneWidget);
       await tapKey(t, 'avatar-choose');
       await act(t, byKey('sheet-photo-p2'));
+      await cropAndUse(t);
 
       final upload = w.profile.avatarUploads.single;
+      expect(upload.image.bytes, w.cropper.output);
       expect(upload.previousPath, mePath);
       expect(noticeSaying('Profile picture updated'), findsOneWidget);
       expect(w.profile.profile.avatarPath, isNot(mePath));
       expect(w.bucket.containsKey(mePath), isFalse);
-      expectPicture(byKey('profile-avatar'), pngBytes, 'after');
+      expectPicture(byKey('profile-avatar'), w.cropper.output, 'after');
       await drainNotice(t);
+    });
+
+    testWidgets('back from the crop screen: nothing cropped, nothing '
+        'uploaded, no notice, the picture kept', (t) async {
+      final w = World(pictures: true);
+      await home(t, w);
+      await openProfilePage(t);
+
+      await tapKey(t, 'profile-avatar-edit');
+      await tapKey(t, 'avatar-choose');
+      await act(t, byKey('sheet-photo-p1'));
+      await backOutOfCrop(t);
+
+      expect(w.cropper.calls, isEmpty);
+      expect(w.profile.avatarUploads, isEmpty);
+      expect(w.profile.avatarRemovals, isEmpty);
+      expect(notice, findsNothing, reason: 'a back-out is not news');
+      expect(find.byType(SisProgressLine), findsNothing);
+      await settle(t);
+      expectPicture(byKey('profile-avatar'), red, 'after backing out');
+    });
+
+    testWidgets('a crop that fails: "That photo could not be used." on the '
+        'crop screen, which stays open, and nothing is uploaded', (t) async {
+      final w = World(pictures: true);
+      w.cropper.fails = true;
+      await home(t, w);
+      await openProfilePage(t);
+
+      await tapKey(t, 'profile-avatar-edit');
+      await tapKey(t, 'avatar-choose');
+      await act(t, byKey('sheet-photo-p1'));
+      await cropAndUse(t);
+
+      expect(w.cropper.calls, hasLength(1));
+      expect(w.profile.avatarUploads, isEmpty);
+      final shown = t.widgetList<SisNotice>(notice).toList();
+      expect(shown, hasLength(1));
+      expect(shown.single.message, 'That photo could not be used.');
+      expect(shown.single.isError, isTrue);
+      expect(find.byType(CropScreen), findsOneWidget, reason: 'screen closed');
+      await drainNotice(t);
+
+      await backOutOfCrop(t);
+      await settle(t);
+      expect(w.profile.avatarUploads, isEmpty);
+      expectPicture(byKey('profile-avatar'), red, 'after a failed crop');
     });
 
     testWidgets('Remove clears it: initials again, the stored file deleted', (
@@ -523,7 +643,7 @@ void main() {
       await home(t, w);
       await openProfilePage(t);
 
-      await tapKey(t, 'profile-avatar');
+      await tapKey(t, 'profile-avatar-edit');
       await act(t, byKey('avatar-remove'));
       expect(w.profile.avatarRemovals, [mePath]);
       expect(w.bucket.containsKey(mePath), isFalse);
@@ -545,9 +665,10 @@ void main() {
       await home(t, w);
       await openProfilePage(t);
 
-      await tapKey(t, 'profile-avatar');
+      await tapKey(t, 'profile-avatar-edit');
       await tapKey(t, 'avatar-choose');
       await act(t, byKey('sheet-photo-p1'));
+      await cropAndUse(t);
 
       expect(noticeSaying('No connection'), findsOneWidget);
       expect(noticeSaying('Profile picture updated'), findsNothing);
@@ -563,7 +684,7 @@ void main() {
       await home(t, w);
       await openProfilePage(t);
 
-      await tapKey(t, 'profile-avatar');
+      await tapKey(t, 'profile-avatar-edit');
       await act(t, byKey('avatar-remove'));
       expect(noticeSaying('No connection'), findsOneWidget);
       expect(noticeSaying('Profile picture removed'), findsNothing);
@@ -578,7 +699,7 @@ void main() {
       await home(t, w);
       await openProfilePage(t);
 
-      await tapKey(t, 'profile-avatar');
+      await tapKey(t, 'profile-avatar-edit');
       await tapKey(t, 'avatar-choose');
       expect(byKey('sheet-allow'), findsOneWidget);
       expect(w.profile.avatarUploads, isEmpty);
@@ -586,29 +707,72 @@ void main() {
   });
 
   group('a group\'s picture', () {
-    testWidgets('any member sets it from the group page: the square JPEG is '
-        'sent for that group, and the page and the list show it', (t) async {
+    testWidgets('any member sets it from the badge on the group page: the '
+        'cropper\'s square is sent for that group, and the page and the list '
+        'show it', (t) async {
       final w = World();
       await home(t, w);
       await openGroupPage(t);
       expectInitials(byKey('group-avatar'), 'Club', 'group page');
 
-      await tapKey(t, 'group-avatar');
+      await tapKey(t, 'group-avatar-edit');
       expect(byKey('avatar-remove'), findsNothing);
       await tapKey(t, 'avatar-choose');
       await act(t, byKey('sheet-photo-p1'));
+      expect(w.gallery.cropLoads, ['p1']);
+      expect(w.chat.groupAvatarCalls, isEmpty, reason: 'sent before Use');
+      await cropAndUse(t);
 
-      expect(w.gallery.squareLoads.single.size, 512);
+      expect(w.cropper.calls.single.source, photoPng);
       final call = w.chat.groupAvatarCalls.single;
       expect(call.conversationId, 'g1');
+      expect(call.image?.bytes, w.cropper.output);
       expect(call.image?.contentType, 'image/jpeg');
       expect(call.previousPath, isNull);
       expect(noticeSaying('Group picture updated'), findsOneWidget);
-      expectPicture(byKey('group-avatar'), pngBytes, 'group page');
+      expectPicture(byKey('group-avatar'), w.cropper.output, 'group page');
       Navigator.of(t.element(find.byType(GroupScreen)))
           .popUntil((r) => r.isFirst);
       await settle(t);
-      expectPicture(byKey('conversation-g1'), pngBytes, 'chat list');
+      expectPicture(byKey('conversation-g1'), w.cropper.output, 'chat list');
+      await drainNotice(t);
+    });
+
+    testWidgets('back from the crop screen sends nothing and says nothing', (
+      t,
+    ) async {
+      final w = World(pictures: true);
+      await home(t, w);
+      await openGroupPage(t);
+
+      await tapKey(t, 'group-avatar-edit');
+      await tapKey(t, 'avatar-choose');
+      await act(t, byKey('sheet-photo-p1'));
+      await backOutOfCrop(t);
+
+      expect(w.cropper.calls, isEmpty);
+      expect(w.chat.groupAvatarCalls, isEmpty);
+      expect(notice, findsNothing);
+      await settle(t);
+      expectPicture(byKey('group-avatar'), blue, 'after backing out');
+    });
+
+    testWidgets('a crop that fails says "That photo could not be used." and '
+        'sends nothing', (t) async {
+      final w = World(pictures: true);
+      w.cropper.fails = true;
+      await home(t, w);
+      await openGroupPage(t);
+
+      await tapKey(t, 'group-avatar-edit');
+      await tapKey(t, 'avatar-choose');
+      await act(t, byKey('sheet-photo-p1'));
+      await cropAndUse(t);
+
+      expect(w.cropper.calls, hasLength(1));
+      expect(w.chat.groupAvatarCalls, isEmpty);
+      expect(noticeSaying('That photo could not be used.'), findsOneWidget);
+      expect(find.byType(CropScreen), findsOneWidget);
       await drainNotice(t);
     });
 
@@ -619,7 +783,7 @@ void main() {
       await home(t, w);
       await openGroupPage(t);
 
-      await tapKey(t, 'group-avatar');
+      await tapKey(t, 'group-avatar-edit');
       await act(t, byKey('avatar-remove'));
       final call = w.chat.groupAvatarCalls.single;
       expect(call.conversationId, 'g1');
@@ -637,9 +801,10 @@ void main() {
       await home(t, w);
       await openGroupPage(t);
 
-      await tapKey(t, 'group-avatar');
+      await tapKey(t, 'group-avatar-edit');
       await tapKey(t, 'avatar-choose');
       await act(t, byKey('sheet-photo-p1'));
+      await cropAndUse(t);
 
       expect(notice, findsOneWidget, reason: 'the refusal is not reported');
       expect(noticeSaying('Group picture updated'), findsNothing);
@@ -648,18 +813,138 @@ void main() {
       await drainNotice(t);
     });
 
-    testWidgets('a 1:1 has no picture of its own to change', (t) async {
+    testWidgets('a 1:1 has no picture of its own to change: no badge, and '
+        'tapping the picture never offers the sheet', (t) async {
       final w = World(pictures: true);
       await home(t, w);
-      await tapKey(t, 'conversation-c1');
-      await tapKey(t, 'conversation-title');
-      expect(find.byType(PersonScreen), findsOneWidget);
+      await openPersonPage(t);
+      expect(byKey('person-avatar'), findsOneWidget);
+      expect(byKey('person-avatar-edit'), findsNothing);
       expect(byKey('group-avatar'), findsNothing);
+      expect(byKey('group-avatar-edit'), findsNothing);
 
-      await t.tap(avatarIn(find.byType(PersonScreen)));
-      await settle(t);
+      await tapKey(t, 'person-avatar');
       expect(byKey('avatar-choose'), findsNothing);
       expect(w.chat.groupAvatarCalls, isEmpty);
+    });
+  });
+
+  group('seeing a picture full size', () {
+    final sites =
+        <
+          (
+            String,
+            String,
+            Future<void> Function(WidgetTester),
+            Uint8List Function(),
+          )
+        >[
+          ('profile-avatar', mePath, openProfilePage, () => red),
+          ('group-avatar', clubPath, openGroupPage, () => blue),
+          ('person-avatar', bobPath, openPersonPage, () => green),
+        ];
+    for (final (key, path, openPage, bytes) in sites) {
+      testWidgets('$key: tapping the picture opens it in the photo viewer, '
+          'read from the avatars bucket', (t) async {
+        final w = World(pictures: true);
+        await home(t, w);
+        await openPage(t);
+        expectPicture(byKey(key), bytes(), 'before');
+
+        await tapKey(t, key);
+        expect(find.byType(PhotoViewer), findsOneWidget, reason: 'no viewer');
+        final viewer = t.widget<PhotoViewer>(find.byType(PhotoViewer));
+        expect(viewer.paths, [path]);
+        expect(viewer.isAvatar, isTrue, reason: 'read as an attachment');
+        expect(byKey('avatar-choose'), findsNothing, reason: 'the sheet');
+        final shown = picturesIn(byKey('viewer-image-$path'));
+        expect(shown, isNotEmpty, reason: 'the viewer shows nothing');
+        expect(
+          shown.every((b) => listEquals(b, bytes())),
+          isTrue,
+          reason: 'the viewer shows another picture',
+        );
+      });
+
+      testWidgets('$key: with no picture, tapping it does nothing', (t) async {
+        final w = World();
+        await home(t, w);
+        await openPage(t);
+
+        await t.tap(byKey(key));
+        await settle(t);
+        expect(find.byType(PhotoViewer), findsNothing);
+        expect(byKey('avatar-choose'), findsNothing);
+        expect(w.chat.avatarRequests, isEmpty);
+      });
+    }
+
+    testWidgets('a picture set before this version (512 px) shows and '
+        'opens unchanged', (t) async {
+      final old = pngOf(512, 512, shade: 60);
+      final w = World(pictures: true);
+      w.bucket[mePath] = old;
+      await home(t, w);
+      await openProfilePage(t);
+      expectPicture(byKey('profile-avatar'), old, 'profile page');
+
+      await tapKey(t, 'profile-avatar');
+      final shown = picturesIn(byKey('viewer-image-$mePath'));
+      expect(shown, isNotEmpty);
+      expect(shown.every((b) => listEquals(b, old)), isTrue);
+    });
+
+    testWidgets('a 640 px picture shows in the chat list, decoded smaller '
+        'than the file for a small circle', (t) async {
+      final big = pngOf(640, 640, shade: 220);
+      final w = World(pictures: true);
+      w.bucket[bobPath] = big;
+      await home(t, w);
+      final site = byKey('conversation-c1');
+      expectPicture(site, big, 'chat list');
+
+      final edges = decodeEdges(t, site);
+      expect(
+        edges,
+        isNotEmpty,
+        reason: 'the 640 px file is decoded at full size for a small circle',
+      );
+      for (final edge in edges) {
+        expect(edge, lessThan(640), reason: 'decoded at the file\'s size');
+      }
+    });
+
+    // Flutter decodes at cacheWidth *image* pixels; a circle 2r logical
+    // pixels wide covers 2r x devicePixelRatio of them. Decoding at fewer
+    // draws the picture blurred on every high-density phone.
+    testWidgets('each circle decodes the picture at its size in the screen\'s '
+        'pixels, so a 2.625x phone shows it sharp', (t) async {
+      final big = pngOf(640, 640, shade: 220);
+      final w = World(pictures: true);
+      w.bucket[bobPath] = big;
+      w.bucket[mePath] = big;
+      await home(t, w);
+      final dpr = t.view.devicePixelRatio;
+
+      void check(Finder site, String where) {
+        final radius = t.widget<PersonAvatar>(avatarIn(site)).radius;
+        final physical = 2 * radius * dpr;
+        final edges = decodeEdges(t, site);
+        expect(edges, isNotEmpty, reason: '$where: not resized at all');
+        for (final edge in edges) {
+          expect(
+            edge,
+            inInclusiveRange(physical.floor(), physical.ceil()),
+            reason:
+                '$where: a ${2 * radius} px circle on a ${dpr}x screen '
+                'decoded at $edge px',
+          );
+        }
+      }
+
+      check(byKey('conversation-c1'), 'chat list');
+      await openProfilePage(t);
+      check(byKey('profile-avatar'), 'profile page');
     });
   });
 
@@ -678,7 +963,7 @@ void main() {
         ..allowed = {...allowed};
       await home(t, w);
       await openProfilePage(t);
-      await tapKey(t, 'profile-avatar');
+      await tapKey(t, 'profile-avatar-edit');
       await tapKey(t, 'avatar-choose');
       expect(byKey('sheet-photo-p0'), findsOneWidget);
       return w;
@@ -699,7 +984,8 @@ void main() {
       await jumpToBottom(t);
       await settleImages(t);
       await act(t, byKey('sheet-photo-p129'));
-      expect(w.gallery.squareLoads, [(id: 'p129', size: 512)]);
+      expect(w.gallery.cropLoads, ['p129']);
+      await cropAndUse(t);
       expect(w.profile.avatarUploads, hasLength(1));
       await drainNotice(t);
     });

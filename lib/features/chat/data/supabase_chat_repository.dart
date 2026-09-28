@@ -78,19 +78,25 @@ final class SupabaseChatRepository implements ChatRepository {
     final me = _uid;
     if (me == null) return const Err(DeniedFailure());
     try {
-      // RLS returns membership rows only for conversations this member belongs
-      // to, so this is already scoped — including the other side's row.
-      final memberRows = await _client
-          .from('conversation_members')
-          .select('conversation_id, user_id')
-          .retriedOnce();
-
-      // Titles distinguish a group from a 1:1; RLS scopes this to the
-      // caller's own conversations, same as the membership rows.
-      final conversationRows = await _client
-          .from('conversations')
-          .select('id, title, avatar_path')
-          .retriedOnce();
+      // Neither of these depends on the other's result, so they run
+      // together instead of one after the other.
+      final firstStage = await Future.wait<List<Map<String, dynamic>>>([
+        // RLS returns membership rows only for conversations this member
+        // belongs to, so this is already scoped — including the other
+        // side's row.
+        _client
+            .from('conversation_members')
+            .select('conversation_id, user_id')
+            .retriedOnce(),
+        // Titles distinguish a group from a 1:1; RLS scopes this to the
+        // caller's own conversations, same as the membership rows.
+        _client
+            .from('conversations')
+            .select('id, title, avatar_path')
+            .retriedOnce(),
+      ]);
+      final memberRows = firstStage[0];
+      final conversationRows = firstStage[1];
       final titleById = {
         for (final row in conversationRows)
           row['id'] as String: row['title'] as String?,
@@ -112,13 +118,34 @@ final class SupabaseChatRepository implements ChatRepository {
       if (conversationIds.isEmpty) return const Ok([]);
 
       final others = otherByConversation.values.toSet().toList();
-      final profileRows = others.isEmpty
-          ? const <Map<String, dynamic>>[]
-          : await _client
-                .from('profiles')
-                .select('user_id, display_name, avatar_path')
-                .inFilter('user_id', others)
-                .retriedOnce();
+      // None of these three depends on either of the other two, so they
+      // also run together rather than one after the other.
+      final secondStage = await Future.wait<Object?>([
+        others.isEmpty
+            ? Future.value(const <Map<String, dynamic>>[])
+            : _client
+                  .from('profiles')
+                  .select('user_id, display_name, avatar_path')
+                  .inFilter('user_id', others)
+                  .retriedOnce(),
+        // Newest first, so the first row seen for a conversation is its
+        // preview. One row per conversation, from a view that does the
+        // DISTINCT ON in the database. A bounded scan across all
+        // conversations used to lose the preview of a quiet one as soon as
+        // enough newer messages existed elsewhere, which rendered as "No
+        // messages yet" on a conversation that had messages.
+        _client
+            .from('conversation_previews')
+            .select(
+              'conversation_id, body, created_at, attachment_path, sender_id, deleted',
+            )
+            .retriedOnce(),
+        // Only conversations with something unread come back.
+        _client.rpc('unread_counts'),
+      ]);
+      final profileRows = secondStage[0]! as List<Map<String, dynamic>>;
+      final recent = secondStage[1]! as List<Map<String, dynamic>>;
+      final unreadRows = secondStage[2]! as List<dynamic>;
       final nameByUser = {
         for (final row in profileRows)
           row['user_id'] as String: row['display_name'] as String,
@@ -127,19 +154,6 @@ final class SupabaseChatRepository implements ChatRepository {
         for (final row in profileRows)
           row['user_id'] as String: row['avatar_path'] as String?,
       };
-
-      // Newest first, so the first row seen for a conversation is its preview.
-      // One row per conversation, from a view that does the DISTINCT ON in the
-      // database. A bounded scan across all conversations used to lose the
-      // preview of a quiet one as soon as enough newer messages existed
-      // elsewhere, which rendered as "No messages yet" on a conversation that
-      // had messages.
-      final recent = await _client
-          .from('conversation_previews')
-          .select(
-            'conversation_id, body, created_at, attachment_path, sender_id, deleted',
-          )
-          .retriedOnce();
       final previewBy = <String, ({String body, DateTime at, String sender})>{
         for (final row in recent)
           row['conversation_id'] as String: (
@@ -154,9 +168,6 @@ final class SupabaseChatRepository implements ChatRepository {
             sender: row['sender_id'] as String,
           ),
       };
-
-      // Only conversations with something unread come back.
-      final unreadRows = await _client.rpc('unread_counts') as List<dynamic>;
       final unreadBy = {
         for (final row in unreadRows.cast<Map<String, dynamic>>())
           row['conversation_id'] as String: row['unread'] as int,

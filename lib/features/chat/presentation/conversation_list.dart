@@ -10,7 +10,6 @@ import '../../auth/domain/session_state.dart';
 import '../domain/message.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
-import '../application/chat_drafts.dart';
 import '../domain/conversation.dart';
 import '../domain/highlight.dart';
 import 'message_screen.dart';
@@ -299,9 +298,6 @@ class _ConversationTile extends ConsumerWidget {
     };
     final scheme = Theme.of(context).colorScheme;
     final unread = conversation.unread > 0;
-    final draftText = ref.watch(
-      draftsProvider.select((m) => m[conversation.id]?.text),
-    );
     return ListTile(
       key: ValueKey('conversation-${conversation.id}'),
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
@@ -323,15 +319,7 @@ class _ConversationTile extends ConsumerWidget {
           fontWeight: unread ? FontWeight.w800 : FontWeight.w700,
         ),
       ),
-      subtitle: draftText != null && draftText.isNotEmpty
-          ? Text(
-              'Draft: ${draftText.split('\n').first}',
-              key: ValueKey('draft-preview-${conversation.id}'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontStyle: FontStyle.italic),
-            )
-          : conversation.lastMessage == null
+      subtitle: conversation.lastMessage == null
           ? const Text('No messages yet')
           : Text(
               conversation.lastSenderId != null &&

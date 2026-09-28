@@ -157,22 +157,37 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     ref.watch(currentUserIdProvider);
     final buffered = <Message>[];
     var loaded = false;
-    final opened = await ref.read(chatRepositoryProvider).incomingAll();
-    if (opened case Ok(:final value)) {
-      final sub = value.listen(
-        (message) {
-          if (!loaded) {
-            buffered.add(message);
+    // The Realtime join can take up to 15s and must never gate the list: it
+    // starts alongside the fetch below instead of being awaited first.
+    // Nothing can arrive before the join itself completes, and the
+    // StreamController buffers anything that lands before `.listen` runs
+    // here (see _inserts), so whichever of the join or the load finishes
+    // first, nothing sent during the race is lost.
+    unawaited(
+      ref.read(chatRepositoryProvider).incomingAll().then((opened) {
+        if (opened case Ok(:final value)) {
+          final sub = value.listen(
+            (message) {
+              if (!loaded) {
+                buffered.add(message);
+              } else {
+                _apply(message);
+              }
+            },
+            // A dropped subscription only stops live updates; the re-read on
+            // returning from a conversation still keeps the list current.
+            onError: (Object _) {},
+          );
+          if (ref.mounted) {
+            ref.onDispose(sub.cancel);
           } else {
-            _apply(message);
+            // The provider was disposed while the join was still in flight;
+            // nothing needs this subscription any more.
+            sub.cancel();
           }
-        },
-        // A dropped subscription only stops live updates; the re-read on
-        // returning from a conversation still keeps the list current.
-        onError: (Object _) {},
-      );
-      ref.onDispose(sub.cancel);
-    }
+        }
+      }),
+    );
     var list = await _load();
     loaded = true;
     var unknown = false;

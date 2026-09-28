@@ -69,10 +69,13 @@ select throws_ok(
   format($$insert into public.messages(conversation_id, sender_id, body, created_at) values (%L, %L, 'backdated', '2000-01-01')$$,
          (select id from public.conversations), '00000000-0000-0000-0000-0000000000a1'),
   '42501', null, 'a member cannot choose created_at');
-select throws_ok(
-  format($$insert into public.messages(id, conversation_id, sender_id, body) values (gen_random_uuid(), %L, %L, 'chosen id')$$,
+-- A member may propose the message id (20260928170000_message_client_id.sql):
+-- a retried send is then the same row, never a second one. Collisions and
+-- every refusal around it are in message_client_id_test.sql.
+select lives_ok(
+  format($$insert into public.messages(id, conversation_id, sender_id, body) values ('0c11e470-0000-4000-8000-000000000001', %L, %L, 'chosen id')$$,
          (select id from public.conversations), '00000000-0000-0000-0000-0000000000a1'),
-  '42501', null, 'a member cannot choose the message id');
+  'a member may choose the message id');
 select throws_ok($$update public.messages set body = 'edited'$$, '42501', null, 'messages cannot be edited');
 select throws_ok($$delete from public.messages$$, '42501', null, 'messages cannot be deleted');
 reset role;
@@ -90,7 +93,7 @@ grant select on _conv to authenticated;
 
 -- 3 bob, the other member, sees the conversation and the message ------------
 select test_as('00000000-0000-0000-0000-0000000000b1', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
-select is((select count(*) from public.messages), 1::bigint, 'bob reads the message sent to him');
+select is((select count(*) from public.messages), 2::bigint, 'bob reads both messages sent to him');
 reset role;
 
 -- 4 the stranger sees nothing, even by guessing the conversation id ---------

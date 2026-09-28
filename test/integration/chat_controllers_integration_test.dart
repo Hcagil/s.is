@@ -7,6 +7,7 @@ import 'package:sis/core/failure.dart';
 import 'package:sis/data/failures.dart' show offlineMessage;
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -140,6 +141,7 @@ void main() {
     conversationId = (started as Ok<String>).value;
     // Something to read: the list and the message screen both need history.
     await carol.repository.send(
+      id: randomMessageId(),
       conversationId: conversationId,
       body: 'seed ${DateTime.now().microsecondsSinceEpoch}',
     );
@@ -213,20 +215,26 @@ void main() {
       expect(loaded.every((m) => m.conversationId == conversationId), isTrue);
 
       final body = 'controller ${DateTime.now().microsecondsSinceEpoch}';
-      final sent = await container.read(messagesProvider.notifier).send(body);
-      expect(sent, isA<Ok<void>>());
+      final pending = container
+          .read(sendQueueProvider.notifier)
+          .enqueue(conversationId, body: body);
 
       // The database, not the controller's optimism, is the witness.
-      final theirs = await dan.repository.messages(conversationId);
+      var theirs = const <Message>[];
+      for (var i = 0; i < 100 && !theirs.any((m) => m.body == body); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        final r = await dan.repository.messages(conversationId);
+        if (r case Ok(:final value)) theirs = value;
+      }
       expect(
-        (theirs as Ok<List<Message>>).value.map((m) => m.body),
-        contains(body),
-        reason: 'send() did not reach the database',
+        theirs.singleWhere((m) => m.body == body).id,
+        pending.id,
+        reason: 'stored under the id the phone chose',
       );
       await eventually<List<Message>>(
         () => container.read(messagesProvider).value ?? const [],
-        (l) => l.any((m) => m.body == body),
-        reason: 'the sent message never appeared in the controller state',
+        (l) => l.any((m) => m.id == pending.id && !m.sending),
+        reason: 'the sent message never became the stored one in state',
       );
     },
   );
@@ -242,7 +250,11 @@ void main() {
 
     final body = 'realtime ${DateTime.now().microsecondsSinceEpoch}';
     expect(
-      await dan.repository.send(conversationId: conversationId, body: body),
+      await dan.repository.send(
+        id: randomMessageId(),
+        conversationId: conversationId,
+        body: body,
+      ),
       isA<Ok<void>>(),
     );
 
@@ -261,24 +273,30 @@ void main() {
     );
   });
 
-  test('send() to a conversation the member is not in is refused', () async {
+  test('a send to a conversation the member is not in is refused: the text '
+      'goes back to the draft with a notice, and is not retried', () async {
     final container = containerFor(carol);
-    container
-        .read(openConversationProvider.notifier)
-        .open('00000000-0000-0000-0000-000000000000');
+    const stranger = '00000000-0000-0000-0000-000000000000';
+    container.read(openConversationProvider.notifier).open(stranger);
     container.listen(messagesProvider, (_, _) {});
+    container.listen(sendQueueProvider, (_, _) {});
     await container.read(messagesProvider.future);
 
-    final result = await container
-        .read(messagesProvider.notifier)
-        .send('not mine ${DateTime.now().microsecondsSinceEpoch}');
+    final body = 'not mine ${DateTime.now().microsecondsSinceEpoch}';
+    container.read(sendQueueProvider.notifier).enqueue(stranger, body: body);
 
-    expect(
-      result,
-      isA<Err<void>>(),
-      reason: 'row-level security must refuse a stranger',
+    final drafts = container.read(draftsProvider.notifier);
+    await eventually<String>(
+      () => drafts.draftFor(stranger).text,
+      (text) => text == body,
+      reason:
+          'row-level security must refuse a stranger, and the refusal '
+          'must come back as a draft, not wait as if offline',
     );
-    expect((result as Err<void>).failure.message, isNotEmpty);
+    expect(container.read(sendQueueProvider)[stranger] ?? const [], isEmpty);
+    final failure = drafts.consumeFailure(stranger);
+    expect(failure, isNotNull);
+    expect(failure!.message, isNotEmpty);
   });
 
   test(
@@ -347,6 +365,7 @@ void main() {
       expectOffline((started as Err<String>).failure.message);
 
       final sent = await offlineSignedIn.repository.send(
+        id: randomMessageId(),
         conversationId: conversationId,
         body: 'never arrives',
       );

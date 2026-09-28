@@ -17,18 +17,29 @@ void main() {
     final f = readableFailure(e);
     expect(f, isA<NetworkFailure>());
     expect(f.message, offlineMessage);
+    expect(
+      (f as NetworkFailure).retryable,
+      isTrue,
+      reason: 'no connection or no answer in time: worth trying again',
+    );
   }
 
   void expectServer(Object e) {
     final f = readableFailure(e);
     expect(f, isA<NetworkFailure>());
     expect(f.message, serverMessage);
+    expect(
+      (f as NetworkFailure).retryable,
+      isFalse,
+      reason: 'the server answered: a retry gets the same answer',
+    );
   }
 
   void expectGeneric(Object e) {
     final f = readableFailure(e);
     expect(f, isA<NetworkFailure>());
     expect(f.message, genericMessage);
+    expect((f as NetworkFailure).retryable, isFalse);
   }
 
   group('offline', () {
@@ -93,6 +104,10 @@ void main() {
     test('RealtimeSubscribeStatus.channelError', () {
       expectGeneric(RealtimeSubscribeStatus.channelError);
     });
+  });
+
+  test('a NetworkFailure written anywhere else is not retryable', () {
+    expect(const NetworkFailure('No connection').retryable, isFalse);
   });
 
   test('the raw error text never reaches the message', () {

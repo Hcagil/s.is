@@ -1,13 +1,14 @@
-// A text message is shown the moment it is sent (2026-09-28): the
-// controller's side. Written from the contract only -- what the message
-// list holds, what the server is asked and in which order, and what a
+// A text message is shown the moment it is sent (2026-09-28), and each chat
+// sends through its own queue (2026-09-28, "Unsent text stays in each
+// chat"): the controllers' side. Written from the contract only -- what the
+// message list holds, what the server is asked and in which order, what a
 // failure leaves behind -- never from how the queue is built.
 //
 // The server here answers only when the test says so. A send that is
 // answered at once cannot show a message that was never shown before the
 // answer, cannot show two sends overlapping, and cannot show an echo
-// arriving before the answer.
-import 'dart:async';
+// arriving before the answer. Retries and backoff are in
+// send_queue_retry_test.dart, under fake time.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +16,7 @@ import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/domain/message.dart';
 
 import '../../support/fakes.dart';
@@ -26,6 +28,10 @@ Message row(String id, {String conv = 'c1', String from = 'u2'}) => Message(
   senderId: from,
   body: 'text of $id',
   createdAt: DateTime.now().subtract(const Duration(minutes: 1)),
+);
+
+final uuidV4 = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
 );
 
 class _SignedIn extends SessionController {
@@ -61,6 +67,10 @@ List<Message> shown(ProviderContainer c) =>
 List<String> ids(ProviderContainer c) => [for (final m in shown(c)) m.id];
 Iterable<Message> pending(ProviderContainer c) =>
     shown(c).where((m) => m.sending);
+SendQueueController queue(ProviderContainer c) =>
+    c.read(sendQueueProvider.notifier);
+Message enqueue(ProviderContainer c, String body, {Message? replyTo}) =>
+    queue(c).enqueue('c1', body: body, replyTo: replyTo);
 
 void main() {
   test('a sending message is pending; an ordinary one is not', () {
@@ -78,32 +88,45 @@ void main() {
     expect(sending.isPending, isTrue);
   });
 
+  test('randomMessageId is a lowercase v4 UUID, different every time', () {
+    final many = [for (var i = 0; i < 500; i++) randomMessageId()];
+    for (final id in many) {
+      expect(id, matches(uuidV4));
+    }
+    expect(many.toSet(), hasLength(500));
+  });
+
   group('the pending message', () {
     test('is in the list synchronously, before the server is asked: trimmed, '
-        'mine, replying to the reply target, which is then cleared', () async {
+        'mine, replying to the reply target, which is then cleared; the '
+        'server is asked with the same id', () async {
       final chat = HeldSendChat()..history['c1'] = [row('m1')];
       final c = await open(chat, 'c1');
-      c.read(replyingToProvider.notifier).start(shown(c).single);
+      final m1 = shown(c).single;
+      c.read(replyingToProvider.notifier).start(m1);
 
       List<Message>? whenAsked;
       chat.onAsk = (_) => whenAsked = shown(c);
 
-      final result = c.read(messagesProvider.notifier).send('  hello  ');
+      final returned = enqueue(c, '  hello  ', replyTo: m1);
 
       // No await between the call and these reads.
       final p = shown(c).last;
+      expect(p.id, returned.id);
+      expect(p.id, matches(uuidV4));
       expect(p.sending, isTrue);
       expect(p.isPending, isTrue);
-      expect(p.id, startsWith('pending-'));
       expect(p.body, 'hello');
       expect(p.conversationId, 'c1');
       expect(p.senderId, me.userId, reason: 'drawn on my side');
       expect(p.replyTo, 'm1');
       expect(ids(c).first, 'm1');
       expect(c.read(replyingToProvider), isNull);
+      expect(c.read(sendQueueProvider)['c1']?.map((m) => m.id), [p.id]);
 
       await flush();
       expect(chat.asked, hasLength(1));
+      expect(chat.asked.single.id, p.id, reason: 'the id the phone chose');
       expect(chat.asked.single.replyTo, 'm1');
       expect(chat.asked.single.conversationId, 'c1');
       expect(
@@ -113,16 +136,17 @@ void main() {
       );
 
       chat.ok(0);
-      final r = await result;
-      expect((r as Ok<Message>).value.id, 'srv-1');
+      await flush();
+      expect(ids(c), ['m1', p.id], reason: 'the stored row keeps its id');
+      expect(pending(c), isEmpty);
+      expect(c.read(sendQueueProvider)['c1'] ?? const [], isEmpty);
     });
 
-    test('quick sends each get their own pending id', () async {
+    test('quick sends each get their own id', () async {
       final chat = HeldSendChat();
       final c = await open(chat, 'c1');
-      final ctrl = c.read(messagesProvider.notifier);
       for (var i = 0; i < 50; i++) {
-        unawaited(ctrl.send('m$i'));
+        enqueue(c, 'm$i');
       }
       final pendingIds = [for (final m in pending(c)) m.id];
       expect(pendingIds, hasLength(50));
@@ -132,6 +156,18 @@ void main() {
         reason: 'two bubbles sharing an id cannot be replaced one by one',
       );
     });
+
+    test('sending clears that chat\'s draft', () async {
+      final chat = HeldSendChat();
+      final c = await open(chat, 'c1');
+      final drafts = c.read(draftsProvider.notifier)
+        ..setText('c1', 'hello')
+        ..setText('c2', 'other chat');
+      enqueue(c, 'hello');
+      expect(drafts.draftFor('c1').text, isEmpty);
+      expect(c.read(draftsProvider).containsKey('c1'), isFalse);
+      expect(drafts.draftFor('c2').text, 'other chat');
+    });
   });
 
   group('order', () {
@@ -139,12 +175,16 @@ void main() {
         'and stay in that order', () async {
       final chat = HeldSendChat();
       final c = await open(chat, 'c1');
-      final ctrl = c.read(messagesProvider.notifier);
 
-      final a = ctrl.send('a');
-      final b = ctrl.send('b');
-      final d = ctrl.send('c');
+      final a = enqueue(c, 'a');
+      final b = enqueue(c, 'b');
+      final d = enqueue(c, 'c');
       expect([for (final m in pending(c)) m.body], ['a', 'b', 'c']);
+      expect(c.read(sendQueueProvider)['c1']?.map((m) => m.body), [
+        'a',
+        'b',
+        'c',
+      ], reason: 'oldest first');
 
       await flush();
       expect([for (final x in chat.asked) x.body], ['a']);
@@ -155,12 +195,11 @@ void main() {
       await flush();
       expect([for (final x in chat.asked) x.body], ['a', 'b', 'c']);
       chat.ok(2);
+      await flush();
 
-      for (final r in await Future.wait([a, b, d])) {
-        expect(r, isA<Ok<Message>>());
-      }
       expect(chat.maxInFlight, 1, reason: 'never two sends in flight at once');
-      expect(ids(c), ['srv-1', 'srv-2', 'srv-3']);
+      expect([for (final x in chat.asked) x.id], [a.id, b.id, d.id]);
+      expect(ids(c), [a.id, b.id, d.id]);
       expect(pending(c), isEmpty);
     });
   });
@@ -170,17 +209,16 @@ void main() {
       final chat = HeldSendChat()..history['c1'] = [row('m1')];
       final c = await open(chat, 'c1');
 
-      final r = c.read(messagesProvider.notifier).send('mine');
+      final p = enqueue(c, 'mine');
       await flush();
       chat.deliver(row('m2')); // someone else writes meanwhile
       await flush();
-      final pendingId = pending(c).single.id;
-      expect(ids(c), ['m1', pendingId, 'm2']);
+      expect(ids(c), ['m1', p.id, 'm2']);
+      expect(shown(c)[1].sending, isTrue);
 
       chat.ok(0);
-      await r;
       await flush();
-      expect(ids(c), ['m1', 'srv-1', 'm2']);
+      expect(ids(c), ['m1', p.id, 'm2']);
       expect(shown(c)[1].sending, isFalse);
     });
 
@@ -188,123 +226,134 @@ void main() {
       final chat = HeldSendChat()..history['c1'] = [row('m1')];
       final c = await open(chat, 'c1');
 
-      final r = c.read(messagesProvider.notifier).send('mine');
+      final p = enqueue(c, 'mine');
       await flush();
       chat.echo(0);
       await flush();
+      expect(ids(c), ['m1', p.id], reason: 'the echo replaces, not appends');
       chat.ok(0);
-      await r;
       await flush();
 
-      expect(ids(c).where((id) => id == 'srv-1'), hasLength(1));
+      expect(ids(c), ['m1', p.id]);
       expect(pending(c), isEmpty);
-      expect(ids(c), ['m1', 'srv-1']);
     });
 
     test('the answer arriving before the echo: shown once', () async {
       final chat = HeldSendChat()..history['c1'] = [row('m1')];
       final c = await open(chat, 'c1');
 
-      final r = c.read(messagesProvider.notifier).send('mine');
+      final p = enqueue(c, 'mine');
       await flush();
       chat.ok(0);
-      await r;
       await flush();
       chat.echo(0);
       await flush();
 
-      expect(ids(c), ['m1', 'srv-1']);
+      expect(ids(c), ['m1', p.id]);
       expect(pending(c), isEmpty);
     });
   });
 
-  group('a failed send', () {
-    test('stops the queue: the failed and every later send are removed, '
-        'all answered with the same failure, their text and reply target '
-        'kept for the composer', () async {
+  group('a refused send', () {
+    test('stops the queue: the refused and every later send leave the list '
+        'and go back to the draft in typed order, with the earliest reply '
+        'target and one notice', () async {
       final m1 = row('m1'), m2 = row('m2');
       final chat = HeldSendChat()..history['c1'] = [m1, m2];
       final c = await open(chat, 'c1');
-      final ctrl = c.read(messagesProvider.notifier);
-      final reply = c.read(replyingToProvider.notifier);
 
-      reply.start(m1);
-      final a = ctrl.send('a');
-      final b = ctrl.send('b');
-      reply.start(m2);
-      final d = ctrl.send('c');
+      enqueue(c, 'a', replyTo: m1);
+      enqueue(c, 'b');
+      enqueue(c, 'c', replyTo: m2);
       expect(pending(c), hasLength(3));
 
       await flush();
-      const failure = NetworkFailure('No connection');
+      const failure = DeniedFailure();
       chat.fail(0, failure);
-      final results = await Future.wait([a, b, d]);
       await flush();
 
-      for (final r in results) {
-        expect((r as Err<Message>).failure, same(failure));
-      }
       expect(
         [for (final x in chat.asked) x.body],
         ['a'],
-        reason: 'the queue stops at the failure',
+        reason: 'the queue stops at the refusal',
       );
       expect(pending(c), isEmpty);
       expect(ids(c), ['m1', 'm2']);
+      expect(c.read(sendQueueProvider)['c1'] ?? const [], isEmpty);
 
-      final stashed = c.read(sendFailureProvider)['c1'];
-      expect(stashed, isNotNull);
-      expect(stashed!.bodies, ['a', 'b', 'c']);
-      expect(stashed.replyTo?.id, 'm1', reason: 'the earliest reply target');
-      expect(stashed.failure, same(failure));
+      final drafts = c.read(draftsProvider.notifier);
+      final d = drafts.draftFor('c1');
+      expect(d.text, 'a\nb\nc');
+      expect(d.replyTo?.id, 'm1', reason: 'the earliest reply target');
+      expect(drafts.consumeFailure('c1'), same(failure));
+      expect(drafts.consumeFailure('c1'), isNull, reason: 'shown once');
+      expect(drafts.draftFor('c1').text, 'a\nb\nc', reason: 'text stays');
+    });
+
+    test('a non-retryable NetworkFailure is a refusal too', () async {
+      final chat = HeldSendChat();
+      final c = await open(chat, 'c1');
+      enqueue(c, 'a');
+      await flush();
+      const failure = NetworkFailure('The server could not do that.');
+      chat.fail(0, failure);
+      await flush();
+      expect(chat.asked, hasLength(1), reason: 'not retried');
+      expect(pending(c), isEmpty);
+      final drafts = c.read(draftsProvider.notifier);
+      expect(drafts.draftFor('c1').text, 'a');
+      expect(drafts.consumeFailure('c1'), same(failure));
+    });
+
+    test('goes in front of what was typed since', () async {
+      final chat = HeldSendChat();
+      final c = await open(chat, 'c1');
+      enqueue(c, 'first');
+      c.read(draftsProvider.notifier).setText('c1', 'typed since');
+      await flush();
+      chat.fail(0, const DeniedFailure());
+      await flush();
       expect(
-        c.read(replyingToProvider)?.id,
-        'm1',
-        reason: 'the conversation is still open: the reply comes back live',
+        c.read(draftsProvider.notifier).draftFor('c1').text,
+        'first\ntyped since',
       );
     });
 
-    test('a failure mid-queue keeps what the server already has', () async {
+    test('a refusal mid-queue keeps what the server already has', () async {
       final chat = HeldSendChat();
       final c = await open(chat, 'c1');
-      final ctrl = c.read(messagesProvider.notifier);
 
-      final a = ctrl.send('a');
-      final b = ctrl.send('b');
-      final d = ctrl.send('c');
+      final a = enqueue(c, 'a');
+      enqueue(c, 'b');
+      enqueue(c, 'c');
       await flush();
       chat.ok(0);
       await flush();
       chat.fail(1, const DeniedFailure());
-
-      expect(await a, isA<Ok<Message>>());
-      expect(await b, isA<Err<Message>>());
-      expect(await d, isA<Err<Message>>());
       await flush();
+
       expect(chat.asked, hasLength(2));
-      expect(ids(c), ['srv-1']);
-      expect(c.read(sendFailureProvider)['c1']!.bodies, ['b', 'c']);
-      expect(c.read(sendFailureProvider)['c1']!.replyTo, isNull);
-      expect(c.read(replyingToProvider), isNull);
+      expect(ids(c), [a.id]);
+      final d = c.read(draftsProvider.notifier).draftFor('c1');
+      expect(d.text, 'b\nc');
+      expect(d.replyTo, isNull);
     });
 
-    test('the next send after a failure still goes out', () async {
+    test('the next send after a refusal still goes out', () async {
       final chat = HeldSendChat();
       final c = await open(chat, 'c1');
-      final ctrl = c.read(messagesProvider.notifier);
 
-      final a = ctrl.send('a');
+      enqueue(c, 'a');
       await flush();
-      chat.fail(0, const NetworkFailure('No connection'));
-      await a;
+      chat.fail(0, const DeniedFailure());
+      await flush();
 
-      final b = ctrl.send('b');
+      final b = enqueue(c, 'b');
       await flush();
       expect([for (final x in chat.asked) x.body], ['a', 'b']);
       chat.ok(1);
-      expect(await b, isA<Ok<Message>>());
       await flush();
-      expect(ids(c), ['srv-2']);
+      expect(ids(c), [b.id]);
     });
   });
 
@@ -315,10 +364,9 @@ void main() {
         ..history['c1'] = [row('m1')]
         ..history['c2'] = [row('n1', conv: 'c2')];
       final c = await open(chat, 'c1');
-      final ctrl = c.read(messagesProvider.notifier);
 
-      final a = ctrl.send('a');
-      final b = ctrl.send('b');
+      enqueue(c, 'a');
+      enqueue(c, 'b');
       await flush();
 
       c.read(openConversationProvider.notifier).open('c2');
@@ -328,8 +376,6 @@ void main() {
       chat.ok(0);
       await flush();
       chat.ok(1);
-      expect(await a, isA<Ok<Message>>());
-      expect(await b, isA<Ok<Message>>());
       await flush();
 
       expect(
@@ -339,8 +385,35 @@ void main() {
       expect(ids(c), ['n1'], reason: 'c1\'s messages never land in c2');
     });
 
-    test('a failure after leaving is kept for that conversation; the open '
-        'one\'s reply target is not touched', () async {
+    test('reopening mid-send shows the pending messages again, then the '
+        'stored ones in place', () async {
+      final chat = HeldSendChat()
+        ..history['c1'] = [row('m1')]
+        ..history['c2'] = [row('n1', conv: 'c2')];
+      final c = await open(chat, 'c1');
+
+      final a = enqueue(c, 'a');
+      final b = enqueue(c, 'b');
+      await flush();
+      c.read(openConversationProvider.notifier).open('c2');
+      await c.read(messagesProvider.future);
+
+      c.read(openConversationProvider.notifier).open('c1');
+      await c.read(messagesProvider.future);
+      await flush();
+      expect(ids(c), ['m1', a.id, b.id]);
+      expect([for (final m in pending(c)) m.id], [a.id, b.id]);
+
+      chat.ok(0);
+      await flush();
+      chat.ok(1);
+      await flush();
+      expect(ids(c), ['m1', a.id, b.id]);
+      expect(pending(c), isEmpty);
+    });
+
+    test('a refusal after leaving is kept for that conversation; the open '
+        'one\'s reply target and draft are not touched', () async {
       final m1 = row('m1');
       final n1 = row('n1', conv: 'c2');
       final chat = HeldSendChat()
@@ -348,26 +421,102 @@ void main() {
         ..history['c2'] = [n1];
       final c = await open(chat, 'c1');
 
-      c.read(replyingToProvider.notifier).start(m1);
-      final a = c.read(messagesProvider.notifier).send('a');
+      enqueue(c, 'a', replyTo: m1);
       await flush();
 
       c.read(openConversationProvider.notifier).open('c2');
       await c.read(messagesProvider.future);
       c.read(replyingToProvider.notifier).start(n1);
+      c.read(draftsProvider.notifier).setText('c2', 'for c2');
 
-      chat.fail(0, const NetworkFailure('No connection'));
-      expect(await a, isA<Err<Message>>());
+      chat.fail(0, const DeniedFailure());
       await flush();
 
       expect(c.read(replyingToProvider)?.id, 'n1');
       expect(ids(c), ['n1']);
-      final failures = c.read(sendFailureProvider.notifier);
-      expect(failures.consume('c2'), isNull);
-      final kept = failures.consume('c1');
-      expect(kept?.bodies, ['a']);
-      expect(kept?.replyTo?.id, 'm1');
-      expect(failures.consume('c1'), isNull, reason: 'read once');
+      final drafts = c.read(draftsProvider.notifier);
+      expect(drafts.consumeFailure('c2'), isNull);
+      expect(drafts.draftFor('c2').text, 'for c2');
+      expect(drafts.draftFor('c1').text, 'a');
+      expect(drafts.draftFor('c1').replyTo?.id, 'm1');
+      expect(drafts.consumeFailure('c1'), isA<DeniedFailure>());
+      expect(drafts.consumeFailure('c1'), isNull, reason: 'read once');
     });
+  });
+
+  group('chats are independent', () {
+    test('a send stuck in c1 never delays c2', () async {
+      final chat = HeldSendChat();
+      final c = await open(chat, 'c1');
+      final q = queue(c);
+      q.enqueue('c1', body: 'a1');
+      q.enqueue('c1', body: 'a2');
+      await flush();
+      final b = q.enqueue('c2', body: 'b1');
+      await flush();
+
+      expect(
+        [for (final x in chat.asked) (x.conversationId, x.body)],
+        [('c1', 'a1'), ('c2', 'b1')],
+        reason: 'c2 went out while c1 still waits',
+      );
+      chat.ok(1);
+      await flush();
+      expect(c.read(sendQueueProvider)['c2'] ?? const [], isEmpty);
+      expect(c.read(sendQueueProvider)['c1']?.map((m) => m.body), ['a1', 'a2']);
+      expect(chat.asked[1].id, b.id);
+      chat.ok(0);
+      await flush();
+      chat.ok(2);
+      await flush();
+    });
+
+    test('a refusal in c1 never stops c2', () async {
+      final chat = HeldSendChat();
+      final c = await open(chat, 'c1');
+      final q = queue(c);
+      q.enqueue('c1', body: 'a1');
+      q.enqueue('c2', body: 'b1');
+      q.enqueue('c2', body: 'b2');
+      await flush();
+
+      chat.fail(0, const DeniedFailure());
+      await flush();
+      expect(c.read(draftsProvider.notifier).draftFor('c1').text, 'a1');
+      expect(c.read(draftsProvider.notifier).draftFor('c2').text, isEmpty);
+
+      final b1 = chat.asked.indexWhere((x) => x.body == 'b1');
+      chat.ok(b1);
+      await flush();
+      expect(
+        [for (final x in chat.asked) x.body],
+        containsAll(['b1', 'b2']),
+        reason: 'c2 carries on',
+      );
+      chat.ok(chat.asked.indexWhere((x) => x.body == 'b2'));
+      await flush();
+      expect(c.read(sendQueueProvider)['c2'] ?? const [], isEmpty);
+      expect(c.read(draftsProvider.notifier).consumeFailure('c2'), isNull);
+    });
+  });
+
+  test('a retryable failure keeps everything queued: nothing drafted, no '
+      'notice, the pending messages stay', () async {
+    final chat = HeldSendChat();
+    final c = await open(chat, 'c1');
+    final a = enqueue(c, 'a');
+    final b = enqueue(c, 'b');
+    await flush();
+    chat.fail(0, const NetworkFailure('No connection', retryable: true));
+    await flush();
+
+    expect([for (final m in pending(c)) m.id], [a.id, b.id]);
+    expect(c.read(sendQueueProvider)['c1']?.map((m) => m.id), [a.id, b.id]);
+    final drafts = c.read(draftsProvider.notifier);
+    expect(drafts.draftFor('c1').text, isEmpty);
+    expect(drafts.consumeFailure('c1'), isNull);
+    expect(chat.asked, hasLength(1), reason: 'b is not tried past a');
+    // Leave nothing scheduled behind the test.
+    queue(c).pauseForBackground();
   });
 }

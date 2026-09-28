@@ -176,10 +176,16 @@ class _Switch implements ChatRepository {
   Future<Result<List<Message>>> messages(String id) => live.messages(id);
   @override
   Future<Result<Message>> send({
+    required String id,
     required String conversationId,
     required String body,
     String? replyTo,
-  }) => live.send(conversationId: conversationId, body: body, replyTo: replyTo);
+  }) => live.send(
+    id: id,
+    conversationId: conversationId,
+    body: body,
+    replyTo: replyTo,
+  );
   @override
   Future<Result<Stream<Message>>> incoming(String id) => live.incoming(id);
   @override
@@ -320,7 +326,11 @@ void main() {
         .timeout(const Duration(seconds: 30));
     // Now, so this run's room tops vedat's list above earlier runs' rooms.
     expect(
-      await yesim.send(conversationId: room, body: 'on top'),
+      await yesim.send(
+        id: randomMessageId(),
+        conversationId: room,
+        body: 'on top',
+      ),
       isA<Ok<Message>>(),
     );
     await arrived;
@@ -553,7 +563,11 @@ void main() {
       await step(t, 'chat-search-older', '3/4');
       await step(t, 'chat-search-older', '4/4');
       final sent = await t.runAsync(
-        () => yesim.send(conversationId: room, body: 'while searching'),
+        () => yesim.send(
+          id: randomMessageId(),
+          conversationId: room,
+          body: 'while searching',
+        ),
       );
       final late = (sent! as Ok<Message>).value;
       await settle(t);

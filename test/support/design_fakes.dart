@@ -166,12 +166,13 @@ class DesignChat implements ChatRepository {
 
   @override
   Future<Result<Message>> send({
+    required String id,
     required String conversationId,
     required String body,
     String? replyTo,
   }) async => Ok(
     Message(
-      id: 'sent-${DateTime.now().microsecondsSinceEpoch}',
+      id: id,
       conversationId: conversationId,
       senderId: me.userId,
       body: body,

@@ -14,6 +14,7 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/notifications/data/supabase_notification_settings_repository.dart';
 import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:sis/features/update/data/play_update_repository.dart';
+import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
@@ -172,6 +173,7 @@ void main() {
     conversation = (started as Ok<String>).value;
     expect(
       await chat.send(
+        id: randomMessageId(),
         conversationId: conversation,
         body:
             'see https://example.com ${DateTime.now().microsecondsSinceEpoch}',

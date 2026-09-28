@@ -15,6 +15,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
@@ -43,7 +44,10 @@ class _SignedIn extends SessionController {
   Future<SessionState> build() async => const Allowed(me);
 }
 
-Future<ProviderContainer> scope(HeldSendChat chat) => settled(
+/// The container of the test running now, for [pendingBubble].
+late ProviderContainer _c;
+
+Future<ProviderContainer> scope(HeldSendChat chat) async => _c = await settled(
   ProviderContainer.test(
     overrides: [
       chatRepositoryProvider.overrideWithValue(chat),
@@ -78,8 +82,19 @@ Finder keyStarting(String prefix) => find.byWidgetPredicate((w) {
   return k is ValueKey<String> && k.value.startsWith(prefix);
 });
 
-final pendingBubble = keyStarting('message-pending-');
-final pendingTime = keyStarting('time-pending-');
+/// Ids of every message still waiting in a send queue: a pending bubble is
+/// keyed by the same id the server will store it under.
+Set<String> _queued() => {
+  for (final q in _c.read(sendQueueProvider).values)
+    for (final m in q) m.id,
+};
+Finder _keyedFor(String prefix) => find.byWidgetPredicate((w) {
+  final k = w.key;
+  if (k is! ValueKey<String> || !k.value.startsWith(prefix)) return false;
+  return _queued().contains(k.value.substring(prefix.length));
+});
+Finder get pendingBubble => _keyedFor('message-');
+Finder get pendingTime => _keyedFor('time-');
 final clock = find.byIcon(Icons.schedule_rounded);
 Finder bubble(String id) => find.byKey(ValueKey('message-$id'));
 final field = find.byKey(const ValueKey('composer-field'));
@@ -200,9 +215,10 @@ void main() {
 
       expect(clock, findsNothing);
       expect(pendingBubble, findsNothing);
-      expect(textIn(t, bubble('srv-1')), contains('hello there'));
+      final id = chat.asked.single.id;
+      expect(textIn(t, bubble(id)), contains('hello there'));
       expect(
-        textIn(t, find.byKey(const ValueKey('time-srv-1'))),
+        textIn(t, find.byKey(ValueKey('time-$id'))),
         contains(hhmm(chat.asked.single.stored.createdAt)),
       );
     });
@@ -220,7 +236,7 @@ void main() {
 
       chat.ok(0);
       await t.pumpAndSettle();
-      expect(edgeColours(t, bubble('srv-1')), {
+      expect(edgeColours(t, bubble(chat.asked.single.id)), {
         yellow,
       }, reason: 'control: the stored, unread message does show the edge');
     });

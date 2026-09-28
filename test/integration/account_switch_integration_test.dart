@@ -19,6 +19,7 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/data/supabase_presence_repository.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/data/supabase_profile_repository.dart';
+import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Two accounts, one after the other, on ONE client — one phone.
@@ -144,7 +145,11 @@ void main() {
         (await fromLena.startDirectConversation(karaId) as Ok<String>).value;
     for (final id in [judeWithLena, karaWithLena]) {
       expect(
-        await fromLena.send(conversationId: id, body: 'lena $stamp'),
+        await fromLena.send(
+          id: randomMessageId(),
+          conversationId: id,
+          body: 'lena $stamp',
+        ),
         isA<Ok<Object?>>(),
       );
     }

@@ -134,7 +134,11 @@ void main() {
       memberIds: [yesimId],
     ) as Ok<String>).value;
     Future<Message> send(ChatRepository as, String c, String body) async =>
-        (await as.send(conversationId: c, body: body) as Ok<Message>).value;
+        (await as.send(
+          id: randomMessageId(),
+          conversationId: c,
+          body: body,
+        ) as Ok<Message>).value;
     hitsInDirect = [
       await send(vedat, direct, 'İstanbul $_tag one'),
       await send(yesim, direct, 'ISTANBUL $_tag two'),

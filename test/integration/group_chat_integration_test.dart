@@ -164,7 +164,11 @@ void main() {
       // And they read what is said in it.
       final body = 'group hello ${nonce()}';
       expect(
-        await hank.repository.send(conversationId: id, body: body),
+        await hank.repository.send(
+          id: randomMessageId(),
+          conversationId: id,
+          body: body,
+        ),
         isA<Ok<Message>>(),
       );
       for (final member in [ivy, jack]) {
@@ -189,7 +193,11 @@ void main() {
         reason: 'a non-member read the group messages',
       );
       expect(
-        await kim.repository.send(conversationId: id, body: 'gatecrashing'),
+        await kim.repository.send(
+          id: randomMessageId(),
+          conversationId: id,
+          body: 'gatecrashing',
+        ),
         isA<Err<Message>>(),
         reason: 'a non-member posted into the group',
       );

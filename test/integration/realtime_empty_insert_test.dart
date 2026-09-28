@@ -162,7 +162,11 @@ void main() {
           '${DateTime.now().microsecondsSinceEpoch}';
       seenBodies.add(body);
       expect(
-        await ann.send(conversationId: conversationId, body: body),
+        await ann.send(
+          id: randomMessageId(),
+          conversationId: conversationId,
+          body: body,
+        ),
         isA<Ok>(),
       );
       for (var i = 0; i < 20 && events.every((m) => m.body != body); i++) {

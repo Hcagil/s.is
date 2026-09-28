@@ -14,6 +14,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
@@ -30,8 +31,10 @@ import '../support/fakes.dart';
 /// A text message shown the moment it is sent (2026-09-28), on the sender's
 /// own MessageScreen over the real [SupabaseChatRepository]: the server's
 /// row and its real Realtime echo must end as exactly one bubble, whichever
-/// arrives first; and a send the server never receives must give the text
-/// back, with a notice, and leave nothing on the server.
+/// arrives first; a send the server never receives waits, queued with its
+/// clock, and goes by itself under the same id once the connection is back;
+/// and a send whose answer is lost after the row landed is read back as
+/// ours on the retry -- one bubble, one row, every time.
 ///
 /// The repository is the real one, relayed so the test can (a) see what the
 /// screen's own subscription delivers, (b) hold the real answer until the
@@ -54,6 +57,7 @@ const _key = String.fromEnvironment(
 const _password = 'integration-password';
 
 typedef _Send = Future<Result<Message>> Function({
+  required String id,
   required String conversationId,
   required String body,
   String? replyTo,
@@ -73,13 +77,20 @@ class _Relay implements ChatRepository {
   /// Every answer [send] returned, in order.
   final answers = <Result<Message>>[];
 
+  /// The id of every send the screen asked for, in order -- a retry
+  /// repeats one.
+  final ids = <String>[];
+
   @override
   Future<Result<Message>> send({
+    required String id,
     required String conversationId,
     required String body,
     String? replyTo,
   }) async {
+    ids.add(id);
     final r = await (sendVia ?? real.send)(
+      id: id,
       conversationId: conversationId,
       body: body,
       replyTo: replyTo,
@@ -232,10 +243,22 @@ void main() {
 
   final field = find.byKey(const ValueKey('composer-field'));
   final send = find.byKey(const ValueKey('composer-send'));
-  final pendingBubble = find.byWidgetPredicate((w) {
-    final k = w.key;
-    return k is ValueKey<String> && k.value.startsWith('message-pending-');
-  });
+
+  /// Bubbles of messages still waiting in a send queue: a pending bubble
+  /// is keyed by the same id the server stores it under.
+  Finder pendingIn(ProviderContainer c) {
+    final queued = {
+      for (final q in c.read(sendQueueProvider).values)
+        for (final m in q) m.id,
+    };
+    return find.byWidgetPredicate((w) {
+      final k = w.key;
+      return k is ValueKey<String> &&
+          k.value.startsWith('message-') &&
+          queued.contains(k.value.substring('message-'.length));
+    });
+  }
+
   final clock = find.byIcon(Icons.schedule_rounded);
 
   String composerText(WidgetTester t) => t
@@ -323,7 +346,7 @@ void main() {
     expect(held.where((m) => m.id == stored.id), hasLength(1));
     expect(held.where((m) => m.sending), isEmpty);
     expect(find.byKey(ValueKey('message-${stored.id}')), findsOneWidget);
-    expect(pendingBubble, findsNothing);
+    expect(pendingIn(c), findsNothing);
     expect(clock, findsNothing);
   }
 
@@ -343,22 +366,24 @@ void main() {
   testWidgets('the real echo first, then the answer: one bubble', (t) async {
     final relay = _Relay(SupabaseChatRepository(umutClient));
     var echoCameFirst = false;
-    relay.sendVia = ({required conversationId, required body, replyTo}) async {
-      final r = await relay.real.send(
-        conversationId: conversationId,
-        body: body,
-        replyTo: replyTo,
-      );
-      if (r case Ok(:final value)) {
-        // Hold the real answer until the real echo reached the screen.
-        for (var i = 0; i < 300 && !relay.echoed.contains(value.id); i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 100));
-        }
-        echoCameFirst = relay.echoed.contains(value.id);
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-      }
-      return r;
-    };
+    relay.sendVia =
+        ({required id, required conversationId, required body, replyTo}) async {
+          final r = await relay.real.send(
+            id: id,
+            conversationId: conversationId,
+            body: body,
+            replyTo: replyTo,
+          );
+          if (r case Ok(:final value)) {
+            // Hold the real answer until the real echo reached the screen.
+            for (var i = 0; i < 300 && !relay.echoed.contains(value.id); i++) {
+              await Future<void>.delayed(const Duration(milliseconds: 100));
+            }
+            echoCameFirst = relay.echoed.contains(value.id);
+            await Future<void>.delayed(const Duration(milliseconds: 300));
+          }
+          return r;
+        };
     final c = await mount(t, relay);
     final body = 'instant echo-first ${DateTime.now().microsecondsSinceEpoch}';
 
@@ -369,15 +394,82 @@ void main() {
     await unmount(t, c);
   }, timeout: const Timeout(Duration(seconds: 90)));
 
-  testWidgets('offline with the chat open: the text comes back with a '
-      'notice, and nothing reaches the server', (t) async {
+  testWidgets('offline with the chat open: the message waits with its clock '
+      'and no notice; back online it sends by itself, retried under the same '
+      'id, stored once', (t) async {
     final dead = SupabaseChatRepository(
       (await t.runAsync(() => deadButSignedIn(umutClient)))!,
     );
     final relay = _Relay(SupabaseChatRepository(umutClient))
       ..sendVia = dead.send;
     final c = await mount(t, relay);
-    final body = 'instant offline ${DateTime.now().microsecondsSinceEpoch}';
+    final body = 'queued offline ${DateTime.now().microsecondsSinceEpoch}';
+
+    await t.enterText(field, body);
+    await t.pump();
+    await t.tap(send);
+    await t.pump();
+    await until(t, () => relay.answers.length >= 2, 'a failure and a retry');
+
+    for (final a in relay.answers) {
+      final f = (a as Err<Message>).failure;
+      expect(
+        f is NetworkFailure && f.retryable,
+        isTrue,
+        reason: 'a dead host is "no connection": $f',
+      );
+    }
+    expect(clock, findsOneWidget, reason: 'still on its way');
+    expect(pendingIn(c), findsOneWidget);
+    expect(find.byType(SisNotice), findsNothing, reason: 'no notice');
+    expect(composerText(t), isEmpty, reason: 'the text does not come back');
+    expect(await rowsWithBody(t, body), isEmpty);
+
+    relay.sendVia = null; // the connection is back
+    await until(
+      t,
+      () => relay.answers.any((a) => a is Ok<Message>),
+      'the queued message to go by itself',
+    );
+    final stored = (relay.answers.last as Ok<Message>).value;
+    await until(
+      t,
+      () => relay.echoed.contains(stored.id),
+      'the real echo of ${stored.id}',
+    );
+    await t.pump();
+
+    expect(relay.ids.toSet(), {stored.id}, reason: 'every attempt, one id');
+    expect(relay.ids.length, greaterThanOrEqualTo(3));
+    expectShownOnce(t, c, stored);
+    expect(find.byType(SisNotice), findsNothing);
+    final rows = await rowsWithBody(t, body);
+    expect(rows, hasLength(1), reason: 'exactly one row');
+    expect(rows.single['id'], stored.id);
+    await unmount(t, c);
+  }, timeout: const Timeout(Duration(seconds: 90)));
+
+  testWidgets('the answer is lost after the row landed: the retry is read '
+      'back as ours, one bubble, one row', (t) async {
+    final relay = _Relay(SupabaseChatRepository(umutClient));
+    var landed = 0;
+    relay.sendVia =
+        ({required id, required conversationId, required body, replyTo}) async {
+          final r = await relay.real.send(
+            id: id,
+            conversationId: conversationId,
+            body: body,
+            replyTo: replyTo,
+          );
+          if (landed++ == 0) {
+            expect(r, isA<Ok<Message>>(), reason: 'the first insert landed');
+            // ...but the phone never hears back.
+            return const Err(NetworkFailure('No connection', retryable: true));
+          }
+          return r;
+        };
+    final c = await mount(t, relay);
+    final body = 'lost answer ${DateTime.now().microsecondsSinceEpoch}';
 
     await t.enterText(field, body);
     await t.pump();
@@ -385,17 +477,24 @@ void main() {
     await t.pump();
     await until(
       t,
-      () =>
-          t.widgetList<SisNotice>(find.byType(SisNotice)).any((n) => n.isError),
-      'an error notice',
+      () => relay.answers.any((a) => a is Ok<Message>),
+      'the retry to be answered',
     );
+    final stored = (relay.answers.last as Ok<Message>).value;
+    await until(
+      t,
+      () => relay.echoed.contains(stored.id),
+      'the real echo of ${stored.id}',
+    );
+    await t.pump();
 
-    expect(relay.answers.single, isA<Err<Message>>());
-    expect(find.byType(SisNotice), findsOneWidget);
-    expect(composerText(t), body);
-    expect(pendingBubble, findsNothing);
-    expect(clock, findsNothing);
-    expect(await rowsWithBody(t, body), isEmpty);
+    expect(relay.ids, hasLength(2));
+    expect(relay.ids.toSet(), {stored.id}, reason: 'the retry reused the id');
+    expect(stored.body, body);
+    expectShownOnce(t, c, stored);
+    expect(find.byType(SisNotice), findsNothing);
+    expect(composerText(t), isEmpty);
+    expect(await rowsWithBody(t, body), hasLength(1));
     await unmount(t, c);
   }, timeout: const Timeout(Duration(seconds: 90)));
 }

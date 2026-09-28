@@ -547,8 +547,12 @@ void main() {
       final inGroup = _stamp('group before');
       final inDirect = _stamp('direct before');
       await t.runAsync(() async {
-        await gus.send(conversationId: g, body: inGroup);
-        await gus.send(conversationId: direct, body: inDirect);
+        await gus.send(id: randomMessageId(), conversationId: g, body: inGroup);
+        await gus.send(
+          id: randomMessageId(),
+          conversationId: direct,
+          body: inDirect,
+        );
       });
 
       await t.pumpWidget(app());
@@ -591,7 +595,9 @@ void main() {
         () => container.read(messagesProvider).hasValue,
         'the group chat reloaded',
       );
-      await t.runAsync(() => hugo.send(conversationId: g, body: live));
+      await t.runAsync(
+        () => hugo.send(id: randomMessageId(), conversationId: g, body: live),
+      );
       await until(t, () => shows(inChat(live)), 'the live group message');
 
       await t.pump(const Duration(seconds: 1));

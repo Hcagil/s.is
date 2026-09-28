@@ -136,10 +136,16 @@ class _MarkReadDown implements ChatRepository {
   Future<Result<List<Message>>> messages(String id) => live.messages(id);
   @override
   Future<Result<Message>> send({
+    required String id,
     required String conversationId,
     required String body,
     String? replyTo,
-  }) => live.send(conversationId: conversationId, body: body, replyTo: replyTo);
+  }) => live.send(
+    id: id,
+    conversationId: conversationId,
+    body: body,
+    replyTo: replyTo,
+  );
   @override
   Future<Result<void>> forward(Message message, List<String> ids) =>
       live.forward(message, ids);
@@ -325,9 +331,21 @@ void main() {
       expect(await _serverUnread(una, direct), 0);
       expect(await _serverUnread(otto, direct), 0);
 
-      await otto.send(conversationId: direct, body: _stamp('o1'));
-      await otto.send(conversationId: direct, body: _stamp('o2'));
-      await una.send(conversationId: direct, body: _stamp('u1'));
+      await otto.send(
+        id: randomMessageId(),
+        conversationId: direct,
+        body: _stamp('o1'),
+      );
+      await otto.send(
+        id: randomMessageId(),
+        conversationId: direct,
+        body: _stamp('o2'),
+      );
+      await una.send(
+        id: randomMessageId(),
+        conversationId: direct,
+        body: _stamp('u1'),
+      );
 
       expect(await _serverUnread(una, direct), 2);
       expect(await _serverUnread(otto, direct), 1);
@@ -336,9 +354,21 @@ void main() {
     test('markRead clears only my count, only in that conversation', () async {
       expect(await una.markRead(groupId), isA<Ok<void>>());
       expect(await otto.markRead(direct), isA<Ok<void>>());
-      await otto.send(conversationId: groupId, body: _stamp('g'));
-      await otto.send(conversationId: direct, body: _stamp('d'));
-      await una.send(conversationId: direct, body: _stamp('mine'));
+      await otto.send(
+        id: randomMessageId(),
+        conversationId: groupId,
+        body: _stamp('g'),
+      );
+      await otto.send(
+        id: randomMessageId(),
+        conversationId: direct,
+        body: _stamp('d'),
+      );
+      await una.send(
+        id: randomMessageId(),
+        conversationId: direct,
+        body: _stamp('mine'),
+      );
       final unaBefore = await _serverUnread(una, direct);
       expect(unaBefore, greaterThan(0), reason: 'fixture: nothing to clear');
 
@@ -361,7 +391,11 @@ void main() {
       'a member not in the conversation is refused, and moves nothing',
       () async {
         expect(await otto.markRead(direct), isA<Ok<void>>());
-        await una.send(conversationId: direct, body: _stamp('for otto'));
+        await una.send(
+          id: randomMessageId(),
+          conversationId: direct,
+          body: _stamp('for otto'),
+        );
         // Positive control: pia can mark her own conversation.
         expect(await pia.markRead(piaOtto), isA<Ok<void>>());
 
@@ -420,7 +454,11 @@ void main() {
       expect(_row(c, direct)!.unread, 0);
 
       final first = _stamp('one');
-      await otto.send(conversationId: direct, body: first);
+      await otto.send(
+        id: randomMessageId(),
+        conversationId: direct,
+        body: first,
+      );
       await eventually<Conversation?>(
         () => _row(c, direct),
         (r) => r?.lastMessage == first,
@@ -429,7 +467,11 @@ void main() {
       expect(_row(c, direct)!.unread, 1);
 
       final second = _stamp('two');
-      await otto.send(conversationId: direct, body: second);
+      await otto.send(
+        id: randomMessageId(),
+        conversationId: direct,
+        body: second,
+      );
       await eventually<Conversation?>(
         () => _row(c, direct),
         (r) => r?.lastMessage == second,
@@ -443,7 +485,7 @@ void main() {
 
       // My own message, from another device: previewed, never counted.
       final mine = _stamp('mine');
-      await una.send(conversationId: direct, body: mine);
+      await una.send(id: randomMessageId(), conversationId: direct, body: mine);
       await eventually<Conversation?>(
         () => _row(c, direct),
         (r) => r?.lastMessage == mine,
@@ -454,8 +496,16 @@ void main() {
 
     test('markRead clears the row here and on the server', () async {
       expect(await otto.markRead(direct), isA<Ok<void>>());
-      await otto.send(conversationId: direct, body: _stamp('x'));
-      await una.send(conversationId: direct, body: _stamp('y'));
+      await otto.send(
+        id: randomMessageId(),
+        conversationId: direct,
+        body: _stamp('x'),
+      );
+      await una.send(
+        id: randomMessageId(),
+        conversationId: direct,
+        body: _stamp('y'),
+      );
       final c = await liveList();
       addTearDown(c.dispose);
       expect(_row(c, direct)!.unread, greaterThan(0), reason: 'fixture');
@@ -483,7 +533,11 @@ void main() {
       });
 
       final body = _stamp('while open');
-      await otto.send(conversationId: direct, body: body);
+      await otto.send(
+        id: randomMessageId(),
+        conversationId: direct,
+        body: body,
+      );
       await eventually<Conversation?>(
         () => _row(c, direct),
         (r) => r?.lastMessage == body,
@@ -495,7 +549,11 @@ void main() {
     });
 
     test('markRead that cannot reach the server leaves the count', () async {
-      await otto.send(conversationId: direct, body: _stamp('z'));
+      await otto.send(
+        id: randomMessageId(),
+        conversationId: direct,
+        body: _stamp('z'),
+      );
       final c = await liveList(chat: _MarkReadDown(una, dead));
       addTearDown(c.dispose);
       final before = _row(c, direct)!.unread;
@@ -564,8 +622,16 @@ void main() {
       await tall(t);
       await t.runAsync(() async {
         await _markAllRead(una);
-        await otto.send(conversationId: direct, body: _stamp('before open'));
-        await otto.send(conversationId: direct, body: _stamp('before open'));
+        await otto.send(
+          id: randomMessageId(),
+          conversationId: direct,
+          body: _stamp('before open'),
+        );
+        await otto.send(
+          id: randomMessageId(),
+          conversationId: direct,
+          body: _stamp('before open'),
+        );
       });
       await t.pumpWidget(app());
       await until(t, () => tile(direct).evaluate().isNotEmpty, 'the list');
@@ -622,7 +688,13 @@ void main() {
       );
 
       final body = _stamp('while you look');
-      await t.runAsync(() => otto.send(conversationId: direct, body: body));
+      await t.runAsync(
+        () => otto.send(
+          id: randomMessageId(),
+          conversationId: direct,
+          body: body,
+        ),
+      );
       await until(
         t,
         () => find.text(body).evaluate().isNotEmpty,

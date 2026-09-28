@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 
@@ -129,27 +130,29 @@ void main() {
       expect((await pending).map((m) => m.id), ['m1', 'm2']);
     });
 
-    test('send passes the body through and reports refusal', () async {
+    test('a queued send passes the body through; a refusal goes back to '
+        'the draft', () async {
       final fake = FakeChat();
       final c = make(fake);
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(messagesProvider.future);
+      final queue = c.read(sendQueueProvider.notifier);
 
-      expect(await c.read(messagesProvider.notifier).send('hello'), isA<Ok>());
+      final sent = queue.enqueue('c1', body: 'hello');
+      for (var i = 0; i < 5; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
       expect(fake.sent, ['hello']);
+      expect(fake.sentIds, [sent.id]);
 
       fake.sendResult = const Err(DeniedFailure());
-      final refused = await c.read(messagesProvider.notifier).send('again');
-      expect((refused as Err).failure, isA<DeniedFailure>());
-    });
-
-    test('send without an open conversation is refused', () async {
-      final fake = FakeChat();
-      final c = make(fake);
-      await c.read(messagesProvider.future);
-      final r = await c.read(messagesProvider.notifier).send('hello');
-      expect((r as Err).failure, isA<DeniedFailure>());
-      expect(fake.sent, isEmpty);
+      queue.enqueue('c1', body: 'again');
+      for (var i = 0; i < 5; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      final drafts = c.read(draftsProvider.notifier);
+      expect(drafts.draftFor('c1').text, 'again');
+      expect(drafts.consumeFailure('c1'), isA<DeniedFailure>());
     });
 
     test('a load failure surfaces its reason', () async {

@@ -121,7 +121,11 @@ void main() {
   test('a sent message is readable by both members', () async {
     final body = 'integration ${DateTime.now().microsecondsSinceEpoch}';
     expect(
-      await ann.send(conversationId: conversationId, body: body),
+      await ann.send(
+        id: randomMessageId(),
+        conversationId: conversationId,
+        body: body,
+      ),
       isA<Ok>(),
     );
 
@@ -141,7 +145,11 @@ void main() {
 
   test('messages parse into the domain model', () async {
     final body = 'parse ${DateTime.now().microsecondsSinceEpoch}';
-    await ann.send(conversationId: conversationId, body: body);
+    await ann.send(
+      id: randomMessageId(),
+      conversationId: conversationId,
+      body: body,
+    );
     final loaded = (await ann.messages(conversationId) as Ok<List<Message>>)
         .value
         .firstWhere((m) => m.body == body);
@@ -162,7 +170,11 @@ void main() {
 
   test('the conversation list names the other member', () async {
     final body = 'preview ${DateTime.now().microsecondsSinceEpoch}';
-    await ann.send(conversationId: conversationId, body: body);
+    await ann.send(
+      id: randomMessageId(),
+      conversationId: conversationId,
+      body: body,
+    );
 
     final list = (await ann.conversations() as Ok<dynamic>).value;
     final row = list.firstWhere((c) => c.id == conversationId);
@@ -183,7 +195,11 @@ void main() {
         .timeout(const Duration(seconds: 20));
 
     expect(
-      await ann.send(conversationId: conversationId, body: body),
+      await ann.send(
+        id: randomMessageId(),
+        conversationId: conversationId,
+        body: body,
+      ),
       isA<Ok>(),
     );
 
@@ -196,7 +212,11 @@ void main() {
     final before =
         (await ann.messages(conversationId) as Ok<List<Message>>).value.length;
     expect(
-      await ann.send(conversationId: conversationId, body: '   '),
+      await ann.send(
+        id: randomMessageId(),
+        conversationId: conversationId,
+        body: '   ',
+      ),
       isA<Err<void>>(),
     );
     final after =
@@ -226,6 +246,7 @@ void main() {
       () async {
         final body = 'delete me ${DateTime.now().microsecondsSinceEpoch}';
         final sent = (await ann.send(
+          id: randomMessageId(),
           conversationId: conversationId,
           body: body,
         )) as Ok<Message>;
@@ -283,6 +304,7 @@ void main() {
     test('someone else\'s message cannot be deleted', () async {
       final body = 'not yours ${DateTime.now().microsecondsSinceEpoch}';
       final sent = (await ann.send(
+        id: randomMessageId(),
         conversationId: conversationId,
         body: body,
       )) as Ok<Message>;
@@ -312,6 +334,7 @@ void main() {
 
         final body = 'watch me vanish ${DateTime.now().microsecondsSinceEpoch}';
         final sent = (await ann.send(
+          id: randomMessageId(),
           conversationId: conversationId,
           body: body,
         )) as Ok<Message>;

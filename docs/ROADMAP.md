@@ -31,6 +31,8 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.21.1 | after a swipe the message springs back to its place; the action row stays above it |
 | v0.21.2 | a text message appears the moment you tap send |
 | v0.21.3 | unsent text stays in each chat's write box; each chat sends through its own queue |
+| v0.21.4 | the app opens faster: start-up requests run side by side |
+| v0.21.5 | the licences page shows each licence as written (centred lines, indents) |
 | later | E2EE | scheduled individually |
 
 ## Status

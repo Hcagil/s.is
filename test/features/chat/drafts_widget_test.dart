@@ -8,6 +8,10 @@
 // "no connection" (retryable, as readableFailure() classifies it) or a
 // refusal.
 //
+// Since 2026-09-28 (v0.21.4, owner) the chat list no longer says "Draft: …":
+// a chat with unsent text shows its last message, and the draft lives only in
+// that chat's write box. [listShowsNoDraft] holds the list to that.
+//
 // Run under TZ=JST-9 like every unit test.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -103,6 +107,28 @@ final editBar = byKey('edit-bar');
 final clock = find.byIcon(Icons.schedule_rounded);
 Finder bubble(String id) => byKey('message-$id');
 Finder draftPreview(String conv) => byKey('draft-preview-$conv');
+
+/// The list, back from a chat with unsent [draft]: nowhere a "Draft" label,
+/// the draft's text nowhere in the tile, and the subtitle is the chat's
+/// last message ([last]) as before drafts existed.
+void listShowsNoDraft(
+  WidgetTester t,
+  String conv, {
+  required String draft,
+  required String last,
+}) {
+  expect(find.byType(MessageScreen), findsNothing, reason: 'not on the list');
+  expect(byKey('conversation-$conv'), findsOneWidget);
+  expect(draftPreview(conv), findsNothing);
+  expect(
+    find.textContaining('Draft', findRichText: true),
+    findsNothing,
+    reason: 'the list shows no draft (owner, v0.21.4)',
+  );
+  final tile = textIn(t, byKey('conversation-$conv'));
+  expect(tile, contains(last), reason: 'the last message is the subtitle');
+  expect(tile, isNot(contains(draft.split('\n').first)));
+}
 
 /// Frames without moving the clock far: 240 ms in all.
 Future<void> settle(WidgetTester t) async {
@@ -210,19 +236,21 @@ Future<void> foreground(WidgetTester t) async {
 
 void main() {
   group('a draft', () {
-    testWidgets('survives going back: the list says "Draft:" with the first '
-        'line in italic, and reopening puts the text back with the cursor '
-        'at the end', (t) async {
+    testWidgets('survives going back: the list shows the last message, not '
+        'the draft, and reopening puts the text back with the cursor at '
+        'the end', (t) async {
       final w = World();
       await start(t, w);
       await openChat(t, 'c1');
       await type(t, 'running late\nsorry');
       await back(t);
 
-      expect(draftPreview('c1'), findsOneWidget);
-      expect(textIn(t, draftPreview('c1')), 'Draft: running late');
-      expect(allItalic(t, draftPreview('c1')), isTrue);
-      expect(draftPreview('c2'), findsNothing);
+      listShowsNoDraft(t, 'c1', draft: 'running late', last: 'where are you');
+      expect(
+        allItalic(t, byKey('conversation-c1')),
+        isFalse,
+        reason: 'no italic draft line in the tile',
+      );
 
       await openChat(t, 'c1');
       expect(composerText(t), 'running late\nsorry');
@@ -248,8 +276,8 @@ void main() {
       await type(t, 'for cem');
       await back(t);
 
-      expect(textIn(t, draftPreview('c1')), 'Draft: for bob');
-      expect(textIn(t, draftPreview('c2')), 'Draft: for cem');
+      listShowsNoDraft(t, 'c1', draft: 'for bob', last: 'where are you');
+      listShowsNoDraft(t, 'c2', draft: 'for cem', last: 'hey');
       await openChat(t, 'c1');
       expect(composerText(t), 'for bob');
       await back(t);
@@ -335,7 +363,9 @@ void main() {
 
       expect(composerText(t), 'half a thought');
       await back(t);
-      expect(textIn(t, draftPreview('c1')), 'Draft: half a thought');
+      listShowsNoDraft(t, 'c1', draft: 'half a thought', last: 'where are you');
+      await openChat(t, 'c1');
+      expect(composerText(t), 'half a thought', reason: 'the box still has it');
     });
 
     testWidgets('is gone once sent: no preview, and the chat reopens empty', (
@@ -367,9 +397,10 @@ void main() {
       await type(t, 'see you at 6');
       await back(t);
 
+      listShowsNoDraft(t, 'c1', draft: 'my draft', last: 'where are you');
       expect(
-        textIn(t, draftPreview('c1')),
-        'Draft: my draft',
+        find.textContaining('see you at 6', findRichText: true),
+        findsNothing,
         reason: 'the edit text is never kept as a draft',
       );
       await openChat(t, 'c1');
@@ -515,8 +546,8 @@ void main() {
       expect(notice, findsNothing);
     });
 
-    testWidgets('after leaving: the list shows the text as a draft, and '
-        'opening the chat shows it with one notice, once', (t) async {
+    testWidgets('after leaving: the list shows no draft, and opening the '
+        'chat puts the text back with one notice, once', (t) async {
       final w = World();
       await start(t, w);
       await openChat(t, 'c1');
@@ -526,7 +557,12 @@ void main() {
       w.chat.fail(0, refused);
       await settle(t);
 
-      expect(textIn(t, draftPreview('c1')), 'Draft: one');
+      expect(draftPreview('c1'), findsNothing);
+      expect(
+        find.textContaining('Draft', findRichText: true),
+        findsNothing,
+        reason: 'the list shows no draft (owner, v0.21.4)',
+      );
       expect(notice, findsNothing, reason: 'shown in the chat, not the list');
 
       await openChat(t, 'c1');

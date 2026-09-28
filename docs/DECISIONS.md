@@ -1018,3 +1018,32 @@ when you come back.
 - Drafts and queued messages live while the app runs; they are not kept
   after the phone closes the app (storing them on the phone comes with the
   stored chat list, v0.23).
+
+## 2026-09-28 — The app opens faster: start-up requests run side by side
+
+The owner reported that opening SIS after it was closed takes more than 5
+seconds. Measured: the server's queries are fast; the time went to about nine
+requests made strictly one after another before the chat list could show,
+each paying a phone-to-server round trip, plus waiting for the live-update
+connection to be fully joined before the list was even asked for.
+- Requests that do not need each other's answers run at the same time: your
+  own profile and the chat list once you are known to be signed in, and the
+  other members' names, the last-message previews and the unread counts once
+  the chats are known.
+- The chat list is fetched while the live-update connection is still being
+  set up; anything that arrives meanwhile is held and applied after, so no
+  message is lost.
+- The next step, showing the last chat list instantly from the phone, comes
+  after leaving a group exists (owner, v0.23).
+- The chat list no longer shows "Draft: …" for a chat with unsent text
+  (owner); the draft stays in that chat's write box.
+
+## 2026-09-28 — The licences page shows each licence as written
+
+The owner reported the licences page content was wrong. The page (SIS's own,
+2026-09-25) dropped each paragraph's layout: centred lines (copyright
+headers) were left-aligned and indented clauses lost their indent, so
+licences read as one flattened block. Now centred paragraphs are centred and
+each indent level is 16 px; a package with several licences shows how many.
+Checked against the app's real bundled list (209 packages): none missing,
+none shown twice.

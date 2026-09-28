@@ -2,6 +2,11 @@
 // ConversationListController and the list tile, against ChatFake — a
 // subscription that is not confirmed until the test says so, a read that can
 // be held open, and Realtime that delivers only to a live listener.
+//
+// Since v0.21.4 the list is fetched while its Realtime join is still being
+// set up, instead of after it (docs/DECISIONS.md 2026-09-28, "The app opens
+// faster"). The group "start-up" holds the new order against JoinChat, whose
+// join can take forever and whose stream keeps what arrives before listen().
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +24,7 @@ import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/join_chat.dart';
 import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
@@ -84,31 +90,6 @@ Future<ProviderContainer> loaded(ChatFake chat) async {
 
 void main() {
   group('ConversationListController', () {
-    test('subscribes before its first read', () async {
-      final chat = ChatFake()
-        ..conversationsResult = Ok([conv('c1', 0)])
-        ..holdAllSubscription();
-      final c = scope(chat);
-      c.listen(conversationListProvider, (_, _) {});
-      await settle();
-
-      expect(chat.calls, contains('incomingAll'));
-      expect(
-        chat.calls,
-        isNot(contains('conversations')),
-        reason:
-            'read before the subscription was confirmed: a message sent '
-            'in between would be missed by both',
-      );
-
-      chat.confirmAllSubscription();
-      await c.read(conversationListProvider.future);
-      expect(
-        chat.calls.indexOf('incomingAll'),
-        lessThan(chat.calls.indexOf('conversations')),
-      );
-    });
-
     test(
       'a message moves its conversation to the top with its preview',
       () async {
@@ -334,6 +315,281 @@ void main() {
       c.dispose();
       await settle();
       expect(chat.canceledAllSubscriptions, greaterThan(0));
+    });
+  });
+
+  group('start-up: the first read runs alongside the join', () {
+    /// A signed-in scope whose list is watched, session settled first so the
+    /// list is built once, for this member.
+    Future<ProviderContainer> watching(ChatFake chat) async {
+      final c = await settled(scope(chat));
+      c.listen(conversationListProvider, (_, _) {});
+      return c;
+    }
+
+    int reads(ChatFake chat) =>
+        chat.calls.where((x) => x == 'conversations').length;
+
+    test('starts the join and the first read together: neither waits for '
+        'the other to answer', () async {
+      final chat = JoinChat()
+        ..conversationsResult = Ok([conv('c1', 30)])
+        ..holdJoin()
+        ..holdList();
+      final c = await watching(chat);
+      await settle();
+
+      expect(chat.calls, contains('incomingAll'));
+      expect(
+        chat.calls,
+        contains('conversations'),
+        reason: 'the read waited for the join to be confirmed',
+      );
+      expect(c.read(conversationListProvider).isLoading, isTrue);
+
+      // The read answers first; the join is still being set up.
+      chat.releaseList();
+      await settle();
+      expect(ids(c), ['c1'], reason: 'the list waited for the join');
+
+      chat.confirmJoin();
+      await settle();
+      expect(chat.listening, isTrue, reason: 'never listened once joined');
+      chat.deliver(msg('c1', 40, body: 'live'));
+      await settle();
+      expect(row(c, 'c1').lastMessage, 'live');
+    });
+
+    test('a join that never completes still gives a list, not a wait and '
+        'not an error', () async {
+      final chat = JoinChat()
+        ..conversationsResult = Ok([conv('c1', 30), conv('c2', 20)])
+        ..holdJoin();
+      final c = await watching(chat);
+      final list = await c
+          .read(conversationListProvider.future)
+          .timeout(
+            const Duration(seconds: 2),
+            onTimeout: () => fail('the list waited for a join that never came'),
+          );
+      await settle();
+
+      expect([for (final x in list) x.id], ['c1', 'c2']);
+      final state = c.read(conversationListProvider);
+      expect(state.isLoading, isFalse);
+      expect(state.hasError, isFalse);
+      expect(chat.joins, 0, reason: 'the join was never confirmed');
+    });
+
+    test('a list gone before its join completes leaves no subscription '
+        'behind', () async {
+      final chat = JoinChat()
+        ..conversationsResult = Ok([conv('c1', 30)])
+        ..holdJoin();
+      final c = await watching(chat);
+      await c.read(conversationListProvider.future);
+      c.dispose();
+      await settle();
+
+      chat.confirmJoin();
+      await settle();
+      expect(chat.listening, isFalse, reason: 'a dead list still listens');
+      expect(chat.listens, chat.cancels);
+    });
+
+    test(
+      'rebuilt while the first join is still out: the replaced '
+      'build\'s subscription ends, one stays live, an insert counted once',
+      () async {
+        final chat = JoinChat(self: 'u1')
+          ..conversationsResult = Ok([conv('c1', 30), conv('c2', 20)])
+          ..holdJoin();
+        final c = await watching(chat);
+        await c.read(conversationListProvider.future);
+        await settle();
+
+        // Rebuilt, as on an account change: a second join starts, and the
+        // first one's list is gone before its join completes.
+        c.invalidate(conversationListProvider);
+        await c.read(conversationListProvider.future);
+        await settle();
+        expect(chat.calls.where((x) => x == 'incomingAll'), hasLength(2));
+        chat.confirmJoin();
+        await settle();
+        chat.deliver(msg('c2', 40, body: 'meanwhile'));
+        await settle();
+
+        expect(
+          chat.listens - chat.cancels,
+          1,
+          reason:
+              'live subscriptions: the replaced build\'s join still listens, '
+              'a Realtime channel nothing owns',
+        );
+        expect(ids(c), ['c2', 'c1']);
+        expect(row(c, 'c2').unread, 1, reason: 'applied once per subscription');
+      },
+    );
+
+    group('an insert is shown exactly once, whenever it arrives:', () {
+      // self: the fake is the database too -- an insert is a row, and any
+      // read after it includes it (preview and unread count).
+      JoinChat world() => JoinChat(self: 'u1')
+        ..conversationsResult = Ok([conv('c1', 30), conv('c2', 20)])
+        ..holdJoin()
+        ..holdList();
+
+      void once(ProviderContainer c) {
+        expect(ids(c), ['c2', 'c1'], reason: 'moved to the top, listed once');
+        expect(row(c, 'c2').lastMessage, 'meanwhile');
+        expect(row(c, 'c2').lastMessageAt, at(40));
+        expect(row(c, 'c2').unread, 1, reason: 'lost (0) or applied twice (2)');
+        expect(row(c, 'c1').unread, 0);
+      }
+
+      test('(b) joined, before the list listens, read still out', () async {
+        final chat = world();
+        final c = await watching(chat);
+        await settle();
+        expect(reads(chat), 1, reason: 'read in flight');
+        expect(chat.listening, isFalse);
+
+        // The server sends it the instant the join is confirmed: it is in
+        // the stream before anyone could have listened.
+        chat.confirmJoin(atJoin: [msg('c2', 40, body: 'meanwhile')]);
+        await settle();
+        chat.releaseList();
+        await c.read(conversationListProvider.future);
+        await settle();
+
+        once(c);
+      });
+
+      test('(c) listening, before the first read answers', () async {
+        final chat = world();
+        final c = await watching(chat);
+        await settle();
+        chat.confirmJoin();
+        await settle();
+        expect(chat.listening, isTrue, reason: 'listens once joined');
+        expect(c.read(conversationListProvider).isLoading, isTrue);
+
+        chat.deliver(msg('c2', 40, body: 'meanwhile'));
+        await settle();
+        chat.releaseList();
+        await c.read(conversationListProvider.future);
+        await settle();
+
+        once(c);
+      });
+
+      test('(c) the read already holds it: counted once, not again', () async {
+        // The read ran after the insert: its preview and count include it.
+        final m = msg('c2', 40, body: 'meanwhile');
+        final chat = JoinChat()
+          ..conversationsResult = Ok([
+            conv('c2', 40, text: 'meanwhile').withPreview(m, counts: true),
+            conv('c1', 30),
+          ])
+          ..holdJoin()
+          ..holdList();
+        final c = await watching(chat);
+        await settle();
+        chat.confirmJoin();
+        await settle();
+        chat.deliver(m);
+        await settle();
+        chat.releaseList();
+        await c.read(conversationListProvider.future);
+        await settle();
+
+        expect(ids(c), ['c2', 'c1']);
+        expect(
+          row(c, 'c2').unread,
+          1,
+          reason: 'the same message counted twice',
+        );
+      });
+
+      test('(d) after the first read has answered', () async {
+        final chat = world();
+        final c = await watching(chat);
+        await settle();
+        chat.confirmJoin();
+        chat.releaseList();
+        await c.read(conversationListProvider.future);
+        await settle();
+
+        chat.deliver(msg('c2', 40, body: 'meanwhile'));
+        await settle();
+
+        once(c);
+      });
+
+      test('(d) the join confirmed only after the first read answered: '
+          'what the server sends then still arrives', () async {
+        final chat = world();
+        final c = await watching(chat);
+        await settle();
+        chat.releaseList();
+        await c.read(conversationListProvider.future);
+        await settle();
+
+        chat.confirmJoin(atJoin: [msg('c2', 40, body: 'meanwhile')]);
+        await settle();
+
+        once(c);
+      });
+    });
+
+    group('a conversation not in the list yet is re-read for:', () {
+      JoinChat world() => JoinChat()
+        ..conversationsResult = Ok([conv('c1', 30)])
+        ..holdJoin()
+        ..holdList();
+
+      /// Someone started a conversation after the read's snapshot.
+      void newChatOnServer(JoinChat chat) => chat.conversationsResult = Ok([
+        conv('c9', 50, other: cem, text: 'hello there'),
+        conv('c1', 30),
+      ]);
+
+      final hello = msg('c9', 50, body: 'hello there', from: 'u3');
+
+      test('(b) sent at the join, before the list listens', () async {
+        final chat = world();
+        final c = await watching(chat);
+        await settle();
+        newChatOnServer(chat);
+        chat.confirmJoin(atJoin: [hello]);
+        await settle();
+        chat.releaseList();
+        await c.read(conversationListProvider.future);
+        await settle();
+        await settle();
+
+        expect(ids(c), ['c9', 'c1'], reason: 'the new conversation was lost');
+        expect(row(c, 'c9').other, cem);
+        expect(reads(chat), greaterThan(1), reason: 'no quiet re-read');
+      });
+
+      test('(c) while the first read is out', () async {
+        final chat = world();
+        final c = await watching(chat);
+        await settle();
+        chat.confirmJoin();
+        await settle();
+        newChatOnServer(chat);
+        chat.deliver(hello);
+        await settle();
+        chat.releaseList();
+        await c.read(conversationListProvider.future);
+        await settle();
+        await settle();
+
+        expect(ids(c), ['c9', 'c1'], reason: 'the new conversation was lost');
+        expect(reads(chat), greaterThan(1), reason: 'no quiet re-read');
+      });
     });
   });
 

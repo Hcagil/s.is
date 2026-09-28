@@ -1003,12 +1003,18 @@ when you come back.
 - Each chat keeps its own draft: the typed text and the message being
   replied to. Leaving the chat keeps it; opening the chat puts it back.
   Sending or clearing the box ends it.
-- A message that could not be sent goes back into that chat's draft (before
-  anything typed since), with the notice, the same way.
+- Offline, or when the connection drops, messages keep queueing in the chat
+  with the clock, as many as the member sends; when the connection returns
+  they send by themselves, in order (owner). Each carries an id made on the
+  phone, so a retry whose first try did reach the server is never stored
+  twice.
+- A message the server refuses (for example, no longer a member) goes back
+  into that chat's draft (before anything typed since), with the notice.
 - Each chat sends through its own queue, in typed order, so a slow send in
   one chat never holds up another, and a failure in one chat never stops
   another's messages.
 - Reopening a chat while its messages are still sending shows them with the
   clock until the server has them.
-- Drafts live while the app runs; they are not kept after the app is closed
-  by the phone (to keep that, drafts would need storing on the phone).
+- Drafts and queued messages live while the app runs; they are not kept
+  after the phone closes the app (storing them on the phone comes with the
+  stored chat list, v0.23).

@@ -1035,3 +1035,5 @@ connection to be fully joined before the list was even asked for.
   message is lost.
 - The next step, showing the last chat list instantly from the phone, comes
   after leaving a group exists (owner, v0.23).
+- The chat list no longer shows "Draft: …" for a chat with unsent text
+  (owner); the draft stays in that chat's write box.

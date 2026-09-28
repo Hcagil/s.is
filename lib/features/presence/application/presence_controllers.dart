@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../chat/application/chat_controllers.dart';
+import '../../chat/domain/conversation.dart';
 import '../../profile/application/profile_controller.dart';
 import '../domain/presence_repository.dart';
 
@@ -89,7 +90,20 @@ class Typing extends Notifier<Set<String>> {
       _channel = null;
       if (channel != null) unawaited(channel.close());
     });
-    if (conversationId != null) {
+    // Watched, not read: a group discovered to be one the member has left
+    // or been removed from (see leftConversationGuardProvider) rebuilds
+    // this at once and leaves the typing:<id> channel rather than waiting
+    // for the screen to close or the token to refresh -- Realtime itself
+    // only re-checks who may receive a private channel at those two
+    // moments, not per broadcast (docs/SECURITY.md's own accepted limit).
+    final hasLeft =
+        conversationId != null &&
+        (ref.watch(conversationListProvider).value ?? const <Conversation>[])
+                .where((c) => c.id == conversationId)
+                .firstOrNull
+                ?.hasLeft ==
+            true;
+    if (conversationId != null && !hasLeft) {
       unawaited(_connect(conversationId, generation));
     }
     return const {};

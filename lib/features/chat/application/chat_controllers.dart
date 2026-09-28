@@ -881,6 +881,17 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
     ref.watch(currentUserIdProvider);
     ref.watch(ownProfileProvider.select((p) => p.value?.shareReadStatus));
     if (conversationId == null) return const [];
+    // Watched: a group discovered to be one the member has left or been
+    // removed from (leftConversationGuardProvider) rebuilds this at once and
+    // leaves the reads:<id> channel, same reasoning as Typing.build() in
+    // presence/application/presence_controllers.dart.
+    final hasLeft =
+        (ref.watch(conversationListProvider).value ?? const <Conversation>[])
+            .where((c) => c.id == conversationId)
+            .firstOrNull
+            ?.hasLeft ==
+        true;
+    if (hasLeft) return const [];
     final repo = ref.read(chatRepositoryProvider);
     // Subscribed before the read, so a read in between is not lost; a
     // failed subscription only costs the live part.

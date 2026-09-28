@@ -273,13 +273,35 @@ final class SupabaseChatRepository implements ChatRepository {
     try {
       // RLS returns these rows only to a caller who is or was in the
       // conversation, current members and past ones alike -- exactly what
-      // the roster's "left" section needs.
+      // the roster's "left" section needs. A rejoined person can hold more
+      // than one row for this conversation (the old one is kept, never
+      // rewritten -- see the server migration's own header comment); the
+      // roster shows each PERSON once, so those collapse below to their
+      // current row if they still have one, else their most recent past
+      // row (security-lead F10) -- the same "current wins, else latest
+      // left_at" rule the server's own mark_read uses.
       final rows = await _client
           .from('conversation_members')
           .select('user_id, role, left_at, left_reason')
           .eq('conversation_id', conversationId)
           .retriedOnce();
-      final ids = [for (final r in rows) r['user_id'] as String];
+      final byUser = <String, Map<String, dynamic>>{};
+      for (final row in rows) {
+        final userId = row['user_id'] as String;
+        final leftAt = row['left_at'] as String?;
+        final existing = byUser[userId];
+        if (existing == null) {
+          byUser[userId] = row;
+          continue;
+        }
+        final existingLeftAt = existing['left_at'] as String?;
+        if (existingLeftAt == null) continue; // a current row already wins
+        if (leftAt == null ||
+            DateTime.parse(leftAt).isAfter(DateTime.parse(existingLeftAt))) {
+          byUser[userId] = row;
+        }
+      }
+      final ids = byUser.keys.toList();
       if (ids.isEmpty) return const Ok([]);
       final profiles = await _client
           .rpc('profiles_public', params: const {}, get: true)
@@ -288,7 +310,7 @@ final class SupabaseChatRepository implements ChatRepository {
           .retriedOnce();
       final byId = {for (final p in profiles) p['user_id'] as String: p};
       return Ok([
-        for (final row in rows)
+        for (final row in byUser.values)
           GroupMember(
             member: Member(
               userId: row['user_id'] as String,

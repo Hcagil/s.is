@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/alert_settings.dart';
 import '../domain/notification_inbox.dart';
 import 'push_receipt_log.dart';
+import 'shared_prefs_alert_store.dart';
 
 /// Shows pushes Telegram-style: one MessagingStyle notification per chat (a
 /// line per unread message, newest last) under one silent group summary.
@@ -21,9 +23,11 @@ final class LocalPushDisplay {
   static const _prefsKey = 'sis.push_inbox';
   static const _ownerKey = 'sis.push_inbox_owner';
   static const _summaryId = 0;
-  static const _channelId = 'messages';
-  static const _channelName = 'Messages';
+  static const _summaryChannelId = 'summary';
+  static const _summaryChannelName = 'Summary';
+  static const _legacyChannelId = 'messages';
   static const _channelDescription = 'New messages';
+  static const _alerts = SharedPrefsAlertStore();
 
   /// Minimum gap between two flushes.
   static const _interval = Duration(milliseconds: 600);
@@ -192,6 +196,36 @@ final class LocalPushDisplay {
   static String _keyFor(String? owner) =>
       owner == null ? _prefsKey : '$_prefsKey.$owner';
 
+  /// Deletes the alerting channels no chat and no default uses any more, and
+  /// the pre-0.26 single 'messages' channel (channels cannot be edited, so a
+  /// combination is a channel of its own, created when first drawn). Never
+  /// throws: this is housekeeping, and runs at app start and on every change
+  /// of a setting.
+  static Future<void> pruneChannels() async {
+    try {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (android == null) return;
+      final used = usedAlertChannelIds(
+        await _alerts.loadDefaults(),
+        await _alerts.loadChats(),
+      );
+      for (final c
+          in await android.getNotificationChannels() ??
+              const <AndroidNotificationChannel>[]) {
+        final ours =
+            c.id.startsWith(alertChannelPrefix) || c.id == _legacyChannelId;
+        if (ours && !used.contains(c.id)) {
+          await android.deleteNotificationChannel(channelId: c.id);
+        }
+      }
+    } catch (e) {
+      await PushReceiptLog.add('error', error: e, label: 'pruneChannels');
+    }
+  }
+
   /// Every pass over the stored inbox in this isolate runs one at a time, so
   /// concurrent pushes never overwrite each other's line. A failing [f] must
   /// not break the chain.
@@ -217,10 +251,19 @@ final class LocalPushDisplay {
     if (dirty.isEmpty) return;
     final last = _lastFlushEnd;
     final loud = last == null || DateTime.now().difference(last) > _quiet;
+    final defaults = await _alerts.loadDefaults();
+    final chats = await _alerts.loadChats();
     for (var i = 0; i < dirty.length; i++) {
       if (i > 0) await Future<void>.delayed(_enqueueGap);
       if (!await _still(owner)) return;
-      await _showChat(dirty[i], alert: loud && i == 0);
+      await _showChat(
+        dirty[i],
+        alert: loud && i == 0,
+        effective: resolveAlert(
+          defaults,
+          chats[dirty[i].conversationId] ?? const ChatAlert(),
+        ),
+      );
     }
     await Future<void>.delayed(_enqueueGap);
     if (!await _still(owner)) return;
@@ -237,41 +280,50 @@ final class LocalPushDisplay {
 
   /// The chat's notification: its whole current state (newest lines, oldest
   /// first), so a later post can never lose an earlier message.
-  static Future<void> _showChat(InboxChat chat, {required bool alert}) =>
-      _plugin.show(
-        id: _idFor(chat.conversationId),
-        title: chat.title,
-        body: chat.lines.last.text,
-        payload: chat.conversationId,
-        notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails(
-            _channelId,
-            _channelName,
-            channelDescription: _channelDescription,
-            importance: Importance.high,
-            priority: Priority.high,
-            groupKey: _group,
-            silent: !alert,
-            onlyAlertOnce: !alert,
-            number: chat.count,
-            subText: chat.count > 1 ? '${chat.count} new messages' : null,
-            when: chat.lines.last.at == 0 ? null : chat.lines.last.at,
-            styleInformation: MessagingStyleInformation(
-              const Person(name: 'You'),
-              conversationTitle: chat.group ? chat.title : null,
-              groupConversation: chat.group,
-              messages: [
-                for (final l in chat.lines)
-                  Message(
-                    l.text,
-                    DateTime.fromMillisecondsSinceEpoch(l.at),
-                    l.sender.isEmpty ? null : Person(name: l.sender),
-                  ),
-              ],
-            ),
-          ),
+  static Future<void> _showChat(
+    InboxChat chat, {
+    required bool alert,
+    required EffectiveAlert effective,
+  }) => _plugin.show(
+    id: _idFor(chat.conversationId),
+    title: chat.title,
+    body: chat.lines.last.text,
+    payload: chat.conversationId,
+    notificationDetails: NotificationDetails(
+      android: AndroidNotificationDetails(
+        alertChannelId(effective),
+        alertChannelName(effective),
+        channelDescription: _channelDescription,
+        playSound: effective.sound,
+        sound: effective.tone == null
+            ? null
+            : UriAndroidNotificationSound(effective.tone!),
+        enableVibration: effective.vibration,
+        importance: Importance.high,
+        priority: Priority.high,
+        groupKey: _group,
+        silent: !alert,
+        onlyAlertOnce: !alert,
+        number: chat.count,
+        subText: chat.count > 1 ? '${chat.count} new messages' : null,
+        when: chat.lines.last.at == 0 ? null : chat.lines.last.at,
+        styleInformation: MessagingStyleInformation(
+          const Person(name: 'You'),
+          conversationTitle: chat.group ? chat.title : null,
+          groupConversation: chat.group,
+          messages: [
+            for (final l in chat.lines)
+              Message(
+                l.text,
+                DateTime.fromMillisecondsSinceEpoch(l.at),
+                l.sender.isEmpty ? null : Person(name: l.sender),
+              ),
+          ],
         ),
-      );
+      ),
+      iOS: DarwinNotificationDetails(presentSound: effective.sound),
+    ),
+  );
 
   /// The silent group summary; no payload, so tapping it just opens the app
   /// on the chat list. Gone when nothing is waiting.
@@ -286,9 +338,12 @@ final class LocalPushDisplay {
       body: inboxSummary(inbox),
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
+          _summaryChannelId,
+          _summaryChannelName,
           channelDescription: _channelDescription,
+          importance: Importance.low,
+          playSound: false,
+          enableVibration: false,
           groupKey: _group,
           setAsGroupSummary: true,
           silent: true,

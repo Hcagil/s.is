@@ -3,7 +3,9 @@ package com.esd.sis
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.media.RingtoneManager
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -14,6 +16,8 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 private const val CHANNEL = "sis/external_picker"
+private const val TONE_CHANNEL = "sis/tone_picker"
+private const val REQUEST_TONE = 9103
 private const val REQUEST_ATTACHMENTS = 9101
 private const val REQUEST_PICTURE = 9102
 private const val MAX_ATTACHMENTS = 10
@@ -30,6 +34,7 @@ private const val PICTURE_EDGE = 2048
 // filtering, so no <queries> manifest entry is needed.
 class MainActivity : FlutterActivity() {
     private var pendingResult: MethodChannel.Result? = null
+    private var pendingTone: MethodChannel.Result? = null
 
     // PickedImageProcessor.process() does file I/O, bitmap decode/rotate/
     // scale and JPEG compression for up to 10 photos; on the main thread
@@ -52,6 +57,38 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, TONE_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method != "pick") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                pickTone((call.arguments as? Map<*, *>)?.get("current") as? String, result)
+            }
+    }
+
+    // The phone's own notification-sound chooser. A null uri in the reply
+    // means the system default; a null reply means the member cancelled.
+    private fun pickTone(current: String?, result: MethodChannel.Result) {
+        if (pendingTone != null) {
+            result.error("busy", "A picker is already open.", null)
+            return
+        }
+        pendingTone = result
+        val defaultUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, defaultUri)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, if (current != null) Uri.parse(current) else defaultUri)
+        }
+        try {
+            startActivityForResult(intent, REQUEST_TONE)
+        } catch (e: ActivityNotFoundException) {
+            pendingTone = null
+            result.error("no_app", "No app can open ringtones.", null)
+        }
     }
 
     private fun startPick(multiple: Boolean, requestCode: Int, result: MethodChannel.Result) {
@@ -73,6 +110,28 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_TONE) {
+            val result = pendingTone
+            pendingTone = null
+            if (result == null) return
+            val uri = if (resultCode != Activity.RESULT_OK || data == null) {
+                null
+            } else if (Build.VERSION.SDK_INT >= 33) {
+                data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                data.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            }
+            when {
+                uri == null -> result.success(null)
+                uri == RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION) ->
+                    result.success(mapOf("uri" to null, "name" to "System default"))
+                else -> result.success(
+                    mapOf("uri" to uri.toString(), "name" to (RingtoneManager.getRingtone(this, uri)?.getTitle(this) ?: "Custom")),
+                )
+            }
+            return
+        }
         if (requestCode != REQUEST_ATTACHMENTS && requestCode != REQUEST_PICTURE) {
             super.onActivityResult(requestCode, resultCode, data)
             return

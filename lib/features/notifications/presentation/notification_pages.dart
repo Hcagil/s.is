@@ -9,6 +9,7 @@ import '../../chat/application/chat_controllers.dart';
 import '../../chat/presentation/conversation_list.dart';
 import '../application/notification_settings_controller.dart';
 import '../domain/notification_settings.dart';
+import 'alert_widgets.dart';
 
 /// Whether and how the member is notified of new messages, and what is
 /// muted.
@@ -61,6 +62,7 @@ class NotificationsScreen extends ConsumerWidget {
                   ),
               ],
             ),
+            const AlertDefaultsSection(),
             const _Header('Muted'),
             const _MutedList(),
           ],

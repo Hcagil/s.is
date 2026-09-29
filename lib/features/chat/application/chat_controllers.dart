@@ -368,13 +368,16 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   /// Marks [conversationId] read on the server, then clears its count here.
   /// A failure leaves the count as it was: better a stale badge than a
   /// conversation that looks read and is not.
+  ///
+  /// Skips the local update (and therefore the debounced save) when state is
+  /// still loading -- i.e. carrying over a value from a previous build/owner.
   Future<void> markRead(String conversationId) async {
     final result = await ref
         .read(chatRepositoryProvider)
         .markRead(conversationId);
     // Checked before touching state: the list can be disposed while the call
     // is in flight, and reading state then throws.
-    if (result is! Ok || !ref.mounted) return;
+    if (result is! Ok || !ref.mounted || state.isLoading) return;
     final current = state.value;
     if (current == null) return;
     state = AsyncData([
@@ -414,10 +417,19 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   /// A full load just finished (explicit [refresh] or a quiet re-read):
   /// saved right away, unlike a single live update, which is debounced by
   /// [_scheduleSnapshotSave] instead.
+  ///
+  /// Saves only when the session is settled (Allowed) AND this build's state
+  /// is settled (AsyncData with isLoading=false), not carrying over a value
+  /// from a previous build/owner.
   void _saveCurrentIfData() {
+    if (ref.read(sessionControllerProvider).value is! Allowed) return;
     final ownerId = ref.read(currentUserIdProvider);
-    final list = state.value;
-    if (ownerId != null && list != null) _saveSnapshot(ownerId, list);
+    final current = state;
+    if (ownerId != null &&
+        current is AsyncData<List<Conversation>> &&
+        !current.isLoading) {
+      _saveSnapshot(ownerId, current.value);
+    }
   }
 
   /// Batches a save after a live update so a burst of incoming messages

@@ -286,15 +286,14 @@ deleted rather than used. It is shown only after the server has confirmed the
 session (`activate_session()` returned true and the member profile loaded); a
 phone offline at start-up, or a session that is refused, never displays it.
 It is erased on every session end the app observes (sign-out, a cold start
-onto sign-in, or "not allowed"); an erase discards any save still in flight,
-and a different account's first list load deletes it. Once the owner changes,
-the previous owner's list is unreachable from the app's list state, even while
-the new owner's list is loading or has failed. Accepted leftovers: a phone
-whose access was removed or replaced and that never reaches the server again
-keeps the file; and a save whose final rename is already under way when an
-erase starts can leave the file in place until the next erase or the next
-account's first load. In both cases the file is unreadable to any other
-account through the app, encrypted with the phone, and excluded from backup. Drafts and queued unsent messages
+onto sign-in, or "not allowed"); after an erase no file remains, whatever
+point a save still in flight had reached, including its final rename (since
+v0.24.1). A different account's first list load deletes it. Once the owner
+changes, the previous owner's list is unreachable from the app's list state,
+even while the new owner's list is loading or has failed. Accepted leftover: a
+phone whose access was removed or replaced and that never reaches the server
+again keeps the file; it is unreadable through the app, encrypted with the
+phone, and excluded from backup. Drafts and queued unsent messages
 are still not stored.
 
 ## Runbook

@@ -49,15 +49,20 @@ jobs:
               - '.github/workflows/**'
               - '.github/compose.ci.yaml'
             database:
+              # Widened deliberately: the database job must run for any
+              # change that can affect app/database behaviour, not only
+              # direct supabase/** edits -- an app-only PR used to skip it.
+              - 'lib/**'
+              - 'test/**'
+              - 'integration_test/**'
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - 'dart_test.yaml'
               - 'compose.yaml'
               - 'docker/Supabase.Dockerfile'
               - 'supabase/**'
-              # The integration tests exercise the data layer against a real
-              # database, so changes there have to run this job too.
-              - 'test/integration/**'
-              - 'test/edge/**'
-              - 'lib/features/**/data/**'
-              - 'dart_test.yaml'
+              - '.github/compose.ci.yaml'
+              - '.github/workflows/**'
 
   documentation:
     name: Documentation check

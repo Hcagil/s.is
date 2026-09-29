@@ -36,6 +36,7 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.22 | contacts; new chat shows your people and finds others by exact tag; who sees your picture: everyone, contacts, nobody |
 | v0.23 | leave a group, admins remove and add members (with or without old messages) |
 | v0.24 | the chat list appears the moment SIS opens, from the phone, then refreshes |
+| v0.25 | iOS: the app builds for iPhone (CI), signs in with Google, and does what the Android app does — updates, push, photo picking and crop; then every release also goes to TestFlight |
 | later | E2EE | scheduled individually |
 
 ## Status

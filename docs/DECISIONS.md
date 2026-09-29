@@ -1134,3 +1134,16 @@ content is kept on the phone, which is why leaving a group came first.
   its read-only entry, as on the server.
 - Nothing else is stored yet: drafts and unsent messages still live only
   while the app runs.
+
+## 2026-09-29 — Update prompt on iOS
+
+- `in_app_update` is Play-only, so iOS never calls it: `main.dart` picks an
+  iOS update repository instead of the Play one.
+- iOS builds come through TestFlight, which already tells testers about new
+  builds, so iOS shows no update banner.
+- The minimum supported build still applies on iOS. The CI build number is the
+  same as Android's versionCode, so one server value serves both.
+- Below the minimum, the required screen opens the TestFlight app
+  (`itms-beta://`) instead of the Play page. At App Store release this link
+  becomes the App Store URL.
+- Nothing is ever forced beyond the minimum.

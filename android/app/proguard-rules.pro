@@ -6,3 +6,6 @@
 -keep class com.google.gson.reflect.TypeToken { *; }
 -keep class * extends com.google.gson.reflect.TypeToken
 -keep class com.dexterous.flutterlocalnotifications.models.** { *; }
+
+# Release optimisation stays off, as it was before these rules existed.
+-dontoptimize

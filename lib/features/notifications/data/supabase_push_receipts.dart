@@ -16,7 +16,7 @@ final class SupabasePushReceipts implements PushReceipts {
       final batch = (await PushReceiptLog.pending()).take(100).toList();
       if (batch.isEmpty) return;
       await _client.rpc('report_push_receipts', params: {'receipts': batch});
-      await PushReceiptLog.removeFirst(batch.length);
+      await PushReceiptLog.removeUploaded(batch);
     } catch (_) {
       // Kept on the phone; tried again on the next start.
     }

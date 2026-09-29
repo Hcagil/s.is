@@ -32,6 +32,7 @@ create function public.report_push_receipts(receipts jsonb)
 returns integer language plpgsql security definer set search_path = '' as $$
 declare
   r jsonb;
+  i integer;
   n integer := 0;
   s text;
   mid uuid;
@@ -44,8 +45,10 @@ begin
     raise exception 'invalid receipts' using errcode = '22023';
   end if;
 
-  for r in select e from jsonb_array_elements(receipts) with ordinality t(e, i)
-            where i <= 100 order by i loop
+  -- Only the first 100 are ever read: the rest of a large array is not
+  -- expanded.
+  for i in 0 .. least(jsonb_array_length(receipts), 100) - 1 loop
+    r := receipts -> i;
     s := case when jsonb_typeof(r) = 'object' then r ->> 'stage' end;
     continue when s is null
       or not (s in ('received', 'shown', 'error') or s ~ '^dropped:[a-z_]{1,40}$');

@@ -129,6 +129,9 @@ final class LocalPushDisplay {
     await prefs.reload();
     final previousOwner = prefs.getString(_ownerKey);
     if (previousOwner == userId && userId != null) return;
+    // Receipts are uploaded as whoever is signed in: one member's must never
+    // go up under the next member's account.
+    await PushReceiptLog.clear();
     await prefs.remove(_keyFor(previousOwner));
     // The owner is stored BEFORE the shade is cleared: cancelAll can throw
     // (in release, R8 broke its Gson use), and the owner was then never
@@ -141,7 +144,7 @@ final class LocalPushDisplay {
     try {
       await _plugin.cancelAll();
     } catch (e) {
-      await PushReceiptLog.add('error', error: 'forUser cancelAll: $e');
+      await PushReceiptLog.add('error', error: e, label: 'forUser cancelAll');
     }
   }
 

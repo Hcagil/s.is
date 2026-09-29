@@ -22,6 +22,7 @@ final class PushReceiptLog {
     String stage, {
     String? messageId,
     Object? error,
+    String? label,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -35,7 +36,7 @@ final class PushReceiptLog {
         jsonEncode({
           'stage': stage,
           'message_id': ?messageId,
-          'error': ?(error == null ? null : _errorText(error)),
+          'error': ?(error == null ? null : _errorText(error, label)),
           'build': ?build,
           'occurred_at': DateTime.now().toUtc().toIso8601String(),
         }),
@@ -73,6 +74,32 @@ final class PushReceiptLog {
     } catch (_) {}
   }
 
+  /// Removes exactly what was uploaded, so receipts the background isolate
+  /// appended meanwhile (or that a full ring rotated) are never deleted by
+  /// count.
+  static Future<void> removeUploaded(
+    List<Map<String, Object?>> uploaded,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final sent = {for (final m in uploaded) jsonEncode(m)};
+      final rest = [
+        for (final e in prefs.getStringList(_prefsKey) ?? const <String>[])
+          if (!sent.contains(e)) e,
+      ];
+      await prefs.setStringList(_prefsKey, rest);
+    } catch (_) {}
+  }
+
+  static Future<void> clear() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      await prefs.remove(_prefsKey);
+    } catch (_) {}
+  }
+
   static Future<int?> _buildNumber() async {
     if (_build != null) return _build;
     try {
@@ -84,10 +111,8 @@ final class PushReceiptLog {
     }
   }
 
-  /// Type and message only, cut short. A FormatException quotes its source,
-  /// which could be message text, so it keeps its type alone.
-  static String _errorText(Object e) {
-    final t = e is FormatException ? 'FormatException' : '${e.runtimeType}: $e';
-    return t.length <= 300 ? t : t.substring(0, 300);
-  }
+  /// The exception's runtime type only, never its text: it can quote a push
+  /// or a device path, and a receipt leaves the phone.
+  static String _errorText(Object e, String? label) =>
+      label == null ? '${e.runtimeType}' : '$label: ${e.runtimeType}';
 }

@@ -267,8 +267,10 @@ Nonce: on iOS the Google SDK puts a `nonce` claim in the ID token, and
 Supabase requires the request nonce and the token nonce to be both present or
 both absent (it compares the SHA-256 hex of the request nonce with the
 token's). On iOS the app makes a random 32-byte nonce (`Random.secure`), gives
-Google its SHA-256 hex and gives Supabase the raw value, so replay stays
-blocked and "Skip nonce checks" stays off. The nonce is fixed for the app
+Google its SHA-256 hex and gives Supabase the raw value, so a token obtained
+elsewhere cannot be injected, and "Skip nonce checks" stays off. It is not
+single-use: Supabase keeps no record of used nonces, so a captured token and
+nonce pair is limited only by the token's expiry. The nonce is fixed for the app
 process because `google_sign_in` takes it once, at initialize. Android sends
 no nonce: nothing shows that Play services embeds it, and a mismatch would
 break the production sign-in. Revisit with a device test.

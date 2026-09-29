@@ -10,6 +10,10 @@
 -- other out whenever `flutter test` runs them in parallel.
 --   ann/bob         test/integration/chat_repository_test.dart
 --   carol/dan       test/integration/chat_controllers_integration_test.dart
+--   gia/hol/ike/jun/kai/lux test/integration/group_membership_integration_test.dart
+--     (gia runs the groups; hol leaves or is removed; ike and jun are the
+--      two admins of the concurrency races; kai is added without history;
+--      lux is allowlisted and active but reachable by nobody there)
 --   erin/frank/grace test/integration/device_change_test.dart
 --     (that suite signs erin in twice on purpose -- it is the device change --
 --      and needs two counterparties to prove history spans every conversation)
@@ -191,5 +195,11 @@ insert into app_private.allowlist(email) values
   ('ulas@integration.test'),
   ('veli@integration.test'),
   ('yunus@integration.test'),
-  ('zehra@integration.test')
+  ('zehra@integration.test'),
+  ('gia@integration.test'),
+  ('hol@integration.test'),
+  ('ike@integration.test'),
+  ('jun@integration.test'),
+  ('kai@integration.test'),
+  ('lux@integration.test')
 on conflict do nothing;

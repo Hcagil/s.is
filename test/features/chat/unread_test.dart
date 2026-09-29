@@ -561,6 +561,8 @@ void main() {
         ..membersResult = const Ok([bob, cem])
         ..conversationsResult = Ok([c])
         ..messagesResult = Ok(history);
+      // v0.23.0: a group's sender names come from its own roster.
+      chat.roster[c.id] = [bob, cem];
       final container = scope(chat);
       await t.pumpWidget(
         UncontrolledProviderScope(

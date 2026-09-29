@@ -15,6 +15,7 @@ import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/data/file_chat_list_snapshot_store.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -515,5 +516,160 @@ void main() {
 
     await t.pumpWidget(const SizedBox());
     await t.pump(const Duration(milliseconds: 50));
+  });
+
+  group('the stored chat list (v0.24.0), over the real repository and the '
+      'real file store', () {
+    late Directory dir;
+    setUp(() => dir = Directory.systemTemp.createTempSync('chat-list-seam-'));
+    tearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+
+    /// bram's app as main.dart wires it, the stored list included (on a temp
+    /// directory: path_provider has no platform side in a test).
+    ProviderContainer app(FileChatListSnapshotStore store) => ProviderContainer(
+      overrides: [
+        runtimeConfigProvider.overrideWithValue(
+          const RuntimeConfig(
+            supabaseUrl: _url,
+            supabasePublishableKey: _key,
+            googleWebClientId: 'c',
+          ),
+        ),
+        authRepositoryProvider.overrideWithValue(
+          FakeAuth(
+            session: true,
+            member: Member(userId: bramId, displayName: 'Bram'),
+          ),
+        ),
+        updateRepositoryProvider.overrideWithValue(FakeUpdate()),
+        chatRepositoryProvider.overrideWithValue(SupabaseChatRepository(bram)),
+        profileRepositoryProvider.overrideWithValue(
+          SupabaseProfileRepository(bram),
+        ),
+        presenceRepositoryProvider.overrideWithValue(
+          SupabasePresenceRepository(bram),
+        ),
+        attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
+        linkOpenerProvider.overrideWithValue(LinkOpenerFake()),
+        pushSourceProvider.overrideWithValue(
+          PushSourceFake(status: PushPermissionStatus.authorized),
+        ),
+        pushRegistryProvider.overrideWithValue(PushRegistryFake()),
+        notificationExplainerStoreProvider.overrideWithValue(
+          NotificationExplainerStoreFake(shown: true),
+        ),
+        chatListSnapshotStoreProvider.overrideWithValue(store),
+      ],
+    );
+
+    Future<void> pumpUntil(
+      WidgetTester t,
+      bool Function() ok,
+      String what, {
+      Duration within = const Duration(seconds: 20),
+    }) async {
+      final deadline = wire.now + within;
+      while (!ok() && wire.now < deadline) {
+        await t.pump(const Duration(milliseconds: 10));
+      }
+      expect(ok(), isTrue, reason: 'timed out waiting for $what');
+    }
+
+    testWidgets('saved after the server answers, shown from the phone on the '
+        'next start before the server answers, erased on sign-out', (t) async {
+      final file = File('${dir.path}/chat_list.json');
+      FileChatListSnapshotStore store() =>
+          FileChatListSnapshotStore(root: () async => dir);
+      final tile = find.byKey(ValueKey('conversation-$withEli'));
+
+      // First start: nothing on the phone; the server's list is saved.
+      var c = app(store());
+      await t.pumpWidget(
+        UncontrolledProviderScope(container: c, child: const SisApp()),
+      );
+      await pumpUntil(t, () => tile.evaluate().isNotEmpty, 'the list');
+      await pumpUntil(
+        t,
+        () => file.existsSync() && file.readAsStringSync().contains(bramLast),
+        'the snapshot of what the server returned',
+      );
+      final saved = file.readAsStringSync();
+      expect(saved, contains(bramId), reason: 'not stamped with its owner');
+      expect(saved, contains(groupTitle));
+      expect(saved, contains(doraLast));
+      expect(saved, isNot(contains('@integration.test')), reason: 'an email');
+      await t.pumpWidget(const SizedBox());
+      c.dispose();
+
+      // Next start, over a slow connection: the stored list is on screen
+      // before the server has answered the list's reads.
+      wire
+        ..delay = const Duration(milliseconds: 1500)
+        ..reset();
+      c = app(store());
+      await t.pumpWidget(
+        UncontrolledProviderScope(container: c, child: const SisApp()),
+      );
+      await pumpUntil(t, () => tile.evaluate().isNotEmpty, 'the stored list');
+      expect(
+        [
+          for (final r in wire.rest)
+            if (r.table == 'conversation_previews' && r.end != null) r,
+        ],
+        isEmpty,
+        reason: 'the list waited for the server: ${wire.rest}',
+      );
+      expect([
+        for (final x in c.read(conversationListProvider).value!) x.id,
+      ], containsAll([withDora, withEli, groupId]));
+
+      // The server's answer then replaces it quietly: still on screen.
+      await pumpUntil(
+        t,
+        () => wire.rest.any((r) => r.table == 'unread_counts' && r.end != null),
+        "the server's list",
+      );
+      await t.pump(const Duration(milliseconds: 200));
+      expect(tile, findsOneWidget);
+
+      // Signing out through the app erases it.
+      wire.delay = Duration.zero;
+      await t.runAsync(
+        () => c.read(sessionControllerProvider.notifier).signOut(),
+      );
+      await pumpUntil(t, () => !file.existsSync(), 'the erase');
+      await t.pumpWidget(const SizedBox());
+      await t.pump(const Duration(milliseconds: 50));
+      c.dispose();
+    });
+
+    testWidgets('a store that cannot be read or written never stops the '
+        "server's list", (t) async {
+      final c = app(
+        FileChatListSnapshotStore(
+          root: () async => throw const FileSystemException('no storage'),
+        ),
+      );
+      addTearDown(c.dispose);
+      await t.pumpWidget(
+        UncontrolledProviderScope(container: c, child: const SisApp()),
+      );
+      await pumpUntil(
+        t,
+        () =>
+            find.byKey(ValueKey('conversation-$withEli')).evaluate().isNotEmpty,
+        'the list',
+      );
+      // Long enough for the save after the load to have failed too: an
+      // error escaping it must land in this test, not after it.
+      for (var i = 0; i < 20; i++) {
+        await t.pump(const Duration(milliseconds: 50));
+      }
+      expect(c.read(conversationListProvider).hasError, isFalse);
+      await t.pumpWidget(const SizedBox());
+      await t.pump(const Duration(milliseconds: 50));
+    });
   });
 }

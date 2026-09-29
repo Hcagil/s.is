@@ -3,6 +3,7 @@ library;
 
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/sis_app.dart';
@@ -11,7 +12,10 @@ import 'package:sis/data/failures.dart' show offlineMessage;
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/core/failure.dart';
+import 'package:sis/features/chat/data/file_chat_list_snapshot_store.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
+import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/data/supabase_presence_repository.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
@@ -163,4 +167,123 @@ void main() {
       }
     },
   );
+
+  group('the stored chat list when the server fails (v0.24.0)', () {
+    late Directory dir;
+    late SupabaseClient live;
+    late String cleoId;
+    final storedTitle = 'stored group ${DateTime.now().microsecondsSinceEpoch}';
+
+    setUp(() => dir = Directory.systemTemp.createTempSync('chat-list-seam-'));
+    tearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+
+    FileChatListSnapshotStore store() =>
+        FileChatListSnapshotStore(root: () async => dir);
+
+    /// cleo's app as main.dart wires it, chat over [chatClient], a list
+    /// already on the phone from her last run.
+    Future<ProviderContainer> app(
+      WidgetTester t,
+      Future<SupabaseClient> Function(SupabaseClient live) chatClient,
+    ) async {
+      live = (await t.runAsync(() => _signedIn('cleo@integration.test')))!;
+      addTearDown(() => live.dispose());
+      cleoId = live.auth.currentUser!.id;
+      await t.runAsync(
+        () => live
+            .from('profiles')
+            .update({'onboarding_done': true})
+            .eq('user_id', cleoId),
+      );
+      await t.runAsync(
+        () => store().save(cleoId, [
+          Conversation(id: 'stored-1', title: storedTitle, lastMessage: 'hi'),
+        ]),
+      );
+      final chat = (await t.runAsync(() => chatClient(live)))!;
+      addTearDown(() => chat.dispose());
+      final c = ProviderContainer(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            const RuntimeConfig(
+              supabaseUrl: _url,
+              supabasePublishableKey: _key,
+              googleWebClientId: 'c',
+            ),
+          ),
+          authRepositoryProvider.overrideWithValue(
+            FakeAuth(
+              session: true,
+              member: Member(userId: cleoId, displayName: 'Cleo'),
+            ),
+          ),
+          updateRepositoryProvider.overrideWithValue(FakeUpdate()),
+          chatRepositoryProvider.overrideWithValue(
+            SupabaseChatRepository(chat),
+          ),
+          profileRepositoryProvider.overrideWithValue(
+            SupabaseProfileRepository(live),
+          ),
+          presenceRepositoryProvider.overrideWithValue(
+            SupabasePresenceRepository(live),
+          ),
+          chatListSnapshotStoreProvider.overrideWithValue(store()),
+        ],
+      );
+      addTearDown(c.dispose);
+      c.listen(conversationListProvider, (_, _) {});
+      await t.pumpWidget(
+        UncontrolledProviderScope(container: c, child: const SisApp()),
+      );
+      return c;
+    }
+
+    /// Until the list's server read has failed and settled (a dead host's GET
+    /// is retried for about 7 s before it fails).
+    Future<AsyncValue<List<Conversation>>> settledList(
+      WidgetTester t,
+      ProviderContainer c,
+    ) async {
+      for (var i = 0; i < 150; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await t.pump();
+        final v = c.read(conversationListProvider);
+        if (!v.isLoading && (v.hasError || i > 60)) break;
+      }
+      await t.pump();
+      return c.read(conversationListProvider);
+    }
+
+    testWidgets('no connection (a retryable failure from the real '
+        'repository): the stored list stays on screen, no raw SDK text', (
+      t,
+    ) async {
+      // The dead client carries cleo's real session before the app asks.
+      final c = await app(t, deadButSignedIn);
+      final v = await settledList(t, c);
+
+      expect(v.hasValue, isTrue, reason: '$v');
+      expect([for (final x in v.value!) x.id], ['stored-1'], reason: '$v');
+      expect(v.hasError, isFalse, reason: '$v');
+      expect(
+        find.byKey(const ValueKey('conversation-stored-1')),
+        findsOneWidget,
+      );
+      for (final needle in ['Exception', 'statusCode', 'errno']) {
+        expect(find.textContaining(needle), findsNothing);
+      }
+    });
+
+    testWidgets('refused (DeniedFailure from the real repository): an '
+        'error on screen, never the stored list', (t) async {
+      // No session on the chat client: the real repository refuses.
+      final c = await app(t, (_) async => deadHostClient());
+      final v = await settledList(t, c);
+
+      expect(v.error, isA<DeniedFailure>(), reason: 'precondition: $v');
+      expect(find.byKey(const ValueKey('conversation-stored-1')), findsNothing);
+    });
+  });
 }

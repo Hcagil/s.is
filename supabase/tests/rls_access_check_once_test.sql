@@ -21,7 +21,11 @@ select plan(30);
 --     that clause refuses). Since v0.22.0 profiles_read also requires the
 --     row be the caller's own, a conversation partner or a saved contact
 --     (profiles_scope_test.sql), and the pin moved to avatar_object, the
---     real picture path (avatar_privacy_test.sql);
+--     real picture path (avatar_privacy_test.sql). Since v0.23.0 (membership
+--     windows) conversations_read is was_member, conversation_members_read
+--     is the overlap of windows, messages_read adds message_readable,
+--     profiles_read uses shared_conversation_ever and attachments_read uses
+--     attachment_readable (group_membership_test.sql proves each);
 --  3. plan text: a member reading conversation_members and
 --     conversation_previews evaluates has_app_access() in an InitPlan, never
 --     in a per-row Filter;
@@ -75,11 +79,11 @@ $$;
 create temp table expected(schemaname name, tablename name, policyname name, def text);
 insert into expected values
   ('public', 'app_config', 'app_config_read', $e$PERMISSIVE|{authenticated}|SELECT|app_private.has_app_access()|<null>$e$),
-  ('public', 'conversation_members', 'conversation_members_read', $e$PERMISSIVE|{authenticated}|SELECT|(app_private.has_app_access() AND app_private.is_member(conversation_id))|<null>$e$),
-  ('public', 'conversations', 'conversations_read', $e$PERMISSIVE|{authenticated}|SELECT|(app_private.has_app_access() AND app_private.is_member(id))|<null>$e$),
+  ('public', 'conversation_members', 'conversation_members_read', $e$PERMISSIVE|{authenticated}|SELECT|(app_private.has_app_access() AND (conversation_id = ANY (app_private.my_conversation_ids())) AND ((user_id = auth.uid()) OR app_private.overlaps_my_membership(conversation_id, joined_at, left_at)))|<null>$e$),
+  ('public', 'conversations', 'conversations_read', $e$PERMISSIVE|{authenticated}|SELECT|(app_private.has_app_access() AND app_private.was_member(id))|<null>$e$),
   ('public', 'messages', 'messages_read', $e$PERMISSIVE|{authenticated}|SELECT|(( SELECT app_private.has_app_access() AS has_app_access) AND (conversation_id = ANY (ARRAY( SELECT cm.conversation_id
    FROM conversation_members cm
-  WHERE (cm.user_id = ( SELECT auth.uid() AS uid))))))|<null>$e$),
+  WHERE (cm.user_id = ( SELECT auth.uid() AS uid))))) AND app_private.message_readable(messages.*))|<null>$e$),
   ('public', 'messages', 'messages_send', $e$PERMISSIVE|{authenticated}|INSERT|<null>|(app_private.has_app_access() AND (sender_id = auth.uid()) AND app_private.is_member(conversation_id) AND ((attachment_path IS NULL) OR ((split_part(attachment_path, '/'::text, 1) = (conversation_id)::text) AND app_private.owns_attachment(attachment_path))) AND ((reply_to IS NULL) OR app_private.in_conversation(reply_to, conversation_id)))$e$),
   ('public', 'notification_mutes', 'notification_mutes_change', $e$PERMISSIVE|{authenticated}|UPDATE|(app_private.has_app_access() AND (user_id = ( SELECT auth.uid() AS uid)))|(app_private.has_app_access() AND (user_id = ( SELECT auth.uid() AS uid)) AND
 CASE kind
@@ -96,11 +100,11 @@ CASE kind
     ELSE NULL::boolean
 END)$e$),
   ('public', 'notification_settings', 'notification_settings_own', $e$PERMISSIVE|{authenticated}|ALL|(app_private.has_app_access() AND (user_id = ( SELECT auth.uid() AS uid)))|(app_private.has_app_access() AND (user_id = ( SELECT auth.uid() AS uid)))$e$),
-  ('public', 'profiles', 'profiles_read', $e$PERMISSIVE|{authenticated}|SELECT|(app_private.has_app_access() AND app_private.is_allowed(user_id) AND ((user_id = auth.uid()) OR app_private.shares_conversation(user_id) OR app_private.is_contact(user_id)))|<null>$e$),
+  ('public', 'profiles', 'profiles_read', $e$PERMISSIVE|{authenticated}|SELECT|(app_private.has_app_access() AND app_private.is_allowed(user_id) AND ((user_id = auth.uid()) OR app_private.shared_conversation_ever(user_id) OR app_private.is_contact(user_id)))|<null>$e$),
   ('public', 'profiles', 'profiles_update_own', $e$PERMISSIVE|{authenticated}|UPDATE|(app_private.has_app_access() AND (user_id = auth.uid()))|(app_private.has_app_access() AND (user_id = auth.uid()) AND ((avatar_object IS NULL) OR app_private.avatar_path_pinned(avatar_object, ('profile/'::text || (user_id)::text))))$e$),
   ('realtime', 'messages', 'realtime_receive', $e$PERMISSIVE|{authenticated}|SELECT|(app_private.has_app_access() AND (((realtime.topic() = 'presence:members'::text) AND (extension = 'presence'::text)) OR ((extension = 'broadcast'::text) AND app_private.is_member(app_private.typing_conversation(realtime.topic()))) OR ((extension = 'broadcast'::text) AND app_private.is_member(app_private.reads_conversation(realtime.topic())) AND app_private.shares_read_status())))|<null>$e$),
   ('realtime', 'messages', 'realtime_send', $e$PERMISSIVE|{authenticated}|INSERT|<null>|(app_private.has_app_access() AND (((realtime.topic() = 'presence:members'::text) AND (extension = 'presence'::text) AND app_private.shares_presence()) OR ((extension = 'broadcast'::text) AND app_private.is_member(app_private.typing_conversation(realtime.topic())) AND app_private.shares_typing())))$e$),
-  ('storage', 'objects', 'attachments_read', $e$PERMISSIVE|{authenticated}|SELECT|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND app_private.is_member_of_path(name))|<null>$e$),
+  ('storage', 'objects', 'attachments_read', $e$PERMISSIVE|{authenticated}|SELECT|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND app_private.attachment_readable(name, owner_id))|<null>$e$),
   ('storage', 'objects', 'attachments_remove_deleted', $e$PERMISSIVE|{authenticated}|DELETE|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND (owner_id = (auth.uid())::text) AND app_private.may_remove_attachment(name))|<null>$e$),
   ('storage', 'objects', 'attachments_write', $e$PERMISSIVE|{authenticated}|INSERT|<null>|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND app_private.is_member_of_path(name) AND (owner_id = (auth.uid())::text))$e$);
 

@@ -1,5 +1,5 @@
 begin;
-select plan(34);
+select plan(36);
 
 -- conversation_previews and the messages_read policy, after they were made
 -- to scale with the caller's own conversations instead of the whole message
@@ -218,8 +218,18 @@ select ok((select view_plan ~ ('(Index (Only )?Scan( Backward)? using|Bitmap Ind
           'the view reaches public.messages through its (conversation_id, created_at) index');
 -- messages_read's bound comes first: the caller's memberships, read once
 -- (an InitPlan), then the view's own join key, one conversation at a time.
-select ok((select view_plan ~ 'Index Cond: \(\(conversation_id = ANY \(\(InitPlan \d+\)\.col1\)\) AND \(conversation_id = cm\.conversation_id\)\)' from plans),
+-- Since v0.23.0 the join key is deparsed with the table's own name
+-- (conversation_members.conversation_id), not the alias.
+select ok((select view_plan ~ 'Index Cond: \(\(conversation_id = ANY \(\(InitPlan \d+\)\.col1\)\) AND \(conversation_id = (cm|conversation_members)\.conversation_id\)\)' from plans),
           'the view''s index scan is bounded to her conversations and to one conversation at a time, not the whole index');
+-- v0.23.0: the membership bound itself is an index scan of
+-- conversation_members limited to the caller (her own rows, in her own
+-- conversations), never a scan of every membership row. Bitmap or plain
+-- index scan: the planner picks either from run to run (measured).
+select ok((select view_plan ~ '(Bitmap Index Scan on|Index (Only )?Scan using) conversation_members_conv_user_idx[^\n]*\n\s+Index Cond: \(\(conversation_id = ANY \(app_private\.my_conversation_ids\(\)\)\) AND \(user_id = \(InitPlan \d+\)\.col1\)\)' from plans),
+          'the view reads her memberships through the (conversation_id, user_id) index, bounded to her');
+select unalike((select view_plan from plans), '%Seq Scan on conversation_members%',
+               'the view does not scan public.conversation_members');
 select unalike((select history_plan from plans), '%Seq Scan on messages%', 'the history read does not scan public.messages');
 select ok((select history_plan ~ ('(Index (Only )?Scan( Backward)? using|Bitmap Index Scan on) ' || (select name from idx) || '\M')
                   and history_plan ~ 'Index Cond: \(\(conversation_id = ANY \(\(InitPlan \d+\)\.col1\)\) AND \(conversation_id = ''d0000000-0000-0000-0000-000000000010''::uuid\)\)'

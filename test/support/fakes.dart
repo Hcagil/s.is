@@ -18,6 +18,8 @@ import 'package:sis/features/chat/domain/contacts_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/external_picker.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
+import 'package:sis/features/chat/domain/group_event.dart';
+import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/picture_cropper.dart';
@@ -328,6 +330,59 @@ class FakeChat implements ChatRepository {
   Future<Result<String>> startDirectConversation(String otherUserId) async {
     started.add(otherUserId);
     return startResult;
+  }
+
+  /// Left null the roster is [conversationMembersResult]: everyone current,
+  /// nobody an admin, nobody departed.
+  Result<List<GroupMember>>? groupRosterResult;
+  Result<List<GroupEvent>> groupEventsResult = const Ok(<GroupEvent>[]);
+  Result<void> groupWriteResult = const Ok(null);
+
+  /// Every group write, in order, as ChatFake.groupWrites names them.
+  final groupWrites = <String>[];
+
+  @override
+  Future<Result<List<GroupMember>>> groupRoster(String id) async =>
+      groupRosterResult ??
+      switch (conversationMembersResult) {
+        Ok(:final value) => Ok([
+          for (final m in value) GroupMember(member: m, isAdmin: false),
+        ]),
+        Err(:final failure) => Err(failure),
+      };
+  @override
+  Future<Result<List<GroupEvent>>> groupEvents(String id) async =>
+      groupEventsResult;
+  @override
+  Future<Result<void>> leaveGroup(String id) async {
+    groupWrites.add('leave:$id');
+    return groupWriteResult;
+  }
+
+  @override
+  Future<Result<void>> removeMember(String id, String memberId) async {
+    groupWrites.add('remove:$id:$memberId');
+    return groupWriteResult;
+  }
+
+  @override
+  Future<Result<void>> addMembers(
+    String id,
+    List<String> memberIds, {
+    required bool withHistory,
+  }) async {
+    groupWrites.add('add:$id:${memberIds.join(',')}:$withHistory');
+    return groupWriteResult;
+  }
+
+  @override
+  Future<Result<void>> setAdmin(
+    String id,
+    String memberId, {
+    required bool isAdmin,
+  }) async {
+    groupWrites.add('admin:$id:$memberId:$isAdmin');
+    return groupWriteResult;
   }
 
   /// Every group asked for, in order, exactly as the caller passed it.
@@ -704,6 +759,7 @@ class ChatFake implements ChatRepository {
             lastSenderId: m.senderId,
             unread: m.senderId == self ? c.unread : c.unread + 1,
             avatarPath: c.avatarPath,
+            hasLeft: c.hasLeft,
           ),
     ];
     rows.sort((a, b) {
@@ -757,6 +813,7 @@ class ChatFake implements ChatRepository {
             lastMessageAt: c.lastMessageAt,
             lastSenderId: c.lastSenderId,
             avatarPath: c.avatarPath,
+            hasLeft: c.hasLeft,
           ),
     ]);
     return const Ok(null);
@@ -841,9 +898,14 @@ class ChatFake implements ChatRepository {
     final held = _people;
     if (held != null) await held.future;
     if (conversationMembersResult case final forced?) return forced;
-    return Ok(
-      [...?roster[id]]..sort((a, b) => a.displayName.compareTo(b.displayName)),
-    );
+    final people = switch (groupRosters[id]) {
+      final rows? => [
+        for (final g in rows)
+          if (!g.hasLeft) g.member,
+      ],
+      null => [...?roster[id]],
+    };
+    return Ok(people..sort((a, b) => a.displayName.compareTo(b.displayName)));
   }
 
   @override
@@ -1553,6 +1615,234 @@ class ChatFake implements ChatRepository {
     );
     (_readSinks[conversationId] ??= []).add(sink);
     return Ok(sink.stream);
+  }
+
+  // Groups: roster, leaving, removal, adding, admins (v0.23) ---------------
+
+  /// Each group's roster as conversation_members holds it: current AND
+  /// departed rows, in joining order (the first current row is the
+  /// longest-standing member). A conversation with no entry is a 1:1 or one
+  /// the caller was never in, which the server refuses.
+  final groupRosters = <String, List<GroupMember>>{};
+
+  /// Each group's group_events, oldest first. [groupEvents] shows them only
+  /// to a current admin, like the row-level security policy.
+  final events = <String, List<GroupEvent>>{};
+
+  /// Who [addMembers] may add: the caller's reach. Anyone else fails the
+  /// whole call, as on the server.
+  final reachable = <Member>[];
+
+  /// Force an outcome; left null each call answers like the RPC.
+  Result<List<GroupMember>>? groupRosterResult;
+  Result<void>? leaveResult;
+  Result<void>? removeResult;
+  Result<void>? addResult;
+  Result<void>? setAdminResult;
+  Result<List<GroupEvent>>? groupEventsResult;
+
+  /// Every group write, in order: `leave:c`, `remove:c:m`,
+  /// `add:c:a,b:history`, `admin:c:m:true`.
+  final groupWrites = <String>[];
+
+  Completer<void>? _groupWrite;
+
+  /// The next group write stays in flight until [releaseGroupWrite].
+  void holdGroupWrite() => _groupWrite = Completer<void>();
+  void releaseGroupWrite() {
+    _groupWrite?.complete();
+    _groupWrite = null;
+  }
+
+  int _eventSeq = 0;
+
+  GroupMember? _current(String conversationId, String? userId) =>
+      groupRosters[conversationId]
+          ?.where((g) => !g.hasLeft && g.member.userId == userId)
+          .firstOrNull;
+
+  bool _isAdmin(String conversationId) =>
+      _current(conversationId, self)?.isAdmin ?? false;
+
+  void _replace(String conversationId, String userId, GroupMember next) {
+    final rows = groupRosters[conversationId]!;
+    final i = rows.indexWhere((g) => !g.hasLeft && g.member.userId == userId);
+    rows[i] = next;
+  }
+
+  void _event(String conversationId, GroupEventKind kind, String subject) {
+    (events[conversationId] ??= []).add(
+      GroupEvent(
+        id: 'e${++_eventSeq}',
+        conversationId: conversationId,
+        kind: kind,
+        subjectId: subject,
+        actorId: kind == GroupEventKind.left ? null : self,
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+
+  /// No current admin left while members remain: promote the
+  /// longest-standing current member, as leave_group does.
+  void _promoteIfNeeded(String conversationId) {
+    final current = groupRosters[conversationId]!.where((g) => !g.hasLeft);
+    if (current.isEmpty || current.any((g) => g.isAdmin)) return;
+    final first = current.first;
+    _replace(
+      conversationId,
+      first.member.userId,
+      GroupMember(member: first.member, isAdmin: true),
+    );
+  }
+
+  Future<void> _groupTick(String call) async {
+    await _tick(call);
+    groupWrites.add(call);
+    final held = _groupWrite;
+    if (held != null) await held.future;
+  }
+
+  @override
+  Future<Result<List<GroupMember>>> groupRoster(String conversationId) async {
+    await _tick('groupRoster:$conversationId');
+    final held = _people;
+    if (held != null) await held.future;
+    if (groupRosterResult case final forced?) return forced;
+    final rows = groupRosters[conversationId];
+    if (rows != null) return Ok(List.of(rows));
+    // No roster of its own: the people [roster] holds (or the forced
+    // [conversationMembersResult]), all current and none an admin.
+    final people =
+        conversationMembersResult ?? Ok([...?roster[conversationId]]);
+    return switch (people) {
+      Ok(:final value) => Ok([
+        for (final m in value) GroupMember(member: m, isAdmin: false),
+      ]),
+      Err(:final failure) => Err(failure),
+    };
+  }
+
+  @override
+  Future<Result<void>> leaveGroup(String conversationId) async {
+    await _groupTick('leave:$conversationId');
+    if (leaveResult case final forced?) return forced;
+    final me = _current(conversationId, self);
+    if (me == null) return const Err(DeniedFailure());
+    _replace(
+      conversationId,
+      self!,
+      GroupMember(
+        member: me.member,
+        isAdmin: me.isAdmin,
+        leftReason: LeftReason.left,
+      ),
+    );
+    _promoteIfNeeded(conversationId);
+    _event(conversationId, GroupEventKind.left, self!);
+    _markLeft(conversationId);
+    return const Ok(null);
+  }
+
+  void _markLeft(String conversationId) {
+    final current = conversationsResult;
+    if (current is! Ok<List<Conversation>>) return;
+    conversationsResult = Ok([
+      for (final c in current.value)
+        if (c.id != conversationId)
+          c
+        else
+          Conversation(
+            id: c.id,
+            title: c.title,
+            other: c.other,
+            lastMessage: c.lastMessage,
+            lastMessageAt: c.lastMessageAt,
+            lastSenderId: c.lastSenderId,
+            unread: c.unread,
+            avatarPath: c.avatarPath,
+            hasLeft: true,
+          ),
+    ]);
+  }
+
+  @override
+  Future<Result<void>> removeMember(
+    String conversationId,
+    String memberId,
+  ) async {
+    await _groupTick('remove:$conversationId:$memberId');
+    if (removeResult case final forced?) return forced;
+    final them = _current(conversationId, memberId);
+    if (!_isAdmin(conversationId) || memberId == self || them == null) {
+      return const Err(DeniedFailure());
+    }
+    _replace(
+      conversationId,
+      memberId,
+      GroupMember(
+        member: them.member,
+        isAdmin: them.isAdmin,
+        leftReason: LeftReason.removed,
+      ),
+    );
+    _event(conversationId, GroupEventKind.removed, memberId);
+    return const Ok(null);
+  }
+
+  @override
+  Future<Result<void>> addMembers(
+    String conversationId,
+    List<String> memberIds, {
+    required bool withHistory,
+  }) async {
+    await _groupTick('add:$conversationId:${memberIds.join(',')}:$withHistory');
+    if (addResult case final forced?) return forced;
+    if (!_isAdmin(conversationId)) return const Err(DeniedFailure());
+    final people = {for (final m in reachable) m.userId: m};
+    if (memberIds.any((id) => !people.containsKey(id))) {
+      return const Err(DeniedFailure());
+    }
+    for (final id in memberIds) {
+      if (_current(conversationId, id) != null) continue;
+      groupRosters[conversationId]!.add(
+        GroupMember(member: people[id]!, isAdmin: false),
+      );
+      _event(conversationId, GroupEventKind.added, id);
+    }
+    return const Ok(null);
+  }
+
+  @override
+  Future<Result<void>> setAdmin(
+    String conversationId,
+    String memberId, {
+    required bool isAdmin,
+  }) async {
+    await _groupTick('admin:$conversationId:$memberId:$isAdmin');
+    if (setAdminResult case final forced?) return forced;
+    final them = _current(conversationId, memberId);
+    if (!_isAdmin(conversationId) || them == null) {
+      return const Err(DeniedFailure());
+    }
+    final admins = groupRosters[conversationId]!.where(
+      (g) => !g.hasLeft && g.isAdmin && g.member.userId != memberId,
+    );
+    if (!isAdmin && admins.isEmpty) return const Err(DeniedFailure());
+    _replace(
+      conversationId,
+      memberId,
+      GroupMember(member: them.member, isAdmin: isAdmin),
+    );
+    return const Ok(null);
+  }
+
+  @override
+  Future<Result<List<GroupEvent>>> groupEvents(String conversationId) async {
+    await _tick('groupEvents:$conversationId');
+    if (groupEventsResult case final forced?) return forced;
+    if (!_isAdmin(conversationId)) return const Ok(<GroupEvent>[]);
+    return Ok(List.of(events[conversationId] ?? const <GroupEvent>[]));
   }
 }
 

@@ -19,6 +19,8 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/group_event.dart';
+import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
@@ -123,6 +125,29 @@ class _Relay implements ChatRepository {
   @override
   Future<Result<List<Member>>> conversationMembers(String id) =>
       real.conversationMembers(id);
+  @override
+  Future<Result<List<GroupMember>>> groupRoster(String id) =>
+      real.groupRoster(id);
+  @override
+  Future<Result<void>> leaveGroup(String id) => real.leaveGroup(id);
+  @override
+  Future<Result<void>> removeMember(String id, String memberId) =>
+      real.removeMember(id, memberId);
+  @override
+  Future<Result<void>> addMembers(
+    String id,
+    List<String> memberIds, {
+    required bool withHistory,
+  }) => real.addMembers(id, memberIds, withHistory: withHistory);
+  @override
+  Future<Result<void>> setAdmin(
+    String id,
+    String memberId, {
+    required bool isAdmin,
+  }) => real.setAdmin(id, memberId, isAdmin: isAdmin);
+  @override
+  Future<Result<List<GroupEvent>>> groupEvents(String id) =>
+      real.groupEvents(id);
   @override
   Future<Result<List<Message>>> sharedMedia(String id) => real.sharedMedia(id);
   @override

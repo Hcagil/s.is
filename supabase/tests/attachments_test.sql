@@ -9,7 +9,7 @@
 -- by `has_app_access()`. A stranger would fail the first gate and prove
 -- nothing about the rest.
 begin;
-select plan(35);
+select plan(37);
 
 -- fixtures ------------------------------------------------------------------
 -- ann, bob: members of the conversation. dan: allowlisted and ACTIVE but not
@@ -149,8 +149,11 @@ insert into storage.objects(bucket_id, name, owner_id, metadata)
 
 -- 5 the other member reads, a non-member does not --------------------------
 select test_as('00000000-0000-0000-0000-00000000bb01', 'b7b7b7b7-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
-select is((select count(*) from storage.objects where bucket_id = 'attachments'), 1::bigint,
-          'the other member reads the attachment');
+-- v0.23.0: another member reads an object only through a message she may
+-- read (attachment_readable). No message references photo.jpg yet, so bob,
+-- a current member, is refused; section 7 shows him reading it once one does.
+select is((select count(*) from storage.objects where bucket_id = 'attachments'), 0::bigint,
+          'the other member does not read an object no message references');
 select lives_ok(
   $$select count(*) from storage.objects where bucket_id = 'attachments'$$,
   'a malformed key already in the bucket does not break a listing');
@@ -242,6 +245,21 @@ select set_eq(
            ('reply_to'),('forwarded')$$,
   'authenticated may insert exactly id, conversation_id, sender_id, body, attachment_path, '
   'attachment_preview, reply_to, forwarded (20260928170000_message_client_id.sql)');
+
+-- The positive control for dan (section 5): with messages referencing
+-- photo, photo2 and photo3, bob -- a member -- reads exactly those three,
+-- while dan, active and allowlisted but not a member, still reads none.
+select test_as('00000000-0000-0000-0000-00000000bb01', 'b7b7b7b7-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select set_eq(
+  $$select name from storage.objects where bucket_id = 'attachments'$$,
+  format($$values (%L), (%L), (%L)$$, (select conv from _fx) || '/photo.jpg',
+         (select conv from _fx) || '/photo2.jpg', (select conv from _fx) || '/photo3.jpg'),
+  'the other member reads every object a message references, and nothing else');
+reset role;
+select test_as('00000000-0000-0000-0000-00000000dd01', 'd7d7d7d7-dddd-dddd-dddd-dddddddddddd');
+select is((select count(*) from storage.objects where bucket_id = 'attachments'), 0::bigint,
+          'an active non-member still reads none of them');
+reset role;
 
 -- 8 losing the active session closes the attachment too ---------------------
 -- ann is still a member, so membership cannot be what stops her here.

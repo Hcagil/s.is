@@ -453,13 +453,15 @@ select is((select string_agg(what || ': ' || line, E'\n')
   null,
   'no Recheck Cond, Filter or Index Cond evaluates escape_like/fold_search per row');
 
--- The definer re-applies membership twice, each enough alone: the bound to
--- the caller's own conversations and app_private.is_member(), messages_read's
--- own check. Results cannot tell one missing (the other still holds), so the
--- plan does: dropping either is drift from the policy this function mirrors.
+-- The definer re-applies the policy twice: the bound to the caller's own
+-- conversations and app_private.message_readable(), messages_read's own check
+-- since v0.23.0 (a membership window, not current membership). Results cannot
+-- tell the bound missing (the window check still holds), so the plan does:
+-- dropping either is drift from the policy this function mirrors. What
+-- message_readable refuses is proven by results in group_membership_test.sql.
 select ok((select bool_and(plan ~ '\n\s*Filter: .*conversation_id = ANY \(\(InitPlan \d+\)\.col1\)'
-                       and plan ~ '\n\s*Filter: .*app_private\.is_member\(conversation_id\)') from _plans),
-  'every candidate row is checked against the caller''s conversations AND by is_member()');
+                       and plan ~ '\n\s*Filter: .*app_private\.message_readable\(') from _plans),
+  'every candidate row is checked against the caller''s conversations AND by message_readable()');
 
 -- The trigram index skips GIN's pending list: with fastupdate on, fresh
 -- messages sit unindexed in a list every search scans in full until the next

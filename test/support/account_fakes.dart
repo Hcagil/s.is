@@ -16,6 +16,8 @@ import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/group_event.dart';
+import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
@@ -300,6 +302,71 @@ class SessionChat implements ChatRepository {
     final r = _roomFor(conversationId, who);
     return Ok([...?r?.members.map(backend.memberOf)]);
   }
+
+  // Groups (v0.23): the roster is the room's members, nobody an admin and
+  // nobody departed; every write is refused without a session or a room,
+  // like the RPCs, and otherwise changes the room.
+  @override
+  Future<Result<List<GroupMember>>> groupRoster(String conversationId) async {
+    final who = await _as('groupRoster:$conversationId');
+    final r = _roomFor(conversationId, who);
+    if (r == null || r.title == null) return const Err(DeniedFailure());
+    return Ok([
+      for (final id in r.members)
+        GroupMember(member: backend.memberOf(id), isAdmin: false),
+    ]);
+  }
+
+  @override
+  Future<Result<List<GroupEvent>>> groupEvents(String conversationId) async {
+    await _as('groupEvents:$conversationId');
+    return const Ok(<GroupEvent>[]);
+  }
+
+  Future<Result<void>> _groupWrite(
+    String call,
+    String conversationId,
+    void Function(Room r, String who) change,
+  ) async {
+    final who = await _as(call);
+    final r = _roomFor(conversationId, who);
+    if (r == null || r.title == null) return const Err(DeniedFailure());
+    change(r, who!);
+    return const Ok(null);
+  }
+
+  @override
+  Future<Result<void>> leaveGroup(String conversationId) => _groupWrite(
+    'leaveGroup:$conversationId',
+    conversationId,
+    (r, who) => r.members.remove(who),
+  );
+
+  @override
+  Future<Result<void>> removeMember(String conversationId, String memberId) =>
+      _groupWrite(
+        'removeMember:$conversationId:$memberId',
+        conversationId,
+        (r, _) => r.members.remove(memberId),
+      );
+
+  @override
+  Future<Result<void>> addMembers(
+    String conversationId,
+    List<String> memberIds, {
+    required bool withHistory,
+  }) => _groupWrite(
+    'addMembers:$conversationId',
+    conversationId,
+    (r, _) => r.members.addAll(memberIds),
+  );
+
+  @override
+  Future<Result<void>> setAdmin(
+    String conversationId,
+    String memberId, {
+    required bool isAdmin,
+  }) => _groupWrite('setAdmin:$conversationId', conversationId, (_, _) {});
 
   @override
   Future<Result<List<Message>>> sharedMedia(String conversationId) async {

@@ -34,6 +34,7 @@ import 'features/profile/application/profile_controller.dart';
 import 'features/profile/data/supabase_profile_repository.dart';
 import 'features/update/application/update_controller.dart';
 import 'features/update/data/play_update_repository.dart';
+import 'features/update/data/testflight_update_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -75,10 +76,14 @@ Future<void> main() async {
               client,
               GoogleSignIn.instance,
               googleWebClientId: config.googleWebClientId,
+              useNonce: defaultTargetPlatform == TargetPlatform.iOS,
             ),
           ),
           updateRepositoryProvider.overrideWithValue(
-            PlayUpdateRepository(client),
+            // Play in-app updates exist on Android only; iOS is TestFlight.
+            defaultTargetPlatform == TargetPlatform.iOS
+                ? TestFlightUpdateRepository(client)
+                : PlayUpdateRepository(client),
           ),
           chatRepositoryProvider.overrideWithValue(
             SupabaseChatRepository(client, cache: attachmentCache),

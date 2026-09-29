@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:crypto/crypto.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -13,12 +17,20 @@ final class SupabaseAuthRepository implements AuthRepository {
     this._client,
     this._google, {
     required this.googleWebClientId,
+    this.useNonce = false,
   });
 
   final SupabaseClient _client;
   final GoogleSignIn _google;
   final String googleWebClientId;
+
+  /// True on iOS: Google's iOS SDK puts a `nonce` claim in the ID token and
+  /// Supabase rejects a token whose nonce the request does not echo. Android
+  /// stays without one: nothing proves Play services embeds it, and a
+  /// mismatch would break the production sign-in.
+  final bool useNonce;
   bool _googleReady = false;
+  String? _rawNonce;
 
   static const _scopes = ['https://www.googleapis.com/auth/userinfo.email'];
 
@@ -36,7 +48,22 @@ final class SupabaseAuthRepository implements AuthRepository {
       // Initialised lazily so a missing Play Services only breaks sign-in,
       // never the whole app for an already signed-in member.
       if (!_googleReady) {
-        await _google.initialize(serverClientId: googleWebClientId);
+        // google_sign_in takes the nonce at initialize, which must run once,
+        // so the nonce lives for the app process, not for each sign-in.
+        // ponytail: one nonce per process; per-sign-in needs re-initialize,
+        // which the plugin forbids.
+        if (useNonce) {
+          final random = Random.secure();
+          _rawNonce = base64UrlEncode(
+            List<int>.generate(32, (_) => random.nextInt(256)),
+          );
+        }
+        await _google.initialize(
+          serverClientId: googleWebClientId,
+          nonce: _rawNonce == null
+              ? null
+              : sha256.convert(utf8.encode(_rawNonce!)).toString(),
+        );
         _googleReady = true;
       }
       user = await _google.authenticate(scopeHint: _scopes);
@@ -67,6 +94,7 @@ final class SupabaseAuthRepository implements AuthRepository {
         provider: OAuthProvider.google,
         idToken: idToken,
         accessToken: auth.accessToken,
+        nonce: _rawNonce,
       );
       return const Ok(null);
     } on AuthRetryableFetchException catch (e) {

@@ -258,6 +258,21 @@ of **the Play App Signing certificate** and of the upload certificate. A
 missing registration surfaces as a Credential Manager cancellation after
 account selection; the app shows that reason rather than returning silently.
 
+iOS: the iOS OAuth client `306417977220-vqg0ne5360a921i23quf294g8e0fjshq` is
+set as `GIDClientID` in `ios/Runner/Info.plist`. The Web client stays
+`serverClientId`, so the ID token's audience is still the Web client and
+Supabase keeps one client list.
+
+Nonce: on iOS the Google SDK puts a `nonce` claim in the ID token, and
+Supabase requires the request nonce and the token nonce to be both present or
+both absent (it compares the SHA-256 hex of the request nonce with the
+token's). On iOS the app makes a random 32-byte nonce (`Random.secure`), gives
+Google its SHA-256 hex and gives Supabase the raw value, so replay stays
+blocked and "Skip nonce checks" stays off. The nonce is fixed for the app
+process because `google_sign_in` takes it once, at initialize. Android sends
+no nonce: nothing shows that Play services embeds it, and a mismatch would
+break the production sign-in. Revisit with a device test.
+
 ### Secrets
 
 No secrets in the app or repository. Service-role keys and signing material

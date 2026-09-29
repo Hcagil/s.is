@@ -9,7 +9,7 @@ import '../../../data/postgrest_retry.dart';
 import '../domain/update_repository.dart';
 
 /// [UpdateRepository] backed by `app_config` and Google Play in-app updates.
-final class PlayUpdateRepository implements UpdateRepository {
+class PlayUpdateRepository implements UpdateRepository {
   PlayUpdateRepository(this._client);
 
   final SupabaseClient _client;

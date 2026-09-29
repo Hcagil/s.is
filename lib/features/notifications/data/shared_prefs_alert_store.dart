@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/alert_settings.dart';
-import 'local_push_display.dart';
+import 'alert_channels.dart';
 
 /// [AlertStore] over shared_preferences. Thin on purpose (ARCHITECTURE rule
 /// 4). Read in the background isolate too, so every load re-reads the disk.
@@ -68,7 +68,7 @@ final class SharedPrefsAlertStore implements AlertStore {
 
   Future<void> _prune() async {
     try {
-      await LocalPushDisplay.pruneChannels();
+      await pruneAlertChannels(this);
     } catch (_) {
       // Housekeeping only; the next start retries.
     }

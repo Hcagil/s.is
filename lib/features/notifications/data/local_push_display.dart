@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/alert_settings.dart';
 import '../domain/notification_inbox.dart';
+import 'alert_channels.dart';
 import 'push_receipt_log.dart';
 import 'shared_prefs_alert_store.dart';
 
@@ -25,7 +26,6 @@ final class LocalPushDisplay {
   static const _summaryId = 0;
   static const _summaryChannelId = 'summary';
   static const _summaryChannelName = 'Summary';
-  static const _legacyChannelId = 'messages';
   static const _channelDescription = 'New messages';
   static const _alerts = SharedPrefsAlertStore();
 
@@ -61,6 +61,11 @@ final class LocalPushDisplay {
         settings: const InitializationSettings(
           android: AndroidInitializationSettings(
             '@drawable/ic_launcher_monochrome',
+          ),
+          iOS: DarwinInitializationSettings(
+            requestAlertPermission: false,
+            requestBadgePermission: false,
+            requestSoundPermission: false,
           ),
         ),
         onDidReceiveNotificationResponse: onTap == null
@@ -201,30 +206,7 @@ final class LocalPushDisplay {
   /// combination is a channel of its own, created when first drawn). Never
   /// throws: this is housekeeping, and runs at app start and on every change
   /// of a setting.
-  static Future<void> pruneChannels() async {
-    try {
-      final android = _plugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
-      if (android == null) return;
-      final used = usedAlertChannelIds(
-        await _alerts.loadDefaults(),
-        await _alerts.loadChats(),
-      );
-      for (final c
-          in await android.getNotificationChannels() ??
-              const <AndroidNotificationChannel>[]) {
-        final ours =
-            c.id.startsWith(alertChannelPrefix) || c.id == _legacyChannelId;
-        if (ours && !used.contains(c.id)) {
-          await android.deleteNotificationChannel(channelId: c.id);
-        }
-      }
-    } catch (e) {
-      await PushReceiptLog.add('error', error: e, label: 'pruneChannels');
-    }
-  }
+  static Future<void> pruneChannels() => pruneAlertChannels(_alerts);
 
   /// Every pass over the stored inbox in this isolate runs one at a time, so
   /// concurrent pushes never overwrite each other's line. A failing [f] must
@@ -357,6 +339,7 @@ final class LocalPushDisplay {
             summaryText: inboxSummary(inbox),
           ),
         ),
+        iOS: DarwinNotificationDetails(presentSound: false),
       ),
     );
   }

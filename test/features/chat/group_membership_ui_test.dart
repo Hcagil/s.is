@@ -408,14 +408,29 @@ void main() {
 
   group('in the chat', () {
     testWidgets('a departed sender keeps her name, greyed', (t) async {
+      // Each person has a tint of their own, so "greyed" is Hol's own name
+      // painted differently once she has left than while she was in.
       final w = World();
       await openClub(t, w);
       final holName = byKey('sender-mh');
       expect(textOf(holName), contains('Hol Varga'));
-      final grey = colorOf(t, holName, 'Hol Varga');
-      final current = colorOf(t, byKey('sender-mb'), 'Bob Stone');
-      expect(grey, isNotNull);
-      expect(grey, isNot(current), reason: 'the departed name is not greyed');
+      final departed = colorOf(t, holName, 'Hol Varga');
+      await drain(t);
+
+      final stillIn = World();
+      stillIn.chat.groupRosters['g1']![3] = const GroupMember(
+        member: hol,
+        isAdmin: false,
+      );
+      await t.pumpWidget(const SizedBox());
+      await openClub(t, stillIn);
+      final current = colorOf(t, byKey('sender-mh'), 'Hol Varga');
+      expect(departed, isNotNull);
+      expect(
+        departed,
+        isNot(current),
+        reason: 'the departed name is not greyed',
+      );
       await drain(t);
     });
 

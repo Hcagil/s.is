@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -35,6 +36,30 @@ import 'features/profile/data/supabase_profile_repository.dart';
 import 'features/update/application/update_controller.dart';
 import 'features/update/data/play_update_repository.dart';
 import 'features/update/data/testflight_update_repository.dart';
+
+/// The provider overrides that depend on the platform: iOS sends a Google
+/// nonce and updates through TestFlight; everything else is Android (Play).
+List<Override> platformOverrides(
+  TargetPlatform platform,
+  SupabaseClient client,
+  RuntimeConfig config,
+) {
+  final isIos = platform == TargetPlatform.iOS;
+  return [
+    authRepositoryProvider.overrideWithValue(
+      SupabaseAuthRepository(
+        client,
+        GoogleSignIn.instance,
+        googleWebClientId: config.googleWebClientId,
+        useNonce: isIos,
+      ),
+    ),
+    updateRepositoryProvider.overrideWithValue(
+      // Play in-app updates exist on Android only; iOS is TestFlight.
+      isIos ? TestFlightUpdateRepository(client) : PlayUpdateRepository(client),
+    ),
+  ];
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -71,20 +96,7 @@ Future<void> main() async {
       ProviderScope(
         overrides: [
           runtimeConfigProvider.overrideWithValue(config),
-          authRepositoryProvider.overrideWithValue(
-            SupabaseAuthRepository(
-              client,
-              GoogleSignIn.instance,
-              googleWebClientId: config.googleWebClientId,
-              useNonce: defaultTargetPlatform == TargetPlatform.iOS,
-            ),
-          ),
-          updateRepositoryProvider.overrideWithValue(
-            // Play in-app updates exist on Android only; iOS is TestFlight.
-            defaultTargetPlatform == TargetPlatform.iOS
-                ? TestFlightUpdateRepository(client)
-                : PlayUpdateRepository(client),
-          ),
+          ...platformOverrides(defaultTargetPlatform, client, config),
           chatRepositoryProvider.overrideWithValue(
             SupabaseChatRepository(client, cache: attachmentCache),
           ),

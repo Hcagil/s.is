@@ -56,7 +56,7 @@ final class SupabaseAuthRepository implements AuthRepository {
           final random = Random.secure();
           _rawNonce = base64UrlEncode(
             List<int>.generate(32, (_) => random.nextInt(256)),
-          );
+          ).replaceAll('=', '');
         }
         await _google.initialize(
           serverClientId: googleWebClientId,

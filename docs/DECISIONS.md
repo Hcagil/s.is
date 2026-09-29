@@ -1172,3 +1172,42 @@ isolate nobody can watch, so there was no way to see where one stopped.
   reads them. Not a feature: a diagnostic that can be dropped once pushes are
   proven on devices.
 
+
+## 2026-09-29 — Notifications the Telegram way (0.25.2)
+
+On 0.25.1 (notifications arriving again) two things were wrong: six messages
+showed two notifications, and tapping one opened a chat without the new
+messages until it was closed and reopened.
+- Why messages vanished: every push drew its chat notification AND the group
+  summary, so a 13-push backlog was 26 posts in about 100 ms. Android sheds an
+  app's notifications past roughly five enqueues a second, silently. The push
+  receipts confirmed every push was `shown`; the phone dropped them.
+  Concurrent pushes also each read, changed and wrote the stored inbox, so one
+  could overwrite another's line.
+- Now: one MessagingStyle notification per chat (stable id per conversation,
+  the newest seven lines, sender name and time on each, the unread count), one
+  silent group summary ("N new messages from M chats"). Tapping a chat opens
+  that chat; tapping the summary opens the chat list. Opening a chat, or
+  coming back to it, clears its notification and stored lines; the summary
+  goes with the last one.
+- Coalescing: a push only STORES its line (serialised in its isolate), waits
+  out 600 ms since the last flush, then one flush posts every chat with unread
+  lines plus the summary, 250 ms between posts. A push whose line an earlier
+  flush already covered posts nothing. Each post renders the whole stored
+  state, so a later post can never lose an earlier message. Alerts (sound)
+  only when the shade was quiet for eight seconds, then for one chat; every
+  other post is silent. Worst case: pushes handled one at a time (the plugin
+  runs queued handlers serially) each wait one interval, so a burst of N
+  finishes in about 0.6 s x N, at under four posts a second and never losing
+  a line. A process killed mid-wait leaves its lines stored; the next push or
+  opened chat shows them.
+- `shown` receipt: recorded once the push's line is inside a posted
+  notification, whichever push posted it.
+- The tapped-chat bug: a chat's Realtime subscription lives only while the app
+  is in the foreground and nothing re-read it on return; a tap on the chat
+  already open also matched the open id, so nothing rebuilt it (and a second
+  copy was pushed). Now the app re-reads the open chat and the chat list, and
+  joins Realtime again, whenever it becomes visible, and a tap on the open
+  chat does the same instead of stacking a copy.
+- No server change: the group name and sender come from the push title the
+  server already words ("Sender @ Group"); the time is when the push arrived.

@@ -15,7 +15,10 @@ import 'push_receipt_log.dart';
 /// (PushReceiptLog) and uploaded by the app on its next open.
 ///
 /// Every push that reaches here ends in exactly one terminal receipt: shown,
-/// `dropped:reason`, or error.
+/// `dropped:reason`, or error. `shown` means the push's line is stored and a
+/// posted notification includes it: pushes of one burst are coalesced
+/// (LocalPushDisplay.show), so a later push's post may be the one that shows
+/// an earlier line, and each still records its own `shown`.
 @pragma('vm:entry-point')
 Future<void> onBackgroundPush(RemoteMessage message) async {
   try {

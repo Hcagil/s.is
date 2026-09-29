@@ -93,6 +93,9 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     // / resumeForeground) rather than waiting out whatever backoff delay was
     // left.
     _lifecycle = AppLifecycleListener(
+      // Visible again after being backgrounded: Realtime died meanwhile, so
+      // the open chat and the list fetch what they missed.
+      onShow: () => ref.read(resumeCatchUpProvider)(),
       onResume: () {
         ref.read(updateControllerProvider.notifier).recheck();
         ref.read(sendQueueProvider.notifier).resumeForeground();

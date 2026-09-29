@@ -63,6 +63,15 @@ Future<void> _openFromNotification(
   WidgetRef ref,
   String id,
 ) async {
+  // Already on screen: opening it again would stack a second copy. Its
+  // Realtime subscription may have died while the app was in the background,
+  // so read it again instead (resume does the same; this covers a tap that
+  // arrives without a resume of its own).
+  if (ref.read(openConversationProvider) == id) {
+    ref.read(messagesProvider.notifier).catchUp();
+    unawaited(ref.read(pushSourceProvider).clearConversation(id));
+    return;
+  }
   final list = ref.read(conversationListProvider.notifier);
   var conversations = await ref.read(conversationListProvider.future);
   if (!conversations.any((c) => c.id == id)) {

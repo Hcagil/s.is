@@ -271,6 +271,17 @@ final class SupabaseChatRepository implements ChatRepository {
   @override
   Future<Result<List<GroupMember>>> groupRoster(String conversationId) async {
     try {
+      final convRows = await _client
+          .from('conversations')
+          .select('title')
+          .eq('id', conversationId)
+          .retriedOnce();
+      // RLS (was_member) makes a conversation invisible to a caller who was
+      // never a member of it -- convRows is empty in that case. A 1:1 has no
+      // title -- groupRoster is for groups only.
+      if (convRows.isEmpty || convRows.first['title'] == null) {
+        return const Err(DeniedFailure());
+      }
       // RLS returns these rows only to a caller who is or was in the
       // conversation, current members and past ones alike -- exactly what
       // the roster's "left" section needs. A rejoined person can hold more

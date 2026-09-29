@@ -53,9 +53,13 @@ final chatTimelineProvider = Provider.autoDispose<List<TimelineEntry>>((ref) {
   final conversationId = ref.watch(openConversationProvider);
   if (conversationId == null) return const [];
   final messages = ref.watch(messagesProvider).value ?? const <Message>[];
-  final conversations =
-      ref.watch(conversationListProvider).value ?? const <Conversation>[];
-  final isGroup = conversations.any((c) => c.id == conversationId && c.isGroup);
+  final isGroup = ref.watch(
+    conversationListProvider.select(
+      (s) => (s.value ?? const <Conversation>[]).any(
+        (c) => c.id == conversationId && c.isGroup,
+      ),
+    ),
+  );
   if (!isGroup) return [for (final m in messages) MessageEntry(m)];
   final events =
       ref.watch(groupEventsProvider(conversationId)).value ??

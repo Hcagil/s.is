@@ -884,13 +884,21 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
     // Watched: a group discovered to be one the member has left or been
     // removed from (leftConversationGuardProvider) rebuilds this at once and
     // leaves the reads:<id> channel, same reasoning as Typing.build() in
-    // presence/application/presence_controllers.dart.
-    final hasLeft =
-        (ref.watch(conversationListProvider).value ?? const <Conversation>[])
-            .where((c) => c.id == conversationId)
-            .firstOrNull
-            ?.hasLeft ==
-        true;
+    // presence/application/presence_controllers.dart. The select folds
+    // "not found yet / still loading" and "found, not left" to the same
+    // `false` so the loading -> loaded transition does not itself count as
+    // a change and resubscribe a second channel -- only an actual
+    // left/removed flip does.
+    final hasLeft = ref.watch(
+      conversationListProvider.select(
+        (s) =>
+            (s.value ?? const <Conversation>[])
+                .where((c) => c.id == conversationId)
+                .firstOrNull
+                ?.hasLeft ==
+            true,
+      ),
+    );
     if (hasLeft) return const [];
     final repo = ref.read(chatRepositoryProvider);
     // Subscribed before the read, so a read in between is not lost; a

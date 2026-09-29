@@ -96,13 +96,23 @@ class Typing extends Notifier<Set<String>> {
     // for the screen to close or the token to refresh -- Realtime itself
     // only re-checks who may receive a private channel at those two
     // moments, not per broadcast (docs/SECURITY.md's own accepted limit).
+    // The select below folds "not found yet / still loading" and "found,
+    // not left" to the same `false` so the loading -> loaded transition
+    // does not itself count as a change and reconnect a second channel
+    // (leaking the first, still-live one) -- only an actual left/removed
+    // flip does.
     final hasLeft =
         conversationId != null &&
-        (ref.watch(conversationListProvider).value ?? const <Conversation>[])
-                .where((c) => c.id == conversationId)
-                .firstOrNull
-                ?.hasLeft ==
-            true;
+        ref.watch(
+          conversationListProvider.select(
+            (s) =>
+                (s.value ?? const <Conversation>[])
+                    .where((c) => c.id == conversationId)
+                    .firstOrNull
+                    ?.hasLeft ==
+                true,
+          ),
+        );
     if (conversationId != null && !hasLeft) {
       unawaited(_connect(conversationId, generation));
     }

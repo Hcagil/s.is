@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../application/chat_controllers.dart';
+import '../application/group_controller.dart';
 import '../../presence/domain/last_seen.dart';
 import '../domain/message.dart';
 import '../domain/read_marks.dart';
@@ -88,8 +89,10 @@ Future<void> _showReaders(
 ) {
   final marks = ref.read(readMarksProvider).value ?? const <ReadMark>[];
   final names = {
-    for (final m in ref.read(yourPeopleProvider).value ?? const [])
-      m.userId: m.displayName,
+    for (final gm
+        in ref.read(groupRosterProvider(message.conversationId)).value ??
+            const [])
+      gm.member.userId: gm.member.displayName,
   };
   final readers = [
     for (final m in marks)

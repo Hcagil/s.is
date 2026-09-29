@@ -41,3 +41,6 @@ skill-updates/
 
 # Firebase client config: restored from the GOOGLE_SERVICES_JSON secret.
 /android/app/google-services.json
+
+# iOS Firebase client config: restored from the GOOGLE_SERVICE_INFO_PLIST secret.
+/ios/Runner/GoogleService-Info.plist

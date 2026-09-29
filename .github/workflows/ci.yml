@@ -39,6 +39,7 @@ jobs:
               - 'lib/**'
               - 'test/**'
               - 'android/**'
+              - 'ios/**'
               - 'tool/**'
               - 'docker/**'
               - 'pubspec.yaml'
@@ -193,3 +194,31 @@ jobs:
           echo "::add-mask::$SUPABASE_TEST_SERVICE_KEY"
           test -n "$SUPABASE_TEST_SERVICE_KEY"
           docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -e TZ=JST-9 -e SUPABASE_TEST_SERVICE_KEY="$SUPABASE_TEST_SERVICE_KEY" flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration
+
+  # Proves the iOS project compiles (unsigned). Signing and TestFlight upload
+  # come with the iOS release job.
+  ios:
+    name: iOS build
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: macos-15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      # docker/Dockerfile is the single source of the Flutter version: same SDK as the Android job.
+      - name: Install Flutter
+        run: |
+          version=$(sed -n 's/^ARG FLUTTER_VERSION=//p' docker/Dockerfile)
+          test -n "$version"
+          git clone --depth 1 --branch "$version" https://github.com/flutter/flutter.git "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+      - name: Restore Firebase config
+        env:
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+        run: |
+          test -n "$GOOGLE_SERVICE_INFO_PLIST" || { echo 'GOOGLE_SERVICE_INFO_PLIST secret is empty' >&2; exit 1; }
+          printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" > ios/Runner/GoogleService-Info.plist
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign

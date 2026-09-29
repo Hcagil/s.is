@@ -20,6 +20,8 @@ import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/group_event.dart';
+import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
@@ -128,6 +130,32 @@ class DesignChat implements ChatRepository {
           .where(keep)
           .take(500)
           .toList();
+
+  @override
+  Future<Result<List<GroupMember>>> groupRoster(String id) async => Ok([
+    for (final m in roster[id] ?? const <Member>[])
+      GroupMember(member: m, isAdmin: false),
+  ]);
+  @override
+  Future<Result<List<GroupEvent>>> groupEvents(String id) async =>
+      const Ok(<GroupEvent>[]);
+  @override
+  Future<Result<void>> leaveGroup(String id) async => const Ok(null);
+  @override
+  Future<Result<void>> removeMember(String id, String memberId) async =>
+      const Ok(null);
+  @override
+  Future<Result<void>> addMembers(
+    String id,
+    List<String> memberIds, {
+    required bool withHistory,
+  }) async => const Ok(null);
+  @override
+  Future<Result<void>> setAdmin(
+    String id,
+    String memberId, {
+    required bool isAdmin,
+  }) async => const Ok(null);
 
   @override
   Future<Result<List<Member>>> conversationMembers(String id) async => Ok(

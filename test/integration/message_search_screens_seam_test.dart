@@ -22,6 +22,8 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/group_event.dart';
+import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
@@ -169,6 +171,29 @@ class _Switch implements ChatRepository {
   @override
   Future<Result<List<Member>>> conversationMembers(String id) =>
       live.conversationMembers(id);
+  @override
+  Future<Result<List<GroupMember>>> groupRoster(String id) =>
+      live.groupRoster(id);
+  @override
+  Future<Result<void>> leaveGroup(String id) => live.leaveGroup(id);
+  @override
+  Future<Result<void>> removeMember(String id, String memberId) =>
+      live.removeMember(id, memberId);
+  @override
+  Future<Result<void>> addMembers(
+    String id,
+    List<String> memberIds, {
+    required bool withHistory,
+  }) => live.addMembers(id, memberIds, withHistory: withHistory);
+  @override
+  Future<Result<void>> setAdmin(
+    String id,
+    String memberId, {
+    required bool isAdmin,
+  }) => live.setAdmin(id, memberId, isAdmin: isAdmin);
+  @override
+  Future<Result<List<GroupEvent>>> groupEvents(String id) =>
+      live.groupEvents(id);
   @override
   Future<Result<List<Message>>> sharedMedia(String id) => live.sharedMedia(id);
   @override

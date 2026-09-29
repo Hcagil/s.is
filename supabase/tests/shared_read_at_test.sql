@@ -127,15 +127,16 @@ select ok(not has_column_privilege('authenticated', 'public.conversation_members
           'authenticated cannot insert shared_read_at');
 select ok(not has_column_privilege('anon', 'public.conversation_members', 'shared_read_at', 'UPDATE'),
           'anon cannot update shared_read_at');
--- No new grants at all: clients still hold exactly the three public columns.
+-- No new grants beyond v0.23.0's role, left_at, left_reason (the roster's
+-- admin marks and "Left" section); history_from and read state stay private.
 select is(
   (select string_agg(grantee || ':' || privilege_type || ':' || column_name, ', '
                      order by grantee, privilege_type, column_name)
      from information_schema.column_privileges
     where table_schema = 'public' and table_name = 'conversation_members'
       and grantee in ('authenticated', 'anon'))::text,
-  'authenticated:SELECT:conversation_id, authenticated:SELECT:joined_at, authenticated:SELECT:user_id',
-  'clients hold exactly SELECT on conversation_id, joined_at, user_id -- nothing new');
+  'authenticated:SELECT:conversation_id, authenticated:SELECT:joined_at, authenticated:SELECT:left_at, authenticated:SELECT:left_reason, authenticated:SELECT:role, authenticated:SELECT:user_id',
+  'clients hold exactly SELECT on conversation_id, joined_at, left_at, left_reason, role, user_id -- nothing more');
 select is((select count(*) from information_schema.table_privileges
             where table_schema = 'public' and table_name = 'conversation_members'
               and grantee in ('authenticated', 'anon')),

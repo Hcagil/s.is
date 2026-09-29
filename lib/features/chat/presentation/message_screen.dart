@@ -20,12 +20,16 @@ import '../../presence/application/presence_controllers.dart';
 import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
+import '../application/group_controller.dart';
+import '../domain/group_member.dart';
 import '../domain/highlight.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
+import '../domain/timeline.dart';
 import '../domain/read_marks.dart';
 import 'attachment_sheet.dart';
 import 'chat_search_bar.dart';
+import 'group_event_line.dart';
 import 'swipeable_message.dart';
 import 'conversation_list.dart';
 import 'message_actions.dart';
@@ -345,16 +349,30 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       chatSearchProvider.select((s) => s.current?.id),
     );
     final status = _status(ref, widget.otherUserId);
-    final names = widget.group
-        ? {
-            for (final m in ref.watch(yourPeopleProvider).value ?? const [])
-              m.userId: m.displayName,
-          }
-        : const <String, String>{};
+    final conversationId = ref.watch(openConversationProvider);
+    // The group's own roster names every sender, current or departed --
+    // yourPeopleProvider would miss someone no longer reachable, and would
+    // also pull in people reachable only through some OTHER shared chat.
+    // Also what greys a departed sender's name in their own bubbles.
+    final roster = widget.group && conversationId != null
+        ? ref.watch(groupRosterProvider(conversationId)).value ??
+              const <GroupMember>[]
+        : const <GroupMember>[];
+    final names = {
+      for (final m in roster) m.member.userId: m.member.displayName,
+    };
+    final departedSenderIds = {
+      for (final m in roster)
+        if (m.hasLeft) m.member.userId,
+    };
     // Read status, where it is shared: your own messages look a little grey
     // until every sharing member has read them.
     final marks = ref.watch(readMarksProvider).value ?? const <ReadMark>[];
-    final conversationId = ref.watch(openConversationProvider);
+    final timeline = ref.watch(chatTimelineProvider);
+    final messageIndexById = {
+      for (var idx = 0; idx < (messages.value ?? const []).length; idx++)
+        (messages.value ?? const [])[idx].id: idx,
+    };
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -455,7 +473,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                   behavior: HitTestBehavior.translucent,
                   onTap: () => _openSwipeId.value = null,
                   child: switch (messages) {
-                    AsyncData(:final value) when value.isEmpty => const Center(
+                    AsyncData() when timeline.isEmpty => const Center(
                       child: Text('No messages yet. Say something.'),
                     ),
                     AsyncData(:final value) => ListView.builder(
@@ -466,10 +484,18 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                       // bubble built even when it is far from the current
                       // scroll offset (see _scrollTo).
                       scrollCacheExtent: ScrollCacheExtent.pixels(2000),
-                      itemCount: value.length,
+                      itemCount: timeline.length,
                       itemBuilder: (context, i) {
-                        final index = value.length - 1 - i;
-                        final message = value[index];
+                        final entry = timeline[timeline.length - 1 - i];
+                        if (entry is EventEntry) {
+                          return GroupEventLine(
+                            entry.event,
+                            names: names,
+                            key: ValueKey('event-${entry.event.id}'),
+                          );
+                        }
+                        final message = (entry as MessageEntry).message;
+                        final index = messageIndexById[message.id] ?? 0;
                         final mine = me != null && message.isFrom(me);
                         final quoted = message.replyTo == null
                             ? null
@@ -513,6 +539,9 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                 widget.group && !mine && startsRun(value, index)
                                 ? (names[message.senderId] ?? 'Member')
                                 : null,
+                            senderLeft: departedSenderIds.contains(
+                              message.senderId,
+                            ),
                             quoted: quoted,
                             quotedName: quoted == null
                                 ? null
@@ -560,6 +589,7 @@ class _Bubble extends StatelessWidget {
     required this.mine,
     required this.unread,
     this.sender,
+    this.senderLeft = false,
     this.quoted,
     this.quotedName,
     this.highlightQuery,
@@ -579,6 +609,10 @@ class _Bubble extends StatelessWidget {
 
   /// The sender's name, shown above the first bubble of their run in a group.
   final String? sender;
+
+  /// True when [sender] has left or been removed from the group -- their
+  /// name is greyed rather than tinted, everywhere it is still shown.
+  final bool senderLeft;
 
   /// The active in-chat search query, if any: every match in [message]'s
   /// body is highlighted.
@@ -769,7 +803,9 @@ class _Bubble extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: personTint(context, message.senderId, ink: true),
+                      color: senderLeft
+                          ? Theme.of(context).colorScheme.onSurfaceVariant
+                          : personTint(context, message.senderId, ink: true),
                     ),
                   ),
                 ),
@@ -1355,6 +1391,35 @@ class _ComposerState extends ConsumerState<_Composer> {
   @override
   Widget build(BuildContext context) {
     final id = _conversationId;
+    // A group left or been removed from: read-only, nothing more to write.
+    // Checked before the listeners below register at all -- there is
+    // nothing left for any of them to restore into a box that cannot send.
+    final hasLeft =
+        id != null &&
+        (ref.watch(conversationListProvider).value ?? const [])
+                .where((c) => c.id == id)
+                .firstOrNull
+                ?.hasLeft ==
+            true;
+    if (hasLeft) {
+      return Container(
+        key: const ValueKey('composer-left'),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border: Border(
+            top: BorderSide(color: Theme.of(context).colorScheme.outline),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Text(
+          "You're no longer in this group",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
     final replying = ref.watch(replyingToProvider);
     final editing = ref.watch(editingProvider);
     ref.listen(editingProvider, (previous, next) {

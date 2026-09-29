@@ -197,6 +197,24 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     return message;
   }
 
+  /// Drops everything queued for [conversationId] outright, and cancels any
+  /// retry it was waiting on -- used when the member has left or been
+  /// removed from it (see GroupController), never sent into a conversation
+  /// they can no longer write to. Unlike a refused send ([_drain]'s own
+  /// [Err] path), the bodies are not worth restoring to the draft: the
+  /// conversation itself explains why, in its disabled write box. Returns
+  /// whether anything was actually dropped, so the caller can decide
+  /// whether "unsent messages were not sent" needs saying.
+  bool dropForLeft(String conversationId) {
+    final items = _queues.remove(conversationId);
+    _timers.remove(conversationId)?.cancel();
+    _retries.remove(conversationId);
+    _draining.remove(conversationId);
+    if (items == null || items.isEmpty) return false;
+    _publish(conversationId);
+    return true;
+  }
+
   void _publish(String conversationId) {
     final items = _queues[conversationId];
     final next = {...state};

@@ -2,7 +2,8 @@
 # Regenerate: dart run flutter_launcher_icons
 flutter_launcher_icons:
   android: true
-  ios: false
+  ios: true
+  remove_alpha_ios: true
   image_path: tool/icon/full.png
   min_sdk_android: 21
   adaptive_icon_background: tool/icon/background.png

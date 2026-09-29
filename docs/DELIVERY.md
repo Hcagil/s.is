@@ -61,7 +61,7 @@ deploys from protected branches.
 `ANDROID_UPLOAD_KEYSTORE_BASE64`, `ANDROID_UPLOAD_KEY_ALIAS`,
 `ANDROID_UPLOAD_STORE_PASSWORD`, `ANDROID_UPLOAD_KEY_PASSWORD`,
 `PLAY_SERVICE_ACCOUNT_JSON`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`,
-`SUPABASE_PROJECT_REF`, `FCM_SERVICE_ACCOUNT`, `GOOGLE_SERVICES_JSON`.
+`SUPABASE_PROJECT_REF`, `FCM_SERVICE_ACCOUNT`, `GOOGLE_SERVICES_JSON`, `GOOGLE_SERVICE_INFO_PLIST`.
 Variables (public): `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, `GOOGLE_WEB_CLIENT_ID`.
 
@@ -72,9 +72,17 @@ functionally complete. Production is a separate, later decision.
 
 ### iOS (later)
 
-A `release-ios.yml` on a hosted macOS runner builds, signs and uploads to
-TestFlight with the same structure and secret discipline. Nothing in the
-Android pipeline blocks it.
+What exists: the iOS project (bundle ID `com.esd.sis`, minimum iOS 15.0) and
+an `iOS build` job in `ci.yml` on a hosted macOS runner. It runs
+`flutter build ios --release --no-codesign` with the same Flutter version as
+the Android job (read from `docker/Dockerfile`), so iOS breakage shows up on
+the pull request. It restores `ios/Runner/GoogleService-Info.plist` from the
+`GOOGLE_SERVICE_INFO_PLIST` secret (the file text, stored as is, like
+`GOOGLE_SERVICES_JSON`) and fails if the secret is empty.
+
+Still to come: a `release-ios.yml` that signs and uploads to TestFlight with
+the same structure and secret discipline. Nothing in the Android pipeline
+blocks it.
 
 ### Before pushing
 
@@ -143,5 +151,7 @@ All of it is deployed by `release.yml` after the migrations: it sets the
 name, deploys the function, and creates the Vault URL if it is missing.
 Nothing is done by hand.
 
-`google-services.json` is not committed; CI and the release restore it from
-the `GOOGLE_SERVICES_JSON` secret. Local copies live in `.private/firebase/`.
+`google-services.json` and `ios/Runner/GoogleService-Info.plist` are not
+committed; CI and the release restore them from the `GOOGLE_SERVICES_JSON`
+and `GOOGLE_SERVICE_INFO_PLIST` secrets. Local copies live in
+`.private/firebase/`.

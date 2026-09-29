@@ -115,6 +115,9 @@
 --      ulas and veli each spend one lookup budget in a 200-call burst, so
 --      they must be fresh: the suite needs a freshly reset stack, as CI has.
 --      yunus plays an older build; zehra hides her picture from selin)
+--   pax            test/integration/push_receipts_seam_test.dart
+--     (the phone's push receipts are uploaded on start as pax, through the
+--      registration path main.dart mounts)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -201,5 +204,6 @@ insert into app_private.allowlist(email) values
   ('ike@integration.test'),
   ('jun@integration.test'),
   ('kai@integration.test'),
-  ('lux@integration.test')
+  ('lux@integration.test'),
+  ('pax@integration.test')
 on conflict do nothing;

@@ -41,6 +41,7 @@ import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/notifications/data/firebase_push_source.dart';
 import 'package:sis/features/notifications/data/local_push_display.dart';
+import 'package:sis/features/notifications/data/push_receipt_log.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
@@ -632,7 +633,23 @@ void main() {
       );
 
       expect(shade.posted, isEmpty, reason: 'in Bea\'s shade');
-      expect(disk.values, storedBefore, reason: 'stored: ${disk.values}');
+      // The only thing written is the push receipt: that it arrived and was
+      // dropped as someone else's -- never its text.
+      const receiptsKey = 'flutter.sis.push_receipts';
+      final receipts = disk.values[receiptsKey];
+      expect(
+        Map<String, Object>.of(disk.values)..remove(receiptsKey),
+        storedBefore,
+        reason: 'stored: ${disk.values}',
+      );
+      expect(storedBefore.containsKey(receiptsKey), isFalse, reason: 'fixture');
+      final stages = [
+        for (final r in (await t.runAsync(PushReceiptLog.pending))!) r['stage'],
+      ];
+      expect(stages, ['received', 'dropped:owner_mismatch']);
+      for (final s in ['Ava late secret', 'Zed', 'c-zed']) {
+        expect(jsonEncode(receipts), isNot(contains(s)), reason: '$receipts');
+      }
       expect(shade.calls.sublist(mark), isEmpty, reason: 'touched the plugin');
       await expectBeaSeesOnlyHers(t, ['Ava late secret', 'Zed']);
     });

@@ -28,6 +28,7 @@ import 'features/notifications/data/firebase_push_source.dart';
 import 'features/notifications/data/local_push_display.dart';
 import 'features/notifications/data/shared_prefs_notification_explainer_store.dart';
 import 'features/notifications/data/supabase_notification_settings_repository.dart';
+import 'features/notifications/data/supabase_push_receipts.dart';
 import 'features/notifications/data/supabase_push_registry.dart';
 import 'features/presence/application/presence_controllers.dart';
 import 'features/presence/data/supabase_presence_repository.dart';
@@ -125,6 +126,7 @@ Future<void> main() async {
             FirebasePushSource(FirebaseMessaging.instance),
           ),
           pushRegistryProvider.overrideWithValue(SupabasePushRegistry(client)),
+          pushReceiptsProvider.overrideWithValue(SupabasePushReceipts(client)),
           notificationSettingsRepositoryProvider.overrideWithValue(
             SupabaseNotificationSettingsRepository(client),
           ),

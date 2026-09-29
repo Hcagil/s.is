@@ -134,6 +134,8 @@ async function send(id: string): Promise<void> {
             // recipient for a build that later needs it.
             data: {
               user_id: t.user_id,
+              // Lets the phone's receipt name the message it is about.
+              message_id: id,
               conversation_id: t.conversation_id,
               title: t.title,
               body: t.body,

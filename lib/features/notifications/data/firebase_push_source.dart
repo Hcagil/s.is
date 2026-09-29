@@ -1,30 +1,65 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../domain/push.dart';
 import 'local_push_display.dart';
+import 'push_receipt_log.dart';
 
 /// A push while the app is in the background or closed. Pushes carry data
 /// only (the chat, and the title and body the server worded for this
 /// member's preview setting), so the app shows them itself, grouped into one
-/// SIS notification. Registered in main; runs in its own isolate.
+/// SIS notification. Registered in main; runs in its own isolate, which has
+/// no Supabase session: what happens to each push is kept as a receipt
+/// (PushReceiptLog) and uploaded by the app on its next open.
+///
+/// Every push that reaches here ends in exactly one terminal receipt: shown,
+/// `dropped:reason`, or error.
 @pragma('vm:entry-point')
 Future<void> onBackgroundPush(RemoteMessage message) async {
+  try {
+    // The plugins this isolate uses (shared preferences, notifications).
+    DartPluginRegistrant.ensureInitialized();
+  } catch (_) {}
+  final raw = message.data['message_id'];
+  final messageId = raw is String ? raw : null;
+  await PushReceiptLog.add('received', messageId: messageId);
+  try {
+    await PushReceiptLog.add(await _deliver(message), messageId: messageId);
+  } catch (e) {
+    // Never rethrown into the plugin, never swallowed unreported.
+    await PushReceiptLog.add('error', messageId: messageId, error: e);
+  }
+}
+
+/// Shows the push; returns its terminal stage, `shown` or `dropped:reason`.
+Future<String> _deliver(RemoteMessage message) async {
   // A notification block means Android already drew this one itself (an
   // older build, or this device's shows_itself was still false when it was
   // sent): showing it again here would duplicate it.
-  if (message.notification != null) return;
+  if (message.notification != null) return 'dropped:has_notification';
   final d = message.data;
   final id = d['conversation_id'], title = d['title'], body = d['body'];
-  if (id is! String || title is! String || body is! String) return;
+  if (id is! String || title is! String || body is! String) {
+    return 'dropped:missing_fields';
+  }
+  final owner = await LocalPushDisplay.currentOwner();
+  if (owner == null) return 'dropped:no_owner';
   final targetUser = d['user_id'];
-  if (targetUser is String &&
-      targetUser != await LocalPushDisplay.currentOwner()) {
-    return;
+  if (targetUser is String && targetUser != owner) {
+    return 'dropped:owner_mismatch';
   }
   await LocalPushDisplay.init();
-  await LocalPushDisplay.show(conversationId: id, title: title, body: body);
+  if (!await LocalPushDisplay.notificationsEnabled()) {
+    return 'dropped:notifications_off';
+  }
+  final drawn = await LocalPushDisplay.show(
+    conversationId: id,
+    title: title,
+    body: body,
+  );
+  return drawn ? 'shown' : 'dropped:no_owner';
 }
 
 /// The device side of push; thin on purpose (ARCHITECTURE rule 4), verified

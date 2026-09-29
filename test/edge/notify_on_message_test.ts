@@ -179,13 +179,16 @@ Deno.test({
         const data = m.data as Record<string, unknown>;
         // What the app reads (conversation_id, title, body, and the
         // recipient it is addressed to), as strings -- FCM refuses a data
-        // map with any other value type. user_id is on BOTH shapes: the
+        // map with any other value type. user_id and message_id are on BOTH shapes: the
         // phone drops a push addressed to someone other than its owner.
         assertEquals(data, {
           conversation_id: target.conversation_id,
           title: target.title,
           body: target.body,
           user_id: target.user_id,
+          // The message itself, so the phone's push receipt can be matched
+          // to it on the server.
+          message_id: messageId,
         }, `data for ${target.token}`);
         assertEquals(data.conversation_id, conversationId);
         assertEquals(data.user_id, recipientOf[target.token as string],

@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/notification_inbox.dart';
+import 'push_receipt_log.dart';
 
 /// Shows pushes as ONE grouped SIS notification (Telegram-style): a child
 /// notification per chat listing its newest lines, under a summary that
@@ -48,16 +49,16 @@ final class LocalPushDisplay {
         : null;
   }
 
-  /// One more message for [conversationId], as the server worded it.
-  static Future<void> show({
+  /// One more message for [conversationId], as the server worded it. False
+  /// (nothing drawn or stored) when nobody owns the inbox on this phone.
+  static Future<bool> show({
     required String conversationId,
     required String title,
     required String body,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
-    final owner = prefs.getString(_ownerKey);
-    if (owner == null) return;
+    if (prefs.getString(_ownerKey) == null) return false;
     final inbox = addToInbox(
       await _load(),
       conversationId: conversationId,
@@ -88,6 +89,7 @@ final class LocalPushDisplay {
       payload: conversationId,
     );
     await _showSummary(inbox);
+    return true;
   }
 
   /// The owner [show] is currently keeping the shade for, or null. Lets a
@@ -127,14 +129,34 @@ final class LocalPushDisplay {
     await prefs.reload();
     final previousOwner = prefs.getString(_ownerKey);
     if (previousOwner == userId && userId != null) return;
+    // Receipts are uploaded as whoever is signed in: one member's must never
+    // go up under the next member's account.
+    await PushReceiptLog.clear();
     await prefs.remove(_keyFor(previousOwner));
-    await _plugin.cancelAll();
+    // The owner is stored BEFORE the shade is cleared: cancelAll can throw
+    // (in release, R8 broke its Gson use), and the owner was then never
+    // written, so every push was dropped as no_owner.
     if (userId == null) {
       await prefs.remove(_ownerKey);
     } else {
       await prefs.setString(_ownerKey, userId);
     }
+    try {
+      await _plugin.cancelAll();
+    } catch (e) {
+      await PushReceiptLog.add('error', error: e, label: 'forUser cancelAll');
+    }
   }
+
+  /// Whether Android lets SIS draw notifications at all (the Android 13+
+  /// permission, or switched off in settings). Anything else counts as yes.
+  static Future<bool> notificationsEnabled() async =>
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.areNotificationsEnabled() ??
+      true;
 
   static String _keyFor(String? owner) =>
       owner == null ? _prefsKey : '$_prefsKey.$owner';

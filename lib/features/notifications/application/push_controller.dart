@@ -17,6 +17,16 @@ final pushRegistryProvider = Provider<PushRegistry>(
   (_) => throw UnimplementedError('override in main'),
 );
 
+/// Where the background handler's receipts go (Supabase in data/). Defaults
+/// to nothing so a build without it still runs.
+final pushReceiptsProvider = Provider<PushReceipts>((_) => const _NoReceipts());
+
+final class _NoReceipts implements PushReceipts {
+  const _NoReceipts();
+  @override
+  Future<void> upload() async {}
+}
+
 /// Tells the push source who owns what it keeps on this device (the shade
 /// and the stored inbox), from every settled answer about the session --
 /// not only from home: a cold start that ends on the sign-in or Denied
@@ -65,6 +75,7 @@ class PushRegistration extends Notifier<String?> {
     // seen why -- never here. Registration itself does not depend on it:
     // even refused, the server already knows the device, and can reach it
     // if the member allows notifications later in system settings.
+    unawaited(ref.read(pushReceiptsProvider).upload());
     final token = await source.token();
     if (token != null) await _register(token);
   }

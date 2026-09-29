@@ -19,6 +19,12 @@ Postgres Row Level Security is the only authority. The client is untrusted.
   - `device_tokens(user_id, token, platform, updated_at)` — push delivery
     addresses. One row per member: registering replaces, so a replaced phone
     stops being notified when it stops being able to read.
+  - `push_receipts(user_id, message_id, stage, error, build, ...)` — what
+    became of each push on a phone. RLS on, no policy, no grant. Written only
+    by `public.report_push_receipts(jsonb)` (security definer, app access
+    required, `authenticated` only): rows are always `auth.uid()`'s, invalid
+    stages are skipped, errors cut to 300 characters, 100 per call, newest 500
+    kept per member. Never holds message text.
 - `public` — RLS enabled on every table; policies use the helpers below.
   - `profiles(user_id pk → auth.users, display_name, created_at)` — created by
     a trigger on `auth.users` insert.

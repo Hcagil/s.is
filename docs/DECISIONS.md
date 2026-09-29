@@ -1147,3 +1147,28 @@ content is kept on the phone, which is why leaving a group came first.
   (`itms-beta://`) instead of the Play page. At App Store release this link
   becomes the App Store URL.
 - Nothing is ever forced beyond the minimum.
+
+## 2026-09-29 — Push receipts, and the release-only notification fix
+
+Notifications never appeared on the owner's Android phone although the server
+sent every push. Pushes are data only and the app draws them in a background
+isolate nobody can watch, so there was no way to see where one stopped.
+- Likely cause, fixed in 0.25.1: in release builds R8 strips the generic type
+  flutter_local_notifications needs to cancel notifications. Signing in
+  cleared the shade before storing the owner, so the call threw, no owner was
+  ever stored, and every push was dropped as "no owner". Rules for it are
+  added and the owner is now stored first.
+- Also: POST_NOTIFICATIONS is declared explicitly, and the handler checks
+  the permission before drawing.
+- Receipts: the handler keeps one line per stage (received, then shown,
+  dropped:<reason> or error) on the phone: stage, message id, error type and
+  message cut to 300 characters, build number, time. Never a title, body or
+  name. The app uploads them on its next open through
+  `report_push_receipts`, into `app_private.push_receipts`.
+- The background isolate does not sign in to Supabase: two isolates
+  refreshing one rotating refresh token could sign the member out, so the
+  phone keeps a 50-line buffer and the main app uploads it.
+- Retention: the newest 500 receipts per member, 100 per upload; nothing else
+  reads them. Not a feature: a diagnostic that can be dropped once pushes are
+  proven on devices.
+

@@ -76,3 +76,12 @@ abstract interface class PushRegistry {
   /// Called before signing out.
   Future<Result<void>> forget(String token);
 }
+
+/// What became of each push that reached this phone (shown, dropped and why,
+/// or failed), recorded by the background handler and sent to the server the
+/// next time the app is open. Never holds message text.
+abstract interface class PushReceipts {
+  /// Sends what is waiting and forgets it once accepted. Best effort: never
+  /// throws, and what fails to send stays for the next start.
+  Future<void> upload();
+}

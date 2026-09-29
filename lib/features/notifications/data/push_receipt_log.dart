@@ -16,6 +16,16 @@ final class PushReceiptLog {
   static const _prefsKey = 'sis.push_receipts';
   static const _max = 50;
   static int? _build;
+  static Future<void> _lock = Future.value();
+
+  /// Appends run one at a time in this isolate, so concurrent handlers (a Doze
+  /// backlog) never overwrite each other's entry. Only [add] takes it: the
+  /// other writers run in the app, never concurrently with themselves.
+  static Future<void> _locked(Future<void> Function() f) {
+    final run = _lock.then((_) => f());
+    _lock = run.then<void>((_) {}, onError: (Object _) {});
+    return run;
+  }
 
   /// Never throws: a receipt must not be able to break what it reports on.
   static Future<void> add(
@@ -23,7 +33,7 @@ final class PushReceiptLog {
     String? messageId,
     Object? error,
     String? label,
-  }) async {
+  }) => _locked(() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
@@ -43,7 +53,7 @@ final class PushReceiptLog {
       );
       await prefs.setStringList(_prefsKey, entries);
     } catch (_) {}
-  }
+  });
 
   static Future<List<Map<String, Object?>>> pending() async {
     try {

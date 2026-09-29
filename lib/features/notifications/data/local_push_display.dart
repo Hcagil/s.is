@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -39,6 +40,15 @@ final class LocalPushDisplay {
   static int _stored = 0; // lines stored by this isolate
   static int _postedThrough = 0; // highest _stored a finished flush covers
   static DateTime? _lastFlushEnd;
+
+  /// A fresh isolate, for tests.
+  @visibleForTesting
+  static void resetForTest() {
+    _lock = Future.value();
+    _stored = 0;
+    _postedThrough = 0;
+    _lastFlushEnd = null;
+  }
 
   /// Must run before [show] in each isolate. [onTap] receives the tapped
   /// chat's conversation id (the payload), when the app is running.
@@ -195,20 +205,35 @@ final class LocalPushDisplay {
   /// summary, [_enqueueGap] apart. Runs inside [_locked]. Alerts (sound,
   /// heads-up) only when the shade has been quiet for [_quiet], and then only
   /// for the first chat; every other post is silent.
+  ///
+  /// The member can sign out or switch in the app's isolate while a flush is
+  /// posting: the owner is noted at load and re-read (fresh from disk) before
+  /// every post and before the save, which goes to that owner's key only.
   static Future<void> _flush() async {
-    final inbox = await _load();
+    final owner = await currentOwner();
+    if (owner == null) return;
+    final inbox = await _load(owner: owner);
     final dirty = dirtyChats(inbox);
     if (dirty.isEmpty) return;
     final last = _lastFlushEnd;
     final loud = last == null || DateTime.now().difference(last) > _quiet;
     for (var i = 0; i < dirty.length; i++) {
       if (i > 0) await Future<void>.delayed(_enqueueGap);
+      if (!await _still(owner)) return;
       await _showChat(dirty[i], alert: loud && i == 0);
     }
     await Future<void>.delayed(_enqueueGap);
+    if (!await _still(owner)) return;
     await _showSummary(inbox);
-    await _save(markPosted(inbox, {for (final c in dirty) c.conversationId}));
+    if (!await _still(owner)) return;
+    await _save(
+      markPosted(inbox, {for (final c in dirty) c.conversationId}),
+      owner: owner,
+    );
   }
+
+  static Future<bool> _still(String owner) async =>
+      await currentOwner() == owner;
 
   /// The chat's notification: its whole current state (newest lines, oldest
   /// first), so a later post can never lose an earlier message.
@@ -291,11 +316,11 @@ final class LocalPushDisplay {
     return h == _summaryId ? 1 : h;
   }
 
-  static Future<List<InboxChat>> _load() async {
+  static Future<List<InboxChat>> _load({String? owner}) async {
     final prefs = await SharedPreferences.getInstance();
     // What the background isolate wrote must be seen here.
     await prefs.reload();
-    final raw = prefs.getString(_keyFor(prefs.getString(_ownerKey)));
+    final raw = prefs.getString(_keyFor(owner ?? prefs.getString(_ownerKey)));
     if (raw == null) return const [];
     try {
       return [
@@ -308,10 +333,10 @@ final class LocalPushDisplay {
     }
   }
 
-  static Future<void> _save(List<InboxChat> inbox) async {
+  static Future<void> _save(List<InboxChat> inbox, {String? owner}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-      _keyFor(prefs.getString(_ownerKey)),
+      _keyFor(owner ?? prefs.getString(_ownerKey)),
       jsonEncode([for (final c in inbox) c.toJson()]),
     );
   }

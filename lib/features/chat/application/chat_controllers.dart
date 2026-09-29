@@ -450,6 +450,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     final ownerId = ref.read(currentUserIdProvider);
     state = const AsyncLoading();
     final next = await AsyncValue.guard(_load);
+    if (!ref.mounted) return;
     if (ref.read(currentUserIdProvider) != ownerId) return;
     state = next;
     _saveCurrentIfData();
@@ -485,8 +486,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   Future<void> reloadQuietly() async {
     final ownerId = ref.read(currentUserIdProvider);
     final next = await AsyncValue.guard(_load);
+    if (!ref.mounted) return;
     if (ref.read(currentUserIdProvider) != ownerId) return;
-    if (next is AsyncData<List<Conversation>> && ref.mounted) state = next;
+    if (next is AsyncData<List<Conversation>>) state = next;
     _saveCurrentIfData();
   }
 

@@ -308,6 +308,18 @@ void main() {
     );
   }
 
+  /// B's list state, every value it was handed since A's screen closed and
+  /// the one now: none holds A's rows, whatever its kind.
+  void expectNoAliceInState(ProviderContainer c) {
+    for (final s in [...states, list(c)]) {
+      expect(
+        hasAny(idsOf(s), aIds),
+        isFalse,
+        reason: "B's list state holds A's rows: $s",
+      );
+    }
+  }
+
   group('baseline', () {
     test('a loaded list is saved for its owner, and shown from the phone on '
         'the next start before the server answers', () async {
@@ -665,6 +677,42 @@ void main() {
 
   group("10. saved only from a settled result of the current owner: B's file "
       "never holds A's list (A, sign-out, B in one run)", () {
+    test("(e) B's first load in flight: B's state holds none of A's rows "
+        'in any form, its loading value included', () async {
+      final c = await bFirstLoadInFlight();
+      await pause(100);
+      expectNoAliceInState(c);
+      chat.answerAll();
+      await until(() => idsOf(list(c)).join() == 'b-1', "B's list");
+      expectNoAliceInState(c);
+    });
+
+    test("(f) B's first load in flight: the readers of the list's in-memory "
+        "value -- the chat search's row labels and a profile page's 1:1 "
+        "lookup -- find none of A's conversations", () async {
+      final c = await bFirstLoadInFlight();
+      await pause(100);
+      // As the two screens read it: the provider's current value, whatever
+      // the state's kind.
+      final value = list(c).value ?? const <Conversation>[];
+      final labels = {for (final x in value) x.id: x};
+      expect(
+        labels.keys,
+        isNot(anyOf(contains('a-1'), contains('a-2'))),
+        reason: "search results would be labelled with A's conversations",
+      );
+      // a-1 is A's own 1:1 with Deniz: B opening Deniz's profile must not
+      // be offered it.
+      final direct = value
+          .where((x) => !x.isGroup && x.other?.userId == deniz.userId)
+          .firstOrNull;
+      expect(
+        direct?.id,
+        isNot(startsWith('a-')),
+        reason: "B's profile page for Deniz finds A's conversation",
+      );
+    });
+
     test('(c) markRead during it, the debounced save firing while the '
         'load is still in flight', () async {
       final c = await bFirstLoadInFlight();
@@ -799,32 +847,37 @@ void main() {
       }
     }
 
-    // OPEN QUESTION, not settled by the contract: after B's load fails,
-    // Riverpod's AsyncError still carries the previous value, A's rows
-    // (measured on c0d9b41). Whether the screen shows an error's value, and
-    // whether that counts as "shown", is for the owner; un-skip once decided.
+    test("(e) B's second load in flight: B's state holds none of A's rows "
+        'in any form', () async {
+      final (c, second) = await bSecondLoadInFlight();
+      expectNoAliceInState(c);
+      chat.answer(second);
+      await until(
+        () => settled(c) && idsOf(list(c)).contains('x-9'),
+        "B's settled list with x-9",
+      );
+      expectNoAliceInState(c);
+    });
+
+    // Owner decision (2026-09-29): once the owner changes, the previous
+    // owner's rows are unreachable from the list's state in any form --
+    // not AsyncData, not AsyncLoading's value, not AsyncError's value.
     for (final failure in [
       const NetworkFailure('offline', retryable: true),
       const NetworkFailure('refused'),
     ]) {
       final kind = failure.retryable ? 'retryable' : 'non-retryable';
-      test(
-        "(d) no live event, the second load failing ($kind): B's error does "
-        "not carry A's rows",
-        () async {
-          final (c, _) = await bSecondLoadInFlight();
-          chat.answerAll(Err(failure));
-          await pastDebounce();
-          expect(
-            hasAny(idsOf(list(c)), aIds),
-            isFalse,
-            reason: "B is left on A's list: ${list(c)}",
-          );
-        },
-        skip:
-            'open question: may an AsyncError carry the previous '
-            "owner's value? (red on c0d9b41)",
-      );
+      test("(d) no live event, the second load failing ($kind): B's error does "
+          "not carry A's rows", () async {
+        final (c, _) = await bSecondLoadInFlight();
+        chat.answerAll(Err(failure));
+        await pastDebounce();
+        expect(
+          hasAny(idsOf(list(c)), aIds),
+          isFalse,
+          reason: "B is left on A's list: ${list(c)}",
+        );
+      });
     }
 
     for (final MapEntry(key: what, value: (event, applied)) in events.entries) {

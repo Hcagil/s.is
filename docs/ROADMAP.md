@@ -35,6 +35,7 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.21.5 | the licences page shows each licence as written (centred lines, indents) |
 | v0.22 | contacts; new chat shows your people and finds others by exact tag; who sees your picture: everyone, contacts, nobody |
 | v0.23 | leave a group, admins remove and add members (with or without old messages) |
+| v0.24 | the chat list appears the moment SIS opens, from the phone, then refreshes |
 | later | E2EE | scheduled individually |
 
 ## Status

@@ -1117,3 +1117,20 @@ The owner decided how people leave groups and who manages them, WhatsApp-like.
   An admin can add only people they can reach (contacts rule, 2026-09-28).
 - **Reach.** Someone who left no longer counts as sharing that chat.
 - 1:1 chats have no admins and no leaving.
+
+## 2026-09-29 — The chat list shows instantly from the phone
+
+The owner asked for the chat list to appear at once when SIS opens, with the
+last-message previews, the way WhatsApp does. This is the first time message
+content is kept on the phone, which is why leaving a group came first.
+- The last chat list the member saw (names, pictures' paths, order, unread
+  counts, last-message previews and times) is saved on the phone after each
+  successful load and shown the instant the app opens; the server's answer
+  then replaces it quietly.
+- It lives in the app's private storage, which Android keeps to SIS alone
+  and encrypts with the phone; no new library is added.
+- It is erased when the member signs out or another account signs in, and
+  never shown to a different account. A group the member left keeps only
+  its read-only entry, as on the server.
+- Nothing else is stored yet: drafts and unsent messages still live only
+  while the app runs.

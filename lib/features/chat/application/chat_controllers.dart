@@ -186,6 +186,31 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     // Rebuilt from scratch for each account: never the last one's list.
     ref.watch(currentUserIdProvider);
     final ownerId = ref.read(currentUserIdProvider);
+    // Riverpod 3 ALWAYS carries a previous value into a new AsyncLoading (or
+    // a later AsyncError) via copyWithPrevious -- including one assigned
+    // explicitly, right here, by this very build(): `state =
+    // const AsyncLoading()` would still answer .value with the last owner's
+    // rows, because copyWithPrevious merges with whatever state already held
+    // (set by the framework itself before build() even starts, from the
+    // previous owner's last settled list). AsyncData is the one exception --
+    // AsyncData.copyWithPrevious always returns itself, ignoring what came
+    // before -- so assigning a clean, empty AsyncData first launders the
+    // slate, and the AsyncLoading assigned right after it only ever merges
+    // with THAT (empty) value, never the old owner's. Both assignments land
+    // before build()'s first await, so neither is ever observed on its own;
+    // only the second is what the very first listener (an existing
+    // subscriber, or a new one with fireImmediately) can ever see -- an
+    // ordinary loading state whose .value is empty, not the previous owner's.
+    // This is the one place every owner change routes through (the provider
+    // lives for the app's whole run and only rebuilds when
+    // currentUserIdProvider itself changes -- see its doc), so doing it here
+    // makes it structurally impossible for a stale value to reach `_apply`,
+    // `markRead`, `_saveCurrentIfData`, or an outside reader of `.value`
+    // (conversation_list.dart, profile_pages.dart, ...): they all see null
+    // until THIS build's own settled data (the disk cache below, or the
+    // server) lands.
+    state = const AsyncData(<Conversation>[]);
+    state = const AsyncLoading();
     // True for as long as THIS build is the current one. ref.mounted alone
     // cannot tell that apart from the Notifier being disposed outright: a
     // rebuild (e.g. an account change) reuses the same Notifier, so

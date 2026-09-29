@@ -1,128 +1,122 @@
 #!/usr/bin/env bash
-# Runs, locally in the project's Docker images, the same checks
-# .github/workflows/ci.yml runs: pattern, format, analyze, unit tests
-# (TZ=JST-9), a debug build (not the signed release bundle), and -- unless
-# --no-db -- db lint, pgTAP and the integration folder with the warmup probe.
-# Stops at the first failure. Never touches the running local Supabase stack
-# destructively: it reuses it if one is already up (`supabase start` is
-# idempotent) and never runs `db reset` or `down -v` unless you ask for it.
+# Replays .github/workflows/ci.yml locally, in Docker: the `android` and
+# `database` jobs, same steps, same order, same commands.
+# mirrors ci.yml jobs android + database; update both together.
 #
-# Usage: tool/ci_local.sh [--no-db] [--db-only] [--reset-db]
-#   --no-db    skip database checks (pattern/format/analyze/test/build only)
-#   --db-only  skip the app checks, run only the database checks
-#   --reset-db replay migrations onto a clean database first (supabase db
-#              reset) instead of reusing whatever is already running
+# Not replayed: the iOS build (needs macOS; runs only in GitHub CI), the
+# classify/documentation jobs, and the "Restore Firebase config" secret step
+# (android/app/google-services.json must already exist locally).
+#
+# The database job starts from zero like CI: any leftover stack and its data
+# are wiped first, and the stack is stopped at the end (never `down -v`).
+#
+# Usage: tool/ci_local.sh [--android] [--database]   (default: both)
+# Each job stops at its first failing step; both jobs always run.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 export LOCAL_UID="${LOCAL_UID:-$(id -u)}" LOCAL_GID="${LOCAL_GID:-$(id -g)}"
-COMPOSE=(docker compose -f compose.yaml -f .github/compose.ci.yaml)
-# Services nothing here talks to (see .github/workflows/ci.yml for why):
-# keeps a laptop-run mirroring what CI now excludes.
-SUPABASE_EXCLUDE=imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+CI=(docker compose -f compose.yaml -f .github/compose.ci.yaml)
+SKIP='imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor'
 
-run_app=1
-run_db=1
-reset_db=0
-for arg in "$@"; do
-  case "$arg" in
-    --no-db) run_db=0 ;;
-    --db-only) run_app=0 ;;
-    --reset-db) reset_db=1 ;;
-    *)
-      echo "unknown flag: $arg (expected --no-db, --db-only, --reset-db)" >&2
-      exit 2
-      ;;
-  esac
-done
-
-step() { echo; echo "==> $*"; }
-verdict_fail() {
-  echo "FAILED: $1" >&2
-  exit 1
-}
-
-mkdir -p .ci-cache/pub .ci-cache/gradle
-
-build_dev_image() {
-  step "Build development image"
-  "${COMPOSE[@]}" build flutter || verdict_fail "Build development image"
-}
-
-if [ "$run_app" = 1 ]; then
-  build_dev_image
-
-  step "Resolve dependencies"
-  "${COMPOSE[@]}" run --rm flutter flutter pub get || verdict_fail "Resolve dependencies"
-
-  step "Layer rules"
-  tool/check_pattern.sh || verdict_fail "Layer rules"
-  test/tool/check_pattern_test.sh || verdict_fail "Layer rules (self-test)"
-
-  step "Check formatting"
-  "${COMPOSE[@]}" run --rm flutter dart format --output=none --set-exit-if-changed lib test \
-    || verdict_fail "Check formatting"
-
-  step "Analyze"
-  "${COMPOSE[@]}" run --rm flutter flutter analyze || verdict_fail "Analyze"
-
-  # TZ=JST-9 as in CI: a non-UTC zone catches a test that only passes because
-  # it never converts to local time.
-  step "Test (TZ=JST-9)"
-  "${COMPOSE[@]}" run --rm -e TZ=JST-9 flutter flutter test || verdict_fail "Test"
-
-  # Debug, not the signed release bundle: this script never sees the
-  # signing/Play secrets that only exist in ci.yml's Android checks job.
-  step "Build debug APK"
-  "${COMPOSE[@]}" run --rm flutter flutter build apk --debug || verdict_fail "Build debug APK"
+want_android=1 want_database=1
+if [ $# -gt 0 ]; then
+  want_android=0 want_database=0
+  for arg in "$@"; do
+    case "$arg" in
+      --android) want_android=1 ;;
+      --database) want_database=1 ;;
+      *) echo "unknown flag: $arg (expected --android, --database)" >&2; exit 2 ;;
+    esac
+  done
 fi
 
-if [ "$run_db" = 1 ]; then
-  step "Build Supabase tooling image"
-  docker compose build supabase || verdict_fail "Build Supabase tooling image"
+FAILED=
+# step "name" cmd...: run one ci.yml step; on failure remember it (the job stops).
+step() {
+  local name=$1; shift
+  echo; echo "==> $name"
+  "$@" || { FAILED=$name; return 1; }
+}
 
-  if [ "$reset_db" = 1 ]; then
-    step "Reset database (--reset-db given)"
-    docker compose run --rm supabase db reset || verdict_fail "Reset database"
-  fi
+service_key() {
+  "${CI[@]}" run --rm supabase status -o env | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p'
+}
 
-  # Idempotent: starts what isn't running yet and replays pending migrations;
-  # does nothing destructive to an already-running stack.
-  step "Start Supabase and replay migrations"
-  docker compose run --rm supabase start -x "$SUPABASE_EXCLUDE" || verdict_fail "Start Supabase"
+layer_rules() { tool/check_pattern.sh && test/tool/check_pattern_test.sh; }
 
-  step "Lint database"
-  docker compose run --rm supabase db lint --level error || verdict_fail "Lint database"
+bundle() {
+  test -f android/app/google-services.json \
+    || { echo 'android/app/google-services.json missing (CI restores it from a secret)' >&2; return 1; }
+  "${CI[@]}" run --rm \
+    -e ANDROID_UPLOAD_KEYSTORE=/tmp/ci.jks -e ANDROID_UPLOAD_KEY_ALIAS=ci \
+    -e ANDROID_UPLOAD_STORE_PASSWORD=throwaway -e ANDROID_UPLOAD_KEY_PASSWORD=throwaway \
+    flutter sh -c 'keytool -genkeypair -noprompt -keystore /tmp/ci.jks -alias ci \
+        -storepass throwaway -keypass throwaway -keyalg RSA -keysize 2048 -validity 1 -dname CN=ci \
+      && flutter build appbundle --release'
+}
 
-  step "Test database (pgTAP)"
-  docker compose run --rm supabase test db || verdict_fail "Test database"
-
-  step "Edge function tests"
-  EDGE_TEST_KEY=$(docker compose run --rm supabase status -o env \
-    | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p')
-  [ -n "$EDGE_TEST_KEY" ] \
-    || verdict_fail "could not read the local stack's service key"
+edge_tests() {
+  local key; key=$(service_key)
+  test -n "$key"
   docker run --rm --add-host host.docker.internal:host-gateway \
-    -v "$PWD":/w -w /w -e SUPABASE_TEST_SERVICE_KEY="$EDGE_TEST_KEY" \
+    -v "$PWD":/w -w /w -e SUPABASE_TEST_SERVICE_KEY="$key" \
     denoland/deno:2.9.7@sha256:fa335acdf6b72106eda2cb6a8cb5f4187e7630e357467489db4b2e7352d5e432 \
-    test --no-check --no-lock --allow-all test/edge/notify_on_message_test.ts \
-    || verdict_fail "Edge function tests"
+    test --no-check --no-lock --allow-all test/edge/notify_on_message_test.ts
+}
 
-  [ "$run_app" = 1 ] || build_dev_image
+integration() {
+  local key; key=$(service_key)
+  test -n "$key"
+  "${CI[@]}" run --rm -e TZ=JST-9 -e SUPABASE_TEST_SERVICE_KEY="$key" \
+    flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration
+}
 
-  step "Wait until Realtime delivers"
-  "${COMPOSE[@]}" run --rm flutter flutter test --run-skipped --tags warmup \
-    test/integration/realtime_warmup_test.dart || verdict_fail "Wait until Realtime delivers"
+job_android() {
+  step "Prepare cache directories" mkdir -p .ci-cache/pub .ci-cache/gradle || return 1
+  step "Build development image" "${CI[@]}" build || return 1
+  step "Resolve dependencies" "${CI[@]}" run --rm flutter flutter pub get || return 1
+  step "Layer rules" layer_rules || return 1
+  step "Check formatting" "${CI[@]}" run --rm flutter dart format --output=none --set-exit-if-changed lib test || return 1
+  step "Analyze" "${CI[@]}" run --rm flutter flutter analyze || return 1
+  step "Test" "${CI[@]}" run --rm -e TZ=JST-9 flutter flutter test || return 1
+  step "Build release bundle" bundle
+}
 
-  step "Repository integration tests"
-  SUPABASE_TEST_SERVICE_KEY=$(docker compose run --rm supabase status -o env \
-    | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p')
-  [ -n "$SUPABASE_TEST_SERVICE_KEY" ] \
-    || verdict_fail "could not read the local stack's service key"
-  "${COMPOSE[@]}" run --rm -e TZ=JST-9 -e SUPABASE_TEST_SERVICE_KEY="$SUPABASE_TEST_SERVICE_KEY" \
-    flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration \
-    || verdict_fail "Repository integration tests"
+job_database() {
+  step "Build Supabase tooling image" docker compose build supabase || return 1
+  # Zero state: --no-backup drops the stack's data volumes (not the SDK ones).
+  step "Wipe leftover Supabase stack" docker compose run --rm supabase stop --no-backup || return 1
+  step "Start Supabase and replay migrations" docker compose run --rm supabase start -x "$SKIP" || return 1
+  step "Lint database" docker compose run --rm supabase db lint --level error || return 1
+  step "Test database" docker compose run --rm supabase test db || return 1
+  step "Edge function tests" edge_tests || return 1
+  step "Prepare cache directories" mkdir -p .ci-cache/pub .ci-cache/gradle || return 1
+  step "Build development image" "${CI[@]}" build flutter || return 1
+  step "Wait until Realtime delivers" "${CI[@]}" run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart || return 1
+  step "Repository integration tests" integration
+}
+
+status=0
+summary=()
+run_job() {
+  FAILED=
+  if "job_$1"; then
+    summary+=("RESULT $1 PASS")
+  else
+    summary+=("RESULT $1 FAIL (step: $FAILED)")
+    status=1
+  fi
+}
+
+[ "$want_android" = 0 ] || run_job android
+if [ "$want_database" = 1 ]; then
+  run_job database
+  docker compose run --rm supabase stop || true
 fi
-
+# Drops this worktree's compose network (no -v: volumes are kept).
+docker compose down --remove-orphans >/dev/null 2>&1 || true
 echo
-echo "PASSED: all requested checks passed."
+echo "iOS build: skipped (macOS only; runs in GitHub CI)"
+printf '%s\n' "${summary[@]}"
+exit "$status"

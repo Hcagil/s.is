@@ -17,6 +17,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/home/presentation/home_screen.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
@@ -175,5 +176,109 @@ void main() {
     expect(push.cleared, [
       'c1',
     ], reason: 'opening from a cold-start launch clears its notification too');
+  });
+
+  group('coming back to a chat that was open (0.25.2)', () {
+    // The owner's bug on 0.25.1: tapping the notification of the chat that
+    // was open opened it without the new messages until it was closed and
+    // reopened. While the app was in the background the socket died: the
+    // server has the messages, Realtime delivered none of them. FakeChat
+    // models that by changing what the server answers without deliver().
+    Message m(String id, String body, int minute) => Message(
+      id: id,
+      conversationId: 'c1',
+      senderId: 'u2',
+      body: body,
+      createdAt: DateTime.utc(2026, 9, 29, 12, minute),
+    );
+
+    Future<(FakeChat, PushSourceFake)> openChat(WidgetTester t) async {
+      final chat = FakeChat(list: [c1], initial: [m('m1', 'before', 1)]);
+      final push = PushSourceFake();
+      await pumpApp(t, chat: chat, push: push);
+      push.openConversation('c1');
+      await t.pumpAndSettle();
+      expect(find.text('before'), findsOneWidget);
+      // Sent while the phone slept: on the server, never delivered live.
+      chat.initial = [m('m1', 'before', 1), m('m2', 'while away', 2)];
+      return (chat, push);
+    }
+
+    /// Background, then foreground, the way Android reports it.
+    Future<void> leaveAndReturn(WidgetTester t) async {
+      for (final s in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        t.binding.handleAppLifecycleStateChanged(s);
+        await t.pump();
+      }
+      await t.pumpAndSettle();
+    }
+
+    testWidgets('tapping the notification of the chat already open shows its '
+        'new messages, on the same screen', (t) async {
+      final (_, push) = await openChat(t);
+
+      push.openConversation('c1');
+      await t.pumpAndSettle();
+
+      expect(find.text('while away'), findsOneWidget);
+      expect(
+        find.byType(MessageScreen, skipOffstage: false),
+        findsOneWidget,
+        reason: 'no second copy of the chat pushed on top of the first',
+      );
+      expect(push.cleared, ['c1', 'c1']);
+
+      await t.pageBack();
+      await t.pumpAndSettle();
+      expect(find.byType(MessageScreen, skipOffstage: false), findsNothing);
+      expect(find.byType(HomeScreen), findsOneWidget);
+    });
+
+    testWidgets('a second notification for a chat opened from the first, '
+        'tapped after going back to the list, opens it again', (t) async {
+      final (_, push) = await openChat(t);
+      await t.pageBack();
+      await t.pumpAndSettle();
+      expect(find.byType(MessageScreen, skipOffstage: false), findsNothing);
+
+      push.openConversation('c1');
+      await t.pumpAndSettle();
+
+      expect(find.byType(MessageScreen), findsOneWidget);
+      expect(find.text('while away'), findsOneWidget);
+      expect(push.cleared, ['c1', 'c1']);
+    });
+
+    testWidgets('returning to the app shows what arrived meanwhile and clears '
+        'the open chat\'s notification', (t) async {
+      final (_, push) = await openChat(t);
+
+      await leaveAndReturn(t);
+
+      expect(find.text('while away'), findsOneWidget);
+      expect(push.cleared, ['c1', 'c1']);
+      expect(find.byType(MessageScreen, skipOffstage: false), findsOneWidget);
+    });
+
+    testWidgets('pulling down the notification shade is not a return: '
+        'nothing is re-read', (t) async {
+      final (_, push) = await openChat(t);
+
+      for (final s in [AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+        t.binding.handleAppLifecycleStateChanged(s);
+        await t.pump();
+      }
+      await t.pumpAndSettle();
+
+      expect(find.text('while away'), findsNothing);
+      expect(push.cleared, ['c1']);
+    });
   });
 }

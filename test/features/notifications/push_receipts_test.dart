@@ -498,6 +498,47 @@ void main() {
       }
     });
 
+    test('a Doze backlog handled at once: every push gets exactly one '
+        'shown, whichever push\'s flush posted its line', () async {
+      await LocalPushDisplay.forUser('member-a');
+      newIsolate(); // FCM's background isolate
+      await PushReceiptLog.removeFirst(1000);
+      final ids = [
+        for (var i = 0; i < 6; i++) '0000000$i-2a55-4c1f-9e0a-0d7f7b1a2c3d',
+      ];
+
+      await Future.wait([
+        for (var i = 0; i < ids.length; i++)
+          onBackgroundPush(
+            _push(
+              to: 'member-a',
+              data: {
+                'conversation_id': 'c-${i % 3}',
+                'title': 'Sender $i',
+                'body': 'burst line $i',
+                'message_id': ids[i],
+                'user_id': 'member-a',
+              },
+            ),
+          ),
+      ]);
+
+      final all = await receipts();
+      for (final id in ids) {
+        final mine = [
+          for (final r in all)
+            if (r['message_id'] == id) r['stage'],
+        ];
+        expect(mine, ['received', 'shown'], reason: '$id: $all');
+      }
+      for (var i = 0; i < ids.length; i++) {
+        expect(
+          Shade.text(shade.childFor('c-${i % 3}')),
+          contains('burst line $i'),
+        );
+      }
+    }, timeout: const Timeout(Duration(seconds: 30)));
+
     test('a message_id that is not a string is left out', () async {
       await background(
         _push(

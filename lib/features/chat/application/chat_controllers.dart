@@ -8,6 +8,7 @@ import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/member.dart';
 import '../../auth/domain/session_state.dart';
+import '../../notifications/application/push_controller.dart';
 import '../../profile/application/profile_controller.dart';
 import '../domain/attachment.dart';
 import '../domain/chat_list_snapshot_store.dart';
@@ -154,6 +155,22 @@ class OpenConversation extends Notifier<String?> {
   void close() => state = null;
 }
 
+/// Called when the app comes back to the foreground: the open chat and the
+/// chat list fetch what they missed, and the open chat's notification goes
+/// (its messages are on screen).
+final resumeCatchUpProvider = Provider<void Function()>((ref) {
+  return () {
+    // Nothing to catch up on before sign-in (and no repository to ask).
+    if (ref.read(sessionControllerProvider).value is! Allowed) return;
+    final open = ref.read(openConversationProvider);
+    if (open != null) {
+      ref.read(messagesProvider.notifier).catchUp();
+      unawaited(ref.read(pushSourceProvider).clearConversation(open));
+    }
+    unawaited(ref.read(conversationListProvider.notifier).catchUp());
+  };
+});
+
 /// Riverpod 3 retries a failed build automatically, which leaves the provider
 /// loading-with-an-error indefinitely instead of settling on [AsyncError] — an
 /// endless spinner where ARCHITECTURE requires a reason on screen. Worse, a
@@ -174,6 +191,13 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   /// costs one disk write, not one per message.
   Timer? _snapshotDebounce;
 
+  /// Bumped by every build and every [catchUp], so a Realtime join that lands
+  /// after a newer one started is dropped (ref.mounted cannot tell).
+  int _gen = 0;
+
+  /// The current all-conversations Realtime subscription.
+  StreamSubscription<Message>? _live;
+
   /// Kept current by a Realtime subscription to every conversation the member
   /// belongs to. Subscribing happens BEFORE the first read and anything that
   /// arrives in between is buffered, the same way the message screen does it,
@@ -186,6 +210,8 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     // Rebuilt from scratch for each account: never the last one's list.
     ref.watch(currentUserIdProvider);
     final ownerId = ref.read(currentUserIdProvider);
+    final gen = ++_gen;
+    ref.onDispose(() => unawaited(_live?.cancel()));
     // Riverpod 3 ALWAYS carries a previous value into a new AsyncLoading (or
     // a later AsyncError) via copyWithPrevious -- including one assigned
     // explicitly, right here, by this very build(): `state =
@@ -248,7 +274,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
           .incomingAll()
           .then((opened) {
             if (opened case Ok(:final value)) {
-              if (!alive) {
+              if (!alive || gen != _gen) {
                 // This build was replaced or disposed while the join was
                 // still out: listen only long enough to cancel, which tears
                 // the channel down through the same onCancel -> leaveChannel
@@ -270,6 +296,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
                 // list current.
                 onError: (Object _) {},
               );
+              _live = sub;
               ref.onDispose(sub.cancel);
             }
           })
@@ -423,9 +450,33 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     final ownerId = ref.read(currentUserIdProvider);
     state = const AsyncLoading();
     final next = await AsyncValue.guard(_load);
+    if (!ref.mounted) return;
     if (ref.read(currentUserIdProvider) != ownerId) return;
     state = next;
     _saveCurrentIfData();
+  }
+
+  /// The app is visible again after being backgrounded, where the Realtime
+  /// connection dies and nothing sent meanwhile is delivered: re-read the
+  /// list at once, then join again and re-read once more to close the gap
+  /// the join leaves. Skipped while a build is still loading (it is fresh).
+  Future<void> catchUp() async {
+    if (state.isLoading || !ref.mounted) return;
+    final gen = ++_gen;
+    final old = _live;
+    _live = null;
+    if (old != null) unawaited(old.cancel());
+    await reloadQuietly();
+    final opened = await ref.read(chatRepositoryProvider).incomingAll();
+    if (opened is! Ok<Stream<Message>>) return;
+    if (gen != _gen || !ref.mounted) {
+      unawaited(opened.value.listen((_) {}).cancel());
+      return;
+    }
+    _live = opened.value.listen(_apply, onError: (Object _) {});
+    // ponytail: a message inserted during this last read can be missed; the
+    // next resume or returning from a chat reads again.
+    await reloadQuietly();
   }
 
   /// Re-reads without showing a spinner: the list on screen stays while the
@@ -435,8 +486,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   Future<void> reloadQuietly() async {
     final ownerId = ref.read(currentUserIdProvider);
     final next = await AsyncValue.guard(_load);
+    if (!ref.mounted) return;
     if (ref.read(currentUserIdProvider) != ownerId) return;
-    if (next is AsyncData<List<Conversation>> && ref.mounted) state = next;
+    if (next is AsyncData<List<Conversation>>) state = next;
     _saveCurrentIfData();
   }
 
@@ -687,6 +739,16 @@ class MessagesController extends AsyncNotifier<List<Message>> {
             if (!shown.any((m) => m.id == p.id)) p,
         ];
     }
+  }
+
+  /// The app is visible again after being backgrounded (or a notification
+  /// for this chat was tapped): Realtime died meanwhile and nothing sent
+  /// since was delivered, so read the chat again with a fresh subscription
+  /// -- build()'s own order, join first, then read. Not while a build is
+  /// loading (it is fresh) or a search jump is on screen.
+  void catchUp() {
+    if (_jumped || state.isLoading) return;
+    ref.invalidateSelf();
   }
 
   /// Reconciles this conversation's shown list with [SendQueueController]'s

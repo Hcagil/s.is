@@ -51,6 +51,42 @@ class Shade {
   /// Every call the app made into the plugin, in order.
   final calls = <String>[];
 
+  /// Every notification posted, in order, with when it was posted. Android
+  /// sheds posts above about 5 per second per app without an error, so the
+  /// timing is part of what the app must get right.
+  final shows = <({DateTime at, Map<String, Object?> n})>[];
+
+  /// The alerting flags of [n]: whether it may sound, and how its group
+  /// alerts (GroupAlertBehavior index: 0 all, 1 summary, 2 children).
+  static ({bool silent, bool onlyAlertOnce, Object? groupAlert, bool summary})
+  alerting(Map<String, Object?> n) {
+    final s = Map<String, Object?>.from(
+      (n['platformSpecifics'] as Map?) ?? const <String, Object?>{},
+    );
+    return (
+      silent: s['silent'] == true,
+      onlyAlertOnce: s['onlyAlertOnce'] == true,
+      groupAlert: s['groupAlertBehavior'],
+      summary: s['setAsGroupSummary'] == true,
+    );
+  }
+
+  /// The most posts inside any one-second window.
+  int get peakPostsPerSecond {
+    var peak = 0;
+    for (var i = 0; i < shows.length; i++) {
+      var n = 0;
+      for (var j = i; j < shows.length; j++) {
+        if (shows[j].at.difference(shows[i].at) >= const Duration(seconds: 1)) {
+          break;
+        }
+        n++;
+      }
+      if (n > peak) peak = n;
+    }
+    return peak;
+  }
+
   static const channel = MethodChannel(
     'dexterous.com/flutter/local_notifications',
   );
@@ -94,6 +130,7 @@ class Shade {
       case 'show':
         final n = Map<String, Object?>.from(args as Map);
         posted[n['id']! as int] = n;
+        shows.add((at: DateTime.now(), n: n));
         return null;
       case 'cancel':
         posted.remove(args is Map ? args['id'] : args);

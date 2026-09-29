@@ -14,19 +14,34 @@ import '../../profile/presentation/settings_screen.dart';
 import '../../update/presentation/update_banner.dart';
 
 /// Home for an allowed member: the update banner, then the conversations.
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key, required this.member});
 
   final Member member;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    ref.listen(openedFromNotificationProvider, (_, next) {
-      if (next case AsyncData(:final value)) {
-        unawaited(_openFromNotification(context, ref, value));
-      }
-    });
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
 
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  StreamSubscription<String>? _taps;
+
+  @override
+  void initState() {
+    super.initState();
+    _taps = ref.read(notificationTapsProvider).listen((id) {
+      if (mounted) unawaited(_openFromNotification(context, ref, id));
+    });
+  }
+
+  @override
+  void dispose() {
+    unawaited(_taps?.cancel());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const SisBrandRow(),
@@ -63,6 +78,12 @@ Future<void> _openFromNotification(
   WidgetRef ref,
   String id,
 ) async {
+  // Already on screen: opening it again would stack a second copy; the same
+  // catch-up as coming back to the app instead.
+  if (ref.read(openConversationProvider) == id) {
+    ref.read(resumeCatchUpProvider)();
+    return;
+  }
   final list = ref.read(conversationListProvider.notifier);
   var conversations = await ref.read(conversationListProvider.future);
   if (!conversations.any((c) => c.id == id)) {

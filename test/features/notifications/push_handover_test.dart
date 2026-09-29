@@ -17,6 +17,7 @@
 // Also here, over the same device: taps on notifications Android drew itself
 // (a push sent to a device still registered as an older build), and a push
 // Android already drew is not drawn a second time.
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -100,11 +101,16 @@ RemoteMessage drawnPush(String chat, String title, String body) =>
     );
 
 /// Every test runs on Android, the only platform SIS ships on.
-void _android(String description, WidgetTesterCallback body) => testWidgets(
-  description,
-  body,
-  variant: TargetPlatformVariant.only(TargetPlatform.android),
-);
+void _android(String description, WidgetTesterCallback body) =>
+    testWidgets(description, (t) async {
+      await body(t);
+      // LocalPushDisplay's lock is static: if this test's last use of it ran
+      // under this test's fake clock, the next test would chain onto a zone
+      // that no longer turns. One real-zone pass leaves it on the real loop.
+      await _rehome?.call(t);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+Future<void> Function(WidgetTester t)? _rehome;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -151,11 +157,53 @@ void main() {
     );
   });
 
+  /// Runs [op] (started in the real zone) to completion, turning both the
+  /// widget test's fake clock and the real event loop. On a phone one event
+  /// loop runs everything; here LocalPushDisplay's pacing timers and its
+  /// static lock -- which the app's own clear/clearAll, run under the fake
+  /// clock, also chain on -- straddle the two.
+  Future<void> drive(WidgetTester t, Future<void> Function() op) async {
+    var done = false;
+    Object? error;
+    await t.runAsync(() async {
+      unawaited(
+        op().then(
+          (_) => done = true,
+          onError: (Object e) {
+            error = e;
+            done = true;
+          },
+        ),
+      );
+    });
+    final deadline = DateTime.now().add(const Duration(seconds: 30));
+    while (!done) {
+      if (DateTime.now().isAfter(deadline)) fail('never finished');
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+      );
+      await t.pump(const Duration(milliseconds: 50));
+    }
+    if (error case final e?) throw e;
+  }
+
+  _rehome = (t) => drive(t, () => LocalPushDisplay.clear('-rehome-'));
+
+  /// pumpAndSettle, plus one turn of the real event loop. The background
+  /// handler runs in a real zone (runAsync); the display's lock it leaves
+  /// behind is a real-zone future, so an app-side clear/clearAll chained on
+  /// it only proceeds once the real loop turns -- on a phone it always does.
+  Future<void> settle(WidgetTester t) async {
+    await t.pumpAndSettle();
+    await t.runAsync(() => Future<void>.delayed(Duration.zero));
+    await t.pumpAndSettle();
+  }
+
   /// A push arriving while the app is in the background or closed: the
   /// production background handler, in its own isolate.
   Future<void> background(WidgetTester t, RemoteMessage m) async {
     newIsolate();
-    await t.runAsync(() => onBackgroundPush(m));
+    await drive(t, () => onBackgroundPush(m));
   }
 
   Future<void> avaPushes(WidgetTester t) async {
@@ -188,13 +236,13 @@ void main() {
         child: const SisApp(),
       ),
     );
-    await t.pumpAndSettle();
+    await settle(t);
   }
 
   /// The app process ends (swiped away, or the phone restarts).
   Future<void> kill(WidgetTester t) async {
     await t.pumpWidget(const SizedBox());
-    await t.pumpAndSettle();
+    await settle(t);
     newIsolate();
   }
 
@@ -219,7 +267,7 @@ void main() {
       ..allowed = true;
     p.profile = profileOf(bea);
     await t.tap(find.text('Continue with Google'));
-    await t.pumpAndSettle();
+    await settle(t);
     expectHome();
   }
 
@@ -262,11 +310,11 @@ void main() {
       await avaPushes(t);
 
       await t.tap(find.byKey(const ValueKey('home-settings')));
-      await t.pumpAndSettle();
+      await settle(t);
       await t.tap(find.byKey(const ValueKey('settings-account')));
-      await t.pumpAndSettle();
+      await settle(t);
       await t.tap(find.byKey(const ValueKey('account-sign-out')));
-      await t.pumpAndSettle();
+      await settle(t);
       expect(auth.signOuts, 1);
 
       expectAvaGone();
@@ -284,7 +332,7 @@ void main() {
 
       auth.session = false;
       auth.changes.add(false);
-      await t.pumpAndSettle();
+      await settle(t);
       expect(auth.signOuts, 0);
 
       expectAvaGone();
@@ -307,7 +355,7 @@ void main() {
       await launch(t, auth, p);
       expect(find.textContaining('not currently approved'), findsOneWidget);
       await t.tap(find.text('Sign out'));
-      await t.pumpAndSettle();
+      await settle(t);
       expect(auth.signOuts, 1);
 
       await beaSignsIn(t, auth, p);
@@ -327,7 +375,7 @@ void main() {
       await launch(t, auth, p);
       expect(find.textContaining('not currently approved'), findsOneWidget);
       await t.tap(find.text('Sign out'));
-      await t.pumpAndSettle();
+      await settle(t);
       expect(auth.signOuts, 1);
       expect(find.text('Continue with Google'), findsOneWidget);
 
@@ -394,7 +442,7 @@ void main() {
 
       auth.session = false;
       auth.changes.add(false);
-      await t.pumpAndSettle();
+      await settle(t);
 
       expectAvaGone();
       await beaSignsIn(t, auth, p);
@@ -417,7 +465,7 @@ void main() {
       await background(t, dataPush('c-xi', 'Xi', 'third', to: ava.userId));
       expect(
         Shade.text(shade.summaries.single),
-        contains('3 new messages in 3 chats'),
+        contains('3 new messages from 3 chats'),
       );
     });
   });
@@ -453,7 +501,7 @@ void main() {
       await background(t, dataPush('c-xi', 'Xi', 'third', to: ava.userId));
       expect(
         Shade.text(shade.summaries.single),
-        contains('3 new messages in 3 chats'),
+        contains('3 new messages from 3 chats'),
         reason: 'the waiting ones must still count',
       );
     });
@@ -486,11 +534,11 @@ void main() {
       await launch(t, auth, p);
       expectHome();
       await t.tap(find.byKey(const ValueKey('home-settings')));
-      await t.pumpAndSettle();
+      await settle(t);
       await t.tap(find.byKey(const ValueKey('settings-account')));
-      await t.pumpAndSettle();
+      await settle(t);
       await t.tap(find.byKey(const ValueKey('account-sign-out')));
-      await t.pumpAndSettle();
+      await settle(t);
       expect(find.text('Continue with Google'), findsOneWidget);
       await kill(t);
       await latePush(t);
@@ -529,7 +577,7 @@ void main() {
       c.listen(openedFromNotificationProvider, (_, next) {
         if (next case AsyncData(:final value)) seen.add(value);
       });
-      await t.pumpAndSettle();
+      await settle(t);
       return seen;
     }
 
@@ -551,7 +599,7 @@ void main() {
         DeviceMessaging.openedApp(drawnPush('c-warm', 'Zed', 'hi'));
         await Future<void>.delayed(Duration.zero);
       });
-      await t.pumpAndSettle();
+      await settle(t);
 
       expect(seen, ['c-warm']);
     });
@@ -563,7 +611,7 @@ void main() {
       expect(seen, ['c-own-cold']);
 
       await t.runAsync(() => Shade.tap('c-own-warm'));
-      await t.pumpAndSettle();
+      await settle(t);
 
       expect(seen, ['c-own-cold', 'c-own-warm']);
     });
@@ -604,11 +652,11 @@ void main() {
       ProfileFake p,
     ) async {
       await t.tap(find.byKey(const ValueKey('home-settings')));
-      await t.pumpAndSettle();
+      await settle(t);
       await t.tap(find.byKey(const ValueKey('settings-account')));
-      await t.pumpAndSettle();
+      await settle(t);
       await t.tap(find.byKey(const ValueKey('account-sign-out')));
-      await t.pumpAndSettle();
+      await settle(t);
       await beaSignsIn(t, auth, p);
       expect(
         await t.runAsync<String?>(LocalPushDisplay.currentOwner),
@@ -686,7 +734,7 @@ void main() {
         t.binding.handleAppLifecycleStateChanged(state);
         await t.pump();
       }
-      await t.pumpAndSettle();
+      await settle(t);
     }
 
     // The sign-out happens on this phone, but the server never hears that
@@ -713,15 +761,15 @@ void main() {
           child: const SisApp(),
         ),
       );
-      await t.pumpAndSettle();
+      await settle(t);
       expectHome();
       await avaPushes(t);
       await t.tap(find.byKey(const ValueKey('home-settings')));
-      await t.pumpAndSettle();
+      await settle(t);
       await t.tap(find.byKey(const ValueKey('settings-account')));
-      await t.pumpAndSettle();
+      await settle(t);
       await t.tap(find.byKey(const ValueKey('account-sign-out')));
-      await t.pumpAndSettle();
+      await settle(t);
       expect(find.text('Continue with Google'), findsOneWidget);
       return (auth, p);
     }
@@ -807,7 +855,7 @@ void main() {
     _android('incomplete config: the setup screen, nothing thrown', (t) async {
       // Exactly main.dart's SetupRequired run: no overrides at all.
       await t.pumpWidget(const ProviderScope(child: SisApp()));
-      await t.pumpAndSettle();
+      await settle(t);
 
       expect(find.byType(SetupRequiredScreen), findsOneWidget);
       await expectNothingBuiltOrThrown(t);
@@ -829,7 +877,7 @@ void main() {
           child: const SisApp(),
         ),
       );
-      await t.pumpAndSettle();
+      await settle(t);
       await t.pump(const Duration(seconds: 10));
 
       expect(find.byType(SetupRequiredScreen), findsOneWidget);
@@ -851,7 +899,7 @@ void main() {
             child: const SisApp(),
           ),
         );
-        await t.pumpAndSettle();
+        await settle(t);
 
         expect(find.byType(StartupFailedScreen), findsOneWidget);
         expect(find.textContaining('bad secure store'), findsOneWidget);
@@ -885,7 +933,7 @@ void main() {
           child: const SisApp(),
         ),
       );
-      await t.pumpAndSettle();
+      await settle(t);
       expect(find.byType(SetupRequiredScreen), findsOneWidget);
       Future<String?> owner() async =>
           t.runAsync<String?>(LocalPushDisplay.currentOwner);
@@ -900,18 +948,18 @@ void main() {
       final c = ProviderScope.containerOf(t.element(find.byType(SisApp)));
       c.invalidate(runtimeConfigProvider);
       c.invalidate(sessionControllerProvider);
-      await t.pumpAndSettle();
+      await settle(t);
       expect(find.textContaining('not currently approved'), findsOneWidget);
       expect(await owner(), isNull, reason: 'Denied must reach forUser');
 
       await t.tap(find.text('Sign out'));
-      await t.pumpAndSettle();
+      await settle(t);
       await beaSignsIn(t, auth, p);
       expect(await owner(), bea.userId, reason: 'Allowed must reach forUser');
 
       auth.session = false; // the server ends Bea's session
       auth.changes.add(false);
-      await t.pumpAndSettle();
+      await settle(t);
       expect(find.text('Continue with Google'), findsOneWidget);
       expect(await owner(), isNull, reason: 'SignedOut must reach forUser');
     });

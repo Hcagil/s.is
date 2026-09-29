@@ -151,3 +151,25 @@ final openedFromNotificationProvider = StreamProvider<String>((ref) async* {
   if (first != null) yield first;
   yield* source.openedConversations;
 });
+
+/// Every tap, including two in a row for the same chat (a StreamProvider
+/// would swallow the second: it only notifies on a changed value): the
+/// conversation that launched the app first, then each later tap. A fresh
+/// stream per read, for whoever listens.
+final notificationTapsProvider = Provider.autoDispose<Stream<String>>((ref) {
+  final PushSource source;
+  try {
+    source = ref.read(pushSourceProvider);
+  } catch (_) {
+    // No push channel in this build (or test): no taps, as the stream
+    // provider above would have ended in an error nobody watches.
+    return const Stream.empty();
+  }
+  Stream<String> taps() async* {
+    final first = await source.launchConversation();
+    if (first != null) yield first;
+    yield* source.openedConversations;
+  }
+
+  return taps();
+});

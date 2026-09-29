@@ -992,7 +992,34 @@ class ChatFake implements ChatRepository {
     final controller = _all ??= StreamController<Message>.broadcast(
       onCancel: () => canceledAllSubscriptions++,
     );
-    return Ok(controller.stream);
+    final source = controller.stream;
+    return Ok(
+      Stream<Message>.multi((out) {
+        liveAllListeners++;
+        final sub = source.listen(
+          out.add,
+          onError: out.addError,
+          onDone: out.close,
+        );
+        out.onCancel = () {
+          liveAllListeners--;
+          return sub.cancel();
+        };
+      }, isBroadcast: true),
+    );
+  }
+
+  /// List-wide subscriptions currently listened to and not cancelled, dead
+  /// ones included: a join that is never cancelled keeps counting here.
+  int liveAllListeners = 0;
+
+  /// The phone went to the background and the OS closed the socket without
+  /// a word: every existing subscription stays open but never delivers
+  /// again. Only a subscription made after this is live. Messages inserted
+  /// meanwhile still reach [history] and the list's "database".
+  void loseRealtime() {
+    _streams.clear();
+    _all = null;
   }
 
   @override

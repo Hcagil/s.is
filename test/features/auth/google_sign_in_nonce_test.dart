@@ -17,194 +17,16 @@
 // NOT covered, and cannot be locally: a real Google-signed token accepted by a
 // real Supabase Auth. That round trip is verified on a device.
 import 'dart:convert';
-import 'dart:math';
 
-import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:google_sign_in_platform_interface/google_sign_in_platform_interface.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/data/failures.dart' show offlineMessage;
 import 'package:sis/features/auth/data/supabase_auth_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const _webClient = 'web-client-123.apps.googleusercontent.com';
-
-String _b64(Object json) =>
-    base64Url.encode(utf8.encode(jsonEncode(json))).replaceAll('=', '');
-
-Map<String, dynamic> _claims(String jwt) => jsonDecode(
-  utf8.decode(base64Url.decode(base64Url.normalize(jwt.split('.')[1]))),
-) as Map<String, dynamic>;
-
-String _sha256hex(String s) => sha256.convert(utf8.encode(s)).toString();
-
-String _randomHex() {
-  final r = Random.secure();
-  return List.generate(
-    32,
-    (_) => r.nextInt(256),
-  ).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-}
-
-/// The native Google SDK, as far as the nonce goes.
-class FakeGooglePlatform extends GoogleSignInPlatform {
-  FakeGooglePlatform({required this.ios});
-
-  /// The iOS SDK puts a nonce in every ID token, its own if given none.
-  final bool ios;
-
-  final inits = <InitParameters>[];
-  var _initDone = false;
-  var authenticateCalls = 0;
-
-  /// What `authenticate` does instead of succeeding.
-  GoogleSignInException? error;
-  bool nullIdToken = false;
-
-  /// The nonce claim of the last token issued.
-  String? lastTokenNonce;
-
-  @override
-  Future<void> init(InitParameters params) async {
-    inits.add(params);
-    await Future<void>.delayed(const Duration(milliseconds: 5));
-    _initDone = true;
-  }
-
-  @override
-  Future<AuthenticationResults> authenticate(
-    AuthenticateParameters params,
-  ) async {
-    authenticateCalls++;
-    if (!_initDone) {
-      throw StateError('authenticate() before initialize() completed');
-    }
-    if (error != null) throw error!;
-    final given = inits.last.nonce;
-    final nonce = given ?? (ios ? _randomHex() : null);
-    lastTokenNonce = nonce;
-    final token = [
-      _b64({'alg': 'RS256', 'typ': 'JWT'}),
-      _b64({
-        'iss': 'https://accounts.google.com',
-        'aud': inits.last.serverClientId,
-        'sub': '1100220033',
-        'email': 'ali@example.com',
-        'nonce': ?nonce,
-      }),
-      'c2lnbmF0dXJl',
-    ].join('.');
-    return AuthenticationResults(
-      user: const GoogleSignInUserData(
-        email: 'ali@example.com',
-        id: '1100220033',
-      ),
-      authenticationTokens: AuthenticationTokenData(
-        idToken: nullIdToken ? null : token,
-      ),
-    );
-  }
-
-  @override
-  Future<AuthenticationResults?>? attemptLightweightAuthentication(
-    AttemptLightweightAuthenticationParameters params,
-  ) async => null;
-
-  @override
-  bool supportsAuthenticate() => true;
-
-  @override
-  bool authorizationRequiresUserInteraction() => false;
-
-  @override
-  Future<ClientAuthorizationTokenData?> clientAuthorizationTokensForScopes(
-    ClientAuthorizationTokensForScopesParameters params,
-  ) async => const ClientAuthorizationTokenData(accessToken: 'ya29.access');
-
-  @override
-  Future<ServerAuthorizationTokenData?> serverAuthorizationTokensForScopes(
-    ServerAuthorizationTokensForScopesParameters params,
-  ) async => null;
-
-  @override
-  Future<void> signOut(SignOutParams params) async {}
-
-  @override
-  Future<void> disconnect(DisconnectParams params) async {}
-}
-
-/// GoTrue's id_token grant, with its nonce rules.
-class GoTrueStandIn {
-  /// Bodies of every id_token grant received.
-  final grants = <Map<String, dynamic>>[];
-
-  /// Any other request, so an unexpected call is visible.
-  final others = <String>[];
-
-  bool offline = false;
-
-  http.Response _error(String msg) => http.Response(
-    jsonEncode({'code': 400, 'error_code': 'validation_failed', 'msg': msg}),
-    400,
-    headers: {'content-type': 'application/json'},
-  );
-
-  late final http.Client client = MockClient((req) async {
-    await Future<void>.delayed(const Duration(milliseconds: 2));
-    if (offline) throw http.ClientException('Failed host lookup: x');
-    if (req.url.path.endsWith('/auth/v1/token') &&
-        req.url.queryParameters['grant_type'] == 'id_token') {
-      final body = jsonDecode(req.body) as Map<String, dynamic>;
-      grants.add(body);
-      final passed = body['nonce'] as String? ?? '';
-      final inToken =
-          _claims(body['id_token'] as String)['nonce'] as String? ?? '';
-      if (passed.isEmpty != inToken.isEmpty) {
-        return _error(
-          'Passed nonce and nonce in id_token should either both exist or not.',
-        );
-      }
-      if (passed.isNotEmpty && _sha256hex(passed) != inToken) {
-        return _error('Nonces mismatch');
-      }
-      final exp = DateTime.now().millisecondsSinceEpoch ~/ 1000 + 3600;
-      const uid = '0b6c4bb4-58e4-4bb5-9c1e-3f4bb8e2a7d1';
-      return http.Response(
-        jsonEncode({
-          'access_token': [
-            _b64({'alg': 'HS256', 'typ': 'JWT'}),
-            _b64({'sub': uid, 'exp': exp, 'role': 'authenticated'}),
-            'c2ln',
-          ].join('.'),
-          'token_type': 'bearer',
-          'expires_in': 3600,
-          'expires_at': exp,
-          'refresh_token': 'refresh-1',
-          'user': {
-            'id': uid,
-            'aud': 'authenticated',
-            'role': 'authenticated',
-            'email': 'ali@example.com',
-            'app_metadata': {'provider': 'google'},
-            'user_metadata': <String, dynamic>{},
-            'created_at': '2026-09-29T10:00:00Z',
-          },
-        }),
-        200,
-        headers: {'content-type': 'application/json'},
-      );
-    }
-    others.add('${req.method} ${req.url}');
-    return http.Response(
-      '[]',
-      200,
-      headers: {'content-type': 'application/json'},
-    );
-  });
-}
+import '../../support/google_sign_in_stand_ins.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -226,7 +48,7 @@ void main() {
     return SupabaseAuthRepository(
       c,
       GoogleSignIn.instance,
-      googleWebClientId: _webClient,
+      googleWebClientId: googleWebClient,
       useNonce: useNonce,
     );
   }
@@ -254,7 +76,7 @@ void main() {
         expect(r, isA<Ok<void>>(), reason: '$r');
         expect(google.inits, hasLength(1));
         expect(google.inits.single.nonce, isNull);
-        expect(google.inits.single.serverClientId, _webClient);
+        expect(google.inits.single.serverClientId, googleWebClient);
         expect(gotrue.grants, hasLength(1));
         expect(gotrue.grants.single['nonce'], isNull);
         expect(gotrue.grants.single['provider'], 'google');
@@ -275,7 +97,7 @@ void main() {
         expect(google.inits, hasLength(1));
         final hashed = google.inits.single.nonce;
         expect(hashed, matches(RegExp(r'^[0-9a-f]{64}$')));
-        expect(google.inits.single.serverClientId, _webClient);
+        expect(google.inits.single.serverClientId, googleWebClient);
 
         final raw = gotrue.grants.single['nonce'] as String?;
         expect(raw, isNotNull, reason: 'the raw nonce never reached Supabase');
@@ -284,7 +106,7 @@ void main() {
           isNot(hashed),
           reason: 'Supabase got the hash, not the raw',
         );
-        expect(_sha256hex(raw!), hashed);
+        expect(sha256hex(raw!), hashed);
       },
     );
 
@@ -385,8 +207,8 @@ void main() {
       expect(await auth.signInWithGoogle(), isA<Ok<void>>());
       google.inits.add(
         InitParameters(
-          serverClientId: _webClient,
-          nonce: _sha256hex('someone-else'),
+          serverClientId: googleWebClient,
+          nonce: sha256hex('someone-else'),
         ),
       );
       final r = await auth.signInWithGoogle();

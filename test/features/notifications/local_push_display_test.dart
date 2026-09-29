@@ -160,7 +160,7 @@ void main() {
         expect(shade.groupKeys.single, isNotNull);
         expect(
           Shade.text(shade.summaries.single),
-          contains('2 new messages in 2 chats'),
+          contains('2 new messages from 2 chats'),
         );
         expect(
           Shade.text(shade.childFor('c1')),
@@ -357,7 +357,7 @@ void main() {
       await push('c2', 'Ben', 'yo');
       expect(
         Shade.text(shade.summaries.single),
-        contains('2 new messages in 2 chats'),
+        contains('2 new messages from 2 chats'),
       );
     });
 
@@ -376,7 +376,7 @@ void main() {
       await push('c2', 'Ben', 'yo');
       expect(
         Shade.text(shade.summaries.single),
-        contains('2 new messages in 2 chats'),
+        contains('2 new messages from 2 chats'),
       );
     });
 
@@ -463,7 +463,7 @@ void main() {
       expect(shade.childChats, {'c1', 'c2'});
       expect(
         Shade.text(shade.summaries.single),
-        contains('2 new messages in 2 chats'),
+        contains('2 new messages from 2 chats'),
       );
     });
 

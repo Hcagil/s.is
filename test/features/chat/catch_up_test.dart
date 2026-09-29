@@ -14,7 +14,6 @@
 // notification lacked the new messages until closed and reopened. ChatFake
 // models the dead socket with loseRealtime(): old subscriptions stay open and
 // never deliver again, exactly as a channel whose socket the OS closed.
-import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

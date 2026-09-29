@@ -17,7 +17,6 @@
 //
 // Real time on purpose: the timing IS the behaviour. The first test must stay
 // first in this file: it is the isolate's first flush.
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';

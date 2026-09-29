@@ -86,26 +86,22 @@ blocks it.
 
 ### Before pushing
 
-`tool/ci_local.sh` runs the same checks as `ci.yml`'s Android and Database
-checks jobs, in the project's Docker images, stopping at the first failure:
+`tool/ci_local.sh` replays `ci.yml`'s Android checks and Database checks jobs
+in Docker: same compose files, `TZ=JST-9`, the release bundle (throwaway key),
+db lint, pgTAP, the Edge function tests, the Realtime warmup and the
+integration tests with `--concurrency=1`. The Database job starts from zero:
+it wipes any leftover local Supabase stack and its data, starts a fresh one,
+replays the migrations, and stops it at the end (never `down -v`). Each job
+stops at its first failing step, both always run, and the script ends with
+`RESULT <job> PASS|FAIL (step: ...)` lines and a non-zero exit on failure.
+The iOS build needs macOS and runs only in GitHub CI. The script and `ci.yml`
+are updated together.
 
 ```bash
-tool/ci_local.sh            # everything: pattern, format, analyze, unit
-                             # tests, a debug build, db lint, pgTAP, and the
-                             # integration folder
-tool/ci_local.sh --no-db    # skip the database part (no local Supabase
-                             # stack needed) -- measured 3:43
-tool/ci_local.sh --db-only  # only the database part -- measured 10:12,
-                             # 9:47 of it the integration tests; not fast,
-                             # run it before pushing a data/ or db/ change
-tool/ci_local.sh --reset-db # replay migrations onto a clean database first,
-                             # instead of reusing whatever is already running
+tool/ci_local.sh             # both jobs
+tool/ci_local.sh --android   # one job
+tool/ci_local.sh --database
 ```
-
-It reuses an already-running local Supabase stack (`supabase start` is
-idempotent) rather than resetting it, and never runs `docker compose down
--v`. The database part needs `docker compose run --rm supabase start` to
-have been run at least once (or pass `--reset-db`).
 
 ## Runbook
 

@@ -245,14 +245,14 @@ void main() {
   bool settled(ProviderContainer c) => !list(c).isLoading;
 
   /// Alice signed in, her server list shown and saved.
-  Future<ProviderContainer> aliceLoaded() async {
+  Future<ProviderContainer> aliceLoaded([List<String> ids = aIds]) async {
     final c = app(const Allowed(alice));
     await until(
-      () => idsOf(list(c)).join() == aIds.join() && !list(c).isLoading,
+      () => idsOf(list(c)).join() == ids.join() && !list(c).isLoading,
       "alice's list",
     );
     await until(
-      () => store.saves.contains('${alice.userId}:${aIds.join(',')}'),
+      () => store.saves.contains('${alice.userId}:${ids.join(',')}'),
       "alice's snapshot saved",
     );
     // Logged is not written: wait for the file itself.
@@ -270,6 +270,43 @@ void main() {
     body: body,
     createdAt: t0.add(const Duration(hours: 1)),
   );
+
+  /// A loaded and saved, signs out (erased), B signs in with B's first read
+  /// held in flight: the list's previous value is still A's. As in the
+  /// app: the home screen (the list's only listener) goes away on
+  /// sign-out and comes back for B; the provider itself lives on.
+  Future<ProviderContainer> bFirstLoadInFlight([
+    List<String> aliceIds = aIds,
+  ]) async {
+    final c = await aliceLoaded(aliceIds);
+    home.close();
+    states.clear(); // from here on, what B's screen is handed
+    session(c, const SignedOut());
+    await until(() => !store.file.existsSync(), 'the erase');
+    chat.holding = true;
+    session(c, const SessionLoading());
+    await pause();
+    session(c, const Allowed(bora));
+    home = watchList(c);
+    await until(
+      () => chat.calls.any((x) => x.who == bora.userId),
+      "B's first read",
+    );
+    return c;
+  }
+
+  void expectNoAliceOnDisk() {
+    expect(
+      store.saves.where((s) => s.startsWith('${bora.userId}:')),
+      everyElement(isNot(contains('a-'))),
+      reason: "A's list saved under B: ${store.log}",
+    );
+    expect(
+      store.raw ?? '',
+      isNot(contains('secret of alice')),
+      reason: "B's stored file holds A's list",
+    );
+  }
 
   group('baseline', () {
     test('a loaded list is saved for its owner, and shown from the phone on '
@@ -628,40 +665,6 @@ void main() {
 
   group("10. saved only from a settled result of the current owner: B's file "
       "never holds A's list (A, sign-out, B in one run)", () {
-    /// A loaded and saved, signs out (erased), B signs in with B's first read
-    /// held in flight: the list's previous value is still A's. As in the
-    /// app: the home screen (the list's only listener) goes away on
-    /// sign-out and comes back for B; the provider itself lives on.
-    Future<ProviderContainer> bFirstLoadInFlight() async {
-      final c = await aliceLoaded();
-      home.close();
-      session(c, const SignedOut());
-      await until(() => !store.file.existsSync(), 'the erase');
-      chat.holding = true;
-      session(c, const SessionLoading());
-      await pause();
-      session(c, const Allowed(bora));
-      home = watchList(c);
-      await until(
-        () => chat.calls.any((x) => x.who == bora.userId),
-        "B's first read",
-      );
-      return c;
-    }
-
-    void expectNoAliceOnDisk() {
-      expect(
-        store.saves.where((s) => s.startsWith('${bora.userId}:')),
-        everyElement(isNot(contains('a-'))),
-        reason: "A's list saved under B: ${store.log}",
-      );
-      expect(
-        store.raw ?? '',
-        isNot(contains('secret of alice')),
-        reason: "B's stored file holds A's list",
-      );
-    }
-
     test('(c) markRead during it, the debounced save firing while the '
         'load is still in flight', () async {
       final c = await bFirstLoadInFlight();
@@ -704,6 +707,216 @@ void main() {
         } catch (_) {}
         chat.answerAll(Err(failure));
         await pastDebounce();
+        expectNoAliceOnDisk();
+      });
+    }
+  });
+
+  group("11. B's second load in flight (an unknown buffered message): a live "
+      "event in a conversation A and B share never puts A's list on B's "
+      'disk or screen', () {
+    /// The conversation A and B are both in: B's Realtime delivers its
+    /// events, and A's carried-over list also has a row for it.
+    final shared = conv('s-1', 'shared hello', 0);
+    const aWithShared = ['a-1', 'a-2', 's-1'];
+
+    /// Someone starts a conversation with B during B's first read.
+    final hello = incoming('x-9', 'hello bora');
+
+    setUp(() {
+      chat.byOwner[alice.userId] = [...aList, shared];
+      chat.byOwner[bora.userId] = [...bList, shared];
+    });
+
+    /// A, sign-out, B; B's first read is answered without x-9 (its
+    /// snapshot predates it) while x-9's message was buffered, so the
+    /// controller reads again. Returns with that second read held.
+    Future<(ProviderContainer, int)> bSecondLoadInFlight() async {
+      final c = await bFirstLoadInFlight(aWithShared);
+      final first = chat.calls.indexWhere((x) => x.who == bora.userId);
+      chat.deliver(hello);
+      await pause();
+      chat.byOwner[bora.userId] = [
+        conv('x-9', 'hello bora', 60),
+        ...bList,
+        shared,
+      ];
+      final asked = chat.calls.length;
+      chat.answer(first, Ok([...bList, shared]));
+      await until(
+        () => chat.calls.skip(asked).any((x) => x.who == bora.userId),
+        "B's second load (for the unknown buffered x-9)",
+      );
+      final second = chat.calls.lastIndexWhere((x) => x.who == bora.userId);
+      await pause(100);
+      expect(chat.calls[second].gate.isCompleted, isFalse);
+      return (c, second);
+    }
+
+    /// The live events, each as Realtime carries it for s-1.
+    final events = <String, (Message, String?)>{
+      '(a) a NEW message': (incoming('s-1', 'live new'), 'live new'),
+      '(b) an EDIT of its newest message': (
+        Message(
+          id: 'm-s-1-last',
+          conversationId: 's-1',
+          senderId: deniz.userId,
+          body: 'shared, edited',
+          createdAt: shared.lastMessageAt!,
+          editedAt: t0.add(const Duration(hours: 1)),
+        ),
+        'shared, edited',
+      ),
+      '(c) a DELETION (a quiet reload)': (
+        Message(
+          id: 'm-s-1-last',
+          conversationId: 's-1',
+          senderId: deniz.userId,
+          body: '',
+          createdAt: shared.lastMessageAt!,
+          deletion: MessageDeletion.placeholder,
+        ),
+        null,
+      ),
+    };
+
+    /// What B is handed: never a settled A list, never A's list with B's
+    /// live event applied to it, and not A's list once B's load is over.
+    void expectBNeverShownAlice(ProviderContainer c, String? applied) {
+      for (final s in states) {
+        if (!hasAny(idsOf(s), aIds)) continue;
+        expect(
+          s,
+          isNot(isA<AsyncData<List<Conversation>>>()),
+          reason: "B's list settled on A's rows: $s",
+        );
+        final row = s.value!.where((x) => x.id == 's-1').firstOrNull;
+        expect(
+          row?.lastMessage,
+          isNot(applied ?? '\u0000'),
+          reason: "B's live event applied to A's carried-over list: $s",
+        );
+      }
+    }
+
+    // OPEN QUESTION, not settled by the contract: after B's load fails,
+    // Riverpod's AsyncError still carries the previous value, A's rows
+    // (measured on c0d9b41). Whether the screen shows an error's value, and
+    // whether that counts as "shown", is for the owner; un-skip once decided.
+    for (final failure in [
+      const NetworkFailure('offline', retryable: true),
+      const NetworkFailure('refused'),
+    ]) {
+      final kind = failure.retryable ? 'retryable' : 'non-retryable';
+      test(
+        "(d) no live event, the second load failing ($kind): B's error does "
+        "not carry A's rows",
+        () async {
+          final (c, _) = await bSecondLoadInFlight();
+          chat.answerAll(Err(failure));
+          await pastDebounce();
+          expect(
+            hasAny(idsOf(list(c)), aIds),
+            isFalse,
+            reason: "B is left on A's list: ${list(c)}",
+          );
+        },
+        skip:
+            'open question: may an AsyncError carry the previous '
+            "owner's value? (red on c0d9b41)",
+      );
+    }
+
+    for (final MapEntry(key: what, value: (event, applied)) in events.entries) {
+      for (final failure in [
+        const NetworkFailure('offline', retryable: true),
+        const NetworkFailure('refused'),
+      ]) {
+        final kind = failure.retryable ? 'retryable' : 'non-retryable';
+        // Only a deletion starts a reload of its own; its failure can land
+        // before or after the second load's.
+        for (final reloadLast in applied == null ? [false, true] : [false]) {
+          final order = applied == null
+              ? (reloadLast
+                    ? ', the reload failing after it'
+                    : ', the reload failing before it')
+              : '';
+
+          /// [what] arrives while B's second load is held; a quiet reload
+          /// it starts and the second load both fail, in [reloadLast]
+          /// order. [check] runs after each failure, once the debounced
+          /// save has had its chance.
+          Future<void> run(void Function(ProviderContainer) check) async {
+            final (c, second) = await bSecondLoadInFlight();
+            chat.deliver(event);
+            await pause(100);
+            final reloads = [
+              for (var i = second + 1; i < chat.calls.length; i++) i,
+            ];
+            if (applied == null) {
+              expect(reloads, isNotEmpty, reason: 'the deletion reloads');
+            }
+            void failReloads() {
+              for (final i in reloads) {
+                if (!chat.calls[i].gate.isCompleted) {
+                  chat.answer(i, Err(failure));
+                }
+              }
+            }
+
+            if (!reloadLast) failReloads();
+            await pastDebounce();
+            check(c);
+            chat.answer(second, Err(failure)); // the second load fails
+            await pastDebounce();
+            check(c);
+            failReloads();
+            await pastDebounce();
+            check(c);
+          }
+
+          test("$what during it, then the load failing ($kind)$order: "
+              "B's file never holds A's list", () async {
+            await run((_) => expectNoAliceOnDisk());
+          });
+
+          test("(d) $what during it, then the load failing ($kind)$order: "
+              "B is never shown A's list as settled or updated", () async {
+            await run((c) => expectBNeverShownAlice(c, applied));
+          });
+        }
+      }
+
+      test('control: $what once B has settled is applied and saved', () async {
+        final (c, _) = await bSecondLoadInFlight();
+        chat.holding = false;
+        chat.answerAll();
+        await until(
+          () => settled(c) && idsOf(list(c)).contains('x-9'),
+          "B's settled list with x-9",
+        );
+        await pastDebounce();
+        final before = store.saves.length;
+        if (applied == null) {
+          // The server's list after the deletion.
+          chat.byOwner[bora.userId] = [
+            conv('x-9', 'hello bora', 60),
+            ...bList,
+            conv('s-1', 'shared after delete', 0),
+          ];
+        }
+        final want = applied ?? 'shared after delete';
+
+        chat.deliver(event);
+        await until(
+          () => list(c).value?.any((x) => x.lastMessage == want) ?? false,
+          'the event on B\'s list',
+        );
+        await pastDebounce();
+
+        expect(store.saves.skip(before), isNotEmpty, reason: 'not saved');
+        expect(store.saves.last, startsWith('${bora.userId}:'));
+        expect(store.raw, contains(want));
         expectNoAliceOnDisk();
       });
     }

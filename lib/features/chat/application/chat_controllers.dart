@@ -10,6 +10,7 @@ import '../../auth/domain/member.dart';
 import '../../auth/domain/session_state.dart';
 import '../../profile/application/profile_controller.dart';
 import '../domain/attachment.dart';
+import '../domain/chat_list_snapshot_store.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
 import '../domain/contacts_repository.dart';
@@ -65,20 +66,43 @@ final attachmentCacheProvider = Provider<AttachmentCache>(
   (_) => throw UnimplementedError('override in main'),
 );
 
-/// Wipes the cache above as soon as the session is found to have ended --
-/// signed out, or Denied (revoked or replaced on another device) -- so
-/// nothing of a previous member's photos or pictures survives on this phone.
-/// Mirrors pushInboxOwnerProvider's reach: every settled answer about the
-/// session, not only the explicit sign-out button, and `fireImmediately`
-/// catches a cold start that lands directly on one of those two states.
-final attachmentCacheOwnerProvider = Provider<void>((ref) {
+/// Runs [onEnd] on every settled answer that the session has ended --
+/// signed out, or Denied (revoked or replaced on another device) -- with
+/// `fireImmediately` so a cold start landing directly on either state is
+/// caught too. Shared by [attachmentCacheOwnerProvider] and
+/// [chatListSnapshotOwnerProvider], mirroring pushInboxOwnerProvider's reach.
+void _onSessionEnd(Ref ref, Future<void> Function() onEnd) {
   ref.listen(sessionControllerProvider, (_, next) {
     switch (next.value) {
       case SignedOut() || Denied():
-        unawaited(ref.read(attachmentCacheProvider).clear());
+        unawaited(onEnd());
       case _:
     }
   }, fireImmediately: true);
+}
+
+/// Wipes the cache above as soon as the session is found to have ended --
+/// signed out, or Denied (revoked or replaced on another device) -- so
+/// nothing of a previous member's photos or pictures survives on this phone.
+final attachmentCacheOwnerProvider = Provider<void>((ref) {
+  _onSessionEnd(ref, () => ref.read(attachmentCacheProvider).clear());
+});
+
+/// Where the conversation list's last snapshot lives on the phone. The real
+/// implementation is overridden in main.dart; data/ is the only layer
+/// allowed to import path_provider.
+final chatListSnapshotStoreProvider = Provider<ChatListSnapshotStore>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Erases the snapshot above as soon as the session is found to have ended,
+/// mirroring [attachmentCacheOwnerProvider] exactly: same two states, same
+/// fireImmediately, same reach (a cold start landing directly on SignedOut
+/// or Denied included). A snapshot is per-owner-checked on read too (see
+/// FileChatListSnapshotStore.load), so this is defence in depth, not the
+/// only guard.
+final chatListSnapshotOwnerProvider = Provider<void>((ref) {
+  _onSessionEnd(ref, () => ref.read(chatListSnapshotStoreProvider).clear());
 });
 
 /// One attachment's bytes: from this phone when they are here, otherwise
@@ -146,6 +170,10 @@ final conversationListProvider =
 /// The conversation list. Failures surface as [AsyncError] carrying the
 /// [Failure], so the screen always has a reason to show.
 class ConversationListController extends AsyncNotifier<List<Conversation>> {
+  /// Batches a save after a live update so a burst of incoming messages
+  /// costs one disk write, not one per message.
+  Timer? _snapshotDebounce;
+
   /// Kept current by a Realtime subscription to every conversation the member
   /// belongs to. Subscribing happens BEFORE the first read and anything that
   /// arrives in between is buffered, the same way the message screen does it,
@@ -157,16 +185,56 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   Future<List<Conversation>> build() async {
     // Rebuilt from scratch for each account: never the last one's list.
     ref.watch(currentUserIdProvider);
-    final buffered = <Message>[];
-    var loaded = false;
+    final ownerId = ref.read(currentUserIdProvider);
+    // Riverpod 3 ALWAYS carries a previous value into a new AsyncLoading (or
+    // a later AsyncError) via copyWithPrevious -- including one assigned
+    // explicitly, right here, by this very build(): `state =
+    // const AsyncLoading()` would still answer .value with the last owner's
+    // rows, because copyWithPrevious merges with whatever state already held
+    // (set by the framework itself before build() even starts, from the
+    // previous owner's last settled list). AsyncData is the one exception --
+    // AsyncData.copyWithPrevious always returns itself, ignoring what came
+    // before -- so assigning a clean, empty AsyncData first launders the
+    // slate, and the AsyncLoading assigned right after it only ever merges
+    // with THAT (empty) value, never the old owner's. Both assignments land
+    // before build()'s first await, so neither is ever observed on its own;
+    // only the second is what the very first listener (an existing
+    // subscriber, or a new one with fireImmediately) can ever see -- an
+    // ordinary loading state whose .value is empty, not the previous owner's.
+    // This is the one place every owner change routes through (the provider
+    // lives for the app's whole run and only rebuilds when
+    // currentUserIdProvider itself changes -- see its doc), so doing it here
+    // makes it structurally impossible for a stale value to reach `_apply`,
+    // `markRead`, `_saveCurrentIfData`, or an outside reader of `.value`
+    // (conversation_list.dart, profile_pages.dart, ...): they all see null
+    // until THIS build's own settled data (the disk cache below, or the
+    // server) lands.
+    state = const AsyncData(<Conversation>[]);
+    state = const AsyncLoading();
     // True for as long as THIS build is the current one. ref.mounted alone
     // cannot tell that apart from the Notifier being disposed outright: a
     // rebuild (e.g. an account change) reuses the same Notifier, so
     // ref.mounted stays true for a build already replaced by a newer one.
-    // Registered synchronously, before the join below starts, so it is set
-    // the moment this build is replaced OR the Notifier is disposed.
+    // Registered synchronously, before the cache read below, so it is set
+    // the moment this build is replaced OR the Notifier is disposed -- and
+    // also guards the cache-restore state assignment right below.
     var alive = true;
     ref.onDispose(() => alive = false);
+    // The store provider is unoverridden in most tests (it throws
+    // UnimplementedError the moment it's read, not just on a failed disk
+    // op), so this must be guarded the same as any other best-effort read.
+    List<Conversation>? cached;
+    if (ownerId != null) {
+      try {
+        cached = await ref.read(chatListSnapshotStoreProvider).load(ownerId);
+      } catch (_) {
+        cached = null;
+      }
+    }
+    if (cached != null && alive && ref.mounted) state = AsyncData(cached);
+    final buffered = <Message>[];
+    var loaded = false;
+    ref.onDispose(() => _snapshotDebounce?.cancel());
     // The Realtime join can take up to 15s and must never gate the list: it
     // starts alongside the fetch below instead of being awaited first.
     // Nothing can arrive before the join itself completes, and the
@@ -212,24 +280,51 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
             log('$e', name: 'sis.chat', error: e, stackTrace: st);
           }),
     );
-    var list = await _load();
-    loaded = true;
-    var unknown = false;
-    for (final message in buffered) {
-      if (message.isDeleted || message.editedAt != null) {
-        unknown = true; // a deletion or edit during the load: read again
-        continue;
+    List<Conversation> list;
+    try {
+      list = await _load();
+      loaded = true;
+      var unknown = false;
+      for (final message in buffered) {
+        if (message.isDeleted || message.editedAt != null) {
+          unknown = true; // a deletion or edit during the load: read again
+          continue;
+        }
+        final next = _withMessage(list, message);
+        if (next == null) {
+          unknown = true;
+        } else {
+          list = next;
+        }
       }
-      final next = _withMessage(list, message);
-      if (next == null) {
-        unknown = true;
-      } else {
-        list = next;
-      }
+      // A buffered message for a conversation the first read did not contain
+      // means one was started during the load: read again rather than drop it.
+      if (unknown) list = await _load();
+    } catch (e) {
+      // Offline with a cached snapshot already shown: the list stays usable
+      // instead of flipping to an error screen over data already on the
+      // member's own phone. Anything that is not a retryable NetworkFailure
+      // is a real refusal (denied, or the server answering "no"), not a
+      // connectivity blip -- it is shown, not hidden behind stale data.
+      if (cached == null || e is! NetworkFailure || !e.retryable) rethrow;
+      loaded = true;
+      list = cached;
     }
-    // A buffered message for a conversation the first read did not contain
-    // means one was started during the load: read again rather than drop it.
-    return unknown ? await _load() : list;
+    if (ownerId != null && alive) _saveSnapshot(ownerId, list);
+    return list;
+  }
+
+  /// Fire-and-forget: the store itself never throws once read (see
+  /// ChatListSnapshotStore's contract), but reading the provider does, when
+  /// nothing overrides it (most tests) -- guarded the same as [build]'s read.
+  void _saveSnapshot(String ownerId, List<Conversation> conversations) {
+    try {
+      unawaited(
+        ref.read(chatListSnapshotStoreProvider).save(ownerId, conversations),
+      );
+    } catch (_) {
+      // No store configured: nothing to save to.
+    }
   }
 
   /// Moves [message] into its conversation's preview. A message for a
@@ -256,6 +351,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
           for (var i = 0; i < current.length; i++)
             if (i == index) current[i].withPreview(message) else current[i],
         ]);
+        _scheduleSnapshotSave();
       }
       return;
     }
@@ -264,6 +360,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       reloadQuietly();
     } else {
       state = AsyncData(next);
+      _scheduleSnapshotSave();
     }
   }
 
@@ -296,18 +393,22 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   /// Marks [conversationId] read on the server, then clears its count here.
   /// A failure leaves the count as it was: better a stale badge than a
   /// conversation that looks read and is not.
+  ///
+  /// Skips the local update (and therefore the debounced save) when state is
+  /// still loading -- i.e. carrying over a value from a previous build/owner.
   Future<void> markRead(String conversationId) async {
     final result = await ref
         .read(chatRepositoryProvider)
         .markRead(conversationId);
     // Checked before touching state: the list can be disposed while the call
     // is in flight, and reading state then throws.
-    if (result is! Ok || !ref.mounted) return;
+    if (result is! Ok || !ref.mounted || state.isLoading) return;
     final current = state.value;
     if (current == null) return;
     state = AsyncData([
       for (final c in current) c.id == conversationId ? c.read() : c,
     ]);
+    _scheduleSnapshotSave();
   }
 
   Future<List<Conversation>> _load() async {
@@ -318,8 +419,12 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   }
 
   Future<void> refresh() async {
+    final ownerId = ref.read(currentUserIdProvider);
     state = const AsyncLoading();
-    state = await AsyncValue.guard(_load);
+    final next = await AsyncValue.guard(_load);
+    if (ref.read(currentUserIdProvider) != ownerId) return;
+    state = next;
+    _saveCurrentIfData();
   }
 
   /// Re-reads without showing a spinner: the list on screen stays while the
@@ -327,8 +432,44 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   /// rather than replacing something correct with an error the member did
   /// not ask for; the explicit [refresh] still reports failures.
   Future<void> reloadQuietly() async {
+    final ownerId = ref.read(currentUserIdProvider);
     final next = await AsyncValue.guard(_load);
+    if (ref.read(currentUserIdProvider) != ownerId) return;
     if (next is AsyncData<List<Conversation>> && ref.mounted) state = next;
+    _saveCurrentIfData();
+  }
+
+  /// A full load just finished (explicit [refresh] or a quiet re-read):
+  /// saved right away, unlike a single live update, which is debounced by
+  /// [_scheduleSnapshotSave] instead.
+  ///
+  /// Saves only when the session is settled (Allowed) AND this build's state
+  /// is settled (AsyncData with isLoading=false), not carrying over a value
+  /// from a previous build/owner.
+  void _saveCurrentIfData() {
+    if (ref.read(sessionControllerProvider).value is! Allowed) return;
+    final ownerId = ref.read(currentUserIdProvider);
+    final current = state;
+    if (ownerId != null &&
+        current is AsyncData<List<Conversation>> &&
+        !current.isLoading) {
+      _saveSnapshot(ownerId, current.value);
+    }
+  }
+
+  /// Batches a save after a live update so a burst of incoming messages
+  /// costs one disk write, not one per message. Checks the store is
+  /// actually configured BEFORE scheduling: with nothing to save to (most
+  /// tests, which never override [chatListSnapshotStoreProvider]) this must
+  /// not leave a bare Timer running past the caller's own lifetime.
+  void _scheduleSnapshotSave() {
+    try {
+      ref.read(chatListSnapshotStoreProvider);
+    } catch (_) {
+      return;
+    }
+    _snapshotDebounce?.cancel();
+    _snapshotDebounce = Timer(const Duration(seconds: 2), _saveCurrentIfData);
   }
 
   /// Opens the 1:1 conversation with [otherUserId], creating it if needed.

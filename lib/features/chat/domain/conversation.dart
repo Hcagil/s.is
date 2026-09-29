@@ -73,6 +73,35 @@ final class Conversation {
     hasLeft: hasLeft,
   );
 
+  /// For the on-disk chat list snapshot only.
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'title': title,
+    'other': other?.toJson(),
+    'lastMessage': lastMessage,
+    'lastMessageAt': lastMessageAt?.toIso8601String(),
+    'lastSenderId': lastSenderId,
+    'unread': unread,
+    'avatarPath': avatarPath,
+    'hasLeft': hasLeft,
+  };
+
+  static Conversation fromJson(Map<String, Object?> json) => Conversation(
+    id: json['id'] as String,
+    title: json['title'] as String?,
+    other: json['other'] == null
+        ? null
+        : Member.fromJson(json['other'] as Map<String, Object?>),
+    lastMessage: json['lastMessage'] as String?,
+    lastMessageAt: json['lastMessageAt'] == null
+        ? null
+        : DateTime.parse(json['lastMessageAt'] as String),
+    lastSenderId: json['lastSenderId'] as String?,
+    unread: json['unread'] as int? ?? 0,
+    avatarPath: json['avatarPath'] as String?,
+    hasLeft: json['hasLeft'] as bool? ?? false,
+  );
+
   bool get isGroup => title != null;
 
   /// What the list shows: the group's title, or who you are talking to.

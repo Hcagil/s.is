@@ -87,7 +87,7 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     otherwise the send fails. Accepted leftover risk: a member who already
     knows a message id learns whether that message exists.
   - Drafts and queued unsent messages live in the app's memory only; if they
-    are ever stored on the phone (planned with the stored chat list), they are
+    are ever stored on the phone (not stored as of v0.24.0; the chat list is — see Secrets), they are
     personal data under the on-phone storage posture.
   - `messages.attachment_path` points into the private `attachments` storage
     bucket, keyed `<conversation_id>/<file>`. The storage policies ask the same
@@ -263,7 +263,7 @@ account selection; the app shows that reason rather than returning silently.
 No secrets in the app or repository. Service-role keys and signing material
 exist only in GitHub Actions secrets and in the maintainer's offline backup.
 
-Nothing the app stores on the phone (session, waiting notification previews)
+Nothing the app stores on the phone (session, waiting notification previews, the stored chat list)
 leaves it through Android backup or device-to-device transfer: both are
 excluded in `android/app/src/main/res/xml/` (see DECISIONS 2026-09-24, one
 SIS notification). A previous member's notifications are cleared on every
@@ -273,6 +273,29 @@ it cannot know about one that ended only locally, so the phone is the last
 line: it draws nothing without a stored owner, and drops a push addressed to
 someone other than the stored owner, even one the server computed correctly
 before a handover (see DECISIONS 2026-09-25).
+
+**Stored chat list (v0.24.0).** The last conversation list the member saw is
+kept in one file, `chat_list.json`, in the app's private support directory
+(`files/`, never the cache). It holds each conversation's id, title, the
+other person's id, name, tag and picture path (never an email), the one-line
+last-message preview and its time, sender id, unread count and left-group
+flag. This is personal data. It is written to a temporary file and renamed,
+stamped with the owner's user id and a schema version, and any file that does
+not match the reading account, is on an old schema, or is unreadable is
+deleted rather than used. It is shown only after the server has confirmed the
+session (`activate_session()` returned true and the member profile loaded); a
+phone offline at start-up, or a session that is refused, never displays it.
+It is erased on every session end the app observes (sign-out, a cold start
+onto sign-in, or "not allowed"); an erase discards any save still in flight,
+and a different account's first list load deletes it. Once the owner changes,
+the previous owner's list is unreachable from the app's list state, even while
+the new owner's list is loading or has failed. Accepted leftovers: a phone
+whose access was removed or replaced and that never reaches the server again
+keeps the file; and a save whose final rename is already under way when an
+erase starts can leave the file in place until the next erase or the next
+account's first load. In both cases the file is unreadable to any other
+account through the app, encrypted with the phone, and excluded from backup. Drafts and queued unsent messages
+are still not stored.
 
 ## Runbook
 

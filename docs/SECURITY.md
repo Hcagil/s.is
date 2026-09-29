@@ -286,9 +286,12 @@ deleted rather than used. It is shown only after the server has confirmed the
 session (`activate_session()` returned true and the member profile loaded); a
 phone offline at start-up, or a session that is refused, never displays it.
 It is erased on every session end the app observes (sign-out, a cold start
-onto sign-in, or "not allowed"); after an erase no file remains, whatever
-point a save still in flight had reached, including its final rename (since
-v0.24.1). A different account's first list load deletes it. Once the owner
+onto sign-in, or "not allowed"). Once an erase and any save it overtook have
+finished, neither the list file nor its temporary file remains, wherever that
+save had reached, including its final rename (since v0.24.1). A process killed
+mid-save can leave the temporary file, which the app never reads, until the
+next erase or save. A different account's first list load deletes the list
+file. Once the owner
 changes, the previous owner's list is unreachable from the app's list state,
 even while the new owner's list is loading or has failed. Accepted leftover: a
 phone whose access was removed or replaced and that never reaches the server

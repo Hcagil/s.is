@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/chat/data/file_chat_list_snapshot_store.dart';
@@ -381,4 +382,230 @@ void main() {
     await s.save('a', convs);
     expect(await s.load('a'), hasLength(1));
   });
+
+  test(
+    'a save whose rename is under way when an erase starts leaves no '
+    'chat_list.json, wherever the rename lands during or after clear()',
+    () async {
+      final convs = [const Conversation(id: 'x', title: 'X')];
+      final landedAt = <String>[];
+      final left = <String>[];
+      // Land the held rename just before clear()'s n-th storage operation;
+      // once n passes clear()'s last one, the rename lands after clear().
+      for (var n = 0; ; n++) {
+        final sub = await Directory('${root.path}/n$n').create();
+        final fs = _RenameHold();
+        final s = FileChatListSnapshotStore(
+          root: () async {
+            fs.before('root lookup');
+            return sub;
+          },
+        );
+        File hooked(String path) => _HookedFile(_realFile(path), fs);
+
+        final saving = IOOverrides.runZoned(
+          () => s.save('a', convs),
+          createFile: hooked,
+        );
+        final wasHeld = await Future.any([
+          fs.reached.future.then((_) => true),
+          saving.then((_) => false),
+        ]);
+        expect(wasHeld, isTrue, reason: 'save never renamed its .part file');
+
+        fs.landBeforeOp = n;
+        await IOOverrides.runZoned(s.clear, createFile: hooked);
+        final landedDuringClear = fs.landed;
+        final where = landedDuringClear
+            ? 'before clear() op $n (${fs.ops[n]})'
+            : 'after clear() returned (ops: ${fs.ops.join(', ')})';
+        landedAt.add(where);
+
+        final file = File('${sub.path}/chat_list.json');
+        if (await file.exists()) {
+          left.add('rename landed $where: file present after clear() returned');
+        }
+        fs.release.complete();
+        await saving;
+        if (await file.exists()) {
+          left.add(
+            'rename landed $where: file present after the save completed',
+          );
+        }
+        if (!landedDuringClear) break;
+      }
+      expect(landedAt.length, greaterThan(1), reason: landedAt.join('\n'));
+      expect(
+        left,
+        isEmpty,
+        reason: 'interleavings tried:\n${landedAt.join('\n')}',
+      );
+    },
+  );
+}
+
+File _realFile(String path) => Zone.root.run(() => File(path));
+
+/// Holds the first rename of `chat_list.json.part` -- the save's final step,
+/// taken after its epoch check -- and makes it take effect on disk at a
+/// chosen point: just before clear()'s [landBeforeOp]-th storage operation,
+/// or, if clear() has fewer, when the save is released after clear().
+class _RenameHold {
+  final reached = Completer<void>();
+  final release = Completer<void>();
+  final ops = <String>[];
+  int? landBeforeOp;
+  File? _from;
+  String? _to;
+  bool landed = false;
+
+  void before(String op) {
+    if (landBeforeOp == null) return; // not clearing yet
+    if (ops.length == landBeforeOp) land();
+    ops.add(op);
+  }
+
+  FileSystemException? _failed;
+
+  // A rename whose .part clear() already removed fails; the failure belongs
+  // to the save that asked for it, not to clear().
+  void land() {
+    if (landed || _from == null) return;
+    landed = true;
+    try {
+      _from!.renameSync(_to!);
+    } on FileSystemException catch (e) {
+      _failed = e;
+    }
+  }
+
+  Future<File> rename(File real, String to) async {
+    if (_from != null || !real.path.endsWith('chat_list.json.part')) {
+      return real.rename(to);
+    }
+    _from = real;
+    _to = to;
+    reached.complete();
+    await release.future;
+    land();
+    if (_failed != null) throw _failed!;
+    return _realFile(to);
+  }
+}
+
+class _HookedFile implements File {
+  _HookedFile(this._real, this._fs);
+  final File _real;
+  final _RenameHold _fs;
+
+  String get _name => _real.path.split('/').last;
+  void _op(String what) => _fs.before('$_name.$what');
+
+  @override
+  String get path => _real.path;
+  @override
+  Uri get uri => _real.uri;
+  @override
+  bool get isAbsolute => _real.isAbsolute;
+  @override
+  File get absolute => _real.absolute;
+  @override
+  Directory get parent => _real.parent;
+
+  @override
+  Future<bool> exists() {
+    _op('exists');
+    return _real.exists();
+  }
+
+  @override
+  bool existsSync() {
+    _op('existsSync');
+    return _real.existsSync();
+  }
+
+  @override
+  Future<FileSystemEntity> delete({bool recursive = false}) {
+    _op('delete');
+    return _real.delete(recursive: recursive);
+  }
+
+  @override
+  void deleteSync({bool recursive = false}) {
+    _op('deleteSync');
+    _real.deleteSync(recursive: recursive);
+  }
+
+  @override
+  Future<File> rename(String newPath) {
+    _op('rename');
+    return _fs.rename(_real, newPath);
+  }
+
+  @override
+  File renameSync(String newPath) {
+    _op('renameSync');
+    return _real.renameSync(newPath);
+  }
+
+  @override
+  Future<File> create({bool recursive = false, bool exclusive = false}) {
+    _op('create');
+    return _real.create(recursive: recursive, exclusive: exclusive);
+  }
+
+  @override
+  Future<File> writeAsString(
+    String contents, {
+    FileMode mode = FileMode.write,
+    Encoding encoding = utf8,
+    bool flush = false,
+  }) {
+    _op('writeAsString');
+    return _real.writeAsString(
+      contents,
+      mode: mode,
+      encoding: encoding,
+      flush: flush,
+    );
+  }
+
+  @override
+  Future<File> writeAsBytes(
+    List<int> bytes, {
+    FileMode mode = FileMode.write,
+    bool flush = false,
+  }) {
+    _op('writeAsBytes');
+    return _real.writeAsBytes(bytes, mode: mode, flush: flush);
+  }
+
+  @override
+  Future<String> readAsString({Encoding encoding = utf8}) {
+    _op('readAsString');
+    return _real.readAsString(encoding: encoding);
+  }
+
+  @override
+  Future<Uint8List> readAsBytes() {
+    _op('readAsBytes');
+    return _real.readAsBytes();
+  }
+
+  @override
+  Future<RandomAccessFile> open({FileMode mode = FileMode.read}) {
+    _op('open');
+    return _real.open(mode: mode);
+  }
+
+  @override
+  IOSink openWrite({FileMode mode = FileMode.write, Encoding encoding = utf8}) {
+    _op('openWrite');
+    return _real.openWrite(mode: mode, encoding: encoding);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError(
+    '_HookedFile does not forward ${invocation.memberName}',
+  );
 }

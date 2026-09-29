@@ -464,9 +464,8 @@ void main() {
     expect(tile, findsOneWidget, reason: 'the list never showed');
     expect(find.byType(HomeScreen), findsOneWidget);
 
-    // From the first request the app made, once it knew who is signed in.
+    final readyAt = wire.now;
     final reqs = wire.rest;
-    final ready = wire.now - reqs.first.start;
     final members = reqs.firstWhere((r) => r.table == 'conversation_members');
     // A profiles read that overlaps the list's first group can only be the
     // member's own profile: the other members' names wait for that group.
@@ -476,10 +475,42 @@ void main() {
       reason: 'the profile and the list were read one after the other: $reqs',
     );
     // Profile: one round trip. List: two. One after the other: three.
+    // Counted as round trips, not wall-clock time: on a loaded CI runner the
+    // server's own time stretches every request (a 500 ms delay measured
+    // 787 ms), so a bound in seconds fails with the requests still perfectly
+    // overlapped. A request's stage is 1 + the deepest stage that had
+    // finished before it started; nothing the app waited on before the list
+    // showed may sit deeper than the list's own second group.
+    final stage = <_Req, int>{};
+    for (final r in [...reqs]..sort((a, b) => a.start.compareTo(b.start))) {
+      stage[r] =
+          1 +
+          [
+            for (final p in stage.keys)
+              if (p.end != null && p.end! <= r.start) stage[p]!,
+          ].fold(0, max);
+    }
+    for (final table in [
+      'profiles_public',
+      'conversation_previews',
+      'unread_counts',
+    ]) {
+      expect(
+        stage[reqs.firstWhere((r) => r.table == table)],
+        2,
+        reason: '$table is not the second round trip: $reqs',
+      );
+    }
+    final waited = [
+      for (final r in reqs)
+        if (r.end != null && r.end! <= readyAt) stage[r]!,
+    ];
     expect(
-      ready,
-      lessThan(delay * 2.5),
-      reason: 'ready after $ready, about the sum of the round trips: $reqs',
+      waited.fold(0, max),
+      2,
+      reason:
+          'ready after ${readyAt - reqs.first.start}, behind more round '
+          'trips than the list needs: $reqs',
     );
 
     await t.pumpWidget(const SizedBox());

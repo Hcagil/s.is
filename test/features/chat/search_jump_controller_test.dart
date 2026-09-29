@@ -122,7 +122,10 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
       messages().returnToLive();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      // Wait for the reload itself, not a fixed time: until it lands the
+      // controller still shows the jumped window (plus the live arrival), and
+      // under a loaded full run 50 ms was not always enough.
+      await c.read(messagesProvider.future);
       final ids = shown();
       expect(ids.last, 'c1-new', reason: 'the live newest message');
       expect(ids, hasLength(500));

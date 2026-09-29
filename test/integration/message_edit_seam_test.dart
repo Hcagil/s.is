@@ -234,39 +234,43 @@ void main() {
     haleContainer.read(openConversationProvider.notifier).open(conversationId);
     ivoContainer.read(openConversationProvider.notifier).open(conversationId);
 
-    Widget scoped(String id, ProviderContainer c, Widget child) => Expanded(
-      child: KeyedSubtree(
-        key: ValueKey('pane-$id'),
-        child: UncontrolledProviderScope(container: c, child: child),
-      ),
+    Widget slot(String id, Widget child) => Expanded(
+      child: KeyedSubtree(key: ValueKey('pane-$id'), child: child),
     );
+    // One scope per container, as main.dart mounts one: ivo's chat and his
+    // list share his container, so his scope sits above both. Two scopes
+    // over one container each run its pending refresh in their own build,
+    // and the one that runs it then marks the other's widgets dirty in the
+    // middle of a build ("markNeedsBuild() called during build", main CI
+    // run 36515353888) -- a flake of this harness, not of the app.
     await t.pumpWidget(
-      MaterialApp(
-        theme: sisTheme(Brightness.light),
-        home: Scaffold(
-          // The list gets the full width below the two chats: a third of
-          // the test screen is narrower than any phone.
-          body: Column(
-            children: [
-              Expanded(
-                flex: 2,
-                child: Row(
-                  children: [
-                    scoped(
-                      'a',
-                      haleContainer,
-                      const MessageScreen(title: 'Ivo'),
-                    ),
-                    scoped(
-                      'b',
-                      ivoContainer,
-                      const MessageScreen(title: 'Hale'),
-                    ),
-                  ],
+      UncontrolledProviderScope(
+        container: ivoContainer,
+        child: MaterialApp(
+          theme: sisTheme(Brightness.light),
+          home: Scaffold(
+            // The list gets the full width below the two chats: a third of
+            // the test screen is narrower than any phone.
+            body: Column(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Row(
+                    children: [
+                      slot(
+                        'a',
+                        UncontrolledProviderScope(
+                          container: haleContainer,
+                          child: const MessageScreen(title: 'Ivo'),
+                        ),
+                      ),
+                      slot('b', const MessageScreen(title: 'Hale')),
+                    ],
+                  ),
                 ),
-              ),
-              scoped('c', ivoContainer, const ConversationList()),
-            ],
+                slot('c', const ConversationList()),
+              ],
+            ),
           ),
         ),
       ),

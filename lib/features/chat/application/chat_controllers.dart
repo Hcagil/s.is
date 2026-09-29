@@ -10,6 +10,7 @@ import '../../auth/domain/member.dart';
 import '../../auth/domain/session_state.dart';
 import '../../profile/application/profile_controller.dart';
 import '../domain/attachment.dart';
+import '../domain/chat_list_snapshot_store.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
 import '../domain/contacts_repository.dart';
@@ -81,6 +82,29 @@ final attachmentCacheOwnerProvider = Provider<void>((ref) {
   }, fireImmediately: true);
 });
 
+/// Where the conversation list's last snapshot lives on the phone. The real
+/// implementation is overridden in main.dart; data/ is the only layer
+/// allowed to import path_provider.
+final chatListSnapshotStoreProvider = Provider<ChatListSnapshotStore>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Erases the snapshot above as soon as the session is found to have ended,
+/// mirroring [attachmentCacheOwnerProvider] exactly: same two states, same
+/// fireImmediately, same reach (a cold start landing directly on SignedOut
+/// or Denied included). A snapshot is per-owner-checked on read too (see
+/// FileChatListSnapshotStore.load), so this is defence in depth, not the
+/// only guard.
+final chatListSnapshotOwnerProvider = Provider<void>((ref) {
+  ref.listen(sessionControllerProvider, (_, next) {
+    switch (next.value) {
+      case SignedOut() || Denied():
+        unawaited(ref.read(chatListSnapshotStoreProvider).clear());
+      case _:
+    }
+  }, fireImmediately: true);
+});
+
 /// One attachment's bytes: from this phone when they are here, otherwise
 /// downloaded once and kept. Replaces a signed URL per look, which fetched
 /// the whole photo again every time.
@@ -146,6 +170,10 @@ final conversationListProvider =
 /// The conversation list. Failures surface as [AsyncError] carrying the
 /// [Failure], so the screen always has a reason to show.
 class ConversationListController extends AsyncNotifier<List<Conversation>> {
+  /// Batches a save after a live update so a burst of incoming messages
+  /// costs one disk write, not one per message.
+  Timer? _snapshotDebounce;
+
   /// Kept current by a Realtime subscription to every conversation the member
   /// belongs to. Subscribing happens BEFORE the first read and anything that
   /// arrives in between is buffered, the same way the message screen does it,
@@ -157,6 +185,19 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   Future<List<Conversation>> build() async {
     // Rebuilt from scratch for each account: never the last one's list.
     ref.watch(currentUserIdProvider);
+    final ownerId = ref.read(currentUserIdProvider);
+    // The store provider is unoverridden in most tests (it throws
+    // UnimplementedError the moment it's read, not just on a failed disk
+    // op), so this must be guarded the same as any other best-effort read.
+    List<Conversation>? cached;
+    if (ownerId != null) {
+      try {
+        cached = await ref.read(chatListSnapshotStoreProvider).load(ownerId);
+      } catch (_) {
+        cached = null;
+      }
+    }
+    if (cached != null && ref.mounted) state = AsyncData(cached);
     final buffered = <Message>[];
     var loaded = false;
     // True for as long as THIS build is the current one. ref.mounted alone
@@ -167,6 +208,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     // the moment this build is replaced OR the Notifier is disposed.
     var alive = true;
     ref.onDispose(() => alive = false);
+    ref.onDispose(() => _snapshotDebounce?.cancel());
     // The Realtime join can take up to 15s and must never gate the list: it
     // starts alongside the fetch below instead of being awaited first.
     // Nothing can arrive before the join itself completes, and the
@@ -212,24 +254,49 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
             log('$e', name: 'sis.chat', error: e, stackTrace: st);
           }),
     );
-    var list = await _load();
-    loaded = true;
-    var unknown = false;
-    for (final message in buffered) {
-      if (message.isDeleted || message.editedAt != null) {
-        unknown = true; // a deletion or edit during the load: read again
-        continue;
+    List<Conversation> list;
+    try {
+      list = await _load();
+      loaded = true;
+      var unknown = false;
+      for (final message in buffered) {
+        if (message.isDeleted || message.editedAt != null) {
+          unknown = true; // a deletion or edit during the load: read again
+          continue;
+        }
+        final next = _withMessage(list, message);
+        if (next == null) {
+          unknown = true;
+        } else {
+          list = next;
+        }
       }
-      final next = _withMessage(list, message);
-      if (next == null) {
-        unknown = true;
-      } else {
-        list = next;
-      }
+      // A buffered message for a conversation the first read did not contain
+      // means one was started during the load: read again rather than drop it.
+      if (unknown) list = await _load();
+    } catch (e) {
+      // Offline (or any other failure) with a cached snapshot already
+      // shown: the list stays usable instead of flipping to an error
+      // screen over data already on the member's own phone.
+      if (cached == null) rethrow;
+      loaded = true;
+      list = cached;
     }
-    // A buffered message for a conversation the first read did not contain
-    // means one was started during the load: read again rather than drop it.
-    return unknown ? await _load() : list;
+    if (ownerId != null) _saveSnapshot(ownerId, list);
+    return list;
+  }
+
+  /// Fire-and-forget: the store itself never throws once read (see
+  /// ChatListSnapshotStore's contract), but reading the provider does, when
+  /// nothing overrides it (most tests) -- guarded the same as [build]'s read.
+  void _saveSnapshot(String ownerId, List<Conversation> conversations) {
+    try {
+      unawaited(
+        ref.read(chatListSnapshotStoreProvider).save(ownerId, conversations),
+      );
+    } catch (_) {
+      // No store configured: nothing to save to.
+    }
   }
 
   /// Moves [message] into its conversation's preview. A message for a
@@ -256,6 +323,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
           for (var i = 0; i < current.length; i++)
             if (i == index) current[i].withPreview(message) else current[i],
         ]);
+        _scheduleSnapshotSave();
       }
       return;
     }
@@ -264,6 +332,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       reloadQuietly();
     } else {
       state = AsyncData(next);
+      _scheduleSnapshotSave();
     }
   }
 
@@ -308,6 +377,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     state = AsyncData([
       for (final c in current) c.id == conversationId ? c.read() : c,
     ]);
+    _scheduleSnapshotSave();
   }
 
   Future<List<Conversation>> _load() async {
@@ -320,6 +390,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   Future<void> refresh() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(_load);
+    _saveCurrentIfData();
   }
 
   /// Re-reads without showing a spinner: the list on screen stays while the
@@ -329,6 +400,31 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   Future<void> reloadQuietly() async {
     final next = await AsyncValue.guard(_load);
     if (next is AsyncData<List<Conversation>> && ref.mounted) state = next;
+    _saveCurrentIfData();
+  }
+
+  /// A full load just finished (explicit [refresh] or a quiet re-read):
+  /// saved right away, unlike a single live update, which is debounced by
+  /// [_scheduleSnapshotSave] instead.
+  void _saveCurrentIfData() {
+    final ownerId = ref.read(currentUserIdProvider);
+    final list = state.value;
+    if (ownerId != null && list != null) _saveSnapshot(ownerId, list);
+  }
+
+  /// Batches a save after a live update so a burst of incoming messages
+  /// costs one disk write, not one per message. Checks the store is
+  /// actually configured BEFORE scheduling: with nothing to save to (most
+  /// tests, which never override [chatListSnapshotStoreProvider]) this must
+  /// not leave a bare Timer running past the caller's own lifetime.
+  void _scheduleSnapshotSave() {
+    try {
+      ref.read(chatListSnapshotStoreProvider);
+    } catch (_) {
+      return;
+    }
+    _snapshotDebounce?.cancel();
+    _snapshotDebounce = Timer(const Duration(seconds: 2), _saveCurrentIfData);
   }
 
   /// Opens the 1:1 conversation with [otherUserId], creating it if needed.

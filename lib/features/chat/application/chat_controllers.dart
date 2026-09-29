@@ -66,20 +66,26 @@ final attachmentCacheProvider = Provider<AttachmentCache>(
   (_) => throw UnimplementedError('override in main'),
 );
 
-/// Wipes the cache above as soon as the session is found to have ended --
-/// signed out, or Denied (revoked or replaced on another device) -- so
-/// nothing of a previous member's photos or pictures survives on this phone.
-/// Mirrors pushInboxOwnerProvider's reach: every settled answer about the
-/// session, not only the explicit sign-out button, and `fireImmediately`
-/// catches a cold start that lands directly on one of those two states.
-final attachmentCacheOwnerProvider = Provider<void>((ref) {
+/// Runs [onEnd] on every settled answer that the session has ended --
+/// signed out, or Denied (revoked or replaced on another device) -- with
+/// `fireImmediately` so a cold start landing directly on either state is
+/// caught too. Shared by [attachmentCacheOwnerProvider] and
+/// [chatListSnapshotOwnerProvider], mirroring pushInboxOwnerProvider's reach.
+void _onSessionEnd(Ref ref, Future<void> Function() onEnd) {
   ref.listen(sessionControllerProvider, (_, next) {
     switch (next.value) {
       case SignedOut() || Denied():
-        unawaited(ref.read(attachmentCacheProvider).clear());
+        unawaited(onEnd());
       case _:
     }
   }, fireImmediately: true);
+}
+
+/// Wipes the cache above as soon as the session is found to have ended --
+/// signed out, or Denied (revoked or replaced on another device) -- so
+/// nothing of a previous member's photos or pictures survives on this phone.
+final attachmentCacheOwnerProvider = Provider<void>((ref) {
+  _onSessionEnd(ref, () => ref.read(attachmentCacheProvider).clear());
 });
 
 /// Where the conversation list's last snapshot lives on the phone. The real
@@ -96,13 +102,7 @@ final chatListSnapshotStoreProvider = Provider<ChatListSnapshotStore>(
 /// FileChatListSnapshotStore.load), so this is defence in depth, not the
 /// only guard.
 final chatListSnapshotOwnerProvider = Provider<void>((ref) {
-  ref.listen(sessionControllerProvider, (_, next) {
-    switch (next.value) {
-      case SignedOut() || Denied():
-        unawaited(ref.read(chatListSnapshotStoreProvider).clear());
-      case _:
-    }
-  }, fireImmediately: true);
+  _onSessionEnd(ref, () => ref.read(chatListSnapshotStoreProvider).clear());
 });
 
 /// One attachment's bytes: from this phone when they are here, otherwise
@@ -186,6 +186,15 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     // Rebuilt from scratch for each account: never the last one's list.
     ref.watch(currentUserIdProvider);
     final ownerId = ref.read(currentUserIdProvider);
+    // True for as long as THIS build is the current one. ref.mounted alone
+    // cannot tell that apart from the Notifier being disposed outright: a
+    // rebuild (e.g. an account change) reuses the same Notifier, so
+    // ref.mounted stays true for a build already replaced by a newer one.
+    // Registered synchronously, before the cache read below, so it is set
+    // the moment this build is replaced OR the Notifier is disposed -- and
+    // also guards the cache-restore state assignment right below.
+    var alive = true;
+    ref.onDispose(() => alive = false);
     // The store provider is unoverridden in most tests (it throws
     // UnimplementedError the moment it's read, not just on a failed disk
     // op), so this must be guarded the same as any other best-effort read.
@@ -197,17 +206,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
         cached = null;
       }
     }
-    if (cached != null && ref.mounted) state = AsyncData(cached);
+    if (cached != null && alive && ref.mounted) state = AsyncData(cached);
     final buffered = <Message>[];
     var loaded = false;
-    // True for as long as THIS build is the current one. ref.mounted alone
-    // cannot tell that apart from the Notifier being disposed outright: a
-    // rebuild (e.g. an account change) reuses the same Notifier, so
-    // ref.mounted stays true for a build already replaced by a newer one.
-    // Registered synchronously, before the join below starts, so it is set
-    // the moment this build is replaced OR the Notifier is disposed.
-    var alive = true;
-    ref.onDispose(() => alive = false);
     ref.onDispose(() => _snapshotDebounce?.cancel());
     // The Realtime join can take up to 15s and must never gate the list: it
     // starts alongside the fetch below instead of being awaited first.
@@ -275,14 +276,16 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       // means one was started during the load: read again rather than drop it.
       if (unknown) list = await _load();
     } catch (e) {
-      // Offline (or any other failure) with a cached snapshot already
-      // shown: the list stays usable instead of flipping to an error
-      // screen over data already on the member's own phone.
-      if (cached == null) rethrow;
+      // Offline with a cached snapshot already shown: the list stays usable
+      // instead of flipping to an error screen over data already on the
+      // member's own phone. Anything that is not a retryable NetworkFailure
+      // is a real refusal (denied, or the server answering "no"), not a
+      // connectivity blip -- it is shown, not hidden behind stale data.
+      if (cached == null || e is! NetworkFailure || !e.retryable) rethrow;
       loaded = true;
       list = cached;
     }
-    if (ownerId != null) _saveSnapshot(ownerId, list);
+    if (ownerId != null && alive) _saveSnapshot(ownerId, list);
     return list;
   }
 
@@ -388,8 +391,11 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   }
 
   Future<void> refresh() async {
+    final ownerId = ref.read(currentUserIdProvider);
     state = const AsyncLoading();
-    state = await AsyncValue.guard(_load);
+    final next = await AsyncValue.guard(_load);
+    if (ref.read(currentUserIdProvider) != ownerId) return;
+    state = next;
     _saveCurrentIfData();
   }
 
@@ -398,7 +404,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   /// rather than replacing something correct with an error the member did
   /// not ask for; the explicit [refresh] still reports failures.
   Future<void> reloadQuietly() async {
+    final ownerId = ref.read(currentUserIdProvider);
     final next = await AsyncValue.guard(_load);
+    if (ref.read(currentUserIdProvider) != ownerId) return;
     if (next is AsyncData<List<Conversation>> && ref.mounted) state = next;
     _saveCurrentIfData();
   }

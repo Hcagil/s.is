@@ -18,6 +18,10 @@ final class FileChatListSnapshotStore implements ChatListSnapshotStore {
 
   final Future<Directory> Function() _root;
 
+  /// Bumped by [clear]; a [save] in flight when it changes lost the race and
+  /// must not resurrect what clear() just erased.
+  int _epoch = 0;
+
   Future<File> _file() async => File('${(await _root()).path}/chat_list.json');
 
   @override
@@ -45,6 +49,7 @@ final class FileChatListSnapshotStore implements ChatListSnapshotStore {
 
   @override
   Future<void> save(String ownerId, List<Conversation> conversations) async {
+    final epoch = _epoch;
     try {
       final file = await _file();
       await file.parent.create(recursive: true);
@@ -56,17 +61,36 @@ final class FileChatListSnapshotStore implements ChatListSnapshotStore {
       // Written aside, then renamed: a half-written file is never read.
       final part = File('${file.path}.part');
       await part.writeAsString(body);
+      if (_epoch != epoch) {
+        // clear() ran while this write was in flight: the erase it performed
+        // must win, not be undone by a save that started before it.
+        await part.delete();
+        return;
+      }
       await part.rename(file.path);
     } catch (_) {
       // Best-effort: the next cold start just waits for the network instead.
+      // No half-written temp file is left behind for a later write to trip
+      // over.
+      try {
+        final part = File('${(await _file()).path}.part');
+        if (await part.exists()) await part.delete();
+      } catch (_) {
+        // Nothing to delete, or nothing that can be.
+      }
     }
   }
 
   @override
   Future<void> clear() async {
+    _epoch++;
     try {
       final file = await _file();
       if (await file.exists()) await file.delete();
+      // A save's temp file too, in case a crash landed between its write and
+      // rename.
+      final part = File('${file.path}.part');
+      if (await part.exists()) await part.delete();
     } catch (_) {
       // Nothing to clear, or nothing that can be.
     }

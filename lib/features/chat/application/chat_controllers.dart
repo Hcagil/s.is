@@ -206,9 +206,10 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     // currentUserIdProvider itself changes -- see its doc), so doing it here
     // makes it structurally impossible for a stale value to reach `_apply`,
     // `markRead`, `_saveCurrentIfData`, or an outside reader of `.value`
-    // (conversation_list.dart, profile_pages.dart, ...): they all see null
-    // until THIS build's own settled data (the disk cache below, or the
-    // server) lands.
+    // (conversation_list.dart, profile_pages.dart, ...): they all see an
+    // AsyncLoading whose .value is the empty list (hasValue is true), not
+    // the previous owner's rows, until THIS build's own settled data (the
+    // disk cache below, or the server) lands.
     state = const AsyncData(<Conversation>[]);
     state = const AsyncLoading();
     // True for as long as THIS build is the current one. ref.mounted alone

@@ -21,10 +21,12 @@ import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
 import '../application/group_controller.dart';
+import '../domain/group_event.dart';
 import '../domain/group_member.dart';
 import '../domain/highlight.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
+import '../domain/timeline.dart';
 import '../domain/read_marks.dart';
 import 'attachment_sheet.dart';
 import 'chat_search_bar.dart';
@@ -366,6 +368,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     // Read status, where it is shared: your own messages look a little grey
     // until every sharing member has read them.
     final marks = ref.watch(readMarksProvider).value ?? const <ReadMark>[];
+    final timeline = ref.watch(chatTimelineProvider);
+    final messageIndexById = {
+      for (var idx = 0; idx < (messages.value ?? const []).length; idx++)
+        (messages.value ?? const [])[idx].id: idx,
+    };
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -466,7 +473,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                   behavior: HitTestBehavior.translucent,
                   onTap: () => _openSwipeId.value = null,
                   child: switch (messages) {
-                    AsyncData(:final value) when value.isEmpty => const Center(
+                    AsyncData() when timeline.isEmpty => const Center(
                       child: Text('No messages yet. Say something.'),
                     ),
                     AsyncData(:final value) => ListView.builder(
@@ -477,10 +484,17 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                       // bubble built even when it is far from the current
                       // scroll offset (see _scrollTo).
                       scrollCacheExtent: ScrollCacheExtent.pixels(2000),
-                      itemCount: value.length,
+                      itemCount: timeline.length,
                       itemBuilder: (context, i) {
-                        final index = value.length - 1 - i;
-                        final message = value[index];
+                        final entry = timeline[timeline.length - 1 - i];
+                        if (entry is EventEntry) {
+                          return _EventLine(
+                            entry.event,
+                            key: ValueKey('event-${entry.event.id}'),
+                          );
+                        }
+                        final message = (entry as MessageEntry).message;
+                        final index = messageIndexById[message.id] ?? 0;
                         final mine = me != null && message.isFrom(me);
                         final quoted = message.replyTo == null
                             ? null
@@ -1756,5 +1770,38 @@ class _LinkedTextState extends ConsumerState<_LinkedText> {
       );
     }
     return Text.rich(TextSpan(style: widget.style, children: spans));
+  }
+}
+
+/// An admin-only line: "X left" / "X was removed" / "X was added". Read
+/// from group_events (chatTimelineProvider), which the server already
+/// scopes to a current admin -- nothing here decides visibility itself.
+class _EventLine extends ConsumerWidget {
+  const _EventLine(this.event, {super.key});
+
+  final GroupEvent event;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final names = {
+      for (final m in ref.watch(yourPeopleProvider).value ?? const [])
+        m.userId: m.displayName,
+    };
+    final subject = names[event.subjectId] ?? 'Someone';
+    final text = switch (event.kind) {
+      GroupEventKind.left => '$subject left',
+      GroupEventKind.removed => '$subject was removed',
+      GroupEventKind.added => '$subject was added',
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Center(
+        child: Text(
+          text,
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+      ),
+    );
   }
 }

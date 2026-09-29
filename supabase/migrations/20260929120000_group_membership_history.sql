@@ -409,10 +409,34 @@ revoke all on function app_private.overlaps_my_membership(uuid, timestamptz, tim
 grant execute on function app_private.overlaps_my_membership(uuid, timestamptz, timestamptz)
   to authenticated;
 
+-- Found while fixing F10 below (own finding, not a named security-lead
+-- item): overlaps_my_membership() is not leakproof and not an index
+-- condition -- OR'd straight against `user_id = auth.uid()` in the policy,
+-- as first written, it stopped the planner using conversation_members_
+-- user_idx at all, even for a query that ALSO filters `where user_id =
+-- auth.uid()` itself: EXPLAIN showed a bare Seq Scan on conversation_members
+-- for conversation_previews's own now-DISTINCT source (see F10). The same
+-- leakproof-array-pre-filter pattern messages_read already uses (2026-09-27)
+-- fixes it: my_conversation_ids() (security definer, so no self-reference
+-- through RLS -- same reason is_member/was_member/overlaps_my_membership
+-- are all definer) returns the caller's own conversation ids as a plain
+-- array, hoisted once; `conversation_id = any(...)` against it is sargable
+-- on conversation_members_conv_user_idx (leading column conversation_id),
+-- narrowing candidates to the caller's own conversations BEFORE the
+-- non-sargable overlap check ever runs on them.
+create or replace function app_private.my_conversation_ids() returns uuid[]
+language sql stable security definer set search_path = '' as $$
+  select coalesce(array_agg(conversation_id), '{}'::uuid[])
+    from public.conversation_members where user_id = (select auth.uid())
+$$;
+revoke all on function app_private.my_conversation_ids() from public, anon;
+grant execute on function app_private.my_conversation_ids() to authenticated;
+
 drop policy conversation_members_read on public.conversation_members;
 create policy conversation_members_read on public.conversation_members for select to authenticated
   using (
     (select app_private.has_app_access())
+    and conversation_id = any (app_private.my_conversation_ids())
     and (
       user_id = (select auth.uid())
       or app_private.overlaps_my_membership(conversation_id, joined_at, left_at)
@@ -660,33 +684,61 @@ create table public.group_events (
 create index group_events_conversation_idx on public.group_events(conversation_id, created_at);
 alter table public.group_events enable row level security;
 revoke all on public.group_events from anon, authenticated;
--- security-lead F9: is_admin(conversation_id) alone had no lower time bound
--- -- an admin added without history could read "X left" events from before
--- they ever joined, which messages_read would never show them the
--- corresponding history for. Bounded to the admin's own CURRENT row's
--- history_from (is_admin already implies a current admin row exists);
--- coalesced to 'infinity' if somehow none is found, so the policy denies
--- rather than defaults open.
+-- security-lead F9, then N1 (HIGH, re-probe): F9's first fix put a bare
+-- `select cm.history_from from conversation_members cm where ...` straight
+-- into the policy's USING clause. A POLICY runs with the QUERYING ROLE's own
+-- privileges (unlike a function body, which runs with SECURITY DEFINER's),
+-- and authenticated was never granted column SELECT on history_from (this
+-- migration's own grant list, above, deliberately leaves it off -- "server's
+-- own read gate, not something the app renders"). So every select on
+-- group_events failed outright, 42501, for every caller including a real
+-- admin -- confirmed over REST. Fixed the way every other privileged column
+-- read in this codebase is: a SECURITY DEFINER function, which is NOT bound
+-- by the caller's column grants, doing the same current-admin-since-
+-- history_from check as one boolean.
+create or replace function app_private.admin_event_visible(
+  conversation uuid,
+  event_at timestamptz
+) returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.conversation_members cm
+     where cm.conversation_id = conversation
+       and cm.user_id = (select auth.uid())
+       and cm.left_at is null
+       and cm.role = 'admin'
+       and event_at >= cm.history_from
+  )
+$$;
+revoke all on function app_private.admin_event_visible(uuid, timestamptz) from public, anon;
+grant execute on function app_private.admin_event_visible(uuid, timestamptz) to authenticated;
+
 create policy group_events_read on public.group_events for select to authenticated
   using (
     (select app_private.has_app_access())
-    and app_private.is_admin(conversation_id)
-    and created_at >= coalesce(
-      (select cm.history_from from public.conversation_members cm
-        where cm.conversation_id = group_events.conversation_id
-          and cm.user_id = (select auth.uid())
-          and cm.left_at is null),
-      'infinity'::timestamptz)
+    and app_private.admin_event_visible(conversation_id, created_at)
   );
 grant select on public.group_events to authenticated;
 
 -- leave_group -----------------------------------------------------------
--- Any CURRENT member of a GROUP (never a 1:1 -- refused) may leave. If they
--- were the group's last current admin, the longest-standing remaining
+-- Any CURRENT member of a GROUP (never a 1:1 -- refused) may leave. If no
+-- current admin would remain after they go, the longest-standing remaining
 -- current member (min joined_at, tied by user_id) becomes admin, so a group
 -- is never left unmanaged. Locked per conversation (advisory) so two admins
 -- leaving at once cannot both see "an admin remains" and leave nobody in
 -- charge.
+--
+-- security-lead N2: the check used to be `mine.role = 'admin' and not
+-- exists(...)` -- only promoting when the LEAVER themselves was the admin.
+-- If a group's sole admin's account was ever deleted outright (auth.users
+-- cascades conversation_members.user_id, which the admin-guard trigger
+-- below does not watch -- see that trigger's own comment), the group is
+-- left with zero current admins and nobody who still has a row could ever
+-- trigger a promotion: an ordinary member leaving never satisfied
+-- `mine.role = 'admin'`, so leave_group itself could not recover the
+-- group, and would in fact go on to fail the deferred admin-guard trigger
+-- at commit (their own leave still updates left_at, which the guard
+-- watches). Fixed: promote whenever no current admin would remain after
+-- this leave, regardless of whether the leaver was one.
 create or replace function public.leave_group(conversation uuid)
 returns void language plpgsql security definer set search_path = '' as $$
 declare
@@ -716,7 +768,7 @@ begin
   insert into public.group_events(conversation_id, kind, actor_id, subject_id)
     values (conversation, 'left', null, me);
 
-  if mine.role = 'admin' and not exists (
+  if not exists (
        select 1 from public.conversation_members
         where conversation_id = conversation and left_at is null and role = 'admin')
   then
@@ -909,6 +961,23 @@ grant execute on function public.set_admin(uuid, uuid, boolean) to authenticated
 -- transaction never trips it), that no GROUP with any current member is
 -- left with zero current admins. Never fires for a 1:1 (no title) or an
 -- empty/fully-departed group (nobody left to need an admin).
+--
+-- security-lead N2: the first version watched `after insert or update` with
+-- no column list -- EVERY update of the table, including mark_read's own
+-- (last_read_at/shared_read_at), queued this deferred check. That is
+-- harmless on its own (the check passes if an admin genuinely exists), but
+-- it meant an entirely unrelated mark_read call could fail at commit,
+-- 23514, for a reason its own transaction never touched, if some EARLIER,
+-- unrelated transaction had already left the group admin-less -- which
+-- `user_id ... on delete cascade` makes possible: deleting the sole
+-- admin's account outright removes their conversation_members row via
+-- cascade, an event this trigger (insert/update only) never saw at all.
+-- Narrowed to `of role, left_at`: only a write that could actually change
+-- who is a current admin queues the check, which also takes ordinary
+-- mark_read calls out of its blast radius entirely. The cascade-delete
+-- case itself is handled by the next trigger below, not by widening this
+-- one to DELETE -- a deferred check on every row an account-deletion
+-- cascade touches would not know how to fix anything, only refuse it.
 create or replace function app_private.group_needs_admin_check() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -931,7 +1000,84 @@ end $$;
 revoke all on function app_private.group_needs_admin_check() from public, anon, authenticated;
 
 create constraint trigger conversation_members_admin_guard
-  after insert or update on public.conversation_members
+  after insert or update of role, left_at on public.conversation_members
   deferrable initially deferred
   for each row
   execute function app_private.group_needs_admin_check();
+
+-- security-lead N2, the cascade case itself: when auth.users cascades a
+-- deletion onto conversation_members (an account removed outright, not a
+-- leave or a removal -- both of those are soft, left_at only), a current
+-- admin's row can vanish with no RPC in the loop to run leave_group's own
+-- promotion. Not deferred (unlike the guard above): this runs immediately,
+-- per deleted row, within the same cascade -- by the time the outer DELETE
+-- (and anything deferred to its commit) finishes, a replacement admin is
+-- already in place, so the guard above never has a gap to catch.
+create or replace function app_private.promote_on_member_deleted() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  conv uuid := old.conversation_id;
+begin
+  if old.left_at is null and old.role = 'admin'
+     and exists (select 1 from public.conversations c where c.id = conv and c.title is not null)
+     and exists (
+       select 1 from public.conversation_members
+        where conversation_id = conv and left_at is null
+     )
+     and not exists (
+       select 1 from public.conversation_members
+        where conversation_id = conv and left_at is null and role = 'admin'
+     )
+  then
+    update public.conversation_members
+       set role = 'admin'
+     where id = (
+       select id from public.conversation_members
+        where conversation_id = conv and left_at is null
+        order by joined_at asc, user_id asc
+        limit 1
+        for update
+     );
+  end if;
+  return null;
+end $$;
+revoke all on function app_private.promote_on_member_deleted() from public, anon, authenticated;
+
+create trigger conversation_members_promote_on_delete
+  after delete on public.conversation_members
+  for each row
+  execute function app_private.promote_on_member_deleted();
+
+-- security-lead F10 (LOW, re-probe): conversation_previews (live definition:
+-- 20260926130000_query_indexes.sql, not the earlier DISTINCT ON version --
+-- that one was already superseded before this feature) is a LATERAL "top 1
+-- message" joined per ROW of `cm.user_id = auth.uid()` in
+-- conversation_members. That was one row per MEMBERSHIP row, not one row
+-- per CONVERSATION -- harmless before this migration, when a member had at
+-- most one row per conversation, but a rejoined member now holds more than
+-- one on purpose (this file's own header comment), so their rejoined
+-- conversation's preview came back twice, identically. Redefined to source
+-- one row per conversation instead: DISTINCT conversation_id from the
+-- caller's own memberships, current or past -- the LATERAL only ever keyed
+-- on conversation_id, never anything else about the row, so which specific
+-- row justified a conversation appearing was already irrelevant to its
+-- preview. Still bounded purely by the caller's own membership count, never
+-- by message history, so this should not move query_indexes_test.sql's
+-- plan-shape assertions or the previews equivalence test -- verified by
+-- running both, not merely argued.
+create or replace view public.conversation_previews
+with (security_invoker = true) as
+select cm.conversation_id, m.body, m.attachment_path, m.created_at,
+       m.sender_id, m.deleted
+  from (select distinct conversation_id from public.conversation_members
+         where user_id = auth.uid()) cm
+  cross join lateral (
+    select mm.body, mm.attachment_path, mm.created_at, mm.sender_id, mm.deleted
+      from public.messages mm
+     where mm.conversation_id = cm.conversation_id
+       and mm.deleted is distinct from 'vanished'
+     order by mm.created_at desc
+     limit 1
+  ) m;
+revoke all on public.conversation_previews from anon, authenticated;
+grant select on public.conversation_previews to authenticated;

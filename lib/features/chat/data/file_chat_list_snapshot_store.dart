@@ -68,6 +68,12 @@ final class FileChatListSnapshotStore implements ChatListSnapshotStore {
         return;
       }
       await part.rename(file.path);
+      if (_epoch != epoch) {
+        // clear() started before the rename landed and may have already run
+        // its own deletes without seeing this file; undo what the rename
+        // just (re)created so the erase still wins.
+        await _tryDelete(file);
+      }
     } catch (_) {
       // Best-effort: the next cold start just waits for the network instead.
       // No half-written temp file is left behind for a later write to trip
@@ -84,15 +90,29 @@ final class FileChatListSnapshotStore implements ChatListSnapshotStore {
   @override
   Future<void> clear() async {
     _epoch++;
+    final File file;
     try {
-      final file = await _file();
-      if (await file.exists()) await file.delete();
-      // A save's temp file too, in case a crash landed between its write and
-      // rename.
-      final part = File('${file.path}.part');
-      if (await part.exists()) await part.delete();
+      file = await _file();
     } catch (_) {
-      // Nothing to clear, or nothing that can be.
+      return; // Root itself is unavailable; nothing to clear.
+    }
+    final part = File('${file.path}.part');
+    // Each delete is caught on its own, not one try/catch around all three:
+    // a save's rename can land between any two of these (recreating
+    // chat_list.json from `part`), and a throw from one delete must never
+    // skip the ones after it. The trailing delete of `file` is what catches
+    // a rename that lands after the first delete of `file` above but before
+    // or during the delete of `part`.
+    await _tryDelete(file);
+    await _tryDelete(part);
+    await _tryDelete(file);
+  }
+
+  Future<void> _tryDelete(File file) async {
+    try {
+      await file.delete();
+    } catch (_) {
+      // Already gone, or nothing that can be done about it.
     }
   }
 }

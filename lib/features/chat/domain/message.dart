@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import '../../../core/date_label.dart';
+
 /// The longest body the database will accept, per the check constraint on
 /// `public.messages.body`.
 const int maxMessageLength = 4000;
@@ -39,27 +41,14 @@ String previewText(Message message) => message.body.isNotEmpty
     ? message.body
     : (message.hasAttachment ? 'Photo' : '');
 
-String _two(int v) => v.toString().padLeft(2, '0');
-
 /// The local clock time of [at], always HH:MM -- whatever day it falls on.
-/// What a chat bubble shows: unlike [previewTime] it never falls back to a
-/// date, since a bubble is already anchored in its conversation's order.
-String clockTime(DateTime at) {
-  final local = at.toLocal();
-  return '${_two(local.hour)}:${_two(local.minute)}';
-}
+/// What a chat bubble shows: unlike [previewTime] it never falls back to a date, since a bubble is already anchored in its conversation's order.
+String clockTime(DateTime at) =>
+    '${twoDigit(at.toLocal().hour)}:${twoDigit(at.toLocal().minute)}';
 
 /// The time shown next to a preview: the clock time today, the date before.
-String previewTime(DateTime at, DateTime now) {
-  final local = at.toLocal();
-  final today = now.toLocal();
-  if (local.year == today.year &&
-      local.month == today.month &&
-      local.day == today.day) {
-    return clockTime(at);
-  }
-  return '${_two(local.day)}.${_two(local.month)}.${_two(local.year % 100)}';
-}
+String previewTime(DateTime at, DateTime now) =>
+    isSameLocalDay(at, now) ? clockTime(at) : dateTail(at);
 
 /// One message in a conversation.
 final class Message {

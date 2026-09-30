@@ -262,7 +262,7 @@ reset role;
 select is((select count(*) from app_private.device_tokens
             where token = 'pts-shared-handset' and user_id = pts_uid(8)),
           0::bigint, 'handover deletes the previous member''s row for the token');
-select is((select user_id::text || '@' || session_id::text from app_private.device_tokens
+select is((select string_agg(user_id::text || '@' || session_id::text, ',') from app_private.device_tokens
             where token = 'pts-shared-handset'),
           pts_uid(9)::text || '@' || pts_sess(9, 'a'), 'the token now belongs to hy, bound to hy''s session');
 select is((select string_agg(user_id::text, ',') from app_private.push_targets_for_message((select id from _m))

@@ -17,7 +17,11 @@
 #   - a failing `gh api` pull read fails the run block, and the step is
 #     continue-on-error so that failure never blocks the release;
 #   - each PR is read from the REST endpoint repos/$GITHUB_REPOSITORY/pulls/N
-#     and kept by its snake_case author_association.
+#     and kept by its snake_case author_association;
+#   - the step is `id: note` and writes the stored note, base64 on one line, as
+#     output `b64` (publish exposes it as note_b64 for TestFlight's What to
+#     Test): only when there is a note, before the insert (a failed insert
+#     still hands it on), and it decodes to exactly the stored text.
 #
 # A `run:` block with no `shell:` runs as `bash -e {0}` on GitHub Actions --
 # errexit but NOT pipefail -- so the step runs that way here; any pipefail
@@ -45,6 +49,12 @@ grep -q 'supabase db query' "$tmp/step.sh" || { echo "FAIL: step not found in $w
 awk '/- name: Store the What.s new note for this build/ { f = 1; next } f && /^ *run: \|/ { exit } f' \
   "$workflow" | grep -q '^ *continue-on-error: true *$' \
   || { echo "FAIL: the note step must be continue-on-error: a gh/db hiccup must not block the release"; exit 1; }
+awk '/- name: Store the What.s new note for this build/ { f = 1; next } f && /^ *run: \|/ { exit } f' \
+  "$workflow" | grep -q '^ *id: note *$' || { echo "FAIL: the note step must be id: note (publish reads steps.note.outputs.b64)"; exit 1; }
+# publish's outputs map hands the note on.
+awk '$0 == "  publish:" { j = 1; next } j && /^  [A-Za-z0-9_-]+:/ { exit } j && /^    outputs:$/ { o = 1; next }
+     o && !/^      / { o = 0 } o' "$workflow" | grep -q '^      note_b64: \${{ steps\.note\.outputs\.b64 }}$' \
+  || { echo "FAIL: publish must output note_b64: \${{ steps.note.outputs.b64 }}"; exit 1; }
 
 # Stand-ins. gh answers from files; supabase records its arguments.
 # The gh stand-in is strict: it accepts only the calls this step may make, in
@@ -112,6 +122,7 @@ EOF
 cat > "$tmp/bin/supabase" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$STUB_CALLS"
+[ -z "${STUB_DB_FAIL:-}" ] || { echo "supabase: connection refused" >&2; exit 1; }
 EOF
 chmod +x "$tmp/bin/gh" "$tmp/bin/supabase"
 
@@ -135,9 +146,9 @@ for pr in 9 10 11 12; do echo OWNER > "$tmp/prs/$pr.assoc"; done
 
 # run_step <prev tag> -> sets $out, $calls; step exit status is returned
 run_step() {
-  : > "$tmp/calls"; : > "$tmp/api"; : > "$tmp/rejects"
+  : > "$tmp/calls"; : > "$tmp/api"; : > "$tmp/rejects"; : > "$tmp/ghout"
   local rc=0
-  (cd "$repo" && PATH="$tmp/bin:$PATH" STUB_PREV_TAG="$1" STUB_PRS="$tmp/prs" \
+  (cd "$repo" && PATH="$tmp/bin:$PATH" STUB_PREV_TAG="$1" STUB_PRS="$tmp/prs" GITHUB_OUTPUT="$tmp/ghout" \
     STUB_CALLS="$tmp/calls" STUB_API="$tmp/api" STUB_REJECTS="$tmp/rejects" \
     STUB_REPO=owner/repo GITHUB_REPOSITORY=owner/repo \
     SHA="$head_sha" BUILD=179 GH_TOKEN=x \
@@ -150,6 +161,16 @@ run_step() {
 fail() { echo "FAIL: $1"; echo "--- step output"; cat "$tmp/out"; echo "--- supabase calls"; cat "$tmp/calls"; exit 1; }
 note_of() { # the text the insert would store
   sed -n "s/.*decode('\([A-Za-z0-9+/=]*\)', 'base64').*/\1/p" "$tmp/calls" | base64 -d
+}
+check_out() { # GITHUB_OUTPUT must hold exactly one b64= line (a wrapped value corrupts the file)
+  [ "$(grep -c '' "$tmp/ghout")" -eq 1 ] && grep -qxE 'b64=[A-Za-z0-9+/]*={0,2}' "$tmp/ghout" \
+    || fail "GITHUB_OUTPUT is not one b64= line: [$(cat "$tmp/ghout")]"
+}
+out_of() { sed -n 's/^b64=//p' "$tmp/ghout" | base64 -d; } # the note handed to distribute
+same_note() { # the b64 output decodes to exactly the stored note (trailing newlines included)
+  check_out
+  local a b; a=$(out_of; printf .); b=$(note_of; printf .)
+  [ "$a" = "$b" ] || fail "b64 output [${a%.}] differs from the stored note [${b%.}]"
 }
 
 # 1 lines since the previous release, in merge order
@@ -166,12 +187,14 @@ expected=$(printf '%s\n%s' 'You can pick a sound.' 'It'"'"'s faster; "quoted" $(
 if grep -q 'rm -rf\|quoted\|faster' "$tmp/calls"; then fail "PR text reached SQL unencoded"; fi
 if note_of | grep -q $'\r'; then fail "a carriage return survived"; fi
 if note_of | grep -q 'Old news'; then fail "a PR from the previous release was included"; fi
+same_note
 
 # 2 nothing user-facing -> no insert, still success
 printf 'For users:   \n' > "$tmp/prs/10"
 printf 'Nothing to see.\n' > "$tmp/prs/12"
 run_step v0.26.0+178 || fail "step failed when there was nothing to store"
 [ ! -s "$tmp/calls" ] || fail "an insert was made with no For users line"
+[ ! -s "$tmp/ghout" ] || fail "a b64 output was written with no note: [$(cat "$tmp/ghout")]"
 
 # 3 no previous release -> only the released commit
 printf 'For users: Only this one.\n' > "$tmp/prs/12"
@@ -207,6 +230,7 @@ run_step v0.26.0+178 || fail "step exited non-zero on a long note"
 stored=$(note_of; printf .); stored=${stored%.}
 [ "${#stored}" -eq 4000 ] || fail "long note stored as ${#stored} characters, want 4000"
 [ "$stored" = "$(printf '%s\n%s' "$long" "$long" | head -c 4000)" ] || fail "long note is not the first 4000 characters"
+same_note
 
 # 6 a failing gh api read fails the run block, and stores nothing
 printf 'For users: Fine.\n' > "$tmp/prs/10"
@@ -225,5 +249,18 @@ touch "$tmp/prs/10.null"
 run_step v0.26.0+178 || fail "step exited non-zero on a null PR body"
 [ "$(note_of)" = "Kept." ] || fail "null body: note was [$(note_of)]"
 rm "$tmp/prs/10.null"
+
+# 8 the b64 output round-trips a multi-line UTF-8 note with quotes exactly,
+# and is written before the insert: a failed insert still hands it on.
+printf "For users: Şarkı seçebilirsin — \"alıntı\" 'tek' \\ \$HOME 🎵\n" > "$tmp/prs/10"
+printf "For users: İkinci satır.\n" > "$tmp/prs/12"
+utf=$(printf '%s\n%s' "Şarkı seçebilirsin — \"alıntı\" 'tek' \\ \$HOME 🎵" "İkinci satır.")
+run_step v0.26.0+178 || fail "step exited non-zero on a UTF-8 note"
+check_out
+[ "$(out_of)" = "$utf" ] || fail "b64 output decodes to [$(out_of)], want [$utf]"
+same_note
+if STUB_DB_FAIL=1 run_step v0.26.0+178; then fail "a failed insert did not fail the run block"; fi
+check_out
+[ "$(out_of)" = "$utf" ] || fail "the note was not handed on when the insert failed (b64 must come before the insert)"
 
 echo "whats_new_note_test: OK"

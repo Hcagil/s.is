@@ -1424,3 +1424,29 @@ the runner. Now:
   with that limit, the leftovers are revoked in the developer portal
   (Certificates, Identifiers & Profiles), which is the one manual step this
   design can still need.
+
+**Amended 2026-10-01 (automatic group distribution).** Every TestFlight upload
+now reaches the testers without a manual step (owner: "automate both"). App
+Store Connect has two groups named `bacanaks`, one internal and one external;
+the repository variable `TESTFLIGHT_GROUPS` (comma-separated names, unset =
+`bacanaks`) names the targets, and every group with a matching name gets the
+build.
+
+- A separate job, `distribute`, needs `ios`, runs on Linux and is not needed
+  by `publish`: Apple's processing takes 5 to 30 minutes, and polling on the
+  macOS runner would bill it. It waits for `publish` only to read the What's
+  new note, which the existing note step now also exposes as a job output
+  (base64, since PR bodies are untrusted); it does not recompute it. The job
+  runs when `publish` failed too.
+- The work is `tool/asc_signing.py distribute` (one tool for everything that
+  talks to App Store Connect, stdlib only): find the build, poll until
+  `VALID` (cap 60 minutes), set What to Test, add to the groups, and submit
+  for beta app review when a matched group is external. Re-running is safe.
+- Not invented: the TestFlight Test Information (beta app description,
+  feedback email, review contact). If the API refuses the first external
+  submission for it, the job fails with a message naming what the owner fills in.
+- Follow-ups from the security review of the signing job (PR #84): the
+  revoke step tries both deletes and then fails if either did, the local
+  cleanup runs regardless, the certificate and profile ids are printed the
+  moment they exist, and the intermediate certificate is fetched over https.
+  The Admin role rationale in SECURITY.md is corrected.

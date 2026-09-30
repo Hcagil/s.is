@@ -276,11 +276,17 @@ set as `GIDClientID` in `ios/Runner/Info.plist`. The Web client is still passed 
 audience** (found on the first TestFlight build). The Supabase Google provider's
 client list therefore holds both, Web first, comma separated; it is set in the
 dashboard, not in the repository. A token for any other client is still rejected.
+Restore checklist: a new or restored Supabase project needs this list (Web, iOS)
+set again, or iPhone sign-in fails with "unacceptable audience".
 
 **Sign-in errors are not shown or logged in full.** SDK and backend error text
 can contain a token or an ID, so the sign-in screen shows a fixed sentence and
 the device log (`sis.auth`) keeps only the error code or type. The start-up failure
 screen is the same: a fixed sentence, and `sis.startup` logs only the error type.
+One exception remains: an offline sign-in goes through `readableFailure`, which
+logs the full error under `sis.data` (network text, never the request body; the
+log exists only in debug and profile builds). Narrowing it to the type is planned
+for 0.33.1.
 
 Nonce: on iOS the Google SDK puts a `nonce` claim in the ID token, and
 Supabase requires the request nonce and the token nonce to be both present or

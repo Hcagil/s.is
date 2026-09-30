@@ -145,8 +145,10 @@ jobs:
         run: |
           ipa=$(ls "$RUNNER_TEMP"/export/*.ipa)
           unzip -q "$ipa" -d "$RUNNER_TEMP/ipa"
+          # Read as text: current codesign prefixes the plist, so plutil cannot parse it.
           env=$(codesign -d --entitlements :- "$RUNNER_TEMP/ipa/Payload/Runner.app" 2>/dev/null \
-            | plutil -extract aps-environment raw -o - -)
+            | tr -d '\n\t' \
+            | sed -n 's|.*<key>aps-environment</key> *<string>\([^<]*\)</string>.*|\1|p')
           echo "aps-environment: $env"
           test "$env" = production || { echo "aps-environment is not production" >&2; exit 1; }
       - name: Diagnose entitlements

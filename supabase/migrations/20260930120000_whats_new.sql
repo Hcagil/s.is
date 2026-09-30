@@ -19,15 +19,31 @@ alter table public.conversations
 -- auth.users, so this is a real row: no email, so it is on no allowlist, can
 -- never sign in, and has no profile (the profile the signup trigger makes is
 -- removed again -- nothing should be able to find it).
--- GoTrue reads the four token columns as non-null strings, so they are ''.
+-- GoTrue scans every column below into a non-nullable Go type (string, int,
+-- bool, map, time.Time), so each one must hold a value, exactly as a row
+-- GoTrue writes itself does -- a NULL in any of them makes the admin user
+-- listing (the dashboard's Users page) fail with a scan error. Columns it
+-- reads as pointers (email, phone, password, *_at, deleted_at) stay NULL.
+-- banned_until is finite: GoTrue cannot scan 'infinity'.
 -- messages.sender_id cascades: deleting this account deletes every system
 -- message, so it must never be deleted.
 insert into auth.users (id, instance_id, aud, role,
-                        confirmation_token, recovery_token, email_change, email_change_token_new,
-                        raw_app_meta_data, raw_user_meta_data, banned_until)
+                        confirmation_token, recovery_token,
+                        email_change, email_change_token_new, email_change_token_current,
+                        email_change_confirm_status,
+                        phone_change, phone_change_token, reauthentication_token,
+                        raw_app_meta_data, raw_user_meta_data,
+                        is_sso_user, is_anonymous,
+                        created_at, updated_at, banned_until)
 values ('00000000-0000-0000-0000-00000000515e', '00000000-0000-0000-0000-000000000000',
-        'authenticated', 'authenticated', '', '', '', '',
-        '{}', '{}', '2999-12-31 00:00:00+00')
+        'authenticated', 'authenticated',
+        '', '',
+        '', '', '',
+        0,
+        '', '', '',
+        '{}', '{}',
+        false, false,
+        now(), now(), '2999-12-31 00:00:00+00')
 on conflict (id) do nothing;
 delete from public.profiles where user_id = '00000000-0000-0000-0000-00000000515e';
 

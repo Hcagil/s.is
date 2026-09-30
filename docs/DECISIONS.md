@@ -1286,10 +1286,23 @@ messages until it was closed and reopened.
   device_platform, shows_itself)` already stored `platform` (`android` or
   `ios`). The app now sends its real platform
   (`SupabasePushRegistry(client, platform:)`, set in `platformOverrides`);
-  iOS registers with `shows_itself = false`. No migration.
-- Access is unchanged and needs no iOS code: `push_targets` still joins
-  `auth.sessions`, `active_sessions`, the allowlist and the mutes, so a
-  revoked or signed-out iPhone gets nothing.
+  iOS registers with `shows_itself = false`. No migration for the platform;
+  the session binding above added one.
+- Access: *amended 2026-09-30.* The first version of this note said access
+  was "unchanged and needs no iOS code". That was wrong. `push_targets`
+  checked that the recipient had an active session, not that the token
+  belonged to it, so a token from a displaced device stayed a target. On
+  Android the phone's owner check dropped such a push; on iOS the system
+  draws the alert, so a displaced iPhone would have shown the message on its
+  lock screen. Fix (migration `20260930160000_push_token_session`):
+  `device_tokens.session_id` records the registering session from the JWT,
+  and `push_targets_for_message` requires it to be the member's active session
+  and to exist in `auth.sessions`. Existing rows were backfilled with the
+  member's current active session; a row with none stays unbound and is never
+  a target. Accepted risk: an iPhone signed out while offline keeps its
+  server session, and the system keeps drawing its pushes until that session
+  ends; the full fix is a Notification Service Extension owner check
+  (follow-up). This replaces the "no migration" claim above too.
 - Foreground: the app pins the system alert off
   (`setForegroundNotificationPresentationOptions()`, all false), so nothing
   shows on top of the open app, as on Android. A tap arrives through

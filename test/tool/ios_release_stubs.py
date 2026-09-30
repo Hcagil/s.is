@@ -713,7 +713,7 @@ def curl():
     if not url or not out:
         reject("curl -sSf URL -o FILE expected")
     if not url.startswith("https://"):
-        reject("the intermediate must be fetched over https (Apple's AIA says http://)")
+        reject("the intermediate must be fetched over https")
     urls = json.loads(E["STUB_URLS"])
     if url not in urls:
         if "f" in fl:
@@ -761,7 +761,9 @@ def asc_signing():
             f.write(inter_pem)
         p = ossl("req", "-x509", "-in", csr, "-CA", os.path.join(ca, "inter.pem"), "-CAkey", os.path.join(ca, "inter.key"),
                  "-utf8", "-days", "1", "-subj", "/CN=%s/OU=%s/O=%s/C=TR" % (cn, team, org),
-                 "-addext", "authorityInfoAccess=caIssuers;URI:http://certs.apple.com/wwdrg3.der", "-outform", "der")
+                 "-addext", "authorityInfoAccess=caIssuers;URI:http://certs.apple.com/wwdrg3.der",
+                 # Apple's leaf carries critical extensions openssl does not know (this OID is on real ones).
+                 "-addext", "1.2.840.113635.100.6.1.4=critical,DER:0500", "-outform", "der")
         if p.returncode != 0 or not p.stdout:
             die("asc_signing stand-in: could not issue: %s" % p.stderr.decode())
         with open(os.path.join(out, "cert.cer"), "wb") as f:

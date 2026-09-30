@@ -54,7 +54,9 @@
 #     temporary keychain codesign can use, installs the profile, and puts
 #     SIGNING_IDENTITY (SHA-1), SIGNING_PROFILE_UUID, SIGNING_CERTIFICATE_ID
 #     and SIGNING_PROFILE_ID in GITHUB_ENV; the intermediate is fetched from
-#     the certificate's AIA URL over https only (Apple lists it as http://);
+#     Apple's fixed https URL (not the http-only AIA URL) and must really have
+#     issued the certificate (openssl verify, Apple's critical extensions
+#     tolerated), or the step fails saying so;
 #   - the export is manual: that SHA-1, that profile UUID for com.esd.sis;
 #   - every framework, then the app, is re-signed with a designated
 #     requirement on identifier and team: the one Xcode writes names the
@@ -330,9 +332,15 @@ chmod +x "$tmp/bin/flutter"
 "$REAL_OPENSSL" req -new -newkey rsa:2048 -nodes -keyout "$tmp/ca/inter.key" -out "$tmp/ca/inter.csr" -subj "/CN=Test WWDR G3" 2>/dev/null
 "$REAL_OPENSSL" req -x509 -in "$tmp/ca/inter.csr" -CA "$tmp/ca/root.pem" -CAkey "$tmp/ca/root.key" -days 2 \
   -addext basicConstraints=critical,CA:true -outform der -out "$tmp/ca/inter.cer" 2>/dev/null
-export STUB_CA="$tmp/ca" STUB_URLS="{\"https://certs.apple.com/wwdrg3.der\": \"$tmp/ca/inter.cer\"}"
-# Only the https form of the certificate's own AIA URL is served; curl refuses
-# plain http (test/tool/ios_release_stubs.py).
+wwdr_url=https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
+export STUB_CA="$tmp/ca" STUB_URLS="{\"$wwdr_url\": \"$tmp/ca/inter.cer\"}"
+# Only Apple's fixed https URL is served: the certificate's AIA URL
+# (certs.apple.com, http only) is a 404 and curl refuses plain http
+# (test/tool/ios_release_stubs.py). An impostor: same name, same root, another
+# key; only a real signature check tells it from the intermediate.
+"$REAL_OPENSSL" req -new -newkey rsa:2048 -nodes -keyout "$tmp/ca/fake.key" -out "$tmp/ca/fake.csr" -subj "/CN=Test WWDR G3" 2>/dev/null
+"$REAL_OPENSSL" req -x509 -in "$tmp/ca/fake.csr" -CA "$tmp/ca/root.pem" -CAkey "$tmp/ca/root.key" -days 2 \
+  -addext basicConstraints=critical,CA:true -outform der -out "$tmp/ca/fake.cer" 2>/dev/null
 
 key_text=$'-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgSECRETSECRET\nTAILLINEtailline\n-----END PRIVATE KEY-----'
 # run <step name> [VAR=value ...]: the step's run block in a fresh-ish job
@@ -456,6 +464,7 @@ for v in SIGNING_IDENTITY SIGNING_PROFILE_UUID SIGNING_CERTIFICATE_ID SIGNING_PR
 done
 grep -qx 'SIGNING_CERTIFICATE_ID=CERT-1' "$tmp/github_env" && grep -qx 'SIGNING_PROFILE_ID=PROF-1' "$tmp/github_env" \
   || fail "the ids from asc_signing.py did not reach GITHUB_ENV"
+[ "$(grep '^curl ' "$tmp/calls")" = "curl $wwdr_url" ] || fail "the intermediate is not fetched once from $wwdr_url: $(grep '^curl' "$tmp/calls")"
 sha1=$(sed -n 's/^SIGNING_IDENTITY=//p' "$tmp/github_env")
 uuid=$(sed -n 's/^SIGNING_PROFILE_UUID=//p' "$tmp/github_env")
 python3 - "$tmp/export-options.plist" "$sha1" "$uuid" <<'EOF' || fail "ExportOptions.plist is wrong"
@@ -492,6 +501,15 @@ run_job true STUB_ASC_FAIL=profile
 [ "$failed_step" = "Create the signing certificate" ] || fail "a refused profile did not fail the certificate step (failed: '${failed_step:-none}')"
 grep -qx 'asc delete CERT-1 -' "$tmp/calls" || fail "a certificate without a profile was not revoked: $(grep '^asc' "$tmp/calls")"
 grep -q '^altool' "$tmp/calls" && fail "the job went on to altool after a failure"
+cleaned
+# The downloaded intermediate did not issue the certificate: the step says so, nothing is imported.
+fresh
+run_job true STUB_URLS="{\"$wwdr_url\": \"$tmp/ca/fake.cer\"}"
+[ "$failed_step" = "Create the signing certificate" ] || fail "a wrong WWDR intermediate did not fail the certificate step (failed: '${failed_step:-none}')"
+grep -q 'the downloaded WWDR intermediate did not issue the signing certificate' "$tmp/out" \
+  || fail "a wrong WWDR intermediate failed without saying so: $(sed -n '/^--- Create the signing/,/^---/p' "$tmp/out")"
+grep -q "^curl $wwdr_url$" "$tmp/calls" || fail "the wrong-issuer case never fetched the intermediate"
+grep -qx 'asc delete CERT-1 PROF-1' "$tmp/calls" || fail "after a wrong issuer the certificate was not revoked"
 cleaned
 # The export fails: both are revoked.
 fresh

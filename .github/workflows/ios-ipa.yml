@@ -103,22 +103,14 @@ jobs:
           mkdir -m 700 "$dir"
           (umask 077; printf '%s\n' "$KEY" > "$dir/AuthKey_$KEY_ID.p8")
           echo "API_PRIVATE_KEYS_DIR=$dir" >> "$GITHUB_ENV"
-      # Ad-hoc signed on purpose (identity "-", no profile): an automatically
-      # signed archive asks Apple for a development profile, which needs a
-      # registered device, and the team has none. Fully unsigned would drop the
-      # entitlements (push) from the binary. The export below re-signs it for
-      # distribution with cloud-managed signing and keeps them.
-      # XCODE_XCCONFIG_FILE overrides these settings without extra flags.
+      # Archived unsigned (CODE_SIGNING_ALLOWED=NO, via XCODE_XCCONFIG_FILE) on
+      # purpose: an automatically signed archive asks Apple for a development
+      # profile, which needs a registered device, and the team has none. The
+      # export below signs it for distribution with cloud-managed signing.
       - name: Archive (signed)
         run: |
-          cat > "$RUNNER_TEMP/adhoc.xcconfig" <<'EOF'
-          CODE_SIGN_STYLE = Manual
-          CODE_SIGN_IDENTITY = -
-          PROVISIONING_PROFILE_SPECIFIER =
-          CODE_SIGNING_REQUIRED = NO
-          CODE_SIGNING_ALLOWED = YES
-          EOF
-          export XCODE_XCCONFIG_FILE="$RUNNER_TEMP/adhoc.xcconfig"
+          echo 'CODE_SIGNING_ALLOWED = NO' > "$RUNNER_TEMP/unsigned.xcconfig"
+          export XCODE_XCCONFIG_FILE="$RUNNER_TEMP/unsigned.xcconfig"
           xcodebuild archive -quiet -workspace ios/Runner.xcworkspace -scheme Runner \
             -configuration Release -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \

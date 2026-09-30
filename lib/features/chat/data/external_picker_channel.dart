@@ -6,12 +6,13 @@ import '../domain/attachment.dart';
 import '../domain/external_picker.dart';
 import 'tiny_preview.dart';
 
-/// [ExternalPicker] over a platform channel to the Android host
-/// (MainActivity.kt): it starts Android's own app chooser, copies whatever
-/// comes back into this app's cache right away -- a content URI's read
-/// grant is temporary -- and hands back file paths already processed to the
-/// shape [ExternalPicker] promises (long-edge-1600 for an attachment,
-/// long-edge-2048 for a picture's crop source).
+/// [ExternalPicker] over a platform channel to the host app: MainActivity.kt
+/// on Android starts the system app chooser, ExternalPickerPlugin.swift on
+/// iOS opens the system photo picker (PHPicker). Either way the host copies
+/// whatever comes back into this app's cache right away -- Android's content
+/// URI read grant is temporary -- and hands back file paths already
+/// processed to the shape [ExternalPicker] promises (long-edge-1600 for an
+/// attachment, long-edge-2048 for a picture's crop source).
 /// This class only reads those files into memory and deletes them; no image
 /// processing happens in Dart. Thin on purpose (ARCHITECTURE rule 4):
 /// verified on a device, not by a unit test.

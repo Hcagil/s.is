@@ -61,7 +61,9 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>SIS shows your photos inside the chat so you can send them faster. You can allow access to just a few photos.</string>
+	<string>Allow access so your photos load right here in the chat. Nothing is uploaded until you send it. You can allow just a few photos.</string>
+	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
+	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

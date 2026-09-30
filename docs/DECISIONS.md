@@ -1321,3 +1321,35 @@ messages until it was closed and reopened.
   default sound (a muted chat is still muted, on the server). Opening a chat
   does not remove its delivered notification on iOS (system-drawn ones
   cannot be cancelled by id from the app); signing out removes all of them.
+
+## 2026-09-30 — Photo picking and the square crop on iOS (0.29.0)
+
+- Already working on iOS without a line of native code: the gallery grid
+  (`photo_manager`, including limited access and `presentLimited`), the
+  full-screen viewer and the crop screen itself (all Flutter). What Android
+  implements natively is the `sis/external_picker` channel ("From an app",
+  and `cropPicture`, the pixels behind the crop screen). On iOS that channel
+  had no handler, so both calls raised `MissingPluginException`.
+- New Swift in the Runner target, same channel, same method names,
+  arguments and results as `MainActivity.kt` (no Dart or Android change):
+  `ExternalPickerPlugin.swift` and `PickedImageProcessor.swift`, registered
+  from `AppDelegate`. No new dependency and no Podfile: `image_picker` would
+  have added a package for a channel the app already defines.
+- "From an app" on iOS is the system photo picker (PHPicker), not the Files
+  picker. iOS has no app chooser; PHPicker is the closest thing: out of
+  process, needs no photo permission, works with limited access and with
+  photos that live in iCloud, and offers albums. The Files picker would add a
+  second screen for cloud-drive photos that are in Photos anyway; add it if
+  members ask. Attachments are capped at 10 by the picker itself
+  (`selectionLimit`), so `dropped` is always 0 on iOS.
+- Decode, EXIF rotation and downscale use ImageIO thumbnails (decoded at the
+  target size, so a 48 MP photo is never held whole); the crop re-decodes
+  with the orientation applied, so a source with an EXIF tag crops the same
+  square the member framed. Output is a JPEG, like Android.
+- `Info.plist`: the photo-library purpose string is reworded like the
+  Android explainer; `PHPhotoLibraryPreventAutomaticLimitedAccessAlert`
+  stops iOS from showing its own "select more photos" prompt on every ask,
+  since the attachment sheet has its own "Allow more" button. No camera
+  string: no flow uses the camera.
+- Unverifiable here (iOS builds only on GitHub CI): the Swift has never been
+  compiled or run on this machine; the first TestFlight build is its test.

@@ -84,8 +84,10 @@ the pull request. It restores `ios/Runner/GoogleService-Info.plist` from the
 Release: `release.yml` has a second job, `ios`, beside `publish` in the same
 run, so it carries the same `versionCode` (computed once, in the `scope` job).
 It calls `.github/workflows/ios-ipa.yml`, which writes
-`GoogleService-Info.plist`, archives and exports a signed App Store build with
-`xcodebuild`, fails unless the exported app carries `aps-environment` =
+`GoogleService-Info.plist`, archives unsigned with `xcodebuild` (a signed
+archive would need a development profile, which needs a registered device),
+ad-hoc signs the archived app with `Runner.entitlements` so the entitlements
+survive, lets the export sign it for App Store distribution, fails unless the exported app carries `aps-environment` =
 `production`, and uploads the `.ipa` to TestFlight (`xcrun altool`). TestFlight
 is the internal-track equivalent: the internal group `Team` receives each
 build automatically. Signing is cloud-managed: the App Store Connect API key

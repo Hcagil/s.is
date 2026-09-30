@@ -1253,5 +1253,17 @@ messages until it was closed and reopened.
   skips the call when shared_preferences says this build was already served
   for that member on this device. A failure is silent and retried at the next
   start.
-- Seeded notes: build 177 (0.25.2) and 178 (0.26.0). 178 is the run number the
-  0.26.0 release receives; check it against the release run.
+- Seeded notes: build 177 (0.25.2) and 178 (0.26.0), checked against the
+  release tags `v0.25.2+177` and `v0.26.0+178`.
+- Ownership: `features/update/` owns delivery (it is keyed on the installed
+  build, like the update check); `features/chat/` only displays the result.
+- Hardening from review: only PRs whose author is the owner or a
+  collaborator count (a PR body can be edited after merge); the note step is
+  `continue-on-error` and cut to 4000 characters, so it can never block a
+  release; any PR lookup error skips the note for that build rather than
+  storing a partial one. Blank means whitespace (space, tab, CR, LF). The
+  system account is banned until 2999-12-31 (GoTrue cannot read
+  `'infinity'`) and must never be deleted: `messages.sender_id` cascades.
+- Accepted risk: a client that reports an absurd build records it and stops
+  getting notes. It only affects that member, and clamping it would break
+  the rule that a note added later for an older build is never delivered.

@@ -19,8 +19,15 @@ alter table public.conversations
 -- auth.users, so this is a real row: no email, so it is on no allowlist, can
 -- never sign in, and has no profile (the profile the signup trigger makes is
 -- removed again -- nothing should be able to find it).
-insert into auth.users (id, aud, role)
-values ('00000000-0000-0000-0000-00000000515e', 'authenticated', 'authenticated')
+-- GoTrue reads the four token columns as non-null strings, so they are ''.
+-- messages.sender_id cascades: deleting this account deletes every system
+-- message, so it must never be deleted.
+insert into auth.users (id, instance_id, aud, role,
+                        confirmation_token, recovery_token, email_change, email_change_token_new,
+                        raw_app_meta_data, raw_user_meta_data, banned_until)
+values ('00000000-0000-0000-0000-00000000515e', '00000000-0000-0000-0000-000000000000',
+        'authenticated', 'authenticated', '', '', '', '',
+        '{}', '{}', 'infinity')
 on conflict (id) do nothing;
 delete from public.profiles where user_id = '00000000-0000-0000-0000-00000000515e';
 
@@ -126,11 +133,11 @@ begin
 
   for n in
     select r.note from public.release_notes r
-     where btrim(r.note) <> ''
+     where btrim(r.note, E' \t\r\n') <> ''
        and r.build <= installed_build
        and case when served is null
                 then r.build = (select max(x.build) from public.release_notes x
-                                 where btrim(x.note) <> '' and x.build <= installed_build)
+                                 where btrim(x.note, E' \t\r\n') <> '' and x.build <= installed_build)
                 else r.build > served end
      order by r.build
   loop
@@ -149,7 +156,7 @@ begin
     end if;
     -- clock_timestamp, not now(): distinct times keep the notes in order.
     insert into public.messages(conversation_id, sender_id, body, created_at)
-    values (cid, sender, btrim(n.note), clock_timestamp());
+    values (cid, sender, btrim(n.note, E' \t\r\n'), clock_timestamp());
     sent := sent + 1;
   end loop;
 

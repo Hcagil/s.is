@@ -281,6 +281,10 @@ process because `google_sign_in` takes it once, at initialize. Android sends
 no nonce: nothing shows that Play services embeds it, and a mismatch would
 break the production sign-in. Revisit with a device test.
 
+### System account
+
+`00000000-0000-0000-0000-00000000515e` authors the "What's new" messages: it has no email, is on no allowlist and is banned, so it cannot sign in. Never delete it: `messages.sender_id` cascades and every system message would go with it.
+
 ### Secrets
 
 No secrets in the app or repository. Service-role keys and signing material

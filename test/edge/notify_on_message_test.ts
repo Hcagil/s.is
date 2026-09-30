@@ -242,7 +242,7 @@ Deno.test({
     const run = Date.now().toString(36);
     const who = [
       'sender', 'droidnew', 'droidold', 'iosfull', 'iossender', 'iosnone',
-      'ioschatmuted', 'iospersonmuted', 'iosrevoked', 'iosdelisted',
+      'ioschatmuted', 'iospersonmuted', 'iosrevoked', 'iosdelisted', 'iosdisplaced',
     ];
     const people = who.map((w) => ({
       id: crypto.randomUUID(),
@@ -276,7 +276,7 @@ Deno.test({
       await register(p.iossender, 'ios', false);
       // shows_itself means nothing on an iPhone: it still gets the alert.
       await register(p.iosnone, 'ios', true);
-      for (const x of [p.ioschatmuted, p.iospersonmuted, p.iosrevoked, p.iosdelisted]) {
+      for (const x of [p.ioschatmuted, p.iospersonmuted, p.iosrevoked, p.iosdelisted, p.iosdisplaced]) {
         await register(x, 'ios', false);
       }
       await asP(p.iossender, (tx) => tx`insert into public.notification_settings(preview) values ('sender')`);
@@ -296,6 +296,12 @@ Deno.test({
       await sql`delete from auth.sessions where id = ${p.iosrevoked.session}`;
       // Still a member with a session: only the allowlist entry is gone.
       await sql`delete from app_private.allowlist where email = ${p.iosdelisted.email}`;
+      // Signed in on a newer session that has not registered yet: the iPhone's
+      // own session is still alive in auth.sessions, only the device moved.
+      const newer = crypto.randomUUID();
+      await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+                values (${newer}, ${p.iosdisplaced.id}, now(), now())`;
+      await as(p.iosdisplaced.id, p.iosdisplaced.email, newer, (tx) => tx`select public.activate_session()`);
 
       const send = (body: string) => asP(sender,
         (tx) => tx`insert into public.messages(conversation_id, sender_id, body)
@@ -313,7 +319,7 @@ Deno.test({
 
       assertEquals(await deliver(messageId), { status: 204, text: '' }, 'a bare 204');
       assertEquals(sent.length, 5, `one send per delivered device, got ${JSON.stringify(sent)}`);
-      const held = [p.ioschatmuted, p.iospersonmuted, p.iosrevoked, p.iosdelisted].map((x) => x.token);
+      const held = [p.ioschatmuted, p.iospersonmuted, p.iosrevoked, p.iosdelisted, p.iosdisplaced].map((x) => x.token);
       for (const s of sent) {
         assert(!held.includes(s.message.token as string), `sent past a gate: ${JSON.stringify(s.message)}`);
       }

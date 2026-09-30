@@ -1353,3 +1353,35 @@ messages until it was closed and reopened.
   string: no flow uses the camera.
 - Unverifiable here (iOS builds only on GitHub CI): the Swift has never been
   compiled or run on this machine; the first TestFlight build is its test.
+
+## 2026-09-30 — iOS release: TestFlight from the same run (0.30.0)
+
+- The iOS release is a job of `release.yml` (`ios`), not a separate workflow
+  with its own trigger. It needs the release's `versionCode`, the CI-passed
+  commit and the same scope decision; a second workflow would have to
+  rediscover all three. The version is now computed once, in `scope`, and read
+  by `publish` and `ios`. `ios` depends on `scope` only, so Play never waits
+  on Apple and an Apple failure cannot fail the Play release: it is a red job
+  beside a green one.
+- One implementation of the signed build: the reusable workflow `ios-ipa.yml`,
+  called by `release.yml` (with upload) and by `ci.yml` on same-repository
+  pull requests (without). A signing check that existed only in the release
+  would find a signing problem after the merge.
+- Signing is cloud-managed with the App Store Connect API key (role Admin),
+  `-allowProvisioningUpdates` and the `-authenticationKey*` flags. No
+  distribution certificate, `.p12`, profile or match repository is stored
+  anywhere: nothing to renew or leak except the key, which lives in a GitHub
+  secret and is on disk only for the length of the job.
+- `xcodebuild archive` and `-exportArchive` instead of `flutter build ipa`,
+  which cannot pass the API key flags. Flutter still writes the build number,
+  name and dart-defines into the Xcode configuration first
+  (`flutter build ios --config-only`). ExportOptions is generated at run time
+  (`app-store-connect`, automatic signing, `teamID` from the secret).
+- Upload is `xcrun altool --upload-app` with the same key: nothing extra to
+  install. `ITSAppUsesNonExemptEncryption` is false in `Info.plist`, so App
+  Store Connect does not ask export compliance on every build.
+- The export is checked before upload: `aps-environment` must be `production`,
+  or the build installs and never receives a push.
+- Off switch: the repository variable `IOS_RELEASE` = `off`. Not built: an
+  external TestFlight group (the owner adds testers after the first build
+  exists).

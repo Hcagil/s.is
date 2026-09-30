@@ -1,0 +1,131 @@
+name: iOS IPA
+# One implementation of the signed iPhone build, called by ci.yml (a pull
+# request proves signing works; upload=false) and release.yml (upload=true,
+# to TestFlight). Callers pass `secrets: inherit`. Cloud-managed signing: the
+# App Store Connect API key lets Xcode create and fetch the certificate and
+# profiles itself, so no certificate, .p12 or match repository exists.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to build
+        required: true
+        type: string
+      build-number:
+        description: CFBundleVersion; must rise with every upload
+        required: true
+        type: string
+      build-name:
+        description: CFBundleShortVersionString (pubspec name)
+        required: true
+        type: string
+      upload:
+        description: Upload the .ipa to TestFlight (false = signing proof only)
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  ipa:
+    name: Signed iPhone build
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.ref }}
+      # docker/Dockerfile is the single source of the Flutter version: same SDK as the Android job.
+      - name: Install Flutter
+        run: |
+          version=$(sed -n 's/^ARG FLUTTER_VERSION=//p' docker/Dockerfile)
+          test -n "$version"
+          git clone --depth 1 --branch "$version" https://github.com/flutter/flutter.git "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+      - name: Restore Firebase config
+        env:
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+        run: |
+          test -n "$GOOGLE_SERVICE_INFO_PLIST" || { echo 'GOOGLE_SERVICE_INFO_PLIST secret is empty' >&2; exit 1; }
+          printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" > ios/Runner/GoogleService-Info.plist
+      # Only ever printed as a path. altool finds the key through API_PRIVATE_KEYS_DIR.
+      - name: Write the App Store Connect key
+        env:
+          KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER_ID" ] || [ -z "$TEAM_ID" ]; then
+            echo 'An App Store Connect secret is empty (KEY, KEY_ID, ISSUER_ID or APPLE_TEAM_ID)' >&2
+            exit 1
+          fi
+          dir="$RUNNER_TEMP/asc"
+          mkdir -m 700 "$dir"
+          (umask 077; printf '%s\n' "$KEY" > "$dir/AuthKey_$KEY_ID.p8")
+          echo "API_PRIVATE_KEYS_DIR=$dir" >> "$GITHUB_ENV"
+      - name: Resolve dependencies
+        run: flutter pub get
+      # Not `flutter build ipa`: it cannot pass the API key flags, and without
+      # them cloud-managed signing has no account to sign in with. Flutter
+      # writes the build number, name and dart-defines into the Xcode config
+      # here; xcodebuild archives and exports below.
+      - name: Configure the Xcode build
+        run: |
+          flutter build ios --config-only --release --no-codesign \
+            --build-number=${{ inputs.build-number }} --build-name=${{ inputs.build-name }} \
+            --dart-define=SUPABASE_URL=${{ vars.SUPABASE_URL }} \
+            --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ vars.SUPABASE_PUBLISHABLE_KEY }} \
+            --dart-define=GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }}
+      - name: Archive (signed)
+        run: |
+          xcodebuild archive -quiet -workspace ios/Runner.xcworkspace -scheme Runner \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_$KEY_ID.p8" \
+            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
+      - name: Export for App Store Connect
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>destination</key><string>export</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive -quiet \
+            -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_$KEY_ID.p8" \
+            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
+      # A build signed without the production push environment installs and
+      # runs but never receives a notification: fail here, not on a phone.
+      - name: Check the push entitlement
+        run: |
+          ipa=$(ls "$RUNNER_TEMP"/export/*.ipa)
+          unzip -q "$ipa" -d "$RUNNER_TEMP/ipa"
+          env=$(codesign -d --entitlements :- "$RUNNER_TEMP/ipa/Payload/Runner.app" 2>/dev/null \
+            | plutil -extract aps-environment raw -o - -)
+          echo "aps-environment: $env"
+          test "$env" = production || { echo "aps-environment is not production" >&2; exit 1; }
+      - name: Upload to TestFlight
+        if: inputs.upload
+        run: |
+          ipa=$(ls "$RUNNER_TEMP"/export/*.ipa)
+          xcrun altool --upload-app --type ios --file "$ipa" \
+            --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
+      - name: Remove the App Store Connect key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"

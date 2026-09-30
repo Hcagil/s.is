@@ -195,8 +195,7 @@ jobs:
           test -n "$SUPABASE_TEST_SERVICE_KEY"
           docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -e TZ=JST-9 -e SUPABASE_TEST_SERVICE_KEY="$SUPABASE_TEST_SERVICE_KEY" flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration
 
-  # Proves the iOS project compiles (unsigned). Signing and TestFlight upload
-  # come with the iOS release job.
+  # Proves the iOS project compiles (unsigned). Signing is proved by ios-signed below.
   ios:
     name: iOS build
     needs: changes
@@ -231,3 +230,23 @@ jobs:
           test -n "$udid"
           xcodebuild test -quiet -workspace ios/Runner.xcworkspace -scheme Runner \
             -configuration Debug -destination "id=$udid" CODE_SIGNING_ALLOWED=NO
+
+  # Signing proof on the pull request: the same signed archive + export the
+  # Release workflow uploads (.github/workflows/ios-ipa.yml), without the
+  # upload. Same-repository pull requests only: a fork's run has no secrets,
+  # and Dependabot's secrets are a separate store.
+  ios-signed:
+    name: iOS signed build
+    needs: changes
+    if: >-
+      needs.changes.outputs.app == 'true' &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    uses: ./.github/workflows/ios-ipa.yml
+    with:
+      ref: ${{ github.sha }}
+      build-number: ${{ github.run_number }}
+      build-name: 0.0.0
+      upload: false
+    secrets: inherit

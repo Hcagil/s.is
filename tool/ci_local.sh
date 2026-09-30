@@ -3,9 +3,10 @@
 # `database` jobs, same steps, same order, same commands.
 # mirrors ci.yml jobs android + database; update both together.
 #
-# Not replayed: the iOS build (needs macOS; runs only in GitHub CI), the
-# classify/documentation jobs, and the "Restore Firebase config" secret step
-# (android/app/google-services.json must already exist locally).
+# Not replayed: the iOS jobs (build, signed build; need macOS and Apple secrets,
+# GitHub CI only), the classify/documentation jobs, and the "Restore Firebase
+# config" secret step (android/app/google-services.json must already exist
+# locally).
 #
 # The database job starts from zero like CI: any leftover stack and its data
 # are wiped first, and the stack is stopped at the end (never `down -v`).
@@ -117,6 +118,6 @@ fi
 # Drops this worktree's compose network (no -v: volumes are kept).
 docker compose down --remove-orphans >/dev/null 2>&1 || true
 echo
-echo "iOS build: skipped (macOS only; runs in GitHub CI)"
+echo "iOS build and signed build: skipped (macOS only; run in GitHub CI)"
 printf '%s\n' "${summary[@]}"
 exit "$status"

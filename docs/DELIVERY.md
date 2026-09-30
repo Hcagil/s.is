@@ -61,16 +61,17 @@ deploys from protected branches.
 `ANDROID_UPLOAD_KEYSTORE_BASE64`, `ANDROID_UPLOAD_KEY_ALIAS`,
 `ANDROID_UPLOAD_STORE_PASSWORD`, `ANDROID_UPLOAD_KEY_PASSWORD`,
 `PLAY_SERVICE_ACCOUNT_JSON`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`,
-`SUPABASE_PROJECT_REF`, `FCM_SERVICE_ACCOUNT`, `GOOGLE_SERVICES_JSON`, `GOOGLE_SERVICE_INFO_PLIST`.
+`SUPABASE_PROJECT_REF`, `FCM_SERVICE_ACCOUNT`, `GOOGLE_SERVICES_JSON`, `GOOGLE_SERVICE_INFO_PLIST`, `APP_STORE_CONNECT_KEY_ID`,
+`APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_API_KEY`, `APPLE_TEAM_ID`.
 Variables (public): `SUPABASE_URL`,
-`SUPABASE_PUBLISHABLE_KEY`, `GOOGLE_WEB_CLIENT_ID`.
+`SUPABASE_PUBLISHABLE_KEY`, `GOOGLE_WEB_CLIENT_ID`, and optionally `IOS_RELEASE`.
 
 ### Play track policy
 
 Internal testing during development. Closed testing for the wider group once
 functionally complete. Production is a separate, later decision.
 
-### iOS (later)
+### iOS
 
 What exists: the iOS project (bundle ID `com.esd.sis`, minimum iOS 15.0) and
 an `iOS build` job in `ci.yml` on a hosted macOS runner. It runs
@@ -80,9 +81,29 @@ the pull request. It restores `ios/Runner/GoogleService-Info.plist` from the
 `GOOGLE_SERVICE_INFO_PLIST` secret (the file text, stored as is, like
 `GOOGLE_SERVICES_JSON`) and fails if the secret is empty.
 
-Still to come: a `release-ios.yml` that signs and uploads to TestFlight with
-the same structure and secret discipline. Nothing in the Android pipeline
-blocks it.
+Release: `release.yml` has a second job, `ios`, beside `publish` in the same
+run, so it carries the same `versionCode` (computed once, in the `scope` job).
+It calls `.github/workflows/ios-ipa.yml`, which writes
+`GoogleService-Info.plist`, archives and exports a signed App Store build with
+`xcodebuild`, fails unless the exported app carries `aps-environment` =
+`production`, and uploads the `.ipa` to TestFlight (`xcrun altool`). TestFlight
+is the internal-track equivalent: the internal group `Team` receives each
+build automatically. Signing is cloud-managed: the App Store Connect API key
+(`APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
+`APP_STORE_CONNECT_API_KEY` = the `.p8` text, plus `APPLE_TEAM_ID`) lets Xcode
+create the certificate and profiles itself; no certificate, `.p12` or match
+repository exists. The `.p8` is written to the runner's temporary directory
+with mode 600, never printed, and removed at the end.
+
+`publish` (Play, migrations, function deploy, tag) does not wait on `ios`, and
+an `ios` failure leaves the Play release intact: the run shows one red job,
+nothing else changes. Off switch: the repository variable `IOS_RELEASE`; the
+job is skipped only when it equals `off`, unset means on.
+
+Pull requests: `ci.yml` calls the same `ios-ipa.yml` with the upload disabled
+(job `iOS signed build`), so a signing problem shows on the pull request and
+not after the merge. It runs only for pull requests from this repository,
+never for forks or Dependabot.
 
 ### Before pushing
 
@@ -107,6 +128,8 @@ tool/ci_local.sh --database
 
 - **Ship:** merge a pull request into `main`. Nothing else. CI runs again on `main` first (about ten minutes), then *Actions → Release* starts; the Play Console *Internal testing* track shows the new build within minutes of that. Phones receive it as a flexible in-app update.
 - **A release failed:** read the failed step first. A failure before *Apply database migrations* changed nothing anywhere — re-run the failed job (*Re-run failed jobs*; it keeps the same `versionCode`). A failure at the migration or upload step is also safe to re-run: `db push` skips migrations that are already applied. A failure only at *Tag and publish release notes* means the build is already on Play — do not re-run (Play rejects the same `versionCode` twice); create the tag by hand.
+- **The iOS job failed but Play succeeded:** the Play build is fine. Do not re-run the whole workflow (Play rejects the same `versionCode` twice); use *Re-run failed jobs*, which runs only `ios` again with the same build number. A build number App Store Connect has already accepted is never reused: if the upload itself got that far, ship the next merge instead.
+- **Turn iOS releases off or on:** set the repository variable `IOS_RELEASE` to `off` (Settings, Secrets and variables, Actions, Variables); delete it to turn them back on. Build numbers only rise, so a gap in the TestFlight builds is normal.
 - **A phone does not see a new build:** the app asks Play on launch and on
   every return to the foreground, but Play answers from the Play Store's own
   cache, which can lag a fresh internal-track release by hours. Open the Play

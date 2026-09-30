@@ -1387,22 +1387,40 @@ messages until it was closed and reopened.
   exists).
 
 **Amended 2026-09-30 (0.30.0 upload rejected).** The first release upload
-failed twice over: the app and its frameworks carried an ad-hoc signature (the
-archive was built unsigned to avoid the development-profile requirement, then
-ad-hoc signed to keep the entitlements, and the export did not re-sign), and
-the build used the iOS 18.5 SDK (Xcode 16.4 on `macos-15`), which App Store
-Connect no longer accepts. Now:
+failed twice over: every code object was rejected as "not properly signed"
+(`Code failed to satisfy specified code requirement(s)`), and the build used
+the iOS 18.5 SDK (Xcode 16.4 on `macos-15`), which App Store Connect no
+longer accepts. The signature finding survived a correct cloud-managed export
+(every object signed `Apple Distribution`): the cause is the designated
+requirement Xcode and codesign generate, `certificate leaf[subject.CN] =
+"Apple Distribution: <name> (<team>)"`. The team's name has non-ASCII letters,
+the generated requirement holds them in decomposed (NFD) form while the
+certificate holds the composed form, and the comparison fails everywhere
+(`codesign --verify` on the runner said "does not satisfy its designated
+Requirement" too). No export option controls the requirement, so the app must
+be signed by codesign with an explicit one, which needs the private key on
+the runner. Now:
 
-- The archive is signed for distribution directly: automatic signing with
-  `CODE_SIGN_IDENTITY="Apple Distribution"` and `DEVELOPMENT_TEAM` passed to
-  `xcodebuild archive`. With the distribution identity Xcode asks for the App
-  Store profile, which cloud-managed signing creates without a registered
-  device, and the embed phase signs every framework with the same identity.
-  The unsigned-archive and ad-hoc `codesign` steps are gone.
-- The iOS jobs run on `macos-26` (default Xcode 26.x), the pull-request build
-  and the release alike, so both use the SDK Apple requires.
+- A distribution certificate per run: the job generates a key and CSR,
+  `tool/asc_signing.py` creates the certificate and an App Store profile
+  through the App Store Connect API (the key the workflow already holds),
+  the export signs with them (manual signing), and every framework and the
+  app are signed again with `=designated => anchor apple generic and
+  identifier "<bundle>" and certificate leaf[subject.OU] = "<team>"`. The
+  certificate and profile are revoked in an `always()` step, so nothing is
+  stored: still no `.p12`, secret or match repository. Rejected: storing a
+  certificate in a secret (a credential to rotate and leak), and asking
+  Apple to rename the team (a manual step with an unknown outcome).
+- The iOS jobs run on `macos-26` (default Xcode 26.x), the pull-request
+  build and the release alike, so both use the SDK Apple requires.
 - Two checks the release used to be the first to run: `codesign --verify
   --deep --strict` plus an `Apple Distribution` authority on the app and each
   framework, and on pull requests `xcrun altool --validate-app` (Apple's
   validation of the exported `.ipa`), so a rejection shows on the PR, not
-  after the merge.
+  after the merge. The pull-request run 36762032010 was the first Apple
+  accepted ("No errors validating archive").
+- Known limit: Apple allows three distribution certificates per team. A run
+  killed before its `always()` step leaves one behind; when creation fails
+  with that limit, the leftovers are revoked in the developer portal
+  (Certificates, Identifiers & Profiles), which is the one manual step this
+  design can still need.

@@ -1,9 +1,10 @@
 name: iOS IPA
 # One implementation of the signed iPhone build, called by ci.yml (a pull
 # request proves signing works; upload=false) and release.yml (upload=true,
-# to TestFlight). Callers pass the five secrets explicitly. Cloud-managed signing: the
-# App Store Connect API key lets Xcode create and fetch the certificate and
-# profiles itself, so no certificate, .p12 or match repository exists.
+# to TestFlight). Callers pass the five secrets explicitly. Signing needs only
+# the App Store Connect API key: a distribution certificate and an App Store
+# profile are created through the API for the run and revoked at its end, so
+# no certificate, .p12 or match repository exists anywhere.
 on:
   workflow_call:
     inputs:

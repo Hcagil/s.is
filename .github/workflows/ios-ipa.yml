@@ -145,10 +145,11 @@ jobs:
             "sis ci $GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" "$dir" | tee -a "$GITHUB_ENV"
           openssl x509 -inform der -in "$dir/cert.cer" -out "$dir/cert.pem"
           # The issuing intermediate is fetched from Apple's fixed https URL (the AIA URL in the certificate is http only;
-          # certs.apple.com does not serve https).
+          # certs.apple.com does not serve https). -ignore_critical: Apple's leaf carries critical
+          # extensions openssl does not know; the signature and issuer name are still checked.
           curl -sSf "https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer" -o "$dir/issuer.cer"
           openssl x509 -inform der -in "$dir/issuer.cer" -out "$dir/issuer.pem"
-          openssl verify -partial_chain -CAfile "$dir/issuer.pem" "$dir/cert.pem" >/dev/null || { echo 'the downloaded WWDR intermediate did not issue the signing certificate' >&2; exit 1; }
+          openssl verify -ignore_critical -partial_chain -CAfile "$dir/issuer.pem" "$dir/cert.pem" >/dev/null || { echo 'the downloaded WWDR intermediate did not issue the signing certificate' >&2; exit 1; }
           keychain="$dir/sign.keychain-db"
           password=$(openssl rand -hex 16)
           security create-keychain -p "$password" "$keychain"

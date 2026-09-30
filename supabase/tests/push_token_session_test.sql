@@ -1,5 +1,5 @@
 begin;
-select plan(55);
+select plan(54);
 
 -- A device token is a push target only for the session that registered it.
 --
@@ -279,10 +279,9 @@ reset role;
 select is((select count(*) from app_private.device_tokens
             where token in ('pts-mis-token', 'pts-mal-token') and session_id is not null),
           0::bigint, 'a missing or malformed session claim binds no token');
-select lives_ok($$select * from app_private.push_targets_for_message((select id from _m))$$,
-                'push_targets does not error after a bad claim');
+-- Evaluated outside any assertion wrapper: an error here aborts the file.
 select is((select count(*) from pts_targets() t where t in ('pts-mis-token', 'pts-mal-token')),
-          0::bigint, 'and neither token is a target');
+          0::bigint, 'push_targets does not error after a bad claim, and neither token is a target');
 
 -- 10 backfill, replayed from the applied migration --------------------------------
 -- The legacy state: rows written before session_id existed. The UPDATE is taken

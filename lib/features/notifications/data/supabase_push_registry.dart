@@ -6,9 +6,13 @@ import '../domain/push.dart';
 
 /// The server's delivery list; a refused call (no app access) is DeniedFailure.
 final class SupabasePushRegistry implements PushRegistry {
-  SupabasePushRegistry(this._client);
+  SupabasePushRegistry(this._client, {this.platform = 'android'});
 
   final SupabaseClient _client;
+
+  /// 'android' or 'ios': stored with the token, so the server sends the
+  /// payload that platform can show.
+  final String platform;
 
   @override
   Future<Result<void>> register(String token) async {
@@ -17,9 +21,10 @@ final class SupabasePushRegistry implements PushRegistry {
         'register_device_token',
         params: {
           'device_token': token,
-          'device_platform': 'android',
-          // This build shows pushes itself, grouped: send it data only.
-          'shows_itself': true,
+          'device_platform': platform,
+          // Android draws pushes itself, grouped: send it data only. An
+          // iPhone is shown a regular notification by the system.
+          'shows_itself': platform == 'android',
         },
       );
       return const Ok(null);

@@ -13,6 +13,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 type Target = {
   user_id: string;
   token: string;
+  platform: string;
   conversation_id: string;
   title: string;
   body: string;
@@ -112,8 +113,13 @@ async function send(id: string): Promise<void> {
   const projectId = serviceAccount.project_id;
 
   const results = await Promise.allSettled(
-    targets.map((t) =>
-      fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+    targets.map((t) => {
+      // iOS shows nothing a data-only push carries (it throttles or drops
+      // them) and this app draws no push of its own there, so an iPhone
+      // always gets a regular notification, grouped per chat by the system
+      // (thread-id) and with the default sound. Android is untouched.
+      const ios = t.platform === 'ios';
+      return fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
         method: 'POST',
         headers: {
           authorization: `Bearer ${token}`,
@@ -125,7 +131,7 @@ async function send(id: string): Promise<void> {
             // Data only where the app shows pushes itself (0.12+), grouped
             // into one SIS notification per phone. Older builds cannot show
             // a data-only push, so they still get a regular notification.
-            ...(t.shows_itself ? {} : { notification: { title: t.title, body: t.body } }),
+            ...(t.shows_itself && !ios ? {} : { notification: { title: t.title, body: t.body } }),
             // A push computed for one member must never be drawn by a phone
             // that has since become another member's: onBackgroundPush drops
             // a data-only push whose user_id differs from the device's
@@ -140,13 +146,15 @@ async function send(id: string): Promise<void> {
               title: t.title,
               body: t.body,
             },
-            android: { priority: 'high' },
+            ...(ios
+              ? { apns: { payload: { aps: { 'thread-id': t.conversation_id, sound: 'default' } } } }
+              : { android: { priority: 'high' } }),
           },
         }),
       }).then((r) => {
         if (!r.ok) throw new Error(`fcm ${r.status}`);
-      }),
-    ),
+      });
+    }),
   );
 
   const sent = results.filter((r) => r.status === 'fulfilled').length;

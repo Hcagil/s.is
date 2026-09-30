@@ -122,6 +122,10 @@
 --   wynn           test/integration/release_notes_seam_test.dart
 --     (What's new notes: each asks for notes at builds numbered from the
 --      clock, so a rerun without a reset still moves forward)
+--   ione/ilka/isak test/integration/push_registry_integration_test.dart
+--     (ione writes to ilka and isak so the delivery list shows the platform
+--      each phone registered; ilka moves from Android to an iPhone, isak's
+--      iPhone takes over a token ilka's phone had)
 --   rho/sig        test/integration/catch_up_seam_test.dart
 --     (rho's socket dies as a backgrounded phone's does; sig writes to her
 --      meanwhile, and catch-up must bring it in)
@@ -216,5 +220,8 @@ insert into app_private.allowlist(email) values
   ('rho@integration.test'),
   ('sig@integration.test'),
   ('whit@integration.test'),
-  ('wynn@integration.test')
+  ('wynn@integration.test'),
+  ('ione@integration.test'),
+  ('ilka@integration.test'),
+  ('isak@integration.test')
 on conflict do nothing;

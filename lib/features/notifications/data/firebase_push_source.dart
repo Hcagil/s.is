@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 
 import '../domain/push.dart';
 import 'local_push_display.dart';
@@ -70,6 +72,11 @@ Future<String> _deliver(RemoteMessage message) async {
 /// says what is new.
 final class FirebasePushSource implements PushSource {
   FirebasePushSource(this._messaging) {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      // While the app is open nothing is shown, as on Android: pin the system
+      // alert off so an iPhone shows nothing on top of the app.
+      unawaited(_messaging.setForegroundNotificationPresentationOptions());
+    }
     // A tap on a notification Android drew itself (this device's
     // shows_itself was still false when the push arrived): the same path
     // LocalPushDisplay taps already use.
@@ -100,7 +107,7 @@ final class FirebasePushSource implements PushSource {
     return switch (s.authorizationStatus) {
       AuthorizationStatus.authorized => PushPermissionStatus.authorized,
       AuthorizationStatus.provisional => PushPermissionStatus.provisional,
-      // deniedPermanently is iOS-only (this app ships on Android only); read
+      // deniedPermanently is not reported by iOS or Android in practice; read
       // the same as a plain denial, which the explainer can still act on.
       AuthorizationStatus.denied ||
       AuthorizationStatus.deniedPermanently => PushPermissionStatus.denied,
@@ -111,6 +118,18 @@ final class FirebasePushSource implements PushSource {
   @override
   Future<String?> token() async {
     try {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        // The APNs token arrives shortly after launch; getToken fails
+        // without it. Waits up to ~10 s, then gives up: a token refresh
+        // registers it later (PushRegistration listens to those).
+        for (
+          var i = 0;
+          i < 20 && await _messaging.getAPNSToken() == null;
+          i++
+        ) {
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        }
+      }
       return await _messaging.getToken();
     } catch (_) {
       return null;

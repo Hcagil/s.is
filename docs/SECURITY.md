@@ -16,9 +16,15 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     row here can outlive the session it names. Anything deciding access must
     re-check `auth.sessions` as `has_app_access()` does; a push path that
     trusted this table alone would have notified a revoked device.
-  - `device_tokens(user_id, token, platform, updated_at)` — push delivery
-    addresses. One row per member: registering replaces, so a replaced phone
-    stops being notified when it stops being able to read.
+  - `device_tokens(user_id, token, platform, shows_itself, session_id, updated_at)`
+    — push delivery addresses. One row per member: registering replaces, so a
+    replaced phone stops being notified when it stops being able to read.
+    `session_id` is the JWT session that registered the token, recorded by
+    `register_device_token` (the client sends none). The server gate: a token
+    is a push target only while `session_id` is still the member's row in
+    `active_sessions` **and** still exists in `auth.sessions`, on every
+    platform; a null (unbound) token is never a target. Sign-in on another
+    device, sign-out and revocation each break that match on their own.
   - `push_receipts(user_id, message_id, stage, error, build, ...)` — what
     became of each push on a phone. RLS on, no policy, no grant. Written only
     by `public.report_push_receipts(jsonb)` (security definer, app access
@@ -284,6 +290,24 @@ break the production sign-in. Revisit with a device test.
 ### System account
 
 `00000000-0000-0000-0000-00000000515e` authors the "What's new" messages: it has no email, is on no allowlist and is banned, so it cannot sign in. Never delete it: `messages.sender_id` cascades and every system message would go with it.
+
+### Push processors and the iOS residual risk
+
+Message text in a push (title and body, worded by the recipient's preview
+setting) passes through two processors: Google Firebase Cloud Messaging (FCM)
+for every device, and Apple Push Notification service (APNs) as well for an
+iPhone, because FCM hands iOS pushes to APNs. On Android the app draws the
+notification itself and drops a push not addressed to the stored owner. On iOS
+the **system** draws the alert, so the app cannot check the owner.
+
+Residual risk, accepted (DECISIONS 2026-09-30): an iPhone signed out while
+offline keeps its server session alive (the sign-out call never reached the
+server), so its token stays bound to a live active session and the system
+still draws its pushes until that session ends (another device signs in, or
+the member is revoked). The window has no time limit: sessions have no
+timebox or inactivity timeout (`[auth.sessions]` in `supabase/config.toml` is
+unset). The full fix is an iOS Notification Service Extension
+that checks the owner before the alert is shown; it is a follow-up.
 
 ### Secrets
 

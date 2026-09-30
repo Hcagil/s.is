@@ -209,7 +209,193 @@ Deno.test({
         await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((p) => p.id))}`;
         await tx`delete from app_private.allowlist where email in ${sql(people.map((p) => p.email))}`;
       }).catch(() => {});
-      await sql.end();
     }
   },
+});
+
+/** POSTs the database webhook for [messageId] as it is deployed; returns the response once the sends are done. */
+async function deliver(messageId: string) {
+  sent.length = 0;
+  pending.length = 0;
+  const res = await handler!(new Request('http://localhost/notify-on-message', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'INSERT', table: 'messages', record: { id: messageId } }),
+  }));
+  await Promise.all(pending);
+  return { status: res.status, text: await res.text() };
+}
+
+// 0.28: an iPhone cannot run app code to draw a data-only push, so it gets a
+// regular alert: a notification block (the server's wording, so the
+// recipient's preview choice holds), the same data map, and an apns block
+// that threads it per chat with the default sound. Android is unchanged:
+// both Android shapes sit on the same message's delivery list as the
+// iPhones, so a function that sends everyone the iOS shape -- or iOS the
+// Android one -- fails here. The people who must get nothing are on the same
+// message too, each held back by one gate.
+Deno.test({
+  name: 'one message: iPhones get an alert with apns, both Android shapes are unchanged, and the gates hold on iOS',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const run = Date.now().toString(36);
+    const who = [
+      'sender', 'droidnew', 'droidold', 'iosfull', 'iossender', 'iosnone',
+      'ioschatmuted', 'iospersonmuted', 'iosrevoked', 'iosdelisted', 'iosdisplaced',
+    ];
+    const people = who.map((w) => ({
+      id: crypto.randomUUID(),
+      session: crypto.randomUUID(),
+      email: `${w}-${run}@edge.test`,
+      name: `${w[0].toUpperCase()}${w.slice(1)}`,
+      token: `edge-${w}-${run}`.padEnd(16, '0'),
+    }));
+    const p = Object.fromEntries(who.map((w, i) => [w, people[i]]));
+    const sender = p.sender;
+    const recipients = people.slice(1);
+    const title = `edge-ios-${run}`;
+    const text = `edge ios hello ${run}`;
+    const asP = <T>(x: typeof sender, body: (tx: postgres.TransactionSql) => Promise<T>) =>
+      as(x.id, x.email, x.session, body);
+    try {
+      for (const x of people) {
+        await sql`insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+                  values (${x.id}, ${x.email}, now(), ${sql.json({ full_name: x.name })})`;
+        await sql`insert into app_private.allowlist(email) values (${x.email})`;
+        await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+                  values (${x.session}, ${x.id}, now(), now())`;
+        await asP(x, (tx) => tx`select public.activate_session()`);
+      }
+      // Registered the way each build does, through the RPC.
+      const register = (x: typeof sender, platform: string, showsItself: boolean) =>
+        asP(x, (tx) => tx`select public.register_device_token(${x.token}, ${platform}, ${showsItself})`);
+      await register(p.droidnew, 'android', true);
+      await register(p.droidold, 'android', false);
+      await register(p.iosfull, 'ios', false);
+      await register(p.iossender, 'ios', false);
+      // shows_itself means nothing on an iPhone: it still gets the alert.
+      await register(p.iosnone, 'ios', true);
+      for (const x of [p.ioschatmuted, p.iospersonmuted, p.iosrevoked, p.iosdelisted, p.iosdisplaced]) {
+        await register(x, 'ios', false);
+      }
+      await asP(p.iossender, (tx) => tx`insert into public.notification_settings(preview) values ('sender')`);
+      await asP(p.iosnone, (tx) => tx`insert into public.notification_settings(preview) values ('none')`);
+
+      await sql`insert into app_private.tag_finds(finder, found_id)
+                select ${sender.id}::uuid, unnest(${recipients.map((r) => r.id)}::uuid[])`;
+      const [{ id: conversationId }] = await asP(sender,
+        (tx) => tx`select public.start_group_conversation(${title}, ${recipients.map((r) => r.id)}::uuid[]) as id`);
+
+      // Each held-back member fails exactly one gate.
+      await asP(p.ioschatmuted, (tx) => tx`insert into public.notification_mutes(kind, target)
+                                            values ('conversation', ${conversationId})`);
+      await asP(p.iospersonmuted, (tx) => tx`insert into public.notification_mutes(kind, target)
+                                              values ('person', ${sender.id})`);
+      // Still a member, still holding the device row: only the session is gone.
+      await sql`delete from auth.sessions where id = ${p.iosrevoked.session}`;
+      // Still a member with a session: only the allowlist entry is gone.
+      await sql`delete from app_private.allowlist where email = ${p.iosdelisted.email}`;
+      // Signed in on a newer session that has not registered yet: the iPhone's
+      // own session is still alive in auth.sessions, only the device moved.
+      const newer = crypto.randomUUID();
+      await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+                values (${newer}, ${p.iosdisplaced.id}, now(), now())`;
+      await as(p.iosdisplaced.id, p.iosdisplaced.email, newer, (tx) => tx`select public.activate_session()`);
+
+      const send = (body: string) => asP(sender,
+        (tx) => tx`insert into public.messages(conversation_id, sender_id, body)
+                   values (${conversationId}, ${sender.id}, ${body}) returning id`);
+      const [{ id: messageId }] = await send(text);
+
+      const expected = await sql`select token, user_id::text, conversation_id::text, title, body, platform, shows_itself
+                                   from app_private.push_targets_for_message(${messageId})`;
+      const delivered = [p.droidnew, p.droidold, p.iosfull, p.iossender, p.iosnone];
+      assertEquals(expected.map((t) => t.token).sort(), delivered.map((x) => x.token).sort(),
+        'fixture: the gates leave exactly five devices on the list');
+      const target = (x: typeof sender) => expected.find((t) => t.token === x.token)!;
+      assertEquals(target(p.iosnone).platform, 'ios', 'fixture: the delivery list says ios');
+      assertEquals(target(p.iosnone).shows_itself, true, 'fixture: an iPhone that said it shows pushes itself');
+
+      assertEquals(await deliver(messageId), { status: 204, text: '' }, 'a bare 204');
+      assertEquals(sent.length, 5, `one send per delivered device, got ${JSON.stringify(sent)}`);
+      const held = [p.ioschatmuted, p.iospersonmuted, p.iosrevoked, p.iosdelisted, p.iosdisplaced].map((x) => x.token);
+      for (const s of sent) {
+        assert(!held.includes(s.message.token as string), `sent past a gate: ${JSON.stringify(s.message)}`);
+      }
+      const messageTo = (x: typeof sender) => {
+        const mine = sent.filter((s) => s.message.token === x.token);
+        assertEquals(mine.length, 1, `exactly one send to ${x.name}`);
+        return mine[0].message;
+      };
+      const dataFor = (x: typeof sender) => {
+        const t = target(x);
+        return {
+          user_id: x.id,
+          message_id: messageId,
+          conversation_id: conversationId,
+          title: t.title,
+          body: t.body,
+        };
+      };
+
+      // Android, exactly as before 0.28.
+      assertEquals(messageTo(p.droidnew), {
+        token: p.droidnew.token,
+        data: dataFor(p.droidnew),
+        android: { priority: 'high' },
+      }, 'an Android phone that shows pushes itself: data only, high priority, nothing else');
+      assertEquals(messageTo(p.droidold), {
+        token: p.droidold.token,
+        notification: { title: target(p.droidold).title, body: target(p.droidold).body },
+        data: dataFor(p.droidold),
+        android: { priority: 'high' },
+      }, 'an older Android build: a notification plus data, high priority, no apns');
+
+      for (const x of [p.iosfull, p.iossender, p.iosnone]) {
+        const m = messageTo(x);
+        const t = target(x);
+        assertEquals(m.notification, { title: t.title, body: t.body }, `${x.name}: the server's wording`);
+        assertEquals(m.data, dataFor(x), `${x.name}: the same data the app reads`);
+        const apns = m.apns as { payload?: { aps?: unknown } } | undefined;
+        assertEquals(apns?.payload?.aps, { 'thread-id': conversationId, sound: 'default' },
+          `${x.name}: threaded per chat, default sound: ${JSON.stringify(m)}`);
+        assert(!('android' in m), `${x.name}: no android block: ${JSON.stringify(m)}`);
+        const raw = JSON.stringify(m);
+        assert(!/content[-_]available/i.test(raw), `${x.name}: not a silent push: ${raw}`);
+      }
+      // The preview each iPhone's member chose is what the alert shows.
+      assert(JSON.stringify(messageTo(p.iosfull).notification).includes(text), 'full preview shows the text');
+      for (const x of [p.iossender, p.iosnone]) {
+        assert(!JSON.stringify(messageTo(x).notification).includes(text),
+          `${x.name}: the text stays off the lock screen: ${JSON.stringify(messageTo(x).notification)}`);
+      }
+      assert(!JSON.stringify(messageTo(p.iosnone).notification).includes(sender.name),
+        `preview none: not even who wrote: ${JSON.stringify(messageTo(p.iosnone).notification)}`);
+
+      // The webhook repeated: already claimed, nothing goes out again.
+      const again = messageId;
+      assertEquals(await deliver(again), { status: 204, text: '' });
+      assertEquals(sent.length, 0, `a repeated call sends nothing: ${JSON.stringify(sent)}`);
+
+      // A message older than two minutes (a webhook retried late) goes to nobody.
+      const [{ id: staleId }] = await send(`${text} stale`);
+      await sql`update public.messages set created_at = now() - interval '3 minutes' where id = ${staleId}`;
+      assertEquals(await deliver(staleId), { status: 204, text: '' });
+      assertEquals(sent.length, 0, `an old message sends nothing: ${JSON.stringify(sent)}`);
+    } finally {
+      await sql.begin(async (tx) => {
+        await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
+      }).catch(() => {});
+    }
+  },
+});
+
+Deno.test({
+  name: 'close the database connection',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: () => sql.end(),
 });

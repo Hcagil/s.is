@@ -1267,3 +1267,57 @@ messages until it was closed and reopened.
 - Accepted risk: a client that reports an absurd build records it and stops
   getting notes. It only affects that member, and clamping it would break
   the rule that a note added later for an older build is never delivered.
+
+## 2026-09-30 — Push notifications on iOS (0.28.0)
+
+- Why a different payload: iOS throttles or drops data-only (silent) pushes,
+  and the app cannot reliably wake to draw its own. An iPhone therefore
+  always gets a regular FCM notification (title and body worded per the
+  member's preview setting, exactly as Android's) with
+  `apns.payload.aps.thread-id` = the conversation id, so the system groups
+  per chat, and the default sound. There is no `content-available`, so the
+  background handler never runs on iOS and the app keeps no inbox or
+  receipts there.
+- Android is unchanged: `notify-on-message` decides by
+  `device_tokens.platform`; an `android` row gets the same JSON as before
+  (data only when `shows_itself`, else notification plus data, plus
+  `android.priority: high`).
+- Where the platform lives: `register_device_token(device_token,
+  device_platform, shows_itself)` already stored `platform` (`android` or
+  `ios`). The app now sends its real platform
+  (`SupabasePushRegistry(client, platform:)`, set in `platformOverrides`);
+  iOS registers with `shows_itself = false`. No migration for the platform;
+  the session binding above added one.
+- Access: *amended 2026-09-30.* The first version of this note said access
+  was "unchanged and needs no iOS code". That was wrong. `push_targets`
+  checked that the recipient had an active session, not that the token
+  belonged to it, so a token from a displaced device stayed a target. On
+  Android the phone's owner check dropped such a push; on iOS the system
+  draws the alert, so a displaced iPhone would have shown the message on its
+  lock screen. Fix (migration `20260930160000_push_token_session`):
+  `device_tokens.session_id` records the registering session from the JWT,
+  and `push_targets_for_message` requires it to be the member's active session
+  and to exist in `auth.sessions`. Existing rows were backfilled with the
+  member's current active session; a row with none stays unbound and is never
+  a target. Accepted risk: an iPhone signed out while offline keeps its
+  server session, and the system keeps drawing its pushes until that session
+  ends; the full fix is a Notification Service Extension owner check
+  (follow-up). This replaces the "no migration" claim above too.
+- Foreground: the app pins the system alert off
+  (`setForegroundNotificationPresentationOptions()`, all false), so nothing
+  shows on top of the open app, as on Android. A tap arrives through
+  `onMessageOpenedApp` / `getInitialMessage`, the same taps stream Android
+  uses, so the chat opens with the same catch-up.
+- The FCM token on iOS needs the APNs token first: `token()` waits up to
+  about ten seconds for it; a later token refresh registers it otherwise.
+- iOS project: `Runner.entitlements` (`aps-environment`; Xcode swaps in the
+  provisioning profile's production value when signing for TestFlight), and
+  `GoogleService-Info.plist` is now a bundle resource (until now
+  `Firebase.initializeApp()` had nothing to read on iOS). The
+  remote-notification background mode is not added: only silent pushes need
+  it.
+- Known gaps: the member's per-chat sound and vibration choices live on the
+  device, so the server cannot honour them; an iPhone always rings with the
+  default sound (a muted chat is still muted, on the server). Opening a chat
+  does not remove its delivered notification on iOS (system-drawn ones
+  cannot be cancelled by id from the app); signing out removes all of them.

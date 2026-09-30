@@ -144,8 +144,9 @@ jobs:
           python3 tool/asc_signing.py create "$dir/csr.pem" com.esd.sis \
             "sis ci $GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" "$dir" | tee -a "$GITHUB_ENV"
           openssl x509 -inform der -in "$dir/cert.cer" -out "$dir/cert.pem"
-          # The issuing intermediate, from the certificate's own AIA field, so codesign can build the chain.
-          issuer=$(openssl x509 -in "$dir/cert.pem" -noout -text | sed -n 's/.*CA Issuers - URI://p' | head -1)
+          # The issuing intermediate, from the certificate's own AIA field (Apple
+          # lists it as http://; the same path is served over https), so codesign can build the chain.
+          issuer=$(openssl x509 -in "$dir/cert.pem" -noout -text | sed -n 's/.*CA Issuers - URI://p' | head -1 | sed 's#^http://#https://#')
           curl -sSf "${issuer:-https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer}" -o "$dir/issuer.cer"
           keychain="$dir/sign.keychain-db"
           password=$(openssl rand -hex 16)
@@ -248,9 +249,13 @@ jobs:
         if: always()
         run: |
           [ -d "$RUNNER_TEMP/asc" ] || exit 0
-          python3 tool/asc_signing.py delete "${SIGNING_CERTIFICATE_ID:--}" "${SIGNING_PROFILE_ID:--}"
-          [ ! -f "$RUNNER_TEMP/sign/sign.keychain-db" ] || security delete-keychain "$RUNNER_TEMP/sign/sign.keychain-db"
+          # A failed revoke must not skip the local cleanup: keep its status,
+          # clean up, then fail the step so a leftover certificate shows red.
+          rc=0
+          python3 tool/asc_signing.py delete "${SIGNING_CERTIFICATE_ID:--}" "${SIGNING_PROFILE_ID:--}" || rc=$?
+          [ ! -f "$RUNNER_TEMP/sign/sign.keychain-db" ] || security delete-keychain "$RUNNER_TEMP/sign/sign.keychain-db" || rc=$?
           rm -rf "$RUNNER_TEMP/sign" "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          exit "$rc"
       - name: Remove the App Store Connect key
         if: always()
         run: rm -rf "$RUNNER_TEMP/asc"

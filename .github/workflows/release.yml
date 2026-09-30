@@ -59,6 +59,10 @@ jobs:
     permissions:
       contents: write
       pull-requests: read
+    outputs:
+      # The What's new note (base64, may be empty), reused by `distribute`
+      # as TestFlight's "What to Test".
+      note_b64: ${{ steps.note.outputs.b64 }}
     env:
       # The commit CI passed. GITHUB_SHA here is main's tip at trigger time,
       # which a later merge may already have moved past.
@@ -109,6 +113,7 @@ jobs:
       # are untrusted input. An existing row is left alone so an edit made in
       # the dashboard survives a re-run.
       - name: Store the What's new note for this build
+        id: note
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -128,6 +133,7 @@ jobs:
           echo "Note: $note"
           if [ -z "$note" ]; then echo "No user-facing change in $range"; exit 0; fi
           b64=$(printf '%s' "$note" | base64 -w0)
+          echo "b64=$b64" >> "$GITHUB_OUTPUT"
           supabase db query --linked "insert into public.release_notes(build, note) values ($BUILD, convert_from(decode('$b64', 'base64'), 'utf8')) on conflict (build) do nothing"
       # The push sender. Deployed before the trigger learns its URL, so the
       # trigger never calls a function that is not there yet. No JWT: the
@@ -181,3 +187,49 @@ jobs:
       GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
     permissions:
       contents: read
+
+  distribute:
+    # Hands the uploaded TestFlight build to the tester groups. Runs only when
+    # `ios` uploaded, on Linux: Apple takes 5 to 30 minutes to process a build
+    # and polling on a macOS runner would bill them. It waits for `publish`
+    # only to read the What's new note; nothing waits on it, and its failure
+    # is a red job beside a green Play release. Safe to re-run alone.
+    # Repository variable TESTFLIGHT_GROUPS (comma-separated names) picks the
+    # groups; unset means `bacanaks`.
+    needs: [scope, ios, publish]
+    if: always() && needs.ios.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    env:
+      KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Write the App Store Connect key
+        env:
+          KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER_ID" ]; then
+            echo 'An App Store Connect secret is empty (KEY, KEY_ID or ISSUER_ID)' >&2
+            exit 1
+          fi
+          dir="$RUNNER_TEMP/asc"
+          mkdir -m 700 "$dir"
+          (umask 077; printf '%s\n' "$KEY" > "$dir/AuthKey_$KEY_ID.p8")
+          echo "API_PRIVATE_KEYS_DIR=$dir" >> "$GITHUB_ENV"
+      - name: Distribute the build to the TestFlight groups
+        env:
+          BUILD: ${{ needs.scope.outputs.code }}
+          NOTE_B64: ${{ needs.publish.outputs.note_b64 }}
+          TF_GROUPS: ${{ vars.TESTFLIGHT_GROUPS }}
+        run: |
+          note=$(printf '%s' "$NOTE_B64" | base64 -d)
+          python3 tool/asc_signing.py distribute com.esd.sis "$BUILD" "${TF_GROUPS:-bacanaks}" "$note"
+      - name: Remove the App Store Connect key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"

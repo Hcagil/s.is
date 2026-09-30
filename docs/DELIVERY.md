@@ -64,7 +64,7 @@ deploys from protected branches.
 `SUPABASE_PROJECT_REF`, `FCM_SERVICE_ACCOUNT`, `GOOGLE_SERVICES_JSON`, `GOOGLE_SERVICE_INFO_PLIST`, `APP_STORE_CONNECT_KEY_ID`,
 `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_API_KEY`, `APPLE_TEAM_ID`.
 Variables (public): `SUPABASE_URL`,
-`SUPABASE_PUBLISHABLE_KEY`, `GOOGLE_WEB_CLIENT_ID`, and optionally `IOS_RELEASE`.
+`SUPABASE_PUBLISHABLE_KEY`, `GOOGLE_WEB_CLIENT_ID`, and optionally `IOS_RELEASE` and `TESTFLIGHT_GROUPS`.
 
 ### Play track policy
 
@@ -100,9 +100,23 @@ Distribution certificate, fails unless the exported app carries
 short of the upload and runs `xcrun altool --validate-app` instead, so
 Apple's own validation happens before the merge. The certificate and profile
 are revoked when the job ends, whatever its result (TestFlight re-signs what
-it distributes, so a shipped build is never affected). TestFlight
-is the internal-track equivalent: the internal group `Team` receives each
-build automatically. The App Store Connect API key
+it distributes, so a shipped build is never affected).
+
+Distribution: a third job, `distribute`, needs `ios` (it runs only when `ios`
+uploaded) and runs on `ubuntu-24.04`, so the wait for Apple's processing
+(5 to 30 minutes) costs no macOS minutes. It calls
+`tool/asc_signing.py distribute`, which polls until the build is `VALID`
+(cap 60 minutes), sets the build's en-US What to Test from the release's
+`For users:` text (the `publish` job's note step exposes it as an output;
+empty falls back to "Bug fixes and improvements."), adds the build to every
+TestFlight group named by the repository variable `TESTFLIGHT_GROUPS`
+(comma-separated; unset means `bacanaks`; an internal and an external group
+may share a name and both receive the build) and, when any matched group is
+external, submits the build for beta app review. It waits for `publish` only
+to read that note; it runs even if `publish` failed, and nothing waits on it.
+The first external submission needs TestFlight Test Information filled in once
+in App Store Connect (beta app description, feedback email, review contact);
+if it is missing the job fails and says so. The App Store Connect API key
 (`APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
 `APP_STORE_CONNECT_API_KEY` = the `.p8` text, plus `APPLE_TEAM_ID`) is the
 only credential; no certificate, `.p12` or match repository exists. The `.p8`
@@ -143,6 +157,7 @@ tool/ci_local.sh --database
 - **Ship:** merge a pull request into `main`. Nothing else. CI runs again on `main` first (about ten minutes), then *Actions → Release* starts; the Play Console *Internal testing* track shows the new build within minutes of that. Phones receive it as a flexible in-app update.
 - **A release failed:** read the failed step first. A failure before *Apply database migrations* changed nothing anywhere — re-run the failed job (*Re-run failed jobs*; it keeps the same `versionCode`). A failure at the migration or upload step is also safe to re-run: `db push` skips migrations that are already applied. A failure only at *Tag and publish release notes* means the build is already on Play — do not re-run (Play rejects the same `versionCode` twice); create the tag by hand.
 - **The iOS job failed but Play succeeded:** the Play build is fine. Do not re-run the whole workflow (Play rejects the same `versionCode` twice); use *Re-run failed jobs*, which runs only `ios` again with the same build number. A build number App Store Connect has already accepted is never reused: if the upload itself got that far, ship the next merge instead.
+- **Distribution to TestFlight groups failed** (job `distribute`; the build is uploaded, Play and `ios` are fine): re-run only that job (*Re-run failed jobs*). It is idempotent: a build already in a group or already submitted for beta review is not an error. A build App Store Connect could not process (`INVALID`) needs the next merge. "Test Information" in the error means the owner fills in TestFlight, Test Information in App Store Connect once, then re-runs the job.
 - **Turn iOS releases off or on:** set the repository variable `IOS_RELEASE` to `off` (Settings, Secrets and variables, Actions, Variables); delete it to turn them back on. Build numbers only rise, so a gap in the TestFlight builds is normal.
 - **A phone does not see a new build:** the app asks Play on launch and on
   every return to the foreground, but Play answers from the Play Store's own

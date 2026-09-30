@@ -356,8 +356,14 @@ secret, including the Admin App Store Connect key. Accepted while the owner
 is the only collaborator. If collaborators are added, move
 `APP_STORE_CONNECT_API_KEY` into a protected-branch environment used only by
 the release iOS job, and give the pull-request signing proof a separate key
-or drop it. The Admin role is kept because cloud-managed signing requires
-it. Rotate the key in App Store Connect (Users and Access, Integrations)
+or drop it. The Admin key is kept because the iOS job creates and revokes a
+per-run distribution certificate and App Store profile, and now also manages
+TestFlight groups and beta review through the API; a lower role is to be tried
+before collaborators are added. Any pushed branch can mint a signing identity
+(it already could, with the key). A run killed before its cleanup leaves a live
+certificate: no leak (the private key died with the runner), but it holds one
+of Apple's three certificate slots, and three leftovers block releases until
+they are revoked in the portal. Rotate the key in App Store Connect (Users and Access, Integrations)
 when a collaborator leaves or a dependency is suspected compromised.
 
 ## Runbook

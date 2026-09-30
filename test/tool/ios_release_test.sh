@@ -10,7 +10,16 @@
 #   - `scope` computes the version once: code = run_number + 100, name = the
 #     pubspec version without any +build; outputs code and name;
 #   - `publish` needs scope only, reads the version from scope and computes
-#     none of its own; nothing ever needs `ios` (Play never waits on Apple);
+#     none of its own; only `distribute` needs `ios` (Play never waits on
+#     Apple), and nothing needs `distribute`;
+#   - `distribute` needs scope, ios and publish, runs whenever ios succeeded
+#     and the run is not cancelled (a failed publish does not stop it), on
+#     ubuntu-24.04 with contents: read and an unpersisted checkout, sees only
+#     the three App Store Connect secrets, writes the key 700/600 under
+#     $RUNNER_TEMP/asc and removes it if: always(); it runs
+#     `tool/asc_signing.py distribute com.esd.sis BUILD GROUPS NOTE` with the
+#     groups from vars.TESTFLIGHT_GROUPS through env (empty = bacanaks) and the
+#     note decoded from publish's note_b64, byte for byte;
 #   - `ios` needs scope only, runs when shipping and when IOS_RELEASE is not
 #     'off' (unset = on), calls ios-ipa.yml with the scope version and
 #     upload: true;
@@ -44,7 +53,8 @@
 #     a name unique to the run attempt, fetches the intermediate, builds a
 #     temporary keychain codesign can use, installs the profile, and puts
 #     SIGNING_IDENTITY (SHA-1), SIGNING_PROFILE_UUID, SIGNING_CERTIFICATE_ID
-#     and SIGNING_PROFILE_ID in GITHUB_ENV;
+#     and SIGNING_PROFILE_ID in GITHUB_ENV; the intermediate is fetched from
+#     the certificate's AIA URL over https only (Apple lists it as http://);
 #   - the export is manual: that SHA-1, that profile UUID for com.esd.sis;
 #   - every framework, then the app, is re-signed with a designated
 #     requirement on identifier and team: the one Xcode writes names the
@@ -56,7 +66,8 @@
 #     release (inputs.upload), both after every check;
 #   - `if: always()` revoke deletes the certificate and profile (`-` for one
 #     never made, nothing when the key never existed), the keychain and the
-#     profiles, after any failure too;
+#     profiles, after any failure too; a failed revoke still removes the
+#     keychain and profiles, then fails the step;
 #   ios/Runner/Info.plist declares ITSAppUsesNonExemptEncryption = false.
 #
 # What only a macOS runner shows: that Xcode and codesign really sign, that
@@ -140,8 +151,9 @@ norm() { tr -s ' ' <<<"$1" | sed 's/^ //; s/ $//'; }
 job "$release" scope > "$tmp/scope"
 job "$release" publish > "$tmp/publish"
 job "$release" ios > "$tmp/ios"
+job "$release" distribute > "$tmp/distribute"
 job "$ci" ios-signed > "$tmp/ios-signed"
-for j in scope publish ios ios-signed; do [ -s "$tmp/$j" ] || fail "job $j not found"; done
+for j in scope publish ios distribute ios-signed; do [ -s "$tmp/$j" ] || fail "job $j not found"; done
 
 # ---- release.yml -----------------------------------------------------------
 # 1 scope owns the version: its outputs, and the numbers its step computes.
@@ -168,8 +180,13 @@ grep -q -- '--build-number=${{ needs.scope.outputs.code }} --build-name=${{ need
   || fail "the AAB is not built with scope's code and name"
 grep -q 'BUILD: ${{ needs.scope.outputs.code }}' "$tmp/publish" || fail "the note step does not use scope's code"
 grep -q 'v${{ needs.scope.outputs.name }}+${{ needs.scope.outputs.code }}' "$tmp/publish" || fail "the release tag does not use scope's version"
-# Nothing in the release waits on the iOS job.
-if grep -nE '^    needs:.*\bios\b' "$release"; then fail "a release job needs ios: Play must never wait on Apple"; fi
+# Only distribute waits on the iOS job; nothing waits on distribute.
+for j in $(sed -n 's/^  \([A-Za-z0-9_-]*\):$/\1/p' "$release"); do
+  [ "$j" = distribute ] && continue
+  needs=$(job "$release" "$j" | awk '/^    needs:/ { print; exit }')
+  if grep -qE '\bios\b' <<<"$needs"; then fail "job $j needs ios: Play must never wait on Apple ($needs)"; fi
+  if grep -qE '\bdistribute\b' <<<"$needs"; then fail "job $j needs distribute: nothing may wait on TestFlight groups ($needs)"; fi
+done
 
 # 3 ios: needs scope only; ships; IOS_RELEASE=off skips, unset runs.
 [ "$(key "$tmp/ios" needs)" = scope ] || fail "ios must need exactly scope, got [$(key "$tmp/ios" needs)]"
@@ -181,6 +198,34 @@ if grep -nE '^    needs:.*\bios\b' "$release"; then fail "a release job needs io
 [ "$(with "$tmp/ios" build-name)" = '${{ needs.scope.outputs.name }}' ] || fail "ios build name is not scope's name"
 [ "$(with "$tmp/ios" ref)" = '${{ github.event.workflow_run.head_sha }}' ] || fail "ios does not build the commit CI passed"
 [ "$(passed_secrets "$tmp/ios")" = "$want_passed" ] || fail "ios must pass exactly the five secrets by name, got [$(passed_secrets "$tmp/ios")]"
+
+# 3b distribute: shape. It waits for publish only for the note.
+dneeds=$(key "$tmp/distribute" needs | tr -d '[] ' | tr , '\n' | sort | paste -sd,)
+[ "$dneeds" = ios,publish,scope ] || fail "distribute must need exactly scope, ios and publish, got [$(key "$tmp/distribute" needs)]"
+[ "$(norm "$(key "$tmp/distribute" if | sed 's/^\${{ *//; s/ *}}$//')")" = "!cancelled() && needs.ios.result == 'success'" ] \
+  || fail "distribute if is [$(key "$tmp/distribute" if)]: run after a successful ios, even when publish failed, never after a cancel"
+[ "$(key "$tmp/distribute" runs-on)" = ubuntu-24.04 ] || fail "distribute must run on ubuntu-24.04 (polling on macOS bills minutes)"
+[ "$(awk '/^    permissions:/ { f = 1; next } f && !/^      / { exit } f { sub(/^ +/, ""); print }' "$tmp/distribute")" = "contents: read" ] \
+  || fail "distribute permissions must be exactly contents: read"
+grep -qE '^ *persist-credentials: false$' "$tmp/distribute" || fail "distribute checkout must not persist the token"
+dsecrets=$(grep -oE 'secrets\.[A-Z_]+' "$tmp/distribute" | sort -u | paste -sd,)
+[ "$dsecrets" = secrets.APP_STORE_CONNECT_API_KEY,secrets.APP_STORE_CONNECT_ISSUER_ID,secrets.APP_STORE_CONNECT_KEY_ID ] \
+  || fail "distribute must see exactly the three App Store Connect secrets, got [$dsecrets]"
+[ "$(grep -c 'secrets.APP_STORE_CONNECT_API_KEY' "$tmp/distribute")" -eq 1 ] || fail "distribute reads the API key secret more than once"
+awk '/^ *run:/ { r = 1; match($0, /^ */); ind = RLENGTH; print; next }
+     r { match($0, /^ */); if (RLENGTH > ind || $0 ~ /^ *$/) { print; next } r = 0 }' "$tmp/distribute" > "$tmp/druntext"
+grep -n '\${{' "$tmp/druntext" && fail "a distribute run block pastes an expression into its script"
+grep -qE '^ *TF_GROUPS: \$\{\{ vars\.TESTFLIGHT_GROUPS \}\}$' "$tmp/distribute" || fail "groups must come from vars.TESTFLIGHT_GROUPS via env TF_GROUPS"
+grep -qE '^ *NOTE_B64: \$\{\{ needs\.publish\.outputs\.note_b64 \}\}$' "$tmp/distribute" || fail "the note must come from publish's note_b64"
+grep -qE '^ *BUILD: \$\{\{ needs\.scope\.outputs\.code \}\}$' "$tmp/distribute" || fail "the build number must be scope's code"
+mapfile -t dsteps < <(sed -n 's/^      - name: //p' "$tmp/distribute")
+[ "${dsteps[-1]}" = "Remove the App Store Connect key" ] || fail "key removal is not distribute's last step: ${dsteps[*]}"
+dgate() { awk -v n="      - name: $1" '$0 == n { f = 1; next } f && (/^ *run:/ || /^ *- /) { exit } f' "$tmp/distribute" | sed -n 's/^ *if: *//p'; }
+[ "$(dgate "Remove the App Store Connect key")" = 'always()' ] || fail "distribute key removal must be if: always()"
+for s in "${dsteps[@]}"; do
+  [ "$s" = "Remove the App Store Connect key" ] || [ -z "$(dgate "$s")" ] || fail "distribute step '$s' is gated [$(dgate "$s")]"
+done
+if grep -n 'set -x\|xtrace' "$tmp/distribute"; then fail "tracing would print the key"; fi
 
 # ---- ci.yml ----------------------------------------------------------------
 # 4 ios-signed: pull requests from this repository, not Dependabot, app changes; no upload.
@@ -285,7 +330,9 @@ chmod +x "$tmp/bin/flutter"
 "$REAL_OPENSSL" req -new -newkey rsa:2048 -nodes -keyout "$tmp/ca/inter.key" -out "$tmp/ca/inter.csr" -subj "/CN=Test WWDR G3" 2>/dev/null
 "$REAL_OPENSSL" req -x509 -in "$tmp/ca/inter.csr" -CA "$tmp/ca/root.pem" -CAkey "$tmp/ca/root.key" -days 2 \
   -addext basicConstraints=critical,CA:true -outform der -out "$tmp/ca/inter.cer" 2>/dev/null
-export STUB_CA="$tmp/ca" STUB_URLS="{\"http://certs.apple.com/wwdrg3.der\": \"$tmp/ca/inter.cer\", \"https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer\": \"$tmp/ca/inter.cer\"}"
+export STUB_CA="$tmp/ca" STUB_URLS="{\"https://certs.apple.com/wwdrg3.der\": \"$tmp/ca/inter.cer\"}"
+# Only the https form of the certificate's own AIA URL is served; curl refuses
+# plain http (test/tool/ios_release_stubs.py).
 
 key_text=$'-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgSECRETSECRET\nTAILLINEtailline\n-----END PRIVATE KEY-----'
 # run <step name> [VAR=value ...]: the step's run block in a fresh-ish job
@@ -295,14 +342,14 @@ key_text=$'-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkw
 # ${{ inputs.* }} / ${{ vars.* }}; ${{ secrets.* }} entries are left to the
 # caller's VAR=value arguments. Run text must hold no expression at all.
 run() {
-  local name=$1; shift
-  step_run "$ipa_wf" "$name" "$tmp/step.sh"
+  local name=$1 wf=${RUN_WF:-$ipa_wf}; shift
+  step_run "$wf" "$name" "$tmp/step.sh"
   ! grep -q '\${{' "$tmp/step.sh" || fail "step '$name' pastes an expression into its script: $(grep '\${{' "$tmp/step.sh")"
   local -a senv=()
-  mapfile -t senv < <(step_keys "$ipa_wf" "$name" | awk '
+  mapfile -t senv < <(step_keys "$wf" "$name" | awk '
     /^ *env:$/ { match($0, /^ */); ind = RLENGTH; f = 1; next }
     f { match($0, /^ */); if (RLENGTH <= ind) exit; sub(/^ +/, ""); print }' \
-    | grep -v ': \${{ secrets\.' \
+    | grep -v ': \${{ secrets\.' | grep -v ': \${{ needs\.\|: \${{ vars\.TESTFLIGHT_GROUPS }}$' \
     | sed -e 's/: \${{ inputs\.build-number }}$/: 4242/' -e 's/: \${{ inputs\.build-name }}$/: 9.8.7/' \
       -e 's/: \${{ vars\.\([A-Z_]*\) }}$/: var-\1/' -e 's/^\([A-Z_]*\): /\1=/')
   local e; for e in "${senv[@]}"; do [[ "$e" != *'${{'* ]] || fail "step '$name' env uses an expression this test does not model: $e"; done
@@ -473,6 +520,16 @@ run_job true STUB_PROFILE_APS=development
 grep -q '^altool' "$tmp/calls" && fail "a build without production push was uploaded"
 cleaned
 
+# A revoke that fails (Apple down) still removes the keychain and profiles,
+# and fails the step so the leftover certificate shows red.
+fresh
+run_job true STUB_ASC_FAIL=delete
+[ "$failed_step" = "Revoke the signing certificate" ] || fail "a failed revoke did not fail its step (failed: '${failed_step:-none}')"
+grep -qx 'asc delete CERT-1 PROF-1' "$tmp/calls" || fail "revoke did not try the delete"
+grep -qx 'security delete-keychain' "$tmp/calls" || fail "a failed revoke skipped the keychain delete"
+[ "${ran[-1]}" = "Remove the App Store Connect key" ] || fail "key removal did not run after a failed revoke: ${ran[*]}"
+cleaned
+
 # 11 the signature check on its own: a code object re-signed after the app
 # (broken seal), or signed ad-hoc, fails.
 sig_case() { # <framework> <adhoc | tamper>: re-sign it ad-hoc, or change it after signing
@@ -531,6 +588,56 @@ fresh
 run "Write the App Store Connect key" KEY="$key_text" >/dev/null
 run "Revoke the signing certificate" || fail "revoke failed with the key but no certificate"
 grep -q '^asc delete' "$tmp/calls" && ! grep -qx 'asc delete - -' "$tmp/calls" && fail "revoke without ids must pass '- -': $(grep '^asc' "$tmp/calls")"
+
+# ---- release.yml distribute: the steps, run ---------------------------------------
+# The key, then distribute, then removal, with GitHub's gates; job env KEY_ID /
+# ISSUER_ID as run() sets them. TF_GROUPS as the runner gives an unset
+# variable: empty.
+run_dist() { # [VAR=value ...]: sets $failed_step, $ran
+  local s rc ok=1
+  failed_step= ran=()
+  for s in "${dsteps[@]}"; do
+    [ "$ok" = 1 ] || [ "$(dgate "$s")" = 'always()' ] || continue
+    ran+=("$s"); rc=0
+    RUN_WF=$release run "$s" KEY="$key_text" BUILD=4242 "$@" || rc=$?
+    leaked "$tmp/out" && fail "distribute step '$s' printed a private key"
+    if [ "$rc" != 0 ] && [ "$ok" = 1 ]; then ok=0; failed_step=$s; fi
+  done
+}
+dnote() { cat "$tmp/calls.note"; }
+note=$'Şarkı seçebilirsin — "alıntı" \'tek\' $HOME `x`\nİkinci satır 🎵'
+# 15 the groups default to bacanaks; the note arrives byte for byte; the key is gone after.
+fresh
+kmode=$(RUN_WF=$release run "Write the App Store Connect key" KEY="$key_text" >/dev/null; stat -c %a "$tmp/rt/asc" "$tmp/rt/asc/AuthKey_K3YID.p8" | paste -sd' ')
+[ "$kmode" = "700 600" ] || fail "distribute key dir/file modes are [$kmode], want 700 600"
+grep -qx "API_PRIVATE_KEYS_DIR=$tmp/rt/asc" "$tmp/github_env" || fail "distribute does not export API_PRIVATE_KEYS_DIR"
+fresh
+run_dist TF_GROUPS= NOTE_B64="$(printf '%s' "$note" | base64 -w0)"
+[ -z "$failed_step" ] || fail "distribute failed at '$failed_step'"
+grep -qx 'asc distribute com.esd.sis 4242 bacanaks' "$tmp/calls" || fail "empty TESTFLIGHT_GROUPS must mean bacanaks: $(grep '^asc' "$tmp/calls")"
+[ "$(dnote)" = "$note" ] || fail "the note reached distribute as [$(dnote)], want [$note]"
+[ ! -e "$tmp/rt/asc" ] || fail "distribute left the key behind"
+# Groups from the variable, as data: never run as shell.
+fresh
+run_dist TF_GROUPS=' bacanaks, Friends $(touch pwned)' NOTE_B64=
+[ -z "$failed_step" ] || fail "distribute failed at '$failed_step'"
+grep -qxF 'asc distribute com.esd.sis 4242  bacanaks, Friends $(touch pwned)' "$tmp/calls" \
+  || fail "TESTFLIGHT_GROUPS did not reach distribute verbatim: $(grep '^asc' "$tmp/calls")"
+[ ! -e "$tmp/job/pwned" ] || fail "TESTFLIGHT_GROUPS was run as shell"
+[ -z "$(dnote)" ] || fail "an empty note_b64 must pass an empty note (the tool supplies the default): [$(dnote)]"
+# A failing distribute still removes the key, and the job fails.
+fresh
+run_dist TF_GROUPS= NOTE_B64= STUB_ASC_FAIL=distribute
+[ "$failed_step" = "Distribute the build to the TestFlight groups" ] || fail "a failed distribute did not fail (failed: '${failed_step:-none}')"
+[ "${ran[-1]}" = "Remove the App Store Connect key" ] || fail "key removal did not run after a failed distribute: ${ran[*]}"
+[ ! -e "$tmp/rt/asc" ] || fail "the key survived a failed distribute"
+# An empty secret fails before anything is written or called.
+for empty in KEY KEY_ID ISSUER_ID; do
+  fresh
+  run_dist TF_GROUPS= NOTE_B64= "$empty="
+  [ "$failed_step" = "Write the App Store Connect key" ] || fail "an empty $empty did not fail the distribute key step"
+  grep -q '^asc' "$tmp/calls" && fail "distribute ran with $empty empty"
+done
 
 # ---- Info.plist --------------------------------------------------------------
 # 14 export compliance answered in the app: no manual question per TestFlight build.

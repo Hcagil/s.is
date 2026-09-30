@@ -27,8 +27,11 @@ Needs python3 and openssl only.
 """
 import base64
 import http.server
+import select
+import socket
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -90,10 +93,54 @@ class Fake(http.server.BaseHTTPRequestHandler):
                                "query": urllib.parse.parse_qs(url.query),
                                "headers": {k.lower(): v for k, v in self.headers.items()},
                                "body": json.loads(raw) if raw else None})
+        st["requests"][-1]["t"] = time.time()
         key = (self.command, url.path)
         forced = st["fail"].get(key) or st["fail"].get((self.command, url.path.rsplit("/", 1)[0]))
+        if forced == "drop":  # the connection dies mid-request: no status line at all
+            self.close_connection = True
+            self.connection.shutdown(socket.SHUT_RDWR)
+            return
+        if forced == "hang":  # an API that is slow to answer
+            time.sleep(8)
+            forced = None
         if forced:
             return self.error(forced)
+        q = urllib.parse.parse_qs(url.query)
+        if key == ("GET", "/v1/apps"):
+            # Like filter[identifier], filter[bundleId] is treated as matching partially.
+            f = q.get("filter[bundleId]", [""])[0]
+            data = [{"type": "apps", "id": i, "attributes": {"bundleId": v}} for i, v in st["apps"] if f in v]
+            return self.reply(200, {"data": data})
+        if key == ("GET", "/v1/builds"):
+            states = st["builds"]
+            state = states.pop(0) if len(states) > 1 else states[0]
+            if (q.get("filter[app]") != ["APP-1"] or q.get("filter[version]") != [st["version"]]) or state is None:
+                return self.reply(200, {"data": []})
+            return self.reply(200, {"data": [{"type": "builds", "id": "BUILD-1", "attributes": {
+                "version": st["version"], "processingState": state}}]})
+        if key == ("GET", "/v1/builds/BUILD-1/betaBuildLocalizations"):
+            return self.reply(200, {"data": [{"type": "betaBuildLocalizations", "id": i, "attributes": {
+                "locale": loc, "whatsNew": "old"}} for i, loc in st["locs"]]})
+        if self.command == "PATCH" and url.path.startswith("/v1/betaBuildLocalizations/"):
+            lid = url.path.rsplit("/", 1)[1]
+            if lid not in dict(st["locs"]):
+                return self.error(404)
+            return self.reply(200, {"data": {"type": "betaBuildLocalizations", "id": lid}})
+        if key == ("POST", "/v1/betaBuildLocalizations"):
+            return self.reply(201, {"data": {"type": "betaBuildLocalizations", "id": "L-NEW"}})
+        if key == ("GET", "/v1/apps/APP-1/betaGroups"):
+            return self.reply(200, {"data": [{"type": "betaGroups", "id": i, "attributes": {
+                "name": n, "isInternalGroup": internal}} for i, n, internal in st["groups"]]})
+        if self.command == "POST" and re.fullmatch(r"/v1/betaGroups/[^/]+/relationships/builds", url.path):
+            if url.path.split("/")[3] not in [g[0] for g in st["groups"]]:
+                return self.error(404)
+            return self.reply(204)
+        if key == ("GET", "/v1/builds/BUILD-1/betaAppReviewSubmission"):
+            sub = {"type": "betaAppReviewSubmissions", "id": "SUB-1",
+                   "attributes": {"betaReviewState": "WAITING_FOR_REVIEW"}} if st["review"] else None
+            return self.reply(200, {"data": sub})
+        if key == ("POST", "/v1/betaAppReviewSubmissions"):
+            return self.reply(201, {"data": {"type": "betaAppReviewSubmissions", "id": "SUB-2"}})
         if key == ("GET", "/v1/bundleIds"):
             f = urllib.parse.parse_qs(url.query).get("filter[identifier]", [""])[0]
             data = [{"type": "bundleIds", "id": i, "attributes": {"identifier": v, "platform": "IOS"}}
@@ -102,11 +149,11 @@ class Fake(http.server.BaseHTTPRequestHandler):
         if key == ("POST", "/v1/certificates"):
             return self.reply(201, {"data": {"type": "certificates", "id": "CERT-1", "attributes": {
                 "certificateType": "DISTRIBUTION", "name": "Apple Distribution: Şirket",
-                "certificateContent": base64.b64encode(st["cert_der"]).decode()}}})
+                "certificateContent": st.get("cert_b64") or base64.b64encode(st["cert_der"]).decode()}}})
         if key == ("POST", "/v1/profiles"):
             return self.reply(201, {"data": {"type": "profiles", "id": "PROF-1", "attributes": {
                 "profileType": "IOS_APP_STORE", "uuid": "0F1E2D3C-UUID",
-                "profileContent": base64.b64encode(PROFILE_BYTES).decode()}}})
+                "profileContent": st.get("prof_b64") or base64.b64encode(PROFILE_BYTES).decode()}}})
         if self.command == "DELETE" and url.path.rsplit("/", 1)[0] in ("/v1/certificates", "/v1/profiles"):
             return self.reply(204)
         return self.error(404)
@@ -145,13 +192,23 @@ class AscSigningTest(unittest.TestCase):
         cls.srv.server_close()
 
     def setUp(self):
-        self.srv.state = {"requests": [], "fail": {}, "cert_der": self.cert_der}
+        self.srv.state = {"requests": [], "fail": {}, "cert_der": self.cert_der,
+                          "apps": [("APP-W", "com.esd.sis.widget"), ("APP-1", "com.esd.sis"), ("APP-X", "com.other.app")],
+                          "version": "412", "builds": ["VALID"], "locs": [("L-DE", "de-DE"), ("L-EN", "en-US")],
+                          "groups": [("G-INT", "bacanaks", True), ("G-EXT", "bacanaks", False), ("G-OTHER", "other", True),
+                                     ("G-OLD", "bacanaks-old", False), ("G-FR", "Friends", False)],
+                          "review": False}
 
-    def tool(self, *args, code="a.main(['asc_signing.py'] + sys.argv[2:])"):
+    def prog(self, code):
+        return ("import sys; sys.path.insert(0, %r); import asc_signing as a; a.API = sys.argv[1]; " % os.path.dirname(TOOL)) + code
+
+    def env(self, **extra):
+        return dict(os.environ, API_PRIVATE_KEYS_DIR=self.keys, KEY_ID=KEY_ID, ISSUER_ID=ISSUER, **extra)
+
+    def tool(self, *args, code="a.main(['asc_signing.py'] + sys.argv[2:])", api=None, **extra):
         """Runs the tool in its own process with only API redirected."""
-        env = dict(os.environ, API_PRIVATE_KEYS_DIR=self.keys, KEY_ID=KEY_ID, ISSUER_ID=ISSUER)
-        prog = ("import sys; sys.path.insert(0, %r); import asc_signing as a; a.API = sys.argv[1]; " % os.path.dirname(TOOL)) + code
-        p = subprocess.run([sys.executable, "-c", prog, self.api, *args], env=env, capture_output=True, text=True, timeout=60)
+        p = subprocess.run([sys.executable, "-c", self.prog(code), api or self.api, *args], env=self.env(**extra),
+                           capture_output=True, text=True, timeout=60)
         self.assertNotIn("PRIVATE KEY", p.stdout + p.stderr, "the key was printed")
         body = "".join(l for l in self.key_pem.splitlines() if "-----" not in l)
         for chunk in (body[i:i + 16] for i in range(0, len(body) - 16, 16)):
@@ -284,7 +341,9 @@ class AscSigningTest(unittest.TestCase):
             self.assertIn("SIGNING_CERTIFICATE_ID=CERT-1", p.stdout.splitlines(), "a created certificate was not reported")
 
     def test_bad_usage(self):
-        for args in ([], ["create", self.csr, "com.esd.sis", "n"], ["delete", "C"], ["revoke", "C", "P"]):
+        for args in ([], ["create", self.csr, "com.esd.sis", "n"], ["delete", "C"], ["revoke", "C", "P"],
+                     ["distribute", "com.esd.sis", "412", "bacanaks"],
+                     ["distribute", "com.esd.sis", "412", "bacanaks", "note", "extra"]):
             self.setUp()
             p = self.tool(*args)
             self.assertNotEqual(p.returncode, 0, "usage %s accepted" % args)
@@ -324,6 +383,236 @@ class AscSigningTest(unittest.TestCase):
             self.srv.state["fail"][("DELETE", path)] = status
             p = self.tool("delete", "CERT-9", "PROF-9")
             self.assertNotEqual(p.returncode, 0, "%d on %s was ignored" % (status, path))
+
+    def test_delete_profile_failure_still_revokes_certificate(self):
+        # A failing delete must not leave the other one behind, and still fails the run.
+        for path, fault in (("/v1/profiles/PROF-9", 500), ("/v1/profiles/PROF-9", "drop"),
+                            ("/v1/certificates/CERT-9", 500), ("/v1/certificates/CERT-9", "drop")):
+            self.setUp()
+            self.srv.state["fail"][("DELETE", path)] = fault
+            p = self.tool("delete", "CERT-9", "PROF-9")
+            self.assertNotEqual(p.returncode, 0, "%s on %s was ignored" % (fault, path))
+            self.assertEqual(self.deleted(), ["/v1/certificates/CERT-9", "/v1/profiles/PROF-9"],
+                             "%s on %s stopped the other delete" % (fault, path))
+
+    # ---- create: the ids reach GITHUB_ENV whatever fails after ----------------------
+    def test_create_reports_ids_before_writing(self):
+        for blocked, want in (("cert.cer", ["SIGNING_CERTIFICATE_ID=CERT-1"]),
+                              ("profile.mobileprovision", ["SIGNING_CERTIFICATE_ID=CERT-1", "SIGNING_PROFILE_ID=PROF-1"])):
+            self.setUp()
+            out = tempfile.mkdtemp()
+            os.mkdir(os.path.join(out, blocked))  # the file cannot be written
+            p = self.tool("create", self.csr, "com.esd.sis", "n", out)
+            self.assertNotEqual(p.returncode, 0, "writing %s over a directory succeeded" % blocked)
+            for line in want:
+                self.assertIn(line, p.stdout.splitlines(), "%s not reported when %s could not be written" % (line, blocked))
+
+    def test_create_reports_ids_on_broken_content(self):
+        for field, want in (("cert_b64", ["SIGNING_CERTIFICATE_ID=CERT-1"]),
+                            ("prof_b64", ["SIGNING_CERTIFICATE_ID=CERT-1", "SIGNING_PROFILE_ID=PROF-1"])):
+            self.setUp()
+            self.srv.state[field] = "abcde"  # not base64 (bad padding)
+            p = self.tool("create", self.csr, "com.esd.sis", "n", tempfile.mkdtemp())
+            self.assertNotEqual(p.returncode, 0, "broken %s accepted" % field)
+            for line in want:
+                self.assertIn(line, p.stdout.splitlines(), "%s not reported on broken %s" % (line, field))
+
+    def test_create_flushes_certificate_id(self):
+        # The id must be on stdout while the run is still going: a runner that
+        # cancels the job kills the process, and unflushed output is lost.
+        self.srv.state["fail"][("POST", "/v1/profiles")] = "hang"
+        out = tempfile.mkdtemp()
+        p = subprocess.Popen([sys.executable, "-c", self.prog("a.main(['asc_signing.py'] + sys.argv[2:])"), self.api,
+                              "create", self.csr, "com.esd.sis", "n", out],
+                             env=self.env(), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        try:
+            ready, _, _ = select.select([p.stdout], [], [], 6)
+            line = p.stdout.readline().decode() if ready else ""
+        finally:
+            p.kill()
+            p.wait()
+            p.stdout.close()
+        self.assertEqual(line.strip(), "SIGNING_CERTIFICATE_ID=CERT-1",
+                         "the certificate id was not flushed before the profile request")
+
+    # ---- call(): a network failure -------------------------------------------------
+    def test_connection_refused_is_reported_briefly(self):
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()
+        p = self.tool("distribute", "com.esd.sis", "412", "bacanaks", "n", api="http://127.0.0.1:%d/v1" % port)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("GET", p.stderr)
+        self.assertIn("/apps", p.stderr)
+        self.assertIn("URLError", p.stderr)
+        self.assertNotIn("Traceback", p.stderr)
+
+    def test_dropped_connection_is_reported_without_body(self):
+        self.srv.state["fail"][("PATCH", "/v1/betaBuildLocalizations/L-EN")] = "drop"
+        p = self.tool("distribute", "com.esd.sis", "412", "bacanaks", "SECRET-NOTE-BODY", ASC_POLL_SECONDS="0")
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("PATCH", p.stderr)
+        self.assertIn("/betaBuildLocalizations/L-EN", p.stderr)
+        self.assertNotIn("SECRET-NOTE-BODY", p.stderr + p.stdout, "the request body was printed")
+        self.assertNotIn("Traceback", p.stderr)
+
+    # ---- distribute ------------------------------------------------------------------
+    def dist(self, groups="bacanaks", note="Note", **extra):
+        extra.setdefault("ASC_POLL_SECONDS", "0")
+        extra.setdefault("ASC_POLL_LIMIT_SECONDS", "30")
+        return self.tool("distribute", "com.esd.sis", "412", groups, note, **extra)
+
+    def find(self, method, path):
+        return [r for r in self.reqs(method) if r["path"] == path]
+
+    def group_adds(self):
+        return sorted(r["path"].split("/")[3] for r in self.reqs("POST") if r["path"].endswith("/relationships/builds"))
+
+    def review_reqs(self):
+        return [r for r in self.reqs() if "betaAppReviewSubmission" in r["path"]]
+
+    def whats_new(self):
+        writes = [r for r in self.reqs() if r["path"].startswith("/v1/betaBuildLocalizations") and r["method"] in ("PATCH", "POST")]
+        self.assertEqual(len(writes), 1, "want one localization write, got %s" % [(r["method"], r["path"]) for r in writes])
+        return writes[0]["body"]["data"]["attributes"]["whatsNew"]
+
+    def test_distribute_full_sequence(self):
+        self.srv.state["builds"] = [None, "PROCESSING", "VALID"]
+        p = self.dist(note='  Line one\nLine "two" şğ  \n')
+        self.assertEqual(p.returncode, 0, p.stderr)
+        rs = self.reqs()
+        self.assertEqual((rs[0]["method"], rs[0]["path"]), ("GET", "/v1/apps"))
+        self.assertEqual(rs[0]["query"].get("filter[bundleId]"), ["com.esd.sis"])
+        builds = self.find("GET", "/v1/builds")
+        self.assertEqual(len(builds), 3, "an empty list or PROCESSING must keep polling until VALID")
+        for b in builds:
+            self.assertEqual(b["query"].get("filter[app]"), ["APP-1"], "the build was looked up under a partial bundle match")
+            self.assertEqual(b["query"].get("filter[version]"), ["412"])
+            self.assertEqual(b["query"].get("limit"), ["1"])
+        self.assertTrue(self.find("GET", "/v1/builds/BUILD-1/betaBuildLocalizations"))
+        patch = self.find("PATCH", "/v1/betaBuildLocalizations/L-EN")
+        self.assertEqual(len(patch), 1, "the en-US localization was not updated")
+        self.assertEqual(patch[0]["body"]["data"]["type"], "betaBuildLocalizations")
+        self.assertEqual(patch[0]["body"]["data"]["id"], "L-EN")
+        self.assertEqual(self.whats_new(), 'Line one\nLine "two" şğ')
+        self.assertIn("application/json", patch[0]["headers"].get("content-type", ""))
+        lg = self.find("GET", "/v1/apps/APP-1/betaGroups")
+        self.assertEqual(len(lg), 1)
+        self.assertEqual(lg[0]["query"].get("limit"), ["200"])
+        self.assertEqual(self.group_adds(), ["G-EXT", "G-INT"], "both groups named bacanaks, nothing else")
+        for r in self.reqs("POST"):
+            if r["path"].endswith("/relationships/builds"):
+                self.assertEqual(r["body"], {"data": [{"type": "builds", "id": "BUILD-1"}]})
+        self.assertEqual(len(self.find("GET", "/v1/builds/BUILD-1/betaAppReviewSubmission")), 1)
+        sub = self.find("POST", "/v1/betaAppReviewSubmissions")
+        self.assertEqual(len(sub), 1, "an external group needs a beta review submission")
+        self.assertEqual(sub[0]["body"]["data"]["type"], "betaAppReviewSubmissions")
+        self.assertEqual(sub[0]["body"]["data"]["relationships"]["build"]["data"], {"type": "builds", "id": "BUILD-1"})
+        order = [next(i for i, r in enumerate(rs) if pred(r)) for pred in (
+            lambda r: r["path"] == "/v1/builds",
+            lambda r: r["method"] == "PATCH",
+            lambda r: r["path"].endswith("/betaGroups"),
+            lambda r: r["path"].endswith("/relationships/builds"),
+            lambda r: "betaAppReviewSubmission" in r["path"])]
+        self.assertEqual(order, sorted(order), "requests out of the contract order")
+        self.assertEqual([r for r in rs if r["method"] == "DELETE"], [])
+
+    def test_distribute_posts_en_us_when_missing(self):
+        self.srv.state["locs"] = [("L-DE", "de-DE")]
+        p = self.dist(note="Hello")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertFalse(self.reqs("PATCH"), "another locale was overwritten")
+        post = self.find("POST", "/v1/betaBuildLocalizations")
+        self.assertEqual(len(post), 1)
+        d = post[0]["body"]["data"]
+        self.assertEqual(d["type"], "betaBuildLocalizations")
+        self.assertEqual(d["attributes"]["locale"], "en-US")
+        self.assertEqual(d["attributes"]["whatsNew"], "Hello")
+        self.assertEqual(d["relationships"]["build"]["data"], {"type": "builds", "id": "BUILD-1"})
+
+    def test_distribute_note_default_and_limit(self):
+        for note, want in (("", "Bug fixes and improvements."), ("  \n\t ", "Bug fixes and improvements."),
+                           (" " + "ş" * 4100 + "\n", "ş" * 4000), ("x" * 4000, "x" * 4000)):
+            self.setUp()
+            p = self.dist(note=note)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(self.whats_new(), want, "note %r" % note[:20])
+
+    def test_distribute_internal_only_skips_review(self):
+        p = self.dist(groups="other")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.group_adds(), ["G-OTHER"])
+        self.assertEqual(self.review_reqs(), [], "an internal-only distribution touched beta review")
+
+    def test_distribute_groups_are_stripped(self):
+        p = self.dist(groups=" other , Friends ")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.group_adds(), ["G-FR", "G-OTHER"])
+        self.assertEqual(len(self.find("POST", "/v1/betaAppReviewSubmissions")), 1)
+
+    def test_distribute_no_matching_group(self):
+        p = self.dist(groups="nobody,ghost")
+        self.assertNotEqual(p.returncode, 0)
+        for name in ("nobody", "ghost", "bacanaks", "other", "Friends"):
+            self.assertIn(name, p.stderr, "the error must list wanted and available names")
+        self.assertEqual(self.group_adds(), [])
+        self.assertEqual(self.review_reqs(), [])
+
+    def test_distribute_is_idempotent(self):
+        self.srv.state["review"] = True
+        for g in ("G-INT", "G-EXT"):
+            self.srv.state["fail"][("POST", "/v1/betaGroups/%s/relationships/builds" % g)] = 409
+        p = self.dist()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.group_adds(), ["G-EXT", "G-INT"])
+        self.assertEqual(len(self.find("GET", "/v1/builds/BUILD-1/betaAppReviewSubmission")), 1)
+        self.assertEqual(self.find("POST", "/v1/betaAppReviewSubmissions"), [], "a second submission was posted")
+
+    def test_distribute_group_add_errors(self):
+        for status in (401, 403, 404, 500):
+            self.setUp()
+            self.srv.state["fail"][("POST", "/v1/betaGroups/G-EXT/relationships/builds")] = status
+            p = self.dist()
+            self.assertNotEqual(p.returncode, 0, "%d on group add was ignored" % status)
+
+    def test_distribute_review_post_error(self):
+        self.srv.state["fail"][("POST", "/v1/betaAppReviewSubmissions")] = 422
+        p = self.dist()
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("fake error 422", p.stderr, "the API error body is not shown")
+        self.assertIn("Test Information", p.stderr, "no hint about TestFlight Test Information")
+
+    def test_distribute_failed_build_stops_at_once(self):
+        for state in ("FAILED", "INVALID"):
+            self.setUp()
+            self.srv.state["builds"] = ["PROCESSING", state]
+            t0 = time.time()
+            p = self.dist(ASC_POLL_SECONDS="0.3")
+            self.assertNotEqual(p.returncode, 0, state)
+            self.assertLess(time.time() - t0, 10)
+            self.assertEqual(len(self.find("GET", "/v1/builds")), 2, "%s: polled on" % state)
+            self.assertEqual(self.reqs()[-1]["path"], "/v1/builds", "%s: went on after the build failed" % state)
+
+    def test_distribute_deadline(self):
+        for states, name in ((["PROCESSING"], "PROCESSING"), ([None], None)):
+            self.setUp()
+            self.srv.state["builds"] = states
+            t0 = time.time()
+            p = self.dist(ASC_POLL_SECONDS="1", ASC_POLL_LIMIT_SECONDS="2.5")
+            self.assertNotEqual(p.returncode, 0)
+            builds = self.find("GET", "/v1/builds")
+            self.assertGreaterEqual(len(builds), 2, "gave up before the deadline")
+            self.assertLessEqual(self.reqs()[-1]["t"], t0 + 2.5 + 0.5, "a request after the deadline")
+            self.assertEqual(self.reqs()[-1]["path"], "/v1/builds")
+            if name:
+                self.assertIn(name, p.stderr, "the timeout does not name the state")
+
+    def test_distribute_exact_app_only(self):
+        self.srv.state["apps"] = [("APP-W", "com.esd.sis.widget")]
+        p = self.dist()
+        self.assertNotEqual(p.returncode, 0)
+        self.assertEqual(self.find("GET", "/v1/builds"), [], "a partial bundle id match was used")
 
 
 if __name__ == "__main__":

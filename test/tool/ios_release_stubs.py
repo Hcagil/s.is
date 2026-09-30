@@ -712,6 +712,8 @@ def curl():
             url = a
     if not url or not out:
         reject("curl -sSf URL -o FILE expected")
+    if not url.startswith("https://"):
+        reject("the intermediate must be fetched over https (Apple's AIA says http://)")
     urls = json.loads(E["STUB_URLS"])
     if url not in urls:
         if "f" in fl:
@@ -776,8 +778,18 @@ def asc_signing():
         print("SIGNING_PROFILE_ID=PROF-1")
     elif ARGS[:1] == ["delete"] and len(ARGS) == 3:
         record("asc delete %s %s" % tuple(ARGS[1:]))
+        if E.get("STUB_ASC_FAIL") == "delete":
+            die("asc_signing: DELETE /v1/profiles/%s: HTTP 500" % ARGS[2])
+    elif ARGS[:1] == ["distribute"] and len(ARGS) == 5:
+        bundle, build, groups, note = ARGS[1:]
+        record("asc distribute %s %s %s" % (bundle, build, groups))
+        with open(E["STUB_CALLS"] + ".note", "w") as f:
+            f.write(note)
+        if E.get("STUB_ASC_FAIL") == "distribute":
+            die("asc_signing: build %s still PROCESSING at the polling limit" % build)
     else:
-        reject("usage: create CSR BUNDLE_ID PROFILE_NAME OUT_DIR | delete CERT_ID PROFILE_ID")
+        reject("usage: create CSR BUNDLE_ID PROFILE_NAME OUT_DIR | delete CERT_ID PROFILE_ID"
+               " | distribute BUNDLE_ID BUILD_NUMBER GROUPS NOTE")
 
 
 {"codesign": codesign, "asc_signing.py": asc_signing, "plutil": plutil, "security": security, "xcodebuild": xcodebuild,

@@ -93,8 +93,8 @@ select is((select note from public.release_notes where build = 99998), '',
 
 -- the seeds
 select is((select count(*) from public.release_notes
-            where build in (177, 178) and btrim(note) <> ''), 2::bigint,
-          'builds 177 and 178 are seeded with non-empty notes');
+            where build in (177, 178, 179) and btrim(note) <> ''), 3::bigint,
+          'builds 177, 178 and 179 are seeded with non-empty notes');
 
 -- 2 the system account -------------------------------------------------------
 select is((select count(*) from auth.users where id = '00000000-0000-0000-0000-00000000515e'),

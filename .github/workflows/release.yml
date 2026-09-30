@@ -118,8 +118,7 @@ jobs:
             | sed -n 's/.*(#\([0-9][0-9]*\))$/\1/p' \
             | while read -r pr; do
                 echo "PR #$pr" >&2
-                gh pr view "$pr" --json body,authorAssociation \
-                  --jq 'select(.authorAssociation | IN("OWNER","MEMBER","COLLABORATOR")) | .body' </dev/null | tr -d '\r' | sed -n 's/^For users: *//p' || exit 1
+                gh api "repos/${GITHUB_REPOSITORY}/pulls/$pr" --jq 'select(.author_association | IN("OWNER","MEMBER","COLLABORATOR")) | .body' </dev/null | tr -d '\r' | sed -n 's/^For users: *//p' || exit 1
               done | sed '/^[[:space:]]*$/d')
           note=${note:0:4000}
           echo "Note: $note"

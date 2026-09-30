@@ -14,13 +14,14 @@
 #   - only PRs whose author is OWNER, MEMBER or COLLABORATOR count (anyone else
 #     could edit a merged PR's body and have it sent to every member as SIS);
 #   - the joined note is cut to 4000 characters, the release_notes check;
-#   - a failing `gh pr view` fails the run block, and the step is
-#     continue-on-error so that failure never blocks the release.
+#   - a failing `gh api` pull read fails the run block, and the step is
+#     continue-on-error so that failure never blocks the release;
+#   - each PR is read from the REST endpoint repos/$GITHUB_REPOSITORY/pulls/N
+#     and kept by its snake_case author_association.
 #
 # A `run:` block with no `shell:` runs as `bash -e {0}` on GitHub Actions --
 # errexit but NOT pipefail -- so the step runs that way here; any pipefail
-# comes from the step itself. The gh stand-in honours --json and --jq with
-# real jq, as gh does.
+# comes from the step itself.
 set -euo pipefail
 command -v jq >/dev/null || { echo "FAIL: jq is required (gh --jq stand-in)"; exit 1; }
 cd "$(dirname "$0")/../.."
@@ -46,27 +47,66 @@ awk '/- name: Store the What.s new note for this build/ { f = 1; next } f && /^ 
   || { echo "FAIL: the note step must be continue-on-error: a gh/db hiccup must not block the release"; exit 1; }
 
 # Stand-ins. gh answers from files; supabase records its arguments.
-# `gh pr view N --json f1,f2 --jq F` builds an object with only the requested
-# fields (body from prs/N, authorAssociation from prs/N.assoc, default NONE),
-# then applies F with jq -r, as gh does. prs/N.fail makes the call fail.
+# The gh stand-in is strict: it accepts only the calls this step may make, in
+# the shape the real CLI and REST API accept, and refuses anything else. A
+# lenient stand-in once accepted `gh pr view --json authorAssociation`, which
+# real gh rejects ("Unknown JSON field"), and a release lost its note.
+#   gh release list --limit N --json tagName --jq F
+#       serves [{tagName: $STUB_PREV_TAG}], or [] when it is empty;
+#   gh api repos/$STUB_REPO/pulls/N --jq F
+#       serves the REST pull object {number, body, author_association}
+#       (snake_case, as the REST API returns it; body from prs/N, or null when
+#       prs/N.null exists; association from prs/N.assoc, default NONE);
+#       prs/N.fail answers like an HTTP error.
+# Every --json field and every .field a --jq filter reads must be one served
+# here. F is applied with real jq, raw output, as gh does. A refused call is
+# logged to $STUB_REJECTS so a swallowed failure still fails the test.
 mkdir -p "$tmp/bin" "$tmp/prs"
 cat > "$tmp/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-case "$1 $2" in
-  "release list") printf '%s\n' "${STUB_PREV_TAG:-}" ;;
-  "pr view")
-    pr=$3; shift 3; fields=; filter=.
+args="$*"
+die() { echo "gh stub: $* (call: gh $args)" >&2; echo "gh $args" >> "$STUB_REJECTS"; exit 2; }
+check_filter() { # $1 jq filter, $2 served field names
+  local f
+  for f in $(grep -oE '\.[A-Za-z_][A-Za-z0-9_]*' <<<"$1" | cut -c2-); do
+    [[ " $2 " == *" $f "* ]] || die "jq filter reads field '$f', which is not served"
+  done
+}
+case "${1:-} ${2:-}" in
+  "release list")
+    shift 2; filter=
     while [ $# -gt 0 ]; do
-      case "$1" in --json) fields=$2; shift 2 ;; --jq) filter=$2; shift 2 ;; *) shift ;; esac
+      case "$1" in
+        --limit) [[ "${2:-}" =~ ^[0-9]+$ ]] || die "bad --limit"; shift 2 ;;
+        --json) for f in ${2//,/ }; do [ "$f" = tagName ] || die "Unknown JSON field: \"$f\""; done; shift 2 ;;
+        --jq) filter=$2; shift 2 ;;
+        *) die "unknown flag $1" ;;
+      esac
     done
-    [ ! -e "$STUB_PRS/$pr.fail" ] || { echo "HTTP 502: Bad Gateway" >&2; exit 1; }
-    [ -n "$fields" ] || { echo "gh stub: pr view without --json" >&2; exit 1; }
+    [ -n "$filter" ] || die "release list without --jq"
+    check_filter "$filter" tagName
+    jq -n --arg t "${STUB_PREV_TAG:-}" 'if $t == "" then [] else [{tagName: $t}] end' | jq -r "$filter" ;;
+  api\ *)
+    path=$2; shift 2; filter=
+    while [ $# -gt 0 ]; do
+      case "$1" in --jq) filter=$2; shift 2 ;; *) die "unknown flag $1" ;; esac
+    done
+    [[ "$path" =~ ^repos/${STUB_REPO}/pulls/([0-9]+)$ ]] \
+      || die "unexpected endpoint '$path', want repos/$STUB_REPO/pulls/<n>"
+    pr=${BASH_REMATCH[1]}
+    echo "$path" >> "$STUB_API"
+    [ -n "$filter" ] || die "api without --jq"
+    check_filter "$filter" "number body author_association"
+    [ ! -e "$STUB_PRS/$pr.fail" ] || { echo "gh: Bad Gateway (HTTP 502)" >&2; exit 1; }
     assoc=NONE; [ ! -e "$STUB_PRS/$pr.assoc" ] || assoc=$(cat "$STUB_PRS/$pr.assoc")
-    jq -n --rawfile body "$STUB_PRS/$pr" --arg a "$assoc" --arg f "$fields" \
-      '{body: $body, authorAssociation: $a} | with_entries(select(.key | IN($f | split(",")[])))' \
-      | jq -r "$filter" ;;
-  *) echo "gh stub: unexpected $*" >&2; exit 1 ;;
+    if [ -e "$STUB_PRS/$pr.null" ]; then
+      jq -n --argjson n "$pr" --arg a "$assoc" '{number: $n, body: null, author_association: $a}'
+    else
+      jq -n --argjson n "$pr" --rawfile body "$STUB_PRS/$pr" --arg a "$assoc" \
+        '{number: $n, body: $body, author_association: $a}'
+    fi | jq -r "$filter" ;;
+  *) die "unexpected subcommand" ;;
 esac
 EOF
 cat > "$tmp/bin/supabase" <<'EOF'
@@ -95,10 +135,17 @@ for pr in 9 10 11 12; do echo OWNER > "$tmp/prs/$pr.assoc"; done
 
 # run_step <prev tag> -> sets $out, $calls; step exit status is returned
 run_step() {
-  : > "$tmp/calls"
+  : > "$tmp/calls"; : > "$tmp/api"; : > "$tmp/rejects"
+  local rc=0
   (cd "$repo" && PATH="$tmp/bin:$PATH" STUB_PREV_TAG="$1" STUB_PRS="$tmp/prs" \
-    STUB_CALLS="$tmp/calls" SHA="$head_sha" BUILD=179 GH_TOKEN=x \
-    bash -e "$tmp/step.sh") > "$tmp/out" 2>&1
+    STUB_CALLS="$tmp/calls" STUB_API="$tmp/api" STUB_REJECTS="$tmp/rejects" \
+    STUB_REPO=owner/repo GITHUB_REPOSITORY=owner/repo \
+    SHA="$head_sha" BUILD=179 GH_TOKEN=x \
+    bash -e "$tmp/step.sh") > "$tmp/out" 2>&1 || rc=$?
+  # A call the real gh would refuse fails the test even where the step's
+  # `|| exit 1`, a pipeline or continue-on-error would hide it.
+  [ ! -s "$tmp/rejects" ] || fail "gh called in a way the real CLI/API refuses: $(cat "$tmp/rejects")"
+  return $rc
 }
 fail() { echo "FAIL: $1"; echo "--- step output"; cat "$tmp/out"; echo "--- supabase calls"; cat "$tmp/calls"; exit 1; }
 note_of() { # the text the insert would store
@@ -108,6 +155,8 @@ note_of() { # the text the insert would store
 # 1 lines since the previous release, in merge order
 run_step v0.26.0+178 || fail "step exited non-zero"
 [ "$(wc -l < "$tmp/calls")" -eq 1 ] || fail "expected exactly one insert"
+[ "$(cat "$tmp/api")" = "$(printf "repos/owner/repo/pulls/%s\n" 10 11 12)" ] \
+  || fail "PRs not read from repos/owner/repo/pulls/<n> in merge order: [$(cat "$tmp/api")]"
 grep -q -- '--linked' "$tmp/calls" || fail "insert not sent to the linked project"
 grep -q 'insert into public.release_notes(build, note) values (179, ' "$tmp/calls" \
   || fail "insert does not target build 179"
@@ -159,15 +208,22 @@ stored=$(note_of; printf .); stored=${stored%.}
 [ "${#stored}" -eq 4000 ] || fail "long note stored as ${#stored} characters, want 4000"
 [ "$stored" = "$(printf '%s\n%s' "$long" "$long" | head -c 4000)" ] || fail "long note is not the first 4000 characters"
 
-# 6 a failing gh pr view fails the run block, and stores nothing
+# 6 a failing gh api read fails the run block, and stores nothing
 printf 'For users: Fine.\n' > "$tmp/prs/10"
 printf 'For users: Also fine.\n' > "$tmp/prs/12"
 touch "$tmp/prs/12.fail"
-if run_step v0.26.0+178; then fail "a failing gh pr view (last PR) did not fail the step"; fi
-[ ! -s "$tmp/calls" ] || fail "a partial note was stored after gh pr view failed"
+if run_step v0.26.0+178; then fail "a failing gh api read (last PR) did not fail the step"; fi
+[ ! -s "$tmp/calls" ] || fail "a partial note was stored after gh api read failed"
 rm "$tmp/prs/12.fail"; touch "$tmp/prs/10.fail"
-if run_step v0.26.0+178; then fail "a failing gh pr view (first PR) did not fail the step"; fi
-[ ! -s "$tmp/calls" ] || fail "a partial note was stored after gh pr view failed"
+if run_step v0.26.0+178; then fail "a failing gh api read (first PR) did not fail the step"; fi
+[ ! -s "$tmp/calls" ] || fail "a partial note was stored after gh api read failed"
 rm "$tmp/prs/10.fail"
+
+# 7 a PR with no description (REST body null) contributes nothing, breaks nothing
+printf "For users: Kept.\n" > "$tmp/prs/12"
+touch "$tmp/prs/10.null"
+run_step v0.26.0+178 || fail "step exited non-zero on a null PR body"
+[ "$(note_of)" = "Kept." ] || fail "null body: note was [$(note_of)]"
+rm "$tmp/prs/10.null"
 
 echo "whats_new_note_test: OK"

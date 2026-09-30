@@ -113,7 +113,8 @@ void main() {
     expect(args['quality'], 82);
   });
 
-  for (final code in ['crop_failed', 'bad_args']) {
+  // Every code the iOS and Android handlers can raise for cropPicture.
+  for (final code in ['crop_failed', 'bad_args', 'unreadable', 'not_image']) {
     test('the native side fails ($code): null, and the source file is '
         'deleted', () async {
       platform((_) async => throw PlatformException(code: code));

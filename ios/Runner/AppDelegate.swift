@@ -12,5 +12,10 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // The app's own channel: "From an app" and the square crop (the iOS twin
+    // of the one MainActivity.kt serves on Android).
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ExternalPickerPlugin") {
+      ExternalPickerPlugin.register(with: registrar)
+    }
   }
 }

@@ -29,9 +29,10 @@ final class ExternalPickFailed implements ExternalPickResult {
 }
 
 /// Hands photo selection to another app on the phone (Google Photos, the
-/// maker's gallery, Files...) through Android's own app chooser. Needs no
-/// photo permission: the chosen app grants this app a temporary read on
-/// only what the member picked.
+/// maker's gallery, Files...) through Android's own app chooser, or on iOS
+/// through the system photo picker. Needs no photo permission: the chosen
+/// app (or the picker) grants this app read access to only what the member
+/// picked.
 ///
 /// Its own boundary (like [Gallery]) because it is a platform capability;
 /// [PickedImage]s it returns are in the exact same shape [Gallery.load] and

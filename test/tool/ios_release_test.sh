@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # The iPhone release path, checked on Linux: the shape of release.yml, ci.yml
 # and the reusable .github/workflows/ios-ipa.yml, and the shell steps of
-# ios-ipa.yml run as written (lifted out of the file, not copied) against
-# stand-ins for codesign, plutil, xcodebuild, xcrun and flutter.
+# ios-ipa.yml run as written (lifted out of the file, not copied), in the
+# file's order with GitHub's if: gates, against stand-ins for codesign,
+# security, xcodebuild, xcrun altool, plutil, curl, openssl, flutter and
+# tool/asc_signing.py (test/tool/ios_release_stubs.py).
 #
 #   release.yml
 #   - `scope` computes the version once: code = run_number + 100, name = the
@@ -20,29 +22,53 @@
 #   both callers pass exactly the five declared secrets by name, and no
 #   workflow uses `secrets: inherit`;
 #   ios-ipa.yml
-#   - declares exactly those five secrets, all required;
+#   - runs on macos-26 (Xcode 26); declares exactly those five secrets, all
+#     required;
 #   - checkout does not persist the token; no ${{ inputs|vars|secrets }} is
 #     pasted into any run: text (they reach steps through env:);
-#   - the key is written after the config-only build and just before the
-#     archive, so it is not on disk during checkout, pub get or configure;
+#   - the steps, exactly in this order: checkout, Flutter, Firebase config,
+#     pub get, config-only build, the key, the archive, the ad-hoc signature,
+#     the certificate, the export, the explicit requirement, the signature
+#     check, the push check, validate, upload, revoke, key removal;
 #   - GoogleService-Info.plist is written from its secret; an empty secret
 #     fails the step and writes nothing;
 #   - the App Store Connect key goes to $RUNNER_TEMP/asc (dir 700, file 600
-#     whatever the umask), is never printed, is found there by xcodebuild and
-#     altool, and a last `if: always()` step removes it;
-#   - Flutter only writes the Xcode config (build number and name passed);
-#     xcodebuild archives and exports with automatic signing;
-#   - the exported Runner.app must carry aps-environment = production:
-#     development, a missing key, an unsigned app or no .ipa all fail;
-#   - the upload runs only when inputs.upload, and only after that check;
+#     whatever the umask) after the config-only build and before the
+#     certificate step, is never printed, and a last `if: always()` step
+#     removes it;
+#   - the archive is unsigned (no -allowProvisioningUpdates or API key flags),
+#     one archive and one export; the app is then signed ad-hoc with
+#     Runner.entitlements so the export keeps the push entitlement;
+#   - the certificate step makes a key, has tool/asc_signing.py create a
+#     distribution certificate and an App Store profile for com.esd.sis under
+#     a name unique to the run attempt, fetches the intermediate, builds a
+#     temporary keychain codesign can use, installs the profile, and puts
+#     SIGNING_IDENTITY (SHA-1), SIGNING_PROFILE_UUID, SIGNING_CERTIFICATE_ID
+#     and SIGNING_PROFILE_ID in GITHUB_ENV;
+#   - the export is manual: that SHA-1, that profile UUID for com.esd.sis;
+#   - every framework, then the app, is re-signed with a designated
+#     requirement on identifier and team: the one Xcode writes names the
+#     certificate's common name in NFD and never matches this team's
+#     certificate; the check then wants Apple Distribution on every code object
+#     and a clean `codesign --verify --deep --strict`;
+#   - the exported Runner.app must carry aps-environment = production;
+#   - validate runs only on a pull request (!inputs.upload), upload only on a
+#     release (inputs.upload), both after every check;
+#   - `if: always()` revoke deletes the certificate and profile (`-` for one
+#     never made, nothing when the key never existed), the keychain and the
+#     profiles, after any failure too;
 #   ios/Runner/Info.plist declares ITSAppUsesNonExemptEncryption = false.
 #
-# What only a macOS runner shows: that Xcode really signs, that the export
-# really rewrites aps-environment to production, that altool really uploads.
+# What only a macOS runner shows: that Xcode and codesign really sign, that
+# the export really sets aps-environment to production, that Apple accepts
+# the signature (altool --validate-app on every pull request), that the API
+# calls work against Apple (tool/asc_signing.py; its request shapes are
+# checked in test/tool/asc_signing_test.py against a fake server).
 #
 # A `run:` block with no `shell:` runs as `bash -e {0}`, so steps run that way.
 set -euo pipefail
-command -v python3 >/dev/null || { echo "FAIL: python3 is required (plutil stand-in)"; exit 1; }
+command -v python3 >/dev/null || { echo "FAIL: python3 is required (the stand-ins)"; exit 1; }
+command -v zip >/dev/null || { echo "FAIL: zip is required"; exit 1; }
 command -v unzip >/dev/null || { echo "FAIL: unzip is required"; exit 1; }
 cd "$(dirname "$0")/../.."
 release=.github/workflows/release.yml
@@ -187,7 +213,7 @@ for n in "${SECRETS[@]}"; do
   awk -v i="      $n:" '$0 == i { f = 1; next } f && /^ {0,6}[A-Za-z]/ { exit } f' "$ipa_wf" | grep -q '^ *required: true$' \
     || fail "secret $n is not required"
 done
-grep -qE '^    runs-on: macos-' "$ipa_wf" || fail "ios-ipa does not run on macOS"
+grep -qE "^    runs-on: macos-26$" "$ipa_wf" || fail "ios-ipa must run on macos-26 (Xcode 26: App Store Connect refuses older SDKs)"
 step_keys "$ipa_wf" "Check out source" | grep -q 'ref: ${{ inputs.ref }}' || fail "checkout ignores inputs.ref"
 step_keys "$ipa_wf" "Check out source" | grep -qE '^ *persist-credentials: false$' \
   || fail "checkout must not persist the token into .git/config (persist-credentials: false)"
@@ -204,187 +230,62 @@ grep -nE 'set -x|set -o xtrace|bash -x' "$ipa_wf" && fail "tracing would print t
 [ "$(grep -c 'secrets.APP_STORE_CONNECT_API_KEY' "$ipa_wf")" -eq 1 ] || fail "the API key secret is read in more than one place"
 step_keys "$ipa_wf" "Write the App Store Connect key" | grep -q 'KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}' \
   || fail "the key step does not take the key from its secret"
-# Step order, and the gates on upload and cleanup.
+# Step order, exactly the contract's; the gates on validate, upload and cleanup.
 mapfile -t steps < <(sed -n 's/^      - name: //p' "$ipa_wf")
+want_steps=("Check out source" "Install Flutter" "Restore Firebase config" "Resolve dependencies"
+  "Configure the Xcode build" "Write the App Store Connect key" "Archive (signed)"
+  "Sign the archive with its entitlements" "Create the signing certificate" "Export for App Store Connect"
+  "Sign with an explicit requirement" "Check the signature" "Check the push entitlement"
+  "Validate with App Store Connect" "Upload to TestFlight" "Revoke the signing certificate"
+  "Remove the App Store Connect key")
+[ "$(printf '%s\n' "${steps[@]}")" = "$(printf '%s\n' "${want_steps[@]}")" ] \
+  || fail "ios-ipa.yml steps are not in the contract order:$(printf '\n  %s' "${steps[@]}")"
 pos() { local i; for i in "${!steps[@]}"; do [ "${steps[$i]}" = "$1" ] && { echo "$i"; return; }; done; fail "no step '$1'"; }
-# The key exists on disk only from just before the archive: not during
-# checkout, pub get or the config-only build.
-[ "$(( $(pos "Write the App Store Connect key") + 1 ))" -eq "$(pos "Archive (signed)")" ] || fail "the key step is not the step just before the archive"
+# The key is on disk only from after the config-only build: not during
+# checkout, pub get or configure; and before the certificate step needs it.
 for s in "Check out source" "Resolve dependencies" "Configure the Xcode build"; do
   [ "$(pos "$s")" -lt "$(pos "Write the App Store Connect key")" ] || fail "the key is on disk during '$s'"
 done
-[ "$(pos "Export for App Store Connect")" -lt "$(pos "Check the push entitlement")" ] || fail "entitlement checked before export"
-[ "$(pos "Check the push entitlement")" -lt "$(pos "Upload to TestFlight")" ] || fail "the upload runs before the push entitlement check"
+[ "$(pos "Write the App Store Connect key")" -lt "$(pos "Create the signing certificate")" ] || fail "the certificate step runs before the key exists"
+gate() { step_keys "$ipa_wf" "$1" | sed -n 's/^ *if: *//p' | sed 's/^\${{ *//; s/ *}}$//'; }
+[ "$(gate "Upload to TestFlight")" = inputs.upload ] || fail "upload is not gated on inputs.upload: [$(gate "Upload to TestFlight")]"
+[ "$(gate "Validate with App Store Connect")" = '!inputs.upload' ] || fail "validate must run only when not uploading: [$(gate "Validate with App Store Connect")]"
+[ "$(gate "Revoke the signing certificate")" = 'always()' ] || fail "revoke must run even after a failure (if: always())"
+[ "$(gate "Remove the App Store Connect key")" = 'always()' ] || fail "key removal must run even after a failure (if: always())"
 [ "${steps[-1]}" = "Remove the App Store Connect key" ] || fail "key removal is not the last step (last: ${steps[-1]})"
-[ "$(step_keys "$ipa_wf" "Upload to TestFlight" | sed -n 's/^ *if: *//p')" = inputs.upload ] || fail "upload is not gated on inputs.upload"
-[ "$(step_keys "$ipa_wf" "Remove the App Store Connect key" | sed -n 's/^ *if: *//p')" = 'always()' ] \
-  || fail "key removal must run even after a failure (if: always())"
-for s in "Check the push entitlement" "Write the App Store Connect key" "Restore Firebase config"; do
+for s in "${want_steps[@]}"; do
+  case "$s" in "Upload to TestFlight"|"Validate with App Store Connect"|"Revoke the signing certificate"|"Remove the App Store Connect key") continue ;; esac
+  [ -z "$(gate "$s")" ] || fail "'$s' is gated [$(gate "$s")]: every other step must run on every call"
+done
+for s in "${want_steps[@]}"; do
   step_keys "$ipa_wf" "$s" | grep -q 'continue-on-error' && fail "'$s' must not be continue-on-error"
 done
 
 # ---- ios-ipa.yml: the steps, run ---------------------------------------------
-# Stand-ins, strict to the real CLI surface; a refused call is logged.
-mkdir -p "$tmp/bin"
-export STUB_REJECTS="$tmp/rejects" STUB_CALLS="$tmp/calls"
-# codesign -d --entitlements :- PATH  -> entitlements as an XML plist on
-#   stdout, "Executable=..." on stderr (real codesign). `--entitlements -`
-#   without the ':' and without --xml prints the human "[Dict]" form, which
-#   no plist parser reads. Unsigned app -> "code object is not signed at all",
-#   exit 1. The stand-in reads the signed entitlements from
-#   PATH/_CodeSignature/entitlements.plist (absent = unsigned).
-cat > "$tmp/bin/codesign" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-args="$*"
-die() { echo "codesign stub: $* (call: codesign $args)" >&2; echo "codesign $args" >> "$STUB_REJECTS"; exit 2; }
-[ "${1:-}" = -d ] || die "only -d is expected"
-shift; ent=; xml=; path=
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --entitlements) ent=${2:?}; shift 2 ;;
-    --xml) xml=1; shift ;;
-    -*) die "unknown flag $1" ;;
-    *) [ -z "$path" ] || die "more than one path"; path=$1; shift ;;
-  esac
-done
-[ "$ent" = :- ] || [ "$ent" = - ] || die "entitlements to a file, not stdout"
-[ -e "$path" ] || { echo "$path: No such file or directory" >&2; exit 1; }
-[ -d "$path" ] && [ -f "$path/Info.plist" ] || die "not an app bundle: $path"
-sig="$path/_CodeSignature/entitlements.plist"
-[ -f "$sig" ] || { echo "$path: code object is not signed at all" >&2; exit 1; }
-echo "Executable=$path/Runner" >&2
-if [ "$ent" = :- ]; then
-  echo "Warning: Specifying ':' in the path is deprecated and will not work in a future release" >&2
-  cat "$sig"
-elif [ -n "$xml" ]; then cat "$sig"
-else
-  python3 -c 'import plistlib,sys
-d=plistlib.load(open(sys.argv[1],"rb")); print("[Dict]")
-for k,v in d.items(): print("\t[Key] %s\n\t[Value]\n\t\t[String] %s" % (k,v))' "$sig"
-fi
-EOF
-# plutil -extract KEYPATH FORMAT [-expect TYPE] [-o PATH] FILE ('-' = stdin).
-#   Without -o, real plutil rewrites FILE in place; the stand-in refuses that.
-#   Missing key -> "Could not extract value", exit 1; unparseable -> exit 1.
-#   raw prints a scalar's value.
-cat > "$tmp/bin/plutil" <<'EOF'
-#!/usr/bin/env python3
-import plistlib, sys
-args = sys.argv[1:]
-def die(msg):
-    print("plutil stub: %s (call: plutil %s)" % (msg, " ".join(args)), file=sys.stderr)
-    open(__import__("os").environ["STUB_REJECTS"], "a").write("plutil %s\n" % " ".join(args))
-    sys.exit(2)
-if len(args) < 3 or args[0] != "-extract": die("only -extract is expected")
-keypath, fmt, rest = args[1], args[2], args[3:]
-if fmt not in ("xml1", "binary1", "json", "swift", "objc", "raw"): die("bad format " + fmt)
-out = None; files = []
-while rest:
-    a = rest.pop(0)
-    if a == "-o": out = rest.pop(0)
-    elif a == "-expect": rest.pop(0)
-    elif a.startswith("-") and a != "-": die("unknown flag " + a)
-    else: files.append(a)
-if len(files) != 1: die("one input file expected")
-if out != "-": die("extract without -o - would rewrite the input")
-name = "<stdin>" if files[0] == "-" else files[0]
-data = sys.stdin.buffer.read() if files[0] == "-" else open(files[0], "rb").read()
-try:
-    v = plistlib.loads(data)
-except Exception:
-    print("%s: Property List error: Cannot parse a NULL or zero-length data / JSON error" % name, file=sys.stderr); sys.exit(1)
-for part in keypath.split("."):
-    if not isinstance(v, dict) or part not in v:
-        print("%s: Could not extract value, error: No value at that key path or invalid key path: %s" % (name, keypath), file=sys.stderr); sys.exit(1)
-    v = v[part]
-if fmt != "raw": die("only raw is modelled")
-if isinstance(v, (dict, list)): print("%s: Could not extract value: not a scalar" % name, file=sys.stderr); sys.exit(1)
-print(str(v).lower() if isinstance(v, bool) else v)
-EOF
-# xcodebuild archive ... / -exportArchive ...: the flags these steps may use.
-#   A missing -authenticationKeyPath file fails as real xcodebuild does; the
-#   export reads ExportOptions.plist (an invalid plist fails) and writes
-#   EXPORT/Runner.ipa, an app whose signed entitlements are $STUB_APS
-#   (unset = key absent, "unsigned" = no signature).
-cat > "$tmp/bin/xcodebuild" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-args="$*"
-die() { echo "xcodebuild stub: $* (call: xcodebuild $args)" >&2; echo "xcodebuild $args" >> "$STUB_REJECTS"; exit 2; }
-mode=; declare -A o=()
-while [ $# -gt 0 ]; do
-  case "$1" in
-    archive) mode=archive; shift ;;
-    -exportArchive) mode=export; shift ;;
-    -quiet|-allowProvisioningUpdates) o[$1]=1; shift ;;
-    -workspace|-scheme|-configuration|-destination|-archivePath|-exportPath|-exportOptionsPlist|-authenticationKeyPath|-authenticationKeyID|-authenticationKeyIssuerID)
-      o[$1]=${2:?}; shift 2 ;;
-    *) die "unexpected argument $1" ;;
-  esac
-done
-for k in -allowProvisioningUpdates -authenticationKeyPath -authenticationKeyID -authenticationKeyIssuerID -archivePath; do
-  [ -n "${o[$k]:-}" ] || die "missing $k"
-done
-[ -f "${o[-authenticationKeyPath]}" ] || { echo "error: authentication key file not found: ${o[-authenticationKeyPath]}" >&2; exit 70; }
-echo "xcodebuild $mode" >> "$STUB_CALLS"
-if [ "$mode" = archive ]; then
-  [ "${o[-workspace]:-}" = ios/Runner.xcworkspace ] && [ "${o[-scheme]:-}" = Runner ] && [ "${o[-configuration]:-}" = Release ] \
-    || die "archive of the wrong target"
-  mkdir -p "${o[-archivePath]}"
-else
-  [ -d "${o[-archivePath]}" ] || { echo "error: archive not found at path '${o[-archivePath]}'" >&2; exit 70; }
-  cp "${o[-exportOptionsPlist]:?}" "$STUB_EXPORT_OPTIONS"
-  python3 -c 'import plistlib,sys; plistlib.load(open(sys.argv[1],"rb"))' "${o[-exportOptionsPlist]}" 2>/dev/null \
-    || { echo "error: exportOptionsPlist error" >&2; exit 70; }
-  app=$(mktemp -d)/Payload/Runner.app; mkdir -p "$app"; : > "$app/Info.plist"
-  if [ "${STUB_APS-}" != unsigned ]; then
-    mkdir -p "$app/_CodeSignature"
-    python3 -c 'import plistlib,sys
-d={"application-identifier":"T.com.esd.sis"}
-if sys.argv[2]: d["aps-environment"]=sys.argv[2]
-plistlib.dump(d, open(sys.argv[1],"wb"))' "$app/_CodeSignature/entitlements.plist" "${STUB_APS-}"
-  fi
-  mkdir -p "${o[-exportPath]:?}"
-  (cd "$app/../.." && python3 -c 'import os,zipfile,sys
-z=zipfile.ZipFile(sys.argv[1],"w")
-for r,_,fs in os.walk("Payload"):
-  for f in fs: z.write(os.path.join(r,f))' "${o[-exportPath]}/Runner.ipa")
-fi
-EOF
-# xcrun altool --upload-app --type ios --file IPA --apiKey ID --apiIssuer ISSUER
-#   Real altool finds AuthKey_ID.p8 in ./private_keys, ~/private_keys,
-#   ~/.private_keys, ~/.appstoreconnect/private_keys or $API_PRIVATE_KEYS_DIR.
-cat > "$tmp/bin/xcrun" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-args="$*"
-die() { echo "xcrun stub: $* (call: xcrun $args)" >&2; echo "xcrun $args" >> "$STUB_REJECTS"; exit 2; }
-[ "${1:-}" = altool ] || die "only altool is expected"; shift
-declare -A o=(); up=
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --upload-app) up=1; shift ;;
-    --type|--file|--apiKey|--apiIssuer) o[$1]=${2:?}; shift 2 ;;
-    *) die "unexpected argument $1" ;;
-  esac
-done
-[ -n "$up" ] && [ "${o[--type]:-}" = ios ] || die "not an iOS upload"
-[ -f "${o[--file]:-}" ] || { echo "*** Error: file not found: ${o[--file]:-}" >&2; exit 1; }
-found=
-for d in ./private_keys ~/private_keys ~/.private_keys ~/.appstoreconnect/private_keys ${API_PRIVATE_KEYS_DIR:-}; do
-  [ -f "$d/AuthKey_${o[--apiKey]:?}.p8" ] && found=1
-done
-[ -n "$found" ] || { echo "*** Error: Could not find private key AuthKey_${o[--apiKey]}.p8" >&2; exit 1; }
-[ -n "${o[--apiIssuer]:-}" ] || die "no issuer"
-echo "altool upload ${o[--file]}" >> "$STUB_CALLS"
-EOF
-# flutter: records its arguments.
+# Stand-ins, strict to the real CLI surfaces (test/tool/ios_release_stubs.py):
+# codesign, security, xcodebuild, xcrun altool, plutil, curl, and openssl
+# (the real one, refusing what LibreSSL lacks). tool/asc_signing.py is stood
+# in for too (its own test is test/tool/asc_signing_test.py): it checks the
+# CSR and the key, and returns a certificate for the CSR's key issued by a test
+# intermediate, for a team whose name has non-ASCII letters, and a profile.
+REAL_OPENSSL=$(command -v openssl) || fail "openssl is required"
+export REAL_OPENSSL STUB_REJECTS="$tmp/rejects" STUB_CALLS="$tmp/calls" STUB_ROOT_CN="Test Apple Root CA" STUB_TEAM=TEAM123
+mkdir -p "$tmp/bin" "$tmp/ca"
+stubs="$PWD/test/tool/ios_release_stubs.py"
+for t in codesign security xcodebuild xcrun plutil curl openssl; do ln -s "$stubs" "$tmp/bin/$t"; done
 cat > "$tmp/bin/flutter" <<'EOF'
 #!/usr/bin/env bash
 echo "flutter $*" >> "$STUB_CALLS"
 EOF
-chmod +x "$tmp/bin"/*
+chmod +x "$tmp/bin/flutter"
+# A root (the system trusts it; never imported) and the intermediate that
+# issues the certificate; the intermediate is served at the certificate's AIA URL.
+"$REAL_OPENSSL" req -x509 -newkey rsa:2048 -nodes -keyout "$tmp/ca/root.key" -out "$tmp/ca/root.pem" \
+  -subj "/CN=$STUB_ROOT_CN" -days 2 2>/dev/null
+"$REAL_OPENSSL" req -new -newkey rsa:2048 -nodes -keyout "$tmp/ca/inter.key" -out "$tmp/ca/inter.csr" -subj "/CN=Test WWDR G3" 2>/dev/null
+"$REAL_OPENSSL" req -x509 -in "$tmp/ca/inter.csr" -CA "$tmp/ca/root.pem" -CAkey "$tmp/ca/root.key" -days 2 \
+  -addext basicConstraints=critical,CA:true -outform der -out "$tmp/ca/inter.cer" 2>/dev/null
+export STUB_CA="$tmp/ca" STUB_URLS="{\"http://certs.apple.com/wwdrg3.der\": \"$tmp/ca/inter.cer\", \"https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer\": \"$tmp/ca/inter.cer\"}"
 
 key_text=$'-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgSECRETSECRET\nTAILLINEtailline\n-----END PRIVATE KEY-----'
 # run <step name> [VAR=value ...]: the step's run block in a fresh-ish job
@@ -409,13 +310,56 @@ run() {
   local rc=0
   (cd "$tmp/job" && umask 022 && set -a && . "$tmp/github_env" && set +a \
     && env PATH="$tmp/bin:$PATH" HOME="$tmp/home" RUNNER_TEMP="$tmp/rt" GITHUB_ENV="$tmp/github_env" \
+      GITHUB_RUN_ID=5150 GITHUB_RUN_ATTEMPT=2 \
       KEY_ID=K3YID ISSUER_ID=issuer-uuid TEAM_ID=TEAM123 STUB_EXPORT_OPTIONS="$tmp/export-options.plist" ${senv[@]+"${senv[@]}"} "$@" \
       bash -e "$tmp/step.sh") > "$tmp/out" 2>&1 || rc=$?
   [ ! -s "$tmp/rejects" ] || fail "step '$name' called a tool in a way the real CLI refuses: $(cat "$tmp/rejects")"
   return $rc
 }
-fresh() { rm -rf "$tmp/job" "$tmp/rt" "$tmp/home"; mkdir -p "$tmp/job/ios/Runner" "$tmp/rt" "$tmp/home"; : > "$tmp/github_env"; : > "$tmp/calls"; }
-leaked() { grep -qE 'SECRETSECRET|TAILLINE|BEGIN PRIVATE KEY' "$tmp/out"; }
+fresh() {
+  rm -rf "$tmp/job" "$tmp/rt" "$tmp/home"
+  mkdir -p "$tmp/job/ios/Runner" "$tmp/job/tool" "$tmp/rt" "$tmp/home"
+  cp ios/Runner/Runner.entitlements "$tmp/job/ios/Runner/"
+  ln -s "$stubs" "$tmp/job/tool/asc_signing.py"
+  : > "$tmp/github_env"; : > "$tmp/calls"; : > "$tmp/all-out"
+}
+leaked() { grep -qE 'SECRETSECRET|TAILLINE|BEGIN [A-Z ]*PRIVATE KEY' "$1"; }
+plist_get() { python3 -c 'import plistlib,sys; print(plistlib.load(open(sys.argv[1],"rb")).get(sys.argv[2], ""))' "$1" "$2"; }
+
+# run_job UPLOAD [VAR=value ...]: every step the stand-ins model (all but
+# checkout, Flutter install and pub get), in the workflow's own order, with
+# GitHub's gates: after a failure only always() steps run; `!inputs.upload`
+# and `inputs.upload` follow UPLOAD. Sets $failed_step (empty = all passed)
+# and $ran; every step's output is checked for the key.
+run_job() {
+  local upload=$1; shift
+  local s g ok=1 rc
+  failed_step= ran=()
+  for s in "${steps[@]}"; do
+    case "$s" in "Check out source"|"Install Flutter"|"Resolve dependencies") continue ;; esac
+    g=$(gate "$s")
+    case "$g" in
+      "") [ "$ok" = 1 ] || continue ;;
+      'always()') ;;
+      inputs.upload) [ "$ok" = 1 ] && [ "$upload" = true ] || continue ;;
+      '!inputs.upload') [ "$ok" = 1 ] && [ "$upload" = false ] || continue ;;
+      *) fail "step '$s' has a gate this test does not model: $g" ;;
+    esac
+    ran+=("$s"); rc=0
+    run "$s" GOOGLE_SERVICE_INFO_PLIST="<plist/>" KEY="$key_text" "$@" || rc=$?
+    { echo "--- $s (exit $rc)"; cat "$tmp/out"; } >> "$tmp/all-out"
+    leaked "$tmp/out" && fail "step '$s' printed a private key"
+    if [ "$rc" != 0 ] && [ "$ok" = 1 ]; then ok=0; failed_step=$s; fi
+  done
+  cp "$tmp/all-out" "$tmp/out"
+}
+cleaned() { # after the always() steps: nothing of the signing material is left
+  [ ! -e "$tmp/rt/asc" ] || fail "the key directory survived the job"
+  [ ! -e "$tmp/rt/sign" ] || fail "\$RUNNER_TEMP/sign (private key, keychain) survived the job"
+  [ ! -e "$tmp/home/Library/MobileDevice/Provisioning Profiles" ] && [ ! -e "$tmp/home/Library/Developer/Xcode/UserData/Provisioning Profiles" ] \
+    || fail "the provisioning profile survived the job"
+  ! grep -q sign.keychain-db "$tmp/home/.stub-keychain-search" 2>/dev/null || fail "the temporary keychain is still in the search list"
+}
 
 # 6 Firebase config: written verbatim; an empty secret fails and writes nothing.
 fresh
@@ -434,7 +378,7 @@ kf="$tmp/rt/asc/AuthKey_K3YID.p8"
 [ "$(stat -c %a "$kf")" = 600 ] || fail "key file mode $(stat -c %a "$kf"), want 600"
 [ "$(stat -c %a "$tmp/rt/asc")" = 700 ] || fail "key dir mode $(stat -c %a "$tmp/rt/asc"), want 700"
 [ "$(cat "$kf")" = "$key_text" ] || fail "key file content differs from the secret"
-leaked && fail "the key step printed the key"
+leaked "$tmp/out" && fail "the key step printed the key"
 grep -qx "API_PRIVATE_KEYS_DIR=$tmp/rt/asc" "$tmp/github_env" || fail "API_PRIVATE_KEYS_DIR not exported: [$(cat "$tmp/github_env")]"
 for empty in KEY KEY_ID ISSUER_ID TEAM_ID; do
   fresh
@@ -442,62 +386,154 @@ for empty in KEY KEY_ID ISSUER_ID TEAM_ID; do
   [ -z "$(ls -A "$tmp/rt")" ] || fail "a key was written with $empty empty"
 done
 
-# 8 the build, run in workflow order: config, key, archive with the key, export with automatic signing.
+# 8 a pull request run, every step in workflow order: passes, validates, never uploads.
 fresh
-run "Configure the Xcode build" || fail "configure step failed"
-[ ! -e "$tmp/rt/asc" ] || fail "the key exists during the config-only build"
-run "Write the App Store Connect key" KEY="$key_text" || fail "key step failed"
+run_job false
+[ -z "$failed_step" ] || fail "the pull request job failed at '$failed_step'"
+grep -q '^xcodebuild -version$' "$tmp/calls" || fail "the archive step does not log the Xcode version"
+[ "$(grep -c '^xcodebuild archive ' "$tmp/calls")" -eq 1 ] && [ "$(grep -c '^xcodebuild export ' "$tmp/calls")" -eq 1 ] \
+  || fail "want one archive and one export: $(grep '^xcodebuild' "$tmp/calls")"
+grep '^xcodebuild archive ' "$tmp/calls" | grep -qE -- '-allowProvisioningUpdates|-authenticationKey' \
+  && fail "the archive is unsigned: no -allowProvisioningUpdates or -authenticationKey* ($(grep '^xcodebuild archive' "$tmp/calls"))"
 grep -q '^flutter build ios ' "$tmp/calls" || fail "flutter does not build ios"
 for f in --config-only --release --no-codesign --build-number=4242 --build-name=9.8.7 \
   --dart-define=SUPABASE_URL=var-SUPABASE_URL --dart-define=SUPABASE_PUBLISHABLE_KEY=var-SUPABASE_PUBLISHABLE_KEY \
   --dart-define=GOOGLE_WEB_CLIENT_ID=var-GOOGLE_WEB_CLIENT_ID; do
   grep -q -- " $f\( \|$\)" "$tmp/calls" || fail "flutter build lacks $f: $(cat "$tmp/calls")"
 done
-grep -q 'build ipa' "$tmp/calls" && fail "flutter build ipa cannot pass the API key"
-run "Archive (signed)" || fail "archive failed with the key the key step wrote"
-run "Export for App Store Connect" STUB_APS=production || fail "export failed"
-python3 - "$tmp/export-options.plist" <<'EOF' || fail "ExportOptions.plist is wrong"
+grep -q 'build ipa' "$tmp/calls" && fail "flutter build ipa cannot sign this app"
+[[ "$(grep '^asc create' "$tmp/calls")" == "asc create com.esd.sis "*5150*2* ]] \
+  || fail "the certificate step does not create for com.esd.sis with a profile name unique to the run attempt: $(grep '^asc' "$tmp/calls")"
+for v in SIGNING_IDENTITY SIGNING_PROFILE_UUID SIGNING_CERTIFICATE_ID SIGNING_PROFILE_ID; do
+  grep -q "^$v=." "$tmp/github_env" || fail "$v is not in GITHUB_ENV: $(cat "$tmp/github_env")"
+done
+grep -qx 'SIGNING_CERTIFICATE_ID=CERT-1' "$tmp/github_env" && grep -qx 'SIGNING_PROFILE_ID=PROF-1' "$tmp/github_env" \
+  || fail "the ids from asc_signing.py did not reach GITHUB_ENV"
+sha1=$(sed -n 's/^SIGNING_IDENTITY=//p' "$tmp/github_env")
+uuid=$(sed -n 's/^SIGNING_PROFILE_UUID=//p' "$tmp/github_env")
+python3 - "$tmp/export-options.plist" "$sha1" "$uuid" <<'EOF' || fail "ExportOptions.plist is wrong"
 import plistlib, sys
 d = plistlib.load(open(sys.argv[1], "rb"))
-want = {"method": "app-store-connect", "signingStyle": "automatic", "teamID": "TEAM123"}
+want = {"method": "app-store-connect", "signingStyle": "manual", "teamID": "TEAM123",
+        "signingCertificate": sys.argv[2], "provisioningProfiles": {"com.esd.sis": sys.argv[3]}}
 bad = {k: d.get(k) for k in want if d.get(k) != want[k]}
-if bad: print("ExportOptions:", bad, file=sys.stderr); sys.exit(1)
+if bad or len(sys.argv[2]) != 40: print("ExportOptions:", bad, file=sys.stderr); sys.exit(1)
 EOF
-[ "$(cat "$tmp/calls" | grep -c '^xcodebuild')" -eq 2 ] || fail "want one archive and one export"
-# Without the key the archive fails (the key path is the one the key step writes).
-rm -rf "$tmp/rt/asc"
-if run "Archive (signed)"; then fail "archive ran without the API key"; fi
+grep -q "^altool validate $tmp/rt/export/sis.ipa$" "$tmp/calls" || fail "the pull request was not validated with App Store Connect: $(cat "$tmp/calls")"
+grep -q '^altool upload' "$tmp/calls" && fail "a pull request uploaded to TestFlight"
+grep -qx 'asc delete CERT-1 PROF-1' "$tmp/calls" || fail "the certificate and profile were not revoked: $(grep '^asc' "$tmp/calls")"
+grep -qx 'security delete-keychain' "$tmp/calls" || fail "the temporary keychain was not deleted"
+cleaned
+# What the check printed: every code object with an Apple Distribution authority.
+for o in Runner.app Flutter.framework App.framework objective_c.framework; do
+  grep -q "^$o: Apple Distribution: " "$tmp/out" || fail "the signature check does not show $o signed for distribution"
+done
 
-# 9 the push entitlement: production passes; everything else fails.
-ent() { # <STUB_APS value or 'unset'> -> step exit status
+# 9 the release run: uploads, never validates separately; the same cleanup.
+fresh
+run_job true
+[ -z "$failed_step" ] || fail "the release job failed at '$failed_step'"
+grep -q "^altool upload $tmp/rt/export/sis.ipa$" "$tmp/calls" || fail "the release did not upload the exported .ipa: $(cat "$tmp/calls")"
+grep -q '^altool validate' "$tmp/calls" && fail "the release validates separately (the upload validates itself)"
+grep -qx 'asc delete CERT-1 PROF-1' "$tmp/calls" || fail "the release did not revoke the certificate"
+cleaned
+
+# 10 failures: the always() steps still clean up whatever exists, and nothing is uploaded.
+# A certificate made, then the profile refused: the certificate is still revoked.
+fresh
+run_job true STUB_ASC_FAIL=profile
+[ "$failed_step" = "Create the signing certificate" ] || fail "a refused profile did not fail the certificate step (failed: '${failed_step:-none}')"
+grep -qx 'asc delete CERT-1 -' "$tmp/calls" || fail "a certificate without a profile was not revoked: $(grep '^asc' "$tmp/calls")"
+grep -q '^altool' "$tmp/calls" && fail "the job went on to altool after a failure"
+cleaned
+# The export fails: both are revoked.
+fresh
+run_job true STUB_EXPORT_FAIL=1
+[ "$failed_step" = "Export for App Store Connect" ] || fail "a failed export did not stop the job (failed: '${failed_step:-none}')"
+grep -qx 'asc delete CERT-1 PROF-1' "$tmp/calls" || fail "after a failed export the certificate was not revoked"
+cleaned
+# An early failure (no key yet): nothing to revoke, and the cleanup steps pass.
+fresh
+run_job true GOOGLE_SERVICE_INFO_PLIST=
+[ "$failed_step" = "Restore Firebase config" ] || fail "an empty Firebase secret did not fail first (failed: '${failed_step:-none}')"
+[ "${ran[-2]}" = "Revoke the signing certificate" ] && [ "${ran[-1]}" = "Remove the App Store Connect key" ] \
+  || fail "after an early failure the cleanup steps did not run: ${ran[*]}"
+grep -q '^asc' "$tmp/calls" && fail "revoke called the API with no key and nothing created"
+grep -q "exit [1-9]).*" <(grep -- '^--- \(Revoke\|Remove\)' "$tmp/out") && fail "a cleanup step failed after an early failure"
+# A certificate that is not for distribution fails the signature check, before any altool.
+fresh
+run_job false STUB_CERT_KIND="Apple Development"
+[ "$failed_step" = "Check the signature" ] || fail "a development-signed app passed the signature check (failed: '${failed_step:-none}')"
+grep -q '^altool' "$tmp/calls" && fail "altool ran after the signature check failed"
+cleaned
+# A profile without the production push environment fails the push check.
+fresh
+run_job true STUB_PROFILE_APS=development
+[ "$failed_step" = "Check the push entitlement" ] || fail "aps-environment development passed (failed: '${failed_step:-none}')"
+grep -q '^altool' "$tmp/calls" && fail "a build without production push was uploaded"
+cleaned
+
+# 11 the signature check on its own: a code object re-signed after the app
+# (broken seal), or signed ad-hoc, fails.
+sig_case() { # <framework> <adhoc | tamper>: re-sign it ad-hoc, or change it after signing
   fresh
-  run "Write the App Store Connect key" KEY="$key_text" >/dev/null || fail "key step failed"
-  run "Archive (signed)" || fail "archive failed"
-  if [ "$1" = unset ]; then run "Export for App Store Connect" || fail "export failed"
-  else run "Export for App Store Connect" STUB_APS="$1" || fail "export failed"; fi
-  run "Check the push entitlement"
+  run_job false >/dev/null
+  [ -z "$failed_step" ] || fail "setup job failed at '$failed_step'"
+  ( cd "$tmp/rt" && rm -rf resign && mkdir resign && cd resign && unzip -q ../export/sis.ipa )
+  local fw="$tmp/rt/resign/Payload/Runner.app/Frameworks/$1"
+  if [ "$2" = adhoc ]; then PATH="$tmp/bin:$PATH" HOME="$tmp/home" codesign --force --sign - "$fw" 2>/dev/null
+  else echo ' ' >> "$fw/_CodeSignature/stub.json"; fi
+  ( cd "$tmp/rt/resign" && rm ../export/sis.ipa && zip -qr ../export/sis.ipa . )
+  rm -rf "$tmp/rt/sig"
+  run "Check the signature"
 }
-ent production || fail "a production-signed app failed the push check"
+if sig_case App.framework adhoc; then fail "an ad-hoc framework inside a distribution-signed app passed the signature check"; fi
+grep -q "App.framework: unsigned or ad-hoc" "$tmp/out" || fail "the check does not name the ad-hoc framework: $(cat "$tmp/out")"
+# Still Apple Distribution everywhere, but the app's seal no longer matches: only --verify sees it.
+if sig_case Flutter.framework tamper; then fail "a framework changed after the app was signed passed the signature check"; fi
+grep -q "sealed resource is missing or invalid" "$tmp/out" || fail "the check did not fail on the broken seal: $(cat "$tmp/out")"
+
+# 12 the push entitlement on its own: production passes; everything else fails.
+mkipa() { # <aps-environment | unset | unsigned>: $RUNNER_TEMP/export/sis.ipa
+  rm -rf "$tmp/rt/export" "$tmp/rt/ipa"; mkdir -p "$tmp/rt/export"
+  python3 - "$tmp/rt/export/sis.ipa" "$1" <<'EOF'
+import io, json, plistlib, sys, zipfile
+z = zipfile.ZipFile(sys.argv[1], "w")
+z.writestr("Payload/Runner.app/Info.plist", plistlib.dumps({"CFBundleIdentifier": "com.esd.sis"}))
+if sys.argv[2] != "unsigned":
+    ents = {"application-identifier": "TEAM123.com.esd.sis"}
+    if sys.argv[2] != "unset": ents["aps-environment"] = sys.argv[2]
+    z.writestr("Payload/Runner.app/_CodeSignature/stub.json", json.dumps({"identifier": "com.esd.sis", "adhoc": True,
+               "leaf": None, "entitlements": ents, "dr": None, "seal": {}}))
+EOF
+}
+fresh; mkipa production
+run "Check the push entitlement" || fail "a production-signed app failed the push check"
 grep -qx 'aps-environment: production' "$tmp/out" || fail "the check does not report the value"
 for bad in development unset unsigned; do
-  if ent "$bad"; then fail "aps-environment '$bad' passed the push check"; fi
+  fresh; mkipa "$bad"
+  if run "Check the push entitlement"; then fail "aps-environment '$bad' passed the push check"; fi
 done
 fresh
 if run "Check the push entitlement"; then fail "the push check passed with no exported .ipa"; fi
 
-# 10 upload: finds the key through GITHUB_ENV, uploads the exported .ipa; the key is then removed.
-ent production || fail "push check failed"
-run "Upload to TestFlight" || fail "upload failed"
-grep -qx "altool upload $tmp/rt/export/Runner.ipa" "$tmp/calls" || fail "the exported .ipa was not uploaded: $(cat "$tmp/calls")"
-leaked && fail "the upload printed the key"
-run "Remove the App Store Connect key" || fail "key removal failed"
-[ ! -e "$tmp/rt/asc" ] || fail "the key directory survived removal"
-# Removal is safe when the key step never ran (always() runs it after an early failure).
+# 13 validate and upload find the key through GITHUB_ENV; without it they fail.
 fresh
+run_job false >/dev/null
+rm -rf "$tmp/rt/asc"
+if run "Validate with App Store Connect"; then fail "validation ran without the API key"; fi
+if run "Upload to TestFlight"; then fail "the upload ran without the API key"; fi
+# Revoke and removal are safe when nothing was created (always() after an early failure).
+fresh
+run "Revoke the signing certificate" || fail "revoke failed when nothing was created"
 run "Remove the App Store Connect key" || fail "key removal failed when there was no key"
+fresh
+run "Write the App Store Connect key" KEY="$key_text" >/dev/null
+run "Revoke the signing certificate" || fail "revoke failed with the key but no certificate"
+grep -q '^asc delete' "$tmp/calls" && ! grep -qx 'asc delete - -' "$tmp/calls" && fail "revoke without ids must pass '- -': $(grep '^asc' "$tmp/calls")"
 
 # ---- Info.plist --------------------------------------------------------------
-# 11 export compliance answered in the app: no manual question per TestFlight build.
+# 14 export compliance answered in the app: no manual question per TestFlight build.
 python3 -c 'import plistlib,sys; sys.exit(0 if plistlib.load(open("ios/Runner/Info.plist","rb")).get("ITSAppUsesNonExemptEncryption") is False else 1)' \
   || fail "Info.plist must declare ITSAppUsesNonExemptEncryption = false"
 

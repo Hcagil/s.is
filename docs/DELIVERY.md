@@ -84,17 +84,29 @@ the pull request. It restores `ios/Runner/GoogleService-Info.plist` from the
 Release: `release.yml` has a second job, `ios`, beside `publish` in the same
 run, so it carries the same `versionCode` (computed once, in the `scope` job).
 It calls `.github/workflows/ios-ipa.yml`, which writes
-`GoogleService-Info.plist`, archives unsigned with `xcodebuild` (a signed
-archive would need a development profile, which needs a registered device),
-ad-hoc signs the archived app with `Runner.entitlements` so the entitlements
-survive, lets the export sign it for App Store distribution, fails unless the exported app carries `aps-environment` =
-`production`, and uploads the `.ipa` to TestFlight (`xcrun altool`). TestFlight
+`GoogleService-Info.plist`, archives unsigned with `xcodebuild` on a
+`macos-26` runner (Xcode 26: App Store Connect refuses older iOS SDKs; a
+signed automatic archive would need a development profile, which needs a
+registered device, and the team has none), creates a distribution certificate
+for a key generated in the job plus an App Store profile through the App Store
+Connect API (`tool/asc_signing.py`), exports with manual signing, then signs
+every framework and the app again with an explicit designated requirement on
+the team ID (the requirement Xcode writes compares the certificate's common
+name, and the team's name has non-ASCII letters that Apple's validation does
+not match), checks that every code object verifies and is signed by an Apple
+Distribution certificate, fails unless the exported app carries
+`aps-environment` = `production`, and uploads the `.ipa` to TestFlight
+(`xcrun altool --upload-app`). On a pull request the same workflow stops
+short of the upload and runs `xcrun altool --validate-app` instead, so
+Apple's own validation happens before the merge. The certificate and profile
+are revoked when the job ends, whatever its result (TestFlight re-signs what
+it distributes, so a shipped build is never affected). TestFlight
 is the internal-track equivalent: the internal group `Team` receives each
-build automatically. Signing is cloud-managed: the App Store Connect API key
+build automatically. The App Store Connect API key
 (`APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
-`APP_STORE_CONNECT_API_KEY` = the `.p8` text, plus `APPLE_TEAM_ID`) lets Xcode
-create the certificate and profiles itself; no certificate, `.p12` or match
-repository exists. The `.p8` is written to the runner's temporary directory
+`APP_STORE_CONNECT_API_KEY` = the `.p8` text, plus `APPLE_TEAM_ID`) is the
+only credential; no certificate, `.p12` or match repository exists. The `.p8`
+and the run's signing key are written to the runner's temporary directory
 with mode 600, never printed, and removed at the end.
 
 `publish` (Play, migrations, function deploy, tag) does not wait on `ios`, and

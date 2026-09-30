@@ -95,7 +95,7 @@ jobs:
       - name: Resolve dependencies
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter pub get
       - name: Layer rules
-        run: tool/check_pattern.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh
+        run: tool/check_pattern.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/asc_signing_test.py
 
       - name: Check formatting
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter dart format --output=none --set-exit-if-changed lib test
@@ -200,7 +200,8 @@ jobs:
     name: iOS build
     needs: changes
     if: needs.changes.outputs.app == 'true'
-    runs-on: macos-15
+    # Same image as ios-ipa.yml, so the pull request compiles with the SDK the release ships.
+    runs-on: macos-26
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

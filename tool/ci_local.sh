@@ -44,7 +44,7 @@ service_key() {
   "${CI[@]}" run --rm supabase status -o env | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p'
 }
 
-layer_rules() { tool/check_pattern.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh; }
+layer_rules() { tool/check_pattern.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/asc_signing_test.py; }
 
 bundle() {
   test -f android/app/google-services.json \

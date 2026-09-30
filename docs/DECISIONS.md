@@ -1482,5 +1482,7 @@ switch, and it would be the wrong one).
 Supabase's own error text, which can hold a token or an ID. It now says
 "Sign-in failed. Please try again." (or "Sign-in was cancelled. Please try
 again."), and the device log (`sis.auth`) keeps only the error code or type,
-never a message body. This replaces the 2026-09-24 "sign-in keeps its
+never a message body. The start-up failure screen, which printed the raw
+exception, says "SIS could not start. Please try again." and logs only the
+type (`sis.startup`). This replaces the 2026-09-24 "sign-in keeps its
 diagnostics" choice.

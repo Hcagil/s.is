@@ -9,7 +9,11 @@ import 'package:sis/data/failures.dart' show offlineMessage;
 import 'package:sis/features/notifications/data/supabase_push_registry.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:sis/features/chat/data/supabase_chat_repository.dart';
+
 import '../support/dead_host.dart';
+import '../support/reach.dart';
+import '../support/service_key.dart';
 
 /// [SupabasePushRegistry] against the real stack: the register_device_token
 /// and forget_device_token RPCs, over a signed-in client.
@@ -151,6 +155,120 @@ void main() {
       final result = await SupabasePushRegistry(anon).forget(_token());
       expect(result, isA<Err<void>>());
       expect((result as Err<void>).failure, isA<DeniedFailure>());
+    });
+  });
+
+  // The platform a phone registers as, read back from what the push sender
+  // is handed (public.push_targets, the edge function's delivery list):
+  // ione writes to a group with ilka and isak, and each phone's row is what
+  // the server would deliver to.
+  group('the platform a phone registers as', () {
+    late SupabaseClient service, ione, ilka, isak;
+    late String group;
+
+    setUpAll(() async {
+      service = SupabaseClient(_url, serviceKey());
+      ione = await _signedIn('ione@integration.test');
+      ilka = await _signedIn('ilka@integration.test');
+      isak = await _signedIn('isak@integration.test');
+      await findByTag(ione, [ilka, isak]);
+      final started = await SupabaseChatRepository(ione).startGroupConversation(
+        title: 'ios push ${DateTime.now().microsecondsSinceEpoch}',
+        memberIds: [ilka.auth.currentUser!.id, isak.auth.currentUser!.id],
+      );
+      group = (started as Ok<String>).value;
+    });
+
+    tearDownAll(() async {
+      for (final c in [service, ione, ilka, isak]) {
+        await c.dispose();
+      }
+    });
+
+    /// The delivery rows for [member] of a fresh message from ione.
+    Future<List<Map<String, dynamic>>> deliveryTo(SupabaseClient member) async {
+      final row = await ione
+          .from('messages')
+          .insert({
+            'conversation_id': group,
+            'sender_id': ione.auth.currentUser!.id,
+            'body': 'platform ${DateTime.now().microsecondsSinceEpoch}',
+          })
+          .select('id')
+          .single();
+      final targets = await service.rpc(
+        'push_targets',
+        params: {'message_id': row['id']},
+      );
+      return [
+        for (final t in targets as List)
+          if (t['user_id'] == member.auth.currentUser!.id)
+            {
+              'token': t['token'],
+              'platform': t['platform'],
+              'shows_itself': t['shows_itself'],
+            },
+      ];
+    }
+
+    test('the default registers an Android phone that shows pushes itself; '
+        'an iPhone registration then replaces it with an ios row that does '
+        'not', () async {
+      final androidToken = _token();
+      expect(
+        await SupabasePushRegistry(ilka).register(androidToken),
+        isA<Ok<void>>(),
+      );
+      expect(await deliveryTo(ilka), [
+        {'token': androidToken, 'platform': 'android', 'shows_itself': true},
+      ]);
+
+      final iosToken = _token();
+      final r = await SupabasePushRegistry(
+        ilka,
+        platform: 'ios',
+      ).register(iosToken);
+      expect(r, isA<Ok<void>>(), reason: '$r');
+      expect(await deliveryTo(ilka), [
+        {'token': iosToken, 'platform': 'ios', 'shows_itself': false},
+      ], reason: 'one active device: the iPhone replaces the Android token');
+    });
+
+    test('a token another member registered moves to the iPhone that '
+        'registers it', () async {
+      final token = _token();
+      expect(await SupabasePushRegistry(ilka).register(token), isA<Ok<void>>());
+      expect((await deliveryTo(ilka)).single['token'], token);
+
+      final r = await SupabasePushRegistry(
+        isak,
+        platform: 'ios',
+      ).register(token);
+      expect(r, isA<Ok<void>>(), reason: '$r');
+      final delivery = await deliveryTo(isak);
+      expect(delivery, [
+        {'token': token, 'platform': 'ios', 'shows_itself': false},
+      ]);
+      expect(
+        (await deliveryTo(ilka)).map((t) => t['token']),
+        isNot(contains(token)),
+        reason: 'the token left ilka when isak claimed it',
+      );
+    });
+
+    test('a platform the server does not know is refused -- a readable '
+        'failure, not DeniedFailure, and nothing is stored', () async {
+      final before = await deliveryTo(isak);
+      final token = _token();
+      final r = await SupabasePushRegistry(
+        isak,
+        platform: 'windows',
+      ).register(token);
+      expect(r, isA<Err<void>>());
+      final failure = (r as Err<void>).failure;
+      expect(failure, isNot(isA<DeniedFailure>()));
+      expect(failure.message, isNot(contains('PostgrestException')));
+      expect(await deliveryTo(isak), before);
     });
   });
 

@@ -7,6 +7,8 @@
 //
 // Not covered: that main() passes `defaultTargetPlatform` rather than a
 // constant -- main() needs dart-defines, Supabase and Firebase to run.
+import 'dart:convert';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +16,8 @@ import 'package:google_sign_in_platform_interface/google_sign_in_platform_interf
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
+import 'package:sis/features/notifications/application/push_controller.dart';
+import 'package:sis/features/notifications/data/supabase_push_registry.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 import 'package:sis/features/update/data/play_update_repository.dart';
 import 'package:sis/features/update/data/testflight_update_repository.dart';
@@ -72,7 +76,7 @@ void main() {
       ios: platform == TargetPlatform.iOS,
     );
     final overrides = platformOverrides(platform, client, _config);
-    expect(overrides, hasLength(2));
+    expect(overrides, hasLength(3));
     return ProviderContainer.test(overrides: overrides);
   }
 
@@ -113,6 +117,45 @@ void main() {
         expect(gotrue.grants.single['nonce'], isNull);
       },
     );
+  }
+
+  /// What the mounted push registry sends the server when it registers
+  /// [token]: the parameters of the one register_device_token call.
+  Future<Map<String, dynamic>> registeredAs(
+    TargetPlatform platform,
+    String token,
+  ) async {
+    final registry = mount(platform).read(pushRegistryProvider);
+    expect(registry, isA<SupabasePushRegistry>());
+    // The stand-in is no PostgREST, so the result is not the point here --
+    // push_registry_integration_test proves the real server accepts it.
+    await registry.register(token);
+    final i = gotrue.others.indexWhere(
+      (o) => o.contains('/rest/v1/rpc/register_device_token'),
+    );
+    expect(i, isNot(-1), reason: 'no register call in ${gotrue.others}');
+    expect(gotrue.others[i], startsWith('POST '));
+    return jsonDecode(gotrue.otherBodies[i]) as Map<String, dynamic>;
+  }
+
+  test('iOS: the push registry registers the token as an iPhone that '
+      'does not show pushes itself', () async {
+    expect(await registeredAs(TargetPlatform.iOS, 'apns-backed-token-1'), {
+      'device_token': 'apns-backed-token-1',
+      'device_platform': 'ios',
+      'shows_itself': false,
+    });
+  });
+
+  for (final platform in [TargetPlatform.android, TargetPlatform.linux]) {
+    test('${platform.name}: the push registry registers the token as an '
+        'Android phone that shows pushes itself', () async {
+      expect(await registeredAs(platform, 'fcm-token-1234'), {
+        'device_token': 'fcm-token-1234',
+        'device_platform': 'android',
+        'shows_itself': true,
+      });
+    });
   }
 
   test('iOS: the update check never reaches in_app_update', () async {

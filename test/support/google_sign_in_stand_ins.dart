@@ -122,6 +122,9 @@ class GoTrueStandIn {
   /// Any other request, so an unexpected call is visible.
   final others = <String>[];
 
+  /// The body of each of [others], in the same order.
+  final otherBodies = <String>[];
+
   bool offline = false;
 
   http.Response _error(String msg) => http.Response(
@@ -176,6 +179,7 @@ class GoTrueStandIn {
       );
     }
     others.add('${req.method} ${req.url}');
+    otherBodies.add(req.body);
     return http.Response(
       '[]',
       200,

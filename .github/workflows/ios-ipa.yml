@@ -169,7 +169,13 @@ jobs:
             echo "$(basename "$object"): ${authority:-unsigned or ad-hoc}"
             case "$authority" in "Apple Distribution: "*) ;; *) bad=1 ;; esac
           done
-          codesign --verify --deep --strict --verbose=2 "$app"
+          # Seals and hashes of every nested object must verify ("valid on
+          # disk"). The designated requirement cannot be evaluated here: the
+          # cloud-managed certificate chain is in no runner keychain, so that
+          # line alone is tolerated; Apple's validation below is the judge.
+          verify=$(codesign --verify --deep --strict --verbose=2 "$app" 2>&1) || true
+          echo "$verify"
+          grep -q ': valid on disk$' <<<"$verify" || { echo 'the app does not verify' >&2; exit 1; }
           [ "$bad" = 0 ] || { echo 'not every code object is signed for distribution' >&2; exit 1; }
       # A build signed without the production push environment installs and
       # runs but never receives a notification: fail here, not on a phone.

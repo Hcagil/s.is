@@ -105,22 +105,34 @@ jobs:
           mkdir -m 700 "$dir"
           (umask 077; printf '%s\n' "$KEY" > "$dir/AuthKey_$KEY_ID.p8")
           echo "API_PRIVATE_KEYS_DIR=$dir" >> "$GITHUB_ENV"
-      # Automatic signing, but with the distribution identity forced: left to
-      # itself an archive asks Apple for a development profile, which needs a
-      # registered device, and the team has none. With Apple Distribution the
-      # profile is the App Store one, cloud-managed signing creates the
-      # certificate and profile on demand, and every embedded framework is
-      # signed by the same identity, which is what App Store Connect checks.
+      # Archived unsigned (CODE_SIGNING_ALLOWED=NO, via XCODE_XCCONFIG_FILE) on
+      # purpose: an automatically signed archive asks Apple for a development
+      # profile, which needs a registered device, and the team has none; and a
+      # distribution identity cannot be forced on an automatic archive (Xcode
+      # rejects it as conflicting). The export below signs for distribution.
       - name: Archive (signed)
         run: |
           xcodebuild -version
+          echo 'CODE_SIGNING_ALLOWED = NO' > "$RUNNER_TEMP/unsigned.xcconfig"
+          export XCODE_XCCONFIG_FILE="$RUNNER_TEMP/unsigned.xcconfig"
           xcodebuild archive -quiet -workspace ios/Runner.xcworkspace -scheme Runner \
             -configuration Release -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_$KEY_ID.p8" \
-            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID" \
-            CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Distribution" DEVELOPMENT_TEAM="$TEAM_ID"
+            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
+      # The export re-signs what it finds signed, and an unsigned archive has
+      # no signature and no entitlements. An ad-hoc signature (allowed for
+      # codesign itself, unlike for Xcode builds) on every framework and then
+      # the app gives it something to replace: the 0.30.0 upload was rejected
+      # because only the app was ad-hoc signed and its frameworks stayed so.
+      - name: Sign the archive with its entitlements
+        run: |
+          app="$RUNNER_TEMP/Runner.xcarchive/Products/Applications/Runner.app"
+          for framework in "$app"/Frameworks/*.framework; do
+            codesign --force --sign - "$framework"
+          done
+          codesign --force --sign - --entitlements ios/Runner/Runner.entitlements "$app"
       - name: Export for App Store Connect
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
@@ -151,12 +163,14 @@ jobs:
           ipa=$(ls "$RUNNER_TEMP"/export/*.ipa)
           unzip -q "$ipa" -d "$RUNNER_TEMP/sig"
           app="$RUNNER_TEMP/sig/Payload/Runner.app"
-          codesign --verify --deep --strict --verbose=2 "$app"
+          bad=0
           for object in "$app" "$app"/Frameworks/*.framework; do
             authority=$(codesign -dvv "$object" 2>&1 | sed -n 's/^Authority=//p' | head -1)
-            echo "$(basename "$object"): $authority"
-            case "$authority" in "Apple Distribution: "*) ;; *) echo "$object is not signed for distribution" >&2; exit 1 ;; esac
+            echo "$(basename "$object"): ${authority:-unsigned or ad-hoc}"
+            case "$authority" in "Apple Distribution: "*) ;; *) bad=1 ;; esac
           done
+          codesign --verify --deep --strict --verbose=2 "$app"
+          [ "$bad" = 0 ] || { echo 'not every code object is signed for distribution' >&2; exit 1; }
       # A build signed without the production push environment installs and
       # runs but never receives a notification: fail here, not on a phone.
       - name: Check the push entitlement

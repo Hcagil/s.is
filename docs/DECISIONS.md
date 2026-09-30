@@ -510,10 +510,10 @@ available".
 **The raw error is logged, not shown.** It goes to the device log under
 `sis.data`, so nothing is lost for debugging.
 
-**Sign-in keeps its diagnostics.** Google's error code and Supabase's
-rejection text stay on the sign-in screen: they are how a signing or client
-registration fault was found before. Only an offline sign-in now says "No
-connection" instead of blaming the token.
+**Sign-in keeps no raw text.** Originally Google's error code and Supabase's
+rejection text stayed on the sign-in screen; since 0.30.1 (2026-10-01) they
+do not, see the entry of that date. Only an offline sign-in says "No
+connection".
 
 **A pattern rule keeps it that way.** `tool/check_pattern.sh` (rule 6)
 fails CI when a feature's `data/` passes error text into a `NetworkFailure`.
@@ -1450,3 +1450,37 @@ build.
   cleanup runs regardless, the certificate and profile ids are printed the
   moment they exist, and the intermediate certificate is fetched over https.
   The Admin role rationale in SECURITY.md is corrected.
+
+## 2026-10-01 — Google sign-in on iOS: the token's audience (0.30.1)
+
+**The first TestFlight build (0.30.0) could not sign in**: Supabase answered
+"unacceptable audience in id_token", and the sign-in screen printed that
+text with the ID in it. Android was fine.
+
+**Cause.** Google's iOS SDK issues the ID token for the iOS OAuth client
+(`GIDClientID`), even though the app also passes the Web client as
+`serverClientId` (which only adds the server auth code). The Supabase
+Google provider accepted one client ID, the Web one, so the audience did not
+match. Android's token carries the Web client as audience, which is why it
+worked. The 0.29 security note that "the audience is still the Web client"
+was an assumption no device had tested.
+
+**Fix: the iOS client joins the provider's client list; the app does not
+change for it.** Supabase's Google provider takes a comma-separated list of
+client IDs: Web first, then the iOS client
+`306417977220-vqg0ne5360a921i23quf294g8e0fjshq.apps.googleusercontent.com`.
+Production auth settings are not deployed from the repository (no
+`[auth.external.google]` in `supabase/config.toml`, no `config push` in
+`release.yml`), so this is set once in the Supabase dashboard
+(Authentication, Sign In / Providers, Google, Client IDs). "Skip nonce
+checks" stays off: the nonce of 0.27 is unaffected. Rejected: making the app
+send the Web client as the iOS client (Google refuses it: the iOS sign-in
+redirect needs an iOS client), and skipping the audience check (no such
+switch, and it would be the wrong one).
+
+**Sign-in errors are fixed words.** The sign-in screen showed Google's and
+Supabase's own error text, which can hold a token or an ID. It now says
+"Sign-in failed. Please try again." (or "Sign-in was cancelled. Please try
+again."), and the device log (`sis.auth`) keeps only the error code or type,
+never a message body. This replaces the 2026-09-24 "sign-in keeps its
+diagnostics" choice.

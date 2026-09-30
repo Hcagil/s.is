@@ -197,7 +197,7 @@ jobs:
     # Repository variable TESTFLIGHT_GROUPS (comma-separated names) picks the
     # groups; unset means `bacanaks`.
     needs: [scope, ios, publish]
-    if: always() && needs.ios.result == 'success'
+    if: ${{ !cancelled() && needs.ios.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     permissions:

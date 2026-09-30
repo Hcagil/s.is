@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Signing assets from App Store Connect for one CI run, and their removal.
+"""App Store Connect for CI: per-run signing assets and their removal, and TestFlight distribution.
 
   asc_signing.py create CSR.pem BUNDLE_ID PROFILE_NAME OUT_DIR
       Creates an Apple Distribution certificate for the CSR and an App Store
@@ -91,6 +91,8 @@ def call(method, path, body=None, ok_missing=False, tolerate=(), hint=""):
         if e.code in tolerate:
             return None
         sys.exit("%s %s: HTTP %s: %s%s" % (method, path, e.code, e.read().decode(errors="replace")[:2000], " " + hint if hint else ""))
+    except OSError as e:
+        sys.exit("%s %s: %s" % (method, path, type(e).__name__))
 
 
 def create(csr_path, bundle_identifier, profile_name, out_dir):

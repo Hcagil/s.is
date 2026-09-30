@@ -1385,3 +1385,24 @@ messages until it was closed and reopened.
 - Off switch: the repository variable `IOS_RELEASE` = `off`. Not built: an
   external TestFlight group (the owner adds testers after the first build
   exists).
+
+**Amended 2026-09-30 (0.30.0 upload rejected).** The first release upload
+failed twice over: the app and its frameworks carried an ad-hoc signature (the
+archive was built unsigned to avoid the development-profile requirement, then
+ad-hoc signed to keep the entitlements, and the export did not re-sign), and
+the build used the iOS 18.5 SDK (Xcode 16.4 on `macos-15`), which App Store
+Connect no longer accepts. Now:
+
+- The archive is signed for distribution directly: automatic signing with
+  `CODE_SIGN_IDENTITY="Apple Distribution"` and `DEVELOPMENT_TEAM` passed to
+  `xcodebuild archive`. With the distribution identity Xcode asks for the App
+  Store profile, which cloud-managed signing creates without a registered
+  device, and the embed phase signs every framework with the same identity.
+  The unsigned-archive and ad-hoc `codesign` steps are gone.
+- The iOS jobs run on `macos-26` (default Xcode 26.x), the pull-request build
+  and the release alike, so both use the SDK Apple requires.
+- Two checks the release used to be the first to run: `codesign --verify
+  --deep --strict` plus an `Apple Distribution` authority on the app and each
+  framework, and on pull requests `xcrun altool --validate-app` (Apple's
+  validation of the exported `.ipa`), so a rejection shows on the PR, not
+  after the merge.

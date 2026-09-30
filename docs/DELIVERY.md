@@ -84,11 +84,16 @@ the pull request. It restores `ios/Runner/GoogleService-Info.plist` from the
 Release: `release.yml` has a second job, `ios`, beside `publish` in the same
 run, so it carries the same `versionCode` (computed once, in the `scope` job).
 It calls `.github/workflows/ios-ipa.yml`, which writes
-`GoogleService-Info.plist`, archives unsigned with `xcodebuild` (a signed
-archive would need a development profile, which needs a registered device),
-ad-hoc signs the archived app with `Runner.entitlements` so the entitlements
-survive, lets the export sign it for App Store distribution, fails unless the exported app carries `aps-environment` =
-`production`, and uploads the `.ipa` to TestFlight (`xcrun altool`). TestFlight
+`GoogleService-Info.plist`, archives with `xcodebuild` on a `macos-26` runner
+(Xcode 26: App Store Connect refuses older iOS SDKs) with automatic signing
+forced to the `Apple Distribution` identity (a plain automatic archive asks for
+a development profile, which needs a registered device, and the team has none),
+exports it for App Store Connect, checks that the app and every embedded
+framework verify and are signed by an Apple Distribution certificate, fails
+unless the exported app carries `aps-environment` = `production`, and uploads
+the `.ipa` to TestFlight (`xcrun altool --upload-app`). On a pull request the
+same workflow stops short of the upload and runs `xcrun altool --validate-app`
+instead, so Apple's own validation happens before the merge. TestFlight
 is the internal-track equivalent: the internal group `Team` receives each
 build automatically. Signing is cloud-managed: the App Store Connect API key
 (`APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,

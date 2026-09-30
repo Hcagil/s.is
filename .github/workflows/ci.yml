@@ -222,3 +222,12 @@ jobs:
         run: flutter pub get
       - name: Build iOS (no codesign)
         run: flutter build ios --release --no-codesign
+      # ios/RunnerTests: the Swift channel handlers against real ImageIO/PhotosUI,
+      # hosted in the app on a simulator (whichever iPhone this Xcode ships).
+      - name: Native iOS tests (simulator)
+        run: |
+          flutter build ios --config-only --simulator --debug
+          udid=$(xcrun simctl list devices available | grep -m1 -E '^ +iPhone' | grep -oE '[0-9A-F-]{36}')
+          test -n "$udid"
+          xcodebuild test -quiet -workspace ios/Runner.xcworkspace -scheme Runner \
+            -configuration Debug -destination "id=$udid" CODE_SIGNING_ALLOWED=NO

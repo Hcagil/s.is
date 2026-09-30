@@ -1211,3 +1211,47 @@ messages until it was closed and reopened.
   chat does the same instead of stacking a copy.
 - No server change: the group name and sender come from the push title the
   server already words ("Sender @ Group"); the time is when the push arrived.
+
+## 2026-09-30 — "What's new" messages from SIS (0.27.0)
+
+- Owner's decisions: plain-language notes appear as messages from "SIS" in a
+  read-only system chat in the chat list; they are delivered when the
+  member's app updates (the first start of a newer build), with no push; the
+  text is automatic and editable by the owner in the Supabase table editor
+  until it is delivered; English only (the app has no l10n); the member can
+  mute the chat but not leave, delete or write into it; a build whose note is
+  empty produces no message.
+- Reuse over a parallel local chat: one conversation per member
+  (`conversations.system = true`, `direct_key = 'system:<uid>'`) whose
+  messages are authored by a fixed system account in `auth.users` (no email,
+  so on no allowlist and never able to sign in; its profile is removed). List,
+  unread counts, read marks, mute and Realtime work unchanged. A shared
+  conversation was rejected: a member would see a note before their own app
+  has the build.
+- Read-only is enforced by the server: `messages_send` refuses a system
+  conversation; leave, add and remove are group-only RPCs (titled
+  conversations) and refuse it; there is no delete policy; `notify_new_message`
+  returns early for it, so no push is queued. The app hides the composer and
+  the forward target, and its profile page offers mute only.
+- Source: `public.release_notes(build integer pk, note text, created_at)`,
+  RLS on with no policy and no grant: only the dashboard (postgres) and
+  `release.yml` write it, clients never read it. `release.yml` joins the
+  non-empty `For users:` lines of the PRs merged since the previous GitHub
+  release (commit subjects `(#N)` between its tag and the released sha) into
+  one row for the published versionCode; no line, no row. `on conflict do
+  nothing` keeps a dashboard edit through a re-run. The text travels
+  base64-encoded because PR bodies are untrusted input.
+- Delivery: `public.deliver_release_notes(installed_build integer) returns
+  integer` (SECURITY DEFINER, keyed on `auth.uid()`, needs app access). State
+  per member in `app_private.release_note_delivery(user_id, last_build)`; a
+  per-member advisory lock makes repeats and two devices deliver each note
+  once. The first call ever delivers only the latest non-empty note with
+  build <= installed (no backlog); later calls deliver every non-empty note in
+  (last served, installed], oldest first. The served build is recorded even
+  when nothing was due; an older build than the served one does nothing.
+- The app calls it once per start after sign-in (`releaseNotesProvider`) and
+  skips the call when shared_preferences says this build was already served
+  for that member on this device. A failure is silent and retried at the next
+  start.
+- Seeded notes: build 177 (0.25.2) and 178 (0.26.0). 178 is the run number the
+  0.26.0 release receives; check it against the release run.

@@ -123,6 +123,19 @@ tool/ci_local.sh --database
 - **Rotate a secret:** update it in GitHub → Settings → Secrets; re-run the last Release workflow. Signing material also exists in the maintainer's offline backup.
 - **Roll back:** Play Console → Internal testing → promote the previous release; then fix forward on `main`. Never rewrite `main` history.
 
+## What's new notes
+
+Every pull request body carries a line `For users: <plain sentence>`, left
+empty when the change is invisible. On release, the *Store the What's new note
+for this build* step joins the non-empty lines of the pull requests merged
+since the previous release and stores them as the note for that build's
+`versionCode` in `public.release_notes`. Nothing is stored when no line is
+non-empty. The owner may edit or add rows in the Supabase dashboard table
+editor: an edit made before a member's app has fetched the note is what that
+member gets, and empty text delivers nothing. Members receive notes as
+messages from SIS on the first start of a newer build; no push is sent
+(docs/DECISIONS.md, 2026-09-30).
+
 ## Push notifications
 
 Firebase project: `sis-app-509303` (the same Cloud project as sign-in),

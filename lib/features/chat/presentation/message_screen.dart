@@ -387,7 +387,15 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                 onTap: () {
                   final id = conversationId;
                   if (id == null) return;
-                  final page = widget.group
+                  final system =
+                      (ref.read(conversationListProvider).value ?? const [])
+                          .where((c) => c.id == id)
+                          .firstOrNull
+                          ?.isSystem ==
+                      true;
+                  final page = system
+                      ? SystemChatScreen(conversationId: id)
+                      : widget.group
                       ? GroupScreen(
                           conversationId: id,
                           title: widget.title ?? 'Group',
@@ -1401,9 +1409,16 @@ class _ComposerState extends ConsumerState<_Composer> {
                 .firstOrNull
                 ?.hasLeft ==
             true;
-    if (hasLeft) {
+    final isSystem =
+        id != null &&
+        (ref.watch(conversationListProvider).value ?? const [])
+                .where((c) => c.id == id)
+                .firstOrNull
+                ?.isSystem ==
+            true;
+    if (hasLeft || isSystem) {
       return Container(
-        key: const ValueKey('composer-left'),
+        key: ValueKey(isSystem ? 'composer-system' : 'composer-left'),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           border: Border(
@@ -1412,7 +1427,9 @@ class _ComposerState extends ConsumerState<_Composer> {
         ),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Text(
-          "You're no longer in this group",
+          isSystem
+              ? 'Only SIS can post here'
+              : "You're no longer in this group",
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Theme.of(context).colorScheme.onSurfaceVariant,

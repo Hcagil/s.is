@@ -37,8 +37,10 @@ import 'features/presence/application/presence_controllers.dart';
 import 'features/presence/data/supabase_presence_repository.dart';
 import 'features/profile/application/profile_controller.dart';
 import 'features/profile/data/supabase_profile_repository.dart';
+import 'features/update/application/release_notes_controller.dart';
 import 'features/update/application/update_controller.dart';
 import 'features/update/data/play_update_repository.dart';
+import 'features/update/data/supabase_release_notes_delivery.dart';
 import 'features/update/data/testflight_update_repository.dart';
 
 /// The provider overrides that depend on the platform: iOS sends a Google
@@ -139,6 +141,9 @@ Future<void> main() async {
           tonePickerProvider.overrideWithValue(const ChannelTonePicker()),
           notificationExplainerStoreProvider.overrideWithValue(
             const SharedPrefsNotificationExplainerStore(),
+          ),
+          releaseNotesDeliveryProvider.overrideWithValue(
+            SupabaseReleaseNotesDelivery(client),
           ),
         ],
         child: const SisApp(),

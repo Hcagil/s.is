@@ -97,7 +97,7 @@ final class SupabaseChatRepository implements ChatRepository {
         // caller's own conversations, same as the membership rows.
         _client
             .from('conversations')
-            .select('id, title, avatar_path')
+            .select('id, title, avatar_path, system')
             .retriedOnce(),
       ]);
       final memberRows = firstStage[0];
@@ -109,6 +109,10 @@ final class SupabaseChatRepository implements ChatRepository {
       final avatarPathById = {
         for (final row in conversationRows)
           row['id'] as String: row['avatar_path'] as String?,
+      };
+      final systemById = {
+        for (final row in conversationRows)
+          row['id'] as String: row['system'] == true,
       };
 
       final otherByConversation = <String, String>{};
@@ -216,6 +220,7 @@ final class SupabaseChatRepository implements ChatRepository {
             unread: unreadBy[id] ?? 0,
             avatarPath: avatarPathById[id],
             hasLeft: myLeftAtByConversation[id] != null,
+            isSystem: systemById[id] ?? false,
           ),
       ];
       // Conversations with no messages yet sort last.

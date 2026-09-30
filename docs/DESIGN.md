@@ -167,6 +167,7 @@ exist only in GitHub Actions secrets and in the maintainer's offline backup.
   stays away until then, never while the member is using the app. An update
   that finished downloading earlier is offered for install at once.
 - Publishing a build never changes `min_supported_build`.
+- On its first start after an update the app asks the server for the "What's new" notes due for its build; they arrive as messages from SIS in a read-only chat (docs/DECISIONS.md, 2026-09-30).
 - Migrations must remain compatible with every build ≥ `min_supported_build`.
 
 ## 6. Delivery pipeline

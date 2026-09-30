@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       ship: ${{ steps.diff.outputs.ship }}
+      code: ${{ steps.v.outputs.code }}
+      name: ${{ steps.v.outputs.name }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -41,6 +43,13 @@ jobs:
           else
             echo ship=false >> "$GITHUB_OUTPUT"
           fi
+      # One source for the version, read by the Play job and the iOS job alike,
+      # so both builds carry the same number.
+      - name: Compute version
+        id: v
+        run: |
+          echo "code=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_OUTPUT"
+          echo "name=$(sed -n 's/^version: *\([^ +]*\).*/\1/p' pubspec.yaml)" >> "$GITHUB_OUTPUT"
 
   publish:
     needs: scope
@@ -59,11 +68,6 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
-      - name: Compute version
-        id: v
-        run: |
-          echo "code=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_OUTPUT"
-          echo "name=$(sed -n 's/^version: *\([^ +]*\).*/\1/p' pubspec.yaml)" >> "$GITHUB_OUTPUT"
       - name: Build toolchain image
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose build flutter
       - name: Restore signing key
@@ -85,7 +89,7 @@ jobs:
           docker compose run --rm -T \
             -e ANDROID_UPLOAD_KEYSTORE -e ANDROID_UPLOAD_KEY_ALIAS -e ANDROID_UPLOAD_STORE_PASSWORD -e ANDROID_UPLOAD_KEY_PASSWORD \
             flutter flutter build appbundle --release \
-              --build-number=${{ steps.v.outputs.code }} --build-name=${{ steps.v.outputs.name }} \
+              --build-number=${{ needs.scope.outputs.code }} --build-name=${{ needs.scope.outputs.name }} \
               --dart-define=SUPABASE_URL=${{ vars.SUPABASE_URL }} \
               --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ vars.SUPABASE_PUBLISHABLE_KEY }} \
               --dart-define=GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }}
@@ -108,7 +112,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-          BUILD: ${{ steps.v.outputs.code }}
+          BUILD: ${{ needs.scope.outputs.code }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -o pipefail
@@ -150,9 +154,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v${{ steps.v.outputs.name }}+${{ steps.v.outputs.code }}" \
+          gh release create "v${{ needs.scope.outputs.name }}+${{ needs.scope.outputs.code }}" \
             --target "$SHA" --generate-notes \
-            --title "SIS ${{ steps.v.outputs.name }} (build ${{ steps.v.outputs.code }})"
+            --title "SIS ${{ needs.scope.outputs.name }} (build ${{ needs.scope.outputs.code }})"
       - name: Remove signing key
         if: always()
         run: rm -f .private/upload-keystore.jks
+
+  ios:
+    # Independent of `publish` on purpose: an iOS failure shows as a red job
+    # but leaves the Play release intact, and Play never waits on Apple.
+    # Repository variable IOS_RELEASE=off skips it; unset means on.
+    needs: scope
+    if: needs.scope.outputs.ship == 'true' && vars.IOS_RELEASE != 'off'
+    uses: ./.github/workflows/ios-ipa.yml
+    with:
+      ref: ${{ github.event.workflow_run.head_sha }}
+      build-number: ${{ needs.scope.outputs.code }}
+      build-name: ${{ needs.scope.outputs.name }}
+      upload: true
+    secrets:
+      APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+    permissions:
+      contents: read

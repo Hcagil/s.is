@@ -350,6 +350,16 @@ again keeps the file; it is unreadable through the app, encrypted with the
 phone, and excluded from backup. Drafts and queued unsent messages
 are still not stored.
 
+**Accepted risk: CI secrets and pushed branches.** Any branch pushed to
+this repository runs its own workflow files and can reach every repository
+secret, including the Admin App Store Connect key. Accepted while the owner
+is the only collaborator. If collaborators are added, move
+`APP_STORE_CONNECT_API_KEY` into a protected-branch environment used only by
+the release iOS job, and give the pull-request signing proof a separate key
+or drop it. The Admin role is kept because cloud-managed signing requires
+it. Rotate the key in App Store Connect (Users and Access, Integrations)
+when a collaborator leaves or a dependency is suspected compromised.
+
 ## Runbook
 
 - **Allow a member:** insert the row directly against the project, through the

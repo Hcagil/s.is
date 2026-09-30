@@ -51,6 +51,35 @@ class Shade {
   /// Every call the app made into the plugin, in order.
   final calls = <String>[];
 
+  /// Android's notification channels by id, as the app would find them.
+  /// A channel is created the first time a notification names it (or when
+  /// the app creates it); after that its sound and vibration are FIXED:
+  /// Android ignores what a later post or create asks for. That is the
+  /// inconvenient part for per-chat alert settings.
+  final channels = <String, Map<String, Object?>>{};
+
+  void _ensureChannel(Map<String, Object?> spec) {
+    final id = spec['channelId'] as String?;
+    if (id == null || channels.containsKey(id)) return;
+    channels[id] = {
+      'id': id,
+      'name': spec['channelName'] ?? spec['name'] ?? id,
+      'description': spec['channelDescription'] ?? spec['description'],
+      'groupId': null,
+      'showBadge': true,
+      'importance': spec['importance'] ?? 3,
+      'bypassDnd': false,
+      'playSound': spec['playSound'] ?? true,
+      if (spec['sound'] != null) 'sound': spec['sound'],
+      if (spec['soundSource'] != null) 'soundSource': spec['soundSource'],
+      'enableLights': false,
+      'enableVibration': spec['enableVibration'] ?? true,
+      'vibrationPattern': null,
+      'ledColor': 0,
+      'audioAttributesUsage': 5,
+    };
+  }
+
   /// Every notification posted, in order, with when it was posted. Android
   /// sheds posts above about 5 per second per app without an error, so the
   /// timing is part of what the app must get right.
@@ -129,6 +158,7 @@ class Shade {
         };
       case 'show':
         final n = Map<String, Object?>.from(args as Map);
+        _ensureChannel(_specifics(n));
         posted[n['id']! as int] = n;
         shows.add((at: DateTime.now(), n: n));
         return null;
@@ -137,6 +167,19 @@ class Shade {
         return null;
       case 'cancelAll':
         posted.clear();
+        return null;
+      case 'createNotificationChannel':
+        final spec = Map<String, Object?>.from(args as Map);
+        _ensureChannel({
+          ...spec,
+          'channelId': spec['id'],
+          'channelName': spec['name'],
+        });
+        return null;
+      case 'getNotificationChannels':
+        return [for (final c in channels.values) Map<String, Object?>.of(c)];
+      case 'deleteNotificationChannel':
+        channels.remove(args);
         return null;
       case 'getActiveNotifications':
         return [

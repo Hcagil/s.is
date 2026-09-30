@@ -22,10 +22,13 @@ import 'features/chat/data/photo_manager_gallery.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
 import 'features/chat/data/supabase_contacts_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
+import 'features/notifications/application/alert_controller.dart';
 import 'features/notifications/application/notification_settings_controller.dart';
 import 'features/notifications/application/push_controller.dart';
+import 'features/notifications/data/channel_tone_picker.dart';
 import 'features/notifications/data/firebase_push_source.dart';
 import 'features/notifications/data/local_push_display.dart';
+import 'features/notifications/data/shared_prefs_alert_store.dart';
 import 'features/notifications/data/shared_prefs_notification_explainer_store.dart';
 import 'features/notifications/data/supabase_notification_settings_repository.dart';
 import 'features/notifications/data/supabase_push_receipts.dart';
@@ -91,6 +94,8 @@ Future<void> main() async {
     // Pushes are data only; the app shows them itself, grouped.
     FirebaseMessaging.onBackgroundMessage(onBackgroundPush);
     await LocalPushDisplay.init(onTap: FirebasePushSource.tapped);
+    // Drops the pre-0.26 'messages' channel and any combination now unused.
+    await LocalPushDisplay.pruneChannels();
     final client = Supabase.instance.client;
     final attachmentCache = FileAttachmentCache();
     runApp(
@@ -130,6 +135,8 @@ Future<void> main() async {
           notificationSettingsRepositoryProvider.overrideWithValue(
             SupabaseNotificationSettingsRepository(client),
           ),
+          alertStoreProvider.overrideWithValue(const SharedPrefsAlertStore()),
+          tonePickerProvider.overrideWithValue(const ChannelTonePicker()),
           notificationExplainerStoreProvider.overrideWithValue(
             const SharedPrefsNotificationExplainerStore(),
           ),

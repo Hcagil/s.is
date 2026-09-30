@@ -9,6 +9,7 @@ import '../../auth/application/session_controller.dart';
 import '../../auth/domain/member.dart';
 import '../../auth/domain/session_state.dart';
 import '../../notifications/domain/notification_settings.dart';
+import '../../notifications/presentation/alert_widgets.dart';
 import '../../notifications/presentation/notification_pages.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../presence/domain/last_seen.dart';
@@ -108,6 +109,8 @@ class PersonScreen extends ConsumerWidget {
             _ContactButton(userId),
             // Muting a person silences them in every chat, groups included.
             MuteTile(kind: MuteKind.person, target: userId),
+            // Your 1:1 with them: its own sound and vibration.
+            if (direct != null) ChatAlertTiles(conversationId: direct.id),
             const SizedBox(height: 12),
             const TabBar(
               tabs: [
@@ -336,6 +339,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                 style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               ),
             MuteTile(kind: MuteKind.conversation, target: conversationId),
+            ChatAlertTiles(conversationId: conversationId),
             const SizedBox(height: 12),
             const TabBar(
               tabs: [

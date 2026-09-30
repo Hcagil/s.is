@@ -117,6 +117,14 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_$KEY_ID.p8" \
             -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
+      # An unsigned archive carries no entitlements, and the export only keeps
+      # the ones it finds signed. An ad-hoc signature (allowed for codesign
+      # itself, unlike for Xcode builds) puts them there; the export replaces
+      # it and sets aps-environment to the profile's value (production).
+      - name: Sign the archive with its entitlements
+        run: |
+          codesign --force --sign - --entitlements ios/Runner/Runner.entitlements \
+            "$RUNNER_TEMP/Runner.xcarchive/Products/Applications/Runner.app"
       - name: Export for App Store Connect
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
@@ -145,10 +153,8 @@ jobs:
         run: |
           ipa=$(ls "$RUNNER_TEMP"/export/*.ipa)
           unzip -q "$ipa" -d "$RUNNER_TEMP/ipa"
-          # Read as text: current codesign prefixes the plist, so plutil cannot parse it.
           env=$(codesign -d --entitlements :- "$RUNNER_TEMP/ipa/Payload/Runner.app" 2>/dev/null \
-            | tr -d '\n\t' \
-            | sed -n 's|.*<key>aps-environment</key> *<string>\([^<]*\)</string>.*|\1|p')
+            | plutil -extract aps-environment raw -o - -)
           echo "aps-environment: $env"
           test "$env" = production || { echo "aps-environment is not production" >&2; exit 1; }
       - name: Diagnose entitlements

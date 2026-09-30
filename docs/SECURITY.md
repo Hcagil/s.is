@@ -304,7 +304,9 @@ Residual risk, accepted (DECISIONS 2026-09-30): an iPhone signed out while
 offline keeps its server session alive (the sign-out call never reached the
 server), so its token stays bound to a live active session and the system
 still draws its pushes until that session ends (another device signs in, or
-the member is revoked). The full fix is an iOS Notification Service Extension
+the member is revoked). The window has no time limit: sessions have no
+timebox or inactivity timeout (`[auth.sessions]` in `supabase/config.toml` is
+unset). The full fix is an iOS Notification Service Extension
 that checks the owner before the alert is shown; it is a follow-up.
 
 ### Secrets

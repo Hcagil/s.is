@@ -64,6 +64,11 @@ List<Override> platformOverrides(
       // Play in-app updates exist on Android only; iOS is TestFlight.
       isIos ? TestFlightUpdateRepository(client) : PlayUpdateRepository(client),
     ),
+    // The platform is stored with the token: iOS is sent a regular
+    // notification, Android data only.
+    pushRegistryProvider.overrideWithValue(
+      SupabasePushRegistry(client, platform: isIos ? 'ios' : 'android'),
+    ),
   ];
 }
 
@@ -91,9 +96,11 @@ Future<void> main() async {
         localStorage: SecureSessionStorage(),
       ),
     );
-    // Push: reads android/app/google-services.json, bundled at build time.
+    // Push: reads android/app/google-services.json (Android) or
+    // ios/Runner/GoogleService-Info.plist (iOS), bundled at build time.
     await Firebase.initializeApp();
-    // Pushes are data only; the app shows them itself, grouped.
+    // Android pushes are data only: the app shows them itself, grouped. iOS
+    // is sent a regular notification and shows it through the system.
     FirebaseMessaging.onBackgroundMessage(onBackgroundPush);
     await LocalPushDisplay.init(onTap: FirebasePushSource.tapped);
     // Drops the pre-0.26 'messages' channel and any combination now unused.
@@ -132,7 +139,6 @@ Future<void> main() async {
           pushSourceProvider.overrideWithValue(
             FirebasePushSource(FirebaseMessaging.instance),
           ),
-          pushRegistryProvider.overrideWithValue(SupabasePushRegistry(client)),
           pushReceiptsProvider.overrideWithValue(SupabasePushReceipts(client)),
           notificationSettingsRepositoryProvider.overrideWithValue(
             SupabaseNotificationSettingsRepository(client),

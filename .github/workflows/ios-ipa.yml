@@ -107,9 +107,9 @@ jobs:
           echo "API_PRIVATE_KEYS_DIR=$dir" >> "$GITHUB_ENV"
       # Archived unsigned (CODE_SIGNING_ALLOWED=NO, via XCODE_XCCONFIG_FILE) on
       # purpose: an automatically signed archive asks Apple for a development
-      # profile, which needs a registered device, and the team has none; and a
-      # distribution identity cannot be forced on an automatic archive (Xcode
-      # rejects it as conflicting). The export below signs for distribution.
+      # profile, which needs a registered device, and the team has none; a
+      # distribution identity cannot be forced on it either (Xcode rejects
+      # the conflict). Signing happens after the export, below.
       - name: Archive (signed)
         run: |
           xcodebuild -version
@@ -117,27 +117,50 @@ jobs:
           export XCODE_XCCONFIG_FILE="$RUNNER_TEMP/unsigned.xcconfig"
           xcodebuild archive -quiet -workspace ios/Runner.xcworkspace -scheme Runner \
             -configuration Release -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_$KEY_ID.p8" \
-            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
-      # The export re-signs what it finds signed, and an unsigned archive has
-      # no signature and no entitlements. An ad-hoc signature (allowed for
-      # codesign itself, unlike for Xcode builds) on every framework and then
-      # the app gives it something to replace: the 0.30.0 upload was rejected
-      # because only the app was ad-hoc signed and its frameworks stayed so.
+            -archivePath "$RUNNER_TEMP/Runner.xcarchive"
+      # An unsigned archive carries no entitlements, and the export keeps the
+      # ones it finds signed. An ad-hoc signature (allowed for codesign
+      # itself, unlike for Xcode builds) puts them there; the export replaces
+      # it and sets aps-environment to the profile's value (production).
       - name: Sign the archive with its entitlements
         run: |
-          app="$RUNNER_TEMP/Runner.xcarchive/Products/Applications/Runner.app"
-          # The export keeps the signature's designated requirement; an ad-hoc
-          # one is a cdhash, false after any re-sign. This one is true of the
-          # team's distribution certificate (ASCII: the team ID, not the name).
-          requirement="=designated => anchor apple generic and certificate leaf[subject.OU] = \"$TEAM_ID\""
-          for framework in "$app"/Frameworks/*.framework; do
-            codesign --force --sign - --requirements "$requirement" "$framework"
+          codesign --force --sign - --entitlements ios/Runner/Runner.entitlements \
+            "$RUNNER_TEMP/Runner.xcarchive/Products/Applications/Runner.app"
+      # A distribution certificate for this run only. Cloud-managed signing
+      # cannot be used: the team's name has non-ASCII letters, and the
+      # designated requirement Xcode writes compares the certificate's common
+      # name in a form Apple's validation does not match, so the app must be
+      # signed with an explicit requirement (below), which needs the private
+      # key here. The key is generated in the job, the certificate is created
+      # from it through the API and revoked in the last step but one; nothing
+      # is stored anywhere.
+      - name: Create the signing certificate
+        run: |
+          dir="$RUNNER_TEMP/sign"
+          mkdir -m 700 "$dir"
+          openssl req -new -newkey rsa:2048 -nodes -keyout "$dir/key.pem" -out "$dir/csr.pem" \
+            -subj "/CN=sis GitHub Actions run $GITHUB_RUN_ID" 2>/dev/null
+          python3 tool/asc_signing.py create "$dir/csr.pem" com.esd.sis \
+            "sis ci $GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" "$dir" | tee -a "$GITHUB_ENV"
+          openssl x509 -inform der -in "$dir/cert.cer" -out "$dir/cert.pem"
+          # The issuing intermediate, from the certificate's own AIA field, so codesign can build the chain.
+          issuer=$(openssl x509 -in "$dir/cert.pem" -noout -text | sed -n 's/.*CA Issuers - URI://p' | head -1)
+          curl -sSf "${issuer:-https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer}" -o "$dir/issuer.cer"
+          keychain="$dir/sign.keychain-db"
+          password=$(openssl rand -hex 16)
+          security create-keychain -p "$password" "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$dir/issuer.cer" -k "$keychain" >/dev/null
+          security import "$dir/cert.pem" -k "$keychain" >/dev/null
+          security import "$dir/key.pem" -k "$keychain" -T /usr/bin/codesign -T /usr/bin/security >/dev/null
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          uuid=$(security cms -D -i "$dir/profile.mobileprovision" | plutil -extract UUID raw -o - -)
+          for profiles in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$profiles" && cp "$dir/profile.mobileprovision" "$profiles/$uuid.mobileprovision"
           done
-          codesign --force --sign - --requirements "$requirement" --entitlements ios/Runner/Runner.entitlements "$app"
-          codesign -d -r- "$app" 2>&1 | sed -n 's/^designated => /archive DR: /p'
+          echo "SIGNING_PROFILE_UUID=$uuid" >> "$GITHUB_ENV"
+          echo "SIGNING_IDENTITY=$(openssl x509 -in "$dir/cert.pem" -noout -fingerprint -sha1 | sed 's/.*=//; s/://g')" >> "$GITHUB_ENV"
       - name: Export for App Store Connect
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
@@ -146,7 +169,9 @@ jobs:
           <plist version="1.0">
           <dict>
             <key>method</key><string>app-store-connect</string>
-            <key>signingStyle</key><string>automatic</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>$SIGNING_IDENTITY</string>
+            <key>provisioningProfiles</key><dict><key>com.esd.sis</key><string>$SIGNING_PROFILE_UUID</string></dict>
             <key>teamID</key><string>$TEAM_ID</string>
             <key>destination</key><string>export</string>
             <key>uploadSymbols</key><true/>
@@ -156,13 +181,27 @@ jobs:
           xcodebuild -exportArchive -quiet \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_$KEY_ID.p8" \
-            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
-      # What App Store Connect rejected once: an ad-hoc or development
-      # signature on the app or any framework. Every code object must verify
-      # and be signed by an Apple Distribution certificate.
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+      # The export signs with a designated requirement on the certificate's
+      # common name, which Apple rejects for this team (see above). Sign every
+      # framework, then the app, again with the same identity and entitlements
+      # but a requirement on the team ID, and repack the .ipa.
+      - name: Sign with an explicit requirement
+        run: |
+          ipa=$(ls "$RUNNER_TEMP"/export/*.ipa)
+          unzip -q "$ipa" -d "$RUNNER_TEMP/resign"
+          app="$RUNNER_TEMP/resign/Payload/Runner.app"
+          for object in "$app"/Frameworks/*.framework "$app"; do
+            identifier=$(plutil -extract CFBundleIdentifier raw -o - "$object/Info.plist")
+            codesign --force --sign "$SIGNING_IDENTITY" --preserve-metadata=identifier,entitlements,flags \
+              --requirements "=designated => anchor apple generic and identifier \"$identifier\" and certificate leaf[subject.OU] = \"$TEAM_ID\"" \
+              "$object"
+          done
+          rm "$ipa"
+          (cd "$RUNNER_TEMP/resign" && zip -qr "$ipa" .)
+      # What App Store Connect rejected once: every code object must verify,
+      # satisfy its designated requirement and be signed by an Apple
+      # Distribution certificate.
       - name: Check the signature
         run: |
           ipa=$(ls "$RUNNER_TEMP"/export/*.ipa)
@@ -175,13 +214,7 @@ jobs:
             codesign -d -r- "$object" 2>&1 | sed -n 's/^designated => /  DR: /p'
             case "$authority" in "Apple Distribution: "*) ;; *) bad=1 ;; esac
           done
-          # Seals and hashes of every nested object must verify ("valid on
-          # disk"). The designated requirement cannot be evaluated here: the
-          # cloud-managed certificate chain is in no runner keychain, so that
-          # line alone is tolerated; Apple's validation below is the judge.
-          verify=$(codesign --verify --deep --strict --verbose=2 "$app" 2>&1) || true
-          echo "$verify"
-          grep -q ': valid on disk$' <<<"$verify" || { echo 'the app does not verify' >&2; exit 1; }
+          codesign --verify --deep --strict --verbose=2 "$app"
           [ "$bad" = 0 ] || { echo 'not every code object is signed for distribution' >&2; exit 1; }
       # A build signed without the production push environment installs and
       # runs but never receives a notification: fail here, not on a phone.
@@ -208,6 +241,15 @@ jobs:
           ipa=$(ls "$RUNNER_TEMP"/export/*.ipa)
           xcrun altool --upload-app --type ios --file "$ipa" \
             --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
+      # The certificate and profile exist for this run only. TestFlight
+      # re-signs what it distributes, so revoking never touches a shipped build.
+      - name: Revoke the signing certificate
+        if: always()
+        run: |
+          [ -d "$RUNNER_TEMP/asc" ] || exit 0
+          python3 tool/asc_signing.py delete "${SIGNING_CERTIFICATE_ID:--}" "${SIGNING_PROFILE_ID:--}"
+          [ ! -f "$RUNNER_TEMP/sign/sign.keychain-db" ] || security delete-keychain "$RUNNER_TEMP/sign/sign.keychain-db"
+          rm -rf "$RUNNER_TEMP/sign" "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
       - name: Remove the App Store Connect key
         if: always()
         run: rm -rf "$RUNNER_TEMP/asc"

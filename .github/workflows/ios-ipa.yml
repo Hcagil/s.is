@@ -157,13 +157,6 @@ jobs:
             | plutil -extract aps-environment raw -o - -)
           echo "aps-environment: $env"
           test "$env" = production || { echo "aps-environment is not production" >&2; exit 1; }
-      - name: Diagnose entitlements
-        if: failure()
-        run: |
-          app="$RUNNER_TEMP/ipa/Payload/Runner.app"
-          codesign -dvv "$app" 2>&1 | head -20 || true
-          codesign -d --entitlements :- "$app" 2>&1 | head -40 || true
-          security cms -D -i "$app/embedded.mobileprovision" 2>/dev/null | plutil -p - | grep -i -E 'aps|Name|get-task|ProvisionedDevices|ProvisionsAllDevices' || true
       - name: Upload to TestFlight
         if: inputs.upload
         run: |

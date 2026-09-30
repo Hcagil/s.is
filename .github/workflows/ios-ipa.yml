@@ -129,10 +129,15 @@ jobs:
       - name: Sign the archive with its entitlements
         run: |
           app="$RUNNER_TEMP/Runner.xcarchive/Products/Applications/Runner.app"
+          # The export keeps the signature's designated requirement; an ad-hoc
+          # one is a cdhash, false after any re-sign. This one is true of the
+          # team's distribution certificate (ASCII: the team ID, not the name).
+          requirement="=designated => anchor apple generic and certificate leaf[subject.OU] = \"$TEAM_ID\""
           for framework in "$app"/Frameworks/*.framework; do
-            codesign --force --sign - "$framework"
+            codesign --force --sign - --requirements "$requirement" "$framework"
           done
-          codesign --force --sign - --entitlements ios/Runner/Runner.entitlements "$app"
+          codesign --force --sign - --requirements "$requirement" --entitlements ios/Runner/Runner.entitlements "$app"
+          codesign -d -r- "$app" 2>&1 | sed -n 's/^designated => /archive DR: /p'
       - name: Export for App Store Connect
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
@@ -167,6 +172,7 @@ jobs:
           for object in "$app" "$app"/Frameworks/*.framework; do
             authority=$(codesign -dvv "$object" 2>&1 | sed -n 's/^Authority=//p' | head -1)
             echo "$(basename "$object"): ${authority:-unsigned or ad-hoc}"
+            codesign -d -r- "$object" 2>&1 | sed -n 's/^designated => /  DR: /p'
             case "$authority" in "Apple Distribution: "*) ;; *) bad=1 ;; esac
           done
           # Seals and hashes of every nested object must verify ("valid on

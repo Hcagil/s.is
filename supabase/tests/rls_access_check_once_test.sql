@@ -26,6 +26,8 @@ select plan(30);
 --     is the overlap of windows, messages_read adds message_readable,
 --     profiles_read uses shared_conversation_ever and attachments_read uses
 --     attachment_readable (group_membership_test.sql proves each);
+--     since v0.27.0 messages_send also refuses the system conversation
+--     (whats_new_test.sql proves the clause);
 --  3. plan text: a member reading conversation_members and
 --     conversation_previews evaluates has_app_access() in an InitPlan, never
 --     in a per-row Filter;
@@ -84,7 +86,7 @@ insert into expected values
   ('public', 'messages', 'messages_read', $e$PERMISSIVE|{authenticated}|SELECT|(( SELECT app_private.has_app_access() AS has_app_access) AND (conversation_id = ANY (ARRAY( SELECT cm.conversation_id
    FROM conversation_members cm
   WHERE (cm.user_id = ( SELECT auth.uid() AS uid))))) AND app_private.message_readable(messages.*))|<null>$e$),
-  ('public', 'messages', 'messages_send', $e$PERMISSIVE|{authenticated}|INSERT|<null>|(app_private.has_app_access() AND (sender_id = auth.uid()) AND app_private.is_member(conversation_id) AND ((attachment_path IS NULL) OR ((split_part(attachment_path, '/'::text, 1) = (conversation_id)::text) AND app_private.owns_attachment(attachment_path))) AND ((reply_to IS NULL) OR app_private.in_conversation(reply_to, conversation_id)))$e$),
+  ('public', 'messages', 'messages_send', $e$PERMISSIVE|{authenticated}|INSERT|<null>|(app_private.has_app_access() AND (sender_id = auth.uid()) AND app_private.is_member(conversation_id) AND (NOT app_private.is_system_conversation(conversation_id)) AND ((attachment_path IS NULL) OR ((split_part(attachment_path, '/'::text, 1) = (conversation_id)::text) AND app_private.owns_attachment(attachment_path))) AND ((reply_to IS NULL) OR app_private.in_conversation(reply_to, conversation_id)))$e$),
   ('public', 'notification_mutes', 'notification_mutes_change', $e$PERMISSIVE|{authenticated}|UPDATE|(app_private.has_app_access() AND (user_id = ( SELECT auth.uid() AS uid)))|(app_private.has_app_access() AND (user_id = ( SELECT auth.uid() AS uid)) AND
 CASE kind
     WHEN 'conversation'::text THEN app_private.is_member(target)

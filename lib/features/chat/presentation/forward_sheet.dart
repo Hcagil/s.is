@@ -76,7 +76,7 @@ class _ForwardPickerState extends ConsumerState<_ForwardPicker> {
               AsyncData(:final value) => ListView(
                 children: [
                   for (final c in value)
-                    if (c.id != widget.exclude)
+                    if (c.id != widget.exclude && !c.isSystem)
                       CheckboxListTile(
                         key: ValueKey('forward-${c.id}'),
                         value: _picked.contains(c.id),

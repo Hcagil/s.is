@@ -118,6 +118,10 @@
 --   pax            test/integration/push_receipts_seam_test.dart
 --     (the phone's push receipts are uploaded on start as pax, through the
 --      registration path main.dart mounts)
+--   whit           test/integration/release_notes_delivery_test.dart
+--   wynn           test/integration/release_notes_seam_test.dart
+--     (What's new notes: each asks for notes at builds numbered from the
+--      clock, so a rerun without a reset still moves forward)
 --   rho/sig        test/integration/catch_up_seam_test.dart
 --     (rho's socket dies as a backgrounded phone's does; sig writes to her
 --      meanwhile, and catch-up must bring it in)
@@ -210,5 +214,7 @@ insert into app_private.allowlist(email) values
   ('lux@integration.test'),
   ('pax@integration.test'),
   ('rho@integration.test'),
-  ('sig@integration.test')
+  ('sig@integration.test'),
+  ('whit@integration.test'),
+  ('wynn@integration.test')
 on conflict do nothing;

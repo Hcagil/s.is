@@ -49,6 +49,7 @@ jobs:
     environment: play-internal
     permissions:
       contents: write
+      pull-requests: read
     env:
       # The commit CI passed. GITHUB_SHA here is main's tip at trigger time,
       # which a later merge may already have moved past.
@@ -57,6 +58,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
       - name: Compute version
         id: v
         run: |
@@ -96,6 +98,34 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      # The "What's new" note for this build: the `For users:` line of every PR
+      # merged since the previous release (docs/DECISIONS.md, 2026-09-30). The
+      # app fetches it on its first start of this build. No such line, no row,
+      # so nothing is delivered. The text goes to SQL base64-encoded: PR bodies
+      # are untrusted input. An existing row is left alone so an edit made in
+      # the dashboard survives a re-run.
+      - name: Store the What's new note for this build
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD: ${{ steps.v.outputs.code }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -o pipefail
+          prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
+          if [ -n "$prev" ]; then range="$prev..$SHA"; else range="$SHA^..$SHA"; fi
+          note=$(git log --reverse --format=%s "$range" \
+            | sed -n 's/.*(#\([0-9][0-9]*\))$/\1/p' \
+            | while read -r pr; do
+                echo "PR #$pr" >&2
+                gh pr view "$pr" --json body,authorAssociation \
+                  --jq 'select(.authorAssociation | IN("OWNER","MEMBER","COLLABORATOR")) | .body' </dev/null | tr -d '\r' | sed -n 's/^For users: *//p' || exit 1
+              done | sed '/^[[:space:]]*$/d')
+          note=${note:0:4000}
+          echo "Note: $note"
+          if [ -z "$note" ]; then echo "No user-facing change in $range"; exit 0; fi
+          b64=$(printf '%s' "$note" | base64 -w0)
+          supabase db query --linked "insert into public.release_notes(build, note) values ($BUILD, convert_from(decode('$b64', 'base64'), 'utf8')) on conflict (build) do nothing"
       # The push sender. Deployed before the trigger learns its URL, so the
       # trigger never calls a function that is not there yet. No JWT: the
       # database trigger holds none; push_targets() makes a forged call

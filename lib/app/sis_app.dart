@@ -15,6 +15,7 @@ import '../features/notifications/application/push_controller.dart';
 import '../features/notifications/presentation/notification_explainer_screen.dart';
 import '../features/profile/application/profile_controller.dart';
 import '../features/profile/presentation/onboarding_screen.dart';
+import '../features/update/application/release_notes_controller.dart';
 import '../features/update/application/update_controller.dart';
 import '../features/update/domain/update_state.dart';
 import '../features/update/presentation/update_required_screen.dart';
@@ -137,6 +138,9 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       // one the member has left or been removed from -- see
       // leftConversationGuardProvider's own doc for why this is silent.
       ref.listen(leftConversationGuardProvider, (_, _) {});
+      // Asks for the What's new notes due for this build once per start,
+      // for whoever is signed in.
+      ref.listen(releaseNotesProvider, (_, _) {});
     }
 
     final update = ref.watch(updateControllerProvider).value;

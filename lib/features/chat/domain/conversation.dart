@@ -18,6 +18,7 @@ final class Conversation {
     this.unread = 0,
     this.avatarPath,
     this.hasLeft = false,
+    this.isSystem = false,
   });
 
   final String id;
@@ -45,6 +46,10 @@ final class Conversation {
   /// the conversation stays in the list, read-only. Always false for a 1:1.
   final bool hasLeft;
 
+  /// True for the read-only SIS system chat that carries What's-new notes;
+  /// nobody can write into it or leave it.
+  final bool isSystem;
+
   /// The same conversation with a newer message as its preview; [unread]
   /// grows by one when [counts] (a message from someone else, arriving while
   /// this conversation is not open).
@@ -59,6 +64,7 @@ final class Conversation {
         unread: counts ? unread + 1 : unread,
         avatarPath: avatarPath,
         hasLeft: hasLeft,
+        isSystem: isSystem,
       );
 
   /// The same conversation with nothing unread.
@@ -71,6 +77,7 @@ final class Conversation {
     lastSenderId: lastSenderId,
     avatarPath: avatarPath,
     hasLeft: hasLeft,
+    isSystem: isSystem,
   );
 
   /// For the on-disk chat list snapshot only.
@@ -84,6 +91,7 @@ final class Conversation {
     'unread': unread,
     'avatarPath': avatarPath,
     'hasLeft': hasLeft,
+    'isSystem': isSystem,
   };
 
   static Conversation fromJson(Map<String, Object?> json) => Conversation(
@@ -100,10 +108,12 @@ final class Conversation {
     unread: json['unread'] as int? ?? 0,
     avatarPath: json['avatarPath'] as String?,
     hasLeft: json['hasLeft'] as bool? ?? false,
+    isSystem: json['isSystem'] as bool? ?? false,
   );
 
   bool get isGroup => title != null;
 
   /// What the list shows: the group's title, or who you are talking to.
-  String get label => title ?? other?.displayName ?? 'Conversation';
+  String get label =>
+      isSystem ? 'SIS' : (title ?? other?.displayName ?? 'Conversation');
 }

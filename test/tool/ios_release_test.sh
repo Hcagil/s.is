@@ -14,8 +14,17 @@
 #     upload: true;
 #   ci.yml
 #   - `ios-signed` calls the same workflow with upload: false, only for
-#     same-repository, non-Dependabot pull requests with app changes;
+#     same-repository pull requests with app changes not opened by Dependabot
+#     (pull_request.user.login, not github.actor: a human re-run of a
+#     Dependabot PR must still skip);
+#   both callers pass exactly the five declared secrets by name, and no
+#   workflow uses `secrets: inherit`;
 #   ios-ipa.yml
+#   - declares exactly those five secrets, all required;
+#   - checkout does not persist the token; no ${{ inputs|vars|secrets }} is
+#     pasted into any run: text (they reach steps through env:);
+#   - the key is written after the config-only build and just before the
+#     archive, so it is not on disk during checkout, pub get or configure;
 #   - GoogleService-Info.plist is written from its secret; an empty secret
 #     fails the step and writes nothing;
 #   - the App Store Connect key goes to $RUNNER_TEMP/asc (dir 700, file 600
@@ -70,6 +79,12 @@ with() {
     f && !/^      / { exit }
     f && $0 ~ "^      " k ":" { v = $0; sub("^      " k ": *", "", v); print v; exit }' "$1"
 }
+# passed_secrets <block file>: the job's `secrets:` map, sorted.
+passed_secrets() {
+  awk '/^    secrets:/ { f = 1; next } f && !/^      / { exit } f { sub(/^ +/, ""); print }' "$1" | sort
+}
+SECRETS=(APP_STORE_CONNECT_API_KEY APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APPLE_TEAM_ID GOOGLE_SERVICE_INFO_PLIST)
+want_passed=$(for n in "${SECRETS[@]}"; do echo "$n: \${{ secrets.$n }}"; done | sort)
 # step_keys <file> <step name>: the step's lines before its run: block.
 step_keys() {
   awk -v n="- name: $2" '
@@ -139,20 +154,22 @@ if grep -nE '^    needs:.*\bios\b' "$release"; then fail "a release job needs io
 [ "$(with "$tmp/ios" build-number)" = '${{ needs.scope.outputs.code }}' ] || fail "ios build number is not scope's code"
 [ "$(with "$tmp/ios" build-name)" = '${{ needs.scope.outputs.name }}' ] || fail "ios build name is not scope's name"
 [ "$(with "$tmp/ios" ref)" = '${{ github.event.workflow_run.head_sha }}' ] || fail "ios does not build the commit CI passed"
-[ "$(key "$tmp/ios" secrets)" = inherit ] || fail "ios does not pass secrets: inherit"
+[ "$(passed_secrets "$tmp/ios")" = "$want_passed" ] || fail "ios must pass exactly the five secrets by name, got [$(passed_secrets "$tmp/ios")]"
 
 # ---- ci.yml ----------------------------------------------------------------
 # 4 ios-signed: pull requests from this repository, not Dependabot, app changes; no upload.
 [ "$(key "$tmp/ios-signed" needs)" = changes ] || fail "ios-signed must need changes"
 signed_if=$(norm "$(key "$tmp/ios-signed" if)")
 for clause in "needs.changes.outputs.app == 'true'" "github.event_name == 'pull_request'" \
-  "github.event.pull_request.head.repo.full_name == github.repository" "github.actor != 'dependabot[bot]'"; do
+  "github.event.pull_request.head.repo.full_name == github.repository" "github.event.pull_request.user.login != 'dependabot[bot]'"; do
   [[ " $signed_if " == *" $clause "* ]] || fail "ios-signed if lacks [$clause]: [$signed_if]"
 done
+[[ "$signed_if" != *"github.actor"* ]] || fail "ios-signed if must not use github.actor (a re-run by a human is not Dependabot): [$signed_if]"
 [[ "$signed_if" != *"||"* ]] || fail "ios-signed if must be a pure conjunction: [$signed_if]"
 [ "$(key "$tmp/ios-signed" uses)" = ./.github/workflows/ios-ipa.yml ] || fail "ios-signed does not call ios-ipa.yml"
 [ "$(with "$tmp/ios-signed" upload)" = false ] || fail "a pull request must never upload to TestFlight"
-[ "$(key "$tmp/ios-signed" secrets)" = inherit ] || fail "ios-signed does not pass secrets: inherit"
+[ "$(passed_secrets "$tmp/ios-signed")" = "$want_passed" ] || fail "ios-signed must pass exactly the five secrets by name, got [$(passed_secrets "$tmp/ios-signed")]"
+if grep -nE 'secrets: *inherit' .github/workflows/*.yml; then fail "secrets: inherit hands every repository secret to the callee"; fi
 
 # ---- ios-ipa.yml: shape ------------------------------------------------------
 # 5 the call interface.
@@ -163,13 +180,25 @@ for input in ref build-number build-name upload; do
 done
 awk '$0 == "      upload:" { f = 1; next } f && /^      [a-z]/ { exit } f' "$ipa_wf" | grep -q '^ *type: boolean$' \
   || fail "input upload is not a boolean (a string 'false' is truthy in if:)"
+# Exactly the five secrets are declared, each required.
+declared=$(awk '/^    secrets:$/ { f = 1; next } f && /^    [^ ]/ { exit } f && /^      [A-Z_]+:$/ { sub(/^ +/, ""); sub(/:$/, ""); print }' "$ipa_wf" | sort)
+[ "$declared" = "$(printf '%s\n' "${SECRETS[@]}" | sort)" ] || fail "ios-ipa.yml must declare exactly the five secrets, got [$declared]"
+for n in "${SECRETS[@]}"; do
+  awk -v i="      $n:" '$0 == i { f = 1; next } f && /^ {0,6}[A-Za-z]/ { exit } f' "$ipa_wf" | grep -q '^ *required: true$' \
+    || fail "secret $n is not required"
+done
 grep -qE '^    runs-on: macos-' "$ipa_wf" || fail "ios-ipa does not run on macOS"
 step_keys "$ipa_wf" "Check out source" | grep -q 'ref: ${{ inputs.ref }}' || fail "checkout ignores inputs.ref"
+step_keys "$ipa_wf" "Check out source" | grep -qE '^ *persist-credentials: false$' \
+  || fail "checkout must not persist the token into .git/config (persist-credentials: false)"
 # Secrets reach steps through env only: an inline ${{ secrets.* }} in a run
 # block is pasted into the script text.
 awk '/^ *run:/ { r = 1; match($0, /^ */); ind = RLENGTH; print; next }
      r { match($0, /^ */); if (RLENGTH > ind || $0 ~ /^ *$/) { print; next } r = 0 }' "$ipa_wf" \
-  | grep -q 'secrets\.' && fail "a run block interpolates a secret"
+  > "$tmp/runtext"
+grep -q 'secrets\.' "$tmp/runtext" && fail "a run block interpolates a secret"
+# Nor inputs or vars: a value pasted into script text is code, not data.
+grep -nE '\$\{\{ *(inputs|vars|secrets)\.' "$tmp/runtext" && fail "a run block interpolates an inputs/vars/secrets expression"
 grep -nE 'set -x|set -o xtrace|bash -x' "$ipa_wf" && fail "tracing would print the key"
 # The key's value is read by its own step only.
 [ "$(grep -c 'secrets.APP_STORE_CONNECT_API_KEY' "$ipa_wf")" -eq 1 ] || fail "the API key secret is read in more than one place"
@@ -178,7 +207,12 @@ step_keys "$ipa_wf" "Write the App Store Connect key" | grep -q 'KEY: ${{ secret
 # Step order, and the gates on upload and cleanup.
 mapfile -t steps < <(sed -n 's/^      - name: //p' "$ipa_wf")
 pos() { local i; for i in "${!steps[@]}"; do [ "${steps[$i]}" = "$1" ] && { echo "$i"; return; }; done; fail "no step '$1'"; }
-[ "$(pos "Write the App Store Connect key")" -lt "$(pos "Archive (signed)")" ] || fail "the key is written after the archive"
+# The key exists on disk only from just before the archive: not during
+# checkout, pub get or the config-only build.
+[ "$(( $(pos "Write the App Store Connect key") + 1 ))" -eq "$(pos "Archive (signed)")" ] || fail "the key step is not the step just before the archive"
+for s in "Check out source" "Resolve dependencies" "Configure the Xcode build"; do
+  [ "$(pos "$s")" -lt "$(pos "Write the App Store Connect key")" ] || fail "the key is on disk during '$s'"
+done
 [ "$(pos "Export for App Store Connect")" -lt "$(pos "Check the push entitlement")" ] || fail "entitlement checked before export"
 [ "$(pos "Check the push entitlement")" -lt "$(pos "Upload to TestFlight")" ] || fail "the upload runs before the push entitlement check"
 [ "${steps[-1]}" = "Remove the App Store Connect key" ] || fail "key removal is not the last step (last: ${steps[-1]})"
@@ -356,18 +390,26 @@ key_text=$'-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkw
 # run <step name> [VAR=value ...]: the step's run block in a fresh-ish job
 # env: $tmp/job is the checkout, $RUNNER_TEMP persists across steps, and
 # GITHUB_ENV lines written by earlier steps are applied, as on a runner.
-# Inline ${{ inputs.* }} / ${{ vars.* }} get fixed test values.
+# The step's own env: is applied, as on a runner, with fixed test values for
+# ${{ inputs.* }} / ${{ vars.* }}; ${{ secrets.* }} entries are left to the
+# caller's VAR=value arguments. Run text must hold no expression at all.
 run() {
   local name=$1; shift
   step_run "$ipa_wf" "$name" "$tmp/step.sh"
-  sed -i -e 's/\${{ inputs\.build-number }}/4242/g' -e 's/\${{ inputs\.build-name }}/9.8.7/g' \
-    -e 's/\${{ vars\.\([A-Z_]*\) }}/var-\1/g' "$tmp/step.sh"
-  ! grep -q '\${{' "$tmp/step.sh" || fail "step '$name' uses an expression this test does not model: $(grep '\${{' "$tmp/step.sh")"
+  ! grep -q '\${{' "$tmp/step.sh" || fail "step '$name' pastes an expression into its script: $(grep '\${{' "$tmp/step.sh")"
+  local -a senv=()
+  mapfile -t senv < <(step_keys "$ipa_wf" "$name" | awk '
+    /^ *env:$/ { match($0, /^ */); ind = RLENGTH; f = 1; next }
+    f { match($0, /^ */); if (RLENGTH <= ind) exit; sub(/^ +/, ""); print }' \
+    | grep -v ': \${{ secrets\.' \
+    | sed -e 's/: \${{ inputs\.build-number }}$/: 4242/' -e 's/: \${{ inputs\.build-name }}$/: 9.8.7/' \
+      -e 's/: \${{ vars\.\([A-Z_]*\) }}$/: var-\1/' -e 's/^\([A-Z_]*\): /\1=/')
+  local e; for e in "${senv[@]}"; do [[ "$e" != *'${{'* ]] || fail "step '$name' env uses an expression this test does not model: $e"; done
   : > "$tmp/rejects"
   local rc=0
   (cd "$tmp/job" && umask 022 && set -a && . "$tmp/github_env" && set +a \
     && env PATH="$tmp/bin:$PATH" HOME="$tmp/home" RUNNER_TEMP="$tmp/rt" GITHUB_ENV="$tmp/github_env" \
-      KEY_ID=K3YID ISSUER_ID=issuer-uuid TEAM_ID=TEAM123 STUB_EXPORT_OPTIONS="$tmp/export-options.plist" "$@" \
+      KEY_ID=K3YID ISSUER_ID=issuer-uuid TEAM_ID=TEAM123 STUB_EXPORT_OPTIONS="$tmp/export-options.plist" ${senv[@]+"${senv[@]}"} "$@" \
       bash -e "$tmp/step.sh") > "$tmp/out" 2>&1 || rc=$?
   [ ! -s "$tmp/rejects" ] || fail "step '$name' called a tool in a way the real CLI refuses: $(cat "$tmp/rejects")"
   return $rc
@@ -400,12 +442,15 @@ for empty in KEY KEY_ID ISSUER_ID TEAM_ID; do
   [ -z "$(ls -A "$tmp/rt")" ] || fail "a key was written with $empty empty"
 done
 
-# 8 the build, run in order: config, archive with the key, export with automatic signing.
+# 8 the build, run in workflow order: config, key, archive with the key, export with automatic signing.
 fresh
-run "Write the App Store Connect key" KEY="$key_text" || fail "key step failed"
 run "Configure the Xcode build" || fail "configure step failed"
+[ ! -e "$tmp/rt/asc" ] || fail "the key exists during the config-only build"
+run "Write the App Store Connect key" KEY="$key_text" || fail "key step failed"
 grep -q '^flutter build ios ' "$tmp/calls" || fail "flutter does not build ios"
-for f in --config-only --release --no-codesign --build-number=4242 --build-name=9.8.7; do
+for f in --config-only --release --no-codesign --build-number=4242 --build-name=9.8.7 \
+  --dart-define=SUPABASE_URL=var-SUPABASE_URL --dart-define=SUPABASE_PUBLISHABLE_KEY=var-SUPABASE_PUBLISHABLE_KEY \
+  --dart-define=GOOGLE_WEB_CLIENT_ID=var-GOOGLE_WEB_CLIENT_ID; do
   grep -q -- " $f\( \|$\)" "$tmp/calls" || fail "flutter build lacks $f: $(cat "$tmp/calls")"
 done
 grep -q 'build ipa' "$tmp/calls" && fail "flutter build ipa cannot pass the API key"

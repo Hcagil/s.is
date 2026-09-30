@@ -119,7 +119,7 @@ jobs:
             | while read -r pr; do
                 echo "PR #$pr" >&2
                 gh pr view "$pr" --json body,authorAssociation \
-                  --jq 'select(.authorAssociation | IN("OWNER","MEMBER","COLLABORATOR")) | .body' </dev/null | tr -d '\r' | sed -n 's/^For users: *//p'
+                  --jq 'select(.authorAssociation | IN("OWNER","MEMBER","COLLABORATOR")) | .body' </dev/null | tr -d '\r' | sed -n 's/^For users: *//p' || exit 1
               done | sed '/^[[:space:]]*$/d')
           note=${note:0:4000}
           echo "Note: $note"

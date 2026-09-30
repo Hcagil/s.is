@@ -27,7 +27,7 @@ insert into auth.users (id, instance_id, aud, role,
                         raw_app_meta_data, raw_user_meta_data, banned_until)
 values ('00000000-0000-0000-0000-00000000515e', '00000000-0000-0000-0000-000000000000',
         'authenticated', 'authenticated', '', '', '', '',
-        '{}', '{}', 'infinity')
+        '{}', '{}', '2999-12-31 00:00:00+00')
 on conflict (id) do nothing;
 delete from public.profiles where user_id = '00000000-0000-0000-0000-00000000515e';
 

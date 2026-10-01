@@ -100,15 +100,20 @@ const maxInboxLines = 25;
 /// [inbox] (chats in the order they last received something, oldest first)
 /// with one more message for [conversationId]: the chat moves to the end,
 /// takes the latest title, appends [body] as a line from the title's sender
-/// (keeping the newest [maxInboxLines]) and counts one more.
+/// (keeping the newest [maxInboxLines]) and counts one more. The server's
+/// separate [sender] and [chat] (a group message) win over parsing [title].
 List<InboxChat> addToInbox(
   List<InboxChat> inbox, {
   required String conversationId,
   required String title,
   required String body,
+  String? sender,
+  String? chat,
   required DateTime at,
 }) {
-  final parsed = parsePushTitle(title);
+  final parsed = sender != null && chat != null
+      ? (chat: chat, sender: sender, group: true)
+      : parsePushTitle(title);
   final existing = inbox
       .where((c) => c.conversationId == conversationId)
       .firstOrNull;

@@ -1536,3 +1536,30 @@ a message arriving with the chat open but the app hidden was marked read althoug
 nobody saw it. The live listener now marks read only while the app is visible
 (`appVisibleProvider`, set from `AppLifecycleListener` onHide/onShow in
 `app/sis_app.dart`); the resume catch-up marks it when the member returns.
+
+## 2026-10-01 — A group's notification names the group (0.30.6)
+
+Owner report, Android and iPhone: a group message's notification did not show
+the group's name. Cause: the group name only travelled inside the title the
+server worded ("Sender @ Group"), and only for the "Name and message" preview.
+An iPhone drew that string as is (the system draws the alert, so the app
+cannot reword it), and "Only who it is from" dropped the group entirely.
+
+- **Owner's decision:** WhatsApp style. A group's notification title is the
+  group's name and each line reads "Sender: message". A 1:1 is unchanged
+  (title = the person).
+- **Server, not the phone:** `push_targets` gains `sender` and `chat` (the
+  group's name, null for a 1:1). The edge function builds an iPhone's alert
+  from them (title = group, body = "Sender: message") and sends them as data
+  fields `sender` and `chat` to Android, which feeds its MessagingStyle (title
+  = group, `groupConversation`, each line's person = sender) from them instead
+  of parsing "Sender @ Group". `title` and `body` are unchanged, so older
+  builds and the plain 1:1 path are untouched. Reading the name from the local
+  chat store was rejected: it cannot work on an iPhone, where the app never
+  runs for a push.
+- **Privacy:** the group name now travels in the push (FCM, and APNs on an
+  iPhone) also under "Only who it is from", as "where from" next to "who
+  from". "No details" still carries neither the sender nor the group: title
+  "SIS", body "New message". Under "Name and message" nothing new travels.
+- Nothing from 0.30.4 changes: one notification per chat, up to 25 lines,
+  burst pacing, pictures, iPhone clear-on-read, receipts.

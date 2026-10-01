@@ -322,6 +322,11 @@ timebox or inactivity timeout (`[auth.sessions]` in `supabase/config.toml` is
 unset). The full fix is an iOS Notification Service Extension
 that checks the owner before the alert is shown; it is a follow-up.
 
+A group's name and the sender's name also travel in the push (as separate
+fields, and as an iPhone's alert title and body) under the "Name and message"
+and "Only who it is from" settings; "No details" carries neither (DECISIONS
+2026-10-01).
+
 ### Secrets
 
 No secrets in the app or repository. Service-role keys and signing material

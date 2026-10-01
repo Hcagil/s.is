@@ -70,10 +70,13 @@ Future<String> _deliver(RemoteMessage message) async {
   if (!await LocalPushDisplay.notificationsEnabled()) {
     return 'dropped:notifications_off';
   }
+  final sender = d['sender'], chat = d['chat'];
   final drawn = await LocalPushDisplay.show(
     conversationId: id,
     title: title,
     body: body,
+    sender: sender is String && sender.isNotEmpty ? sender : null,
+    chat: chat is String && chat.isNotEmpty ? chat : null,
   );
   return drawn ? 'shown' : 'dropped:no_owner';
 }

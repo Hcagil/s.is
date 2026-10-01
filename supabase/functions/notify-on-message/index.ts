@@ -18,6 +18,10 @@ type Target = {
   title: string;
   body: string;
   shows_itself: boolean;
+  // Who sent it and which group it is in, worded by the recipient's preview
+  // setting: sender is null for 'none'; chat is null for a 1:1 and for 'none'.
+  sender: string | null;
+  chat: string | null;
 };
 
 async function accessToken(serviceAccount: {
@@ -119,6 +123,14 @@ async function send(id: string): Promise<void> {
       // always gets a regular notification, grouped per chat by the system
       // (thread-id) and with the default sound. Android is untouched.
       const ios = t.platform === 'ios';
+      // A group's alert is titled with the group and each line reads
+      // "Sender: message" (WhatsApp style); a 1:1's title stays the sender.
+      // An iPhone shows this block as is, and Android's app takes the same
+      // pieces as data (sender, chat) for its MessagingStyle lines.
+      const group = t.chat != null && t.sender != null; // != : an old schema omits the fields (undefined)
+      const shown = group
+        ? { title: t.chat!, body: `${t.sender}: ${t.body}` }
+        : { title: t.title, body: t.body };
       return fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
         method: 'POST',
         headers: {
@@ -131,7 +143,9 @@ async function send(id: string): Promise<void> {
             // Data only where the app shows pushes itself (0.12+), grouped
             // into one SIS notification per phone. Older builds cannot show
             // a data-only push, so they still get a regular notification.
-            ...(t.shows_itself && !ios ? {} : { notification: { title: t.title, body: t.body } }),
+            ...(t.shows_itself && !ios
+              ? {}
+              : { notification: ios ? shown : { title: t.title, body: t.body } }),
             // A push computed for one member must never be drawn by a phone
             // that has since become another member's: onBackgroundPush drops
             // a data-only push whose user_id differs from the device's
@@ -145,6 +159,7 @@ async function send(id: string): Promise<void> {
               conversation_id: t.conversation_id,
               title: t.title,
               body: t.body,
+              ...(group ? { sender: t.sender!, chat: t.chat! } : {}),
             },
             ...(ios
               ? { apns: { payload: { aps: { 'thread-id': t.conversation_id, sound: 'default' } } } }

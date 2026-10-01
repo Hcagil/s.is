@@ -104,10 +104,14 @@ final class LocalPushDisplay {
   /// call whose line an earlier flush already covered posts nothing. Returns
   /// true once its line is inside a posted notification, false when nothing
   /// was posted for it.
+  ///
+  /// [sender] and [chat] are the server's separate fields for a group message.
   static Future<bool> show({
     required String conversationId,
     required String title,
     required String body,
+    String? sender,
+    String? chat,
   }) async {
     final at = DateTime.now();
     String? lineOwner; // who the line is stored for
@@ -123,6 +127,8 @@ final class LocalPushDisplay {
           title: title,
           body: body,
           at: at,
+          sender: sender,
+          chat: chat,
         ),
       );
       return ++_stored;
@@ -325,7 +331,9 @@ final class LocalPushDisplay {
   }) => _plugin.show(
     id: _idFor(chat.conversationId),
     title: chat.title,
-    body: chat.lines.last.text,
+    body: chat.group && chat.lines.last.sender.isNotEmpty
+        ? '${chat.lines.last.sender}: ${chat.lines.last.text}'
+        : chat.lines.last.text,
     payload: chat.conversationId,
     notificationDetails: NotificationDetails(
       android: AndroidNotificationDetails(
@@ -397,7 +405,9 @@ final class LocalPushDisplay {
           styleInformation: InboxStyleInformation(
             [
               for (final c in inbox.reversed)
-                '${c.title}: ${c.lines.last.text}',
+                c.group && c.lines.last.sender.isNotEmpty
+                    ? '${c.title}: ${c.lines.last.sender}: ${c.lines.last.text}'
+                    : '${c.title}: ${c.lines.last.text}',
             ],
             contentTitle: 'SIS',
             summaryText: inboxSummary(inbox),

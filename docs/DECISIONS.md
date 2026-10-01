@@ -1530,3 +1530,9 @@ notification) now invalidates `readMarksProvider` (re-join, then re-read) and
 calls `markRead` for the open chat before the list's catch-up re-read.
 Android shared both paths; it merely kept its socket longer. Groups use the
 same controller.
+
+**Not marked while hidden.** Where the socket outlived the background (Android),
+a message arriving with the chat open but the app hidden was marked read although
+nobody saw it. The live listener now marks read only while the app is visible
+(`appVisibleProvider`, set from `AppLifecycleListener` onHide/onShow in
+`app/sis_app.dart`); the resume catch-up marks it when the member returns.

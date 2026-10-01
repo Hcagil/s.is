@@ -67,8 +67,11 @@ class ConversationList extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: Row(
-        mainAxisSize: MainAxisSize.min,
+      floatingActionButton: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        alignment: WrapAlignment.end,
+        crossAxisAlignment: WrapCrossAlignment.end,
         children: [
           FloatingActionButton.extended(
             key: const ValueKey('new-group'),
@@ -77,7 +80,6 @@ class ConversationList extends ConsumerWidget {
             icon: const Icon(Icons.groups_outlined),
             label: const Text('New group'),
           ),
-          const SizedBox(width: 12),
           FloatingActionButton.extended(
             key: const ValueKey('new-chat'),
             heroTag: 'new-chat',

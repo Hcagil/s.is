@@ -29,7 +29,18 @@ Future<void> onBackgroundPush(RemoteMessage message) async {
   } catch (_) {}
   final raw = message.data['message_id'];
   final messageId = raw is String ? raw : null;
-  await PushReceiptLog.add('received', messageId: messageId);
+  // Timings for the receipt (where a late push was late): when FCM sent it,
+  // when it reached the phone (PushArrivalReceiver.kt), and now, when the
+  // Dart handler starts; all epoch milliseconds, never message content.
+  final arrival = await PushReceiptLog.takeArrival(messageId);
+  await PushReceiptLog.add(
+    'received',
+    messageId: messageId,
+    note:
+        'sent=${message.sentTime?.millisecondsSinceEpoch ?? '?'} '
+        'dart=${DateTime.now().millisecondsSinceEpoch} '
+        '${arrival ?? 'native=?'}',
+  );
   try {
     await PushReceiptLog.add(await _deliver(message), messageId: messageId);
   } catch (e) {

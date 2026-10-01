@@ -1,12 +1,17 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, visibleForTesting;
+import 'package:flutter/services.dart'
+    show MethodChannel, MissingPluginException, PlatformException;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/alert_settings.dart';
 import '../domain/notification_inbox.dart';
 import 'alert_channels.dart';
+import 'notification_avatars.dart';
 import 'push_receipt_log.dart';
 import 'shared_prefs_alert_store.dart';
 
@@ -29,12 +34,15 @@ final class LocalPushDisplay {
   static const _channelDescription = 'New messages';
   static const _alerts = SharedPrefsAlertStore();
 
-  /// Minimum gap between two flushes.
-  static const _interval = Duration(milliseconds: 600);
+  /// iOS only: AppDelegate.swift removes a chat's delivered pushes by thread
+  /// id.
+  static const _iosChannel = MethodChannel('sis/notifications');
 
   /// Between two posts to the plugin: Android sheds an app's notifications
-  /// past about 5 enqueues a second.
-  static const _enqueueGap = Duration(milliseconds: 250);
+  /// past about 5 enqueues a second; 300 ms keeps it under 4. Only waited out
+  /// when a post follows another this closely (see [_pace]); a push on an idle
+  /// phone posts at once.
+  static const _enqueueGap = Duration(milliseconds: 300);
 
   /// Shade idle time after which a flush may alert again.
   static const _quiet = Duration(seconds: 8);
@@ -44,6 +52,7 @@ final class LocalPushDisplay {
   static int _stored = 0; // lines stored by this isolate
   static int _postedThrough = 0; // highest _stored a finished flush covers
   static DateTime? _lastFlushEnd;
+  static DateTime? _lastPostAt; // when this isolate last posted to the plugin
 
   /// A fresh isolate, for tests.
   @visibleForTesting
@@ -52,6 +61,7 @@ final class LocalPushDisplay {
     _stored = 0;
     _postedThrough = 0;
     _lastFlushEnd = null;
+    _lastPostAt = null;
   }
 
   /// Must run before [show] in each isolate. [onTap] receives the tapped
@@ -88,10 +98,12 @@ final class LocalPushDisplay {
   /// One more message for [conversationId], as the server worded it. False
   /// (nothing drawn or stored) when nobody owns the inbox on this phone.
   ///
-  /// Pushes can wake this many times at once, so each call only STORES its
-  /// line, then waits out [_interval] and posts the whole current state in
-  /// one flush; a call whose line an earlier flush already covered posts
-  /// nothing. Returns true once its line is inside a posted notification.
+  /// Pushes can wake this more than once at a time, so each call only STORES
+  /// its line, then posts the whole current state in one flush (posts are
+  /// paced by [_pace], so a backlog never trips Android's enqueue limit); a
+  /// call whose line an earlier flush already covered posts nothing. Returns
+  /// true once its line is inside a posted notification, false when nothing
+  /// was posted for it.
   static Future<bool> show({
     required String conversationId,
     required String title,
@@ -115,21 +127,21 @@ final class LocalPushDisplay {
     });
     if (mine == null) return false;
 
-    // Wait out the interval since the last flush.
-    final last = _lastFlushEnd;
-    if (last != null) {
-      final wait = _interval - DateTime.now().difference(last);
-      if (wait > Duration.zero) await Future<void>.delayed(wait);
-    }
-
+    var posted = false;
     await _locked<void>(() async {
-      if (_postedThrough >= mine) return;
+      if (_postedThrough >= mine) {
+        posted = true; // an earlier flush already covered this line
+        return;
+      }
       final upTo = _stored;
-      await _flush();
+      // False when the flush stopped early (the owner changed mid-way): the
+      // line is then not in any posted notification and stays pending.
+      if (!await _flush()) return;
       _postedThrough = upTo;
       _lastFlushEnd = DateTime.now();
+      posted = true;
     });
-    return true;
+    return posted;
   }
 
   /// The owner [show] is currently keeping the shade for, or null. Lets a
@@ -141,13 +153,29 @@ final class LocalPushDisplay {
     return prefs.getString(_ownerKey);
   }
 
-  /// The member opened [conversationId]: its notification goes.
+  /// The member opened [conversationId]: its notification goes. On an iPhone
+  /// this also removes the chat's delivered pushes (thread id = the
+  /// conversation), which the plugin cannot see.
   static Future<void> clear(String conversationId) => _locked<void>(() async {
     final inbox = removeFromInbox(await _load(), conversationId);
     await _save(inbox);
     await _plugin.cancel(id: _idFor(conversationId));
     await _showSummary(inbox);
+    await _clearDelivered(conversationId);
   });
+
+  /// iOS only: the system, not this plugin, drew the chat's pushes, so they
+  /// are removed by thread id through AppDelegate.swift. Never throws.
+  static Future<void> _clearDelivered(String conversationId) async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+    try {
+      await _iosChannel.invokeMethod<void>('clearThread', conversationId);
+    } on PlatformException {
+      // Nothing to remove, or the system refused: the chat is open anyway.
+    } on MissingPluginException {
+      // No native side (a test host).
+    }
+  }
 
   /// Sign-out: nothing of the last account stays in the shade.
   static Future<void> clearAll() => _locked<void>(() async {
@@ -225,47 +253,69 @@ final class LocalPushDisplay {
   /// The member can sign out or switch in the app's isolate while a flush is
   /// posting: the owner is noted at load and re-read (fresh from disk) before
   /// every post and before the save, which goes to that owner's key only.
-  static Future<void> _flush() async {
+  ///
+  /// Returns false when it stopped early because the owner changed, true
+  /// otherwise (also when there was nothing to post).
+  static Future<bool> _flush() async {
     final owner = await currentOwner();
-    if (owner == null) return;
+    if (owner == null) return false;
     final inbox = await _load(owner: owner);
     final dirty = dirtyChats(inbox);
-    if (dirty.isEmpty) return;
+    if (dirty.isEmpty) return true;
     final last = _lastFlushEnd;
     final loud = last == null || DateTime.now().difference(last) > _quiet;
     final defaults = await _alerts.loadDefaults();
     final chats = await _alerts.loadChats();
+    final pictures = await NotificationAvatars.forChats(owner, [
+      for (final c in dirty) c.conversationId,
+    ]);
     for (var i = 0; i < dirty.length; i++) {
-      if (i > 0) await Future<void>.delayed(_enqueueGap);
-      if (!await _still(owner)) return;
+      await _pace();
+      if (!await _still(owner)) return false;
       await _showChat(
         dirty[i],
         alert: loud && i == 0,
+        picture: pictures[dirty[i].conversationId],
         effective: resolveAlert(
           defaults,
           chats[dirty[i].conversationId] ?? const ChatAlert(),
         ),
       );
     }
-    await Future<void>.delayed(_enqueueGap);
-    if (!await _still(owner)) return;
+    await _pace();
+    if (!await _still(owner)) return false;
     await _showSummary(inbox);
-    if (!await _still(owner)) return;
+    if (!await _still(owner)) return false;
     await _save(
       markPosted(inbox, {for (final c in dirty) c.conversationId}),
       owner: owner,
     );
+    return true;
+  }
+
+  /// Waits only as long as it takes to leave [_enqueueGap] since this
+  /// isolate's last post, then counts as a post itself.
+  static Future<void> _pace() async {
+    final last = _lastPostAt;
+    if (last != null) {
+      final wait = _enqueueGap - DateTime.now().difference(last);
+      if (wait > Duration.zero) await Future<void>.delayed(wait);
+    }
+    _lastPostAt = DateTime.now();
   }
 
   static Future<bool> _still(String owner) async =>
       await currentOwner() == owner;
 
   /// The chat's notification: its whole current state (newest lines, oldest
-  /// first), so a later post can never lose an earlier message.
+  /// first), so a later post can never lose an earlier message. [picture] is
+  /// the cached picture of the other person (1:1) or the group, or null; in a
+  /// 1:1 it is also the sender's icon.
   static Future<void> _showChat(
     InboxChat chat, {
     required bool alert,
     required EffectiveAlert effective,
+    Uint8List? picture,
   }) => _plugin.show(
     id: _idFor(chat.conversationId),
     title: chat.title,
@@ -287,6 +337,7 @@ final class LocalPushDisplay {
         silent: !alert,
         onlyAlertOnce: !alert,
         number: chat.count,
+        largeIcon: picture == null ? null : ByteArrayAndroidBitmap(picture),
         subText: chat.count > 1 ? '${chat.count} new messages' : null,
         when: chat.lines.last.at == 0 ? null : chat.lines.last.at,
         styleInformation: MessagingStyleInformation(
@@ -298,7 +349,14 @@ final class LocalPushDisplay {
               Message(
                 l.text,
                 DateTime.fromMillisecondsSinceEpoch(l.at),
-                l.sender.isEmpty ? null : Person(name: l.sender),
+                l.sender.isEmpty
+                    ? null
+                    : Person(
+                        name: l.sender,
+                        icon: picture == null || chat.group
+                            ? null
+                            : ByteArrayAndroidIcon(picture),
+                      ),
               ),
           ],
         ),

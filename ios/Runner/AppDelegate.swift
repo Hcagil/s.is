@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -16,6 +17,27 @@ import UIKit
     // of the one MainActivity.kt serves on Android).
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ExternalPickerPlugin") {
       ExternalPickerPlugin.register(with: registrar)
+    }
+    // Reading a chat removes that chat's delivered pushes: the system drew
+    // them (APNs), so the Flutter notifications plugin cannot see them. They
+    // are matched by thread id, which the server sets to the conversation id.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SisNotifications") {
+      let channel = FlutterMethodChannel(
+        name: "sis/notifications", binaryMessenger: registrar.messenger())
+      channel.setMethodCallHandler { call, result in
+        guard call.method == "clearThread", let thread = call.arguments as? String else {
+          result(FlutterMethodNotImplemented)
+          return
+        }
+        let center = UNUserNotificationCenter.current()
+        center.getDeliveredNotifications { delivered in
+          let ids = delivered
+            .filter { $0.request.content.threadIdentifier == thread }
+            .map { $0.request.identifier }
+          if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
+          DispatchQueue.main.async { result(nil) }
+        }
+      }
     }
   }
 }

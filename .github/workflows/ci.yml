@@ -227,7 +227,8 @@ jobs:
       - name: Native iOS tests (simulator)
         run: |
           flutter build ios --config-only --simulator --debug
-          udid=$(xcrun simctl list devices available | grep -m1 -E '^ +iPhone' | grep -oE '[0-9A-F-]{36}')
+          devices=$(xcrun simctl list devices available)
+          udid=$(grep -m1 -E '^ +iPhone' <<<"$devices" | grep -oE '[0-9A-F-]{36}')
           test -n "$udid"
           xcodebuild test -quiet -workspace ios/Runner.xcworkspace -scheme Runner \
             -configuration Debug -destination "id=$udid" CODE_SIGNING_ALLOWED=NO

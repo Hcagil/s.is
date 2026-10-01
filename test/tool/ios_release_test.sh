@@ -80,6 +80,8 @@
 #
 # A `run:` block with no `shell:` runs as `bash -e {0}`, so steps run that way.
 set -euo pipefail
+# pipefail: never pipe into a reader that stops early (grep -q, head, awk exit;
+# gawk stops, mawk drains): the writer can die of SIGPIPE (141). grep -q <<<"$(...)".
 command -v python3 >/dev/null || { echo "FAIL: python3 is required (the stand-ins)"; exit 1; }
 command -v zip >/dev/null || { echo "FAIL: zip is required"; exit 1; }
 command -v unzip >/dev/null || { echo "FAIL: unzip is required"; exit 1; }
@@ -161,7 +163,7 @@ for j in scope publish ios distribute ios-signed; do [ -s "$tmp/$j" ] || fail "j
 # 1 scope owns the version: its outputs, and the numbers its step computes.
 grep -qE '^      code: \$\{\{ steps\.v\.outputs\.code \}\}$' "$tmp/scope" || fail "scope does not output code from steps.v"
 grep -qE '^      name: \$\{\{ steps\.v\.outputs\.name \}\}$' "$tmp/scope" || fail "scope does not output name from steps.v"
-step_keys "$release" "Compute version" | grep -qE '^ *id: v$' || fail "Compute version is not step id v"
+grep -qE '^ *id: v$' <<<"$(step_keys "$release" "Compute version")" || fail "Compute version is not step id v"
 step_run "$release" "Compute version" "$tmp/version.sh"
 sed -i 's/\${{ github\.run_number }}/77/g' "$tmp/version.sh"
 grep -q '\${{' "$tmp/version.sh" && fail "Compute version reads an unexpected expression: $(cat "$tmp/version.sh")"
@@ -185,7 +187,7 @@ grep -q 'v${{ needs.scope.outputs.name }}+${{ needs.scope.outputs.code }}' "$tmp
 # Only distribute waits on the iOS job; nothing waits on distribute.
 for j in $(sed -n 's/^  \([A-Za-z0-9_-]*\):$/\1/p' "$release"); do
   [ "$j" = distribute ] && continue
-  needs=$(job "$release" "$j" | awk '/^    needs:/ { print; exit }')
+  needs=$(job "$release" "$j" | awk '/^    needs:/ && !n++')
   if grep -qE '\bios\b' <<<"$needs"; then fail "job $j needs ios: Play must never wait on Apple ($needs)"; fi
   if grep -qE '\bdistribute\b' <<<"$needs"; then fail "job $j needs distribute: nothing may wait on TestFlight groups ($needs)"; fi
 done
@@ -251,18 +253,18 @@ for input in ref build-number build-name upload; do
   awk -v i="      $input:" '$0 == i { f = 1; next } f && /^      [a-z]/ { exit } f' "$ipa_wf" > "$tmp/input"
   grep -q '^ *required: true$' "$tmp/input" || fail "input $input is not required"
 done
-awk '$0 == "      upload:" { f = 1; next } f && /^      [a-z]/ { exit } f' "$ipa_wf" | grep -q '^ *type: boolean$' \
+grep -q '^ *type: boolean$' <<<"$(awk '$0 == "      upload:" { f = 1; next } f && /^      [a-z]/ { exit } f' "$ipa_wf")" \
   || fail "input upload is not a boolean (a string 'false' is truthy in if:)"
 # Exactly the five secrets are declared, each required.
 declared=$(awk '/^    secrets:$/ { f = 1; next } f && /^    [^ ]/ { exit } f && /^      [A-Z_]+:$/ { sub(/^ +/, ""); sub(/:$/, ""); print }' "$ipa_wf" | sort)
 [ "$declared" = "$(printf '%s\n' "${SECRETS[@]}" | sort)" ] || fail "ios-ipa.yml must declare exactly the five secrets, got [$declared]"
 for n in "${SECRETS[@]}"; do
-  awk -v i="      $n:" '$0 == i { f = 1; next } f && /^ {0,6}[A-Za-z]/ { exit } f' "$ipa_wf" | grep -q '^ *required: true$' \
+  grep -q '^ *required: true$' <<<"$(awk -v i="      $n:" '$0 == i { f = 1; next } f && /^ {0,6}[A-Za-z]/ { exit } f' "$ipa_wf")" \
     || fail "secret $n is not required"
 done
 grep -qE "^    runs-on: macos-26$" "$ipa_wf" || fail "ios-ipa must run on macos-26 (Xcode 26: App Store Connect refuses older SDKs)"
-step_keys "$ipa_wf" "Check out source" | grep -q 'ref: ${{ inputs.ref }}' || fail "checkout ignores inputs.ref"
-step_keys "$ipa_wf" "Check out source" | grep -qE '^ *persist-credentials: false$' \
+grep -q 'ref: ${{ inputs.ref }}' <<<"$(step_keys "$ipa_wf" "Check out source")" || fail "checkout ignores inputs.ref"
+grep -qE '^ *persist-credentials: false$' <<<"$(step_keys "$ipa_wf" "Check out source")" \
   || fail "checkout must not persist the token into .git/config (persist-credentials: false)"
 # Secrets reach steps through env only: an inline ${{ secrets.* }} in a run
 # block is pasted into the script text.
@@ -275,7 +277,7 @@ grep -nE '\$\{\{ *(inputs|vars|secrets)\.' "$tmp/runtext" && fail "a run block i
 grep -nE 'set -x|set -o xtrace|bash -x' "$ipa_wf" && fail "tracing would print the key"
 # The key's value is read by its own step only.
 [ "$(grep -c 'secrets.APP_STORE_CONNECT_API_KEY' "$ipa_wf")" -eq 1 ] || fail "the API key secret is read in more than one place"
-step_keys "$ipa_wf" "Write the App Store Connect key" | grep -q 'KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}' \
+grep -q 'KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}' <<<"$(step_keys "$ipa_wf" "Write the App Store Connect key")" \
   || fail "the key step does not take the key from its secret"
 # Step order, exactly the contract's; the gates on validate, upload and cleanup.
 mapfile -t steps < <(sed -n 's/^      - name: //p' "$ipa_wf")
@@ -305,7 +307,7 @@ for s in "${want_steps[@]}"; do
   [ -z "$(gate "$s")" ] || fail "'$s' is gated [$(gate "$s")]: every other step must run on every call"
 done
 for s in "${want_steps[@]}"; do
-  step_keys "$ipa_wf" "$s" | grep -q 'continue-on-error' && fail "'$s' must not be continue-on-error"
+  grep -q 'continue-on-error' <<<"$(step_keys "$ipa_wf" "$s")" && fail "'$s' must not be continue-on-error"
 done
 
 # ---- ios-ipa.yml: the steps, run ---------------------------------------------
@@ -448,7 +450,7 @@ run_job false
 grep -q '^xcodebuild -version$' "$tmp/calls" || fail "the archive step does not log the Xcode version"
 [ "$(grep -c '^xcodebuild archive ' "$tmp/calls")" -eq 1 ] && [ "$(grep -c '^xcodebuild export ' "$tmp/calls")" -eq 1 ] \
   || fail "want one archive and one export: $(grep '^xcodebuild' "$tmp/calls")"
-grep '^xcodebuild archive ' "$tmp/calls" | grep -qE -- '-allowProvisioningUpdates|-authenticationKey' \
+grep -qE -- '-allowProvisioningUpdates|-authenticationKey' <<<"$(grep '^xcodebuild archive ' "$tmp/calls")" \
   && fail "the archive is unsigned: no -allowProvisioningUpdates or -authenticationKey* ($(grep '^xcodebuild archive' "$tmp/calls"))"
 grep -q '^flutter build ios ' "$tmp/calls" || fail "flutter does not build ios"
 for f in --config-only --release --no-codesign --build-number=4242 --build-name=9.8.7 \

@@ -10,10 +10,13 @@ import '../application/chat_controllers.dart';
 import '../domain/attachment.dart';
 import '../domain/external_picker.dart';
 import '../domain/gallery.dart';
+import 'crop_screen.dart';
 
 /// Shows the attachment sheet; an empty `images` list when the member
 /// closes it or backs out without choosing a photo. `dropped` is how many
 /// more photos "From an app" offered beyond the cap -- 0 unless it was hit.
+/// With [square] the sheet crops the chosen photo itself (the crop screen
+/// opens over the grid, so back returns to it) and returns the cropped image.
 Future<({List<PickedImage> images, int dropped})> showAttachmentSheet(
   BuildContext context, {
   bool square = false,
@@ -139,7 +142,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
       showSisNotice(context, 'That photo could not be opened.', isError: true);
       return;
     }
-    Navigator.of(context).pop((images: [image], dropped: 0));
+    await _finish([image], 0);
   }
 
   Future<void> _selectMore() async {
@@ -164,12 +167,26 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     switch (result) {
       case ExternalPickedImages(:final images, :final dropped)
           when images.isNotEmpty:
-        Navigator.of(context).pop((images: images, dropped: dropped));
+        await _finish(images, dropped);
       case ExternalPickCancelled():
         return;
       case ExternalPickedImages() || ExternalPickFailed():
         showSisNotice(context, 'That could not be opened.', isError: true);
     }
+  }
+
+  /// Ends the pick. A chat photo closes the sheet. A picture is cropped
+  /// first, with the crop screen pushed over this sheet: backing out of it
+  /// returns to the grid at the same scroll position, and only a finished
+  /// crop closes the sheet.
+  Future<void> _finish(List<PickedImage> images, int dropped) async {
+    if (!widget.square) {
+      Navigator.of(context).pop((images: images, dropped: dropped));
+      return;
+    }
+    final cropped = await openCropScreen(context, images.first);
+    if (!mounted || cropped == null) return;
+    Navigator.of(context).pop((images: [cropped], dropped: 0));
   }
 
   @override

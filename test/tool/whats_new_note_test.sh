@@ -46,14 +46,13 @@ awk '
 ' "$workflow" > "$tmp/step.sh"
 grep -q 'supabase db query' "$tmp/step.sh" || { echo "FAIL: step not found in $workflow"; exit 1; }
 # The step's own keys, between its name and its run: line.
-awk '/- name: Store the What.s new note for this build/ { f = 1; next } f && /^ *run: \|/ { exit } f' \
-  "$workflow" | grep -q '^ *continue-on-error: true *$' \
+note_keys=$(awk '/- name: Store the What.s new note for this build/ { f = 1; next } f && /^ *run: \|/ { exit } f' "$workflow")
+grep -q '^ *continue-on-error: true *$' <<<"$note_keys" \
   || { echo "FAIL: the note step must be continue-on-error: a gh/db hiccup must not block the release"; exit 1; }
-awk '/- name: Store the What.s new note for this build/ { f = 1; next } f && /^ *run: \|/ { exit } f' \
-  "$workflow" | grep -q '^ *id: note *$' || { echo "FAIL: the note step must be id: note (publish reads steps.note.outputs.b64)"; exit 1; }
+grep -q '^ *id: note *$' <<<"$note_keys" || { echo "FAIL: the note step must be id: note (publish reads steps.note.outputs.b64)"; exit 1; }
 # publish's outputs map hands the note on.
-awk '$0 == "  publish:" { j = 1; next } j && /^  [A-Za-z0-9_-]+:/ { exit } j && /^    outputs:$/ { o = 1; next }
-     o && !/^      / { o = 0 } o' "$workflow" | grep -q '^      note_b64: \${{ steps\.note\.outputs\.b64 }}$' \
+grep -q '^      note_b64: \${{ steps\.note\.outputs\.b64 }}$' <<<"$(awk '$0 == "  publish:" { j = 1; next } j && /^  [A-Za-z0-9_-]+:/ { exit } j && /^    outputs:$/ { o = 1; next }
+     o && !/^      / { o = 0 } o' "$workflow")" \
   || { echo "FAIL: publish must output note_b64: \${{ steps.note.outputs.b64 }}"; exit 1; }
 
 # Stand-ins. gh answers from files; supabase records its arguments.
@@ -185,8 +184,8 @@ grep -q 'on conflict (build) do nothing' "$tmp/calls" || fail "a re-run would ov
 expected=$(printf '%s\n%s' 'You can pick a sound.' 'It'"'"'s faster; "quoted" $(rm -rf /) `x` too.')
 [ "$(note_of)" = "$expected" ] || fail "note was: [$(note_of)]"
 if grep -q 'rm -rf\|quoted\|faster' "$tmp/calls"; then fail "PR text reached SQL unencoded"; fi
-if note_of | grep -q $'\r'; then fail "a carriage return survived"; fi
-if note_of | grep -q 'Old news'; then fail "a PR from the previous release was included"; fi
+if grep -q $'\r' <<<"$(note_of)"; then fail "a carriage return survived"; fi
+if grep -q 'Old news' <<<"$(note_of)"; then fail "a PR from the previous release was included"; fi
 same_note
 
 # 2 nothing user-facing -> no insert, still success
@@ -212,7 +211,7 @@ run_step v0.26.0+178 || fail "step exited non-zero"
 [ "$(note_of)" = $'From the owner.\nFrom a collaborator.' ] || fail "association filter: note was [$(note_of)]"
 echo CONTRIBUTOR > "$tmp/prs/12.assoc"
 run_step v0.26.0+178 || fail "step exited non-zero"
-if note_of | grep -q stranger; then fail "a CONTRIBUTOR's For users line was stored"; fi
+if grep -q stranger <<<"$(note_of)"; then fail "a CONTRIBUTOR's For users line was stored"; fi
 echo MEMBER > "$tmp/prs/12.assoc"
 run_step v0.26.0+178 || fail "step exited non-zero"
 [ "$(note_of)" = $'From the owner.\nFrom a collaborator.\nFrom a stranger.' ] || fail "MEMBER dropped: [$(note_of)]"
@@ -229,7 +228,8 @@ printf 'Nothing.\n' > "$tmp/prs/11"
 run_step v0.26.0+178 || fail "step exited non-zero on a long note"
 stored=$(note_of; printf .); stored=${stored%.}
 [ "${#stored}" -eq 4000 ] || fail "long note stored as ${#stored} characters, want 4000"
-[ "$stored" = "$(printf '%s\n%s' "$long" "$long" | head -c 4000)" ] || fail "long note is not the first 4000 characters"
+both=$(printf '%s\n%s' "$long" "$long")
+[ "$stored" = "${both:0:4000}" ] || fail "long note is not the first 4000 characters"
 same_note
 
 # 6 a failing gh api read fails the run block, and stores nothing

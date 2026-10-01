@@ -723,4 +723,115 @@ void main() {
       }
     }, timeout: const Timeout(Duration(minutes: 2)));
   });
+
+  // 0.30.5, owner report (TestFlight): iOS suspends the socket the moment
+  // the app is backgrounded and Realtime replays nothing. The resume
+  // catch-up (resumeCatchUpProvider) must re-read read marks and mark the
+  // open chat read -- against the real database, not a fake's idea of it.
+  group('resume catch-up on the real stack', () {
+    Future<void> eventually(
+      Future<bool> Function() ok,
+      String what, {
+      Duration within = const Duration(seconds: 20),
+    }) async {
+      final deadline = DateTime.now().add(within);
+      while (DateTime.now().isBefore(deadline)) {
+        if (await ok()) return;
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+      fail('never happened within $within: $what');
+    }
+
+    Future<ProviderContainer> sanaIn(String id, {ChatRepository? chat}) async {
+      final c = ProviderContainer.test(
+        overrides: _production(sanaClient, 'Sana', chat: chat),
+      );
+      addTearDown(() async {
+        c.dispose();
+        await sanaClient.removeAllChannels();
+      });
+      await settled(c);
+      c.listen(ownProfileProvider, (_, _) {});
+      await c.read(ownProfileProvider.future);
+      c.listen(conversationListProvider, (_, _) {});
+      await c.read(conversationListProvider.future);
+      c.read(openConversationProvider.notifier).open(id);
+      c.listen(messagesProvider, (_, _) {});
+      c.listen(readMarksProvider, (_, _) {});
+      await c.read(messagesProvider.future);
+      await c.read(readMarksProvider.future);
+      return c;
+    }
+
+    Future<DateTime?> theoSeesSanaReadAt() async {
+      final r = await theo.readMarks(direct);
+      return (r as Ok<List<ReadMark>>).value
+          .where((m) => m.userId == sanaId)
+          .firstOrNull
+          ?.readAt;
+    }
+
+    test(
+      'a read whose broadcast this phone missed shows after resume',
+      () async {
+        // The reads:<id> channel is the one that died: its join goes to a
+        // dead host, so nothing arrives live -- as with a suspended socket.
+        final c = await sanaIn(direct, chat: _Wired(sana, updates: dead));
+        final mine = (await sana.send(
+          id: randomMessageId(),
+          conversationId: direct,
+          body: _stamp('mine'),
+        ) as Ok<Message>).value;
+        expect(await theo.markRead(direct), isA<Ok<void>>());
+        await Future<void>.delayed(const Duration(seconds: 2));
+        expect(
+          _markOf(c, theoId)?.hasRead(mine.createdAt) ?? false,
+          isFalse,
+          reason: 'fixture: the read arrived live',
+        );
+
+        c.read(resumeCatchUpProvider)();
+
+        await eventually(
+          () async => _markOf(c, theoId)?.hasRead(mine.createdAt) ?? false,
+          "theo's read to show after resume",
+        );
+      },
+      timeout: const Timeout(Duration(minutes: 2)),
+    );
+
+    test('a message arriving while hidden is not marked read; after '
+        'resume the server holds the read', () async {
+      final c = await sanaIn(direct);
+      c.read(appVisibleProvider.notifier).set(false);
+      final before = await theoSeesSanaReadAt();
+
+      final theirs = (await theo.send(
+        id: randomMessageId(),
+        conversationId: direct,
+        body: _stamp('while hidden'),
+      ) as Ok<Message>).value;
+      await eventually(
+        () async =>
+            c.read(messagesProvider).value?.any((m) => m.id == theirs.id) ??
+            false,
+        'the message to arrive live while hidden',
+      );
+      await Future<void>.delayed(const Duration(seconds: 2));
+      final hidden = await theoSeesSanaReadAt();
+      expect(
+        hidden != null && !hidden.isBefore(theirs.createdAt),
+        isFalse,
+        reason: 'marked read while hidden (before: $before, now: $hidden)',
+      );
+
+      c.read(appVisibleProvider.notifier).set(true);
+      c.read(resumeCatchUpProvider)();
+
+      await eventually(() async {
+        final at = await theoSeesSanaReadAt();
+        return at != null && !at.isBefore(theirs.createdAt);
+      }, 'the server to record the read after resume');
+    }, timeout: const Timeout(Duration(minutes: 2)));
+  });
 }

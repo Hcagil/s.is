@@ -339,4 +339,16 @@ void main() {
     expect(fieldText(t, tagKey), 'maya_r', reason: 'the typed tag was lost');
     expect(fake.profile.tag, 'maya');
   });
+
+  testWidgets('the name field capitalises each word (0.30.7)', (t) async {
+    await pumpForm(t, ProfileFake(profile: me));
+    final field = t.widget<TextField>(
+      find.descendant(
+        of: find.byKey(nameKey),
+        matching: find.byType(TextField),
+        matchRoot: true,
+      ),
+    );
+    expect(field.textCapitalization, TextCapitalization.words);
+  });
 }

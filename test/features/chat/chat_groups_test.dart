@@ -302,4 +302,18 @@ void main() {
       );
     });
   });
+
+  testWidgets('the group name field capitalises each word (0.30.7)', (
+    tester,
+  ) async {
+    await openComposer(tester, ChatFake());
+    final field = tester.widget<TextField>(
+      find.descendant(
+        of: find.byKey(const ValueKey('group-title')),
+        matching: find.byType(TextField),
+        matchRoot: true,
+      ),
+    );
+    expect(field.textCapitalization, TextCapitalization.words);
+  });
 }

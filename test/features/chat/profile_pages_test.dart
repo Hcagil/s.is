@@ -16,6 +16,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/group_colors.dart';
 import 'package:sis/features/chat/domain/initials.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
@@ -201,8 +202,10 @@ Future<void> openTitle(WidgetTester t) async {
   await settle(t);
 }
 
+/// The top route's back button. The photo viewer is a non-opaque route: the
+/// screen behind it stays built, with its own back button, under the viewer.
 Future<void> back(WidgetTester t) async {
-  await t.pageBack();
+  await t.tap(find.byType(BackButton).hitTestable().first);
   await settle(t);
 }
 
@@ -695,42 +698,55 @@ void main() {
     });
   });
 
-  testWidgets('a person keeps one tint: list, picker, group, page, settings', (
-    t,
-  ) async {
-    final w = World();
-    await pumpApp(t, w);
-    final bs = initialsOf(bob.displayName);
-    final mk = initialsOf(me.displayName);
-    final inList = tintOf(t, byKey('conversation-c1'), bs);
+  testWidgets(
+    'a person keeps one tint outside groups: list, picker, page; a group member wears their group colour',
+    (t) async {
+      final w = World();
+      await pumpApp(t, w);
+      final bs = initialsOf(bob.displayName);
+      final mk = initialsOf(me.displayName);
+      final inList = tintOf(t, byKey('conversation-c1'), bs);
 
-    await t.tap(find.text('New chat'));
-    await settle(t);
-    final inPicker = tintOf(t, byKey('member-ub'), bs);
-    Navigator.of(t.element(byKey('member-ub'))).pop();
-    await settle(t);
+      await t.tap(find.text('New chat'));
+      await settle(t);
+      final inPicker = tintOf(t, byKey('member-ub'), bs);
+      Navigator.of(t.element(byKey('member-ub'))).pop();
+      await settle(t);
 
-    await openChat(t, 'g1');
-    await openTitle(t);
-    await tapKey(t, 'tab-members');
-    final inGroup = tintOf(t, byKey('group-member-ub'), bs);
-    final meInGroup = tintOf(t, byKey('group-member-u1'), mk);
-    await tapKey(t, 'group-member-ub');
-    final onPage = tintOf(t, find.byType(PersonScreen), bs);
+      await openChat(t, 'g1');
+      await openTitle(t);
+      await tapKey(t, 'tab-members');
+      final inGroup = tintOf(t, byKey('group-member-ub'), bs);
+      final meInGroup = tintOf(t, byKey('group-member-u1'), mk);
+      final dark =
+          Theme.of(t.element(byKey('group-member-ub'))).brightness ==
+          Brightness.dark;
+      await tapKey(t, 'group-member-ub');
+      final onPage = tintOf(t, find.byType(PersonScreen), bs);
 
-    expect(inPicker, inList, reason: 'picker');
-    expect(inGroup, inList, reason: 'group members');
-    expect(onPage, inList, reason: 'person page');
+      expect(inPicker, inList, reason: 'picker');
+      expect(onPage, inList, reason: 'person page');
+      // 0.30.7: inside a group a person wears their group colour (slot in
+      // joining order: Maya 0, Bob 1), the colour their name has in the chat.
+      // (The avatar washes its colour like every tint; the hue is the slot's.)
+      Color opaque(Color c) => c.withValues(alpha: 1);
+      expect(opaque(inGroup), Color(groupColorArgb(1, dark: dark)));
+      expect(opaque(meInGroup), Color(groupColorArgb(0, dark: dark)));
 
-    Navigator.of(t.element(find.byType(PersonScreen)))
-        .popUntil((r) => r.isFirst);
-    await settle(t);
-    await tapKey(t, 'home-settings');
-    expect(find.byType(SettingsScreen), findsOneWidget);
-    final meInSettings = tintOf(t, byKey('settings-profile'), mk);
-    expect(meInSettings, meInGroup, reason: 'settings card vs group row');
-    // Guards the comparisons above against a palette of one colour. Bob's
-    // id is chosen so his tint differs from Maya's under any seeding by id.
-    expect(meInGroup, isNot(inGroup), reason: 'two people, one colour');
-  });
+      Navigator.of(t.element(find.byType(PersonScreen)))
+          .popUntil((r) => r.isFirst);
+      await settle(t);
+      await tapKey(t, 'home-settings');
+      expect(find.byType(SettingsScreen), findsOneWidget);
+      final meInSettings = tintOf(t, byKey('settings-profile'), mk);
+      // Guards the comparisons above against a palette of one colour. Bob's
+      // id is chosen so his tint differs from Maya's under any seeding by id.
+      expect(meInSettings, isNot(inList), reason: 'two people, one colour');
+      expect(
+        meInSettings,
+        isNot(meInGroup),
+        reason: 'outside the group: own tint',
+      );
+    },
+  );
 }

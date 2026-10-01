@@ -760,6 +760,8 @@ class ChatFake implements ChatRepository {
             unread: m.senderId == self ? c.unread : c.unread + 1,
             avatarPath: c.avatarPath,
             hasLeft: c.hasLeft,
+            isSystem: c.isSystem,
+            senders: c.senders,
           ),
     ];
     rows.sort((a, b) {
@@ -814,6 +816,8 @@ class ChatFake implements ChatRepository {
             lastSenderId: c.lastSenderId,
             avatarPath: c.avatarPath,
             hasLeft: c.hasLeft,
+            isSystem: c.isSystem,
+            senders: c.senders,
           ),
     ]);
     return const Ok(null);
@@ -1719,7 +1723,11 @@ class ChatFake implements ChatRepository {
     _replace(
       conversationId,
       first.member.userId,
-      GroupMember(member: first.member, isAdmin: true),
+      GroupMember(
+        member: first.member,
+        isAdmin: true,
+        colorSlot: first.colorSlot,
+      ),
     );
   }
 
@@ -1744,7 +1752,8 @@ class ChatFake implements ChatRepository {
         conversationMembersResult ?? Ok([...?roster[conversationId]]);
     return switch (people) {
       Ok(:final value) => Ok([
-        for (final m in value) GroupMember(member: m, isAdmin: false),
+        for (final (i, m) in value.indexed)
+          GroupMember(member: m, isAdmin: false, colorSlot: i % 10),
       ]),
       Err(:final failure) => Err(failure),
     };
@@ -1763,6 +1772,7 @@ class ChatFake implements ChatRepository {
         member: me.member,
         isAdmin: me.isAdmin,
         leftReason: LeftReason.left,
+        colorSlot: me.colorSlot,
       ),
     );
     _promoteIfNeeded(conversationId);
@@ -1789,6 +1799,8 @@ class ChatFake implements ChatRepository {
             unread: c.unread,
             avatarPath: c.avatarPath,
             hasLeft: true,
+            isSystem: c.isSystem,
+            senders: c.senders,
           ),
     ]);
   }
@@ -1811,6 +1823,7 @@ class ChatFake implements ChatRepository {
         member: them.member,
         isAdmin: them.isAdmin,
         leftReason: LeftReason.removed,
+        colorSlot: them.colorSlot,
       ),
     );
     _event(conversationId, GroupEventKind.removed, memberId);
@@ -1832,8 +1845,13 @@ class ChatFake implements ChatRepository {
     }
     for (final id in memberIds) {
       if (_current(conversationId, id) != null) continue;
-      groupRosters[conversationId]!.add(
-        GroupMember(member: people[id]!, isAdmin: false),
+      final rows = groupRosters[conversationId]!;
+      rows.add(
+        GroupMember(
+          member: people[id]!,
+          isAdmin: false,
+          colorSlot: _colorSlot(rows, id),
+        ),
       );
       _event(conversationId, GroupEventKind.added, id);
     }
@@ -1859,9 +1877,31 @@ class ChatFake implements ChatRepository {
     _replace(
       conversationId,
       memberId,
-      GroupMember(member: them.member, isAdmin: isAdmin),
+      GroupMember(
+        member: them.member,
+        isAdmin: isAdmin,
+        colorSlot: them.colorSlot,
+      ),
     );
     return const Ok(null);
+  }
+
+  /// The slot the server's trigger gives [userId] joining [rows]: their
+  /// earlier slot if they were here before; else a free one (departed members
+  /// still hold theirs); else the least used; the lowest number on a tie.
+  static int _colorSlot(List<GroupMember> rows, String userId) {
+    for (final g in rows.reversed) {
+      if (g.member.userId == userId) return g.colorSlot;
+    }
+    final users = List.generate(10, (_) => <String>{});
+    for (final g in rows) {
+      users[g.colorSlot].add(g.member.userId);
+    }
+    var best = 0;
+    for (var slot = 1; slot < 10; slot++) {
+      if (users[slot].length < users[best].length) best = slot;
+    }
+    return best;
   }
 
   @override

@@ -135,8 +135,8 @@ select is(
      from information_schema.column_privileges
     where table_schema = 'public' and table_name = 'conversation_members'
       and grantee in ('authenticated', 'anon'))::text,
-  'authenticated:SELECT:conversation_id, authenticated:SELECT:joined_at, authenticated:SELECT:left_at, authenticated:SELECT:left_reason, authenticated:SELECT:role, authenticated:SELECT:user_id',
-  'clients hold exactly SELECT on conversation_id, joined_at, left_at, left_reason, role, user_id -- nothing more');
+  'authenticated:SELECT:color_slot, authenticated:SELECT:conversation_id, authenticated:SELECT:joined_at, authenticated:SELECT:left_at, authenticated:SELECT:left_reason, authenticated:SELECT:role, authenticated:SELECT:user_id',
+  'clients hold exactly SELECT on color_slot, conversation_id, joined_at, left_at, left_reason, role, user_id -- nothing more');
 select is((select count(*) from information_schema.table_privileges
             where table_schema = 'public' and table_name = 'conversation_members'
               and grantee in ('authenticated', 'anon')),

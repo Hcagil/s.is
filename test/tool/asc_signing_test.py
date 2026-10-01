@@ -132,8 +132,13 @@ class Fake(http.server.BaseHTTPRequestHandler):
             return self.reply(200, {"data": [{"type": "betaGroups", "id": i, "attributes": {
                 "name": n, "isInternalGroup": internal}} for i, n, internal in st["groups"]]})
         if self.command == "POST" and re.fullmatch(r"/v1/betaGroups/[^/]+/relationships/builds", url.path):
-            if url.path.split("/")[3] not in [g[0] for g in st["groups"]]:
+            gid = url.path.split("/")[3]
+            if gid not in [g[0] for g in st["groups"]]:
                 return self.error(404)
+            if dict((g[0], g[2]) for g in st["groups"])[gid]:
+                # Apple refuses manual additions to an internal group (seen on a real run).
+                return self.reply(422, {"errors": [{"status": "422", "code": "ENTITY_ERROR",
+                                                    "detail": "Builds cannot be assigned to this internal group."}]})
             return self.reply(204)
         if key == ("GET", "/v1/builds/BUILD-1/betaAppReviewSubmission"):
             sub = {"type": "betaAppReviewSubmissions", "id": "SUB-1",
@@ -500,7 +505,8 @@ class AscSigningTest(unittest.TestCase):
         lg = self.find("GET", "/v1/apps/APP-1/betaGroups")
         self.assertEqual(len(lg), 1)
         self.assertEqual(lg[0]["query"].get("limit"), ["200"])
-        self.assertEqual(self.group_adds(), ["G-EXT", "G-INT"], "both groups named bacanaks, nothing else")
+        self.assertEqual(self.group_adds(), ["G-EXT"], "only the external bacanaks group, nothing else")
+        self.assertIn("internal group bacanaks receives builds automatically", p.stdout + p.stderr)
         for r in self.reqs("POST"):
             if r["path"].endswith("/relationships/builds"):
                 self.assertEqual(r["body"], {"data": [{"type": "builds", "id": "BUILD-1"}]})
@@ -542,18 +548,21 @@ class AscSigningTest(unittest.TestCase):
     def test_distribute_internal_only_skips_review(self):
         p = self.dist(groups="other")
         self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertEqual(self.group_adds(), ["G-OTHER"])
+        self.assertEqual(self.group_adds(), [], "an internal group was POSTed to")
+        self.assertIn("internal group other receives builds automatically", p.stdout + p.stderr)
         self.assertEqual(self.review_reqs(), [], "an internal-only distribution touched beta review")
 
     def test_distribute_groups_are_stripped(self):
         p = self.dist(groups=" other , Friends ")
         self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertEqual(self.group_adds(), ["G-FR", "G-OTHER"])
+        self.assertEqual(self.group_adds(), ["G-FR"])
         self.assertEqual(len(self.find("POST", "/v1/betaAppReviewSubmissions")), 1)
 
     def test_distribute_no_matching_group(self):
         p = self.dist(groups="nobody,ghost")
         self.assertNotEqual(p.returncode, 0)
+        self.assertIn("no TestFlight group named", p.stderr)
+        self.assertIn("the app has", p.stderr)
         for name in ("nobody", "ghost", "bacanaks", "other", "Friends"):
             self.assertIn(name, p.stderr, "the error must list wanted and available names")
         self.assertEqual(self.group_adds(), [])
@@ -561,13 +570,34 @@ class AscSigningTest(unittest.TestCase):
 
     def test_distribute_is_idempotent(self):
         self.srv.state["review"] = True
-        for g in ("G-INT", "G-EXT"):
-            self.srv.state["fail"][("POST", "/v1/betaGroups/%s/relationships/builds" % g)] = 409
+        self.srv.state["fail"][("POST", "/v1/betaGroups/G-EXT/relationships/builds")] = 409
         p = self.dist()
         self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertEqual(self.group_adds(), ["G-EXT", "G-INT"])
+        self.assertEqual(self.group_adds(), ["G-EXT"])
+        self.assertIn("already", (p.stdout + p.stderr).lower(), "a re-run does not report the existing submission")
         self.assertEqual(len(self.find("GET", "/v1/builds/BUILD-1/betaAppReviewSubmission")), 1)
         self.assertEqual(self.find("POST", "/v1/betaAppReviewSubmissions"), [], "a second submission was posted")
+
+    def test_distribute_group_names_ignore_case(self):
+        for groups in ("bacanaks", " BaCaNaKs "):
+            self.setUp()
+            self.srv.state["groups"] = [("G-INT", "BACANAKS", True), ("G-EXT", "Bacanaks", False), ("G-FR", "Friends", False)]
+            p = self.dist(groups=groups)
+            self.assertEqual(p.returncode, 0, "%r: %s" % (groups, p.stderr))
+            self.assertEqual(self.group_adds(), ["G-EXT"], groups)
+            self.assertIn("receives builds automatically", p.stdout + p.stderr, groups)
+            self.assertEqual(len(self.find("POST", "/v1/betaAppReviewSubmissions")), 1, groups)
+
+    def test_fake_refuses_internal_group_like_apple(self):
+        """Guards the fake: if it stopped refusing, the internal-group tests would prove nothing."""
+        import urllib.request, urllib.error
+        req = urllib.request.Request(self.api + "/betaGroups/G-INT/relationships/builds", method="POST",
+                                     data=b'{"data":[{"type":"builds","id":"BUILD-1"}]}',
+                                     headers={"Content-Type": "application/json"})
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(req)
+        self.assertEqual(e.exception.code, 422)
+        self.assertIn("cannot be assigned to this internal group", e.exception.read().decode())
 
     def test_distribute_group_add_errors(self):
         for status in (401, 403, 404, 500):

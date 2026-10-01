@@ -38,7 +38,7 @@ jobs:
         id: diff
         run: |
           if git diff --name-only HEAD^ HEAD \
-              | grep -qvE '^(docs/|\.github/)|\.md$|^\.git(ignore|attributes)$'; then
+              | grep -vE '^(docs/|\.github/)|\.md$|^\.git(ignore|attributes)$' >/dev/null; then
             echo ship=true >> "$GITHUB_OUTPUT"
           else
             echo ship=false >> "$GITHUB_OUTPUT"

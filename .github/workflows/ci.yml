@@ -95,7 +95,7 @@ jobs:
       - name: Resolve dependencies
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter pub get
       - name: Layer rules
-        run: tool/check_pattern.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/asc_signing_test.py
+        run: tool/check_pattern.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py
 
       - name: Check formatting
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter dart format --output=none --set-exit-if-changed lib test
@@ -227,7 +227,8 @@ jobs:
       - name: Native iOS tests (simulator)
         run: |
           flutter build ios --config-only --simulator --debug
-          udid=$(xcrun simctl list devices available | grep -m1 -E '^ +iPhone' | grep -oE '[0-9A-F-]{36}')
+          devices=$(xcrun simctl list devices available)
+          udid=$(grep -m1 -E '^ +iPhone' <<<"$devices" | grep -oE '[0-9A-F-]{36}')
           test -n "$udid"
           xcodebuild test -quiet -workspace ios/Runner.xcworkspace -scheme Runner \
             -configuration Debug -destination "id=$udid" CODE_SIGNING_ALLOWED=NO

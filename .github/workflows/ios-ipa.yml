@@ -213,7 +213,7 @@ jobs:
           app="$RUNNER_TEMP/sig/Payload/Runner.app"
           bad=0
           for object in "$app" "$app"/Frameworks/*.framework; do
-            authority=$(codesign -dvv "$object" 2>&1 | sed -n 's/^Authority=//p' | head -1)
+            authority=$(codesign -dvv "$object" 2>&1 | awk '/^Authority=/ && !n { sub(/^Authority=/, ""); print; n = 1 }')
             echo "$(basename "$object"): ${authority:-unsigned or ad-hoc}"
             codesign -d -r- "$object" 2>&1 | sed -n 's/^designated => /  DR: /p'
             case "$authority" in "Apple Distribution: "*) ;; *) bad=1 ;; esac

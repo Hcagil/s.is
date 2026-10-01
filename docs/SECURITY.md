@@ -374,16 +374,33 @@ secret, including the Admin App Store Connect key. Accepted while the owner
 is the only collaborator. If collaborators are added, move
 `APP_STORE_CONNECT_API_KEY` into a protected-branch environment used only by
 the two release jobs that need it (`ios` and `distribute`), and give the
-pull-request signing proof a separate key or drop it. The Admin key is kept
-for the `ios` job, which creates and revokes a per-run distribution
-certificate and App Store profile. `distribute` only manages TestFlight groups
-and beta review, so it could use a separate lower-role key (App Manager, to be
-confirmed against Apple's role documentation before collaborators are
-added). Any pushed branch can mint a signing identity
-(it already could, with the key). A run killed before its cleanup leaves a live
-certificate: no leak (the private key died with the runner), but it holds one
-of Apple's three certificate slots, and three leftovers block releases until
-they are revoked in the portal. Rotate the key in App Store Connect (Users and Access, Integrations)
+pull-request signing proof a separate key or drop it. The Admin key is
+kept for `distribute` (TestFlight groups and beta review) and for the
+one-off `ios-signing-bootstrap.yml` (creates the distribution certificate); the
+`ios` job only reads the certificate and profile.
+
+**Accepted risk: a long-lived iOS signing key in repository secrets** (decided
+2026-10-01, `docs/DECISIONS.md`). Every build is signed with one Apple
+Distribution certificate whose private key is the secret `IOS_DISTRIBUTION_KEY`,
+valid for a year. Same trust model as `ANDROID_UPLOAD_KEYSTORE_BASE64`: any
+pushed branch can read it, so a branch author can sign a build as this team
+until the certificate is revoked. Unlike the Android keystore, which only the
+release after a merge receives, this key is also handed to every same-repository
+pull request's `iOS signed build`, which runs that branch's own workflow file. The key was previously minted per run, but
+the same branch author could always mint a fresh certificate with the App Store
+Connect key, so the added exposure is that a stolen key stays usable for the
+rest of the certificate's year instead of one job. A signed build still has to
+get past App Store Connect (bundle ID, team, TestFlight review) to reach a
+tester. Mitigations:
+the key is written to the runner with mode 600 only in the `ios` job and
+removed at the end, never printed, and the bootstrap workflow never sees it
+(it receives only a CSR). When collaborators are added, move
+`IOS_DISTRIBUTION_KEY` into a protected-branch environment together with the
+App Store Connect key. Compromise or a lost key: revoke the certificate in App
+Store Connect and run the bootstrap again (DELIVERY.md, Certificate lifecycle);
+builds it signed that are still in review fail. Leftover certificates
+no longer accumulate: runs create none; the three-slot limit is used by the
+one certificate (plus one during a rotation). Rotate the key in App Store Connect (Users and Access, Integrations)
 when a collaborator leaves or a dependency is suspected compromised.
 
 ## Runbook

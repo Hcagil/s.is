@@ -1,10 +1,12 @@
 name: iOS IPA
 # One implementation of the signed iPhone build, called by ci.yml (a pull
 # request proves signing works; upload=false) and release.yml (upload=true,
-# to TestFlight). Callers pass the five secrets explicitly. Signing needs only
-# the App Store Connect API key: a distribution certificate and an App Store
-# profile are created through the API for the run and revoked at its end, so
-# no certificate, .p12 or match repository exists anywhere.
+# to TestFlight). Callers pass the six secrets explicitly. Signing needs only
+# the App Store Connect API key and one long-lived distribution certificate:
+# its private key is the secret IOS_DISTRIBUTION_KEY, the certificate and its
+# App Store profile ("sis ci distribution") are read from App Store Connect on
+# every run; both were created once by ios-signing-bootstrap.yml. Nothing is
+# created or revoked per run (docs/DELIVERY.md, Certificate lifecycle).
 on:
   workflow_call:
     inputs:
@@ -39,6 +41,9 @@ on:
         required: true
       GOOGLE_SERVICE_INFO_PLIST:
         description: GoogleService-Info.plist content
+        required: true
+      IOS_DISTRIBUTION_KEY:
+        description: Private key (PEM) of the long-lived Apple Distribution certificate
         required: true
 
 permissions:
@@ -127,23 +132,27 @@ jobs:
         run: |
           codesign --force --sign - --entitlements ios/Runner/Runner.entitlements \
             "$RUNNER_TEMP/Runner.xcarchive/Products/Applications/Runner.app"
-      # A distribution certificate for this run only. Cloud-managed signing
-      # cannot be used: the team's name has non-ASCII letters, and the
-      # designated requirement Xcode writes compares the certificate's common
-      # name in a form Apple's validation does not match, so the app must be
-      # signed with an explicit requirement (below), which needs the private
-      # key here. The key is generated in the job, the certificate is created
-      # from it through the API and revoked in the last step but one; nothing
-      # is stored anywhere.
-      - name: Create the signing certificate
+      # One long-lived distribution certificate for every build. A per-run one
+      # cannot work: Apple validates a build's signature again in TestFlight beta
+      # review (up to about 48 hours after the upload) and a revoked certificate
+      # fails it (ITMS-90721, ITMS-90035). The key comes from the secret, the
+      # certificate and profile from App Store Connect. Cloud-managed signing
+      # cannot be used: the team's name has non-ASCII letters, and the designated
+      # requirement Xcode writes does not match Apple's validation, so the app is
+      # signed with an explicit requirement (below), which needs the key here.
+      - name: Import the signing certificate
+        env:
+          KEY_PEM: ${{ secrets.IOS_DISTRIBUTION_KEY }}
         run: |
+          test -n "$KEY_PEM" || { echo 'IOS_DISTRIBUTION_KEY secret is empty (run the iOS signing bootstrap, docs/DELIVERY.md)' >&2; exit 1; }
           dir="$RUNNER_TEMP/sign"
           mkdir -m 700 "$dir"
-          openssl req -new -newkey rsa:2048 -nodes -keyout "$dir/key.pem" -out "$dir/csr.pem" \
-            -subj "/CN=sis GitHub Actions run $GITHUB_RUN_ID" 2>/dev/null
-          python3 tool/asc_signing.py create "$dir/csr.pem" com.esd.sis \
-            "sis ci $GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" "$dir" | tee -a "$GITHUB_ENV"
+          (umask 077; printf '%s\n' "$KEY_PEM" > "$dir/key.pem")
+          python3 tool/asc_signing.py fetch "sis ci distribution" "$dir"
           openssl x509 -inform der -in "$dir/cert.cer" -out "$dir/cert.pem"
+          openssl pkey -in "$dir/key.pem" -pubout -out "$dir/key.pub" 2>/dev/null || { echo 'IOS_DISTRIBUTION_KEY is not a valid private key PEM' >&2; exit 1; }
+          openssl x509 -in "$dir/cert.pem" -pubkey -noout > "$dir/cert.pub"
+          cmp -s "$dir/key.pub" "$dir/cert.pub" || { echo 'the certificate in App Store Connect does not match IOS_DISTRIBUTION_KEY (rotated, or the wrong key?)' >&2; exit 1; }
           # The issuing intermediate is fetched from Apple's fixed https URL (the AIA URL in the certificate is http only;
           # certs.apple.com does not serve https). -ignore_critical: Apple's leaf carries critical
           # extensions openssl does not know; the signature and issuer name are still checked.
@@ -245,16 +254,12 @@ jobs:
           ipa=$(ls "$RUNNER_TEMP"/export/*.ipa)
           xcrun altool --upload-app --type ios --file "$ipa" \
             --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
-      # The certificate and profile exist for this run only. TestFlight
-      # re-signs what it distributes, so revoking never touches a shipped build.
-      - name: Revoke the signing certificate
+      # Nothing is revoked here, ever: the certificate outlives the build
+      # (see the comment above the import). Only the runner's copies go.
+      - name: Remove the signing material
         if: always()
         run: |
-          [ -d "$RUNNER_TEMP/asc" ] || exit 0
-          # A failed revoke must not skip the local cleanup: keep its status,
-          # clean up, then fail the step so a leftover certificate shows red.
           rc=0
-          python3 tool/asc_signing.py delete "${SIGNING_CERTIFICATE_ID:--}" "${SIGNING_PROFILE_ID:--}" || rc=$?
           [ ! -f "$RUNNER_TEMP/sign/sign.keychain-db" ] || security delete-keychain "$RUNNER_TEMP/sign/sign.keychain-db" || rc=$?
           rm -rf "$RUNNER_TEMP/sign" "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
           exit "$rc"

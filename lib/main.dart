@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -157,10 +159,15 @@ Future<void> main() async {
     );
   } catch (e) {
     // Malformed config or a broken secure store must show a reason, not a
-    // blank screen.
+    // blank screen. Error text can hold config or IDs: only its type is kept.
+    log('Startup failed: ${e.runtimeType}', name: 'sis.startup');
     runApp(
       ProviderScope(
-        overrides: [startupErrorProvider.overrideWithValue('$e')],
+        overrides: [
+          startupErrorProvider.overrideWithValue(
+            'SIS could not start. Please try again.',
+          ),
+        ],
         child: const SisApp(),
       ),
     );

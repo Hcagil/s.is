@@ -38,8 +38,12 @@ class FakeGooglePlatform extends GoogleSignInPlatform {
   var _initDone = false;
   var authenticateCalls = 0;
 
-  /// What `authenticate` does instead of succeeding.
-  GoogleSignInException? error;
+  /// What `authenticate` throws instead of succeeding: a
+  /// GoogleSignInException, as the SDK does, or anything else.
+  Object? error;
+
+  /// What `init` throws instead of finishing, as a failed platform call does.
+  Object? initError;
   bool nullIdToken = false;
 
   /// The nonce claim of the last token issued.
@@ -49,6 +53,7 @@ class FakeGooglePlatform extends GoogleSignInPlatform {
   Future<void> init(InitParameters params) async {
     inits.add(params);
     await Future<void>.delayed(const Duration(milliseconds: 5));
+    if (initError != null) throw initError!;
     _initDone = true;
   }
 
@@ -127,6 +132,10 @@ class GoTrueStandIn {
 
   bool offline = false;
 
+  /// When set, every id_token grant is refused with this message, as GoTrue
+  /// refuses a token whose audience is not an authorised client id.
+  String? rejectWith;
+
   http.Response _error(String msg) => http.Response(
     jsonEncode({'code': 400, 'error_code': 'validation_failed', 'msg': msg}),
     400,
@@ -140,6 +149,7 @@ class GoTrueStandIn {
         req.url.queryParameters['grant_type'] == 'id_token') {
       final body = jsonDecode(req.body) as Map<String, dynamic>;
       grants.add(body);
+      if (rejectWith != null) return _error(rejectWith!);
       final passed = body['nonce'] as String? ?? '';
       final inToken =
           jwtClaims(body['id_token'] as String)['nonce'] as String? ?? '';

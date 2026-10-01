@@ -271,9 +271,22 @@ missing registration surfaces as a Credential Manager cancellation after
 account selection; the app shows that reason rather than returning silently.
 
 iOS: the iOS OAuth client `306417977220-vqg0ne5360a921i23quf294g8e0fjshq` is
-set as `GIDClientID` in `ios/Runner/Info.plist`. The Web client stays
-`serverClientId`, so the ID token's audience is still the Web client and
-Supabase keeps one client list.
+set as `GIDClientID` in `ios/Runner/Info.plist`. The Web client is still passed as
+`serverClientId`, but the iOS SDK issues the ID token with the **iOS client as
+audience** (found on the first TestFlight build). The Supabase Google provider's
+client list therefore holds both, Web first, comma separated; it is set in the
+dashboard, not in the repository. A token for any other client is still rejected.
+Restore checklist: a new or restored Supabase project needs this list (Web, iOS)
+set again, or iPhone sign-in fails with "unacceptable audience".
+
+**Sign-in errors are not shown or logged in full.** SDK and backend error text
+can contain a token or an ID, so the sign-in screen shows a fixed sentence and
+the device log (`sis.auth`) keeps only the error code or type. The start-up failure
+screen is the same: a fixed sentence, and `sis.startup` logs only the error type.
+One exception remains: an offline sign-in goes through `readableFailure`, which
+logs the full error under `sis.data` (network text, never the request body; the
+log exists only in debug and profile builds). Narrowing it to the type is planned
+for 0.33.1.
 
 Nonce: on iOS the Google SDK puts a `nonce` claim in the ID token, and
 Supabase requires the request nonce and the token nonce to be both present or

@@ -1,4 +1,5 @@
 import '../../auth/domain/member.dart';
+import 'group_colors.dart';
 import 'message.dart';
 
 /// A conversation as the conversation list needs it.
@@ -19,6 +20,7 @@ final class Conversation {
     this.avatarPath,
     this.hasLeft = false,
     this.isSystem = false,
+    this.senders = const {},
   });
 
   final String id;
@@ -50,6 +52,10 @@ final class Conversation {
   /// nobody can write into it or leave it.
   final bool isSystem;
 
+  /// For a group: each other member's name and colour slot by user id, so the
+  /// list can name and colour the sender of the preview. Empty for a 1:1.
+  final Map<String, GroupVoice> senders;
+
   /// The same conversation with a newer message as its preview; [unread]
   /// grows by one when [counts] (a message from someone else, arriving while
   /// this conversation is not open).
@@ -65,6 +71,7 @@ final class Conversation {
         avatarPath: avatarPath,
         hasLeft: hasLeft,
         isSystem: isSystem,
+        senders: senders,
       );
 
   /// The same conversation with nothing unread.
@@ -78,6 +85,7 @@ final class Conversation {
     avatarPath: avatarPath,
     hasLeft: hasLeft,
     isSystem: isSystem,
+    senders: senders,
   );
 
   /// For the on-disk chat list snapshot only.
@@ -92,6 +100,7 @@ final class Conversation {
     'avatarPath': avatarPath,
     'hasLeft': hasLeft,
     'isSystem': isSystem,
+    'senders': {for (final e in senders.entries) e.key: e.value.toJson()},
   };
 
   static Conversation fromJson(Map<String, Object?> json) => Conversation(
@@ -109,6 +118,13 @@ final class Conversation {
     avatarPath: json['avatarPath'] as String?,
     hasLeft: json['hasLeft'] as bool? ?? false,
     isSystem: json['isSystem'] as bool? ?? false,
+    senders: {
+      for (final e
+          in ((json['senders'] as Map<String, Object?>?) ??
+                  const <String, Object?>{})
+              .entries)
+        e.key: GroupVoice.fromJson(e.value! as Map<String, Object?>),
+    },
   );
 
   bool get isGroup => title != null;

@@ -1,3 +1,4 @@
+import 'dart:developer';
 import 'dart:typed_data';
 
 import 'package:photo_manager/photo_manager.dart';
@@ -75,7 +76,10 @@ final class PhotoManagerGallery implements Gallery {
   @override
   Future<PickedImage?> load(GalleryPhoto photo) async {
     final e = await AssetEntity.fromId(photo.id);
-    if (e == null) return null;
+    if (e == null) {
+      log('photo ${photo.id}: asset not found', name: 'sis.chat');
+      return null;
+    }
     final w = e.width, h = e.height;
     final long = w > h ? w : h;
     // An unknown size (0) asks for the cap and lets the platform fit it.
@@ -92,7 +96,10 @@ final class PhotoManagerGallery implements Gallery {
       format: ThumbnailFormat.jpeg,
       quality: 85,
     );
-    if (bytes == null) return null;
+    if (bytes == null) {
+      log('photo ${photo.id}: no pixels returned', name: 'sis.chat');
+      return null;
+    }
     return PickedImage(
       bytes: bytes,
       contentType: 'image/jpeg',
@@ -104,7 +111,10 @@ final class PhotoManagerGallery implements Gallery {
   @override
   Future<PickedImage?> loadForCrop(GalleryPhoto photo) async {
     final e = await AssetEntity.fromId(photo.id);
-    if (e == null) return null;
+    if (e == null) {
+      log('photo ${photo.id}: asset not found', name: 'sis.chat');
+      return null;
+    }
     final w = e.width, h = e.height;
     final long = w > h ? w : h;
     final size = long == 0
@@ -120,7 +130,10 @@ final class PhotoManagerGallery implements Gallery {
       format: ThumbnailFormat.jpeg,
       quality: 85,
     );
-    if (bytes == null) return null;
+    if (bytes == null) {
+      log('photo ${photo.id}: no pixels returned', name: 'sis.chat');
+      return null;
+    }
     return PickedImage(
       bytes: bytes,
       contentType: 'image/jpeg',

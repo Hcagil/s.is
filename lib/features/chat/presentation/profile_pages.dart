@@ -499,6 +499,7 @@ class _MembersTab extends ConsumerWidget {
                   seed: m.member.userId,
                   online: online.contains(m.member.userId),
                   avatarPath: m.member.avatarPath,
+                  groupSlot: m.colorSlot,
                 ),
                 title: Text(
                   m.member.userId == me
@@ -570,6 +571,7 @@ class _MembersTab extends ConsumerWidget {
                       label: m.member.displayName,
                       seed: m.member.userId,
                       avatarPath: m.member.avatarPath,
+                      groupSlot: m.colorSlot,
                     ),
                   ),
                   title: Text(

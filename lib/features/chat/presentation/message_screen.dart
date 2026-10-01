@@ -84,10 +84,15 @@ Future<void> openConversation(
   // Again on leaving, so a message that landed while the screen was open is
   // read before the list below re-reads the counts.
   await list.markRead(conversationId);
-  if (previous == null) {
-    ref.read(openConversationProvider.notifier).close();
-  } else {
-    ref.read(openConversationProvider.notifier).open(previous);
+  // Only while this chat is still the open one: the member may already have
+  // opened another during the markRead above, and closing (or restoring
+  // `previous`) then would pull that chat's messages out from under it.
+  if (ref.read(openConversationProvider) == conversationId) {
+    if (previous == null) {
+      ref.read(openConversationProvider.notifier).close();
+    } else {
+      ref.read(openConversationProvider.notifier).open(previous);
+    }
   }
   // The list is also kept live by Realtime; this re-read is the fallback when
   // that subscription could not be established.
@@ -118,6 +123,15 @@ String? _status(WidgetRef ref, String? other) {
   }
   return null;
 }
+
+bool _isIos(BuildContext context) =>
+    Theme.of(context).platform == TargetPlatform.iOS;
+
+/// The bottom safe-area inset the composer covers itself on iPhone (the home
+/// indicator; 0 while the keyboard is open, when the keyboard is the edge).
+/// Android: 0 -- its SafeArea handles the gesture bar as before.
+double _composerBottomInset(BuildContext context) =>
+    _isIos(context) ? MediaQuery.paddingOf(context).bottom : 0;
 
 /// The open conversation: its messages, and a composer.
 class MessageScreen extends ConsumerStatefulWidget {
@@ -365,6 +379,8 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       for (final m in roster)
         if (m.hasLeft) m.member.userId,
     };
+    // Each sender's colour slot, from the group's roster (empty in a 1:1).
+    final slotByUser = {for (final m in roster) m.member.userId: m.colorSlot};
     // Read status, where it is shared: your own messages look a little grey
     // until every sharing member has read them.
     final marks = ref.watch(readMarksProvider).value ?? const <ReadMark>[];
@@ -474,6 +490,10 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       ),
       body: SisGlow(
         child: SafeArea(
+          // iPhone: the composer paints through the home-indicator area
+          // itself (see _composerBottomInset), so no differently coloured
+          // band is left under it. Android keeps the SafeArea as it was.
+          bottom: !_isIos(context),
           child: Column(
             children: [
               Expanded(
@@ -550,6 +570,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                             senderLeft: departedSenderIds.contains(
                               message.senderId,
                             ),
+                            senderSlot: slotByUser[message.senderId],
                             quoted: quoted,
                             quotedName: quoted == null
                                 ? null
@@ -598,6 +619,7 @@ class _Bubble extends StatelessWidget {
     required this.unread,
     this.sender,
     this.senderLeft = false,
+    this.senderSlot,
     this.quoted,
     this.quotedName,
     this.highlightQuery,
@@ -621,6 +643,10 @@ class _Bubble extends StatelessWidget {
   /// True when [sender] has left or been removed from the group -- their
   /// name is greyed rather than tinted, everywhere it is still shown.
   final bool senderLeft;
+
+  /// [sender]'s colour slot in this group; null (not known yet) falls back to
+  /// the person's own tint.
+  final int? senderSlot;
 
   /// The active in-chat search query, if any: every match in [message]'s
   /// body is highlighted.
@@ -810,9 +836,11 @@ class _Bubble extends StatelessWidget {
                     key: ValueKey('sender-${message.id}'),
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       color: senderLeft
                           ? Theme.of(context).colorScheme.onSurfaceVariant
+                          : senderSlot != null
+                          ? groupColor(context, senderSlot!)
                           : personTint(context, message.senderId, ink: true),
                     ),
                   ),
@@ -1427,7 +1455,12 @@ class _ComposerState extends ConsumerState<_Composer> {
             top: BorderSide(color: Theme.of(context).colorScheme.outline),
           ),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          16 + _composerBottomInset(context),
+        ),
         child: Text(
           isSystem
               ? 'Only SIS can post here'
@@ -1494,7 +1527,12 @@ class _ComposerState extends ConsumerState<_Composer> {
           top: BorderSide(color: Theme.of(context).colorScheme.outline),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(6, 8, 10, 12),
+      padding: EdgeInsets.fromLTRB(
+        6,
+        8,
+        10,
+        _isIos(context) ? 4 + _composerBottomInset(context) : 12,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1518,6 +1556,9 @@ class _ComposerState extends ConsumerState<_Composer> {
                   minLines: 1,
                   maxLines: 4,
                   focusNode: _focus,
+                  // Messages, captions and edits all start with a capital; the
+                  // keyboard's own setting still decides (nothing is forced).
+                  textCapitalization: TextCapitalization.sentences,
                   textInputAction: TextInputAction.send,
                   // A non-null onEditingComplete replaces Flutter's default,
                   // which unfocuses the field on the send action and so

@@ -12,6 +12,7 @@ import '../../auth/domain/member.dart';
 import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
+import '../domain/group_colors.dart';
 import '../domain/group_event.dart';
 import '../domain/group_member.dart';
 import '../domain/message.dart';
@@ -91,7 +92,7 @@ final class SupabaseChatRepository implements ChatRepository {
         // side's row.
         _client
             .from('conversation_members')
-            .select('conversation_id, user_id, left_at')
+            .select('conversation_id, user_id, left_at, color_slot')
             .retriedOnce(),
         // Titles distinguish a group from a 1:1; RLS scopes this to the
         // caller's own conversations, same as the membership rows.
@@ -116,6 +117,10 @@ final class SupabaseChatRepository implements ChatRepository {
       };
 
       final otherByConversation = <String, String>{};
+      // Colour slots of the people in each group, and every other member's id
+      // (named below, so a group's preview can name its sender).
+      final slotByConversation = <String, Map<String, int>>{};
+      final otherIds = <String>{};
       // The caller's own left_at, per conversation. A member who left and
       // was later re-added can hold more than one row for the same
       // conversation (the old row is kept, never rewritten): a current row
@@ -126,6 +131,9 @@ final class SupabaseChatRepository implements ChatRepository {
         final userId = row['user_id'] as String;
         final conversationId = row['conversation_id'] as String;
         if (userId != me) {
+          otherIds.add(userId);
+          (slotByConversation[conversationId] ??= {})[userId] =
+              row['color_slot'] as int? ?? 0;
           otherByConversation[conversationId] = userId;
           continue;
         }
@@ -145,7 +153,7 @@ final class SupabaseChatRepository implements ChatRepository {
       final conversationIds = {...titleById.keys, ...otherByConversation.keys};
       if (conversationIds.isEmpty) return const Ok([]);
 
-      final others = otherByConversation.values.toSet().toList();
+      final others = otherIds.toList();
       // None of these three depends on either of the other two, so they
       // also run together rather than one after the other.
       final secondStage = await Future.wait<Object?>([
@@ -221,6 +229,14 @@ final class SupabaseChatRepository implements ChatRepository {
             avatarPath: avatarPathById[id],
             hasLeft: myLeftAtByConversation[id] != null,
             isSystem: systemById[id] ?? false,
+            senders: titleById[id] == null
+                ? const {}
+                : {
+                    for (final e
+                        in (slotByConversation[id] ?? const <String, int>{})
+                            .entries)
+                      e.key: GroupVoice(nameByUser[e.key] ?? 'Member', e.value),
+                  },
           ),
       ];
       // Conversations with no messages yet sort last.
@@ -298,7 +314,7 @@ final class SupabaseChatRepository implements ChatRepository {
       // left_at" rule the server's own mark_read uses.
       final rows = await _client
           .from('conversation_members')
-          .select('user_id, role, left_at, left_reason')
+          .select('user_id, role, left_at, left_reason, color_slot')
           .eq('conversation_id', conversationId)
           .retriedOnce();
       final byUser = <String, Map<String, dynamic>>{};
@@ -336,6 +352,7 @@ final class SupabaseChatRepository implements ChatRepository {
               avatarPath: byId[row['user_id']]?['avatar_path'] as String?,
             ),
             isAdmin: row['role'] == 'admin',
+            colorSlot: row['color_slot'] as int? ?? 0,
             leftReason: row['left_at'] == null
                 ? null
                 : (row['left_reason'] == 'removed'

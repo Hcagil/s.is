@@ -3,7 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
 import '../application/chat_controllers.dart';
+import '../domain/group_colors.dart';
 import '../domain/initials.dart';
+
+/// The colour of [slot] in a group's name text, for the current theme. The
+/// slot comes from the server (see groupColorArgb), so everyone sees the same
+/// colour for the same person in the same group.
+Color groupColor(BuildContext context, int slot) => Color(
+  groupColorArgb(slot, dark: Theme.of(context).brightness == Brightness.dark),
+);
 
 /// Initials in a circle, tinted per person (seeded by their user id, so they
 /// keep one colour everywhere), with the brand dot when [online]. Shows the
@@ -18,6 +26,7 @@ class PersonAvatar extends ConsumerWidget {
     this.online = false,
     this.dotKey,
     this.avatarPath,
+    this.groupSlot,
   });
 
   final String label;
@@ -29,6 +38,11 @@ class PersonAvatar extends ConsumerWidget {
   /// Storage path of their picture; null shows the initials.
   final String? avatarPath;
 
+  /// Inside a group: the person's colour slot there. The initials placeholder
+  /// then wears that colour (tinted background, coloured initials) instead of
+  /// the per-person tint. Null everywhere else.
+  final int? groupSlot;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
@@ -39,13 +53,17 @@ class PersonAvatar extends ConsumerWidget {
     final circle = bytes == null
         ? CircleAvatar(
             radius: radius,
-            backgroundColor: personTint(context, seed),
+            backgroundColor: groupSlot == null
+                ? personTint(context, seed)
+                : groupColor(context, groupSlot!).withValues(alpha: 0.18),
             child: Text(
               initialsOf(label),
               style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: radius * 2 / 3,
-                color: personTint(context, seed, ink: true),
+                color: groupSlot == null
+                    ? personTint(context, seed, ink: true)
+                    : groupColor(context, groupSlot!),
               ),
             ),
           )

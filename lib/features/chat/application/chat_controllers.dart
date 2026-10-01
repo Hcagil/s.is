@@ -424,6 +424,19 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     final index = list.indexWhere((c) => c.id == message.conversationId);
     if (index < 0) return null;
     final existing = list[index];
+    final me = switch (ref.read(sessionControllerProvider).value) {
+      Allowed(:final member) => member.userId,
+      _ => null,
+    };
+    // A sender the list does not know yet (someone added to this group since
+    // the list was read) cannot be named or coloured: null makes the caller
+    // read the list again, as for an unknown conversation.
+    if (existing.isGroup &&
+        !existing.isSystem &&
+        message.senderId != me &&
+        !existing.senders.containsKey(message.senderId)) {
+      return null;
+    }
     final at = existing.lastMessageAt;
     // Not newer than the current preview -- a late delivery, or the same
     // message delivered twice -- leaves the list exactly as it was. Using
@@ -432,10 +445,6 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     if (at != null && !message.createdAt.isAfter(at)) return list;
     final updated = [...list]..removeAt(index);
     // Unread: someone else's message, in a conversation not on screen.
-    final me = switch (ref.read(sessionControllerProvider).value) {
-      Allowed(:final member) => member.userId,
-      _ => null,
-    };
     final counts =
         message.senderId != me &&
         ref.read(openConversationProvider) != message.conversationId;
@@ -686,10 +695,24 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// any earlier one is dropped, even if it arrives later.
   String? _requestedAnchorId;
 
+  /// The conversation the current state belongs to. Riverpod 3 always carries
+  /// the previous value into a reload, so a rebuild for a different chat would
+  /// otherwise answer `.value` with the chat just left.
+  String? _stateFor;
+
   @override
   Future<List<Message>> build() async {
     _jumped = false;
     final conversationId = ref.watch(openConversationProvider);
+    if (_stateFor != conversationId) {
+      _stateFor = conversationId;
+      // Launder the carried value, as ConversationListController.build does:
+      // the empty AsyncData is replaced by AsyncLoading before the first
+      // await, so only an empty loading state is ever observed -- never the
+      // last chat's messages. (A same-chat catchUp keeps its value on purpose.)
+      state = const AsyncData(<Message>[]);
+      state = const AsyncLoading();
+    }
     if (conversationId == null) return const [];
 
     final repo = ref.read(chatRepositoryProvider);
@@ -704,6 +727,8 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     final buffered = <Message>[];
     var loaded = false;
     final sub = stream.listen((message) {
+      // Strictly this chat's: a row for another conversation is never shown.
+      if (message.conversationId != conversationId) return;
       if (!loaded) {
         buffered.add(message);
         return;
@@ -744,6 +769,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         loaded = true;
         final merged = [...value];
         for (final message in buffered) {
+          if (message.conversationId != conversationId) continue;
           final i = merged.indexWhere((m) => m.id == message.id);
           if (i < 0) {
             merged.add(message);

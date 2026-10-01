@@ -96,12 +96,18 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     _lifecycle = AppLifecycleListener(
       // Visible again after being backgrounded: Realtime died meanwhile, so
       // the open chat and the list fetch what they missed.
-      onShow: () => ref.read(resumeCatchUpProvider)(),
+      onShow: () {
+        ref.read(appVisibleProvider.notifier).set(true);
+        ref.read(resumeCatchUpProvider)();
+      },
       onResume: () {
         ref.read(updateControllerProvider.notifier).recheck();
         ref.read(sendQueueProvider.notifier).resumeForeground();
       },
-      onHide: () => ref.read(sendQueueProvider.notifier).pauseForBackground(),
+      onHide: () {
+        ref.read(appVisibleProvider.notifier).set(false);
+        ref.read(sendQueueProvider.notifier).pauseForBackground();
+      },
     );
   }
 

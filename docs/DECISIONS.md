@@ -1510,3 +1510,29 @@ picture comes from the chat list snapshot and the picture cache the chat feature
 already keeps, through `notification_avatars.dart`, with the snapshot's owner
 check and no network call. This is the one data-to-data import across features;
 it stays until a third feature needs the same lookup.
+
+## 2026-10-01 — Read marks across a background (0.30.5)
+
+Owner report from TestFlight: on iPhones the sender often did not see the
+read mark. Cause: the 0.25.2 resume catch-up re-read the open chat's
+*messages* and the chat list, but not read status. Two losses followed, both
+because Realtime replays nothing and iOS suspends the socket at once:
+
+- **Sender backgrounded:** the `reads:<id>` broadcast sent while the phone was
+  away was never heard, and `ReadMarksController` was not rebuilt on return,
+  so the mark stayed stale until the chat was closed and reopened.
+- **Reader backgrounded** with the chat open: messages arriving meanwhile were
+  loaded by the catch-up but never marked read (only the live listener did
+  that), so the server never recorded a read until the reader left the chat.
+
+**Fix:** `resumeCatchUpProvider` (the one path for app resume and a tapped
+notification) now invalidates `readMarksProvider` (re-join, then re-read) and
+calls `markRead` for the open chat before the list's catch-up re-read.
+Android shared both paths; it merely kept its socket longer. Groups use the
+same controller.
+
+**Not marked while hidden.** Where the socket outlived the background (Android),
+a message arriving with the chat open but the app hidden was marked read although
+nobody saw it. The live listener now marks read only while the app is visible
+(`appVisibleProvider`, set from `AppLifecycleListener` onHide/onShow in
+`app/sis_app.dart`); the resume catch-up marks it when the member returns.

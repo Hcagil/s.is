@@ -178,6 +178,15 @@ class PhotoPlatform {
       case 'openSetting':
         settingsOpened++;
         return null;
+      // The asset's record, for a photo the phone still has. Its pixels
+      // (getOriginBytes, getThumb, getFullFile ...) are not answered: null,
+      // as for a photo deleted or still in the cloud.
+      case 'fetchEntityProperties':
+        final id = args['id'];
+        for (final s in _visible) {
+          if (s.id == id) return (_page([s])['data']! as List).single;
+        }
+        return null;
       default:
         return null;
     }
@@ -434,6 +443,30 @@ void main() {
         expect(await page(0), isEmpty);
         expect(await page(1), isEmpty);
       });
+    });
+  });
+
+  // 0.30.7 diagnostics: a photo that cannot be read is null (and logged),
+  // never a throw -- the attachment sheet shows a reason instead of crashing.
+  group('a photo that cannot be read', () {
+    setUp(() {
+      phone
+        ..state = Platform.authorized
+        ..shots = const [Shot('kept', 1, 1)];
+    });
+    const gallery = PhotoManagerGallery();
+
+    test('load: an asset the phone no longer has is null', () async {
+      expect(await gallery.load(const GalleryPhoto('gone')), isNull);
+    });
+    test('loadForCrop: an asset the phone no longer has is null', () async {
+      expect(await gallery.loadForCrop(const GalleryPhoto('gone')), isNull);
+    });
+    test('load: an asset whose pixels never come is null', () async {
+      expect(await gallery.load(const GalleryPhoto('kept')), isNull);
+    });
+    test('loadForCrop: an asset whose pixels never come is null', () async {
+      expect(await gallery.loadForCrop(const GalleryPhoto('kept')), isNull);
     });
   });
 }

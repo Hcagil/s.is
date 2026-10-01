@@ -15,17 +15,38 @@ JSON:API bodies, 201 on create, 204 on delete, a 404 / 409 / 500 carrying an
   create  looks the bundle id up, creates a DISTRIBUTION certificate from the
           CSR and an IOS_APP_STORE profile tying the exact bundle id to that
           certificate; writes OUT/cert.cer (DER) and
-          OUT/profile.mobileprovision; stdout carries only GITHUB_ENV lines
+          OUT/profile.mobileprovision; stdout carries only the lines
           SIGNING_CERTIFICATE_ID / SIGNING_PROFILE_ID. A failure after the
-          certificate exists still reports its id (the always() revoke step
-          reads it) and exits non-zero.
-  delete  CERT_ID PROFILE_ID: deletes both; `-` skips one; 404 is fine; any
-          other error fails.
+          certificate exists still reports its id and exits non-zero. Only the
+          iOS signing bootstrap workflow calls it.
+  fetch   PROFILE_NAME OUT_DIR: the long-lived identity every run signs with.
+          Lists profiles (filter[name], limit 200; the filter matches
+          partially), takes the ACTIVE one named exactly PROFILE_NAME, the
+          newest by createdDate; then its first DISTRIBUTION certificate (no
+          certificateType attribute counts too). Writes OUT/cert.cer and
+          OUT/profile.mobileprovision; stdout: the two id lines and nothing
+          else but ::warning:: lines. Expired (<= 0 days) certificate or
+          profile: exit 1 "the signing <x> expired; rotate it
+          (docs/DELIVERY.md)"; under 30 days: "::warning::The iOS signing <x>
+          expires in N days; rotate it (docs/DELIVERY.md)". No such profile,
+          no distribution certificate, an API error: non-zero. Only GETs.
+  delete  CERT_ID PROFILE_ID: the certificate first, then the profile; `-`
+          skips one; a failed certificate delete keeps the profile and exits
+          1; a failed profile delete exits 1; 404 is fine.
+  cleanup [MIN_AGE_HOURS=6]: one-time sweep of the old per-run material:
+          only profiles named exactly "sis ci <digits>-<digits>" at least that
+          old; per profile, each certificate first (each tried on its own),
+          the profile only when all its certificates went; never "sis ci
+          distribution", another profile or certificate; 404 is fine; any
+          failure exits 1 after trying everything; prints ids and ages, never
+          names or content. Ages are checked under TZ=JST-9.
+  release is gone: it is a usage error.
   never   prints the private key or the bearer token.
 
 Needs python3 and openssl only.
 """
 import base64
+import datetime
 import http.server
 import select
 import socket
@@ -45,6 +66,7 @@ TOOL = os.path.join(ROOT, "tool", "asc_signing.py")
 KEY_ID, ISSUER = "K3YID", "69a6de7e-issuer-uuid"
 BUNDLES = {"BID-WIDGET": "com.esd.sis.widget", "BID-APP": "com.esd.sis", "BID-OTHER": "com.other.app"}
 PROFILE_BYTES = b"0\x82\x01\x00fake-cms-" + os.urandom(32)
+CONTENT_MARK = base64.b64encode(b"KEYMATERIAL-" + os.urandom(24)).decode()
 
 
 def sh(*cmd, data=None):
@@ -65,6 +87,12 @@ def der_int(b):
 def raw_to_der(raw):
     body = der_int(raw[:32]) + der_int(raw[32:])
     return b"\x30" + bytes([len(body)]) + body
+
+
+def attrs(base, over):
+    """base updated from over; a None value drops the attribute."""
+    d = dict(base, **(over or {}))
+    return {k: v for k, v in d.items() if v is not None}
 
 
 class Fake(http.server.BaseHTTPRequestHandler):
@@ -159,7 +187,29 @@ class Fake(http.server.BaseHTTPRequestHandler):
             return self.reply(201, {"data": {"type": "profiles", "id": "PROF-1", "attributes": {
                 "profileType": "IOS_APP_STORE", "uuid": "0F1E2D3C-UUID",
                 "profileContent": st.get("prof_b64") or base64.b64encode(PROFILE_BYTES).decode()}}})
+        if key == ("GET", "/v1/profiles"):
+            # Every profile of the team, ours and others'; filter[name] (if
+            # used) matches partially, like the other filters.
+            # filter[name] (if used) matches partially and ignores case.
+            f = q.get("filter[name]", [""])[0].lower()
+            lim = int(q.get("limit", ["20"])[0])
+            data = [{"type": "profiles", "id": i, "attributes": attrs({
+                "name": n, "createdDate": c, "profileState": "ACTIVE", "profileType": "IOS_APP_STORE",
+                "uuid": "UUID-" + i, "profileContent": CONTENT_MARK}, st["pattrs"].get(i))}
+                for i, n, c, _ in st["profiles"] if f in n.lower()]
+            return self.reply(200, {"data": data[:lim], "links": {"self": self.path}, "meta": {"paging": {"total": len(data)}}})
+        m = re.fullmatch(r"/v1/profiles/([^/]+)/certificates", url.path)
+        if self.command == "GET" and m:
+            certs = {i: cs for i, _, _, cs in st["profiles"]}
+            if m.group(1) not in certs:
+                return self.error(404)
+            return self.reply(200, {"data": [{"type": "certificates", "id": c, "attributes": attrs({
+                "certificateType": "DISTRIBUTION", "name": "Apple Distribution: Şirket",
+                "certificateContent": CONTENT_MARK}, st["cattrs"].get(c))} for c in certs[m.group(1)]]})
         if self.command == "DELETE" and url.path.rsplit("/", 1)[0] in ("/v1/certificates", "/v1/profiles"):
+            if url.path in st["gone"]:  # deleted already: Apple answers 404
+                return self.error(404)
+            st["gone"].add(url.path)
             return self.reply(204)
         return self.error(404)
 
@@ -202,7 +252,7 @@ class AscSigningTest(unittest.TestCase):
                           "version": "412", "builds": ["VALID"], "locs": [("L-DE", "de-DE"), ("L-EN", "en-US")],
                           "groups": [("G-INT", "bacanaks", True), ("G-EXT", "bacanaks", False), ("G-OTHER", "other", True),
                                      ("G-OLD", "bacanaks-old", False), ("G-FR", "Friends", False)],
-                          "review": False}
+                          "review": False, "profiles": [], "gone": set(), "pattrs": {}, "cattrs": {}}
 
     def prog(self, code):
         return ("import sys; sys.path.insert(0, %r); import asc_signing as a; a.API = sys.argv[1]; " % os.path.dirname(TOOL)) + code
@@ -347,6 +397,7 @@ class AscSigningTest(unittest.TestCase):
 
     def test_bad_usage(self):
         for args in ([], ["create", self.csr, "com.esd.sis", "n"], ["delete", "C"], ["revoke", "C", "P"],
+                     ["release", "com.esd.sis", "412", "C", "P"], ["release", "com.esd.sis", "412", "C"],
                      ["distribute", "com.esd.sis", "412", "bacanaks"],
                      ["distribute", "com.esd.sis", "412", "bacanaks", "note", "extra"]):
             self.setUp()
@@ -356,7 +407,8 @@ class AscSigningTest(unittest.TestCase):
 
     # ---- delete -----------------------------------------------------------------
     def deleted(self):
-        return sorted(r["path"] for r in self.reqs("DELETE"))
+        """Every resource a DELETE was sent for (a repeat of one counts once)."""
+        return sorted({r["path"] for r in self.reqs("DELETE")})
 
     def test_delete_both(self):
         p = self.tool("delete", "CERT-9", "PROF-9")
@@ -389,16 +441,28 @@ class AscSigningTest(unittest.TestCase):
             p = self.tool("delete", "CERT-9", "PROF-9")
             self.assertNotEqual(p.returncode, 0, "%d on %s was ignored" % (status, path))
 
-    def test_delete_profile_failure_still_revokes_certificate(self):
-        # A failing delete must not leave the other one behind, and still fails the run.
-        for path, fault in (("/v1/profiles/PROF-9", 500), ("/v1/profiles/PROF-9", "drop"),
-                            ("/v1/certificates/CERT-9", 500), ("/v1/certificates/CERT-9", "drop")):
+    def test_delete_certificate_before_profile(self):
+        p = self.tool("delete", "CERT-9", "PROF-9")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual([r["path"] for r in self.reqs("DELETE")], ["/v1/certificates/CERT-9", "/v1/profiles/PROF-9"],
+                         "the certificate must be revoked before its profile is deleted")
+
+    def test_delete_failed_certificate_keeps_profile(self):
+        for fault in (500, 401, 409, "drop"):
             self.setUp()
-            self.srv.state["fail"][("DELETE", path)] = fault
+            self.srv.state["fail"][("DELETE", "/v1/certificates/CERT-9")] = fault
             p = self.tool("delete", "CERT-9", "PROF-9")
-            self.assertNotEqual(p.returncode, 0, "%s on %s was ignored" % (fault, path))
-            self.assertEqual(self.deleted(), ["/v1/certificates/CERT-9", "/v1/profiles/PROF-9"],
-                             "%s on %s stopped the other delete" % (fault, path))
+            self.assertEqual(p.returncode, 1, "%s on the certificate: want exit 1, got %d" % (fault, p.returncode))
+            self.assertEqual(self.deleted(), ["/v1/certificates/CERT-9"],
+                             "%s on the certificate: the profile was deleted anyway" % fault)
+
+    def test_delete_failed_profile_fails(self):
+        for fault in (500, 403, "drop"):
+            self.setUp()
+            self.srv.state["fail"][("DELETE", "/v1/profiles/PROF-9")] = fault
+            p = self.tool("delete", "CERT-9", "PROF-9")
+            self.assertEqual(p.returncode, 1, "%s on the profile: want exit 1, got %d" % (fault, p.returncode))
+            self.assertEqual(self.deleted(), ["/v1/certificates/CERT-9", "/v1/profiles/PROF-9"])
 
     # ---- create: the ids reach GITHUB_ENV whatever fails after ----------------------
     def test_create_reports_ids_before_writing(self):
@@ -644,6 +708,303 @@ class AscSigningTest(unittest.TestCase):
         self.assertNotEqual(p.returncode, 0)
         self.assertEqual(self.find("GET", "/v1/builds"), [], "a partial bundle id match was used")
 
+    # ---- cleanup: leftovers of earlier runs ---------------------------------------
+    @staticmethod
+    def ago(hours, form="+0000"):
+        """An App Store Connect createdDate `hours` ago, in UTC."""
+        t = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=hours)
+        return t.strftime("%Y-%m-%dT%H:%M:%S.000") + form
+
+    def cleanup(self, *args):
+        # A non-UTC zone: an age computed from a naive local time is off by 9 h.
+        return self.tool("cleanup", *args, TZ="JST-9")
+
+    def test_cleanup_deletes_only_old_sis_ci_profiles(self):
+        self.srv.state["profiles"] = [
+            ("P-OLD", "sis ci 5150-1", self.ago(7), ["C-OLD1", "C-OLD2"]),
+            ("P-NEW", "sis ci 5151-1", self.ago(5), ["C-NEW"]),  # a run still in flight
+            ("P-HAND", "App Store sis", self.ago(500), ["C-HAND"]),
+            ("P-MY", "my sis ci 1", self.ago(500), ["C-MY"]),
+            ("P-X", "sis cix 1", self.ago(500), ["C-X"]),
+            ("P-CASE", "SIS CI 1-1", self.ago(500), ["C-CASE"]),
+            # The long-lived identity: never touched, however old.
+            ("P-DIST", "sis ci distribution", self.ago(9000), ["C-DIST"]),
+            ("P-NODASH", "sis ci 5150", self.ago(500), ["C-ND"]),
+            ("P-TAIL", "sis ci 5150-1 old", self.ago(500), ["C-TAIL"]),
+            ("P-TRAIL", "sis ci 5150-1 ", self.ago(500), ["C-TRAIL"]),
+            ("P-LEAD", " sis ci 5150-1", self.ago(500), ["C-LEAD"]),
+            ("P-ALPHA", "sis ci 5150-a", self.ago(500), ["C-ALPHA"]),
+            ("P-NL", "sis ci 5150-1\n", self.ago(500), ["C-NL"]),
+        ]
+        p = self.cleanup()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.deleted(), ["/v1/certificates/C-OLD1", "/v1/certificates/C-OLD2", "/v1/profiles/P-OLD"],
+                         "cleanup must delete exactly the sis ci profile older than 6 h and its certificates")
+        lists = self.find("GET", "/v1/profiles")
+        self.assertTrue(lists, "the profiles were not listed")
+        self.assertEqual(lists[0]["query"].get("limit"), ["200"])
+        listed = sorted(r["path"] for r in self.reqs("GET") if r["path"].endswith("/certificates"))
+        self.assertNotIn("/v1/profiles/P-HAND/certificates", listed)
+        for r in self.reqs("DELETE"):
+            self.verify_jwt(r["headers"]["authorization"][7:])
+
+    def test_cleanup_age_argument(self):
+        for args, created, deleted in ((("0",), self.ago(1 / 60), True), (("24",), self.ago(7), False),
+                                       ((), self.ago(6 + 1 / 60), True), ((), self.ago(6 - 1 / 60), False)):
+            self.setUp()
+            self.srv.state["profiles"] = [("P-1", "sis ci 1-1", created, ["C-1"])]
+            p = self.cleanup(*args)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            want = ["/v1/certificates/C-1", "/v1/profiles/P-1"] if deleted else []
+            self.assertEqual(self.deleted(), want, "cleanup %s on a profile created %s" % (args, created))
+
+    def test_cleanup_profile_without_certificate(self):
+        self.srv.state["profiles"] = [("P-1", "sis ci 1-1", self.ago(7), [])]
+        p = self.cleanup()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.deleted(), ["/v1/profiles/P-1"])
+
+    def test_cleanup_date_forms(self):
+        for form in ("Z", "+0000", "+00:00"):
+            self.setUp()
+            self.srv.state["profiles"] = [("P-1", "sis ci 1-1", self.ago(7, form), ["C-1"]),
+                                          ("P-2", "sis ci 2-1", self.ago(5, form), ["C-2"])]
+            p = self.cleanup()
+            self.assertEqual(p.returncode, 0, "%s: %s" % (form, p.stderr))
+            self.assertEqual(self.deleted(), ["/v1/certificates/C-1", "/v1/profiles/P-1"], form)
+
+    def test_cleanup_unparseable_date_fails(self):
+        self.srv.state["profiles"] = [("P-1", "sis ci 1-1", "yesterday", ["C-1"])]
+        p = self.cleanup()
+        self.assertNotEqual(p.returncode, 0, "an unparseable createdDate was accepted")
+        self.assertEqual(self.deleted(), [], "a profile of unknown age was deleted")
+
+    def test_cleanup_404_is_fine(self):
+        self.srv.state["profiles"] = [("P-1", "sis ci 1-1", self.ago(7), ["C-1"])]
+        self.srv.state["fail"].update({("DELETE", "/v1/certificates"): 404, ("DELETE", "/v1/profiles"): 404})
+        p = self.cleanup()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.deleted(), ["/v1/certificates/C-1", "/v1/profiles/P-1"])
+
+    def test_cleanup_failed_delete_tries_the_rest(self):
+        # A profile is deleted only once all its certificates went; every
+        # other delete is still tried; the run then exits 1.
+        for path, fault, kept in (("/v1/certificates/C-1", 500, "/v1/profiles/P-1"),
+                                  ("/v1/certificates/C-2", "drop", "/v1/profiles/P-1"),
+                                  ("/v1/certificates/C-3", "drop", "/v1/profiles/P-2"),
+                                  ("/v1/profiles/P-1", 500, None)):
+            self.setUp()
+            self.srv.state["profiles"] = [("P-1", "sis ci 1-1", self.ago(9), ["C-1", "C-2"]),
+                                          ("P-2", "sis ci 2-1", self.ago(8), ["C-3"])]
+            self.srv.state["fail"][("DELETE", path)] = fault
+            p = self.cleanup()
+            self.assertEqual(p.returncode, 1, "%s on %s: want exit 1, got %d" % (fault, path, p.returncode))
+            want = [d for d in ["/v1/certificates/C-1", "/v1/certificates/C-2", "/v1/certificates/C-3",
+                                "/v1/profiles/P-1", "/v1/profiles/P-2"] if d != kept]
+            self.assertEqual(self.deleted(), want, "%s on %s: wrong deletes" % (fault, path))
+
+    def test_cleanup_certificates_before_their_profile(self):
+        self.srv.state["profiles"] = [("P-1", "sis ci 1-1", self.ago(9), ["C-1", "C-2"]),
+                                      ("P-2", "sis ci 2-1", self.ago(8), ["C-3"])]
+        p = self.cleanup()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        order = [r["path"] for r in self.reqs("DELETE")]
+        for prof, certs in (("/v1/profiles/P-1", ["C-1", "C-2"]), ("/v1/profiles/P-2", ["C-3"])):
+            for c in certs:
+                self.assertLess(order.index("/v1/certificates/" + c), order.index(prof),
+                                "%s deleted before its certificate %s: %s" % (prof, c, order))
+
+    def test_cleanup_prints_ids_not_names_or_content(self):
+        self.srv.state["profiles"] = [("P-OLD", "sis ci 90817263-4", self.ago(7), ["C-OLD"]),
+                                      ("P-NEW", "sis ci 51846029-7", self.ago(1), ["C-NEW"]),
+                                      ("P-HAND", "HANDMADE-PROFILE", self.ago(99), ["C-HAND"]),
+                                      ("P-DIST", "sis ci distribution", self.ago(99), ["C-DIST"])]
+        p = self.cleanup()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        out = p.stdout + p.stderr
+        self.assertIn("P-OLD", out, "the deleted profile's id is not reported")
+        self.assertEqual(self.deleted(), ["/v1/certificates/C-OLD", "/v1/profiles/P-OLD"])
+        for leak in ("90817263", "51846029", "HANDMADE-PROFILE", "distribution", "Şirket", CONTENT_MARK, CONTENT_MARK[:24]):
+            self.assertNotIn(leak, out, "cleanup printed %r" % leak)
+
+    def test_cleanup_bad_usage(self):
+        for args in (["abc"], ["1", "2"]):
+            self.setUp()
+            p = self.tool("cleanup", *args)
+            self.assertNotEqual(p.returncode, 0, "cleanup %s accepted" % args)
+            self.assertFalse(self.reqs(), "cleanup %s made a request" % args)
+            self.assertIn("cleanup", p.stdout + p.stderr, "cleanup %s does not show the usage" % args)
+
+    # ---- fetch: the long-lived identity every run signs with ----------------------
+    WARN = re.compile(r"^::warning::The iOS signing (certificate|profile) expires in (\d+) days; "
+                      r"rotate it \(docs/DELIVERY\.md\)$")
+
+    @staticmethod
+    def until(days, form="+0000"):
+        """An App Store Connect expirationDate `days` from now, in UTC."""
+        t = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=days)
+        return t.strftime("%Y-%m-%dT%H:%M:%S.000") + form
+
+    def identity(self, profiles, certs=None):
+        """profiles: (id, name, created, state, [cert ids], expirationDate or None);
+        certs: {id: attribute overrides}. Each profile and certificate has its own content."""
+        st = self.srv.state
+        st["profiles"] = [(i, n, c, cs) for i, n, c, _, cs, _ in profiles]
+        for i, _, _, state, _, exp in profiles:
+            st["pattrs"][i] = {"profileState": state, "expirationDate": exp,
+                               "profileContent": base64.b64encode(PROFILE_BYTES + i.encode()).decode()}
+        for _, _, _, _, cs, _ in profiles:
+            for c in cs:
+                st["cattrs"][c] = dict({"expirationDate": self.until(300),
+                                        "certificateContent": base64.b64encode(self.cert_der + c.encode()).decode()},
+                                       **(certs or {}).get(c, {}))
+
+    def healthy(self, cert_exp=300, prof_exp=300):
+        self.identity([("P-D", "sis ci distribution", self.ago(240), "ACTIVE", ["C-D"],
+                        None if prof_exp is None else self.until(prof_exp))],
+                      {"C-D": {"expirationDate": None if cert_exp is None else self.until(cert_exp)}})
+
+    def fetch(self, name="sis ci distribution"):
+        out = tempfile.mkdtemp()
+        # A non-UTC zone: days left computed from a naive local time are off by 9 h.
+        p = self.tool("fetch", name, out, TZ="JST-9")
+        self.assertEqual({r["method"] for r in self.reqs()} - {"GET"}, set(), "fetch must only read")
+        return p, out
+
+    def ids(self, p):
+        return sorted(l for l in p.stdout.splitlines() if not l.startswith("::warning::"))
+
+    def warnings(self, p):
+        return [self.WARN.match(l).groups() for l in (p.stdout + p.stderr).splitlines() if self.WARN.match(l)]
+
+    def written(self, out):
+        with open(os.path.join(out, "cert.cer"), "rb") as f, open(os.path.join(out, "profile.mobileprovision"), "rb") as g:
+            return f.read(), g.read()
+
+    def test_fetch_writes_identity_prints_ids(self):
+        self.healthy()
+        p, out = self.fetch()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.ids(p), ["SIGNING_CERTIFICATE_ID=C-D", "SIGNING_PROFILE_ID=P-D"],
+                         "stdout must be exactly the two id lines")
+        self.assertEqual(self.warnings(p), [])
+        self.assertEqual(self.written(out), (self.cert_der + b"C-D", PROFILE_BYTES + b"P-D"))
+        lists = self.find("GET", "/v1/profiles")
+        self.assertEqual(len(lists), 1)
+        self.assertEqual(lists[0]["query"].get("filter[name]"), ["sis ci distribution"])
+        self.assertEqual(lists[0]["query"].get("limit"), ["200"])
+        self.assertEqual(len(self.find("GET", "/v1/profiles/P-D/certificates")), 1)
+        for r in self.reqs():
+            self.verify_jwt(r["headers"]["authorization"][7:])
+        out_text = p.stdout + p.stderr
+        for leak in ("sis ci distribution", "Şirket", "Apple Distribution",
+                     base64.b64encode(self.cert_der + b"C-D").decode()[:40],
+                     base64.b64encode(PROFILE_BYTES + b"P-D").decode()[:40], "UUID-P-D"):
+            self.assertNotIn(leak, out_text, "fetch printed %r" % leak)
+
+    def test_fetch_picks_exact_active_newest(self):
+        # The list is in no date order: neither the first nor the last is the newest.
+        self.identity([
+            ("P-MID", "sis ci distribution", self.ago(24 * 30), "ACTIVE", ["C-MID"], self.until(300)),
+            ("P-NEW", "sis ci distribution", self.ago(24 * 2), "ACTIVE", ["C-NEW"], self.until(300)),
+            ("P-OLD", "sis ci distribution", self.ago(24 * 400), "ACTIVE", ["C-OLD"], self.until(300)),
+            ("P-INV", "sis ci distribution", self.ago(1), "INVALID", ["C-INV"], self.until(300)),
+            ("P-LONG", "sis ci distribution 2", self.ago(1), "ACTIVE", ["C-LONG"], self.until(300)),
+            ("P-PRE", "old sis ci distribution", self.ago(1), "ACTIVE", ["C-PRE"], self.until(300)),
+            ("P-CASE", "SIS CI DISTRIBUTION", self.ago(1), "ACTIVE", ["C-CASE"], self.until(300)),
+            ("P-SP", "sis ci distribution ", self.ago(1), "ACTIVE", ["C-SP"], self.until(300)),
+        ])
+        p, out = self.fetch()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.ids(p), ["SIGNING_CERTIFICATE_ID=C-NEW", "SIGNING_PROFILE_ID=P-NEW"])
+        self.assertEqual(self.written(out), (self.cert_der + b"C-NEW", PROFILE_BYTES + b"P-NEW"))
+
+    def test_fetch_certificate_choice(self):
+        for certs, types, want in ((["C-DEV", "C-NOTYPE", "C-DIST"], {"C-DEV": "DEVELOPMENT", "C-NOTYPE": None}, "C-NOTYPE"),
+                                   (["C-DEV", "C-DIST", "C-DIST2"], {"C-DEV": "IOS_DEVELOPMENT"}, "C-DIST")):
+            self.setUp()
+            self.identity([("P-D", "sis ci distribution", self.ago(240), "ACTIVE", certs, self.until(300))],
+                          {c: {"certificateType": t} for c, t in types.items()})
+            p, out = self.fetch()
+            self.assertEqual(p.returncode, 0, "%s: %s" % (certs, p.stderr))
+            self.assertEqual(self.ids(p), ["SIGNING_CERTIFICATE_ID=" + want, "SIGNING_PROFILE_ID=P-D"], certs)
+            self.assertEqual(self.written(out)[0], self.cert_der + want.encode(), certs)
+
+    def test_fetch_no_active_profile(self):
+        for profiles in ([],
+                         [("P-INV", "sis ci distribution", self.ago(1), "INVALID", ["C-1"], self.until(300))],
+                         [("P-LONG", "sis ci distribution 2", self.ago(1), "ACTIVE", ["C-1"], self.until(300)),
+                          ("P-CASE", "SIS CI DISTRIBUTION", self.ago(1), "ACTIVE", ["C-2"], self.until(300))]):
+            self.setUp()
+            self.identity(profiles)
+            p, out = self.fetch()
+            self.assertNotEqual(p.returncode, 0, "%s accepted" % [x[:2] for x in profiles])
+            self.assertIn("no active profile named", p.stdout + p.stderr)
+            self.assertIn("run the iOS signing bootstrap workflow", p.stdout + p.stderr)
+            self.assertNotIn("SIGNING_", p.stdout)
+
+    def test_fetch_no_distribution_certificate(self):
+        for certs, types in (([], {}), (["C-DEV"], {"C-DEV": "DEVELOPMENT"})):
+            self.setUp()
+            self.identity([("P-D", "sis ci distribution", self.ago(240), "ACTIVE", certs, self.until(300))],
+                          {c: {"certificateType": t} for c, t in types.items()})
+            p, out = self.fetch()
+            self.assertNotEqual(p.returncode, 0, "a profile with certificates %s was accepted" % certs)
+            self.assertNotIn("SIGNING_CERTIFICATE_ID", p.stdout)
+
+    def test_fetch_expired(self):
+        for cert_exp, prof_exp, what in ((-1, 300, "certificate"), (300, -1, "profile"), (-0.1, 300, "certificate")):
+            self.setUp()
+            self.healthy(cert_exp, prof_exp)
+            p, out = self.fetch()
+            self.assertEqual(p.returncode, 1, "%s %s days: want exit 1, got %d" % (what, cert_exp, p.returncode))
+            self.assertIn("the signing %s expired; rotate it (docs/DELIVERY.md)" % what, p.stdout + p.stderr)
+
+    def test_fetch_expiry_warning(self):
+        for cert_exp, prof_exp, want in (
+                (10 + 1 / 24, 300, [("certificate", (10, 11))]),
+                (300, 10 + 1 / 24, [("profile", (10, 11))]),
+                (28.5, 28.5, [("certificate", (28, 29)), ("profile", (28, 29))]),
+                (31.5, 31.5, []), (None, None, []), (300, None, []),
+                # Under JST-9: 30 days and 4 hours is not < 30 days; a naive local "now" makes it 29.8.
+                (30 + 4 / 24, 30 + 4 / 24, [])):
+            self.setUp()
+            self.healthy(cert_exp, prof_exp)
+            p, out = self.fetch()
+            self.assertEqual(p.returncode, 0, "cert %s / profile %s days: %s" % (cert_exp, prof_exp, p.stderr))
+            got = self.warnings(p)
+            self.assertEqual(sorted(w for w, _ in got), [w for w, _ in want], "cert %s / profile %s days: %s"
+                             % (cert_exp, prof_exp, p.stdout + p.stderr))
+            for (w, n), (_, ok) in zip(sorted(got), want):
+                self.assertIn(int(n), ok, "%s: %s days" % (w, n))
+            self.assertEqual(self.ids(p), ["SIGNING_CERTIFICATE_ID=C-D", "SIGNING_PROFILE_ID=P-D"])
+
+    def test_fetch_date_forms(self):
+        for form in ("Z", "+0000", "+00:00"):
+            self.setUp()
+            self.identity([("P-D", "sis ci distribution", self.ago(240, form), "ACTIVE", ["C-D"], self.until(10.5, form))],
+                          {"C-D": {"expirationDate": self.until(-1, form)}})
+            p, out = self.fetch()
+            self.assertEqual(p.returncode, 1, "%s: an expired certificate passed" % form)
+
+    def test_fetch_api_errors(self):
+        for key, fault in ((("GET", "/v1/profiles"), 500), (("GET", "/v1/profiles"), 401),
+                           (("GET", "/v1/profiles/P-D/certificates"), 500), (("GET", "/v1/profiles/P-D/certificates"), "drop")):
+            self.setUp()
+            self.healthy()
+            self.srv.state["fail"][key] = fault
+            p, out = self.fetch()
+            self.assertNotEqual(p.returncode, 0, "%s on %s accepted" % (fault, key[1]))
+            self.assertNotIn("SIGNING_CERTIFICATE_ID", p.stdout)
+            self.assertNotIn("Traceback", p.stderr)
+
+    def test_fetch_bad_usage(self):
+        for args in (["fetch"], ["fetch", "sis ci distribution"], ["fetch", "sis ci distribution", "/tmp", "x"]):
+            self.setUp()
+            p = self.tool(*args)
+            self.assertNotEqual(p.returncode, 0, "%s accepted" % args)
+            self.assertFalse(self.reqs(), "%s made a request" % args)
+            self.assertIn("fetch PROFILE_NAME OUT_DIR", p.stdout + p.stderr, "%s does not show the usage" % args)
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

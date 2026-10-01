@@ -1,0 +1,68 @@
+# This workflow creates the long-lived Apple Distribution certificate and its App Store profile.
+# The private key never reaches this workflow (generated locally, stored as the secret
+# IOS_DISTRIBUTION_KEY by tool/ios_signing_bootstrap.sh). Nothing secret is printed.
+# It is run again for the yearly rotation; a new run with the same profile_name makes
+# fetch take the newest profile.
+name: iOS signing bootstrap
+on:
+  workflow_dispatch:
+    inputs:
+      csr_b64:
+        description: base64 of the PEM certificate signing request
+        required: true
+        type: string
+      profile_name:
+        description: name of the App Store profile ios-ipa.yml fetches
+        required: false
+        default: 'sis ci distribution'
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: ios-signing-bootstrap
+  cancel-in-progress: false
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Write the App Store Connect key
+        env:
+          KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER_ID" ]; then
+            echo 'An App Store Connect secret is empty (KEY, KEY_ID or ISSUER_ID)' >&2
+            exit 1
+          fi
+          dir="$RUNNER_TEMP/asc"
+          mkdir -m 700 "$dir"
+          (umask 077; printf '%s\n' "$KEY" > "$dir/AuthKey_$KEY_ID.p8")
+          echo "API_PRIVATE_KEYS_DIR=$dir" >> "$GITHUB_ENV"
+      # One-time sweep of what the old per-run pipeline may have left: Apple
+      # allows three distribution certificates and the new one needs a slot.
+      - name: Remove leftover per-run certificates
+        run: python3 tool/asc_signing.py cleanup
+      - name: Create the certificate and profile
+        env:
+          CSR_B64: ${{ inputs.csr_b64 }}
+          PROFILE_NAME: ${{ inputs.profile_name }}
+        run: |
+          set -o pipefail
+          dir="$RUNNER_TEMP/out"
+          mkdir -m 700 "$dir"
+          printf '%s' "$CSR_B64" | base64 -d > "$dir/csr.pem"
+          openssl req -in "$dir/csr.pem" -noout -verify 2>/dev/null || { echo 'csr_b64 is not a valid CSR' >&2; exit 1; }
+          python3 tool/asc_signing.py create "$dir/csr.pem" com.esd.sis "$PROFILE_NAME" "$dir" | tee -a "$GITHUB_STEP_SUMMARY"
+          openssl x509 -inform der -in "$dir/cert.cer" -pubkey -noout > "$dir/cert.pub"
+          openssl req -in "$dir/csr.pem" -pubkey -noout > "$dir/csr.pub"
+          cmp -s "$dir/cert.pub" "$dir/csr.pub" || { echo 'the issued certificate does not match the CSR' >&2; exit 1; }
+          echo "Certificate $(openssl x509 -inform der -in "$dir/cert.cer" -noout -enddate)"
+      - name: Remove the App Store Connect key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc" "$RUNNER_TEMP/out"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""App Store Connect for CI: per-run signing assets and their removal, and TestFlight distribution.
+"""App Store Connect for CI: the long-lived signing identity, and TestFlight distribution.
 
   asc_signing.py create CSR.pem BUNDLE_ID PROFILE_NAME OUT_DIR
       Creates an Apple Distribution certificate for the CSR and an App Store
@@ -7,8 +7,9 @@
       OUT_DIR/profile.mobileprovision; prints
       SIGNING_CERTIFICATE_ID=... and SIGNING_PROFILE_ID=... (GITHUB_ENV lines).
   asc_signing.py delete CERTIFICATE_ID PROFILE_ID
-      Revokes the certificate and deletes the profile; '-' skips one. Both
-      are tried; exits non-zero if either failed (404 is fine).
+      Revokes the certificate, then deletes the profile (kept if the revoke
+      failed); '-' skips one; exits non-zero on a failure (404 is fine).
+      For rotation; no pipeline step calls it.
   asc_signing.py distribute BUNDLE_ID BUILD_NUMBER GROUPS NOTE
       After an upload: waits until the build is VALID (polls every
       $ASC_POLL_SECONDS, default 30, for at most $ASC_POLL_LIMIT_SECONDS,
@@ -18,25 +19,47 @@
       is one, submits it for beta app review. Internal groups are skipped:
       they get builds by themselves ("Enable automatic distribution"). Safe
       to re-run.
+  asc_signing.py fetch PROFILE_NAME OUT_DIR
+      The signing identity of every run: finds the ACTIVE profile named
+      PROFILE_NAME (the newest, if several) and the distribution certificate it
+      uses; writes OUT_DIR/cert.cer (DER) and OUT_DIR/profile.mobileprovision;
+      prints ids only (SIGNING_CERTIFICATE_ID=..., SIGNING_PROFILE_ID=...).
+      Fails if there is none or either has expired; prints a ::warning:: when
+      either expires within 30 days.
+  asc_signing.py cleanup [MIN_AGE_HOURS]
+      One-time sweep of the old per-run material: profiles named
+      "sis ci <run>-<attempt>" (nothing else is touched; not the long-lived
+      one) created at least MIN_AGE_HOURS ago (default 6), each with its
+      certificates (certificates first). Tries everything, then exits 1 if
+      anything failed.
 
 The key is the App Store Connect API key the workflow already holds:
 $API_PRIVATE_KEYS_DIR/AuthKey_$KEY_ID.p8 with $KEY_ID and $ISSUER_ID.
 
-Why a certificate per run: the team's name has non-ASCII letters, and the
-designated requirement Xcode writes compares the certificate's common name in
-a form Apple's own validation does not match ("Code failed to satisfy
-specified code requirement(s)"), so the app must be signed by codesign with an
-explicit requirement, which needs the private key on the runner. Nothing is
-kept: the key is generated in the job and the certificate is revoked when the
-job ends. Standard library and openssl only.
+Why one long-lived certificate: Apple validates the signature of a build not
+only while processing it but again in TestFlight beta review (up to about 48
+hours later), and a certificate revoked by then fails the build (ITMS-90721,
+ITMS-90035); Apple allows only three distribution certificates, so per-run
+ones cannot be kept until each review ends. One certificate, created once by
+the iOS signing bootstrap workflow, with its private key kept as the repository
+secret IOS_DISTRIBUTION_KEY, is fetched by every run and revoked only on
+rotation. A certificate is needed at all because the team's name has non-ASCII
+letters and the designated requirement Xcode writes compares the certificate's
+common name in a form Apple's own validation does not match ("Code failed to
+satisfy specified code requirement(s)"), so the app must be signed by codesign
+with an explicit requirement, which needs the private key on the runner.
+Standard library and openssl only.
 """
 import base64
+import datetime
 import json
 import os
+import re
 import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 API = "https://api.appstoreconnect.apple.com/v1"
@@ -124,11 +147,11 @@ def create(csr_path, bundle_identifier, profile_name, out_dir):
 
 
 def delete(certificate_id, profile_id):
-    # Both deletes are tried: a failed profile delete must not leave the
-    # certificate (one of Apple's three slots) alive.
+    # Certificate first: the profile is the only way to find the certificate
+    # again, so it is kept when the certificate delete failed.
     failed = False
-    for path, ident in ("/profiles/", profile_id), ("/certificates/", certificate_id):
-        if ident == "-":
+    for path, ident in ("/certificates/", certificate_id), ("/profiles/", profile_id):
+        if ident == "-" or (failed and path == "/profiles/"):
             continue
         try:
             call("DELETE", path + ident, ok_missing=True)
@@ -139,20 +162,92 @@ def delete(certificate_id, profile_id):
         sys.exit(1)
 
 
-def distribute(bundle_identifier, build_number, groups, note):
-    """Waits for the uploaded build, sets its What to Test and hands it to the groups."""
+def parse_date(s):
+    """An App Store Connect date ('Z', '+0000' or '+00:00' offset) as an aware datetime."""
+    s = s.replace("Z", "+00:00")
+    if s[-5] in "+-" and s[-3] != ":":
+        s = s[:-2] + ":" + s[-2:]
+    return datetime.datetime.fromisoformat(s)
+
+
+def build_state(app_id, build_number):
+    builds = call("GET", "/builds?filter[app]=%s&filter[version]=%s&limit=1" % (app_id, build_number))["data"]
+    # Right after the upload the build is not listed yet.
+    return builds, builds[0]["attributes"]["processingState"] if builds else "NOT LISTED YET"
+
+
+def find_app(bundle_identifier):
     apps = call("GET", "/apps?filter[bundleId]=%s" % bundle_identifier)["data"]
     apps = [a for a in apps if a["attributes"]["bundleId"] == bundle_identifier]
     if not apps:
         sys.exit("no app %s in App Store Connect" % bundle_identifier)
-    app_id = apps[0]["id"]
+    return apps[0]["id"]
+
+
+def cleanup(min_age_hours=6.0):
+    """One-time sweep of old per-run material: 'sis ci <run>-<attempt>' profiles and their certificates."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    failed = False
+    for p in call("GET", "/profiles?limit=200")["data"]:
+        if not re.fullmatch(r"sis ci [0-9]+-[0-9]+", p["attributes"]["name"]):
+            continue
+        age = (now - parse_date(p["attributes"]["createdDate"])).total_seconds() / 3600
+        if age < min_age_hours:
+            continue
+        try:
+            stuck = False
+            for c in call("GET", "/profiles/%s/certificates" % p["id"])["data"]:
+                try:
+                    delete(c["id"], "-")
+                except SystemExit:
+                    stuck = failed = True
+            if not stuck:  # a leftover certificate keeps its profile, the only way to find it again
+                delete("-", p["id"])
+                print("removed leftover profile %s (age %.1f h)" % (p["id"], age), flush=True)
+        except SystemExit:
+            failed = True
+    if failed:
+        sys.exit(1)
+
+
+def fetch(profile_name, out_dir):
+    """Writes the long-lived certificate and profile to out_dir; warns before they expire."""
+    found = call("GET", "/profiles?filter[name]=%s&limit=200" % urllib.parse.quote(profile_name))["data"]
+    # The name filter matches partially: keep the exact name.
+    found = [p for p in found if p["attributes"]["name"] == profile_name and p["attributes"]["profileState"] == "ACTIVE"]
+    if not found:
+        sys.exit("no active profile named %s in App Store Connect; run the iOS signing bootstrap workflow" % profile_name)
+    profile = max(found, key=lambda p: parse_date(p["attributes"]["createdDate"]))
+    certs = call("GET", "/profiles/%s/certificates" % profile["id"])["data"]
+    certs = [c for c in certs if c["attributes"].get("certificateType", "DISTRIBUTION") == "DISTRIBUTION"]
+    if not certs:
+        sys.exit("the profile %s uses no distribution certificate" % profile["id"])
+    cert = certs[0]
+    now = datetime.datetime.now(datetime.timezone.utc)
+    for what, item in ("certificate", cert), ("profile", profile):
+        if "expirationDate" not in item["attributes"]:
+            continue
+        days = (parse_date(item["attributes"]["expirationDate"]) - now).total_seconds() / 86400
+        if days <= 0:
+            sys.exit("the signing %s expired; rotate it (docs/DELIVERY.md)" % what)
+        if days < 30:
+            print("::warning::The iOS signing %s expires in %d days; rotate it (docs/DELIVERY.md)" % (what, days), flush=True)
+    with open(os.path.join(out_dir, "cert.cer"), "wb") as f:
+        f.write(base64.b64decode(cert["attributes"]["certificateContent"]))
+    with open(os.path.join(out_dir, "profile.mobileprovision"), "wb") as f:
+        f.write(base64.b64decode(profile["attributes"]["profileContent"]))
+    print("SIGNING_CERTIFICATE_ID=%s" % cert["id"], flush=True)
+    print("SIGNING_PROFILE_ID=%s" % profile["id"], flush=True)
+
+
+def distribute(bundle_identifier, build_number, groups, note):
+    """Waits for the uploaded build, sets its What to Test and hands it to the groups."""
+    app_id = find_app(bundle_identifier)
 
     interval = float(os.environ.get("ASC_POLL_SECONDS", "30"))
     deadline = time.monotonic() + float(os.environ.get("ASC_POLL_LIMIT_SECONDS", "3600"))
     while True:
-        builds = call("GET", "/builds?filter[app]=%s&filter[version]=%s&limit=1" % (app_id, build_number))["data"]
-        # Right after the upload the build is not listed yet.
-        state = builds[0]["attributes"]["processingState"] if builds else "NOT LISTED YET"
+        builds, state = build_state(app_id, build_number)
         print("build %s: %s" % (build_number, state), flush=True)
         if state == "VALID":
             break
@@ -216,6 +311,10 @@ def main(argv):
         delete(*argv[2:])
     elif argv[1:2] == ["distribute"] and len(argv) == 6:
         distribute(argv[2], argv[3], [g.strip() for g in argv[4].split(",") if g.strip()], argv[5])
+    elif argv[1:2] == ["fetch"] and len(argv) == 4:
+        fetch(*argv[2:])
+    elif argv[1:2] == ["cleanup"] and len(argv) in (2, 3):
+        cleanup(*[float(a) for a in argv[2:]])
     else:
         sys.exit(__doc__)
 

@@ -42,7 +42,15 @@ Future<void> onBackgroundPush(RemoteMessage message) async {
         '${arrival ?? 'native=?'}',
   );
   try {
-    await PushReceiptLog.add(await _deliver(message), messageId: messageId);
+    // Android already drew and alerted for this push (InstantPush.kt): this
+    // post replaces it in place, quietly.
+    await PushReceiptLog.add(
+      await _deliver(
+        message,
+        alreadyAlerted: arrival?.contains('fast=native') ?? false,
+      ),
+      messageId: messageId,
+    );
   } catch (e) {
     // Never rethrown into the plugin, never swallowed unreported.
     await PushReceiptLog.add('error', messageId: messageId, error: e);
@@ -50,7 +58,10 @@ Future<void> onBackgroundPush(RemoteMessage message) async {
 }
 
 /// Shows the push; returns its terminal stage, `shown` or `dropped:reason`.
-Future<String> _deliver(RemoteMessage message) async {
+Future<String> _deliver(
+  RemoteMessage message, {
+  bool alreadyAlerted = false,
+}) async {
   // A notification block means Android already drew this one itself (an
   // older build, or this device's shows_itself was still false when it was
   // sent): showing it again here would duplicate it.
@@ -77,6 +88,7 @@ Future<String> _deliver(RemoteMessage message) async {
     body: body,
     sender: sender is String && sender.isNotEmpty ? sender : null,
     chat: chat is String && chat.isNotEmpty ? chat : null,
+    alreadyAlerted: alreadyAlerted,
   );
   return drawn ? 'shown' : 'dropped:no_owner';
 }

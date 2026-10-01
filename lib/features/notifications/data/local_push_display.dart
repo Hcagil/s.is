@@ -106,12 +106,17 @@ final class LocalPushDisplay {
   /// was posted for it.
   ///
   /// [sender] and [chat] are the server's separate fields for a group message.
+  ///
+  /// [alreadyAlerted]: Android already drew this push itself and alerted
+  /// (InstantPush.kt); this post replaces that notification in place (same
+  /// id) without sound or heads-up again.
   static Future<bool> show({
     required String conversationId,
     required String title,
     required String body,
     String? sender,
     String? chat,
+    bool alreadyAlerted = false,
   }) async {
     final at = DateTime.now();
     String? lineOwner; // who the line is stored for
@@ -147,7 +152,7 @@ final class LocalPushDisplay {
       final upTo = _stored;
       // False when the flush stopped early (the owner changed mid-way): the
       // line is then not in any posted notification and stays pending.
-      if (!await _flush(lineOwner!)) return;
+      if (!await _flush(lineOwner!, alreadyAlerted: alreadyAlerted)) return;
       _postedThrough = upTo;
       _lastFlushEnd = DateTime.now();
       posted = true;
@@ -268,14 +273,19 @@ final class LocalPushDisplay {
   /// Returns false when it stopped early because the owner changed, true
   /// otherwise (also when there was nothing to post). [expected] is the owner
   /// the line being posted was stored for; any other owner stops it (false).
-  static Future<bool> _flush(String expected) async {
+  static Future<bool> _flush(
+    String expected, {
+    bool alreadyAlerted = false,
+  }) async {
     final owner = await currentOwner();
     if (owner == null || owner != expected) return false;
     final inbox = await _load(owner: owner);
     final dirty = dirtyChats(inbox);
     if (dirty.isEmpty) return true;
     final last = _lastFlushEnd;
-    final loud = last == null || DateTime.now().difference(last) > _quiet;
+    final loud =
+        !alreadyAlerted &&
+        (last == null || DateTime.now().difference(last) > _quiet);
     final defaults = await _alerts.loadDefaults();
     final chats = await _alerts.loadChats();
     final pictures = await NotificationAvatars.forChats(owner, [

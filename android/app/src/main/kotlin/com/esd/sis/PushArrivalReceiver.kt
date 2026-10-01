@@ -5,10 +5,14 @@ import android.content.Context
 import android.content.Intent
 
 /**
- * Measurement only: records when a push reached the process.
- * The Dart handler (onBackgroundPush) reads and removes the value to put native arrival time
- * and FCM delivered/original priority into the push receipt, so production shows whether a
- * late push was late at the phone or inside the Flutter plugin hand-off.
+ * Records when a push reached the process, and draws it at once when FCM did not mark it high
+ * priority. The Flutter plugin hands a not-high push to a deferred job that Doze or app standby
+ * can hold for 10-50 minutes (FlutterFirebaseMessagingReceiver), and the immediate path needs
+ * the exemption only high priority gives; so [InstantPush] posts a minimal notification now and
+ * the Dart handler later replaces it in place (same notification id).
+ * The Dart handler (onBackgroundPush) reads and removes the value to put native arrival time,
+ * FCM delivered/original priority and whether this receiver drew the push into the push
+ * receipt.
  */
 class PushArrivalReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -20,10 +24,12 @@ class PushArrivalReceiver : BroadcastReceiver() {
             val delivered = extras.getString("google.delivered_priority") ?: "?"
             val original = extras.getString("google.original_priority") ?: "?"
 
+            val drawn = InstantPush.show(context, extras)
+
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             val now = System.currentTimeMillis()
             val editor = prefs.edit()
-            editor.putString("flutter.sis.push_arrival.$id", "$now,$delivered,$original")
+            editor.putString("flutter.sis.push_arrival.$id", "$now,$delivered,$original" + if (drawn) ",n" else "")
 
             // Housekeeping: a value the Dart handler never read goes after an hour.
             for (key in prefs.all.keys) {

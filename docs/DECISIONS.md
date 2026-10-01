@@ -1564,6 +1564,43 @@ cannot reword it), and "Only who it is from" dropped the group entirely.
 - Nothing from 0.30.4 changes: one notification per chat, up to 25 lines,
   burst pacing, pictures, iPhone clear-on-read, receipts.
 
+## 2026-10-01 — Android draws a not-high-priority push itself, at once (0.30.7)
+
+Owner report: notifications on the owner's Android phone arrived only when the
+app was opened. Production receipts: the push reached the phone in 0.7-4 s
+(PushArrivalReceiver) but without FCM priority (`google.original_priority`
+absent, receipts `prio=?/?`; other phones `high/high`); the Dart handler then
+started 10-50 min later. The server was fine.
+
+**Cause.** firebase_messaging 16.7.0 hands a background push to
+`FlutterFirebaseMessagingBackgroundService.enqueueMessageProcessing(context,
+intent, remoteMessage.getOriginalPriority() == PRIORITY_HIGH)`
+(FlutterFirebaseMessagingReceiver.java:89-92). Not high means a JobScheduler
+job (JobIntentService.java:300-310), which Doze and app standby defer. The
+immediate path (a started service, wake lock) is only allowed in the few
+seconds after a high-priority message; JobIntentService itself catches the
+`IllegalStateException` Android throws otherwise and falls back to the job
+(JobIntentService.java:490-503). So calling the wakeful path ourselves would
+fall back to the same job: without the exemption it is not available.
+
+**Chosen.** `PushArrivalReceiver` (already runs on arrival) calls
+`InstantPush.show`: when the push is ours (data-only, owner matches, app not in
+the foreground, notifications allowed) and its original priority is not
+`high`, it posts a minimal notification immediately (title, "Sender: message",
+same group key, the chat's sound/vibration choice read from the same
+preferences, tap opens the chat as a Dart-drawn one does). The notification
+id is the Dart side's own (FNV-1a of the conversation id), so when the deferred
+Dart handler finally runs, `LocalPushDisplay` replaces it in place with the
+full MessagingStyle state and no second sound (`alreadyAlerted`): never a
+duplicate, never two alerts. High priority is untouched. The receipt's
+`received` note gains `fast=native` when the receiver drew the push.
+
+**Known ceiling.** Until Dart catches up, the native notification shows only
+the newest line of a chat (a second push replaces the first's text), and
+reading the chat before the deferred Dart job runs cancels the notification
+but the late job re-posts it (as any late push did before). Fixing the
+device's missing priority is not in the app's hands.
+
 ## 2026-10-01 — One long-lived iOS distribution certificate
 
 **Evidence.** The release pipeline created a distribution certificate and an

@@ -109,10 +109,13 @@ uploaded) and runs on `ubuntu-24.04`, so the wait for Apple's processing
 (cap 60 minutes), sets the build's en-US What to Test from the release's
 `For users:` text (the `publish` job's note step exposes it as an output;
 empty falls back to "Bug fixes and improvements."), adds the build to every
-TestFlight group named by the repository variable `TESTFLIGHT_GROUPS`
-(comma-separated; unset means `bacanaks`; an internal and an external group
-may share a name and both receive the build) and, when any matched group is
-external, submits the build for beta app review. It waits for `publish` only
+external TestFlight group named by the repository variable `TESTFLIGHT_GROUPS`
+(comma-separated, matched case-insensitively; unset means `bacanaks`) and, when
+there is one, submits the build for beta app review. Internal groups are not
+touched: App Store Connect refuses manual additions to them (422), so each
+needs "Enable automatic distribution" switched on once in App Store Connect,
+TestFlight, the group's settings; it then receives every processed build by
+itself. It waits for `publish` only
 to read that note; it runs even if `publish` failed, and nothing waits on it.
 The first external submission needs TestFlight Test Information filled in once
 in App Store Connect (beta app description, feedback email, review contact);

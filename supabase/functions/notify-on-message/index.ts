@@ -127,7 +127,7 @@ async function send(id: string): Promise<void> {
       // "Sender: message" (WhatsApp style); a 1:1's title stays the sender.
       // An iPhone shows this block as is, and Android's app takes the same
       // pieces as data (sender, chat) for its MessagingStyle lines.
-      const group = t.chat !== null && t.sender !== null;
+      const group = t.chat != null && t.sender != null; // != : an old schema omits the fields (undefined)
       const shown = group
         ? { title: t.chat!, body: `${t.sender}: ${t.body}` }
         : { title: t.title, body: t.body };

@@ -1486,3 +1486,27 @@ never a message body. The start-up failure screen, which printed the raw
 exception, says "SIS could not start. Please try again." and logs only the
 type (`sis.startup`). This replaces the 2026-09-24 "sign-in keeps its
 diagnostics" choice.
+
+## 2026-10-01 — Notification bursts: measure before the fix (0.30.4)
+
+**A burst on one Android phone arrived late, not lost.** Every message of a
+21-message burst was sent, received and shown; the first two within a second,
+the rest in one batch about two minutes later (earlier bursts up to 29 minutes),
+while a second phone on the same build was prompt. The plugin hands a
+high-priority background push to a service directly and falls back to a
+deferrable job only when the phone does not grant the push its high priority,
+so the delay is either that fallback or FCM delivering late. The receipts could
+not tell which.
+
+**0.30.4 measures instead of guessing.** A small native receiver notes when each
+push reaches the phone and with which priority; the `received` receipt carries
+the send time, that arrival time, the moment the Dart handler starts and both
+priorities (numbers and priority words only, never content). The next burst on
+the affected phone decides the fix: draw the notification natively, run our own
+handler engine, or change what the server sends.
+
+**Notifications read chat's stores on the phone, read-only.** The sender's
+picture comes from the chat list snapshot and the picture cache the chat feature
+already keeps, through `notification_avatars.dart`, with the snapshot's owner
+check and no network call. This is the one data-to-data import across features;
+it stays until a third feature needs the same lookup.

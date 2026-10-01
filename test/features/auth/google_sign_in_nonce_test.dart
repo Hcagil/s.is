@@ -18,6 +18,7 @@
 // real Supabase Auth. That round trip is verified on a device.
 import 'dart:convert';
 
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:google_sign_in_platform_interface/google_sign_in_platform_interface.dart';
@@ -27,6 +28,26 @@ import 'package:sis/features/auth/data/supabase_auth_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../support/google_sign_in_stand_ins.dart';
+
+/// Planted in every exception message, detail and response body a failure
+/// path sees; the text the user is shown must never contain it.
+const sentinel = 'SENTINEL-7f3a-raw-exception-text';
+
+/// [r] is a ProviderFailure carrying exactly [message] (by default the
+/// failed sentence), [userCanceled] as given, and no trace of [sentinel].
+ProviderFailure expectFailed(
+  Result<void> r, {
+  required bool userCanceled,
+  String message = signInFailedMessage,
+}) {
+  expect(r, isA<Err<void>>(), reason: '$r');
+  final f = (r as Err<void>).failure;
+  expect(f, isA<ProviderFailure>());
+  expect(f.message, isNot(contains(sentinel)));
+  expect(f.message, message);
+  expect((f as ProviderFailure).userCanceled, userCanceled);
+  return f;
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -63,6 +84,11 @@ void main() {
       await c.dispose();
     }
     clients.clear();
+  });
+
+  test('the two sentences are the ones the contract names', () {
+    expect(signInFailedMessage, 'Sign-in failed. Please try again.');
+    expect(signInCanceledMessage, 'Sign-in was cancelled. Please try again.');
   });
 
   group('Android (useNonce false)', () {
@@ -151,7 +177,7 @@ void main() {
         expect(r, isA<Err<void>>());
         final f = (r as Err<void>).failure;
         expect(f, isA<ProviderFailure>());
-        expect(f.message, startsWith('Supabase rejected'));
+        expect(f.message, signInFailedMessage);
       },
     );
   });
@@ -181,7 +207,89 @@ void main() {
           final r = await repo(useNonce: ios).signInWithGoogle();
 
           expect(r, isA<Err<void>>());
+          expectFailed(r, userCanceled: false);
           expect(gotrue.grants, isEmpty);
+        });
+
+        for (final code in [
+          GoogleSignInExceptionCode.canceled,
+          GoogleSignInExceptionCode.interrupted,
+        ]) {
+          test('${code.name} -> the cancelled sentence, userCanceled, no '
+              'SDK text', () async {
+            google.error = GoogleSignInException(
+              code: code,
+              description: sentinel,
+              details: sentinel,
+            );
+            final r = await repo(useNonce: ios).signInWithGoogle();
+
+            expectFailed(r, userCanceled: true, message: signInCanceledMessage);
+            expect(gotrue.grants, isEmpty);
+          });
+        }
+
+        for (final code in GoogleSignInExceptionCode.values.where(
+          (c) =>
+              c != GoogleSignInExceptionCode.canceled &&
+              c != GoogleSignInExceptionCode.interrupted,
+        )) {
+          test('${code.name} -> the failed sentence, not a cancel, no SDK '
+              'text', () async {
+            google.error = GoogleSignInException(
+              code: code,
+              description: sentinel,
+              details: sentinel,
+            );
+            final r = await repo(useNonce: ios).signInWithGoogle();
+
+            expectFailed(r, userCanceled: false);
+            expect(gotrue.grants, isEmpty);
+          });
+        }
+
+        test('authenticate throws something else -> the failed sentence, '
+            'no exception text', () async {
+          google.error = StateError(sentinel);
+          final r = await repo(useNonce: ios).signInWithGoogle();
+
+          expectFailed(r, userCanceled: false);
+          expect(gotrue.grants, isEmpty);
+        });
+
+        test('initialize fails -> the failed sentence, no exception text, '
+            'Supabase not called', () async {
+          google.initError = PlatformException(
+            code: 'sign_in_failed',
+            message: sentinel,
+            details: sentinel,
+          );
+          final r = await repo(useNonce: ios).signInWithGoogle();
+
+          expectFailed(r, userCanceled: false);
+          expect(google.authenticateCalls, 0);
+          expect(gotrue.grants, isEmpty);
+        });
+
+        test('Supabase refuses the token (e.g. its audience) -> the failed '
+            'sentence; no GoTrue text, token, audience or client id', () async {
+          gotrue.rejectWith =
+              'Unacceptable audience in id_token: [$googleWebClient] $sentinel';
+          final r = await repo(useNonce: ios).signInWithGoogle();
+
+          expect(gotrue.grants, hasLength(1), reason: 'Supabase not called');
+          final f = expectFailed(r, userCanceled: false);
+          final token = gotrue.grants.single['id_token'] as String;
+          for (final leak in [
+            token,
+            ...token.split('.'),
+            googleWebClient,
+            'web-client-123',
+            'audience',
+            'Unacceptable',
+          ]) {
+            expect(f.message, isNot(contains(leak)));
+          }
         });
 
         test(
@@ -198,8 +306,8 @@ void main() {
       });
     }
 
-    test('iOS: Supabase\'s "Nonces mismatch" -> ProviderFailure "Supabase '
-        'rejected..."', () async {
+    test('iOS: Supabase\'s "Nonces mismatch" -> ProviderFailure with the '
+        'fixed sentence', () async {
       // A token whose nonce is not the hash of what the repository sends.
       platform(ios: true);
       final auth = repo(useNonce: true);
@@ -216,7 +324,7 @@ void main() {
       expect(r, isA<Err<void>>());
       final f = (r as Err<void>).failure;
       expect(f, isA<ProviderFailure>());
-      expect(f.message, startsWith('Supabase rejected'));
+      expect(f.message, signInFailedMessage);
     });
   });
 }

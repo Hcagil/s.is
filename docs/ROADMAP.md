@@ -38,6 +38,25 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.24 | the chat list appears the moment SIS opens, from the phone, then refreshes |
 | v0.25 | iOS: the app builds for iPhone (CI), signs in with Google, and does what the Android app does — updates, push, photo picking and crop; then every release also goes to TestFlight |
 | v0.27 | "What's new" messages from SIS in a read-only system chat, delivered when the app updates |
+| v0.28 | **done** 2026-09-30 — push notifications on iPhone |
+| v0.29 | **done** 2026-09-30 — photo picking and the square crop on iPhone |
+| v0.30 | **done** 2026-09-30 — every release also goes to TestFlight; builds reach the tester groups by themselves |
+| v0.30.1 | a failed sign-in shows a plain sentence, never the raw error |
+| v0.30.2 | iPhone: the keyboard stays open after sending; the tag box stays above the keyboard in a new chat |
+| v0.30.3 | backing out of the crop returns to the same place in the photo grid |
+| v0.30.4 | notifications: bursts arrive at once and show more lines per chat; the sender's picture on Android; iPhone clears a chat's notifications once it is read |
+| v0.30.5 | iPhone: the read mark always reaches the sender |
+| v0.31 | Sign in with Apple on iPhone (a hidden Apple email is refused; the same email is one account) |
+| v0.32 | "What's new" v2: sent to everyone when an update is available, with an "Update now" button; a redesigned SIS chat |
+| v0.33 | group chats show the sender's picture beside the last bubble of a run |
+| v0.33.1 | maintenance: flaky tests, small fixes, workflow lint |
+| v0.34 | iPhone checks the owner inside the notification and shows the sender's picture; sign-ins end after 30 days unused; drafts and the offline queue survive closing the app |
+| v0.35 | photos in the offline queue; reopening a chat keeps its place, with a button to the first unread message; cleanup of storage left by deleted accounts |
+| v0.36 | find SIS members from the phone's contacts |
+| v0.37 | pin a message for everyone in the chat (a group setting decides who may pin); pin up to 5 chats on the list |
+| v0.38 | react to a message with an emoji by long press |
+| after v0.36 | plan end-to-end encryption |
+| later | voice-to-write; public App Store release |
 | later | E2EE | scheduled individually |
 
 ## Status

@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'dart:math';
+import 'dart:developer';
+import 'dart:math' show Random;
 
 import 'package:crypto/crypto.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -10,6 +11,12 @@ import '../../../data/failures.dart';
 import '../../../data/postgrest_retry.dart';
 import '../domain/auth_repository.dart';
 import '../domain/member.dart';
+
+/// What a member reads when sign-in fails. SDK and backend error text can carry
+/// a token or an ID, so it never reaches the screen or the log: only the type
+/// or code does.
+const signInFailedMessage = 'Sign-in failed. Please try again.';
+const signInCanceledMessage = 'Sign-in was cancelled. Please try again.';
 
 /// [AuthRepository] backed by Google native sign-in and Supabase Auth.
 final class SupabaseAuthRepository implements AuthRepository {
@@ -69,22 +76,26 @@ final class SupabaseAuthRepository implements AuthRepository {
       user = await _google.authenticate(scopeHint: _scopes);
     } on GoogleSignInException catch (e) {
       // A Credential Manager "cancellation" after account selection usually
-      // means the Android OAuth client / SHA-1 is not registered.
+      // means the Android OAuth client / SHA-1 is not registered, hence the
+      // code in the log.
+      log('Google sign-in failed: ${e.code.name}', name: 'sis.auth');
       final canceled =
           e.code == GoogleSignInExceptionCode.canceled ||
           e.code == GoogleSignInExceptionCode.interrupted;
       return Err(
         ProviderFailure(
-          'Google sign-in ${e.code.name}: ${e.description ?? 'no details'}',
+          canceled ? signInCanceledMessage : signInFailedMessage,
           userCanceled: canceled,
         ),
       );
     } catch (e) {
-      return Err(ProviderFailure('Google sign-in unavailable: $e'));
+      log('Google sign-in failed: ${e.runtimeType}', name: 'sis.auth');
+      return const Err(ProviderFailure(signInFailedMessage));
     }
     final idToken = user.authentication.idToken;
     if (idToken == null) {
-      return const Err(ProviderFailure('Google did not return an ID token.'));
+      log('Google sign-in returned no ID token', name: 'sis.auth');
+      return const Err(ProviderFailure(signInFailedMessage));
     }
     try {
       final auth =
@@ -101,9 +112,12 @@ final class SupabaseAuthRepository implements AuthRepository {
       // Offline, not a rejection: say so rather than blame the token.
       return Err(readableFailure(e));
     } on AuthException catch (e) {
-      return Err(
-        ProviderFailure('Supabase rejected the Google token: ${e.message}'),
+      // e.message can hold the token's audience or the token itself.
+      log(
+        'Supabase rejected the Google token: ${e.statusCode}',
+        name: 'sis.auth',
       );
+      return const Err(ProviderFailure(signInFailedMessage));
     }
   }
 

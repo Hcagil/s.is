@@ -1256,6 +1256,7 @@ class _Composer extends ConsumerStatefulWidget {
 
 class _ComposerState extends ConsumerState<_Composer> {
   final _controller = TextEditingController();
+  final _focus = FocusNode();
   bool _sending = false;
 
   /// This composer's conversation is fixed for its whole lifetime: opening
@@ -1317,6 +1318,7 @@ class _ComposerState extends ConsumerState<_Composer> {
 
   @override
   void dispose() {
+    _focus.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -1515,8 +1517,12 @@ class _ComposerState extends ConsumerState<_Composer> {
                   maxLength: maxMessageLength,
                   minLines: 1,
                   maxLines: 4,
+                  focusNode: _focus,
                   textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => _send(),
+                  // A non-null onEditingComplete replaces Flutter's default,
+                  // which unfocuses the field on the send action and so
+                  // closes the keyboard.
+                  onEditingComplete: _send,
                   // Throttled, and silent when the member does not share typing.
                   onChanged: (text) {
                     if (text.isNotEmpty) {
@@ -1535,7 +1541,12 @@ class _ComposerState extends ConsumerState<_Composer> {
               const SizedBox(width: 8),
               IconButton.filled(
                 key: const ValueKey('composer-send'),
-                onPressed: _sending ? null : _send,
+                onPressed: _sending
+                    ? null
+                    : () {
+                        _send();
+                        _focus.requestFocus();
+                      },
                 icon: const Icon(Icons.arrow_upward_rounded),
               ),
             ],

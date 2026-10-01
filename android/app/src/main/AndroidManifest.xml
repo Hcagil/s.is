@@ -50,6 +50,15 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/notification_accent" />
+        <!-- Measurement only: notes when each push reached the phone, so the push receipt can tell a late FCM delivery from a late hand-off inside the Flutter plugin. Runs beside the plugin's own receiver. -->
+        <receiver
+            android:name=".PushArrivalReceiver"
+            android:exported="true"
+            android:permission="com.google.android.c2dm.permission.SEND">
+            <intent-filter>
+                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+            </intent-filter>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -28,11 +28,14 @@ final class PushReceiptLog {
   }
 
   /// Never throws: a receipt must not be able to break what it reports on.
+  /// [note] is a short measurement text (timings, never message content),
+  /// stored in the receipt's existing text column when there is no error.
   static Future<void> add(
     String stage, {
     String? messageId,
     Object? error,
     String? label,
+    String? note,
   }) => _locked(() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -46,7 +49,7 @@ final class PushReceiptLog {
         jsonEncode({
           'stage': stage,
           'message_id': ?messageId,
-          'error': ?(error == null ? null : _errorText(error, label)),
+          'error': ?(note ?? (error == null ? null : _errorText(error, label))),
           'build': ?build,
           'occurred_at': DateTime.now().toUtc().toIso8601String(),
         }),
@@ -125,4 +128,34 @@ final class PushReceiptLog {
   /// or a device path, and a receipt leaves the phone.
   static String _errorText(Object e, String? label) =>
       label == null ? '${e.runtimeType}' : '$label: ${e.runtimeType}';
+
+  static final _priorityWord = RegExp(r'^[a-z?]{1,10}$');
+
+  /// What the Android side noted when [messageId]'s push reached the phone
+  /// (PushArrivalReceiver.kt), as `native=ms prio=delivered/original`,
+  /// or null when nothing was noted (iPhone, an older build, or already
+  /// taken). Removes the note. Never throws.
+  static Future<String?> takeArrival(String? messageId) async {
+    if (messageId == null) return null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final key = 'sis.push_arrival.$messageId';
+      final raw = prefs.getString(key);
+      if (raw == null) return null;
+      await prefs.remove(key);
+      final p = raw.split(',');
+      final ms = int.tryParse(p[0]);
+      if (p.length != 3 ||
+          ms == null ||
+          ms <= 0 ||
+          !_priorityWord.hasMatch(p[1]) ||
+          !_priorityWord.hasMatch(p[2])) {
+        return null;
+      }
+      return 'native=$ms prio=${p[1]}/${p[2]}';
+    } catch (_) {
+      return null;
+    }
+  }
 }

@@ -117,6 +117,27 @@ void main() {
       expect(chat.count, maxInboxLines + 3);
     });
 
+    // 0.30.4 (owner): a burst of up to 25 messages in one chat stays fully
+    // readable in its expanded notification.
+    test('a chat keeps the newest 25 lines: 30 messages drop the first 5', () {
+      expect(maxInboxLines, 25);
+      var inbox = <InboxChat>[];
+      for (var i = 0; i < 30; i++) {
+        inbox = addToInbox(
+          inbox,
+          conversationId: 'c1',
+          title: 'Ava',
+          body: 'Line $i',
+          at: atMs(i),
+        );
+      }
+      expect(
+        [for (final l in inbox.single.lines) l.text],
+        [for (var i = 5; i < 30; i++) 'Line $i'],
+      );
+      expect(inbox.single.count, 30);
+    });
+
     test('the chat that just received a message moves to the end, the '
         'others keep their order', () {
       var inbox = <InboxChat>[];

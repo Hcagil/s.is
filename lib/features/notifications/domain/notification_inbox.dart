@@ -81,8 +81,9 @@ final class InboxChat {
   );
 }
 
-/// How many lines one chat's notification keeps.
-const maxInboxLines = 7;
+/// How many lines one chat's notification keeps: what Android's
+/// MessagingStyle holds (it drops anything past 25 itself).
+const maxInboxLines = 25;
 
 /// The server words a group message's title 'Sender @ Group', and a 1:1's
 /// (or a sender-only preview's) as just the name.

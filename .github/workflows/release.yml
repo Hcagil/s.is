@@ -185,6 +185,7 @@ jobs:
       APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+      IOS_DISTRIBUTION_KEY: ${{ secrets.IOS_DISTRIBUTION_KEY }}
     permissions:
       contents: read
 

@@ -62,7 +62,8 @@ deploys from protected branches.
 `ANDROID_UPLOAD_STORE_PASSWORD`, `ANDROID_UPLOAD_KEY_PASSWORD`,
 `PLAY_SERVICE_ACCOUNT_JSON`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`,
 `SUPABASE_PROJECT_REF`, `FCM_SERVICE_ACCOUNT`, `GOOGLE_SERVICES_JSON`, `GOOGLE_SERVICE_INFO_PLIST`, `APP_STORE_CONNECT_KEY_ID`,
-`APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_API_KEY`, `APPLE_TEAM_ID`.
+`APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_API_KEY`, `APPLE_TEAM_ID`,
+`IOS_DISTRIBUTION_KEY`.
 Variables (public): `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, `GOOGLE_WEB_CLIENT_ID`, and optionally `IOS_RELEASE` and `TESTFLIGHT_GROUPS`.
 
@@ -87,9 +88,11 @@ It calls `.github/workflows/ios-ipa.yml`, which writes
 `GoogleService-Info.plist`, archives unsigned with `xcodebuild` on a
 `macos-26` runner (Xcode 26: App Store Connect refuses older iOS SDKs; a
 signed automatic archive would need a development profile, which needs a
-registered device, and the team has none), creates a distribution certificate
-for a key generated in the job plus an App Store profile through the App Store
-Connect API (`tool/asc_signing.py`), exports with manual signing, then signs
+registered device, and the team has none), fetches the long-lived distribution
+certificate and App Store profile from the App Store Connect API
+(`tool/asc_signing.py fetch`) and imports them with the private key from the
+secret `IOS_DISTRIBUTION_KEY` into a temporary keychain, exports with manual
+signing, then signs
 every framework and the app again with an explicit designated requirement on
 the team ID (the requirement Xcode writes compares the certificate's common
 name, and the team's name has non-ASCII letters that Apple's validation does
@@ -98,9 +101,56 @@ Distribution certificate, fails unless the exported app carries
 `aps-environment` = `production`, and uploads the `.ipa` to TestFlight
 (`xcrun altool --upload-app`). On a pull request the same workflow stops
 short of the upload and runs `xcrun altool --validate-app` instead, so
-Apple's own validation happens before the merge. The certificate and profile
-are revoked when the job ends, whatever its result (TestFlight re-signs what
-it distributes, so a shipped build is never affected).
+Apple's own validation happens before the merge.
+
+Certificate lifecycle: one long-lived Apple Distribution certificate signs
+every build. It is never created or revoked by a run. Why: Apple validates a
+build's signature more than once, while it processes the upload (build 193 of
+0.30.5, revoked seconds after the upload, failed with ITMS-90721 "Certificate
+Revoked") and again in TestFlight beta review, up to about 48 hours later (build
+195 of 0.30.6 went `VALID`, was submitted for review and was rejected with
+ITMS-90035 "Invalid Signature"; builds 194 and 195 were signed identically and
+differed only in what the revoke raced against). Apple allows three
+distribution certificates per team, so keeping a per-run certificate until each
+review ends would block releases once three builds are in review. Hence:
+
+- **Where things live.** The private key is the repository secret
+  `IOS_DISTRIBUTION_KEY` (PEM, same trust model as
+  `ANDROID_UPLOAD_KEYSTORE_BASE64`). The certificate and the App Store profile
+  named `sis ci distribution` live in App Store Connect and are read through
+  the API on every run; they are public data. A run (a release, and the pull
+  request's `iOS signed build`, which has the same secret access: it is for
+  same-repository pull requests only) fetches them, checks that the certificate
+  belongs to the key, imports both and signs. It fails with a clear message if
+  the secret is empty or not a key, the profile is missing or not active, or
+  the certificate does not match the key. Nothing is revoked, so no run can
+  invalidate a build another run is waiting on.
+- **Expiry.** The certificate and profile last one year. `fetch` prints a
+  `::warning::` on every run in the last 30 days and fails once either has
+  expired.
+- **Bootstrap (once, and for each rotation).** `tool/ios_signing_bootstrap.sh`
+  generates a key and a CSR in a container, dispatches
+  `.github/workflows/ios-signing-bootstrap.yml` (which holds the App Store
+  Connect key and sees only the CSR: it removes any old per-run
+  `sis ci <run>-<attempt>` leftovers, then creates the certificate and the
+  profile and logs their ids), and after that run succeeds stores the key with
+  `gh secret set IOS_DISTRIBUTION_KEY`. The workflow must exist on `main`
+  before it can be dispatched, so the pull request adding it merges first and
+  the pipeline switch follows. `GITHUB_TOKEN` cannot write secrets, which is why
+  the key is set from the owner's signed-in `gh`, not from a workflow.
+- **Rotation.** Run the bootstrap again about a month before expiry. `fetch`
+  takes the newest active profile of that name, so the switch happens by itself
+  when the secret and the new profile are both in place (the script sets the
+  secret only after the new certificate exists). Revoke the previous certificate
+  (App Store Connect, Certificates) only after the last build it signed has left
+  beta review (approved or rejected); revoking earlier fails that build.
+  A lost key is also a rotation: Apple never gives a private key back.
+  If the bootstrap run succeeded but the secret was not set (the script was
+  stopped, or `gh secret set` failed), every iOS build fails the key check:
+  revoke the just-created certificate and run the bootstrap again.
+- **A revoked or deleted certificate** (by hand in the portal, or by Apple)
+  invalidates its profile: `fetch` then finds no active profile and says to run
+  the bootstrap. Builds it signed are affected as described above.
 
 Distribution: a third job, `distribute`, needs `ios` (it runs only when `ios`
 uploaded) and runs on `ubuntu-24.04`, so the wait for Apple's processing
@@ -122,9 +172,10 @@ in App Store Connect (beta app description, feedback email, review contact);
 if it is missing the job fails and says so. The App Store Connect API key
 (`APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
 `APP_STORE_CONNECT_API_KEY` = the `.p8` text, plus `APPLE_TEAM_ID`) is the
-only credential; no certificate, `.p12` or match repository exists. The `.p8`
-and the run's signing key are written to the runner's temporary directory
-with mode 600, never printed, and removed at the end.
+only credential for the API; the signing key is the secret
+`IOS_DISTRIBUTION_KEY` (no `.p12` or match repository exists). The `.p8` and
+the signing key are written to the runner's temporary directory with mode 600
+just before use, never printed, and removed at the end.
 
 `publish` (Play, migrations, function deploy, tag) does not wait on `ios`, and
 an `ios` failure leaves the Play release intact: the run shows one red job,

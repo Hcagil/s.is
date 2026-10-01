@@ -693,6 +693,9 @@ def xcrun():
     finally:
         shutil.rmtree(t)
     record("altool %s %s" % (action, ipa))
+    if action == "upload" and E.get("STUB_UPLOAD_FAIL"):
+        # The upload reached Apple, then altool failed: the build may still be processed.
+        die("*** Error: Error uploading '%s'. The operation couldn't be completed." % ipa)
     print("No errors %s archive at '%s'." % ("validating" if action == "validate" else "uploading", ipa))
 
 
@@ -737,51 +740,70 @@ def openssl():
     os.execv(OPENSSL, [OPENSSL, *ARGS])
 
 
+def issue(csr, name, out):
+    """A certificate for the CSR's key from the test intermediate, for a team whose
+    name has non-ASCII letters, and an App Store profile naming it; the ids printed."""
+    team = E["STUB_TEAM"]
+    org = "Şirket Adı Çağ"
+    cn = "%s: %s (%s)" % (E.get("STUB_CERT_KIND", "Apple Distribution"), org, team)
+    ca = E["STUB_CA"]
+    with open(os.path.join(ca, "inter.cer"), "rb") as f:
+        inter_pem = ossl("x509", "-inform", "der", data=f.read()).stdout
+    with open(os.path.join(ca, "inter.pem"), "wb") as f:
+        f.write(inter_pem)
+    p = ossl("req", "-x509", "-in", csr, "-CA", os.path.join(ca, "inter.pem"), "-CAkey", os.path.join(ca, "inter.key"),
+             "-utf8", "-days", "1", "-subj", "/CN=%s/OU=%s/O=%s/C=TR" % (cn, team, org),
+             "-addext", "authorityInfoAccess=caIssuers;URI:http://certs.apple.com/wwdrg3.der",
+             # Apple's leaf carries critical extensions openssl does not know (this OID is on real ones).
+             "-addext", "1.2.840.113635.100.6.1.4=critical,DER:0500", "-outform", "der")
+    if p.returncode != 0 or not p.stdout:
+        die("asc_signing stand-in: could not issue: %s" % p.stderr.decode())
+    with open(os.path.join(out, "cert.cer"), "wb") as f:
+        f.write(p.stdout)
+    import uuid
+    prof = {"Name": name, "UUID": str(uuid.uuid4()).upper(), "TeamIdentifier": [team], "DeveloperCertificates": [p.stdout],
+            "Entitlements": {"application-identifier": team + ".com.esd.sis", "com.apple.developer.team-identifier": team,
+                             "aps-environment": E.get("STUB_PROFILE_APS", "production"), "get-task-allow": False}}
+    with open(os.path.join(out, "profile.mobileprovision"), "wb") as f:
+        f.write(b"STUBCMS\n" + plistlib.dumps(prof))
+    print("SIGNING_CERTIFICATE_ID=CERT-1", flush=True)
+    print("SIGNING_PROFILE_ID=PROF-1", flush=True)
+
+
 def asc_signing():
-    """tool/asc_signing.py stood in for: App Store Connect's side of it."""
+    """tool/asc_signing.py stood in for: App Store Connect's side of it. Every
+    subcommand the real tool has is accepted and recorded (a pipeline that
+    revokes shows in the calls); `release` is gone from the real tool."""
     kid, d = E.get("KEY_ID"), E.get("API_PRIVATE_KEYS_DIR")
     if not (kid and d and os.path.isfile(os.path.join(d, "AuthKey_%s.p8" % kid)) and E.get("ISSUER_ID")):
         die("asc_signing: no App Store Connect key (API_PRIVATE_KEYS_DIR, KEY_ID, ISSUER_ID)")
-    team = E["STUB_TEAM"]
-    if ARGS[:1] == ["create"] and len(ARGS) == 5:
-        csr, bundle, name, out = ARGS[1:]
-        if ossl("req", "-in", csr, "-noout", "-verify").returncode != 0:
-            die("asc_signing: POST /v1/certificates: 409 ENTITY_ERROR (not a CSR: %s)" % csr)
-        if bundle != "com.esd.sis":
-            die("asc_signing: no bundle id %s" % bundle)
+    if ARGS[:1] == ["fetch"] and len(ARGS) == 3:
+        # The long-lived identity: the certificate is for the key in
+        # $STUB_DIST_KEY (what IOS_DISTRIBUTION_KEY should hold).
+        name, out = ARGS[1:]
+        record("asc fetch %s" % name)
+        if name != "sis ci distribution":
+            die("no active profile named %s in App Store Connect; run the iOS signing bootstrap workflow" % name)
+        if E.get("STUB_ASC_FAIL") == "fetch":
+            die("the signing certificate expired; rotate it (docs/DELIVERY.md)")
         if not os.path.isdir(out):
             die("asc_signing: %s is not a directory" % out)
+        csr = os.path.join(out, ".stub.csr")
+        p = ossl("req", "-new", "-key", E["STUB_DIST_KEY"], "-subj", "/CN=sis distribution", "-out", csr)
+        if p.returncode != 0:
+            die("asc_signing stand-in: no CSR: %s" % p.stderr.decode())
+        issue(csr, name, out)
+        os.remove(csr)
+    elif ARGS[:1] == ["create"] and len(ARGS) == 5:
+        csr, bundle, name, out = ARGS[1:]
         record("asc create %s %s" % (bundle, name))
-        org = "Şirket Adı Çağ"
-        cn = "%s: %s (%s)" % (E.get("STUB_CERT_KIND", "Apple Distribution"), org, team)
-        ca = E["STUB_CA"]
-        with open(os.path.join(ca, "inter.cer"), "rb") as f:
-            inter_pem = ossl("x509", "-inform", "der", data=f.read()).stdout
-        with open(os.path.join(ca, "inter.pem"), "wb") as f:
-            f.write(inter_pem)
-        p = ossl("req", "-x509", "-in", csr, "-CA", os.path.join(ca, "inter.pem"), "-CAkey", os.path.join(ca, "inter.key"),
-                 "-utf8", "-days", "1", "-subj", "/CN=%s/OU=%s/O=%s/C=TR" % (cn, team, org),
-                 "-addext", "authorityInfoAccess=caIssuers;URI:http://certs.apple.com/wwdrg3.der",
-                 # Apple's leaf carries critical extensions openssl does not know (this OID is on real ones).
-                 "-addext", "1.2.840.113635.100.6.1.4=critical,DER:0500", "-outform", "der")
-        if p.returncode != 0 or not p.stdout:
-            die("asc_signing stand-in: could not issue: %s" % p.stderr.decode())
-        with open(os.path.join(out, "cert.cer"), "wb") as f:
-            f.write(p.stdout)
-        print("SIGNING_CERTIFICATE_ID=CERT-1", flush=True)
-        if E.get("STUB_ASC_FAIL") == "profile":
-            die("asc_signing: POST /v1/profiles: 409 ENTITY_ERROR")
-        import uuid
-        prof = {"Name": name, "UUID": str(uuid.uuid4()).upper(), "TeamIdentifier": [team], "DeveloperCertificates": [p.stdout],
-                "Entitlements": {"application-identifier": team + ".com.esd.sis", "com.apple.developer.team-identifier": team,
-                                 "aps-environment": E.get("STUB_PROFILE_APS", "production"), "get-task-allow": False}}
-        with open(os.path.join(out, "profile.mobileprovision"), "wb") as f:
-            f.write(b"STUBCMS\n" + plistlib.dumps(prof))
-        print("SIGNING_PROFILE_ID=PROF-1")
+        if ossl("req", "-in", csr, "-noout", "-verify").returncode != 0:
+            die("asc_signing: POST /v1/certificates: 409 ENTITY_ERROR (not a CSR: %s)" % csr)
+        issue(csr, name, out)
     elif ARGS[:1] == ["delete"] and len(ARGS) == 3:
         record("asc delete %s %s" % tuple(ARGS[1:]))
-        if E.get("STUB_ASC_FAIL") == "delete":
-            die("asc_signing: DELETE /v1/profiles/%s: HTTP 500" % ARGS[2])
+    elif ARGS[:1] == ["cleanup"] and len(ARGS) <= 2 and all(a.isdigit() for a in ARGS[1:]):
+        record(" ".join(["asc"] + ARGS))
     elif ARGS[:1] == ["distribute"] and len(ARGS) == 5:
         bundle, build, groups, note = ARGS[1:]
         record("asc distribute %s %s %s" % (bundle, build, groups))
@@ -791,8 +813,7 @@ def asc_signing():
             die("asc_signing: build %s still PROCESSING at the polling limit" % build)
     else:
         reject("usage: create CSR BUNDLE_ID PROFILE_NAME OUT_DIR | delete CERT_ID PROFILE_ID"
-               " | distribute BUNDLE_ID BUILD_NUMBER GROUPS NOTE")
-
+               " | distribute BUNDLE_ID BUILD_NUMBER GROUPS NOTE | fetch PROFILE_NAME OUT_DIR | cleanup [MIN_AGE_HOURS]")
 
 {"codesign": codesign, "asc_signing.py": asc_signing, "plutil": plutil, "security": security, "xcodebuild": xcodebuild,
  "xcrun": xcrun, "curl": curl, "openssl": openssl}[TOOL]()

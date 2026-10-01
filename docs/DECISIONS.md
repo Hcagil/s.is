@@ -1563,3 +1563,45 @@ cannot reword it), and "Only who it is from" dropped the group entirely.
   "SIS", body "New message". Under "Name and message" nothing new travels.
 - Nothing from 0.30.4 changes: one notification per chat, up to 25 lines,
   burst pacing, pictures, iPhone clear-on-read, receipts.
+
+## 2026-10-01 — One long-lived iOS distribution certificate
+
+**Evidence.** The release pipeline created a distribution certificate and an
+App Store profile per run through the App Store Connect API, signed, uploaded
+with altool and revoked the certificate seconds later (so no certificate
+outlived the job).
+
+- 0.30.5 build 193: Apple processing failed, ITMS-90721 "Certificate Revoked"
+  (the certificate that signed Runner.app and its frameworks had been revoked
+  before processing ended); `distribute` polled "NOT LISTED YET" to its limit.
+- 0.30.5 build 194: same pipeline, processed and approved in external beta
+  review. The revoke is a race, not a certain failure.
+- 0.30.6 build 195 (Release run 36855087297): upload 11:33:24, certificate
+  revoked in the same second, `VALID` at 11:35:33, submitted for beta review
+  at 11:35:36, then rejected by TestFlight review with ITMS-90035 "Invalid
+  Signature". Its signature checks (authority, designated requirement,
+  `codesign --verify`) were identical to build 194's, and the pipeline had not
+  changed between the two commits.
+
+**Cause.** Apple validates the uploaded binary's signature against the signing
+certificate more than once: while processing, and again in beta review up to
+about 48 hours later. A certificate revoked before that fails the build, with
+an error that does not always say "revoked".
+
+**Options weighed.** (a) Keep each run's certificate until its build's review
+ends and clean up by state: Apple allows three distribution certificates, so
+three builds in review block the next release, with several releases a day
+possible. (c) Skip external review (internal-only testers): changes how
+testers are invited and was not verifiable. (b) **Chosen:** one long-lived
+certificate, never revoked by a run; the private key is the repository secret
+`IOS_DISTRIBUTION_KEY`; the certificate and the profile `sis ci distribution`
+are read from App Store Connect on each run.
+
+**Consequences.** Trade-off recorded in `docs/SECURITY.md` (a long-lived key in
+repository secrets, the Android keystore's trust model; protected-environment
+secret once there are collaborators). The key is generated locally and set with
+`gh secret set` (`GITHUB_TOKEN` cannot write secrets); the certificate is
+created by a one-off `workflow_dispatch` bootstrap that sees only a CSR. The
+yearly rotation and the expiry warning are in `docs/DELIVERY.md`. The earlier
+"revoke at `VALID`" idea (commit 2799c04) was dropped for the same reason as
+the per-run revoke: beta review comes later.

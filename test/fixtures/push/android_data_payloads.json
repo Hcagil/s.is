@@ -1,0 +1,34 @@
+{
+  "group_full": {
+    "conversation_id": "<conversation>",
+    "title": "Ann Sender @ Edge Team",
+    "body": "edge seam hello",
+    "user_id": "<user>",
+    "message_id": "<message>",
+    "sender": "Ann Sender",
+    "chat": "Edge Team"
+  },
+  "group_sender": {
+    "conversation_id": "<conversation>",
+    "title": "Ann Sender",
+    "body": "New message",
+    "user_id": "<user>",
+    "message_id": "<message>",
+    "sender": "Ann Sender",
+    "chat": "Edge Team"
+  },
+  "group_none": {
+    "conversation_id": "<conversation>",
+    "title": "SIS",
+    "body": "New message",
+    "user_id": "<user>",
+    "message_id": "<message>"
+  },
+  "direct_full": {
+    "conversation_id": "<conversation>",
+    "title": "Ann Sender",
+    "body": "edge direct hello",
+    "user_id": "<user>",
+    "message_id": "<message>"
+  }
+}

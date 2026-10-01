@@ -55,8 +55,17 @@ Deno.env.set('SUPABASE_SERVICE_ROLE_KEY', serviceKey);
 type Sent = { url: string; message: Record<string, unknown> };
 const sent: Sent[] = [];
 const realFetch = globalThis.fetch;
+// When set, the delivery list comes back as a database without the 0.30.6
+// columns returns it: no sender, no chat (a function deployed ahead of its
+// migration, or rolled back behind it).
+let oldSchema = false;
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  if (oldSchema && url.includes('/rest/v1/rpc/push_targets')) {
+    const res = await realFetch(input, init);
+    const rows = (await res.json()) as Record<string, unknown>[];
+    return Response.json(rows.map(({ sender: _s, chat: _c, ...rest }) => rest), { status: res.status });
+  }
   if (url.startsWith('https://oauth2.googleapis.com/')) {
     return Response.json({ access_token: 'test-access-token', expires_in: 3600, token_type: 'Bearer' });
   }
@@ -145,9 +154,13 @@ Deno.test({
                    values (${conversationId}, ${sender.id}, 'edge hello') returning id`);
 
       // What the database says each recipient gets (read without claiming).
-      const expected = await sql`select token, user_id::text, conversation_id::text, title, body, shows_itself
+      const expected = await sql`select token, user_id::text, conversation_id::text, title, body, shows_itself,
+                                        sender, chat
                                    from app_private.push_targets_for_message(${messageId})`;
       assertEquals(expected.length, 2, 'fixture: two recipients on the delivery list');
+      for (const t of expected) {
+        assertEquals([t.sender, t.chat], [sender.name, title], 'fixture: a group message, preview full');
+      }
       assertEquals(
         expected.map((t) => `${t.token}:${t.shows_itself}`).sort(),
         [`${newBuild.token}:true`, `${oldBuild.token}:false`].sort(),
@@ -189,6 +202,10 @@ Deno.test({
           // The message itself, so the phone's push receipt can be matched
           // to it on the server.
           message_id: messageId,
+          // 0.30.6: a group message names its sender and the group apart,
+          // on both Android shapes.
+          sender: target.sender,
+          chat: target.chat,
         }, `data for ${target.token}`);
         assertEquals(data.conversation_id, conversationId);
         assertEquals(data.user_id, recipientOf[target.token as string],
@@ -308,7 +325,8 @@ Deno.test({
                    values (${conversationId}, ${sender.id}, ${body}) returning id`);
       const [{ id: messageId }] = await send(text);
 
-      const expected = await sql`select token, user_id::text, conversation_id::text, title, body, platform, shows_itself
+      const expected = await sql`select token, user_id::text, conversation_id::text, title, body, platform, shows_itself,
+                                        sender, chat
                                    from app_private.push_targets_for_message(${messageId})`;
       const delivered = [p.droidnew, p.droidold, p.iosfull, p.iossender, p.iosnone];
       assertEquals(expected.map((t) => t.token).sort(), delivered.map((x) => x.token).sort(),
@@ -336,8 +354,14 @@ Deno.test({
           conversation_id: conversationId,
           title: t.title,
           body: t.body,
+          // 0.30.6: only for a group message the recipient may see named.
+          ...(t.sender != null && t.chat != null ? { sender: t.sender, chat: t.chat } : {}),
         };
       };
+      assertEquals([target(p.droidnew).sender, target(p.droidnew).chat], [sender.name, title],
+        'fixture: the group message names sender and group for a full preview');
+      assertEquals([target(p.iosnone).sender, target(p.iosnone).chat], [null, null],
+        'fixture: preview none names neither');
 
       // Android, exactly as before 0.28.
       assertEquals(messageTo(p.droidnew), {
@@ -352,11 +376,29 @@ Deno.test({
         android: { priority: 'high' },
       }, 'an older Android build: a notification plus data, high priority, no apns');
 
+      // 0.30.6: an iPhone cannot reword a group alert itself, so the server
+      // does: the group is the title, each line "Sender: text". With preview
+      // none there is no sender or group to name: the old wording stands.
+      assertEquals(messageTo(p.iosfull).notification, { title, body: `${sender.name}: ${text}` },
+        'iPhone, preview full: titled by the group, the line names the sender');
+      assertEquals(messageTo(p.iossender).notification, { title, body: `${sender.name}: New message` },
+        'iPhone, preview sender: titled by the group, the sender named, no text');
+      assertEquals(messageTo(p.iosnone).notification, { title: 'SIS', body: 'New message' },
+        'iPhone, preview none: unchanged');
       for (const x of [p.iosfull, p.iossender, p.iosnone]) {
         const m = messageTo(x);
         const t = target(x);
-        assertEquals(m.notification, { title: t.title, body: t.body }, `${x.name}: the server's wording`);
-        assertEquals(m.data, dataFor(x), `${x.name}: the same data the app reads`);
+        // The base map the app reads is exactly as before; sender/chat may
+        // ride along only with the server's own values.
+        const data = m.data as Record<string, unknown>;
+        const base = dataFor(x) as Record<string, unknown>;
+        for (const k of ['user_id', 'message_id', 'conversation_id', 'title', 'body']) {
+          assertEquals(data[k], base[k], `${x.name}: data.${k}`);
+        }
+        for (const k of Object.keys(data)) {
+          assert(k in base || (k === 'sender' && data[k] === t.sender) || (k === 'chat' && data[k] === t.chat),
+            `${x.name}: unexpected data.${k}: ${JSON.stringify(data)}`);
+        }
         const apns = m.apns as { payload?: { aps?: unknown } } | undefined;
         assertEquals(apns?.payload?.aps, { 'thread-id': conversationId, sound: 'default' },
           `${x.name}: threaded per chat, default sound: ${JSON.stringify(m)}`);
@@ -383,6 +425,180 @@ Deno.test({
       await sql`update public.messages set created_at = now() - interval '3 minutes' where id = ${staleId}`;
       assertEquals(await deliver(staleId), { status: 204, text: '' });
       assertEquals(sent.length, 0, `an old message sends nothing: ${JSON.stringify(sent)}`);
+    } finally {
+      await sql.begin(async (tx) => {
+        await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
+      }).catch(() => {});
+    }
+  },
+});
+
+// 0.30.6, the seam from server to phone. test/fixtures/push/
+// android_data_payloads.json is the data map an Android phone that shows
+// pushes itself is sent, per case, with the ids replaced by placeholders.
+// Here the REAL function's output must equal it; the Dart side
+// (test/features/notifications/group_push_display_test.dart) feeds the same
+// file through the real background handler. Change either side alone and
+// one of the two goes red.
+Deno.test({
+  name: 'seam: what an Android phone is sent for a group (full, sender, none) and a 1:1 equals the shared fixture',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const fixture = JSON.parse(
+      await Deno.readTextFile(new URL('../fixtures/push/android_data_payloads.json', import.meta.url)),
+    ) as Record<string, Record<string, string>>;
+    const run = Date.now().toString(36);
+    const who = ['ann', 'gfull', 'gsender', 'gnone', 'dfull'];
+    const people = who.map((w) => ({
+      id: crypto.randomUUID(),
+      session: crypto.randomUUID(),
+      email: `seam-${w}-${run}@edge.test`,
+      name: w === 'ann' ? 'Ann Sender' : w,
+      token: `edge-seam-${w}-${run}`.padEnd(16, '0'),
+    }));
+    const p = Object.fromEntries(who.map((w, i) => [w, people[i]]));
+    const asP = <T>(x: typeof p.ann, body: (tx: postgres.TransactionSql) => Promise<T>) =>
+      as(x.id, x.email, x.session, body);
+    try {
+      for (const x of people) {
+        await sql`insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+                  values (${x.id}, ${x.email}, now(), ${sql.json({ full_name: x.name })})`;
+        await sql`insert into app_private.allowlist(email) values (${x.email})`;
+        await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+                  values (${x.session}, ${x.id}, now(), now())`;
+        await asP(x, (tx) => tx`select public.activate_session()`);
+        if (x !== p.ann) {
+          await asP(x, (tx) => tx`select public.register_device_token(${x.token}, 'android', true)`);
+        }
+      }
+      await asP(p.gsender, (tx) => tx`insert into public.notification_settings(preview) values ('sender')`);
+      await asP(p.gnone, (tx) => tx`insert into public.notification_settings(preview) values ('none')`);
+      await sql`insert into app_private.tag_finds(finder, found_id)
+                select ${p.ann.id}::uuid, unnest(${people.slice(1).map((r) => r.id)}::uuid[])`;
+      const [{ id: group }] = await asP(p.ann, (tx) =>
+        tx`select public.start_group_conversation('Edge Team', ${[p.gfull.id, p.gsender.id, p.gnone.id]}::uuid[]) as id`);
+      const [{ id: direct }] = await asP(p.ann, (tx) =>
+        tx`select public.start_direct_conversation(${p.dfull.id}) as id`);
+      const send = async (conversation: string, body: string) => {
+        const [{ id }] = await asP(p.ann, (tx) =>
+          tx`insert into public.messages(conversation_id, sender_id, body)
+             values (${conversation}, ${p.ann.id}, ${body}) returning id`);
+        assertEquals(await deliver(id), { status: 204, text: '' });
+        return { id: id as string, sent: [...sent] };
+      };
+      // The ids are the only run-specific values: put the placeholders back.
+      const placeholders = (m: Record<string, unknown>, ids: Record<string, string>) => {
+        const data = { ...(m.data as Record<string, string>) };
+        for (const [k, v] of Object.entries(ids)) {
+          assertEquals(data[k], v, `data.${k}`);
+          data[k] = `<${k.replace('_id', '')}>`;
+        }
+        return data;
+      };
+      const g = await send(group, 'edge seam hello');
+      const d = await send(direct, 'edge direct hello');
+      const onlyTo = (sends: Sent[], x: typeof p.ann) => {
+        const mine = sends.filter((s) => s.message.token === x.token);
+        assertEquals(mine.length, 1, `exactly one send to ${x.email}`);
+        const m = mine[0].message;
+        assertEquals(Object.keys(m).sort(), ['android', 'data', 'token'], `data only: ${JSON.stringify(m)}`);
+        return m;
+      };
+      const ids = (x: typeof p.ann, conversation: string, message: string) =>
+        ({ conversation_id: conversation, user_id: x.id, message_id: message });
+      assertEquals(placeholders(onlyTo(g.sent, p.gfull), ids(p.gfull, group, g.id)), fixture.group_full,
+        'group, preview full');
+      assertEquals(placeholders(onlyTo(g.sent, p.gsender), ids(p.gsender, group, g.id)), fixture.group_sender,
+        'group, preview sender');
+      assertEquals(placeholders(onlyTo(g.sent, p.gnone), ids(p.gnone, group, g.id)), fixture.group_none,
+        'group, preview none: no sender, no chat');
+      const direct1 = placeholders(onlyTo(d.sent, p.dfull), ids(p.dfull, direct, d.id));
+      assertEquals(direct1, fixture.direct_full, '1:1: exactly the five keys it always had');
+      // Byte-identical to before 0.30.6: the same keys, nothing added.
+      assertEquals(Object.keys(direct1).sort(), ['body', 'conversation_id', 'message_id', 'title', 'user_id']);
+    } finally {
+      await sql.begin(async (tx) => {
+        await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
+      }).catch(() => {});
+    }
+  },
+});
+
+// The contract's group test is `chat != null && sender != null`: a row with
+// neither column at all (the old schema) is not a group, and every shape
+// falls back to the server's title/body exactly as before 0.30.6.
+Deno.test({
+  name: 'old schema: rows without sender/chat send the pre-0.30.6 shapes on Android and iOS',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const run = Date.now().toString(36);
+    const who = ['ann', 'droidnew', 'droidold', 'iphone'];
+    const people = who.map((w) => ({
+      id: crypto.randomUUID(),
+      session: crypto.randomUUID(),
+      email: `old-${w}-${run}@edge.test`,
+      name: `Old ${w}`,
+      token: `edge-old-${w}-${run}`.padEnd(16, '0'),
+    }));
+    const p = Object.fromEntries(who.map((w, i) => [w, people[i]]));
+    const asP = <T>(x: typeof p.ann, body: (tx: postgres.TransactionSql) => Promise<T>) =>
+      as(x.id, x.email, x.session, body);
+    try {
+      for (const x of people) {
+        await sql`insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+                  values (${x.id}, ${x.email}, now(), ${sql.json({ full_name: x.name })})`;
+        await sql`insert into app_private.allowlist(email) values (${x.email})`;
+        await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+                  values (${x.session}, ${x.id}, now(), now())`;
+        await asP(x, (tx) => tx`select public.activate_session()`);
+      }
+      const register = (x: typeof p.ann, platform: string, showsItself: boolean) =>
+        asP(x, (tx) => tx`select public.register_device_token(${x.token}, ${platform}, ${showsItself})`);
+      await register(p.droidnew, 'android', true);
+      await register(p.droidold, 'android', false);
+      await register(p.iphone, 'ios', false);
+      await sql`insert into app_private.tag_finds(finder, found_id)
+                select ${p.ann.id}::uuid, unnest(${people.slice(1).map((r) => r.id)}::uuid[])`;
+      const [{ id: group }] = await asP(p.ann, (tx) =>
+        tx`select public.start_group_conversation(${`old-${run}`}, ${people.slice(1).map((r) => r.id)}::uuid[]) as id`);
+      const [{ id: messageId }] = await asP(p.ann, (tx) =>
+        tx`insert into public.messages(conversation_id, sender_id, body)
+           values (${group}, ${p.ann.id}, 'old schema hello') returning id`);
+      const expected = await sql`select token, title, body
+                                   from app_private.push_targets_for_message(${messageId})`;
+      const t = (x: typeof p.ann) => expected.find((r) => r.token === x.token)!;
+
+      oldSchema = true;
+      try {
+        assertEquals(await deliver(messageId), { status: 204, text: '' });
+      } finally {
+        oldSchema = false;
+      }
+      assertEquals(sent.length, 3, JSON.stringify(sent));
+      const to = (x: typeof p.ann) => sent.find((s) => s.message.token === x.token)!.message;
+      const data = (x: typeof p.ann) => ({
+        user_id: x.id,
+        message_id: messageId,
+        conversation_id: group,
+        title: t(x).title,
+        body: t(x).body,
+      });
+      assertEquals(to(p.droidnew), { token: p.droidnew.token, data: data(p.droidnew), android: { priority: 'high' } });
+      assertEquals(to(p.droidold), {
+        token: p.droidold.token,
+        notification: { title: t(p.droidold).title, body: t(p.droidold).body },
+        data: data(p.droidold),
+        android: { priority: 'high' },
+      });
+      assertEquals(to(p.iphone).notification, { title: t(p.iphone).title, body: t(p.iphone).body },
+        `iPhone: the server's own wording, not a group rewording: ${JSON.stringify(to(p.iphone))}`);
+      assertEquals(to(p.iphone).data, data(p.iphone));
     } finally {
       await sql.begin(async (tx) => {
         await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;

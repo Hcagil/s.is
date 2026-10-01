@@ -129,6 +129,8 @@ final class PushReceiptLog {
   static String _errorText(Object e, String? label) =>
       label == null ? '${e.runtimeType}' : '$label: ${e.runtimeType}';
 
+  static final _priorityWord = RegExp(r'^[a-z?]{1,10}$');
+
   /// What the Android side noted when [messageId]'s push reached the phone
   /// (PushArrivalReceiver.kt), as `native=ms prio=delivered/original`,
   /// or null when nothing was noted (iPhone, an older build, or already
@@ -143,8 +145,15 @@ final class PushReceiptLog {
       if (raw == null) return null;
       await prefs.remove(key);
       final p = raw.split(',');
-      if (p.length != 3) return null;
-      return 'native=${p[0]} prio=${p[1]}/${p[2]}';
+      final ms = int.tryParse(p[0]);
+      if (p.length != 3 ||
+          ms == null ||
+          ms <= 0 ||
+          !_priorityWord.hasMatch(p[1]) ||
+          !_priorityWord.hasMatch(p[2])) {
+        return null;
+      }
+      return 'native=$ms prio=${p[1]}/${p[2]}';
     } catch (_) {
       return null;
     }

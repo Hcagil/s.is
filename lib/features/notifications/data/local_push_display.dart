@@ -110,10 +110,12 @@ final class LocalPushDisplay {
     required String body,
   }) async {
     final at = DateTime.now();
+    String? lineOwner; // who the line is stored for
     final mine = await _locked<int?>(() async {
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
-      if (prefs.getString(_ownerKey) == null) return null;
+      lineOwner = prefs.getString(_ownerKey);
+      if (lineOwner == null) return null;
       await _save(
         addToInbox(
           await _load(),
@@ -129,6 +131,9 @@ final class LocalPushDisplay {
 
     var posted = false;
     await _locked<void>(() async {
+      // A line stored for one member is never reported posted because of a
+      // flush that ran for another: after an owner change it stays unposted.
+      if (await currentOwner() != lineOwner) return;
       if (_postedThrough >= mine) {
         posted = true; // an earlier flush already covered this line
         return;
@@ -136,7 +141,7 @@ final class LocalPushDisplay {
       final upTo = _stored;
       // False when the flush stopped early (the owner changed mid-way): the
       // line is then not in any posted notification and stays pending.
-      if (!await _flush()) return;
+      if (!await _flush(lineOwner!)) return;
       _postedThrough = upTo;
       _lastFlushEnd = DateTime.now();
       posted = true;
@@ -255,10 +260,11 @@ final class LocalPushDisplay {
   /// every post and before the save, which goes to that owner's key only.
   ///
   /// Returns false when it stopped early because the owner changed, true
-  /// otherwise (also when there was nothing to post).
-  static Future<bool> _flush() async {
+  /// otherwise (also when there was nothing to post). [expected] is the owner
+  /// the line being posted was stored for; any other owner stops it (false).
+  static Future<bool> _flush(String expected) async {
     final owner = await currentOwner();
-    if (owner == null) return false;
+    if (owner == null || owner != expected) return false;
     final inbox = await _load(owner: owner);
     final dirty = dirtyChats(inbox);
     if (dirty.isEmpty) return true;

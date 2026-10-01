@@ -8,12 +8,14 @@
 // lost. And background handlers running at once each loaded, added to and
 // saved the stored inbox, overwriting each other's lines.
 //
-// Contract under test (not the implementation): show() stores one line and
-// completes true once that line is inside a posted notification, whichever
-// call posted it; at most one flush per 600 ms, each posting every chat with
-// something new (250 ms apart) and one summary; only the first chat post of
-// a flush after 8 s quiet (or the isolate's first flush) may alert; the
-// summary is always silent and lets the children alert.
+// Contract under test (not the implementation, 0.30.4): show() stores one
+// line and completes true once that line is inside a posted notification,
+// whichever call posted it; a flush posts every chat with something new and
+// one summary, with no fixed wait before it (an idle phone posts at once) and
+// consecutive plugin posts at least 300 ms apart, so never more than 4 in
+// any second; only the first chat post of a flush after 8 s quiet (or the
+// isolate's first flush) may alert; the summary is always silent and lets
+// the children alert. Timing of the 0.30.4 changes: push_burst_test.dart.
 //
 // Real time on purpose: the timing IS the behaviour. The first test must stay
 // first in this file: it is the isolate's first flush.
@@ -164,7 +166,7 @@ void main() {
   });
 
   group('a Doze backlog: 13 pushes across 4 chats at once', () {
-    // Per chat, at most maxInboxLines (7), so every line must be readable.
+    // Per chat, well under maxInboxLines (25), so every line must be readable.
     final burst = [
       for (var i = 0; i < 13; i++)
         (

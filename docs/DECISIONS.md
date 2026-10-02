@@ -1608,7 +1608,11 @@ the newest line of a chat (a second push replaces the first's text), and
 reading the chat before the deferred Dart job runs cancels the notification
 but the late job re-posts it (as any late push did before). A custom
 per-chat tone is not used by the native notification (the system default sound
-plays). Fixing the device's missing priority is not in the app's hands.
+plays). Fixing the device's missing priority is not in the app's hands. The
+native "already alerted" mark is in memory per isolate, so if the background
+isolate dies after the native draw and before its flush completes, the next
+isolate alerts that chat a second time. The native draw also requires a UUID
+`message_id` (FCM ids are UUIDs).
 
 ## 2026-10-01 — One long-lived iOS distribution certificate
 

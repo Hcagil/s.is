@@ -66,6 +66,7 @@ final class LocalPushDisplay {
     _postedThrough = 0;
     _lastFlushEnd = null;
     _lastPostAt = null;
+    _nativeAlerted.clear();
   }
 
   /// Must run before [show] in each isolate. [onTap] receives the tapped

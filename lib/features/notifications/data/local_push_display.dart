@@ -54,6 +54,10 @@ final class LocalPushDisplay {
   static DateTime? _lastFlushEnd;
   static DateTime? _lastPostAt; // when this isolate last posted to the plugin
 
+  /// Conversations Android already alerted for, until a flush posts them
+  /// (per isolate).
+  static final Set<String> _nativeAlerted = {};
+
   /// A fresh isolate, for tests.
   @visibleForTesting
   static void resetForTest() {
@@ -125,6 +129,7 @@ final class LocalPushDisplay {
       await prefs.reload();
       lineOwner = prefs.getString(_ownerKey);
       if (lineOwner == null) return null;
+      if (alreadyAlerted) _nativeAlerted.add(conversationId);
       await _save(
         addToInbox(
           await _load(),
@@ -152,7 +157,7 @@ final class LocalPushDisplay {
       final upTo = _stored;
       // False when the flush stopped early (the owner changed mid-way): the
       // line is then not in any posted notification and stays pending.
-      if (!await _flush(lineOwner!, alreadyAlerted: alreadyAlerted)) return;
+      if (!await _flush(lineOwner!)) return;
       _postedThrough = upTo;
       _lastFlushEnd = DateTime.now();
       posted = true;
@@ -264,7 +269,8 @@ final class LocalPushDisplay {
   /// Posts everything not yet shown: each chat with unread lines, then the
   /// summary, [_enqueueGap] apart. Runs inside [_locked]. Alerts (sound,
   /// heads-up) only when the shade has been quiet for [_quiet], and then only
-  /// for the first chat; every other post is silent.
+  /// for the first chat Android had not already alerted for; every other
+  /// post is silent.
   ///
   /// The member can sign out or switch in the app's isolate while a flush is
   /// posting: the owner is noted at load and re-read (fresh from disk) before
@@ -273,19 +279,17 @@ final class LocalPushDisplay {
   /// Returns false when it stopped early because the owner changed, true
   /// otherwise (also when there was nothing to post). [expected] is the owner
   /// the line being posted was stored for; any other owner stops it (false).
-  static Future<bool> _flush(
-    String expected, {
-    bool alreadyAlerted = false,
-  }) async {
+  static Future<bool> _flush(String expected) async {
     final owner = await currentOwner();
     if (owner == null || owner != expected) return false;
     final inbox = await _load(owner: owner);
     final dirty = dirtyChats(inbox);
     if (dirty.isEmpty) return true;
     final last = _lastFlushEnd;
-    final loud =
-        !alreadyAlerted &&
-        (last == null || DateTime.now().difference(last) > _quiet);
+    final loud = last == null || DateTime.now().difference(last) > _quiet;
+    final alertIndex = dirty.indexWhere(
+      (c) => !_nativeAlerted.contains(c.conversationId),
+    );
     final defaults = await _alerts.loadDefaults();
     final chats = await _alerts.loadChats();
     final pictures = await NotificationAvatars.forChats(owner, [
@@ -296,7 +300,7 @@ final class LocalPushDisplay {
       if (!await _still(owner)) return false;
       await _showChat(
         dirty[i],
-        alert: loud && i == 0,
+        alert: loud && i == alertIndex,
         picture: pictures[dirty[i].conversationId],
         effective: resolveAlert(
           defaults,
@@ -312,6 +316,7 @@ final class LocalPushDisplay {
       markPosted(inbox, {for (final c in dirty) c.conversationId}),
       owner: owner,
     );
+    _nativeAlerted.removeAll([for (final c in dirty) c.conversationId]);
     return true;
   }
 

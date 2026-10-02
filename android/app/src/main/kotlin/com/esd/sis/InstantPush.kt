@@ -15,7 +15,9 @@ import org.json.JSONObject
 
 object InstantPush {
     const val GROUP = "sis.messages"
-    const val CHANNEL_LOUD = "sis-instant"
+    const val CHANNEL_BOTH = "sis-instant"
+    const val CHANNEL_SOUND = "sis-instant-sound"
+    const val CHANNEL_VIBRATE = "sis-instant-vibrate"
     const val CHANNEL_QUIET = "sis-instant-quiet"
 
     fun notificationId(conversationId: String): Int {
@@ -31,7 +33,7 @@ object InstantPush {
         return originalPriority != "high" && !hasNotificationBlock && !appInForeground && owner != null && (targetUser == null || targetUser == owner) && notificationsEnabled && hasFields
     }
 
-    fun alerts(defaultsJson: String?, chatsJson: String?, conversationId: String): Boolean {
+    private fun resolve(defaultsJson: String?, chatsJson: String?, conversationId: String, key: String): Boolean {
         val defaults = try {
             JSONObject(defaultsJson ?: "{}")
         } catch (e: Exception) {
@@ -44,13 +46,26 @@ object InstantPush {
             null
         }
 
-        fun resolve(key: String): Boolean = when (chat?.optString(key, "byDefault")) {
+        return when (chat?.optString(key, "byDefault")) {
             "on" -> true
             "off" -> false
             else -> defaults.optBoolean(key, true)
         }
+    }
 
-        return resolve("s") || resolve("v")
+    /** Whether the chat's SOUND resolves on (Dart's resolveAlert). Name kept for the shared-vector test. */
+    fun alerts(defaultsJson: String?, chatsJson: String?, conversationId: String): Boolean =
+        resolve(defaultsJson, chatsJson, conversationId, "s")
+
+    /** Whether the chat's VIBRATION resolves on (Dart's resolveAlert). */
+    fun vibrates(defaultsJson: String?, chatsJson: String?, conversationId: String): Boolean =
+        resolve(defaultsJson, chatsJson, conversationId, "v")
+
+    fun channelFor(sound: Boolean, vibration: Boolean): String = when {
+        sound && vibration -> CHANNEL_BOTH
+        sound -> CHANNEL_SOUND
+        vibration -> CHANNEL_VIBRATE
+        else -> CHANNEL_QUIET
     }
 
     fun body(text: String, sender: String?, group: Boolean): String {
@@ -77,7 +92,7 @@ object InstantPush {
                         it.processName == context.packageName
                 } == true
 
-            if (!hasFields || !shouldPostNow(
+            if (!shouldPostNow(
                     extras.getString("google.original_priority"),
                     hasNotificationBlock,
                     appInForeground,
@@ -96,20 +111,31 @@ object InstantPush {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 manager.createNotificationChannel(
-                    NotificationChannel(CHANNEL_LOUD, "Messages (instant)", NotificationManager.IMPORTANCE_HIGH).apply {
+                    NotificationChannel(CHANNEL_BOTH, "Messages (instant)", NotificationManager.IMPORTANCE_HIGH).apply {
                         enableVibration(true)
+                    },
+                )
+                manager.createNotificationChannel(
+                    NotificationChannel(CHANNEL_SOUND, "Messages (instant, sound only)", NotificationManager.IMPORTANCE_HIGH).apply {
+                        enableVibration(false)
+                    },
+                )
+                manager.createNotificationChannel(
+                    NotificationChannel(CHANNEL_VIBRATE, "Messages (instant, vibration only)", NotificationManager.IMPORTANCE_HIGH).apply {
+                        enableVibration(true)
+                        setSound(null, null)
                     },
                 )
                 manager.createNotificationChannel(
                     NotificationChannel(CHANNEL_QUIET, "Messages (instant, silent)", NotificationManager.IMPORTANCE_LOW),
                 )
             }
-            val channel = if (alerts(
-                    prefs.getString("flutter.sis.alert_defaults", null),
-                    prefs.getString("flutter.sis.alert_chats", null),
-                    conversationId,
-                )
-            ) CHANNEL_LOUD else CHANNEL_QUIET
+            val defaults = prefs.getString("flutter.sis.alert_defaults", null)
+            val chats = prefs.getString("flutter.sis.alert_chats", null)
+            val channel = channelFor(
+                alerts(defaults, chats, conversationId),
+                vibrates(defaults, chats, conversationId),
+            )
 
             // Same tap contract as flutter_local_notifications, so the app opens the chat as it does for
             // the notification Dart draws.
@@ -142,6 +168,7 @@ object InstantPush {
             NotificationManagerCompat.from(context).notify(id, notification)
             return true
         } catch (e: Exception) {
+            android.util.Log.w("InstantPush", "draw failed: ${e.javaClass.simpleName}")
             return false
         }
     }

@@ -1591,15 +1591,24 @@ same group key, the chat's sound/vibration choice read from the same
 preferences, tap opens the chat as a Dart-drawn one does). The notification
 id is the Dart side's own (FNV-1a of the conversation id), so when the deferred
 Dart handler finally runs, `LocalPushDisplay` replaces it in place with the
-full MessagingStyle state and no second sound (`alreadyAlerted`): never a
-duplicate, never two alerts. High priority is untouched. The receipt's
-`received` note gains `fast=native` when the receiver drew the push.
+full MessagingStyle state and no second sound (`alreadyAlerted`, kept per
+conversation, so another chat's lines in the same flush still alert): never a
+duplicate, never two alerts. The native side resolves sound and vibration
+separately, exactly as Dart's `resolveAlert`, and posts to one of four fixed
+channels (a channel's sound and vibration cannot change once created):
+`sis-instant` (both), `sis-instant-sound`, `sis-instant-vibrate`,
+`sis-instant-quiet` (neither, low importance). The receiver keeps its unread
+arrival note for 24 hours, because Doze has held the Dart job 10-50 minutes
+and a note deleted earlier would make Dart alert a second time. High priority
+is untouched. The receipt's `received` note gains `fast=native` when the
+receiver drew the push.
 
 **Known ceiling.** Until Dart catches up, the native notification shows only
 the newest line of a chat (a second push replaces the first's text), and
 reading the chat before the deferred Dart job runs cancels the notification
-but the late job re-posts it (as any late push did before). Fixing the
-device's missing priority is not in the app's hands.
+but the late job re-posts it (as any late push did before). A custom
+per-chat tone is not used by the native notification (the system default sound
+plays). Fixing the device's missing priority is not in the app's hands.
 
 ## 2026-10-01 — One long-lived iOS distribution certificate
 

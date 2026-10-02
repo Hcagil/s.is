@@ -15,6 +15,12 @@ import android.content.Intent
  * receipt.
  */
 class PushArrivalReceiver : BroadcastReceiver() {
+    companion object {
+        // Doze has held the Dart job 10-50 min; a note removed before the job runs makes Dart alert a
+        // second time, so an unread note is kept a day.
+        private const val STALE_AFTER_MS = 24L * 60 * 60 * 1000
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         try {
             val extras = intent.extras ?: return
@@ -31,14 +37,14 @@ class PushArrivalReceiver : BroadcastReceiver() {
             val editor = prefs.edit()
             editor.putString("flutter.sis.push_arrival.$id", "$now,$delivered,$original" + if (drawn) ",n" else "")
 
-            // Housekeeping: a value the Dart handler never read goes after an hour.
+            // Housekeeping: a value the Dart handler never read goes after a day.
             for (key in prefs.all.keys) {
                 if (key.startsWith("flutter.sis.push_arrival.")) {
                     val value = prefs.getString(key, null)
                     if (value != null && value.contains(",")) {
                         try {
                             val at = value.substringBefore(",").toLong()
-                            if (now - at > 3_600_000) editor.remove(key)
+                            if (now - at > STALE_AFTER_MS) editor.remove(key)
                         } catch (_: NumberFormatException) {
                             // Ignore invalid entries
                         }

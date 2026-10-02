@@ -106,6 +106,10 @@ jobs:
       # local time at all. POSIX form, so no tzdata is needed.
       - name: Test
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -e TZ=JST-9 flutter flutter test
+      # JVM unit tests of the native Kotlin (android/app/src/test); they share
+      # fixed vectors with the Dart tests (test/fixtures/instant_push_vectors.json).
+      - name: Android unit tests
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter sh -c 'cd android && ./gradlew --no-daemon :app:testDebugUnitTest'
       # Release mode, not debug: R8 shrinking and the signing config only run
       # in a release build, and the Release workflow after merge is the wrong
       # place to find out they break. A throwaway key stands in for the upload

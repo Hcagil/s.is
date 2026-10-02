@@ -107,24 +107,7 @@ class InstantPushTest {
     @Test
     fun `group key matches the Dart side`() = assertEquals(vectors.getString("group_key"), InstantPush.GROUP)
 
-    // ---- the chat's alert choice, read from the same preferences ----
-
-    @Test
-    fun `alert choice follows the shared vectors`() {
-        val alerts = vectors.getJSONArray("alerts")
-        assertTrue(alerts.length() > 0)
-        val wrong = mutableListOf<String>()
-        for (i in 0 until alerts.length()) {
-            val v = alerts.getJSONObject(i)
-            val defaults = if (v.isNull("defaults")) null else v.getString("defaults")
-            val chats = if (v.isNull("chats")) null else v.getString("chats")
-            // Two native channels: loud and quiet. A chat whose sound resolves off must never
-            // land on the loud one (it would ring); a chat whose sound resolves on must.
-            val loud = InstantPush.alerts(defaults, chats, v.getString("conversation_id"))
-            if (loud != v.getBoolean("sound")) wrong += "${v.getString("name")}: loud=$loud"
-        }
-        assertEquals(emptyList<String>(), wrong)
-    }
+    // The chat's sound, vibration and channel: InstantPushChannelTest.
 
     // ---- the line: "Sender: message" in a group ----
 

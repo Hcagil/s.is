@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared by test/features/notifications/instant_push_parity_test.dart (Dart) and android/app/src/test/kotlin/com/esd/sis/InstantPushTest.kt (Kotlin). The Android receiver (InstantPush.kt) draws a not-high push first; the Dart handler replaces it in place. Both sides must agree on these values, or the replacement becomes a duplicate (id), joins another group (group_key), or alerts against the chat's choice (alerts). Expected ids: 32-bit FNV-1a of the UTF-8 conversation id, kept positive (top bit cleared).",
+  "_comment": "Shared by test/features/notifications/instant_push_parity_test.dart (Dart) and android/app/src/test/kotlin/com/esd/sis/InstantPushTest.kt (Kotlin). The Android receiver (InstantPush.kt) draws a not-high push first; the Dart handler replaces it in place. Both sides must agree on these values, or the replacement becomes a duplicate (id), joins another group (group_key), or alerts against the chat's choice (alerts). Expected ids: 32-bit FNV-1a of the UTF-8 conversation id, kept positive (top bit cleared). Each alert vector's channel is the native channel InstantPush posts to: sis-instant (sound and vibration), sis-instant-sound, sis-instant-vibrate, sis-instant-quiet (neither).",
   "group_key": "sis.messages",
   "ids": [
     {"conversation_id": "a", "id": 1678518572},
@@ -12,14 +12,14 @@
     {"conversation_id": "chat-2", "id": 1797186880}
   ],
   "alerts": [
-    {"name": "nothing saved", "defaults": null, "chats": null, "conversation_id": "c1", "sound": true, "vibration": true},
-    {"name": "corrupt json reads as nothing saved", "defaults": "{not json", "chats": "[[[", "conversation_id": "c1", "sound": true, "vibration": true},
-    {"name": "defaults off, chat not listed", "defaults": "{\"s\":false,\"t\":null,\"n\":null,\"v\":false}", "chats": "{\"other\":{\"s\":\"on\",\"v\":\"on\"}}", "conversation_id": "c1", "sound": false, "vibration": false},
-    {"name": "defaults on, chat off/off", "defaults": "{\"s\":true,\"t\":null,\"n\":null,\"v\":true}", "chats": "{\"c1\":{\"s\":\"off\",\"v\":\"off\"}}", "conversation_id": "c1", "sound": false, "vibration": false},
-    {"name": "defaults off, chat on/on", "defaults": "{\"s\":false,\"t\":null,\"n\":null,\"v\":false}", "chats": "{\"c1\":{\"s\":\"on\",\"v\":\"on\"}}", "conversation_id": "c1", "sound": true, "vibration": true},
-    {"name": "defaults off, chat byDefault", "defaults": "{\"s\":false,\"t\":null,\"n\":null,\"v\":false}", "chats": "{\"c1\":{\"s\":\"byDefault\",\"v\":\"byDefault\"}}", "conversation_id": "c1", "sound": false, "vibration": false},
-    {"name": "defaults missing keys mean on", "defaults": "{}", "chats": "{}", "conversation_id": "c1", "sound": true, "vibration": true},
-    {"name": "chat sound off only, vibration on", "defaults": null, "chats": "{\"c1\":{\"s\":\"off\",\"v\":\"byDefault\"}}", "conversation_id": "c1", "sound": false, "vibration": true},
-    {"name": "chat vibration off only, sound on", "defaults": null, "chats": "{\"c1\":{\"s\":\"byDefault\",\"v\":\"off\"}}", "conversation_id": "c1", "sound": true, "vibration": false}
+    {"name": "nothing saved", "defaults": null, "chats": null, "conversation_id": "c1", "sound": true, "vibration": true, "channel": "sis-instant"},
+    {"name": "corrupt json reads as nothing saved", "defaults": "{not json", "chats": "[[[", "conversation_id": "c1", "sound": true, "vibration": true, "channel": "sis-instant"},
+    {"name": "defaults off, chat not listed", "defaults": "{\"s\":false,\"t\":null,\"n\":null,\"v\":false}", "chats": "{\"other\":{\"s\":\"on\",\"v\":\"on\"}}", "conversation_id": "c1", "sound": false, "vibration": false, "channel": "sis-instant-quiet"},
+    {"name": "defaults on, chat off/off", "defaults": "{\"s\":true,\"t\":null,\"n\":null,\"v\":true}", "chats": "{\"c1\":{\"s\":\"off\",\"v\":\"off\"}}", "conversation_id": "c1", "sound": false, "vibration": false, "channel": "sis-instant-quiet"},
+    {"name": "defaults off, chat on/on", "defaults": "{\"s\":false,\"t\":null,\"n\":null,\"v\":false}", "chats": "{\"c1\":{\"s\":\"on\",\"v\":\"on\"}}", "conversation_id": "c1", "sound": true, "vibration": true, "channel": "sis-instant"},
+    {"name": "defaults off, chat byDefault", "defaults": "{\"s\":false,\"t\":null,\"n\":null,\"v\":false}", "chats": "{\"c1\":{\"s\":\"byDefault\",\"v\":\"byDefault\"}}", "conversation_id": "c1", "sound": false, "vibration": false, "channel": "sis-instant-quiet"},
+    {"name": "defaults missing keys mean on", "defaults": "{}", "chats": "{}", "conversation_id": "c1", "sound": true, "vibration": true, "channel": "sis-instant"},
+    {"name": "chat sound off only, vibration on", "defaults": null, "chats": "{\"c1\":{\"s\":\"off\",\"v\":\"byDefault\"}}", "conversation_id": "c1", "sound": false, "vibration": true, "channel": "sis-instant-vibrate"},
+    {"name": "chat vibration off only, sound on", "defaults": null, "chats": "{\"c1\":{\"s\":\"byDefault\",\"v\":\"off\"}}", "conversation_id": "c1", "sound": true, "vibration": false, "channel": "sis-instant-sound"}
   ]
 }

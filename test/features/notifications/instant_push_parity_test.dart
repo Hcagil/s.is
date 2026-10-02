@@ -56,6 +56,10 @@ void main() {
   late Directory support;
   late Directory cache;
 
+  /// Chats whose post Android refuses (the plugin call throws), as when the
+  /// process is killed or the shade rejects the post mid-flush.
+  final refuse = <String>{};
+
   void newIsolate() {
     SharedPreferences.resetStatic();
     LocalPushDisplay.resetForTest();
@@ -79,7 +83,15 @@ void main() {
     disk = DiskPrefs();
     support = await Directory.systemTemp.createTemp('sis-support-');
     cache = await Directory.systemTemp.createTemp('sis-cache-');
-    messenger.setMockMethodCallHandler(Shade.channel, shade.handle);
+    refuse.clear();
+    messenger.setMockMethodCallHandler(Shade.channel, (call) async {
+      if (call.method == 'show' &&
+          refuse.contains((call.arguments as Map)['payload'])) {
+        shade.calls.add(call.method);
+        throw PlatformException(code: 'error', message: 'post refused');
+      }
+      return shade.handle(call);
+    });
     messenger.setMockMethodCallHandler(_prefsChannel, disk.handle);
     messenger.setMockMethodCallHandler(_pathChannel, paths);
     newIsolate();
@@ -258,5 +270,96 @@ void main() {
       expect(note, isNot(contains('fast=')), reason: note);
       expect(Shade.alerting(shade.childFor(chat)).silent, isFalse);
     });
+  });
+
+  group('alreadyAlerted is per conversation', () {
+    // Distinct chat ids per test: the natively-alerted mark is per isolate
+    // and LocalPushDisplay.resetForTest does not clear it.
+    bool quiet(Map<String, Object?> n) {
+      final a = Shade.alerting(n);
+      return a.silent || a.onlyAlertOnce;
+    }
+
+    List<Map<String, Object?>> postsFor(String chat, int mark) => [
+      for (final s in shade.shows.sublist(mark))
+        if (s.n['payload'] == chat) s.n,
+    ];
+
+    test('a flush holding the natively drawn chat and another chat: the '
+        'other alerts, the native one stays quiet', () async {
+      const a = 'pc1-native', b = 'pc1-other';
+      // B's line is stored but its post was refused: still waiting to post.
+      refuse.add(b);
+      try {
+        await LocalPushDisplay.show(
+          conversationId: b,
+          title: 'Ben',
+          body: 'b1',
+        );
+      } catch (_) {}
+      refuse.clear();
+      newIsolate();
+      final mark = shade.shows.length;
+
+      await LocalPushDisplay.show(
+        conversationId: a,
+        title: 'Ann',
+        body: 'a1',
+        alreadyAlerted: true,
+      );
+
+      final pa = postsFor(a, mark), pb = postsFor(b, mark);
+      expect(pa, isNotEmpty);
+      expect(pb, isNotEmpty, reason: 'the waiting chat joins this flush');
+      expect(pa.every(quiet), isTrue, reason: 'native already alerted: $pa');
+      expect(
+        pb.any((n) => !quiet(n)),
+        isTrue,
+        reason: 'the other chat was never alerted: $pb',
+      );
+    });
+
+    test('only the natively drawn chat in the flush: nothing alerts, the '
+        'summary included', () async {
+      const a = 'pc2-native';
+      final mark = shade.shows.length;
+
+      await LocalPushDisplay.show(
+        conversationId: a,
+        title: 'Ann',
+        body: 'a1',
+        alreadyAlerted: true,
+      );
+
+      expect(postsFor(a, mark), isNotEmpty);
+      for (final s in shade.shows.sublist(mark)) {
+        expect(quiet(s.n), isTrue, reason: '${s.n}');
+      }
+    });
+
+    test('a flush that did not complete keeps the native chat quiet when a '
+        'later push posts it', () async {
+      const a = 'pc3-native', b = 'pc3-other';
+      refuse.add(a);
+      try {
+        await LocalPushDisplay.show(
+          conversationId: a,
+          title: 'Ann',
+          body: 'a1',
+          alreadyAlerted: true,
+        );
+      } catch (_) {}
+      refuse.clear();
+      // Past the 8 s quiet window, so the next flush may alert at all.
+      await Future<void>.delayed(const Duration(milliseconds: 8600));
+      final mark = shade.shows.length;
+
+      await LocalPushDisplay.show(conversationId: b, title: 'Ben', body: 'b1');
+
+      final pa = postsFor(a, mark), pb = postsFor(b, mark);
+      expect(pa, isNotEmpty, reason: 'the waiting native chat is posted now');
+      expect(pa.every(quiet), isTrue, reason: 'alerted a second time: $pa');
+      expect(pb.any((n) => !quiet(n)), isTrue, reason: '$pb');
+    }, timeout: const Timeout(Duration(seconds: 60)));
   });
 }

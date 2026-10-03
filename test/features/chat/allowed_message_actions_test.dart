@@ -1,8 +1,10 @@
 // allowedMessageActions, from the rules in docs/DECISIONS.md: reply and
 // forward on any stored message; edit only on your own message younger than
 // 6 hours (never a forwarded one); delete for everyone on your own message at
-// any age, or on anyone's when you are a group admin (0.30.8); read-by on
-// your own message in a group; nothing on a pending or deleted message.
+// any age, or on anyone's when you are a group admin (0.30.8); read-by first
+// on your own stored message in every chat, groups and 1:1 alike (0.30.10),
+// never on another's; nothing on a pending or deleted message. The tap menu
+// (menuMessageActions) never offers read-by.
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -36,12 +38,12 @@ void main() {
   }
 
   group('allowedMessageActions', () {
-    test('Own stored text, age < 6h, group true -> all actions', () {
+    test('Own stored text, age < 6h -> readBy first, in any chat', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(hours: 5)),
       );
-      final actions = allowedMessageActions(msg, me: me, now: now, group: true);
+      final actions = allowedMessageActions(msg, me: me, now: now);
       expect(
         actions,
         equals([
@@ -54,44 +56,18 @@ void main() {
       );
     });
 
-    test('Own stored text, age < 6h, group false -> no readBy', () {
-      final msg = buildMessage(
-        senderId: me,
-        createdAt: now.subtract(const Duration(hours: 5)),
-      );
-      final actions = allowedMessageActions(
-        msg,
-        me: me,
-        now: now,
-        group: false,
-      );
-      expect(
-        actions,
-        equals([
-          MessageAction.reply,
-          MessageAction.forward,
-          MessageAction.edit,
-          MessageAction.delete,
-        ]),
-      );
-    });
-
-    test('Own stored photo with caption, age < 6h, group false', () {
+    test('Own stored photo with caption, age < 6h', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(hours: 5)),
         attachmentPath: 'c1/1.png',
         body: 'Caption',
       );
-      final actions = allowedMessageActions(
-        msg,
-        me: me,
-        now: now,
-        group: false,
-      );
+      final actions = allowedMessageActions(msg, me: me, now: now);
       expect(
         actions,
         equals([
+          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
@@ -100,22 +76,18 @@ void main() {
       );
     });
 
-    test('Own stored photo with empty caption, age < 6h, group false', () {
+    test('Own stored photo with empty caption, age < 6h', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(hours: 5)),
         attachmentPath: 'c1/1.png',
         body: '',
       );
-      final actions = allowedMessageActions(
-        msg,
-        me: me,
-        now: now,
-        group: false,
-      );
+      final actions = allowedMessageActions(msg, me: me, now: now);
       expect(
         actions,
         equals([
+          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
@@ -124,20 +96,70 @@ void main() {
       );
     });
 
-    test('Own age exactly 6h, group false -> reply, forward, delete', () {
+    test('Own age exactly 6h -> readBy, reply, forward, delete', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(hours: 6)),
       );
-      final actions = allowedMessageActions(
-        msg,
-        me: me,
-        now: now,
-        group: false,
-      );
+      final actions = allowedMessageActions(msg, me: me, now: now);
       expect(
         actions,
         equals([
+          MessageAction.readBy,
+          MessageAction.reply,
+          MessageAction.forward,
+          MessageAction.delete,
+        ]),
+      );
+    });
+
+    test('Own age 6h-1s -> readBy, reply, forward, edit, delete', () {
+      final msg = buildMessage(
+        senderId: me,
+        createdAt: now.subtract(
+          const Duration(hours: 5, minutes: 59, seconds: 59),
+        ),
+      );
+      final actions = allowedMessageActions(msg, me: me, now: now);
+      expect(
+        actions,
+        equals([
+          MessageAction.readBy,
+          MessageAction.reply,
+          MessageAction.forward,
+          MessageAction.edit,
+          MessageAction.delete,
+        ]),
+      );
+    });
+
+    test('Own age 6h+1s -> readBy, reply, forward, delete', () {
+      final msg = buildMessage(
+        senderId: me,
+        createdAt: now.subtract(const Duration(hours: 6, seconds: 1)),
+      );
+      final actions = allowedMessageActions(msg, me: me, now: now);
+      expect(
+        actions,
+        equals([
+          MessageAction.readBy,
+          MessageAction.reply,
+          MessageAction.forward,
+          MessageAction.delete,
+        ]),
+      );
+    });
+
+    test('Own age 3 days -> readBy, reply, forward, delete', () {
+      final msg = buildMessage(
+        senderId: me,
+        createdAt: now.subtract(const Duration(days: 3)),
+      );
+      final actions = allowedMessageActions(msg, me: me, now: now);
+      expect(
+        actions,
+        equals([
+          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.delete,
@@ -146,18 +168,14 @@ void main() {
     });
 
     test(
-      'Own age exactly 6h, group true -> readBy, reply, forward, delete',
+      'Own forwarded message, age < 6h -> readBy, reply, forward, delete',
       () {
         final msg = buildMessage(
           senderId: me,
-          createdAt: now.subtract(const Duration(hours: 6)),
+          createdAt: now.subtract(const Duration(hours: 5)),
+          forwarded: true,
         );
-        final actions = allowedMessageActions(
-          msg,
-          me: me,
-          now: now,
-          group: true,
-        );
+        final actions = allowedMessageActions(msg, me: me, now: now);
         expect(
           actions,
           equals([
@@ -170,217 +188,22 @@ void main() {
       },
     );
 
-    test('Own age 6h-1s, group false -> reply, forward, edit, delete', () {
-      final msg = buildMessage(
-        senderId: me,
-        createdAt: now.subtract(
-          const Duration(hours: 5, minutes: 59, seconds: 59),
-        ),
-      );
-      final actions = allowedMessageActions(
-        msg,
-        me: me,
-        now: now,
-        group: false,
-      );
-      expect(
-        actions,
-        equals([
-          MessageAction.reply,
-          MessageAction.forward,
-          MessageAction.edit,
-          MessageAction.delete,
-        ]),
-      );
-    });
-
-    test('Own age 6h-1s, group true -> all actions', () {
-      final msg = buildMessage(
-        senderId: me,
-        createdAt: now.subtract(
-          const Duration(hours: 5, minutes: 59, seconds: 59),
-        ),
-      );
-      final actions = allowedMessageActions(msg, me: me, now: now, group: true);
-      expect(
-        actions,
-        equals([
-          MessageAction.readBy,
-          MessageAction.reply,
-          MessageAction.forward,
-          MessageAction.edit,
-          MessageAction.delete,
-        ]),
-      );
-    });
-
-    test('Own age 6h+1s, group false -> reply, forward, delete', () {
-      final msg = buildMessage(
-        senderId: me,
-        createdAt: now.subtract(const Duration(hours: 6, seconds: 1)),
-      );
-      final actions = allowedMessageActions(
-        msg,
-        me: me,
-        now: now,
-        group: false,
-      );
-      expect(
-        actions,
-        equals([
-          MessageAction.reply,
-          MessageAction.forward,
-          MessageAction.delete,
-        ]),
-      );
-    });
-
-    test('Own age 6h+1s, group true -> readBy, reply, forward, delete', () {
-      final msg = buildMessage(
-        senderId: me,
-        createdAt: now.subtract(const Duration(hours: 6, seconds: 1)),
-      );
-      final actions = allowedMessageActions(msg, me: me, now: now, group: true);
-      expect(
-        actions,
-        equals([
-          MessageAction.readBy,
-          MessageAction.reply,
-          MessageAction.forward,
-          MessageAction.delete,
-        ]),
-      );
-    });
-
-    test('Own age 3 days, group false -> reply, forward, delete', () {
-      final msg = buildMessage(
-        senderId: me,
-        createdAt: now.subtract(const Duration(days: 3)),
-      );
-      final actions = allowedMessageActions(
-        msg,
-        me: me,
-        now: now,
-        group: false,
-      );
-      expect(
-        actions,
-        equals([
-          MessageAction.reply,
-          MessageAction.forward,
-          MessageAction.delete,
-        ]),
-      );
-    });
-
-    test('Own age 3 days, group true -> readBy, reply, forward, delete', () {
-      final msg = buildMessage(
-        senderId: me,
-        createdAt: now.subtract(const Duration(days: 3)),
-      );
-      final actions = allowedMessageActions(msg, me: me, now: now, group: true);
-      expect(
-        actions,
-        equals([
-          MessageAction.readBy,
-          MessageAction.reply,
-          MessageAction.forward,
-          MessageAction.delete,
-        ]),
-      );
-    });
-
-    test(
-      'Own forwarded message, age < 6h, group false -> reply, forward, delete',
-      () {
-        final msg = buildMessage(
-          senderId: me,
-          createdAt: now.subtract(const Duration(hours: 5)),
-          forwarded: true,
-        );
-        final actions = allowedMessageActions(
-          msg,
-          me: me,
-          now: now,
-          group: false,
-        );
-        expect(
-          actions,
-          equals([
-            MessageAction.reply,
-            MessageAction.forward,
-            MessageAction.delete,
-          ]),
-        );
-      },
-    );
-
-    test('Own forwarded message, age < 6h, group true -> readBy, reply, forward, delete', () {
-      final msg = buildMessage(
-        senderId: me,
-        createdAt: now.subtract(const Duration(hours: 5)),
-        forwarded: true,
-      );
-      final actions = allowedMessageActions(msg, me: me, now: now, group: true);
-      expect(
-        actions,
-        equals([
-          MessageAction.readBy,
-          MessageAction.reply,
-          MessageAction.forward,
-          MessageAction.delete,
-        ]),
-      );
-    });
-
-    test('Somebody else\'s stored message, age < 6h, group false -> reply & forward', () {
+    test('Somebody else\'s stored message, age < 6h -> reply & forward', () {
       final msg = buildMessage(
         senderId: other,
         createdAt: now.subtract(const Duration(hours: 5)),
       );
-      final actions = allowedMessageActions(
-        msg,
-        me: me,
-        now: now,
-        group: false,
-      );
+      final actions = allowedMessageActions(msg, me: me, now: now);
       expect(actions, equals([MessageAction.reply, MessageAction.forward]));
     });
 
-    test('Somebody else\'s stored message, age < 6h, group true -> reply & forward', () {
-      final msg = buildMessage(
-        senderId: other,
-        createdAt: now.subtract(const Duration(hours: 5)),
-      );
-      final actions = allowedMessageActions(msg, me: me, now: now, group: true);
-      expect(actions, equals([MessageAction.reply, MessageAction.forward]));
-    });
-
-    test(
-      'Somebody else\'s photo, age < 6h, group false -> reply & forward',
-      () {
-        final msg = buildMessage(
-          senderId: other,
-          createdAt: now.subtract(const Duration(hours: 5)),
-          attachmentPath: 'c1/1.png',
-        );
-        final actions = allowedMessageActions(
-          msg,
-          me: me,
-          now: now,
-          group: false,
-        );
-        expect(actions, equals([MessageAction.reply, MessageAction.forward]));
-      },
-    );
-
-    test('Somebody else\'s photo, age < 6h, group true -> reply & forward', () {
+    test('Somebody else\'s photo, age < 6h -> reply & forward', () {
       final msg = buildMessage(
         senderId: other,
         createdAt: now.subtract(const Duration(hours: 5)),
         attachmentPath: 'c1/1.png',
       );
-      final actions = allowedMessageActions(msg, me: me, now: now, group: true);
+      final actions = allowedMessageActions(msg, me: me, now: now);
       expect(actions, equals([MessageAction.reply, MessageAction.forward]));
     });
 
@@ -392,18 +215,8 @@ void main() {
           createdAt: now.subtract(const Duration(hours: 1)),
           localImage: Uint8List.fromList([0]),
         );
-        final actionsGroupFalse = allowedMessageActions(
-          msg,
-          me: me,
-          now: now,
-          group: false,
-        );
-        final actionsGroupTrue = allowedMessageActions(
-          msg,
-          me: me,
-          now: now,
-          group: true,
-        );
+        final actionsGroupFalse = allowedMessageActions(msg, me: me, now: now);
+        final actionsGroupTrue = allowedMessageActions(msg, me: me, now: now);
         expect(actionsGroupFalse, equals([]));
         expect(actionsGroupTrue, equals([]));
       },
@@ -415,18 +228,8 @@ void main() {
         createdAt: now.subtract(const Duration(hours: 1)),
         deletion: MessageDeletion.placeholder,
       );
-      final actionsGroupFalse = allowedMessageActions(
-        msg,
-        me: me,
-        now: now,
-        group: false,
-      );
-      final actionsGroupTrue = allowedMessageActions(
-        msg,
-        me: me,
-        now: now,
-        group: true,
-      );
+      final actionsGroupFalse = allowedMessageActions(msg, me: me, now: now);
+      final actionsGroupTrue = allowedMessageActions(msg, me: me, now: now);
       expect(actionsGroupFalse, equals([]));
       expect(actionsGroupTrue, equals([]));
     });
@@ -437,56 +240,22 @@ void main() {
         createdAt: now.subtract(const Duration(hours: 1)),
         deletion: MessageDeletion.vanished,
       );
-      final actionsGroupFalse = allowedMessageActions(
-        msg,
-        me: me,
-        now: now,
-        group: false,
-      );
-      final actionsGroupTrue = allowedMessageActions(
-        msg,
-        me: me,
-        now: now,
-        group: true,
-      );
+      final actionsGroupFalse = allowedMessageActions(msg, me: me, now: now);
+      final actionsGroupTrue = allowedMessageActions(msg, me: me, now: now);
       expect(actionsGroupFalse, equals([]));
       expect(actionsGroupTrue, equals([]));
     });
 
-    test('me == null: fresh stored message, group false -> no readBy, edit, delete', () {
+    test('me == null: fresh stored message -> no readBy, edit, delete', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(minutes: 10)),
       );
-      final actions = allowedMessageActions(
-        msg,
-        me: null,
-        now: now,
-        group: false,
-      );
+      final actions = allowedMessageActions(msg, me: null, now: now);
       expect(actions, isNot(contains(MessageAction.readBy)));
       expect(actions, isNot(contains(MessageAction.edit)));
       expect(actions, isNot(contains(MessageAction.delete)));
     });
-
-    test(
-      'me == null: fresh stored message, group true -> no readBy, edit, delete',
-      () {
-        final msg = buildMessage(
-          senderId: me,
-          createdAt: now.subtract(const Duration(minutes: 10)),
-        );
-        final actions = allowedMessageActions(
-          msg,
-          me: null,
-          now: now,
-          group: true,
-        );
-        expect(actions, isNot(contains(MessageAction.readBy)));
-        expect(actions, isNot(contains(MessageAction.edit)));
-        expect(actions, isNot(contains(MessageAction.delete)));
-      },
-    );
 
     test('me == null: deleted message -> empty list', () {
       final msg = buildMessage(
@@ -494,12 +263,7 @@ void main() {
         createdAt: now.subtract(const Duration(minutes: 10)),
         deletion: MessageDeletion.placeholder,
       );
-      final actions = allowedMessageActions(
-        msg,
-        me: null,
-        now: now,
-        group: false,
-      );
+      final actions = allowedMessageActions(msg, me: null, now: now);
       expect(actions, equals([]));
     });
 
@@ -527,6 +291,7 @@ void main() {
       expect(
         allowedMessageActions(stale, me: me, now: now.toLocal()),
         equals([
+          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.delete,
@@ -540,17 +305,11 @@ void main() {
         createdAt: now.subtract(const Duration(days: 30)),
       );
       expect(
-        allowedMessageActions(theirs, me: me, now: now, group: true),
+        allowedMessageActions(theirs, me: me, now: now),
         isNot(contains(MessageAction.delete)),
       );
       expect(
-        allowedMessageActions(
-          theirs,
-          me: me,
-          now: now,
-          group: true,
-          admin: true,
-        ),
+        allowedMessageActions(theirs, me: me, now: now, admin: true),
         equals([
           MessageAction.reply,
           MessageAction.forward,
@@ -559,5 +318,23 @@ void main() {
         reason: 'delete, but never edit or read-by on another\'s message',
       );
     });
+
+    test(
+      'the tap menu never offers readBy, even on your own stored message',
+      () {
+        final msg = buildMessage(
+          senderId: me,
+          createdAt: now.subtract(const Duration(minutes: 5)),
+        );
+        expect(
+          allowedMessageActions(msg, me: me, now: now).first,
+          MessageAction.readBy,
+        );
+        expect(
+          menuMessageActions(msg, me: me, now: now),
+          isNot(contains(MessageAction.readBy)),
+        );
+      },
+    );
   });
 }

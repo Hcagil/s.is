@@ -13,6 +13,7 @@ import '../domain/group_member.dart';
 import '../domain/message.dart';
 import '../domain/read_marks.dart';
 import 'forward_sheet.dart';
+import 'message_menu_card.dart';
 import 'swipeable_message.dart';
 
 enum _DeleteChoice { forMe, forEveryone }
@@ -108,14 +109,17 @@ Future<bool> runMessageAction(
   return true;
 }
 
-/// Opens the tap menu for [message] and carries out the chosen action.
-/// [photoViewer] limits it to reply, forward and delete (the full-screen
-/// photo's menu). True when the action ended the interaction (see
-/// [runMessageAction]).
+/// Opens the tap menu for [message], a floating card next to [anchor] (the
+/// tapped bubble's global rect; [alignEnd] for your own messages), and
+/// carries out the chosen action. [photoViewer] limits it to reply, forward
+/// and delete and hangs the card under the viewer's top-right menu button.
+/// True when the action ended the interaction (see [runMessageAction]).
 Future<bool> showMessageMenu(
   BuildContext context,
   WidgetRef ref,
   Message message, {
+  Rect? anchor,
+  bool alignEnd = false,
   bool photoViewer = false,
 }) async {
   final me = switch (ref.read(sessionControllerProvider).value) {
@@ -137,29 +141,33 @@ Future<bool> showMessageMenu(
         a,
   ];
   if (actions.isEmpty) return false;
-  final action = await showModalBottomSheet<MessageAction>(
-    context: context,
-    showDragHandle: true,
-    builder: (sheet) => SafeArea(
-      child: Column(
-        key: const ValueKey('message-menu'),
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final a in actions)
-            ListTile(
-              key: ValueKey('menu-${swipeActionKeyId(a)}'),
-              leading: Icon(
-                swipeActionIcon(a),
-                color: a == MessageAction.delete
-                    ? Theme.of(sheet).colorScheme.error
-                    : null,
-              ),
-              title: Text(swipeActionLabel(a)),
-              onTap: () => Navigator.of(sheet).pop(a),
-            ),
-        ],
-      ),
-    ),
+  final size = MediaQuery.sizeOf(context);
+  final pad = MediaQuery.viewPaddingOf(context);
+  final at =
+      anchor ??
+      (photoViewer
+          ? Rect.fromLTRB(
+              size.width - 56,
+              pad.top,
+              size.width,
+              pad.top + kToolbarHeight,
+            )
+          : Rect.fromLTWH(size.width / 2, size.height / 2, 0, 0));
+  final action = await showMenuCard<MessageAction>(
+    context,
+    anchor: at,
+    alignEnd: alignEnd || photoViewer,
+    highlightAnchor: !photoViewer && anchor != null,
+    actions: [
+      for (final a in actions)
+        MenuCardAction(
+          value: a,
+          keyId: swipeActionKeyId(a),
+          icon: swipeActionIcon(a),
+          label: swipeActionLabel(a),
+          destructive: a == MessageAction.delete,
+        ),
+    ],
   );
   if (action == null || !context.mounted) return false;
   return runMessageAction(

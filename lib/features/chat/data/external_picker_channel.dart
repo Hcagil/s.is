@@ -74,8 +74,8 @@ final class ExternalPickerChannel implements ExternalPicker {
         final Uint8List bytes;
         try {
           bytes = await file.readAsBytes();
-        } on FileSystemException catch (e) {
-          log('picked file unreadable: $e', name: 'sis.chat', error: e);
+        } on FileSystemException {
+          log('picked file unreadable', name: 'sis.chat');
           return null;
         }
         images.add(

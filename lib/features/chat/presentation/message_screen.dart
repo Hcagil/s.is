@@ -21,6 +21,7 @@ import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
 import '../application/group_controller.dart';
+import '../domain/emoji.dart';
 import '../domain/group_member.dart';
 import '../domain/highlight.dart';
 import '../domain/links.dart';
@@ -675,8 +676,8 @@ class _Bubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final brand = SisBrand.of(context);
     // Square-ish corner on the sender's side marks whose bubble it is.
-    const r = Radius.circular(8);
-    const tail = Radius.circular(3);
+    const r = Radius.circular(11);
+    const tail = Radius.circular(4);
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -854,7 +855,7 @@ class _Bubble extends StatelessWidget {
                 _BodyWithTime(
                   message: message,
                   bodyStyle: TextStyle(
-                    fontSize: 15,
+                    fontSize: isBigEmoji(message.body) ? 40 : 15,
                     color: mine ? Colors.white : brand.text,
                   ),
                   linkColor: mine

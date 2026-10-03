@@ -75,19 +75,7 @@ final class SupabaseAuthRepository implements AuthRepository {
       }
       user = await _google.authenticate(scopeHint: _scopes);
     } on GoogleSignInException catch (e) {
-      // A Credential Manager "cancellation" after account selection usually
-      // means the Android OAuth client / SHA-1 is not registered, hence the
-      // code in the log.
-      log('Google sign-in failed: ${e.code.name}', name: 'sis.auth');
-      final canceled =
-          e.code == GoogleSignInExceptionCode.canceled ||
-          e.code == GoogleSignInExceptionCode.interrupted;
-      return Err(
-        ProviderFailure(
-          canceled ? signInCanceledMessage : signInFailedMessage,
-          userCanceled: canceled,
-        ),
-      );
+      return _googleFailure(e);
     } catch (e) {
       log('Google sign-in failed: ${e.runtimeType}', name: 'sis.auth');
       return const Err(ProviderFailure(signInFailedMessage));
@@ -108,6 +96,9 @@ final class SupabaseAuthRepository implements AuthRepository {
         nonce: _rawNonce,
       );
       return const Ok(null);
+    } on GoogleSignInException catch (e) {
+      // The scope grant failed after the account was chosen.
+      return _googleFailure(e);
     } on AuthRetryableFetchException catch (e) {
       // Offline, not a rejection: say so rather than blame the token.
       return Err(readableFailure(e));
@@ -119,6 +110,22 @@ final class SupabaseAuthRepository implements AuthRepository {
       );
       return const Err(ProviderFailure(signInFailedMessage));
     }
+  }
+
+  Err<void> _googleFailure(GoogleSignInException e) {
+    // A Credential Manager "cancellation" after account selection usually
+    // means the Android OAuth client / SHA-1 is not registered, hence the
+    // code in the log.
+    log('Google sign-in failed: ${e.code.name}', name: 'sis.auth');
+    final canceled =
+        e.code == GoogleSignInExceptionCode.canceled ||
+        e.code == GoogleSignInExceptionCode.interrupted;
+    return Err(
+      ProviderFailure(
+        canceled ? signInCanceledMessage : signInFailedMessage,
+        userCanceled: canceled,
+      ),
+    );
   }
 
   @override

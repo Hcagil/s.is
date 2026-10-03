@@ -327,6 +327,10 @@ fields, and as an iPhone's alert title and body) under the "Name and message"
 and "Only who it is from" settings; "No details" carries neither (DECISIONS
 2026-10-01).
 
+### Group name colour slot (finding L1)
+
+Former members keep their colour slot, so the number of slots in use leaks how many members a group has had (up to ten). Low risk, accepted.
+
 ### Secrets
 
 No secrets in the app or repository. Service-role keys and signing material

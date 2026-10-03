@@ -692,11 +692,37 @@ void main() {
         await t.pumpAndSettle();
         await t.tap(find.byKey(const ValueKey('action-read-by')));
         await t.pumpAndSettle();
+        // 0.30.10: an own card, keyed `readers`; each reader's row shows
+        // the read time as lastSeenLabel without its "last seen " prefix.
+        final card = find.byKey(const ValueKey('readers'));
+        expect(card, findsOneWidget);
+        expect(
+          find.descendant(
+            of: card,
+            matching: find.byKey(const ValueKey('readers-title')),
+          ),
+          findsOneWidget,
+        );
         final now = DateTime.now();
         for (final id in [theoId, wrenId]) {
-          expect(find.text(names[id]!), findsWidgets, reason: 'reader $id');
+          final row = find.descendant(
+            of: card,
+            matching: find.byKey(ValueKey('reader-$id')),
+          );
+          expect(row, findsOneWidget, reason: 'reader $id has a row');
+          expect(
+            find.descendant(of: row, matching: find.text(names[id]!)),
+            findsOneWidget,
+            reason: 'reader $id is named',
+          );
           final at = _markOf(container, id)!.readAt!;
-          expect(find.text(lastSeenLabel(at, now)), findsWidgets);
+          final when = lastSeenLabel(at, now).replaceFirst('last seen ', '');
+          expect(when.startsWith('last seen'), isFalse);
+          expect(
+            find.descendant(of: row, matching: find.text(when)),
+            findsOneWidget,
+            reason: 'reader $id shows when: "$when"',
+          );
         }
         expect(find.text('Nobody yet'), findsNothing);
       } finally {

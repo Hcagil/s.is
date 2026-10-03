@@ -501,11 +501,11 @@ void main() {
       expectInitials(byKey('profile-avatar'), 'Maya Kaya', 'profile page');
 
       await tapKey(t, 'profile-avatar-edit');
-      expect(byKey('avatar-choose'), findsOneWidget);
+      expect(byKey('avatar-library'), findsOneWidget);
       expect(byKey('avatar-remove'), findsNothing);
       await t.tapAt(const Offset(20, 20));
       await settle(t);
-      expect(byKey('avatar-choose'), findsNothing);
+      expect(byKey('avatar-library'), findsNothing);
       expect(w.profile.avatarUploads, isEmpty);
       expect(w.profile.avatarRemovals, isEmpty);
     });
@@ -519,7 +519,7 @@ void main() {
       w.profile.holdAvatar();
 
       await tapKey(t, 'profile-avatar-edit');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       expect(
         byKey('sheet-photo-p1'),
         findsOneWidget,
@@ -575,7 +575,7 @@ void main() {
 
       await tapKey(t, 'profile-avatar-edit');
       expect(byKey('avatar-remove'), findsOneWidget);
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       await act(t, byKey('sheet-photo-p2'));
       await cropAndUse(t);
 
@@ -596,7 +596,7 @@ void main() {
       await openProfilePage(t);
 
       await tapKey(t, 'profile-avatar-edit');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       await act(t, byKey('sheet-photo-p1'));
       await backOutOfCrop(t);
 
@@ -617,7 +617,7 @@ void main() {
       await openProfilePage(t);
 
       await tapKey(t, 'profile-avatar-edit');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       await act(t, byKey('sheet-photo-p1'));
       await cropAndUse(t);
 
@@ -666,7 +666,7 @@ void main() {
       await openProfilePage(t);
 
       await tapKey(t, 'profile-avatar-edit');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       await act(t, byKey('sheet-photo-p1'));
       await cropAndUse(t);
 
@@ -700,7 +700,7 @@ void main() {
       await openProfilePage(t);
 
       await tapKey(t, 'profile-avatar-edit');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       expect(byKey('sheet-allow'), findsOneWidget);
       expect(w.profile.avatarUploads, isEmpty);
     });
@@ -717,7 +717,7 @@ void main() {
 
       await tapKey(t, 'group-avatar-edit');
       expect(byKey('avatar-remove'), findsNothing);
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       await act(t, byKey('sheet-photo-p1'));
       expect(w.gallery.cropLoads, ['p1']);
       expect(w.chat.groupAvatarCalls, isEmpty, reason: 'sent before Use');
@@ -746,7 +746,7 @@ void main() {
       await openGroupPage(t);
 
       await tapKey(t, 'group-avatar-edit');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       await act(t, byKey('sheet-photo-p1'));
       await backOutOfCrop(t);
 
@@ -765,7 +765,7 @@ void main() {
       await openGroupPage(t);
 
       await tapKey(t, 'group-avatar-edit');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       await act(t, byKey('sheet-photo-p1'));
       await cropAndUse(t);
 
@@ -802,7 +802,7 @@ void main() {
       await openGroupPage(t);
 
       await tapKey(t, 'group-avatar-edit');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       await act(t, byKey('sheet-photo-p1'));
       await cropAndUse(t);
 
@@ -824,7 +824,7 @@ void main() {
       expect(byKey('group-avatar-edit'), findsNothing);
 
       await tapKey(t, 'person-avatar');
-      expect(byKey('avatar-choose'), findsNothing);
+      expect(byKey('avatar-library'), findsNothing);
       expect(w.chat.groupAvatarCalls, isEmpty);
     });
   });
@@ -856,7 +856,7 @@ void main() {
         final viewer = t.widget<PhotoViewer>(find.byType(PhotoViewer));
         expect(viewer.paths, [path]);
         expect(viewer.isAvatar, isTrue, reason: 'read as an attachment');
-        expect(byKey('avatar-choose'), findsNothing, reason: 'the sheet');
+        expect(byKey('avatar-library'), findsNothing, reason: 'the sheet');
         final shown = picturesIn(byKey('viewer-image-$path'));
         expect(shown, isNotEmpty, reason: 'the viewer shows nothing');
         expect(
@@ -874,7 +874,7 @@ void main() {
         await t.tap(byKey(key));
         await settle(t);
         expect(find.byType(PhotoViewer), findsNothing);
-        expect(byKey('avatar-choose'), findsNothing);
+        expect(byKey('avatar-library'), findsNothing);
         expect(w.chat.avatarRequests, isEmpty);
       });
     }
@@ -964,7 +964,7 @@ void main() {
       await home(t, w);
       await openProfilePage(t);
       await tapKey(t, 'profile-avatar-edit');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       expect(byKey('sheet-photo-p0'), findsOneWidget);
       return w;
     }

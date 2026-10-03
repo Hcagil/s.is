@@ -123,7 +123,8 @@ Future<void> openNewChat(WidgetTester t) => tapKey(t, 'new-chat');
 /// Closes the New chat picker the way a back gesture does, and opens it again.
 Future<void> reopenNewChat(WidgetTester t) async {
   Navigator.of(t.element(byKey('find-by-tag-field'))).pop();
-  await steps(t);
+  // 0.30.10: New chat is a full page; let its exit transition finish.
+  await steps(t, 40);
   expect(byKey('find-by-tag-field'), findsNothing);
   await openNewChat(t);
 }

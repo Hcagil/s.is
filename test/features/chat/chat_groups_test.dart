@@ -209,6 +209,107 @@ void main() {
     });
   });
 
+  // 0.30.10: New group and New chat are full pages, there on the first
+  // frames after the tap (no network wait), and back from them makes
+  // nothing.
+  group('the new group page (0.30.10)', () {
+    Finder byKey(String k) => find.byKey(ValueKey(k));
+
+    Future<void> openFast(WidgetTester t, ChatFake chat, String entry) async {
+      await pump(t, chat);
+      await t.tap(entry == 'new-group' ? byKey(entry) : find.text(entry));
+      // The tap's frame and the push's: the page is up before any
+      // repository call (5 s each here) could have answered.
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 16));
+    }
+
+    testWidgets('opens at once even with a slow server; back creates '
+        'nothing and the list is back', (t) async {
+      final chat = ChatFake(latency: const Duration(seconds: 5))
+        ..membersResult = const Ok([bob, cleo]);
+      await openFast(t, chat, 'new-group');
+      expect(byKey('new-group-page'), findsOneWidget, reason: 'not at once');
+      await t.pump(const Duration(seconds: 6));
+      await t.pumpAndSettle();
+      await t.enterText(byKey('group-title'), 'Weekend trip');
+      await t.tap(byKey('group-member-u2'));
+      await t.pumpAndSettle();
+      await t.pageBack();
+      await t.pumpAndSettle();
+      expect(byKey('new-group-page'), findsNothing);
+      expect(chat.groups, isEmpty);
+      expect(find.byType(ConversationList), findsOneWidget);
+    });
+
+    testWidgets('a picked person shows as a chip; tapping the chip unpicks '
+        'them, and the group can no longer be created', (t) async {
+      final chat = ChatFake();
+      await openComposer(t, chat);
+      await t.enterText(byKey('group-title'), 'Weekend trip');
+      expect(byKey('group-chip-u2'), findsNothing);
+      await t.tap(byKey('group-member-u2'));
+      await t.pumpAndSettle();
+      expect(byKey('group-chip-u2'), findsOneWidget);
+
+      await t.tap(byKey('group-chip-u2'));
+      await t.pumpAndSettle();
+      expect(byKey('group-chip-u2'), findsNothing);
+      await tapCreate(t);
+      expect(chat.groups, isEmpty, reason: 'an unpicked chip still counted');
+      expect(byKey('new-group-page'), findsOneWidget);
+    });
+
+    testWidgets('search narrows the people', (t) async {
+      await openComposer(t, ChatFake());
+      await t.enterText(byKey('group-search'), 'cle');
+      await t.pumpAndSettle();
+      expect(byKey('group-member-u3'), findsOneWidget);
+      expect(byKey('group-member-u2'), findsNothing);
+    });
+
+    testWidgets('a person picked, then searched away, stays picked', (t) async {
+      final chat = ChatFake();
+      await openComposer(t, chat);
+      await t.enterText(byKey('group-title'), 'Weekend trip');
+      await t.tap(byKey('group-member-u2'));
+      await t.pumpAndSettle();
+      await t.enterText(byKey('group-search'), 'cle');
+      await t.pumpAndSettle();
+      expect(byKey('group-chip-u2'), findsOneWidget);
+      await tapCreate(t);
+      expect(chat.groups.single.memberIds, ['u2']);
+    });
+
+    testWidgets('New chat opens at once; back opens no chat', (t) async {
+      final chat = ChatFake(latency: const Duration(seconds: 5))
+        ..membersResult = const Ok([bob, cleo]);
+      await openFast(t, chat, 'New chat');
+      expect(byKey('new-chat-page'), findsOneWidget, reason: 'not at once');
+      await t.pump(const Duration(seconds: 6));
+      await t.pumpAndSettle();
+      await t.pageBack();
+      await t.pumpAndSettle();
+      expect(byKey('new-chat-page'), findsNothing);
+      expect(chat.started, isEmpty);
+      expect(find.byType(MessageScreen), findsNothing);
+    });
+
+    testWidgets('New chat: tapping a person opens the chat with them', (
+      t,
+    ) async {
+      final chat = ChatFake()..membersResult = const Ok([bob, cleo]);
+      await pump(t, chat);
+      await t.tap(find.text('New chat'));
+      await t.pumpAndSettle();
+      await t.tap(byKey('member-u3'));
+      await t.pumpAndSettle();
+      expect(chat.started, ['u3']);
+      expect(byKey('new-chat-page'), findsNothing);
+      expect(find.byType(MessageScreen), findsOneWidget);
+    });
+  });
+
   group('conversation list', () {
     testWidgets('a group is labelled by its title, not by a person', (
       tester,

@@ -300,6 +300,90 @@ void main() {
     });
   });
 
+  // 0.30.10: adding members is a full page (add-members-page) with search,
+  // chips and "Add (N)"; it keeps the nobody-left message and the
+  // "Show old messages?" switch.
+  group('the add members page (0.30.10)', () {
+    const eve = Member(userId: 'ue', displayName: 'Eve Long', tag: 'eve');
+
+    World withEve() => World()
+      ..chat.membersResult = const Ok([bob, cem, dee, eve])
+      ..chat.reachable.add(eve);
+
+    String label(WidgetTester t) => textOf(byKey('add-members-confirm'));
+
+    testWidgets('opens on the first frames after the tap', (t) async {
+      final w = withEve();
+      await clubMembers(t, w);
+      await t.ensureVisible(byKey('add-members'));
+      await t.pump();
+      await t.tap(byKey('add-members'));
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 16));
+      expect(byKey('add-members-page'), findsOneWidget);
+      await drain(t);
+    });
+
+    testWidgets('picking shows a chip and counts in "Add (N)"; the chip '
+        'unpicks; with nobody picked Add does nothing', (t) async {
+      final w = withEve();
+      await clubMembers(t, w);
+      await tapKey(t, 'add-members');
+      await tapKey(t, 'add-members-confirm');
+      expect(w.chat.groupWrites, isEmpty, reason: 'added nobody');
+      expect(byKey('add-members-page'), findsOneWidget);
+
+      await tapKey(t, 'add-member-ud');
+      await tapKey(t, 'add-member-ue');
+      expect(byKey('add-chip-ud'), findsOneWidget);
+      expect(byKey('add-chip-ue'), findsOneWidget);
+      expect(label(t), contains('Add (2)'));
+
+      await tapKey(t, 'add-chip-ud');
+      expect(byKey('add-chip-ud'), findsNothing);
+      expect(label(t), contains('Add (1)'));
+      await tapKey(t, 'add-members-confirm');
+      expect(w.chat.groupWrites.single, startsWith('add:g1:ue:'));
+      expect(byKey('add-members-page'), findsNothing, reason: 'page stayed');
+      await drain(t);
+    });
+
+    testWidgets('search narrows who can be added', (t) async {
+      final w = withEve();
+      await clubMembers(t, w);
+      await tapKey(t, 'add-members');
+      await t.enterText(byKey('add-members-search'), 'eve');
+      await settle(t);
+      expect(byKey('add-member-ue'), findsOneWidget);
+      expect(byKey('add-member-ud'), findsNothing);
+      await drain(t);
+    });
+
+    testWidgets('everyone you know is already in: the nobody-left message', (
+      t,
+    ) async {
+      final w = World()..chat.membersResult = const Ok([bob, cem]);
+      await clubMembers(t, w);
+      await tapKey(t, 'add-members');
+      expect(byKey('add-members-empty'), findsOneWidget);
+      expect(byKey('add-member-ub'), findsNothing);
+      await drain(t);
+    });
+
+    testWidgets('back adds nobody', (t) async {
+      final w = withEve();
+      await clubMembers(t, w);
+      await tapKey(t, 'add-members');
+      await tapKey(t, 'add-member-ud');
+      await t.pageBack();
+      await settle(t);
+      await t.pump(const Duration(milliseconds: 500));
+      expect(byKey('add-members-page'), findsNothing);
+      expect(w.chat.groupWrites, isEmpty);
+      await drain(t);
+    });
+  });
+
   group('leaving', () {
     testWidgets('cancel keeps you in; confirm leaves, the write box is '
         'replaced and the list shows the group left, greyed', (t) async {

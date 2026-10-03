@@ -377,4 +377,20 @@ void main() {
       expect(find.byType(PhotoViewer), findsNothing);
     });
   });
+
+  testWidgets('an emoji-only message renders big, text does not', (
+    tester,
+  ) async {
+    await pump(tester, [
+      msg('e', body: '\u{1F600}', minute: 1),
+      msg('t', body: 'hi', minute: 2),
+      msg('m', body: 'hi \u{1F600}', minute: 3),
+    ]);
+    double height(String s) =>
+        tester.getSize(find.text(s, findRichText: true)).height;
+
+    final text = height('hi');
+    expect(height('\u{1F600}'), greaterThan(text * 1.5));
+    expect(height('hi \u{1F600}'), text, reason: 'mixed stays text size');
+  });
 }

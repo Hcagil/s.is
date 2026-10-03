@@ -404,4 +404,67 @@ void main() {
       });
     }
   });
+
+  group('the camera choice (0.30.8)', () {
+    Future<void> camera(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('composer-attach')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('attach-camera')));
+      await steps(tester);
+    }
+
+    const cameraFailed = 'The camera could not take a photo.';
+
+    testWidgets('a photo taken is sent to this chat as one image', (
+      tester,
+    ) async {
+      final chat = ChatFake();
+      final picker = ExternalPickerFake()..shot = shot(7);
+      await pump(tester, chat, galleryAt(GalleryAccess.full), picker);
+
+      await camera(tester);
+
+      expect(picker.cameraCalls, 1);
+      expect(picker.attachmentCalls, 0);
+      expect(chat.sentImages, hasLength(1));
+      expect(chat.sentImages.single.conversationId, 'c1');
+      expect(chat.sentImages.single.image.bytes, shot(7).bytes);
+      expect(notices(tester), isEmpty);
+    });
+
+    testWidgets('closing the camera without a photo is silent', (tester) async {
+      final chat = ChatFake();
+      final picker = ExternalPickerFake(); // shot stays null
+      await pump(tester, chat, galleryAt(GalleryAccess.full), picker);
+      await type(tester, 'keep me');
+
+      await camera(tester);
+
+      expect(picker.cameraCalls, 1);
+      expect(chat.sentImages, isEmpty);
+      expect(notices(tester), isEmpty);
+      expect(composerText(tester), 'keep me');
+    });
+
+    for (final (name, broken) in [
+      ('no usable camera', (ExternalPickerFake p) => p.noCamera = true),
+      ('not a readable photo', (ExternalPickerFake p) => p.failure = true),
+    ]) {
+      testWidgets('$name -> "$cameraFailed", nothing sent', (tester) async {
+        final chat = ChatFake();
+        final picker = ExternalPickerFake()..shot = shot(1);
+        broken(picker);
+        await pump(tester, chat, galleryAt(GalleryAccess.full), picker);
+
+        await camera(tester);
+
+        expect(chat.sentImages, isEmpty);
+        final shown = notices(tester);
+        expect(shown, hasLength(1));
+        expect(shown.single.message, cameraFailed);
+        expect(shown.single.isError, isTrue);
+        await drain(tester);
+      });
+    }
+  });
 }

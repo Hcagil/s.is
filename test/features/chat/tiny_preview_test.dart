@@ -1,6 +1,8 @@
 // tinyPreview, written from its contract in lib/features/chat/data/
 // tiny_preview.dart: a small PNG for a receiver's blurred preview, or null
 // when the source cannot be decoded at all.
+import 'dart:async';
+import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -68,5 +70,50 @@ void main() {
     final preview = await tinyPreview(Uint8List(0));
 
     expect(preview, isNull);
+  });
+
+  group('the size cap (0.30.8): null or at most 2900 bytes', () {
+    /// A PNG of random pixels: nothing for the encoder to compress.
+    Future<Uint8List> noise(int w, int h) async {
+      final r = Random(42);
+      final px = Uint8List(w * h * 4);
+      for (var i = 0; i < px.length; i++) {
+        px[i] = (i % 4 == 3) ? 255 : r.nextInt(256);
+      }
+      final done = Completer<ui.Image>();
+      ui.decodeImageFromPixels(
+        px,
+        w,
+        h,
+        ui.PixelFormat.rgba8888,
+        done.complete,
+      );
+      final image = await done.future;
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      return png!.buffer.asUint8List();
+    }
+
+    for (final (w, h) in [(320, 240), (60, 3000), (3000, 60), (200, 200)]) {
+      test('busy ${w}x$h', () async {
+        final preview = await tinyPreview(await noise(w, h));
+        if (preview != null) {
+          expect(preview.length, lessThanOrEqualTo(2900));
+          await decode(preview); // still a picture, not truncated bytes
+        }
+      });
+    }
+
+    test('a busy portrait photo still gets a (narrower) preview', () async {
+      // At 24 px wide a 2:3 noise image is about 24x36x4 raw bytes, over the
+      // cap; a smaller width fits, and a preview beats none.
+      final preview = await tinyPreview(await noise(320, 480));
+      expect(preview, isNotNull);
+      expect(preview!.length, lessThanOrEqualTo(2900));
+    });
+
+    test('a busy normal photo still gets a preview', () async {
+      final preview = await tinyPreview(await noise(320, 240));
+      expect(preview, isNotNull, reason: 'well under the cap at 24 px');
+    });
   });
 }

@@ -17,6 +17,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/group_colors.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/home/presentation/home_screen.dart';
@@ -279,6 +280,104 @@ void main() {
 
       expect(find.text('while away'), findsNothing);
       expect(push.cleared, ['c1']);
+    });
+  });
+
+  group('Back from a chat a notification opened (0.30.8)', () {
+    Future<void> back(WidgetTester t) async {
+      await t.pageBack();
+      await t.pumpAndSettle();
+    }
+
+    testWidgets('warm: Back lands on the list, not on the chat that was open', (
+      t,
+    ) async {
+      final chat = FakeChat(list: [c1, c2]);
+      final push = PushSourceFake();
+      await pumpApp(t, chat: chat, push: push);
+
+      await t.tap(find.text('Weekend plan'));
+      await t.pumpAndSettle();
+      expect(find.byType(MessageScreen), findsOneWidget);
+
+      push.openConversation('c2');
+      await t.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.text('New project'),
+        ),
+        findsOneWidget,
+      );
+
+      await back(t);
+      expect(
+        find.byType(MessageScreen),
+        findsNothing,
+        reason: 'Back must not reveal Weekend plan underneath',
+      );
+      expect(find.byType(HomeScreen), findsOneWidget);
+    });
+
+    testWidgets('cold: Back from the launched chat lands on the list', (
+      t,
+    ) async {
+      final chat = FakeChat(list: [c1, c2]);
+      final push = PushSourceFake(launchConversationId: 'c2');
+      await pumpApp(t, chat: chat, push: push);
+      expect(find.byType(MessageScreen), findsOneWidget);
+
+      await back(t);
+      expect(find.byType(MessageScreen), findsNothing);
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.text('Weekend plan'), findsOneWidget, reason: 'the list');
+    });
+  });
+
+  group('the preview line names the sender in a group (0.30.8)', () {
+    final at = DateTime.now().subtract(const Duration(minutes: 3));
+    String rowText(WidgetTester t) => t
+        .widgetList<RichText>(find.byType(RichText))
+        .map((r) => r.text.toPlainText())
+        .join('\n');
+
+    testWidgets('someone else: "Name: message"; you: "You: message"', (
+      t,
+    ) async {
+      final chat = FakeChat(
+        list: [
+          Conversation(
+            id: 'g1',
+            title: 'Crew',
+            lastMessage: 'pizza tonight?',
+            lastMessageAt: at,
+            lastSenderId: 'u2',
+            senders: const {'u2': GroupVoice('Bob', 1)},
+          ),
+          Conversation(
+            id: 'g2',
+            title: 'Work',
+            lastMessage: 'on my way',
+            lastMessageAt: at,
+            lastSenderId: 'u1',
+            senders: const {'u2': GroupVoice('Bob', 1)},
+          ),
+          Conversation(
+            id: 'd1',
+            other: const Member(userId: 'u3', displayName: 'Cem'),
+            lastMessage: 'see you',
+            lastMessageAt: at,
+            lastSenderId: 'u3',
+          ),
+        ],
+      );
+      await pumpApp(t, chat: chat, push: PushSourceFake());
+      final text = rowText(t);
+
+      expect(text, contains('Bob: pizza tonight?'));
+      expect(text, contains('You: on my way'));
+      expect(text, contains('see you'));
+      expect(text, isNot(contains('Cem: see you')), reason: '1:1 unchanged');
     });
   });
 }

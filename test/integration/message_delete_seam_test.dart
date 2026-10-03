@@ -26,8 +26,8 @@ import '../support/reach.dart';
 /// Two members' message screens, mounted at once over the real repository,
 /// exercising the seam a unit test cannot: A deletes her own message through
 /// the actual swipe -> action row -> confirm flow, and B's OPEN screen must
-/// see the result arrive live over Realtime -- vanished within the hour,
-/// a placeholder afterwards.
+/// see the result arrive live over Realtime. Since 0.30.8 a delete leaves a
+/// placeholder at any age (there is no "vanish within the hour" any more).
 ///
 /// Requires `docker compose run --rm supabase start`. Uses opal and russ
 /// (created here, password sign-in); run with --concurrency=1 like the rest
@@ -196,19 +196,8 @@ void main() {
   Finder within(String paneId, Finder matching) =>
       find.descendant(of: pane(paneId), matching: matching);
 
-  /// Like [within], but also finds what is laid out at zero size: a vanished
-  /// message ends its animation at zero height, which the default finders
-  /// treat as offstage -- so a fast machine catches it mid-animation and a
-  /// slow one (CI) never does. `find.descendant` applies its own
-  /// skipOffstage, so it has to be turned off there, not only inside.
-  Finder anywhereWithin(String paneId, Finder matching) => find.descendant(
-    of: pane(paneId),
-    matching: matching,
-    skipOffstage: false,
-  );
-
   testWidgets('A deletes her own message through the sheet; B\'s open screen '
-      'sees it vanish, and a backdated one become a placeholder', (t) async {
+      'sees a placeholder, and so does a backdated one', (t) async {
     // Written directly with the service key, bypassing RLS the way a
     // trusted backend job would -- and the way the pgTAP suite backdates
     // created_at "as postgres": no client insert grant ever allows it.
@@ -256,8 +245,8 @@ void main() {
     expect(old, isA<Ok<Message>>());
     final recentMessage = (recent! as Ok<Message>).value;
     final oldMessage = (old! as Ok<Message>).value;
-    // Two hours old: still inside the 6-hour delete window, but past the
-    // 1-hour vanish threshold, so this one must become a placeholder.
+    // Two hours old: a delete is allowed at any age and leaves a
+    // placeholder, exactly like the fresh one.
     // `.toUtc()` matters: under the suite's non-UTC TZ, a naive local
     // string here would be read back by Postgres as UTC, landing hours in
     // the future rather than in the past.
@@ -345,9 +334,9 @@ void main() {
     // of whatever Realtime then does to tell B.
     await until(
       t,
-      () => anywhereWithin(
+      () => within(
         'a',
-        find.byKey(ValueKey('vanish-${recentMessage.id}'), skipOffstage: false),
+        find.byKey(ValueKey('deleted-${recentMessage.id}')),
       ).evaluate().isNotEmpty,
       'A\'s own screen to update after her delete',
       // Server or app? The row in the database, and A's controller state.
@@ -367,18 +356,19 @@ void main() {
       },
     );
 
-    // B's OPEN screen sees it vanish, live, without any action of his own.
+    // B's OPEN screen sees the placeholder, live, without any action of
+    // his own.
     await until(
       t,
-      () => anywhereWithin(
+      () => within(
         'b',
-        find.byKey(ValueKey('vanish-${recentMessage.id}'), skipOffstage: false),
+        find.byKey(ValueKey('deleted-${recentMessage.id}')),
       ).evaluate().isNotEmpty,
-      'B\'s screen to see the recent message vanish',
+      'B\'s screen to show the recent message as a placeholder',
     );
 
-    // The backdated message: over an hour old, so deleting it leaves a
-    // placeholder rather than nothing.
+    // The backdated message: two hours old, still deletable, still a
+    // placeholder.
     await t.drag(
       within('a', find.byKey(ValueKey('message-${oldMessage.id}'))),
       swipeOpen,

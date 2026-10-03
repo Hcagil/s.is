@@ -133,6 +133,8 @@ void main() {
     });
 
     test('with nothing jumped: a no-op, no reload', () async {
+      // The open's background verify re-read (0.30.12) has run.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
       final before = shown();
       final asked = reads('c1');
       messages().returnToLive();

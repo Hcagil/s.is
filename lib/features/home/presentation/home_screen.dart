@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/brand.dart';
 import '../../auth/domain/member.dart';
 import '../../chat/application/chat_controllers.dart';
+import '../../chat/domain/conversation.dart';
 import '../../chat/presentation/conversation_list.dart';
 import '../../chat/presentation/message_screen.dart';
 import '../../notifications/application/push_controller.dart';
@@ -70,9 +71,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-/// Opens the conversation a tapped notification is about. The list is read
-/// again when it does not have it yet (a chat started while the app was
-/// closed); an id that is still unknown is ignored rather than guessed at.
+/// Opens the conversation a tapped notification is about, at once, with no
+/// network wait; see below for a chat the list does not hold yet.
 Future<void> _openFromNotification(
   BuildContext context,
   WidgetRef ref,
@@ -84,27 +84,55 @@ Future<void> _openFromNotification(
     ref.read(resumeCatchUpProvider)();
     return;
   }
-  final list = ref.read(conversationListProvider.notifier);
-  var conversations = await ref.read(conversationListProvider.future);
-  if (!conversations.any((c) => c.id == id)) {
-    await list.reloadQuietly();
-    conversations = ref.read(conversationListProvider).value ?? const [];
-  }
-  final match = conversations.where((c) => c.id == id).firstOrNull;
-  if (match == null || !context.mounted) return;
+  // No waiting: the chat is pushed in this very frame with what the list
+  // holds right now (the stored snapshot counts). A chat the list does not
+  // know yet opens with its header empty -- MessageScreen fills title, group
+  // and the other member in from the list once it has them -- and is dropped
+  // again below if the list never learns it.
+  final match = _listed(ref, id);
   // Back from this chat must reach the list, not a chat that was open
   // before: close that one first (so it is not recorded as `previous`),
   // then drop everything above the list.
   ref.read(openConversationProvider.notifier).close();
   Navigator.of(context).popUntil((route) => route.isFirst);
-  await openConversation(
+  final opened = openConversation(
     context,
     ref,
-    match.id,
-    title: match.label,
-    otherUserId: match.other?.userId,
-    group: match.isGroup,
+    id,
+    title: match?.label,
+    otherUserId: match?.other?.userId,
+    group: match?.isGroup ?? false,
   );
+  if (match == null) unawaited(_dropIfUnknown(context, ref, id));
+  await opened;
+}
+
+Conversation? _listed(WidgetRef ref, String id) =>
+    (ref.read(conversationListProvider).value ?? const <Conversation>[])
+        .where((c) => c.id == id)
+        .firstOrNull;
+
+/// The list is read again when it does not have [id] once it has settled (a
+/// chat started while the app was closed); an id that is still unknown after
+/// that is not a chat this member can open, so its screen is closed again
+/// rather than left empty.
+Future<void> _dropIfUnknown(
+  BuildContext context,
+  WidgetRef ref,
+  String id,
+) async {
+  final settled = Completer<void>();
+  final sub = ref.listenManual(conversationListProvider, (_, next) {
+    if (!next.isLoading && !settled.isCompleted) settled.complete();
+  }, fireImmediately: true);
+  await settled.future;
+  sub.close();
+  if (_listed(ref, id) == null) {
+    await ref.read(conversationListProvider.notifier).reloadQuietly();
+  }
+  if (_listed(ref, id) != null) return;
+  if (!context.mounted || ref.read(openConversationProvider) != id) return;
+  Navigator.of(context).pop();
 }
 
 /// Reports "seen now" when the signed-in app opens, comes back to the

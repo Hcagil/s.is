@@ -27,10 +27,37 @@ type Target = {
   badge?: number;
 };
 
-async function accessToken(serviceAccount: {
-  client_email: string;
-  private_key: string;
-}): Promise<string> {
+type ServiceAccount = { client_email: string; private_key: string };
+
+// Google hands out an access token good for an hour. It is kept at module
+// scope, so every message the same warm worker handles reuses it instead of
+// signing a JWT and calling oauth2.googleapis.com first (one or two round
+// trips on every push). It is refreshed five minutes before it expires, and
+// at once when FCM answers 401 (see send). The token is never logged.
+// ponytail: one service account per deployment, so the cache is not keyed.
+const REFRESH_MARGIN_MS = 5 * 60 * 1000;
+let cached: { token: string; expiresAt: number } | null = null;
+let minting: Promise<string> | null = null;
+
+function accessToken(serviceAccount: ServiceAccount, fresh = false): Promise<string> {
+  if (!fresh && cached && cached.expiresAt - REFRESH_MARGIN_MS > Date.now()) {
+    return Promise.resolve(cached.token);
+  }
+  // Messages handled together share one exchange.
+  minting ??= mintToken(serviceAccount)
+    .then(({ token, expiresIn }) => {
+      cached = { token, expiresAt: Date.now() + expiresIn * 1000 };
+      return token;
+    })
+    .finally(() => {
+      minting = null;
+    });
+  return minting;
+}
+
+async function mintToken(
+  serviceAccount: ServiceAccount,
+): Promise<{ token: string; expiresIn: number }> {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: 'RS256', typ: 'JWT' };
   const claim = {
@@ -71,7 +98,9 @@ async function accessToken(serviceAccount: {
     }),
   });
   if (!res.ok) throw new Error(`token exchange failed: ${res.status}`);
-  return (await res.json()).access_token;
+  const body = await res.json();
+  const expiresIn = Number(body.expires_in);
+  return { token: body.access_token, expiresIn: Number.isFinite(expiresIn) ? expiresIn : 3600 };
 }
 
 // Supabase's edge runtime keeps the worker alive for promises handed to it.
@@ -138,10 +167,10 @@ async function send(id: string): Promise<void> {
       const shown = group
         ? { title: t.chat!, body: `${t.sender}: ${t.body}` }
         : { title: t.title, body: t.body };
-      return fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+      const post = (bearer: string) => fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
         method: 'POST',
         headers: {
-          authorization: `Bearer ${token}`,
+          authorization: `Bearer ${bearer}`,
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -186,7 +215,17 @@ async function send(id: string): Promise<void> {
               : { android: { priority: 'high' } }),
           },
         }),
-      }).then((r) => {
+      });
+      return post(token).then(async (r) => {
+        // 401: the cached token was refused (revoked, or the clock drifted).
+        // Take a fresh one -- another message may already have -- and send
+        // once more.
+        if (r.status === 401) {
+          const next = cached && cached.token !== token
+            ? cached.token
+            : await accessToken(serviceAccount, true);
+          r = await post(next);
+        }
         if (!r.ok) throw new Error(`fcm ${r.status}`);
       });
     }),

@@ -687,6 +687,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// live, newest window.
   bool _jumped = false;
 
+  /// Counts this member's own optimistic deletes and hides, so a background
+  /// re-read that began before one cannot undo it (see _verify).
+  int _ownEdits = 0;
+
   /// True while [jumpToAround] has replaced the shown list with an old
   /// window; false once live (including before any jump at all).
   bool get isJumped => _jumped;
@@ -700,33 +704,59 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// otherwise answer `.value` with the chat just left.
   String? _stateFor;
 
+  /// The newest messages of chats left this run, shown at once when one is
+  /// opened again while the read is out. Cleared on an account change.
+  final _memory = <String, List<Message>>{};
+  String? _memoryOwner;
+
+  void _remember(String id, List<Message>? list) {
+    if (list == null) return;
+    final kept = [
+      for (final m in list)
+        if (!m.isPending) m,
+    ];
+    _memory.remove(id);
+    if (kept.isEmpty) return;
+    _memory[id] = kept;
+    if (_memory.length > 8) _memory.remove(_memory.keys.first);
+  }
+
   @override
   Future<List<Message>> build() async {
+    final owner = ref.watch(currentUserIdProvider);
+    if (owner != _memoryOwner) {
+      _memory.clear();
+      _memoryOwner = owner;
+      _stateFor = null;
+    }
+    final wasJumped = _jumped;
     _jumped = false;
     final conversationId = ref.watch(openConversationProvider);
     if (_stateFor != conversationId) {
+      final left = _stateFor;
+      if (left != null && !wasJumped) _remember(left, state.value);
       _stateFor = conversationId;
       // Launder the carried value, as ConversationListController.build does:
-      // the empty AsyncData is replaced by AsyncLoading before the first
-      // await, so only an empty loading state is ever observed -- never the
-      // last chat's messages. (A same-chat catchUp keeps its value on purpose.)
-      state = const AsyncData(<Message>[]);
+      // the AsyncData is replaced by AsyncLoading before the first await, so
+      // only a loading state is ever observed -- never the last chat's
+      // messages. What it holds is this chat's own remembered list (empty
+      // when none), which the screen shows while the read is out. (A
+      // same-chat catchUp keeps its value on purpose.)
+      state = AsyncData(_memory[conversationId] ?? const <Message>[]);
       state = const AsyncLoading();
     }
     if (conversationId == null) return const [];
 
     final repo = ref.read(chatRepositoryProvider);
-    // Awaited first, and it resolves only once the server has confirmed the
-    // subscription: Realtime replays nothing, so a message sent before that
-    // moment would be missed here AND be too late for the read below.
-    // Anything arriving during the read is buffered and reconciled by id.
-    final stream = switch (await repo.incoming(conversationId)) {
-      Ok(:final value) => value,
-      Err(:final failure) => throw failure,
-    };
     final buffered = <Message>[];
     var loaded = false;
-    final sub = stream.listen((message) {
+    StreamSubscription<Message>? sub;
+    ref.onDispose(() => unawaited(sub?.cancel()));
+    // True while THIS build is current: ref.mounted stays true for a build
+    // already replaced by a newer one (a chat switch), onDispose fires for both.
+    var alive = true;
+    ref.onDispose(() => alive = false);
+    void onMessage(Message message) {
       // Strictly this chat's: a row for another conversation is never shown.
       if (message.conversationId != conversationId) return;
       if (!loaded) {
@@ -748,8 +778,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       if (!message.isFrom(_me ?? '') && ref.read(appVisibleProvider)) {
         ref.read(conversationListProvider.notifier).markRead(conversationId);
       }
-    });
-    ref.onDispose(sub.cancel);
+    }
 
     // Pending sends: queued, in flight, or waiting out a network retry in
     // SendQueueController, which lives independently of this screen. This
@@ -762,7 +791,26 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       _onQueueChanged,
     );
 
-    switch (await repo.messages(conversationId)) {
+    // The join and the read run together, so opening costs the longer of the
+    // two, not both. The stream is listened to the moment the join answers;
+    // whatever it delivers before the read lands is buffered and merged by
+    // id. The read may have been answered before the join took effect on the
+    // server, so _verify reads once more after the first paint.
+    final joining = repo.incoming(conversationId).then((opened) {
+      if (opened case Ok(:final value)) {
+        if (alive && ref.mounted) {
+          sub = value.listen(onMessage);
+        } else {
+          unawaited(value.listen((_) {}).cancel());
+        }
+      }
+      return opened;
+    });
+    final (joined, read) = await (joining, repo.messages(conversationId)).wait;
+    if (!alive) return const []; // replaced or closed mid-open: drop it all
+    if (joined case Err(:final failure)) throw failure;
+
+    switch (read) {
       case Err(:final failure):
         throw failure;
       case Ok(:final value):
@@ -785,6 +833,9 @@ class MessagesController extends AsyncNotifier<List<Message>> {
             if (m.deletion != MessageDeletion.vanished) m,
         ];
         final pending = ref.read(sendQueueProvider)[conversationId] ?? const [];
+        // A later turn, so the list below is already the state when it runs.
+        final edits = _ownEdits;
+        unawaited(Future(() => _verify(conversationId, edits, () => alive)));
         return [
           ...shown,
           for (final p in pending)
@@ -796,11 +847,57 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// The app is visible again after being backgrounded (or a notification
   /// for this chat was tapped): Realtime died meanwhile and nothing sent
   /// since was delivered, so read the chat again with a fresh subscription
-  /// -- build()'s own order, join first, then read. Not while a build is
+  /// -- build()'s own read, with a fresh subscription. Not while a build is
   /// loading (it is fresh) or a search jump is on screen.
   void catchUp() {
     if (_jumped || state.isLoading) return;
     ref.invalidateSelf();
+  }
+
+  /// The first read can be served before the join took effect on the server:
+  /// a message sent in between is in neither it nor the stream. A second read,
+  /// after both, closes that window. Merged by id, so nothing is shown twice;
+  /// an edit or delete that landed in the window replaces the old row.
+  Future<void> _verify(
+    String conversationId,
+    int edits,
+    bool Function() alive,
+  ) async {
+    if (!alive() || !ref.mounted) return;
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .messages(conversationId);
+    // A delete or hide made meanwhile is not on the server yet: this read
+    // would put the row back.
+    if (!alive() || !ref.mounted || _jumped || edits != _ownEdits) return;
+    if (ref.read(openConversationProvider) != conversationId) return;
+    final current = state.value;
+    if (result is! Ok<List<Message>> || current == null) return;
+    var next = current;
+    for (final m in result.value) {
+      if (m.deletion == MessageDeletion.vanished) continue;
+      final i = next.indexWhere((x) => x.id == m.id);
+      if (i < 0) {
+        next = [...next, m];
+      } else if (_newer(m, next[i])) {
+        next = [...next]..[i] = m;
+      }
+    }
+    if (identical(next, current)) return;
+    state = AsyncData(
+      [...next]..sort((a, b) => a.createdAt.compareTo(b.createdAt)),
+    );
+  }
+
+  /// Whether [read] is a later state of [shown] than what is on screen: a
+  /// delete, or a later edit. Never the other way round -- a read that began
+  /// before a live event must not undo it.
+  static bool _newer(Message read, Message shown) {
+    if (shown.isDeleted) return false;
+    if (read.isDeleted) return true;
+    final at = read.editedAt;
+    final was = shown.editedAt;
+    return at != null && (was == null || at.isAfter(was));
   }
 
   /// Reconciles this conversation's shown list with [SendQueueController]'s
@@ -879,6 +976,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// rolled back when the server refuses; other open screens get it through
   /// Realtime.
   Future<Result<void>> deleteForEveryone(Message message) async {
+    _ownEdits++;
     _deleted(
       Message(
         id: message.id,
@@ -900,6 +998,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// Hides [message] from this member only (delete for me). It leaves the
   /// list at once and comes back when the server refuses.
   Future<Result<void>> hideForMe(Message message) async {
+    _ownEdits++;
     final current = state.value;
     if (current != null) {
       state = AsyncData([

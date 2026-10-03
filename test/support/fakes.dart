@@ -589,8 +589,8 @@ class FakeChat implements ChatRepository {
   final deletedMessages = <Message>[];
 
   /// Forces the outcome. Left null the fake answers like the server: it wipes
-  /// the message and delivers the update the way Realtime does -- vanished
-  /// under an hour old, a placeholder otherwise -- to both the conversation's
+  /// the message to a placeholder at any age, deleted by its sender, and
+  /// delivers the update the way Realtime does -- to both the conversation's
   /// own subscription and the list-wide one.
   Result<void>? deleteForEveryoneResult;
 
@@ -598,8 +598,6 @@ class FakeChat implements ChatRepository {
   Future<Result<void>> deleteForEveryone(Message message) async {
     deletedMessages.add(message);
     if (deleteForEveryoneResult case final forced?) return forced;
-    final vanished =
-        DateTime.now().difference(message.createdAt) < const Duration(hours: 1);
     deliver(
       Message(
         id: message.id,
@@ -607,12 +605,36 @@ class FakeChat implements ChatRepository {
         senderId: message.senderId,
         body: '',
         createdAt: message.createdAt,
-        deletion: vanished
-            ? MessageDeletion.vanished
-            : MessageDeletion.placeholder,
+        deletion: MessageDeletion.placeholder,
+        deletedBy: message.senderId,
       ),
     );
     return const Ok(null);
+  }
+
+  /// Every message handed to [hideForMe], in order.
+  final hiddenMessages = <Message>[];
+
+  /// Forces the outcome of [hideForMe]; left null it succeeds.
+  Result<void>? hideForMeResult;
+
+  @override
+  Future<Result<void>> hideForMe(Message message) async {
+    hiddenMessages.add(message);
+    return hideForMeResult ?? const Ok(null);
+  }
+
+  /// How many times [unreadTotal] was read.
+  int unreadTotalReads = 0;
+
+  /// Forces the outcome of [unreadTotal]. Left null it answers like
+  /// unread_total: the sum of [list]'s unread counts.
+  Result<int>? unreadTotalResult;
+
+  @override
+  Future<Result<int>> unreadTotal() async {
+    unreadTotalReads++;
+    return unreadTotalResult ?? Ok(list.fold(0, (n, c) => n + c.unread));
   }
 
   /// Every edit asked for, in order: the message as the caller held it, and
@@ -760,6 +782,8 @@ class ChatFake implements ChatRepository {
             unread: m.senderId == self ? c.unread : c.unread + 1,
             avatarPath: c.avatarPath,
             hasLeft: c.hasLeft,
+            isSystem: c.isSystem,
+            senders: c.senders,
           ),
     ];
     rows.sort((a, b) {
@@ -814,6 +838,8 @@ class ChatFake implements ChatRepository {
             lastSenderId: c.lastSenderId,
             avatarPath: c.avatarPath,
             hasLeft: c.hasLeft,
+            isSystem: c.isSystem,
+            senders: c.senders,
           ),
     ]);
     return const Ok(null);
@@ -1376,46 +1402,93 @@ class ChatFake implements ChatRepository {
   /// Every message id [deleteForEveryone] was asked to delete, in order.
   final deleted = <String>[];
 
-  /// Forces the outcome. Left null the fake answers like the server: refused
-  /// (DeniedFailure) unless the message is in [history], sent by [self]
-  /// (when set) or its own recorded sender, and not already deleted -- then
-  /// wipes it (vanished under an hour old, a placeholder otherwise) and
-  /// delivers the update to that conversation's subscription AND the
-  /// list-wide one, exactly like a real UPDATE over Realtime.
+  /// Forces the outcome. Left null the fake answers like delete_message:
+  /// refused (DeniedFailure) unless the message is in [history], not already
+  /// deleted, and sent by [self] (when set) or in a conversation listed in
+  /// [adminOf] -- at any age. Then it wipes it to a placeholder deleted by
+  /// [self] (or its sender) and delivers the update to that conversation's
+  /// subscription AND the list-wide one, exactly like a real UPDATE.
   Result<void>? deleteForEveryoneResult;
+
+  /// Conversations in which [self] is a group admin.
+  final adminOf = <String>{};
+
+  Completer<void>? _writeHold;
+
+  /// The next [deleteForEveryone] or [hideForMe] stays in flight until
+  /// [releaseWrite]: whatever the screen shows meanwhile counts.
+  void holdWrite() => _writeHold = Completer<void>();
+  void releaseWrite() {
+    _writeHold?.complete();
+    _writeHold = null;
+  }
 
   @override
   Future<Result<void>> deleteForEveryone(Message message) async {
     await _tick('delete:${message.id}');
     deleted.add(message.id);
+    if (_writeHold case final held?) await held.future;
     if (deleteForEveryoneResult case final forced?) return forced;
     final rows = history[message.conversationId];
     final i = rows?.indexWhere((m) => m.id == message.id) ?? -1;
     if (rows == null || i < 0) return const Err(DeniedFailure());
     final existing = rows[i];
     if (existing.isDeleted ||
-        (self != null && existing.senderId != self) ||
-        DateTime.now().difference(existing.createdAt) >
-            const Duration(hours: 6)) {
+        (self != null &&
+            existing.senderId != self &&
+            !adminOf.contains(existing.conversationId))) {
       return const Err(DeniedFailure());
     }
-    final vanished =
-        DateTime.now().difference(existing.createdAt) <
-        const Duration(hours: 1);
     final wiped = Message(
       id: existing.id,
       conversationId: existing.conversationId,
       senderId: existing.senderId,
       body: '',
       createdAt: existing.createdAt,
-      deletion: vanished
-          ? MessageDeletion.vanished
-          : MessageDeletion.placeholder,
+      deletion: MessageDeletion.placeholder,
+      deletedBy: self ?? existing.senderId,
     );
     rows[i] = wiped;
     _streams[message.conversationId]?.add(wiped);
     _all?.add(wiped);
     return const Ok(null);
+  }
+
+  /// Every message id [hideForMe] was asked to hide, in order.
+  final hidden = <String>[];
+
+  /// Forces the outcome. Left null the fake answers like hide_message:
+  /// refused (DeniedFailure) unless the message is in [history]; then it is
+  /// gone from every later read of [history]. Nothing is delivered: nobody
+  /// else sees any change.
+  Result<void>? hideForMeResult;
+
+  @override
+  Future<Result<void>> hideForMe(Message message) async {
+    await _tick('hide:${message.id}');
+    hidden.add(message.id);
+    if (_writeHold case final held?) await held.future;
+    if (hideForMeResult case final forced?) return forced;
+    final rows = history[message.conversationId];
+    final before = rows?.length ?? 0;
+    rows?.removeWhere((m) => m.id == message.id);
+    return (rows?.length ?? 0) < before
+        ? const Ok(null)
+        : const Err(DeniedFailure());
+  }
+
+  /// Forces the outcome. Left null the fake answers like unread_total: the
+  /// sum of the unread counts [conversationsResult] holds.
+  Result<int>? unreadTotalResult;
+
+  @override
+  Future<Result<int>> unreadTotal() async {
+    await _tick('unreadTotal');
+    if (unreadTotalResult case final forced?) return forced;
+    return switch (conversationsResult) {
+      Ok(:final value) => Ok(value.fold(0, (n, c) => n + c.unread)),
+      Err(:final failure) => Err(failure),
+    };
   }
 
   /// Every edit asked for, in order: which message, to what body (exactly as
@@ -1719,7 +1792,11 @@ class ChatFake implements ChatRepository {
     _replace(
       conversationId,
       first.member.userId,
-      GroupMember(member: first.member, isAdmin: true),
+      GroupMember(
+        member: first.member,
+        isAdmin: true,
+        colorSlot: first.colorSlot,
+      ),
     );
   }
 
@@ -1744,7 +1821,8 @@ class ChatFake implements ChatRepository {
         conversationMembersResult ?? Ok([...?roster[conversationId]]);
     return switch (people) {
       Ok(:final value) => Ok([
-        for (final m in value) GroupMember(member: m, isAdmin: false),
+        for (final (i, m) in value.indexed)
+          GroupMember(member: m, isAdmin: false, colorSlot: i % 10),
       ]),
       Err(:final failure) => Err(failure),
     };
@@ -1763,6 +1841,7 @@ class ChatFake implements ChatRepository {
         member: me.member,
         isAdmin: me.isAdmin,
         leftReason: LeftReason.left,
+        colorSlot: me.colorSlot,
       ),
     );
     _promoteIfNeeded(conversationId);
@@ -1789,6 +1868,8 @@ class ChatFake implements ChatRepository {
             unread: c.unread,
             avatarPath: c.avatarPath,
             hasLeft: true,
+            isSystem: c.isSystem,
+            senders: c.senders,
           ),
     ]);
   }
@@ -1811,6 +1892,7 @@ class ChatFake implements ChatRepository {
         member: them.member,
         isAdmin: them.isAdmin,
         leftReason: LeftReason.removed,
+        colorSlot: them.colorSlot,
       ),
     );
     _event(conversationId, GroupEventKind.removed, memberId);
@@ -1832,8 +1914,13 @@ class ChatFake implements ChatRepository {
     }
     for (final id in memberIds) {
       if (_current(conversationId, id) != null) continue;
-      groupRosters[conversationId]!.add(
-        GroupMember(member: people[id]!, isAdmin: false),
+      final rows = groupRosters[conversationId]!;
+      rows.add(
+        GroupMember(
+          member: people[id]!,
+          isAdmin: false,
+          colorSlot: _colorSlot(rows, id),
+        ),
       );
       _event(conversationId, GroupEventKind.added, id);
     }
@@ -1859,9 +1946,31 @@ class ChatFake implements ChatRepository {
     _replace(
       conversationId,
       memberId,
-      GroupMember(member: them.member, isAdmin: isAdmin),
+      GroupMember(
+        member: them.member,
+        isAdmin: isAdmin,
+        colorSlot: them.colorSlot,
+      ),
     );
     return const Ok(null);
+  }
+
+  /// The slot the server's trigger gives [userId] joining [rows]: their
+  /// earlier slot if they were here before; else a free one (departed members
+  /// still hold theirs); else the least used; the lowest number on a tie.
+  static int _colorSlot(List<GroupMember> rows, String userId) {
+    for (final g in rows.reversed) {
+      if (g.member.userId == userId) return g.colorSlot;
+    }
+    final users = List.generate(10, (_) => <String>{});
+    for (final g in rows) {
+      users[g.colorSlot].add(g.member.userId);
+    }
+    var best = 0;
+    for (var slot = 1; slot < 10; slot++) {
+      if (users[slot].length < users[best].length) best = slot;
+    }
+    return best;
   }
 
   @override
@@ -2159,7 +2268,19 @@ class GalleryFake implements Gallery {
   Future<Uint8List?> thumbnail(GalleryPhoto photo, {int size = 240}) async {
     thumbnailIds.add(photo.id);
     await _tick();
+    final gate = _thumbGate;
+    if (gate != null) await gate.future;
     return thumbnails[photo.id];
+  }
+
+  Completer<void>? _thumbGate;
+
+  /// Every [thumbnail] from now on stays in flight until [releaseThumbnails]:
+  /// a slow phone, where a tile is on screen long before its picture is.
+  void holdThumbnails() => _thumbGate = Completer<void>();
+  void releaseThumbnails() {
+    _thumbGate?.complete();
+    _thumbGate = null;
   }
 
   @override
@@ -3204,6 +3325,14 @@ class ExternalPickerFake implements ExternalPicker {
 
   int attachmentCalls = 0;
   int pictureCalls = 0;
+  int cameraCalls = 0;
+
+  /// What the camera returns for [takePhoto]. Null: the member closes the
+  /// camera without a photo. Ignored while [failure] or [noCamera] is set.
+  PickedImage? shot;
+
+  /// The phone has no usable camera: [takePhoto] fails.
+  bool noCamera = false;
 
   Completer<void>? _hold;
 
@@ -3232,6 +3361,17 @@ class ExternalPickerFake implements ExternalPicker {
       all.take(cap).toList(),
       dropped: all.length > cap ? all.length - cap : 0,
     );
+  }
+
+  @override
+  Future<ExternalPickResult> takePhoto() async {
+    cameraCalls++;
+    await _roundTrip();
+    if (failure || noCamera) return const ExternalPickFailed();
+    final one = shot;
+    return one == null
+        ? const ExternalPickCancelled()
+        : ExternalPickedImages([one]);
   }
 
   @override

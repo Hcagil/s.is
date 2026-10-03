@@ -1,3 +1,4 @@
+import 'dart:developer';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -27,11 +28,18 @@ final class ExternalPickerChannel implements ExternalPicker {
   final MethodChannel _channel;
 
   @override
-  Future<ExternalPickResult> pickAttachments() async {
+  Future<ExternalPickResult> pickAttachments() =>
+      _pickImages('pickAttachments');
+
+  @override
+  Future<ExternalPickResult> takePhoto() => _pickImages('takePhoto');
+
+  Future<ExternalPickResult> _pickImages(String method) async {
     final Map<Object?, Object?>? raw;
     try {
-      raw = await _channel.invokeMapMethod<String, Object?>('pickAttachments');
-    } on PlatformException {
+      raw = await _channel.invokeMapMethod<String, Object?>(method);
+    } on PlatformException catch (e) {
+      log('picker ${e.code}: ${e.message}', name: 'sis.chat', error: e);
       return const ExternalPickFailed();
     }
     if (raw == null) return const ExternalPickCancelled();
@@ -48,7 +56,8 @@ final class ExternalPickerChannel implements ExternalPicker {
     final List<Object?>? paths;
     try {
       paths = await _channel.invokeMethod<List<Object?>>('pickProfilePicture');
-    } on PlatformException {
+    } on PlatformException catch (e) {
+      log('picker ${e.code}: ${e.message}', name: 'sis.chat', error: e);
       return const ExternalPickFailed();
     }
     if (paths == null || paths.isEmpty) return const ExternalPickCancelled();
@@ -72,6 +81,7 @@ final class ExternalPickerChannel implements ExternalPicker {
         try {
           bytes = await file.readAsBytes();
         } on FileSystemException {
+          log('picked file unreadable', name: 'sis.chat');
           return null;
         }
         images.add(

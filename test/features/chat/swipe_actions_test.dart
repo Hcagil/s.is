@@ -384,6 +384,11 @@ void main() {
 
       expect(row('m1'), findsNothing);
       expect(shownBoxes(), isEmpty);
+      expect(
+        find.byKey(const ValueKey('message-menu')),
+        findsNothing,
+        reason: 'long-press is reserved (v0.42); it must not open the menu',
+      );
       expect(find.byType(BottomSheet), findsNothing);
       expect(find.byType(Dialog), findsNothing);
       expect(left(tester, bubble('m1')), start);
@@ -405,13 +410,13 @@ void main() {
       expect(shownBoxes(), ['read-by', 'reply', 'forward', 'edit', 'delete']);
     });
 
-    testWidgets('your own text over 6 h in a group: read-by, reply, forward', (
+    testWidgets('your own text over 6 h in a group: no edit, delete stays', (
       tester,
     ) async {
       final old = DateTime.now().subtract(const Duration(hours: 7));
       await pump(tester, chatWith([msg('m1', createdAt: old)]), group: true);
       await open(tester, 'm1');
-      expect(shownBoxes(), ['read-by', 'reply', 'forward']);
+      expect(shownBoxes(), ['read-by', 'reply', 'forward', 'delete']);
     });
 
     testWidgets('your own forwarded message: no edit', (tester) async {
@@ -655,7 +660,7 @@ void main() {
       );
       expect(
         actionLabels(actionsNode(tester, bubble('old'))),
-        unorderedEquals(['Read by', 'Reply', 'Forward']),
+        unorderedEquals(['Read by', 'Reply', 'Forward', 'Delete for everyone']),
       );
       expect(
         actionLabels(actionsNode(tester, bubble('fwd'))),

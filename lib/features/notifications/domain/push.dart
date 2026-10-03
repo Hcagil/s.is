@@ -53,6 +53,12 @@ abstract interface class PushSource {
   Future<void> forUser(String? userId);
 }
 
+/// The number on the app icon (implemented in data/). Cosmetic: never throws.
+abstract interface class AppBadge {
+  /// Shows [count] on the icon; 0 clears it.
+  Future<void> set(int count);
+}
+
 /// Whether the member has already seen the explainer screen that runs before
 /// SIS asks for notification permission (implemented over shared_preferences
 /// in data/).

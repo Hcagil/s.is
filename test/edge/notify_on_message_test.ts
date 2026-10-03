@@ -56,15 +56,15 @@ type Sent = { url: string; message: Record<string, unknown> };
 const sent: Sent[] = [];
 const realFetch = globalThis.fetch;
 // When set, the delivery list comes back as a database without the 0.30.6
-// columns returns it: no sender, no chat (a function deployed ahead of its
-// migration, or rolled back behind it).
+// and 0.30.8 columns returns it: no sender, no chat, no badge (a function
+// deployed ahead of its migration, or rolled back behind it).
 let oldSchema = false;
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   if (oldSchema && url.includes('/rest/v1/rpc/push_targets')) {
     const res = await realFetch(input, init);
     const rows = (await res.json()) as Record<string, unknown>[];
-    return Response.json(rows.map(({ sender: _s, chat: _c, ...rest }) => rest), { status: res.status });
+    return Response.json(rows.map(({ sender: _s, chat: _c, badge: _b, ...rest }) => rest), { status: res.status });
   }
   if (url.startsWith('https://oauth2.googleapis.com/')) {
     return Response.json({ access_token: 'test-access-token', expires_in: 3600, token_type: 'Bearer' });
@@ -94,6 +94,12 @@ Object.defineProperty(Deno, 'serve', {
 await import('../../supabase/functions/notify-on-message/index.ts');
 
 const sql = postgres(dbUrl, { max: 1, onnotice: () => {} });
+
+/** 0.30.8: [uid]'s own unread total, straight from the database -- the badge their push must carry. */
+async function unreadOf(uid: string): Promise<number> {
+  const [{ n }] = await sql`select app_private.unread_total(${uid}::uuid)::int as n`;
+  return n as number;
+}
 
 /** Runs [body] as [uid] on [session], the way a signed-in client reaches SQL. */
 function as<T>(uid: string, email: string, session: string, body: (tx: postgres.TransactionSql) => Promise<T>) {
@@ -206,6 +212,8 @@ Deno.test({
           // on both Android shapes.
           sender: target.sender,
           chat: target.chat,
+          // 0.30.8: the recipient's own unread total, as a string.
+          badge: String(await unreadOf(target.user_id)),
         }, `data for ${target.token}`);
         assertEquals(data.conversation_id, conversationId);
         assertEquals(data.user_id, recipientOf[target.token as string],
@@ -346,9 +354,12 @@ Deno.test({
         assertEquals(mine.length, 1, `exactly one send to ${x.name}`);
         return mine[0].message;
       };
+      const badges: Record<string, number> = {};
+      for (const x of delivered) badges[x.id] = await unreadOf(x.id);
       const dataFor = (x: typeof sender) => {
         const t = target(x);
         return {
+          badge: String(badges[x.id]),
           user_id: x.id,
           message_id: messageId,
           conversation_id: conversationId,
@@ -392,7 +403,7 @@ Deno.test({
         // ride along only with the server's own values.
         const data = m.data as Record<string, unknown>;
         const base = dataFor(x) as Record<string, unknown>;
-        for (const k of ['user_id', 'message_id', 'conversation_id', 'title', 'body']) {
+        for (const k of ['user_id', 'message_id', 'conversation_id', 'title', 'body', 'badge']) {
           assertEquals(data[k], base[k], `${x.name}: data.${k}`);
         }
         for (const k of Object.keys(data)) {
@@ -400,8 +411,8 @@ Deno.test({
             `${x.name}: unexpected data.${k}: ${JSON.stringify(data)}`);
         }
         const apns = m.apns as { payload?: { aps?: unknown } } | undefined;
-        assertEquals(apns?.payload?.aps, { 'thread-id': conversationId, sound: 'default' },
-          `${x.name}: threaded per chat, default sound: ${JSON.stringify(m)}`);
+        assertEquals(apns?.payload?.aps, { 'thread-id': conversationId, sound: 'default', badge: badges[x.id] },
+          `${x.name}: threaded per chat, default sound, its own badge (a number): ${JSON.stringify(m)}`);
         assert(!('android' in m), `${x.name}: no android block: ${JSON.stringify(m)}`);
         const raw = JSON.stringify(m);
         assert(!/content[-_]available/i.test(raw), `${x.name}: not a silent push: ${raw}`);
@@ -516,9 +527,9 @@ Deno.test({
       assertEquals(placeholders(onlyTo(g.sent, p.gnone), ids(p.gnone, group, g.id)), fixture.group_none,
         'group, preview none: no sender, no chat');
       const direct1 = placeholders(onlyTo(d.sent, p.dfull), ids(p.dfull, direct, d.id));
-      assertEquals(direct1, fixture.direct_full, '1:1: exactly the five keys it always had');
-      // Byte-identical to before 0.30.6: the same keys, nothing added.
-      assertEquals(Object.keys(direct1).sort(), ['body', 'conversation_id', 'message_id', 'title', 'user_id']);
+      assertEquals(direct1, fixture.direct_full, '1:1: the five keys it always had, plus the badge');
+      // As before 0.30.6, plus only 0.30.8's badge: no sender, no chat.
+      assertEquals(Object.keys(direct1).sort(), ['badge', 'body', 'conversation_id', 'message_id', 'title', 'user_id']);
     } finally {
       await sql.begin(async (tx) => {
         await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
@@ -599,6 +610,81 @@ Deno.test({
       assertEquals(to(p.iphone).notification, { title: t(p.iphone).title, body: t(p.iphone).body },
         `iPhone: the server's own wording, not a group rewording: ${JSON.stringify(to(p.iphone))}`);
       assertEquals(to(p.iphone).data, data(p.iphone));
+    } finally {
+      await sql.begin(async (tx) => {
+        await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
+      }).catch(() => {});
+    }
+  },
+});
+
+// 0.30.8: the badge is the recipient's own unread total. Here the two
+// recipients and the sender all have different totals before the message
+// (Cat sent Bob and Ann three messages elsewhere), so a function that sends
+// one shared number, the sender's, or none at all fails here.
+Deno.test({
+  name: 'badge: each recipient gets their own unread total, not the sender\'s and not each other\'s',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const run = Date.now().toString(36);
+    const who = ['ann', 'bob', 'cat'];
+    const people = who.map((w) => ({
+      id: crypto.randomUUID(),
+      session: crypto.randomUUID(),
+      email: `badge-${w}-${run}@edge.test`,
+      name: `Badge ${w}`,
+      token: `edge-badge-${w}-${run}`.padEnd(16, '0'),
+    }));
+    const p = Object.fromEntries(who.map((w, i) => [w, people[i]]));
+    const asP = <T>(x: typeof p.ann, body: (tx: postgres.TransactionSql) => Promise<T>) =>
+      as(x.id, x.email, x.session, body);
+    try {
+      for (const x of people) {
+        await sql`insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+                  values (${x.id}, ${x.email}, now(), ${sql.json({ full_name: x.name })})`;
+        await sql`insert into app_private.allowlist(email) values (${x.email})`;
+        await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+                  values (${x.session}, ${x.id}, now(), now())`;
+        await asP(x, (tx) => tx`select public.activate_session()`);
+      }
+      await asP(p.bob, (tx) => tx`select public.register_device_token(${p.bob.token}, 'android', true)`);
+      await asP(p.cat, (tx) => tx`select public.register_device_token(${p.cat.token}, 'ios', false)`);
+      await sql`insert into app_private.tag_finds(finder, found_id)
+                values (${p.ann.id}, ${p.bob.id}), (${p.ann.id}, ${p.cat.id}),
+                       (${p.cat.id}, ${p.ann.id}), (${p.cat.id}, ${p.bob.id})`;
+      // Before the message: Bob and Ann each have three unread from Cat, Cat none.
+      const [{ id: other }] = await asP(p.cat, (tx) =>
+        tx`select public.start_group_conversation(${`badge-other-${run}`}, ${[p.ann.id, p.bob.id]}::uuid[]) as id`);
+      for (let i = 0; i < 3; i++) {
+        await asP(p.cat, (tx) => tx`insert into public.messages(conversation_id, sender_id, body)
+                                     values (${other}, ${p.cat.id}, ${`earlier ${i}`})`);
+      }
+      const [{ id: group }] = await asP(p.ann, (tx) =>
+        tx`select public.start_group_conversation(${`badge-${run}`}, ${[p.bob.id, p.cat.id]}::uuid[]) as id`);
+      const [{ id: messageId }] = await asP(p.ann, (tx) =>
+        tx`insert into public.messages(conversation_id, sender_id, body)
+           values (${group}, ${p.ann.id}, 'badge hello') returning id`);
+      const bob = await unreadOf(p.bob.id);
+      const cat = await unreadOf(p.cat.id);
+      const ann = await unreadOf(p.ann.id);
+      // The fixture itself: three different totals, else the test proves nothing.
+      assert(bob > 0 && cat > 0, `both recipients have unread: bob ${bob}, cat ${cat}`);
+      assert(bob !== cat && bob !== ann && cat !== ann, `distinct totals: bob ${bob}, cat ${cat}, ann ${ann}`);
+      // Each recipient reads the same count back through the app's own call.
+      assertEquals((await asP(p.bob, (tx) => tx`select public.unread_total()::int as n`))[0].n, bob);
+      assertEquals((await asP(p.cat, (tx) => tx`select public.unread_total()::int as n`))[0].n, cat);
+
+      assertEquals(await deliver(messageId), { status: 204, text: '' });
+      assertEquals(sent.length, 2, JSON.stringify(sent));
+      // deno-lint-ignore no-explicit-any
+      const to = (x: typeof p.ann) => sent.find((s) => s.message.token === x.token)!.message as any;
+      assertEquals(to(p.bob).data?.badge, String(bob), `Bob: his own total, a string: ${JSON.stringify(to(p.bob))}`);
+      assertEquals(to(p.cat).data?.badge, String(cat), `Cat: her own total, a string: ${JSON.stringify(to(p.cat))}`);
+      const aps = to(p.cat).apns?.payload?.aps;
+      assertEquals(aps?.badge, cat, `Cat's iPhone: the icon badge is her own total, a number: ${JSON.stringify(aps)}`);
     } finally {
       await sql.begin(async (tx) => {
         await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;

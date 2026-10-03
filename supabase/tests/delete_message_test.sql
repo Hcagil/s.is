@@ -5,11 +5,12 @@
 --
 -- Every negative fixture fails exactly ONE gate: bob is a real member of the
 -- conversation but did not send the message under test (the sender gate
--- only); dee sends her own, fresh, well within-window message and then loses
--- her session (the app-access gate only). A stranger who fails every gate at
+-- only); dee sends her own message and then loses her session (the
+-- app-access gate only). Since 0.30.8 there is no time window and every
+-- deletion is a placeholder recording who deleted it. A stranger who fails every gate at
 -- once would prove nothing about any one of them.
 begin;
-select plan(67);
+select plan(68);
 
 -- storage.objects carries a statement-level trigger that unconditionally
 -- refuses direct DELETE (protect_objects_delete), independent of RLS, unless
@@ -126,21 +127,23 @@ reset role;
 select is((select deleted from public.messages where id = (select recent from _m)), null,
           'the refused message is untouched');
 
--- 3 over six hours old -------------------------------------------------------
+-- 3 over six hours old: no window any more --------------------------------
 select test_as('00000000-0000-0000-0000-0000000de001', 'de000000-0000-0000-0000-0000000de001');
-select throws_ok(format($$select public.delete_message(%L)$$, (select old from _m)),
-                 '42501', null, 'a message over 6 hours old cannot be deleted');
+select lives_ok(format($$select public.delete_message(%L)$$, (select old from _m)),
+                'a message over 6 hours old may be deleted by its sender');
 reset role;
-select is((select deleted from public.messages where id = (select old from _m)), null,
-          'the too-old message is untouched');
+select is((select deleted from public.messages where id = (select old from _m)), 'placeholder',
+          'the 7-hour-old message is a placeholder now');
 
--- 4 within the hour: vanishes, and a text message returns no path -----------
+-- 4 within the hour: a placeholder too, and a text message returns no path -
 select test_as('00000000-0000-0000-0000-0000000de001', 'de000000-0000-0000-0000-0000000de001');
 select is(public.delete_message((select recent from _m)), null,
           'a text message returns no path to remove from storage');
 reset role;
-select is((select deleted from public.messages where id = (select recent from _m)), 'vanished',
-          'under an hour old: vanished');
+select is((select deleted from public.messages where id = (select recent from _m)), 'placeholder',
+          'under an hour old: a placeholder, never vanished');
+select is((select deleted_by from public.messages where id = (select recent from _m)),
+          '00000000-0000-0000-0000-0000000de001'::uuid, 'deleted_by records the sender who deleted it');
 select isnt((select deleted_at from public.messages where id = (select recent from _m)), null,
             'deleted_at is set');
 select is((select body from public.messages where id = (select recent from _m)), '',
@@ -168,8 +171,8 @@ select is(public.delete_message((select photo from _m)),
 reset role;
 select is((select attachment_path from public.messages where id = (select photo from _m)), null,
           'attachment_path is wiped');
-select is((select deleted from public.messages where id = (select photo from _m)), 'vanished',
-          'the photo message, sent 5 minutes ago, vanished too');
+select is((select deleted from public.messages where id = (select photo from _m)), 'placeholder',
+          'the photo message, sent 5 minutes ago, is a placeholder too');
 
 -- 7 without app access: the sender gate alone cannot be what stops her ------
 select test_as('00000000-0000-0000-0000-0000000de003', 'de000000-0000-0000-0000-0000000de003');
@@ -286,16 +289,16 @@ select is((select count(*) from storage.objects
           'the object is gone');
 
 -- 11 the unique photo path: two messages never share one --------------------
--- ann cannot dodge the 6-hour window on her OLD, still-live photo by
--- reusing its path in a brand-new message -- she owns the file and the
--- folder matches, so only the unique index can be what blocks her.
+-- ann cannot reuse her OLD, still-live photo's path in a brand-new message
+-- -- she owns the file and the folder matches, so only the unique index can
+-- be what blocks her.
 select test_as('00000000-0000-0000-0000-0000000de001', 'de000000-0000-0000-0000-0000000de001');
 select throws_ok(
   format($$insert into public.messages(conversation_id, sender_id, body, attachment_path)
            values (%L, %L, '', %L)$$,
          (select id from _c1), '00000000-0000-0000-0000-0000000de001',
          (select id from _c1)::text || '/de-old-photo.jpg'),
-  '23505', null, 'ann cannot reuse her own still-live old photo''s path to dodge its 6-hour window');
+  '23505', null, 'ann cannot reuse her own still-live old photo''s path');
 reset role;
 
 -- a fellow member cannot squat on it either, live or not: null sqlstate
@@ -437,13 +440,13 @@ reset role;
 select is((select count(*) from app_private.push_targets_for_message((select id from _new))), 0::bigint,
           'a message deleted within the push window reaches nobody');
 
--- The newest message and the two before it (photo, recent) are all vanished:
--- the preview falls back past all of them to the placeholder underneath.
+-- The newest message is deleted: nothing vanishes any more, so the preview
+-- is that placeholder itself, wiped, with deleted exposed.
 select test_as('00000000-0000-0000-0000-0000000de002', 'de000000-0000-0000-0000-0000000de002');
 select is((select body from public.conversation_previews where conversation_id = (select id from _c1)), '',
-          'vanished messages are skipped: the preview falls back to the placeholder before them');
+          'the preview of a deleted newest message carries no text');
 select is((select deleted from public.conversation_previews where conversation_id = (select id from _c1)),
-          'placeholder', 'conversation_previews exposes deleted for a placeholder');
+          'placeholder', 'conversation_previews exposes deleted for the newest placeholder');
 reset role;
 
 -- 15 without app access: ownership and the record are not enough on their own

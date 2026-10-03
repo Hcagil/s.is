@@ -23,6 +23,7 @@ IconData swipeActionIcon(MessageAction action) => switch (action) {
   MessageAction.forward => Icons.shortcut,
   MessageAction.edit => Icons.edit_outlined,
   MessageAction.delete => Icons.delete_outline,
+  MessageAction.copy => Icons.copy_outlined,
 };
 
 /// The short label on [action]'s box.
@@ -32,6 +33,7 @@ String swipeActionLabel(MessageAction action) => switch (action) {
   MessageAction.forward => 'Forward',
   MessageAction.edit => 'Edit',
   MessageAction.delete => 'Delete',
+  MessageAction.copy => 'Copy',
 };
 
 /// The fuller wording a screen reader announces for [action], as a custom
@@ -48,6 +50,7 @@ String swipeActionKeyId(MessageAction action) => switch (action) {
   MessageAction.forward => 'forward',
   MessageAction.edit => 'edit',
   MessageAction.delete => 'delete',
+  MessageAction.copy => 'copy',
 };
 
 /// Wraps a message bubble so it can be dragged right to reveal [actions]: a
@@ -70,6 +73,7 @@ class SwipeableMessage extends StatefulWidget {
     required this.onOpenChanged,
     required this.onAction,
     required this.child,
+    this.onTap,
   });
 
   /// The message this bubble belongs to.
@@ -96,6 +100,10 @@ class SwipeableMessage extends StatefulWidget {
   /// Called when a box in this bubble's row (or its matching screen-reader
   /// custom action) is chosen.
   final ValueChanged<MessageAction> onAction;
+
+  /// Called on a tap on the bubble (photo, link and quote taps win over it);
+  /// works even when [actions] is empty. Null: no tap.
+  final VoidCallback? onTap;
 
   final Widget child;
 
@@ -166,7 +174,17 @@ class _SwipeableMessageState extends State<SwipeableMessage> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.actions.isEmpty) return widget.child;
+    if (widget.actions.isEmpty) {
+      return widget.onTap == null
+          ? widget.child
+          : GestureDetector(
+              behavior: HitTestBehavior.deferToChild,
+              // Long-press is reserved (v0.42): a no-op competes with the tap so a long hold opens nothing.
+              onTap: widget.onTap,
+              onLongPress: () {},
+              child: widget.child,
+            );
+    }
     final offset = _dragging ? _dragDx : 0.0;
     return Semantics(
       customSemanticsActions: {
@@ -179,6 +197,8 @@ class _SwipeableMessageState extends State<SwipeableMessage> {
         onHorizontalDragUpdate: _onDragUpdate,
         onHorizontalDragEnd: (_) => _finishDrag(),
         onHorizontalDragCancel: _finishDrag,
+        onTap: widget.onTap,
+        onLongPress: () {},
         child: Column(
           crossAxisAlignment: widget.mine
               ? CrossAxisAlignment.end

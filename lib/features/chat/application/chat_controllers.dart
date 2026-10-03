@@ -424,6 +424,19 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     final index = list.indexWhere((c) => c.id == message.conversationId);
     if (index < 0) return null;
     final existing = list[index];
+    final me = switch (ref.read(sessionControllerProvider).value) {
+      Allowed(:final member) => member.userId,
+      _ => null,
+    };
+    // A sender the list does not know yet (someone added to this group since
+    // the list was read) cannot be named or coloured: null makes the caller
+    // read the list again, as for an unknown conversation.
+    if (existing.isGroup &&
+        !existing.isSystem &&
+        message.senderId != me &&
+        !existing.senders.containsKey(message.senderId)) {
+      return null;
+    }
     final at = existing.lastMessageAt;
     // Not newer than the current preview -- a late delivery, or the same
     // message delivered twice -- leaves the list exactly as it was. Using
@@ -432,10 +445,6 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     if (at != null && !message.createdAt.isAfter(at)) return list;
     final updated = [...list]..removeAt(index);
     // Unread: someone else's message, in a conversation not on screen.
-    final me = switch (ref.read(sessionControllerProvider).value) {
-      Allowed(:final member) => member.userId,
-      _ => null,
-    };
     final counts =
         message.senderId != me &&
         ref.read(openConversationProvider) != message.conversationId;
@@ -686,10 +695,24 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// any earlier one is dropped, even if it arrives later.
   String? _requestedAnchorId;
 
+  /// The conversation the current state belongs to. Riverpod 3 always carries
+  /// the previous value into a reload, so a rebuild for a different chat would
+  /// otherwise answer `.value` with the chat just left.
+  String? _stateFor;
+
   @override
   Future<List<Message>> build() async {
     _jumped = false;
     final conversationId = ref.watch(openConversationProvider);
+    if (_stateFor != conversationId) {
+      _stateFor = conversationId;
+      // Launder the carried value, as ConversationListController.build does:
+      // the empty AsyncData is replaced by AsyncLoading before the first
+      // await, so only an empty loading state is ever observed -- never the
+      // last chat's messages. (A same-chat catchUp keeps its value on purpose.)
+      state = const AsyncData(<Message>[]);
+      state = const AsyncLoading();
+    }
     if (conversationId == null) return const [];
 
     final repo = ref.read(chatRepositoryProvider);
@@ -704,6 +727,8 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     final buffered = <Message>[];
     var loaded = false;
     final sub = stream.listen((message) {
+      // Strictly this chat's: a row for another conversation is never shown.
+      if (message.conversationId != conversationId) return;
       if (!loaded) {
         buffered.add(message);
         return;
@@ -744,6 +769,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         loaded = true;
         final merged = [...value];
         for (final message in buffered) {
+          if (message.conversationId != conversationId) continue;
           final i = merged.indexWhere((m) => m.id == message.id);
           if (i < 0) {
             merged.add(message);
@@ -848,31 +874,59 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     state = AsyncData([...current]..[i] = message);
   }
 
-  /// Deletes the member's own [message] for everyone. The screen shows an
-  /// [Err]'s reason; on success the message vanishes or becomes "deleted"
-  /// here at once, and on every other open screen through Realtime.
+  /// Deletes [message] for everyone (the member's own, or any member's when
+  /// they are a group admin). The placeholder shows here at once and is
+  /// rolled back when the server refuses; other open screens get it through
+  /// Realtime.
   Future<Result<void>> deleteForEveryone(Message message) async {
+    _deleted(
+      Message(
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        body: '',
+        createdAt: message.createdAt,
+        deletion: MessageDeletion.placeholder,
+        deletedBy: _me,
+      ),
+    );
     final result = await ref
         .read(chatRepositoryProvider)
         .deleteForEveryone(message);
-    if (result is Ok && ref.mounted) {
-      final vanishes =
-          DateTime.now().difference(message.createdAt) <
-          const Duration(hours: 1);
-      _deleted(
-        Message(
-          id: message.id,
-          conversationId: message.conversationId,
-          senderId: message.senderId,
-          body: '',
-          createdAt: message.createdAt,
-          deletion: vanishes
-              ? MessageDeletion.vanished
-              : MessageDeletion.placeholder,
-        ),
-      );
+    if (result is Err && ref.mounted) _replace(message);
+    return result;
+  }
+
+  /// Hides [message] from this member only (delete for me). It leaves the
+  /// list at once and comes back when the server refuses.
+  Future<Result<void>> hideForMe(Message message) async {
+    final current = state.value;
+    if (current != null) {
+      state = AsyncData([
+        for (final m in current)
+          if (m.id != message.id) m,
+      ]);
+    }
+    final result = await ref.read(chatRepositoryProvider).hideForMe(message);
+    if (result is Err && ref.mounted) {
+      final now = state.value;
+      if (now != null && !now.any((m) => m.id == message.id)) {
+        state = AsyncData(
+          [...now, message]..sort((a, b) => a.createdAt.compareTo(b.createdAt)),
+        );
+      }
     }
     return result;
+  }
+
+  /// Puts [message] back in its place (a refused delete), keeping every
+  /// other change made meanwhile.
+  void _replace(Message message) {
+    final current = state.value;
+    if (current == null) return;
+    final i = current.indexWhere((m) => m.id == message.id);
+    if (i < 0) return;
+    state = AsyncData([...current]..[i] = message);
   }
 
   /// Edits the member's own [message] to [body]. The screen shows an [Err]'s

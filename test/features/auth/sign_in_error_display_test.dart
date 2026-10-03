@@ -108,6 +108,47 @@ void main() {
     });
   });
 
+  group('the scope-authorization step (0.30.8)', () {
+    // authenticate() succeeds; the exception comes from the next step, the
+    // scope consent. It must be mapped like every other sign-in error, and
+    // the controller must leave its loading state.
+    Future<(SessionState, ProviderContainer)> signInKeeping() async {
+      final c = ProviderContainer.test(overrides: overrides());
+      await c.read(sessionControllerProvider.future);
+      await c
+          .read(sessionControllerProvider.notifier)
+          .signIn()
+          .timeout(const Duration(seconds: 5));
+      await Future<void>.delayed(Duration.zero);
+      return (c.read(sessionControllerProvider).requireValue, c);
+    }
+
+    test('dismissed consent -> SignedOut(the cancelled sentence)', () async {
+      google.scopeError = const GoogleSignInException(
+        code: GoogleSignInExceptionCode.canceled,
+        description: sentinel,
+      );
+      final (s, c) = await signInKeeping();
+      expect(google.scopeCalls, greaterThan(0), reason: 'the step was reached');
+      expect(s, isA<SignedOut>());
+      expect((s as SignedOut).reason, signInCanceledMessage);
+      expect(c.read(sessionControllerProvider).isLoading, isFalse);
+    });
+
+    test('any other failure -> SessionError(the failed sentence)', () async {
+      google.scopeError = const GoogleSignInException(
+        code: GoogleSignInExceptionCode.unknownError,
+        description: sentinel,
+      );
+      final (s, c) = await signInKeeping();
+      expect(google.scopeCalls, greaterThan(0));
+      expect(s, isA<SessionError>());
+      expect((s as SessionError).reason, signInFailedMessage);
+      expect(c.read(sessionControllerProvider).isLoading, isFalse);
+      expect(s, isNot(isA<SessionLoading>()));
+    });
+  });
+
   group('the screen the gate shows', () {
     Future<void> tapSignIn(WidgetTester t) async {
       await t.pumpWidget(

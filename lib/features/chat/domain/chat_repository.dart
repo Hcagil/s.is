@@ -23,6 +23,11 @@ abstract interface class ChatRepository {
   /// Conversations the signed-in member belongs to, most recent first.
   Future<Result<List<Conversation>>> conversations();
 
+  /// How many messages the signed-in member has not read, across every chat
+  /// they are in, leaving out muted chats and people (the app-icon badge).
+  /// Read in the background: nothing waits on it.
+  Future<Result<int>> unreadTotal();
+
   /// Marks everything in [conversationId] read for the signed-in member, as of
   /// now. Only the member's own place moves; nobody else can see it.
   Future<Result<void>> markRead(String conversationId);
@@ -191,10 +196,16 @@ abstract interface class ChatRepository {
   /// status, while the caller shares theirs. Resolves once subscribed.
   Future<Result<Stream<ReadMark>>> readUpdates(String conversationId);
 
-  /// Deletes the member's own [message] for everyone, and its photo. The
-  /// server refuses (DeniedFailure) when it is not theirs, already deleted,
-  /// or over 6 hours old.
+  /// Deletes [message] for everyone, and its photo: the caller's own, or any
+  /// member's when the caller is a group admin, at any age. The server
+  /// refuses (DeniedFailure) when the caller is neither, or it is already
+  /// deleted.
   Future<Result<void>> deleteForEveryone(Message message);
+
+  /// Hides [message] from the caller's own reads on every device (delete for
+  /// me); nobody else sees any change. The server refuses (DeniedFailure)
+  /// for a message the caller cannot read.
+  Future<Result<void>> hideForMe(Message message);
 
   /// Edits the member's own [message] to [body]: replaces its text, or a
   /// photo message's caption. Returns the updated message on success.

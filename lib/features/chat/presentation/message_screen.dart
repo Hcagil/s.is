@@ -21,6 +21,9 @@ import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
 import '../application/group_controller.dart';
+import '../domain/attachment.dart';
+import '../domain/emoji.dart';
+import '../domain/external_picker.dart';
 import '../domain/group_member.dart';
 import '../domain/highlight.dart';
 import '../domain/links.dart';
@@ -84,10 +87,15 @@ Future<void> openConversation(
   // Again on leaving, so a message that landed while the screen was open is
   // read before the list below re-reads the counts.
   await list.markRead(conversationId);
-  if (previous == null) {
-    ref.read(openConversationProvider.notifier).close();
-  } else {
-    ref.read(openConversationProvider.notifier).open(previous);
+  // Only while this chat is still the open one: the member may already have
+  // opened another during the markRead above, and closing (or restoring
+  // `previous`) then would pull that chat's messages out from under it.
+  if (ref.read(openConversationProvider) == conversationId) {
+    if (previous == null) {
+      ref.read(openConversationProvider.notifier).close();
+    } else {
+      ref.read(openConversationProvider.notifier).open(previous);
+    }
   }
   // The list is also kept live by Realtime; this re-read is the fallback when
   // that subscription could not be established.
@@ -118,6 +126,15 @@ String? _status(WidgetRef ref, String? other) {
   }
   return null;
 }
+
+bool _isIos(BuildContext context) =>
+    Theme.of(context).platform == TargetPlatform.iOS;
+
+/// The bottom safe-area inset the composer covers itself on iPhone (the home
+/// indicator; 0 while the keyboard is open, when the keyboard is the edge).
+/// Android: 0 -- its SafeArea handles the gesture bar as before.
+double _composerBottomInset(BuildContext context) =>
+    _isIos(context) ? MediaQuery.paddingOf(context).bottom : 0;
 
 /// The open conversation: its messages, and a composer.
 class MessageScreen extends ConsumerStatefulWidget {
@@ -311,6 +328,15 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     return null;
   }
 
+  /// A tap on a message: closes the keyboard and any open swipe row, then
+  /// opens the action menu. Photo, link and quote taps are handled deeper in
+  /// the bubble and win over this.
+  Future<void> _openMessageMenu(Message message) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _openSwipeId.value = null;
+    await showMessageMenu(context, ref, message);
+  }
+
   @override
   Widget build(BuildContext context) {
     final messages = ref.watch(messagesProvider);
@@ -365,6 +391,8 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       for (final m in roster)
         if (m.hasLeft) m.member.userId,
     };
+    // Each sender's colour slot, from the group's roster (empty in a 1:1).
+    final slotByUser = {for (final m in roster) m.member.userId: m.colorSlot};
     // Read status, where it is shared: your own messages look a little grey
     // until every sharing member has read them.
     final marks = ref.watch(readMarksProvider).value ?? const <ReadMark>[];
@@ -474,12 +502,19 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       ),
       body: SisGlow(
         child: SafeArea(
+          // iPhone: the composer paints through the home-indicator area
+          // itself (see _composerBottomInset), so no differently coloured
+          // band is left under it. Android keeps the SafeArea as it was.
+          bottom: !_isIos(context),
           child: Column(
             children: [
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
-                  onTap: () => _openSwipeId.value = null,
+                  onTap: () {
+                    _openSwipeId.value = null;
+                    FocusManager.instance.primaryFocus?.unfocus();
+                  },
                   child: switch (messages) {
                     AsyncData() when timeline.isEmpty => const Center(
                       child: Text('No messages yet. Say something.'),
@@ -536,8 +571,15 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                           },
                           onAction: (action) {
                             _openSwipeId.value = null;
-                            runMessageAction(context, ref, message, action);
+                            runMessageAction(
+                              context,
+                              ref,
+                              message,
+                              action,
+                              canDeleteForEveryone: true,
+                            );
                           },
+                          onTap: () => _openMessageMenu(message),
                           child: _Bubble(
                             message,
                             key: ValueKey('read-$unread-${message.id}'),
@@ -550,6 +592,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                             senderLeft: departedSenderIds.contains(
                               message.senderId,
                             ),
+                            senderSlot: slotByUser[message.senderId],
                             quoted: quoted,
                             quotedName: quoted == null
                                 ? null
@@ -598,6 +641,7 @@ class _Bubble extends StatelessWidget {
     required this.unread,
     this.sender,
     this.senderLeft = false,
+    this.senderSlot,
     this.quoted,
     this.quotedName,
     this.highlightQuery,
@@ -621,6 +665,10 @@ class _Bubble extends StatelessWidget {
   /// True when [sender] has left or been removed from the group -- their
   /// name is greyed rather than tinted, everywhere it is still shown.
   final bool senderLeft;
+
+  /// [sender]'s colour slot in this group; null (not known yet) falls back to
+  /// the person's own tint.
+  final int? senderSlot;
 
   /// The active in-chat search query, if any: every match in [message]'s
   /// body is highlighted.
@@ -649,8 +697,8 @@ class _Bubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final brand = SisBrand.of(context);
     // Square-ish corner on the sender's side marks whose bubble it is.
-    const r = Radius.circular(8);
-    const tail = Radius.circular(3);
+    const r = Radius.circular(11);
+    const tail = Radius.circular(4);
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -710,7 +758,9 @@ class _Bubble extends StatelessWidget {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        'This message was deleted',
+                        message.deletedByAdmin
+                            ? 'Deleted by an admin'
+                            : 'This message was deleted',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -757,49 +807,53 @@ class _Bubble extends StatelessWidget {
                   ),
                 ),
               if (message.replyTo != null && !message.isDeleted)
-                Container(
-                  key: ValueKey('quote-${message.id}'),
-                  margin: const EdgeInsets.only(bottom: 6),
-                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                  decoration: BoxDecoration(
-                    color: (mine ? Colors.white : brand.text).withValues(
-                      alpha: 0.12,
-                    ),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border(
-                      left: BorderSide(
-                        color: mine
-                            ? Colors.white
-                            : Theme.of(context).colorScheme.primary,
-                        width: 3,
+                GestureDetector(
+                  // A tap on a quote is its own (it opens nothing); it must not reach the bubble's menu tap.
+                  onTap: () {},
+                  child: Container(
+                    key: ValueKey('quote-${message.id}'),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                    decoration: BoxDecoration(
+                      color: (mine ? Colors.white : brand.text).withValues(
+                        alpha: 0.12,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border(
+                        left: BorderSide(
+                          color: mine
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.primary,
+                          width: 3,
+                        ),
                       ),
                     ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (quotedName != null)
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (quotedName != null)
+                          Text(
+                            quotedName!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: mine
+                                  ? Colors.white
+                                  : Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
                         Text(
-                          quotedName!,
+                          quoteText(quoted),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: mine
-                                ? Colors.white
-                                : Theme.of(context).colorScheme.primary,
+                            fontSize: 13,
+                            color: mine ? Colors.white : brand.text,
                           ),
                         ),
-                      Text(
-                        quoteText(quoted),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: mine ? Colors.white : brand.text,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               if (sender != null)
@@ -810,9 +864,11 @@ class _Bubble extends StatelessWidget {
                     key: ValueKey('sender-${message.id}'),
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       color: senderLeft
                           ? Theme.of(context).colorScheme.onSurfaceVariant
+                          : senderSlot != null
+                          ? groupColor(context, senderSlot!)
                           : personTint(context, message.senderId, ink: true),
                     ),
                   ),
@@ -826,7 +882,7 @@ class _Bubble extends StatelessWidget {
                 _BodyWithTime(
                   message: message,
                   bodyStyle: TextStyle(
-                    fontSize: 15,
+                    fontSize: isBigEmoji(message.body) ? 40 : 15,
                     color: mine ? Colors.white : brand.text,
                   ),
                   linkColor: mine
@@ -1160,7 +1216,19 @@ class _Attachment extends ConsumerWidget {
     ];
     final index = paths.indexOf(path);
     if (index < 0) return;
-    openPhotoViewer(context, paths, index);
+    openPhotoViewer(
+      context,
+      paths,
+      index,
+      onMenu: (viewerContext, shown) {
+        final message = (ref.read(messagesProvider).value ?? const <Message>[])
+            .where((m) => m.attachmentPath == shown)
+            .firstOrNull;
+        return message == null
+            ? Future.value(false)
+            : showMessageMenu(viewerContext, ref, message, photoViewer: true);
+      },
+    );
   }
 
   @override
@@ -1367,14 +1435,41 @@ class _ComposerState extends ConsumerState<_Composer> {
     }
   }
 
+  /// One photo taken now. It has the same shape as the library's, so it
+  /// flows through the same caption / upload / optimistic-bubble path. A
+  /// cancelled camera sends nothing; a failure says so.
+  Future<({List<PickedImage> images, int dropped})> _takePhoto() async {
+    const none = (images: <PickedImage>[], dropped: 0);
+    final result = await ref.read(externalPickerProvider).takePhoto();
+    if (!mounted) return none;
+    switch (result) {
+      case ExternalPickedImages(:final images) when images.isNotEmpty:
+        return (images: images, dropped: 0);
+      case ExternalPickCancelled():
+        return none;
+      case ExternalPickedImages() || ExternalPickFailed():
+        showSisNotice(
+          context,
+          'The camera could not take a photo.',
+          isError: true,
+        );
+        return none;
+    }
+  }
+
   /// Picks and sends one or more images, with whatever is typed as the
   /// caption of the first one -- the rest go with no caption, one message
   /// per photo, same as any photo sent from the grid.
   Future<void> _attach() async {
     if (_sending) return;
-    // The phone's own photos, or another app's. Closing the sheet without
-    // choosing anything sends nothing.
-    final picked = await showAttachmentSheet(context);
+    // The camera, or the phone's photo library (which also offers another
+    // app). Closing either without a photo sends nothing.
+    final source = await showAttachMenu(context);
+    if (source == null || !mounted) return;
+    final picked = switch (source) {
+      AttachSource.library => await showAttachmentSheet(context),
+      AttachSource.camera => await _takePhoto(),
+    };
     if (picked.images.isEmpty || !mounted) return;
     setState(() => _sending = true);
     final body = _controller.text;
@@ -1427,7 +1522,12 @@ class _ComposerState extends ConsumerState<_Composer> {
             top: BorderSide(color: Theme.of(context).colorScheme.outline),
           ),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          16 + _composerBottomInset(context),
+        ),
         child: Text(
           isSystem
               ? 'Only SIS can post here'
@@ -1494,7 +1594,12 @@ class _ComposerState extends ConsumerState<_Composer> {
           top: BorderSide(color: Theme.of(context).colorScheme.outline),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(6, 8, 10, 12),
+      padding: EdgeInsets.fromLTRB(
+        6,
+        8,
+        10,
+        _isIos(context) ? 4 + _composerBottomInset(context) : 12,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1518,6 +1623,9 @@ class _ComposerState extends ConsumerState<_Composer> {
                   minLines: 1,
                   maxLines: 4,
                   focusNode: _focus,
+                  // Messages, captions and edits all start with a capital; the
+                  // keyboard's own setting still decides (nothing is forced).
+                  textCapitalization: TextCapitalization.sentences,
                   textInputAction: TextInputAction.send,
                   // A non-null onEditingComplete replaces Flutter's default,
                   // which unfocuses the field on the send action and so

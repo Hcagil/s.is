@@ -102,15 +102,28 @@ class FakeGooglePlatform extends GoogleSignInPlatform {
   @override
   bool authorizationRequiresUserInteraction() => false;
 
+  /// What the scope-authorization step (after a successful authenticate)
+  /// throws instead of answering: the consent sheet dismissed, or a failure.
+  Object? scopeError;
+  var scopeCalls = 0;
+
   @override
   Future<ClientAuthorizationTokenData?> clientAuthorizationTokensForScopes(
     ClientAuthorizationTokensForScopesParameters params,
-  ) async => const ClientAuthorizationTokenData(accessToken: 'ya29.access');
+  ) async {
+    scopeCalls++;
+    if (scopeError != null) throw scopeError!;
+    return const ClientAuthorizationTokenData(accessToken: 'ya29.access');
+  }
 
   @override
   Future<ServerAuthorizationTokenData?> serverAuthorizationTokensForScopes(
     ServerAuthorizationTokensForScopesParameters params,
-  ) async => null;
+  ) async {
+    scopeCalls++;
+    if (scopeError != null) throw scopeError!;
+    return null;
+  }
 
   @override
   Future<void> signOut(SignOutParams params) async {}

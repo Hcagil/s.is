@@ -126,6 +126,12 @@
 --     (ione writes to ilka and isak so the delivery list shows the platform
 --      each phone registered; ilka moves from Android to an iPhone, isak's
 --      iPhone takes over a token ilka's phone had)
+--   mira/nico      test/integration/per_chat_seam_test.dart
+--     (mira switches between What's new, a 1:1 and a group with nico; nico
+--      writes into the chat she has just left)
+--   gwen/hugh/iona test/integration/group_colors_seam_test.dart
+--     (gwen's group with hugh and iona: each reads the others' colour slots
+--      and names; gwen's 1:1 with hugh carries none)
 --   rho/sig        test/integration/catch_up_seam_test.dart
 --     (rho's socket dies as a backgrounded phone's does; sig writes to her
 --      meanwhile, and catch-up must bring it in)
@@ -223,5 +229,10 @@ insert into app_private.allowlist(email) values
   ('wynn@integration.test'),
   ('ione@integration.test'),
   ('ilka@integration.test'),
-  ('isak@integration.test')
+  ('isak@integration.test'),
+  ('mira@integration.test'),
+  ('nico@integration.test'),
+  ('gwen@integration.test'),
+  ('hugh@integration.test'),
+  ('iona@integration.test')
 on conflict do nothing;

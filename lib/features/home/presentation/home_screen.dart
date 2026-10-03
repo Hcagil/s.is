@@ -92,6 +92,11 @@ Future<void> _openFromNotification(
   }
   final match = conversations.where((c) => c.id == id).firstOrNull;
   if (match == null || !context.mounted) return;
+  // Back from this chat must reach the list, not a chat that was open
+  // before: close that one first (so it is not recorded as `previous`),
+  // then drop everything above the list.
+  ref.read(openConversationProvider.notifier).close();
+  Navigator.of(context).popUntil((route) => route.isFirst);
   await openConversation(
     context,
     ref,

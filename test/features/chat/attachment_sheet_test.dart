@@ -66,7 +66,10 @@ Future<ProviderContainer> pump(
 }
 
 Future<void> openSheet(WidgetTester tester) async {
+  // The paperclip opens a small menu (0.30.8); the library is one choice.
   await tester.tap(find.byKey(const ValueKey('composer-attach')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('attach-library')));
   await tester.pumpAndSettle();
 }
 
@@ -352,25 +355,45 @@ void main() {
   });
 
   group('an unreadable thumbnail', () {
-    testWidgets('renders a quiet tile that does not respond to taps', (
-      tester,
-    ) async {
+    testWidgets('renders a quiet tile', (tester) async {
       // Deliberately no thumbnail bytes for p1: unreadable.
       final gallery = GalleryFake(photos: [photo('p1')]);
       await pump(tester, ChatFake(), gallery);
       await openSheet(tester);
       await tester.pumpAndSettle();
 
+      expect(find.byKey(const ValueKey('sheet-photo-p1')), findsOneWidget);
       expect(find.byType(Image), findsNothing);
+    });
+  });
+
+  group('a thumbnail still on its way (0.30.8)', () {
+    testWidgets('the tile is already a tap target, and sends that photo', (
+      tester,
+    ) async {
+      final gallery = GalleryFake(photos: [photo('p1')])
+        ..thumbnails['p1'] = photoPng
+        ..holdThumbnails();
+      final chat = ChatFake();
+      await pump(tester, chat, gallery);
+      await tester.tap(find.byKey(const ValueKey('composer-attach')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('attach-library')));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(gallery.thumbnailIds, contains('p1'));
+      expect(find.byType(Image), findsNothing, reason: 'no picture yet');
 
       await tester.tap(find.byKey(const ValueKey('sheet-photo-p1')));
-      await tester.pumpAndSettle();
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
 
-      expect(
-        gallery.loadedIds,
-        isEmpty,
-        reason: 'a tile with no readable thumbnail must not be a tap target',
-      );
+      expect(gallery.loadedIds, ['p1']);
+      gallery.releaseThumbnails();
+      await tester.pumpAndSettle();
+      expect(chat.sentImages, hasLength(1));
     });
   });
 
@@ -452,7 +475,7 @@ void main() {
         await tester.pump();
 
         expect(find.byType(SisNotice), findsOneWidget);
-        expect(find.textContaining('could not be opened'), findsOneWidget);
+        expect(find.text('That photo could not be opened.'), findsOneWidget);
         expect(find.byType(SnackBar), findsNothing);
         expect(chat.sentImages, isEmpty);
         expect(
@@ -460,6 +483,12 @@ void main() {
           findsOneWidget,
           reason: 'the sheet must still be open after a failed load',
         );
+        // Not stuck "opening": the same tile opens again on the next tap.
+        gallery.loadResults.remove('p1');
+        await tester.tap(find.byKey(const ValueKey('sheet-photo-p1')));
+        await tester.pump();
+        await tester.pump();
+        expect(gallery.loadedIds, ['p1', 'p1']);
         // Lets the notice's own timer run out so it does not outlive the
         // test.
         await tester.pump(const Duration(seconds: 5));
@@ -511,6 +540,8 @@ void main() {
       );
       await pump(tester, ChatFake(), gallery);
       await tester.tap(find.byKey(const ValueKey('composer-attach')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('attach-library')));
       await steps(tester);
       expect(find.byKey(const ValueKey('sheet-photo-p0')), findsOneWidget);
       return gallery;

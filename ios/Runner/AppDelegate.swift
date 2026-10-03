@@ -25,6 +25,19 @@ import UserNotifications
       let channel = FlutterMethodChannel(
         name: "sis/notifications", binaryMessenger: registrar.messenger())
       channel.setMethodCallHandler { call, result in
+        // The app-icon number, set from Dart (unread total) whenever it changes.
+        if call.method == "setBadge" {
+          let count = (call.arguments as? Int) ?? 0
+          DispatchQueue.main.async {
+            if #available(iOS 16.0, *) {
+              UNUserNotificationCenter.current().setBadgeCount(count) { _ in }
+            } else {
+              UIApplication.shared.applicationIconBadgeNumber = count
+            }
+            result(nil)
+          }
+          return
+        }
         guard call.method == "clearThread", let thread = call.arguments as? String else {
           result(FlutterMethodNotImplemented)
           return

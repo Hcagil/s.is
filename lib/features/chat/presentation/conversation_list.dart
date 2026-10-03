@@ -187,6 +187,7 @@ class _GroupComposerState extends ConsumerState<_GroupComposer> {
             TextField(
               key: const ValueKey('group-title'),
               controller: _title,
+              textCapitalization: TextCapitalization.words,
               maxLength: 80,
               onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(
@@ -453,6 +454,18 @@ class _ConversationTile extends ConsumerWidget {
     // ever arrive, so the tile is greyed like a departed member's name
     // elsewhere in that same group.
     final left = conversation.hasLeft;
+    // A group row names its last sender, in their colour in that group.
+    final voice =
+        conversation.isGroup &&
+            !conversation.isSystem &&
+            conversation.lastSenderId != me
+        ? conversation.senders[conversation.lastSenderId]
+        : null;
+    final previewStyle = unread
+        ? TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w600)
+        : left
+        ? TextStyle(color: scheme.onSurfaceVariant)
+        : null;
     return ListTile(
       key: ValueKey('conversation-${conversation.id}'),
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
@@ -478,6 +491,25 @@ class _ConversationTile extends ConsumerWidget {
       ),
       subtitle: conversation.lastMessage == null
           ? const Text('No messages yet')
+          : voice != null
+          ? Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: voice.name,
+                    style: TextStyle(
+                      color: groupColor(context, voice.slot),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  TextSpan(text: ': ${conversation.lastMessage}'),
+                ],
+              ),
+              key: ValueKey('preview-${conversation.id}'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: previewStyle,
+            )
           : Text(
               conversation.lastSenderId != null &&
                       conversation.lastSenderId == me
@@ -486,14 +518,7 @@ class _ConversationTile extends ConsumerWidget {
               key: ValueKey('preview-${conversation.id}'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: unread
-                  ? TextStyle(
-                      color: scheme.onSurface,
-                      fontWeight: FontWeight.w600,
-                    )
-                  : left
-                  ? TextStyle(color: scheme.onSurfaceVariant)
-                  : null,
+              style: previewStyle,
             ),
       trailing: conversation.lastMessageAt == null
           ? null

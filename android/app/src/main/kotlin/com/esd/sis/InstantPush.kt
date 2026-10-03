@@ -151,6 +151,10 @@ object InstantPush {
             )
 
             val line = body(text, extras.getString("sender"), !chat.isNullOrEmpty())
+            // The unread total the server computed for this member (see the push
+            // payload): shown by launchers that print a number on the icon. No
+            // permission involved.
+            val badge = extras.getString("badge")?.toIntOrNull() ?: 0
             val notification = NotificationCompat.Builder(context, channel)
                 .setSmallIcon(R.drawable.ic_launcher_monochrome)
                 .setColor(ContextCompat.getColor(context, R.color.notification_accent))
@@ -163,6 +167,7 @@ object InstantPush {
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setWhen(System.currentTimeMillis())
+                .apply { if (badge > 0) setNumber(badge) }
                 .build()
 
             NotificationManagerCompat.from(context).notify(id, notification)

@@ -200,6 +200,118 @@ void main() {
     });
   });
 
+  group('optimistic delete and hide (0.30.8)', () {
+    // ChatFake holds the write in flight: what the screen shows meanwhile is
+    // the optimistic state, before any server answer.
+    Future<(ProviderContainer, ChatFake)> open(List<Message> rows) async {
+      final chat = ChatFake(
+        self: 'me',
+        latency: const Duration(milliseconds: 2),
+      )..history['c1'] = [...rows];
+      final c = ProviderContainer.test(
+        overrides: [chatRepositoryProvider.overrideWithValue(chat)],
+      );
+      c.listen(messagesProvider, (_, _) {});
+      c.read(openConversationProvider.notifier).open('c1');
+      await c.read(messagesProvider.future);
+      return (c, chat);
+    }
+
+    List<Message> shown(ProviderContainer c) =>
+        c.read(messagesProvider).requireValue;
+
+    test(
+      'delete for everyone: the placeholder shows before the server answers',
+      () async {
+        final (c, chat) = await open([msg('m1', body: 'oops')]);
+        chat.holdWrite();
+        final pending = c
+            .read(messagesProvider.notifier)
+            .deleteForEveryone(shown(c).single);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        expect(chat.deleted, ['m1'], reason: 'the call is in flight');
+        expect(shown(c).single.deletion, MessageDeletion.placeholder);
+        expect(shown(c).single.body, '');
+
+        chat.releaseWrite();
+        expect(await pending, isA<Ok<void>>());
+        expect(shown(c).single.deletion, MessageDeletion.placeholder);
+      },
+    );
+
+    test('delete for everyone: an Err rolls the placeholder back', () async {
+      final (c, chat) = await open([msg('m1', body: 'oops')]);
+      chat
+        ..deleteForEveryoneResult = const Err(DeniedFailure())
+        ..holdWrite();
+      final pending = c
+          .read(messagesProvider.notifier)
+          .deleteForEveryone(shown(c).single);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(shown(c).single.deletion, MessageDeletion.placeholder);
+
+      chat.releaseWrite();
+      expect(await pending, isA<Err<void>>());
+      final back = shown(c).single;
+      expect(
+        back.deletion,
+        isNull,
+        reason: 'the refusal undoes the placeholder',
+      );
+      expect(back.body, 'oops');
+    });
+
+    test('hide for me: gone at once, before the server answers', () async {
+      final (c, chat) = await open([
+        msg('m1', minute: 1, from: 'u2'),
+        msg('m2', minute: 2, from: 'u2'),
+      ]);
+      chat.holdWrite();
+      final pending = c
+          .read(messagesProvider.notifier)
+          .hideForMe(shown(c).first);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(chat.hidden, ['m1']);
+      expect(shown(c).map((m) => m.id), ['m2']);
+
+      chat.releaseWrite();
+      expect(await pending, isA<Ok<void>>());
+      expect(shown(c).map((m) => m.id), ['m2']);
+    });
+
+    test('hide for me: an Err puts it back in createdAt order', () async {
+      final (c, chat) = await open([
+        msg('m1', minute: 1, from: 'u2'),
+        msg('m2', minute: 2, from: 'u2'),
+        msg('m3', minute: 3, from: 'u2'),
+      ]);
+      chat
+        ..hideForMeResult = const Err(NetworkFailure('offline'))
+        ..holdWrite();
+      final middle = shown(c).firstWhere((m) => m.id == 'm2');
+      final pending = c.read(messagesProvider.notifier).hideForMe(middle);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(shown(c).map((m) => m.id), isNot(contains('m2')));
+
+      chat.releaseWrite();
+      expect(await pending, isA<Err<void>>());
+      final ids = shown(c).map((m) => m.id).toList();
+      expect(ids.toSet(), {'m1', 'm2', 'm3'});
+      final times = shown(c).map((m) => m.createdAt).toList();
+      final sorted = [...times]..sort();
+      final reversed = sorted.reversed.toList();
+      expect(
+        times.toString() == sorted.toString() ||
+            times.toString() == reversed.toString(),
+        isTrue,
+        reason: 're-inserted where it was, by createdAt; got $ids',
+      );
+      expect(ids.indexOf('m2'), 1, reason: 'between m1 and m3: $ids');
+    });
+  });
+
   group('delete for everyone', () {
     ProviderContainer makeWithCache(FakeChat fake, AttachmentCacheFake cache) =>
         ProviderContainer.test(
@@ -209,35 +321,34 @@ void main() {
           ],
         );
 
-    test('Ok updates local state at once, vanished when recent', () async {
-      // A forced Ok, with no window logic of its own: this isolates the
-      // controller's own local update from the fake's simulated echo.
-      final recent = Message(
-        id: 'm1',
-        conversationId: 'c1',
-        senderId: 'me',
-        body: 'hi',
-        createdAt: DateTime.now(),
-      );
-      final fake = FakeChat(initial: [recent])
-        ..deleteForEveryoneResult = const Ok(null);
-      final cache = AttachmentCacheFake();
-      final c = makeWithCache(fake, cache);
-      c.read(openConversationProvider.notifier).open('c1');
-      await c.read(messagesProvider.future);
+    test(
+      'Ok leaves a placeholder at any age: no vanishing since 0.30.8',
+      () async {
+        // A forced Ok, with no window logic of its own: this isolates the
+        // controller's own local update from the fake's simulated echo.
+        final recent = Message(
+          id: 'm1',
+          conversationId: 'c1',
+          senderId: 'me',
+          body: 'hi',
+          createdAt: DateTime.now(),
+        );
+        final fake = FakeChat(initial: [recent])
+          ..deleteForEveryoneResult = const Ok(null);
+        final cache = AttachmentCacheFake();
+        final c = makeWithCache(fake, cache);
+        c.read(openConversationProvider.notifier).open('c1');
+        await c.read(messagesProvider.future);
 
-      final result = await c
-          .read(messagesProvider.notifier)
-          .deleteForEveryone(recent);
-      expect(result, isA<Ok<void>>());
-      final after = c.read(messagesProvider).requireValue.single;
-      expect(after.deletion, MessageDeletion.vanished);
-      expect(
-        after.body,
-        'hi',
-        reason: 'a vanishing message keeps its text for the animation, briefly',
-      );
-    });
+        final result = await c
+            .read(messagesProvider.notifier)
+            .deleteForEveryone(recent);
+        expect(result, isA<Ok<void>>());
+        final after = c.read(messagesProvider).requireValue.single;
+        expect(after.deletion, MessageDeletion.placeholder);
+        expect(after.body, '', reason: 'a placeholder carries no text');
+      },
+    );
 
     test('Err is returned and leaves state unchanged', () async {
       final live = msg('m1', minute: 0);

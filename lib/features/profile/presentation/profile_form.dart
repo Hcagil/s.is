@@ -127,6 +127,7 @@ class _ProfileFormState extends ConsumerState<ProfileForm> {
         TextField(
           key: const ValueKey('profile-name'),
           controller: _name,
+          textCapitalization: TextCapitalization.words,
           maxLength: maxDisplayNameLength,
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(

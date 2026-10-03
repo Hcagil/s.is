@@ -1,6 +1,7 @@
 // allowedMessageActions, from the rules in docs/DECISIONS.md: reply and
-// forward on any stored message; edit and delete for everyone only on your
-// own message younger than 6 hours (never edit a forwarded one); read-by on
+// forward on any stored message; edit only on your own message younger than
+// 6 hours (never a forwarded one); delete for everyone on your own message at
+// any age, or on anyone's when you are a group admin (0.30.8); read-by on
 // your own message in a group; nothing on a pending or deleted message.
 import 'dart:typed_data';
 
@@ -123,7 +124,7 @@ void main() {
       );
     });
 
-    test('Own age exactly 6h, group false -> reply & forward only', () {
+    test('Own age exactly 6h, group false -> reply, forward, delete', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(hours: 6)),
@@ -134,24 +135,40 @@ void main() {
         now: now,
         group: false,
       );
-      expect(actions, equals([MessageAction.reply, MessageAction.forward]));
-    });
-
-    test('Own age exactly 6h, group true -> readBy + reply & forward', () {
-      final msg = buildMessage(
-        senderId: me,
-        createdAt: now.subtract(const Duration(hours: 6)),
-      );
-      final actions = allowedMessageActions(msg, me: me, now: now, group: true);
       expect(
         actions,
         equals([
-          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
+          MessageAction.delete,
         ]),
       );
     });
+
+    test(
+      'Own age exactly 6h, group true -> readBy, reply, forward, delete',
+      () {
+        final msg = buildMessage(
+          senderId: me,
+          createdAt: now.subtract(const Duration(hours: 6)),
+        );
+        final actions = allowedMessageActions(
+          msg,
+          me: me,
+          now: now,
+          group: true,
+        );
+        expect(
+          actions,
+          equals([
+            MessageAction.readBy,
+            MessageAction.reply,
+            MessageAction.forward,
+            MessageAction.delete,
+          ]),
+        );
+      },
+    );
 
     test('Own age 6h-1s, group false -> reply, forward, edit, delete', () {
       final msg = buildMessage(
@@ -197,7 +214,7 @@ void main() {
       );
     });
 
-    test('Own age 6h+1s, group false -> reply & forward only', () {
+    test('Own age 6h+1s, group false -> reply, forward, delete', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(hours: 6, seconds: 1)),
@@ -208,26 +225,34 @@ void main() {
         now: now,
         group: false,
       );
-      expect(actions, equals([MessageAction.reply, MessageAction.forward]));
-    });
-
-    test('Own age 6h+1s, group true -> readBy + reply & forward', () {
-      final msg = buildMessage(
-        senderId: me,
-        createdAt: now.subtract(const Duration(hours: 6, seconds: 1)),
-      );
-      final actions = allowedMessageActions(msg, me: me, now: now, group: true);
       expect(
         actions,
         equals([
-          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
+          MessageAction.delete,
         ]),
       );
     });
 
-    test('Own age 3 days, group false -> reply & forward only', () {
+    test('Own age 6h+1s, group true -> readBy, reply, forward, delete', () {
+      final msg = buildMessage(
+        senderId: me,
+        createdAt: now.subtract(const Duration(hours: 6, seconds: 1)),
+      );
+      final actions = allowedMessageActions(msg, me: me, now: now, group: true);
+      expect(
+        actions,
+        equals([
+          MessageAction.readBy,
+          MessageAction.reply,
+          MessageAction.forward,
+          MessageAction.delete,
+        ]),
+      );
+    });
+
+    test('Own age 3 days, group false -> reply, forward, delete', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(days: 3)),
@@ -238,10 +263,17 @@ void main() {
         now: now,
         group: false,
       );
-      expect(actions, equals([MessageAction.reply, MessageAction.forward]));
+      expect(
+        actions,
+        equals([
+          MessageAction.reply,
+          MessageAction.forward,
+          MessageAction.delete,
+        ]),
+      );
     });
 
-    test('Own age 3 days, group true -> readBy + reply & forward', () {
+    test('Own age 3 days, group true -> readBy, reply, forward, delete', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(days: 3)),
@@ -253,6 +285,7 @@ void main() {
           MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
+          MessageAction.delete,
         ]),
       );
     });
@@ -472,7 +505,7 @@ void main() {
 
     // Run under TZ=JST-9: the window is between instants, so a local and a
     // UTC reading of the same moments must agree.
-    test('the 6 h window compares instants, not wall-clock fields', () {
+    test('the 6 h edit window compares instants, not wall-clock fields', () {
       final fresh = buildMessage(
         senderId: me,
         createdAt: now
@@ -488,8 +521,42 @@ void main() {
         contains(MessageAction.delete),
       );
       expect(
+        allowedMessageActions(fresh, me: me, now: now.toLocal()),
+        contains(MessageAction.edit),
+      );
+      expect(
         allowedMessageActions(stale, me: me, now: now.toLocal()),
-        equals([MessageAction.reply, MessageAction.forward]),
+        equals([
+          MessageAction.reply,
+          MessageAction.forward,
+          MessageAction.delete,
+        ]),
+      );
+    });
+
+    test('an admin may delete somebody else\'s message, at any age', () {
+      final theirs = buildMessage(
+        senderId: other,
+        createdAt: now.subtract(const Duration(days: 30)),
+      );
+      expect(
+        allowedMessageActions(theirs, me: me, now: now, group: true),
+        isNot(contains(MessageAction.delete)),
+      );
+      expect(
+        allowedMessageActions(
+          theirs,
+          me: me,
+          now: now,
+          group: true,
+          admin: true,
+        ),
+        equals([
+          MessageAction.reply,
+          MessageAction.forward,
+          MessageAction.delete,
+        ]),
+        reason: 'delete, but never edit or read-by on another\'s message',
       );
     });
   });

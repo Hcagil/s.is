@@ -62,6 +62,7 @@ final class Message {
     this.attachmentPreview,
     this.localImage,
     this.deletion,
+    this.deletedBy,
     this.editedAt,
     this.replyTo,
     this.forwarded = false,
@@ -97,8 +98,11 @@ final class Message {
   /// bubble itself, only the pending state ([isPending]).
   final bool sending;
 
-  /// Set when the sender deleted it for everyone; its content is gone.
+  /// Set when it was deleted for everyone; its content is gone.
   final MessageDeletion? deletion;
+
+  /// Who deleted it for everyone: its sender, or a group admin.
+  final String? deletedBy;
 
   /// When the sender last edited this message's body, or null if never
   /// edited. No history is kept: only the latest body survives.
@@ -106,19 +110,20 @@ final class Message {
 
   bool get isDeleted => deletion != null;
 
+  /// A group admin deleted it, not its sender.
+  bool get deletedByAdmin => deletedBy != null && deletedBy != senderId;
+
   bool get isEdited => editedAt != null;
 
-  /// Whether [me] may still delete this for everyone at [now]: their own,
-  /// stored, not yet deleted, and under 6 hours old (the server checks too).
-  bool canDeleteForEveryone(String me, DateTime now) =>
-      senderId == me &&
-      !isPending &&
-      deletion == null &&
-      now.difference(createdAt) < deleteForEveryoneWindow;
+  /// Whether [me] may delete this for everyone: it is stored, not yet
+  /// deleted, and theirs -- or [admin] (a group admin may delete any
+  /// member's message). No time limit (the server checks too).
+  bool canDeleteForEveryone(String me, {bool admin = false}) =>
+      !isPending && deletion == null && (senderId == me || admin);
 
   /// Whether [me] may still edit this message at [now]: their own, stored,
-  /// not deleted, not forwarded, and under 6 hours old -- the same window as
-  /// [canDeleteForEveryone] (the server checks too).
+  /// not deleted, not forwarded, and under 6 hours old (the server checks
+  /// too).
   bool canEdit(String me, DateTime now) =>
       senderId == me &&
       !isPending &&
@@ -141,12 +146,12 @@ final class Message {
 bool startsRun(List<Message> messages, int index) =>
     index == 0 || messages[index - 1].senderId != messages[index].senderId;
 
-/// How long after sending a message its sender may delete it for everyone.
+/// How long after sending a message its sender may still edit it.
 const deleteForEveryoneWindow = Duration(hours: 6);
 
-/// What a delete for everyone left behind. Within an hour of sending the
-/// message vanishes as if never sent; after that, "This message was
-/// deleted" stays in its place.
+/// What a delete for everyone left behind. A new delete always leaves the
+/// "This message was deleted" placeholder; `vanished` is only what older
+/// deletes (within an hour of sending) left, as if never sent.
 enum MessageDeletion { vanished, placeholder }
 
 /// Mirrors public.fold_search exactly: İ, I and ı all fold to plain 'i',
@@ -168,9 +173,10 @@ bool isSearchable(String query) =>
     RegExp(r'[\p{L}\p{N}]', unicode: true).allMatches(query.trim()).length >= 3;
 
 /// One action a member may take on a message: reply, forward, edit their
-/// own text/caption, delete their own message for everyone, or (in a group,
-/// on their own message) see who has read it.
-enum MessageAction { readBy, reply, forward, edit, delete }
+/// own text/caption, delete (for me, or for everyone: their own, or any
+/// member's for a group admin), copy the text (tap menu only), or (in
+/// a group, on their own message) see who has read it.
+enum MessageAction { readBy, reply, forward, edit, delete, copy }
 
 /// The actions [me] may take on [message] at [now], in the order they are
 /// offered -- reply and forward need a stored message with something in
@@ -184,8 +190,10 @@ List<MessageAction> allowedMessageActions(
   required String? me,
   required DateTime now,
   bool group = false,
+  bool admin = false,
 }) {
-  final canDelete = me != null && message.canDeleteForEveryone(me, now);
+  final canDelete =
+      me != null && message.canDeleteForEveryone(me, admin: admin);
   final canEdit = me != null && message.canEdit(me, now);
   final canShare = !message.isPending && !message.isDeleted;
   final canSeeReaders = group && me != null && message.isFrom(me) && canShare;
@@ -195,5 +203,26 @@ List<MessageAction> allowedMessageActions(
     if (canShare) MessageAction.forward,
     if (canEdit) MessageAction.edit,
     if (canDelete) MessageAction.delete,
+  ];
+}
+
+/// The actions the tap menu offers for [message], in order: reply, copy
+/// (text present, not deleted), forward, edit (own text within the
+/// edit window) and delete (any stored message: the dialog then offers
+/// delete for me, and delete for everyone only when
+/// [Message.canDeleteForEveryone] allows). Copy is never in the swipe row.
+List<MessageAction> menuMessageActions(
+  Message message, {
+  required String? me,
+  required DateTime now,
+}) {
+  final canShare = !message.isPending && !message.isDeleted;
+  final canEdit = me != null && message.canEdit(me, now);
+  return [
+    if (canShare) MessageAction.reply,
+    if (canShare && message.body.isNotEmpty) MessageAction.copy,
+    if (canShare) MessageAction.forward,
+    if (canEdit) MessageAction.edit,
+    if (!message.isPending) MessageAction.delete,
   ];
 }

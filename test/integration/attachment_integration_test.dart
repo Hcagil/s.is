@@ -769,4 +769,95 @@ void main() {
       await t.pump(const Duration(seconds: 61));
     });
   });
+
+  group('the stored row takes the pending photo\'s place (0.30.11)', () {
+    // The controller lets whichever of the Realtime echo and the POST answer
+    // arrives first replace the pending bubble. That only works if the real
+    // repository hands back, both ways, the same row: same id, same path,
+    // same caption, same sender.
+    test('the echo on incoming() is the very row sendImage answers', () async {
+      final subscribed = await liam.incoming(conversationId);
+      final stream = (subscribed as Ok<Stream<Message>>).value;
+      final caption = 'echo ${DateTime.now().microsecondsSinceEpoch}';
+      final echo = stream.firstWhere((m) => m.body == caption);
+
+      final sent = await liam.sendImage(
+        conversationId: conversationId,
+        image: PickedImage(
+          bytes: _png,
+          contentType: 'image/png',
+          extension: 'png',
+          preview: _png,
+        ),
+        body: caption,
+      ) as Ok<Message>;
+      final echoed = await echo.timeout(const Duration(seconds: 20));
+
+      expect(echoed.id, sent.value.id);
+      expect(echoed.attachmentPath, sent.value.attachmentPath);
+      expect(echoed.attachmentPath, isNotNull);
+      expect(echoed.senderId, liamClient!.auth.currentUser!.id);
+      expect(echoed.senderId, sent.value.senderId);
+      expect(echoed.attachmentPreview, sent.value.attachmentPreview);
+    });
+
+    test(
+      'through the controller on the real stack: one entry for the photo, '
+      'keeping the phone\'s bytes, after both the answer and the echo',
+      () async {
+        final liamId = liamClient!.auth.currentUser!.id;
+        final container = ProviderContainer.test(
+          overrides: [
+            chatRepositoryProvider.overrideWithValue(liam),
+            sessionControllerProvider.overrideWith(
+              () => _SignedIn(Member(userId: liamId, displayName: 'Liam')),
+            ),
+          ],
+        );
+        // Signed in before any chat opens, as in the app.
+        await container.read(sessionControllerProvider.future);
+        container.read(openConversationProvider.notifier).open(conversationId);
+        container.listen(messagesProvider, (_, _) {});
+        // Completes once the subscription is confirmed: the echo will come.
+        await container.read(messagesProvider.future);
+
+        // Its own echo is watched for on a second subscription, so the test
+        // knows the controller's copy has had its chance to arrive too.
+        final watched =
+            (await liam.incoming(conversationId) as Ok<Stream<Message>>).value;
+        final caption = 'handoff ${DateTime.now().microsecondsSinceEpoch}';
+        final echo = watched.firstWhere((m) => m.body == caption);
+        final bytes = Uint8List.fromList(_png);
+
+        final result = await container
+            .read(messagesProvider.notifier)
+            .sendImage(
+              body: caption,
+              chosen: PickedImage(
+                bytes: bytes,
+                contentType: 'image/png',
+                extension: 'png',
+                preview: _png,
+              ),
+            );
+        final id = (result! as Ok<Message>).value.id;
+        await echo.timeout(const Duration(seconds: 20));
+        await Future<void>.delayed(const Duration(seconds: 1));
+
+        final mine = [
+          for (final m in container.read(messagesProvider).requireValue)
+            if (m.body == caption) m,
+        ];
+        expect(mine, hasLength(1), reason: 'the photo is in the chat twice');
+        expect(mine.single.id, id);
+        expect(mine.single.isPending, isFalse);
+        expect(
+          mine.single.localImage,
+          bytes,
+          reason: 'the phone\'s own copy was dropped: the bubble would reload',
+        );
+        container.dispose();
+      },
+    );
+  });
 }

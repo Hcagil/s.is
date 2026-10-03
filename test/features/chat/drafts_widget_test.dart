@@ -145,7 +145,11 @@ Future<void> start(WidgetTester t, World w) async {
 
 Future<void> openChat(WidgetTester t, String id) async {
   await t.tap(byKey('conversation-$id'));
-  await settle(t);
+  // The page slides in (the iOS-style transition, ~500 ms, on both
+  // platforms since 0.30.11); a tap before it lands misses the composer.
+  for (var i = 0; i < 30; i++) {
+    await t.pump(const Duration(milliseconds: 20));
+  }
   expect(find.byType(MessageScreen), findsOneWidget);
 }
 

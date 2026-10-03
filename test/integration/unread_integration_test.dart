@@ -610,7 +610,9 @@ void main() {
         await t.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 100)),
         );
-        await t.pump();
+        // Advance the test clock too: a page slides in and out over ~500 ms
+        // of it (the iOS-style transition on both platforms since 0.30.11).
+        await t.pump(const Duration(milliseconds: 100));
         if (ok()) return;
       }
       fail('never happened: $what');

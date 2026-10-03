@@ -593,13 +593,10 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                             !message.isDeleted &&
                             (message.isPending ||
                                 !isReadByAnyone(marks, message.createdAt));
-                        // Read by is offered in a 1:1 chat too (its card is one
-                        // line), so the rule's group flag is always on here.
                         final allowedActions = allowedMessageActions(
                           message,
                           me: me,
                           now: DateTime.now(),
-                          group: true,
                         );
                         final bubble = SwipeableMessage(
                           key: _keyFor(message.id),

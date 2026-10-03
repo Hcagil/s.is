@@ -174,29 +174,28 @@ bool isSearchable(String query) =>
 
 /// One action a member may take on a message: reply, forward, edit their
 /// own text/caption, delete (for me, or for everyone: their own, or any
-/// member's for a group admin), copy the text (tap menu only), or (in
-/// a group, on their own message) see who has read it.
+/// member's for a group admin), copy the text (tap menu only), or, on their
+/// own message, see who has read it.
 enum MessageAction { readBy, reply, forward, edit, delete, copy }
 
 /// The actions [me] may take on [message] at [now], in the order they are
 /// offered -- reply and forward need a stored message with something in
 /// it; edit and delete for everyone are the sender's own message within
-/// [deleteForEveryoneWindow]; read-by only shows in a [group], on your own
-/// message, alongside reply/forward. This is the single source of truth for
+/// [deleteForEveryoneWindow]; read-by shows on your own message in every
+/// chat, groups and 1:1, alongside reply/forward. This is the single source of truth for
 /// "what does this message allow": both the swipe action row and each
 /// bubble's screen-reader custom actions read it, so the rule lives once.
 List<MessageAction> allowedMessageActions(
   Message message, {
   required String? me,
   required DateTime now,
-  bool group = false,
   bool admin = false,
 }) {
   final canDelete =
       me != null && message.canDeleteForEveryone(me, admin: admin);
   final canEdit = me != null && message.canEdit(me, now);
   final canShare = !message.isPending && !message.isDeleted;
-  final canSeeReaders = group && me != null && message.isFrom(me) && canShare;
+  final canSeeReaders = me != null && message.isFrom(me) && canShare;
   return [
     if (canSeeReaders) MessageAction.readBy,
     if (canShare) MessageAction.reply,

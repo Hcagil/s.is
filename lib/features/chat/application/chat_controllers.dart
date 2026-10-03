@@ -752,6 +752,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     var loaded = false;
     StreamSubscription<Message>? sub;
     ref.onDispose(() => unawaited(sub?.cancel()));
+    // True while THIS build is current: ref.mounted stays true for a build
+    // already replaced by a newer one (a chat switch), onDispose fires for both.
+    var alive = true;
+    ref.onDispose(() => alive = false);
     void onMessage(Message message) {
       // Strictly this chat's: a row for another conversation is never shown.
       if (message.conversationId != conversationId) return;
@@ -794,7 +798,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     // server, so _verify reads once more after the first paint.
     final joining = repo.incoming(conversationId).then((opened) {
       if (opened case Ok(:final value)) {
-        if (ref.mounted) {
+        if (alive && ref.mounted) {
           sub = value.listen(onMessage);
         } else {
           unawaited(value.listen((_) {}).cancel());
@@ -803,6 +807,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       return opened;
     });
     final (joined, read) = await (joining, repo.messages(conversationId)).wait;
+    if (!alive) return const []; // replaced or closed mid-open: drop it all
     if (joined case Err(:final failure)) throw failure;
 
     switch (read) {
@@ -830,7 +835,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         final pending = ref.read(sendQueueProvider)[conversationId] ?? const [];
         // A later turn, so the list below is already the state when it runs.
         final edits = _ownEdits;
-        unawaited(Future(() => _verify(conversationId, edits)));
+        unawaited(Future(() => _verify(conversationId, edits, () => alive)));
         return [
           ...shown,
           for (final p in pending)
@@ -853,14 +858,18 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// a message sent in between is in neither it nor the stream. A second read,
   /// after both, closes that window. Merged by id, so nothing is shown twice;
   /// an edit or delete that landed in the window replaces the old row.
-  Future<void> _verify(String conversationId, int edits) async {
-    if (!ref.mounted) return;
+  Future<void> _verify(
+    String conversationId,
+    int edits,
+    bool Function() alive,
+  ) async {
+    if (!alive() || !ref.mounted) return;
     final result = await ref
         .read(chatRepositoryProvider)
         .messages(conversationId);
     // A delete or hide made meanwhile is not on the server yet: this read
     // would put the row back.
-    if (!ref.mounted || _jumped || edits != _ownEdits) return;
+    if (!alive() || !ref.mounted || _jumped || edits != _ownEdits) return;
     if (ref.read(openConversationProvider) != conversationId) return;
     final current = state.value;
     if (result is! Ok<List<Message>> || current == null) return;

@@ -21,6 +21,7 @@ import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
 import '../application/group_controller.dart';
+import '../domain/conversation.dart';
 import '../domain/emoji.dart';
 import '../domain/group_member.dart';
 import '../domain/highlight.dart';
@@ -353,7 +354,12 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       message,
       anchor: anchor,
       alignEnd: mine,
-      group: widget.group,
+      group:
+          widget.group ||
+          (ref.read(conversationListProvider).value ?? const <Conversation>[])
+              .any(
+                (c) => c.id == ref.read(openConversationProvider) && c.isGroup,
+              ),
     );
   }
 
@@ -417,13 +423,25 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     final currentHitId = ref.watch(
       chatSearchProvider.select((s) => s.current?.id),
     );
-    final status = _status(ref, widget.otherUserId);
     final conversationId = ref.watch(openConversationProvider);
+    // Not given by the caller (a tapped notification opens this screen before
+    // the list is known): taken from the list as soon as it has the chat.
+    final listed = ref.watch(
+      conversationListProvider.select(
+        (s) => (s.value ?? const <Conversation>[])
+            .where((c) => c.id == conversationId)
+            .firstOrNull,
+      ),
+    );
+    final title = widget.title ?? listed?.label;
+    final isGroup = widget.group || (listed?.isGroup ?? false);
+    final otherUserId = widget.otherUserId ?? listed?.other?.userId;
+    final status = _status(ref, otherUserId);
     // The group's own roster names every sender, current or departed --
     // yourPeopleProvider would miss someone no longer reachable, and would
     // also pull in people reachable only through some OTHER shared chat.
     // Also what greys a departed sender's name in their own bubbles.
-    final roster = widget.group && conversationId != null
+    final roster = isGroup && conversationId != null
         ? ref.watch(groupRosterProvider(conversationId)).value ??
               const <GroupMember>[]
         : const <GroupMember>[];
@@ -440,6 +458,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     // until every sharing member has read them.
     final marks = ref.watch(readMarksProvider).value ?? const <ReadMark>[];
     final timeline = ref.watch(chatTimelineProvider);
+    final value = messages.value ?? const <Message>[];
     final messageIndexById = {
       for (var idx = 0; idx < (messages.value ?? const []).length; idx++)
         (messages.value ?? const [])[idx].id: idx,
@@ -466,17 +485,14 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                       true;
                   final page = system
                       ? SystemChatScreen(conversationId: id)
-                      : widget.group
-                      ? GroupScreen(
-                          conversationId: id,
-                          title: widget.title ?? 'Group',
-                        )
-                      : widget.otherUserId == null
+                      : isGroup
+                      ? GroupScreen(conversationId: id, title: title ?? 'Group')
+                      : otherUserId == null
                       ? null
                       // Already in this chat: no Message button on their page.
                       : PersonScreen(
-                          userId: widget.otherUserId!,
-                          fallbackName: widget.title,
+                          userId: otherUserId,
+                          fallbackName: title,
                           fallbackAvatarPath: _headerAvatar(
                             ref,
                             conversationId,
@@ -494,11 +510,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                     child: Row(
                       children: [
                         PersonAvatar(
-                          label: widget.title ?? 'Conversation',
+                          label: title ?? 'Conversation',
                           seed:
-                              widget.otherUserId ??
+                              otherUserId ??
                               conversationId ??
-                              widget.title ??
+                              title ??
                               'Conversation',
                           radius: 18,
                           avatarPath: _headerAvatar(ref, conversationId),
@@ -509,7 +525,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                widget.title ?? 'Conversation',
+                                title ?? 'Conversation',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -562,100 +578,101 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                     AsyncData() when timeline.isEmpty => const Center(
                       child: Text('No messages yet. Say something.'),
                     ),
-                    AsyncData(:final value) => ListView.builder(
-                      controller: _scroll,
-                      // Newest at the bottom, which is where the composer is.
-                      reverse: true,
-                      // Generous on purpose: a jump-to-hit needs the target
-                      // bubble built even when it is far from the current
-                      // scroll offset (see _scrollTo).
-                      scrollCacheExtent: ScrollCacheExtent.pixels(2000),
-                      itemCount: timeline.length,
-                      itemBuilder: (context, i) {
-                        final entry = timeline[timeline.length - 1 - i];
-                        if (entry is EventEntry) {
-                          return GroupEventLine(
-                            entry.event,
-                            names: names,
-                            key: ValueKey('event-${entry.event.id}'),
-                          );
-                        }
-                        final message = (entry as MessageEntry).message;
-                        final index = messageIndexById[message.id] ?? 0;
-                        final mine = me != null && message.isFrom(me);
-                        final quoted = message.replyTo == null
-                            ? null
-                            : value
-                                  .where((m) => m.id == message.replyTo)
-                                  .firstOrNull;
-                        final unread =
-                            mine &&
-                            !message.isDeleted &&
-                            (message.isPending ||
-                                !isReadByAnyone(marks, message.createdAt));
-                        final allowedActions = allowedMessageActions(
-                          message,
-                          me: me,
-                          now: DateTime.now(),
-                        );
-                        final bubble = SwipeableMessage(
-                          key: _keyFor(message.id),
-                          messageId: message.id,
-                          mine: mine,
-                          actions: allowedActions,
-                          openId: _openSwipeId,
-                          onOpenChanged: (open) {
-                            if (open) {
-                              _openSwipeId.value = message.id;
-                            } else if (_openSwipeId.value == message.id) {
-                              _openSwipeId.value = null;
-                            }
-                          },
-                          onAction: (action) {
-                            _openSwipeId.value = null;
-                            runMessageAction(
-                              context,
-                              ref,
-                              message,
-                              action,
-                              canDeleteForEveryone: true,
-                              anchor: _bubbleRect(message.id),
-                              alignEnd: mine,
-                              group: widget.group,
+                    _ when messages is! AsyncError && timeline.isNotEmpty =>
+                      ListView.builder(
+                        controller: _scroll,
+                        // Newest at the bottom, which is where the composer is.
+                        reverse: true,
+                        // Generous on purpose: a jump-to-hit needs the target
+                        // bubble built even when it is far from the current
+                        // scroll offset (see _scrollTo).
+                        scrollCacheExtent: ScrollCacheExtent.pixels(2000),
+                        itemCount: timeline.length,
+                        itemBuilder: (context, i) {
+                          final entry = timeline[timeline.length - 1 - i];
+                          if (entry is EventEntry) {
+                            return GroupEventLine(
+                              entry.event,
+                              names: names,
+                              key: ValueKey('event-${entry.event.id}'),
                             );
-                          },
-                          onTap: () => _openMessageMenu(message, mine: mine),
-                          child: _Bubble(
+                          }
+                          final message = (entry as MessageEntry).message;
+                          final index = messageIndexById[message.id] ?? 0;
+                          final mine = me != null && message.isFrom(me);
+                          final quoted = message.replyTo == null
+                              ? null
+                              : value
+                                    .where((m) => m.id == message.replyTo)
+                                    .firstOrNull;
+                          final unread =
+                              mine &&
+                              !message.isDeleted &&
+                              (message.isPending ||
+                                  !isReadByAnyone(marks, message.createdAt));
+                          final allowedActions = allowedMessageActions(
                             message,
-                            key: ValueKey('read-$unread-${message.id}'),
+                            me: me,
+                            now: DateTime.now(),
+                          );
+                          final bubble = SwipeableMessage(
+                            key: _keyFor(message.id),
+                            messageId: message.id,
                             mine: mine,
-                            unread: unread,
-                            sender:
-                                widget.group && !mine && startsRun(value, index)
-                                ? (names[message.senderId] ?? 'Member')
-                                : null,
-                            senderLeft: departedSenderIds.contains(
-                              message.senderId,
+                            actions: allowedActions,
+                            openId: _openSwipeId,
+                            onOpenChanged: (open) {
+                              if (open) {
+                                _openSwipeId.value = message.id;
+                              } else if (_openSwipeId.value == message.id) {
+                                _openSwipeId.value = null;
+                              }
+                            },
+                            onAction: (action) {
+                              _openSwipeId.value = null;
+                              runMessageAction(
+                                context,
+                                ref,
+                                message,
+                                action,
+                                canDeleteForEveryone: true,
+                                anchor: _bubbleRect(message.id),
+                                alignEnd: mine,
+                                group: isGroup,
+                              );
+                            },
+                            onTap: () => _openMessageMenu(message, mine: mine),
+                            child: _Bubble(
+                              message,
+                              key: ValueKey('read-$unread-${message.id}'),
+                              mine: mine,
+                              unread: unread,
+                              sender:
+                                  isGroup && !mine && startsRun(value, index)
+                                  ? (names[message.senderId] ?? 'Member')
+                                  : null,
+                              senderLeft: departedSenderIds.contains(
+                                message.senderId,
+                              ),
+                              senderSlot: slotByUser[message.senderId],
+                              quoted: quoted,
+                              quotedName: quoted == null
+                                  ? null
+                                  : quoted.senderId == me
+                                  ? 'You'
+                                  : (names[quoted.senderId] ?? 'Member'),
+                              highlightQuery: searchQuery,
+                              isCurrentHit: message.id == currentHitId,
                             ),
-                            senderSlot: slotByUser[message.senderId],
-                            quoted: quoted,
-                            quotedName: quoted == null
-                                ? null
-                                : quoted.senderId == me
-                                ? 'You'
-                                : (names[quoted.senderId] ?? 'Member'),
-                            highlightQuery: searchQuery,
-                            isCurrentHit: message.id == currentHitId,
-                          ),
-                        );
-                        return message.deletion == MessageDeletion.vanished
-                            ? _Vanishing(
-                                key: ValueKey('vanish-${message.id}'),
-                                child: bubble,
-                              )
-                            : bubble;
-                      },
-                    ),
+                          );
+                          return message.deletion == MessageDeletion.vanished
+                              ? _Vanishing(
+                                  key: ValueKey('vanish-${message.id}'),
+                                  child: bubble,
+                                )
+                              : bubble;
+                        },
+                      ),
                     AsyncError(:final error) => Center(
                       child: Padding(
                         padding: const EdgeInsets.all(32),

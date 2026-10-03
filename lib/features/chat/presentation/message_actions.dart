@@ -144,12 +144,7 @@ Future<bool> showMessageMenu(
       me != null &&
       roster.any((m) => m.member.userId == me && m.isAdmin && !m.hasLeft);
   final actions = [
-    for (final a in menuMessageActions(
-      message,
-      me: me,
-      now: DateTime.now(),
-      withReadBy: true,
-    ))
+    for (final a in menuMessageActions(message, me: me, now: DateTime.now()))
       if (!photoViewer ||
           a == MessageAction.reply ||
           a == MessageAction.forward ||
@@ -215,16 +210,6 @@ Future<void> _showReaders(
     for (final m in marks)
       if (m.hasRead(message.createdAt)) m,
   ];
-  if (!group) {
-    final at = readers.isEmpty ? null : readers.first.readAt!.toLocal();
-    showSisNotice(
-      context,
-      at == null
-          ? 'Not read yet'
-          : 'Read ${twoDigit(at.hour)}:${twoDigit(at.minute)}',
-    );
-    return;
-  }
   final people = {
     for (final gm
         in ref.read(groupRosterProvider(message.conversationId)).value ??
@@ -232,6 +217,29 @@ Future<void> _showReaders(
       gm.member.userId: gm.member,
   };
   final size = MediaQuery.sizeOf(context);
+  final at = !group && readers.isNotEmpty
+      ? readers.first.readAt!.toLocal()
+      : null;
+  if (!group) {
+    // 1:1: the same floating card, one line, no list.
+    await showFloatingCard<void>(
+      context,
+      anchor: anchor ?? Rect.fromLTWH(size.width / 2, size.height / 2, 0, 0),
+      alignEnd: alignEnd,
+      highlightAnchor: anchor != null,
+      cardKey: const ValueKey('readers'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Text(
+          at == null
+              ? 'Not read yet'
+              : 'Read ${twoDigit(at.hour)}:${twoDigit(at.minute)}',
+          key: const ValueKey('readers-line'),
+        ),
+      ),
+    );
+    return;
+  }
   await showFloatingCard<void>(
     context,
     anchor: anchor ?? Rect.fromLTWH(size.width / 2, size.height / 2, 0, 0),
@@ -241,64 +249,82 @@ Future<void> _showReaders(
     child: Builder(
       builder: (card) {
         final t = SisBrand.of(card);
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Text(
-                readers.isEmpty ? 'Read by' : 'Read by ${readers.length}',
-                key: const ValueKey('readers-title'),
-                style: Theme.of(card).textTheme.titleSmall,
-              ),
-            ),
-            if (readers.isEmpty)
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 320),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-                child: Text('Nobody yet', style: TextStyle(color: t.muted)),
-              )
-            else
-              for (final m in readers)
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Text(
+                  readers.isEmpty ? 'Read by' : 'Read by ${readers.length}',
+                  key: const ValueKey('readers-title'),
+                  style: Theme.of(card).textTheme.titleSmall,
+                ),
+              ),
+              if (readers.isEmpty)
                 Padding(
-                  key: ValueKey('reader-${m.userId}'),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      PersonAvatar(
-                        label: people[m.userId]?.displayName ?? 'Member',
-                        seed: m.userId,
-                        radius: 16,
-                        avatarPath: people[m.userId]?.avatarPath,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              people[m.userId]?.displayName ?? 'Member',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+                  child: Text('Nobody yet', style: TextStyle(color: t.muted)),
+                )
+              else
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final m in readers)
+                          Padding(
+                            key: ValueKey('reader-${m.userId}'),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
                             ),
-                            Text(
-                              lastSeenLabel(
-                                m.readAt!,
-                                DateTime.now(),
-                              ).replaceFirst('last seen ', ''),
-                              style: TextStyle(color: t.muted, fontSize: 12),
+                            child: Row(
+                              children: [
+                                PersonAvatar(
+                                  label:
+                                      people[m.userId]?.displayName ?? 'Member',
+                                  seed: m.userId,
+                                  radius: 16,
+                                  avatarPath: people[m.userId]?.avatarPath,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        people[m.userId]?.displayName ??
+                                            'Member',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        lastSeenLabel(
+                                          m.readAt!,
+                                          DateTime.now(),
+                                        ).replaceFirst('last seen ', ''),
+                                        style: TextStyle(
+                                          color: t.muted,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-            const SizedBox(height: 4),
-          ],
+              const SizedBox(height: 4),
+            ],
+          ),
         );
       },
     ),

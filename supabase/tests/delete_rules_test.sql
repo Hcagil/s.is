@@ -12,7 +12,7 @@
 --        alone -- an admin elsewhere is nobody here
 --   ann  again, at the very end, with her session revoked: app access alone
 begin;
-select plan(55);
+select plan(57);
 
 set local storage.allow_delete_query = 'true';
 
@@ -251,6 +251,19 @@ select throws_ok(format($$select public.hide_message(%L)$$, (select last from _m
 reset role;
 select is((select deleted from public.messages where id = (select last from _m)), null,
           'the message is untouched: only the app-access gate stopped her');
+
+-- 7 a sender who LEFT is an outsider: own message, every other gate passed --
+insert into public.messages(conversation_id, sender_id, body, created_at) values
+  (g('G'), '00000000-0000-0000-0000-0000000d7003', 'dr cat said', now() - interval '2 hours');
+update public.conversation_members set left_at = now() - interval '1 hour', left_reason = 'left'
+ where conversation_id = g('G') and user_id = '00000000-0000-0000-0000-0000000d7003';
+select test_as('03');
+select throws_ok(format($$select public.delete_message(%L)$$,
+                   (select id from public.messages where body = 'dr cat said')),
+                 '42501', null, 'cat, gone from G, cannot delete even her own message there');
+reset role;
+select is((select deleted from public.messages where body = 'dr cat said'), null,
+          'her message is untouched: only the membership gate stopped her');
 
 select * from finish();
 rollback;

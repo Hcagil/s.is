@@ -267,6 +267,7 @@ void main() {
       await t.enterText(byKey('composer-field'), caption);
       await t.pump();
       await tapWhenShown(t, 'composer-attach');
+      await tapWhenShown(t, 'attach-library');
       await tapWhenShown(t, 'sheet-from-app');
 
       var arrived = <Message>[];
@@ -321,6 +322,7 @@ void main() {
       await mount(t, dead, picker);
 
       await tapWhenShown(t, 'composer-attach');
+      await tapWhenShown(t, 'attach-library');
       await tapWhenShown(t, 'sheet-from-app');
       await until(
         t,

@@ -265,9 +265,32 @@ void main() {
       );
     });
 
-    testWidgets('tapping the words around a link opens nothing', (
-      tester,
-    ) async {
+    testWidgets(
+      'tapping the words around a link opens the menu, not the link',
+      (tester) async {
+        final opener = LinkOpenerFake();
+        await pump(
+          tester,
+          chatWith([
+            msg('m1', from: bob, body: 'bak https://example.com güzel'),
+          ]),
+          opener: opener,
+        );
+
+        await tapText(tester, 'm1', 'güzel');
+        await tester.pumpAndSettle();
+
+        expect(opener.opened, isEmpty);
+        expect(find.byType(PhotoViewer), findsNothing);
+        expect(
+          find.byKey(const ValueKey('message-menu')),
+          findsOneWidget,
+          reason: 'plain words are the message: a tap there opens its menu',
+        );
+      },
+    );
+
+    testWidgets('tapping the link itself opens it and no menu', (tester) async {
       final opener = LinkOpenerFake();
       await pump(
         tester,
@@ -275,11 +298,11 @@ void main() {
         opener: opener,
       );
 
-      await tapText(tester, 'm1', 'güzel');
-      await tapText(tester, 'm1', 'bak');
+      await tapText(tester, 'm1', 'https://example.com');
+      await tester.pumpAndSettle();
 
-      expect(opener.opened, isEmpty);
-      expect(find.byType(PhotoViewer), findsNothing);
+      expect(opener.opened, hasLength(1));
+      expect(find.byKey(const ValueKey('message-menu')), findsNothing);
     });
 
     testWidgets('a link that will not open says which host', (tester) async {

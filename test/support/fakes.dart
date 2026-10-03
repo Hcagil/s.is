@@ -2268,7 +2268,19 @@ class GalleryFake implements Gallery {
   Future<Uint8List?> thumbnail(GalleryPhoto photo, {int size = 240}) async {
     thumbnailIds.add(photo.id);
     await _tick();
+    final gate = _thumbGate;
+    if (gate != null) await gate.future;
     return thumbnails[photo.id];
+  }
+
+  Completer<void>? _thumbGate;
+
+  /// Every [thumbnail] from now on stays in flight until [releaseThumbnails]:
+  /// a slow phone, where a tile is on screen long before its picture is.
+  void holdThumbnails() => _thumbGate = Completer<void>();
+  void releaseThumbnails() {
+    _thumbGate?.complete();
+    _thumbGate = null;
   }
 
   @override

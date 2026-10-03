@@ -125,7 +125,10 @@ Future<void> type(WidgetTester tester, String text) async {
 }
 
 Future<void> openSheet(WidgetTester tester) async {
+  // The paperclip opens a small menu (0.30.8); the library is one choice.
   await tester.tap(find.byKey(const ValueKey('composer-attach')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('attach-library')));
   await tester.pumpAndSettle();
 }
 

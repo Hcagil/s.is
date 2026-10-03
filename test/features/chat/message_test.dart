@@ -147,7 +147,11 @@ void main() {
         Duration(hours: 7),
         Duration(days: 400),
       ]) {
-        expect(msg(age: age).canDeleteForEveryone('me'), isTrue, reason: '$age');
+        expect(
+          msg(age: age).canDeleteForEveryone('me'),
+          isTrue,
+          reason: '$age',
+        );
       }
     });
 
@@ -158,8 +162,10 @@ void main() {
         isFalse,
       );
       expect(
-        msg(sender: 'other', age: const Duration(days: 30))
-            .canDeleteForEveryone('me', admin: true),
+        msg(
+          sender: 'other',
+          age: const Duration(days: 30),
+        ).canDeleteForEveryone('me', admin: true),
         isTrue,
       );
     });
@@ -168,8 +174,10 @@ void main() {
       for (final d in MessageDeletion.values) {
         expect(msg(deletion: d).canDeleteForEveryone('me'), isFalse);
         expect(
-          msg(sender: 'other', deletion: d)
-              .canDeleteForEveryone('me', admin: true),
+          msg(
+            sender: 'other',
+            deletion: d,
+          ).canDeleteForEveryone('me', admin: true),
           isFalse,
         );
       }

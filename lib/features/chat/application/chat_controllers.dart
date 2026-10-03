@@ -947,9 +947,30 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     if (current == null) return;
     final i = current.indexWhere((m) => m.id == message.id);
     if (i < 0) {
-      state = AsyncData([...current, message]);
+      // My own photo's stored row (the Realtime echo or the POST answer,
+      // whichever is first) takes the pending bubble's place and keeps its
+      // local image: one bubble, never two, and no swap to the downloaded
+      // copy. Matched by caption and the photo's own preview (see
+      // Message.isPendingOf), so photos in the air together never swap.
+      final p = message.attachmentPath != null && message.isFrom(_me ?? '')
+          ? current.indexWhere((m) => m.isPendingOf(message))
+          : -1;
+      state = AsyncData(
+        p >= 0
+            ? ([...current]
+                ..[p] = message.withLocalImage(current[p].localImage))
+            : [...current, message],
+      );
     } else if (!identical(current[i], message)) {
-      state = AsyncData([...current]..[i] = message);
+      // The echo and the answer are both this message: keep the phone's
+      // own photo across the second one.
+      final kept = current[i].localImage;
+      state = AsyncData(
+        [...current]
+          ..[i] = message.localImage == null && kept != null
+              ? message.withLocalImage(kept)
+              : message,
+      );
     }
   }
 
@@ -976,6 +997,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       body: body.trim(),
       createdAt: DateTime.now(),
       localImage: image.bytes,
+      attachmentPreview: image.preview,
     );
     _append(pending);
     final result = await ref
@@ -987,16 +1009,19 @@ class MessagesController extends AsyncNotifier<List<Message>> {
           replyTo: ref.read(replyingToProvider)?.id,
         );
     if (!ref.mounted) return result;
+    // Stored row first: it takes the pending bubble's place (see _append),
+    // so the photo never leaves the screen. Whatever pending is left over
+    // (a failed send) is removed after.
+    if (result case Ok(:final value)) {
+      _append(value);
+      if (ref.mounted) ref.read(replyingToProvider.notifier).clear();
+    }
     final current = state.value;
-    if (current != null) {
+    if (current != null && current.any((m) => m.id == pending.id)) {
       state = AsyncData([
         for (final m in current)
           if (m.id != pending.id) m,
       ]);
-    }
-    if (result case Ok(:final value)) {
-      _append(value);
-      if (ref.mounted) ref.read(replyingToProvider.notifier).clear();
     }
     return result;
   }

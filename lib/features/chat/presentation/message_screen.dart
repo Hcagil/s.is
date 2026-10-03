@@ -1287,8 +1287,10 @@ class _Attachment extends ConsumerWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 260, maxWidth: 280),
           child: switch ((message.localImage, path)) {
-            // Your own photo, straight from the phone while it uploads.
-            (final Uint8List local, null) => Stack(
+            // Your own photo, straight from the phone: shown from the tap on,
+            // never swapped for the downloaded copy (the swap flashed blank).
+            // The logo spins only while it uploads.
+            (final Uint8List local, _) => Stack(
               alignment: Alignment.center,
               children: [
                 Image.memory(
@@ -1297,7 +1299,7 @@ class _Attachment extends ConsumerWidget {
                   cacheWidth: 560,
                   fit: BoxFit.cover,
                 ),
-                const SisLoadingLogo(size: 40),
+                if (path == null) const SisLoadingLogo(size: 40),
               ],
             ),
             (_, final String path) => switch (ref.watch(

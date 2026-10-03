@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 /// The Nocturne design: ink violet, Manrope, rounded but precise shapes.
@@ -52,6 +53,15 @@ ThemeData sisTheme(Brightness brightness) {
       titleMedium: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
     ),
     scaffoldBackgroundColor: t.background,
+    // Every page slides in the iOS way on both platforms: dragging from the
+    // left edge leaves it, also on an Android phone with button navigation or
+    // the system gesture off. The Android system back gesture keeps working.
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      },
+    ),
     extensions: [t],
     appBarTheme: AppBarTheme(
       backgroundColor: t.background,

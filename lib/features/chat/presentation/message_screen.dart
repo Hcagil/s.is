@@ -335,6 +335,18 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   Future<void> _openMessageMenu(Message message, {required bool mine}) async {
     FocusManager.instance.primaryFocus?.unfocus();
     _openSwipeId.value = null;
+    // The bubble moves while the keyboard drops, so the card is placed after
+    // it settles; capped at 30 frames.
+    if (View.of(context).viewInsets.bottom > 0) {
+      for (
+        var i = 0;
+        i < 30 && mounted && View.of(context).viewInsets.bottom > 0;
+        i++
+      ) {
+        await WidgetsBinding.instance.endOfFrame;
+      }
+      if (!mounted) return;
+    }
     final anchor = _bubbleRect(message.id);
     await showMessageMenu(
       context,

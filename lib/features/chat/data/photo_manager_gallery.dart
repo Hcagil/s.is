@@ -29,6 +29,12 @@ final class PhotoManagerGallery implements Gallery {
   /// read the same way on their next ask -- indistinguishable from here.
   static const _askedBeforeKey = 'gallery_permission_asked_before';
 
+  /// On iPhone with LIMITED photo access the first thumbnail or load request
+  /// can come back null (a degraded, opportunistic result); asking again
+  /// works. One retry, not a loop. Verified on a device only.
+  static Future<Uint8List?> _retry(Future<Uint8List?> Function() fetch) async =>
+      await fetch() ?? await fetch();
+
   @override
   Future<GalleryAccess> requestAccess() async {
     final prefs = await SharedPreferences.getInstance();
@@ -70,7 +76,8 @@ final class PhotoManagerGallery implements Gallery {
   @override
   Future<Uint8List?> thumbnail(GalleryPhoto photo, {int size = 240}) async {
     final e = await AssetEntity.fromId(photo.id);
-    return e?.thumbnailDataWithSize(ThumbnailSize.square(size));
+    if (e == null) return null;
+    return _retry(() => e.thumbnailDataWithSize(ThumbnailSize.square(size)));
   }
 
   @override
@@ -91,10 +98,12 @@ final class PhotoManagerGallery implements Gallery {
             (w * _maxEdge / long).round(),
             (h * _maxEdge / long).round(),
           );
-    final bytes = await e.thumbnailDataWithSize(
-      size,
-      format: ThumbnailFormat.jpeg,
-      quality: 85,
+    final bytes = await _retry(
+      () => e.thumbnailDataWithSize(
+        size,
+        format: ThumbnailFormat.jpeg,
+        quality: 85,
+      ),
     );
     if (bytes == null) {
       log('photo ${photo.id}: no pixels returned', name: 'sis.chat');
@@ -125,10 +134,12 @@ final class PhotoManagerGallery implements Gallery {
             (w * _cropEdge / long).round(),
             (h * _cropEdge / long).round(),
           );
-    final bytes = await e.thumbnailDataWithSize(
-      size,
-      format: ThumbnailFormat.jpeg,
-      quality: 85,
+    final bytes = await _retry(
+      () => e.thumbnailDataWithSize(
+        size,
+        format: ThumbnailFormat.jpeg,
+        quality: 85,
+      ),
     );
     if (bytes == null) {
       log('photo ${photo.id}: no pixels returned', name: 'sis.chat');

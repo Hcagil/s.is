@@ -7,6 +7,7 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -20,6 +21,7 @@ private const val TONE_CHANNEL = "sis/tone_picker"
 private const val REQUEST_TONE = 9103
 private const val REQUEST_ATTACHMENTS = 9101
 private const val REQUEST_PICTURE = 9102
+private const val REQUEST_CAMERA = 9104
 private const val MAX_ATTACHMENTS = 10
 private const val ATTACHMENT_EDGE = 1600
 private const val PICTURE_EDGE = 2048
@@ -35,6 +37,7 @@ private const val PICTURE_EDGE = 2048
 class MainActivity : FlutterActivity() {
     private var pendingResult: MethodChannel.Result? = null
     private var pendingTone: MethodChannel.Result? = null
+    private var cameraFile: File? = null
 
     // PickedImageProcessor.process() does file I/O, bitmap decode/rotate/
     // scale and JPEG compression for up to 10 photos; on the main thread
@@ -53,6 +56,7 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "pickAttachments" -> startPick(multiple = true, requestCode = REQUEST_ATTACHMENTS, result = result)
                     "pickProfilePicture" -> startPick(multiple = false, requestCode = REQUEST_PICTURE, result = result)
+                    "takePhoto" -> takePhoto(result)
                     "cropPicture" -> cropPicture(call, result)
                     else -> result.notImplemented()
                 }
@@ -109,6 +113,34 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    // The camera app, through the camera intent: it needs no CAMERA
+    // permission of ours. It writes the photo into a file of ours (shared
+    // through FileProvider, see AndroidManifest.xml), which is processed like
+    // any picked photo and then deleted.
+    private fun takePhoto(result: MethodChannel.Result) {
+        if (pendingResult != null) {
+            result.error("busy", "A picker is already open.", null)
+            return
+        }
+        val dir = File(cacheDir, "captures").apply { mkdirs() }
+        val file = File(dir, "capture-${System.currentTimeMillis()}.jpg")
+        val uri = FileProvider.getUriForFile(this, "$packageName.captures", file)
+        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+            putExtra(MediaStore.EXTRA_OUTPUT, uri)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        pendingResult = result
+        cameraFile = file
+        try {
+            startActivityForResult(intent, REQUEST_CAMERA)
+        } catch (e: ActivityNotFoundException) {
+            pendingResult = null
+            cameraFile = null
+            file.delete()
+            result.error("no_camera", "No camera on this device.", null)
+        }
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == REQUEST_TONE) {
             val result = pendingTone
@@ -129,6 +161,32 @@ class MainActivity : FlutterActivity() {
                 else -> result.success(
                     mapOf("uri" to uri.toString(), "name" to (RingtoneManager.getRingtone(this, uri)?.getTitle(this) ?: "Custom")),
                 )
+            }
+            return
+        }
+        if (requestCode == REQUEST_CAMERA) {
+            val result = pendingResult
+            pendingResult = null
+            val file = cameraFile
+            cameraFile = null
+            if (result == null) {
+                file?.delete()
+                return
+            }
+            if (resultCode != Activity.RESULT_OK || file == null || !file.exists() || file.length() == 0L) {
+                file?.delete()
+                result.success(null)
+                return
+            }
+            pickExecutor.execute {
+                try {
+                    val path = PickedImageProcessor(this@MainActivity).process(Uri.fromFile(file), ATTACHMENT_EDGE)
+                    runOnUiThread { result.success(mapOf("paths" to listOf(path), "dropped" to 0)) }
+                } catch (e: Exception) {
+                    runOnUiThread { result.error("unreadable", "Could not read the photo.", null) }
+                } finally {
+                    file.delete()
+                }
             }
             return
         }

@@ -25,11 +25,13 @@ import 'features/chat/data/supabase_chat_repository.dart';
 import 'features/chat/data/supabase_contacts_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
 import 'features/notifications/application/alert_controller.dart';
+import 'features/notifications/application/badge_controller.dart';
 import 'features/notifications/application/notification_settings_controller.dart';
 import 'features/notifications/application/push_controller.dart';
 import 'features/notifications/data/channel_tone_picker.dart';
 import 'features/notifications/data/firebase_push_source.dart';
 import 'features/notifications/data/local_push_display.dart';
+import 'features/notifications/data/platform_app_badge.dart';
 import 'features/notifications/data/shared_prefs_alert_store.dart';
 import 'features/notifications/data/shared_prefs_notification_explainer_store.dart';
 import 'features/notifications/data/supabase_notification_settings_repository.dart';
@@ -142,6 +144,7 @@ Future<void> main() async {
             FirebasePushSource(FirebaseMessaging.instance),
           ),
           pushReceiptsProvider.overrideWithValue(SupabasePushReceipts(client)),
+          appBadgeProvider.overrideWithValue(const PlatformAppBadge()),
           notificationSettingsRepositoryProvider.overrideWithValue(
             SupabaseNotificationSettingsRepository(client),
           ),

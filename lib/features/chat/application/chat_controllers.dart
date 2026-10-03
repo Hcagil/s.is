@@ -874,31 +874,59 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     state = AsyncData([...current]..[i] = message);
   }
 
-  /// Deletes the member's own [message] for everyone. The screen shows an
-  /// [Err]'s reason; on success the message vanishes or becomes "deleted"
-  /// here at once, and on every other open screen through Realtime.
+  /// Deletes [message] for everyone (the member's own, or any member's when
+  /// they are a group admin). The placeholder shows here at once and is
+  /// rolled back when the server refuses; other open screens get it through
+  /// Realtime.
   Future<Result<void>> deleteForEveryone(Message message) async {
+    _deleted(
+      Message(
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        body: '',
+        createdAt: message.createdAt,
+        deletion: MessageDeletion.placeholder,
+        deletedBy: _me,
+      ),
+    );
     final result = await ref
         .read(chatRepositoryProvider)
         .deleteForEveryone(message);
-    if (result is Ok && ref.mounted) {
-      final vanishes =
-          DateTime.now().difference(message.createdAt) <
-          const Duration(hours: 1);
-      _deleted(
-        Message(
-          id: message.id,
-          conversationId: message.conversationId,
-          senderId: message.senderId,
-          body: '',
-          createdAt: message.createdAt,
-          deletion: vanishes
-              ? MessageDeletion.vanished
-              : MessageDeletion.placeholder,
-        ),
-      );
+    if (result is Err && ref.mounted) _replace(message);
+    return result;
+  }
+
+  /// Hides [message] from this member only (delete for me). It leaves the
+  /// list at once and comes back when the server refuses.
+  Future<Result<void>> hideForMe(Message message) async {
+    final current = state.value;
+    if (current != null) {
+      state = AsyncData([
+        for (final m in current)
+          if (m.id != message.id) m,
+      ]);
+    }
+    final result = await ref.read(chatRepositoryProvider).hideForMe(message);
+    if (result is Err && ref.mounted) {
+      final now = state.value;
+      if (now != null && !now.any((m) => m.id == message.id)) {
+        state = AsyncData(
+          [...now, message]..sort((a, b) => a.createdAt.compareTo(b.createdAt)),
+        );
+      }
     }
     return result;
+  }
+
+  /// Puts [message] back in its place (a refused delete), keeping every
+  /// other change made meanwhile.
+  void _replace(Message message) {
+    final current = state.value;
+    if (current == null) return;
+    final i = current.indexWhere((m) => m.id == message.id);
+    if (i < 0) return;
+    state = AsyncData([...current]..[i] = message);
   }
 
   /// Edits the member's own [message] to [body]. The screen shows an [Err]'s

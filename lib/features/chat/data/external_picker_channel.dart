@@ -28,10 +28,16 @@ final class ExternalPickerChannel implements ExternalPicker {
   final MethodChannel _channel;
 
   @override
-  Future<ExternalPickResult> pickAttachments() async {
+  Future<ExternalPickResult> pickAttachments() =>
+      _pickImages('pickAttachments');
+
+  @override
+  Future<ExternalPickResult> takePhoto() => _pickImages('takePhoto');
+
+  Future<ExternalPickResult> _pickImages(String method) async {
     final Map<Object?, Object?>? raw;
     try {
-      raw = await _channel.invokeMapMethod<String, Object?>('pickAttachments');
+      raw = await _channel.invokeMapMethod<String, Object?>(method);
     } on PlatformException catch (e) {
       log('picker ${e.code}: ${e.message}', name: 'sis.chat', error: e);
       return const ExternalPickFailed();

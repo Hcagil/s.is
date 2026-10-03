@@ -80,6 +80,16 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   @override
+  Future<Result<int>> unreadTotal() async {
+    try {
+      final n = await _client.rpc('unread_total');
+      return Ok(n as int);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
   Future<Result<List<Conversation>>> conversations() async {
     final me = _uid;
     if (me == null) return const Err(DeniedFailure());
@@ -254,7 +264,7 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, reply_to, forwarded, edited_at';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -949,6 +959,16 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   @override
+  Future<Result<void>> hideForMe(Message message) async {
+    try {
+      await _client.rpc('hide_message', params: {'message': message.id});
+      return const Ok(null);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
   Future<Result<Message>> editMessage(Message message, String body) async {
     try {
       final row = await _client.rpc(
@@ -1040,6 +1060,7 @@ final class SupabaseChatRepository implements ChatRepository {
       'placeholder' => MessageDeletion.placeholder,
       _ => null,
     },
+    deletedBy: row['deleted_by'] as String?,
   );
 
   /// A preview that does not decode is dropped, never thrown: one bad row

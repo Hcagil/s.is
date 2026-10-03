@@ -22,6 +22,9 @@ type Target = {
   // setting: sender is null for 'none'; chat is null for a 1:1 and for 'none'.
   sender: string | null;
   chat: string | null;
+  // The recipient's unread total (muted chats and people left out), counting
+  // this message: the app-icon badge. Absent from an old schema.
+  badge?: number;
 };
 
 async function accessToken(serviceAccount: {
@@ -123,6 +126,10 @@ async function send(id: string): Promise<void> {
       // always gets a regular notification, grouped per chat by the system
       // (thread-id) and with the default sound. Android is untouched.
       const ios = t.platform === 'ios';
+      // The badge is a count the database computed for this recipient; a
+      // missing or odd value sets nothing rather than a wrong number.
+      const badge =
+        typeof t.badge === 'number' && Number.isInteger(t.badge) && t.badge >= 0 ? t.badge : null;
       // A group's alert is titled with the group and each line reads
       // "Sender: message" (WhatsApp style); a 1:1's title stays the sender.
       // An iPhone shows this block as is, and Android's app takes the same
@@ -160,9 +167,22 @@ async function send(id: string): Promise<void> {
               title: t.title,
               body: t.body,
               ...(group ? { sender: t.sender!, chat: t.chat! } : {}),
+              // Android has no remote badge: the app's own notification sets
+              // it (Notification.setNumber) from this.
+              ...(badge != null ? { badge: String(badge) } : {}),
             },
             ...(ios
-              ? { apns: { payload: { aps: { 'thread-id': t.conversation_id, sound: 'default' } } } }
+              ? {
+                  apns: {
+                    payload: {
+                      aps: {
+                        'thread-id': t.conversation_id,
+                        sound: 'default',
+                        ...(badge != null ? { badge } : {}),
+                      },
+                    },
+                  },
+                }
               : { android: { priority: 'high' } }),
           },
         }),

@@ -11,6 +11,7 @@ import '../features/chat/application/chat_controllers.dart';
 import '../features/chat/application/chat_drafts.dart';
 import '../features/chat/application/group_controller.dart';
 import '../features/home/presentation/home_screen.dart';
+import '../features/notifications/application/badge_controller.dart';
 import '../features/notifications/application/push_controller.dart';
 import '../features/notifications/presentation/notification_explainer_screen.dart';
 import '../features/profile/application/profile_controller.dart';
@@ -99,6 +100,8 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       onShow: () {
         ref.read(appVisibleProvider.notifier).set(true);
         ref.read(resumeCatchUpProvider)();
+        // The icon number is re-read on every return, never left stale.
+        ref.read(badgeSyncProvider)();
       },
       onResume: () {
         ref.read(updateControllerProvider.notifier).recheck();
@@ -147,6 +150,9 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       // Asks for the What's new notes due for this build once per start,
       // for whoever is signed in.
       ref.listen(releaseNotesProvider, (_, _) {});
+      // The app-icon unread number follows the chat list for whoever is
+      // signed in (and clears when nobody is).
+      ref.listen(badgeSyncProvider, (_, _) {});
     }
 
     final update = ref.watch(updateControllerProvider).value;

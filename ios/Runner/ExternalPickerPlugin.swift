@@ -7,7 +7,9 @@ import UniformTypeIdentifiers
 // Android, with the same method names, arguments and results. "From an app"
 // is the system photo picker (PHPicker): it runs out of process, needs no
 // photo-library permission and hands back only what the member chose.
-final class ExternalPickerPlugin: NSObject, FlutterPlugin, PHPickerViewControllerDelegate {
+final class ExternalPickerPlugin: NSObject, FlutterPlugin, PHPickerViewControllerDelegate,
+  UIImagePickerControllerDelegate, UINavigationControllerDelegate
+{
   private static let attachmentEdge = 1600
   private static let pictureEdge = 2048
   private static let maxAttachments = 10
@@ -31,10 +33,86 @@ final class ExternalPickerPlugin: NSObject, FlutterPlugin, PHPickerViewControlle
       present(isPicture: false, result: result)
     case "pickProfilePicture":
       present(isPicture: true, result: result)
+    case "takePhoto":
+      takePhoto(result: result)
     case "cropPicture":
       crop(call.arguments as? [String: Any], result: result)
     default:
       result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func topViewController() -> UIViewController? {
+    var top = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap { $0.windows }
+      .first(where: { $0.isKeyWindow })?
+      .rootViewController
+    while let presented = top?.presentedViewController { top = presented }
+    return top
+  }
+
+  // The camera: one photo taken now, replied exactly like pickAttachments
+  // (`paths` + `dropped`). Needs NSCameraUsageDescription in Info.plist.
+  private func takePhoto(result: @escaping FlutterResult) {
+    if pending != nil {
+      result(FlutterError(code: "busy", message: "A picker is already open.", details: nil))
+      return
+    }
+    guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+      result(FlutterError(code: "no_camera", message: "No camera on this device.", details: nil))
+      return
+    }
+    guard let host = topViewController() else {
+      result(FlutterError(code: "no_app", message: "No app can open the camera.", details: nil))
+      return
+    }
+    let picker = UIImagePickerController()
+    picker.sourceType = .camera
+    picker.mediaTypes = ["public.image"]
+    picker.delegate = self
+    pending = result
+    pendingIsPicture = false
+    host.present(picker, animated: true)
+  }
+
+  func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+    picker.dismiss(animated: true)
+    guard let reply = pending else { return }
+    pending = nil
+    reply(nil)  // cancelled: not a failure
+  }
+
+  func imagePickerController(
+    _ picker: UIImagePickerController,
+    didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+  ) {
+    picker.dismiss(animated: true)
+    guard let reply = pending else { return }
+    pending = nil
+    guard let image = info[.originalImage] as? UIImage else {
+      reply(FlutterError(code: "unreadable", message: "Could not read the photo.", details: nil))
+      return
+    }
+    worker.async {
+      // jpegData writes the camera's orientation into the EXIF, which
+      // PickedImageProcessor then applies.
+      let temp = FileManager.default.temporaryDirectory
+        .appendingPathComponent("capture-\(UUID().uuidString).jpg")
+      defer { try? FileManager.default.removeItem(at: temp) }
+      do {
+        guard let data = image.jpegData(compressionQuality: 0.92) else {
+          throw PickedImageError.notImage
+        }
+        try data.write(to: temp)
+        let path = try PickedImageProcessor.process(
+          url: temp, maxEdge: ExternalPickerPlugin.attachmentEdge)
+        DispatchQueue.main.async { reply(["paths": [path], "dropped": 0]) }
+      } catch {
+        DispatchQueue.main.async {
+          reply(FlutterError(code: "unreadable", message: "Could not read the photo.", details: nil))
+        }
+      }
     }
   }
 
@@ -49,13 +127,7 @@ final class ExternalPickerPlugin: NSObject, FlutterPlugin, PHPickerViewControlle
     let picker = PHPickerViewController(configuration: config)
     picker.delegate = self
 
-    var top = UIApplication.shared.connectedScenes
-      .compactMap { $0 as? UIWindowScene }
-      .flatMap { $0.windows }
-      .first(where: { $0.isKeyWindow })?
-      .rootViewController
-    while let presented = top?.presentedViewController { top = presented }
-    guard let host = top else {
+    guard let host = topViewController() else {
       result(FlutterError(code: "no_app", message: "No app can open photos.", details: nil))
       return
     }

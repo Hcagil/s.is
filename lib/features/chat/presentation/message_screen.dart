@@ -21,7 +21,9 @@ import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
 import '../application/group_controller.dart';
+import '../domain/attachment.dart';
 import '../domain/emoji.dart';
+import '../domain/external_picker.dart';
 import '../domain/group_member.dart';
 import '../domain/highlight.dart';
 import '../domain/links.dart';
@@ -326,6 +328,15 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     return null;
   }
 
+  /// A tap on a message: closes the keyboard and any open swipe row, then
+  /// opens the action menu. Photo, link and quote taps are handled deeper in
+  /// the bubble and win over this.
+  Future<void> _openMessageMenu(Message message) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _openSwipeId.value = null;
+    await showMessageMenu(context, ref, message);
+  }
+
   @override
   Widget build(BuildContext context) {
     final messages = ref.watch(messagesProvider);
@@ -500,7 +511,10 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
-                  onTap: () => _openSwipeId.value = null,
+                  onTap: () {
+                    _openSwipeId.value = null;
+                    FocusManager.instance.primaryFocus?.unfocus();
+                  },
                   child: switch (messages) {
                     AsyncData() when timeline.isEmpty => const Center(
                       child: Text('No messages yet. Say something.'),
@@ -557,8 +571,15 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                           },
                           onAction: (action) {
                             _openSwipeId.value = null;
-                            runMessageAction(context, ref, message, action);
+                            runMessageAction(
+                              context,
+                              ref,
+                              message,
+                              action,
+                              canDeleteForEveryone: true,
+                            );
                           },
+                          onTap: () => _openMessageMenu(message),
                           child: _Bubble(
                             message,
                             key: ValueKey('read-$unread-${message.id}'),
@@ -737,7 +758,9 @@ class _Bubble extends StatelessWidget {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        'This message was deleted',
+                        message.deletedByAdmin
+                            ? 'Deleted by an admin'
+                            : 'This message was deleted',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1189,7 +1212,19 @@ class _Attachment extends ConsumerWidget {
     ];
     final index = paths.indexOf(path);
     if (index < 0) return;
-    openPhotoViewer(context, paths, index);
+    openPhotoViewer(
+      context,
+      paths,
+      index,
+      onMenu: (viewerContext, shown) {
+        final message = (ref.read(messagesProvider).value ?? const <Message>[])
+            .where((m) => m.attachmentPath == shown)
+            .firstOrNull;
+        return message == null
+            ? Future.value(false)
+            : showMessageMenu(viewerContext, ref, message, photoViewer: true);
+      },
+    );
   }
 
   @override
@@ -1396,14 +1431,41 @@ class _ComposerState extends ConsumerState<_Composer> {
     }
   }
 
+  /// One photo taken now. It has the same shape as the library's, so it
+  /// flows through the same caption / upload / optimistic-bubble path. A
+  /// cancelled camera sends nothing; a failure says so.
+  Future<({List<PickedImage> images, int dropped})> _takePhoto() async {
+    const none = (images: <PickedImage>[], dropped: 0);
+    final result = await ref.read(externalPickerProvider).takePhoto();
+    if (!mounted) return none;
+    switch (result) {
+      case ExternalPickedImages(:final images) when images.isNotEmpty:
+        return (images: images, dropped: 0);
+      case ExternalPickCancelled():
+        return none;
+      case ExternalPickedImages() || ExternalPickFailed():
+        showSisNotice(
+          context,
+          'The camera could not take a photo.',
+          isError: true,
+        );
+        return none;
+    }
+  }
+
   /// Picks and sends one or more images, with whatever is typed as the
   /// caption of the first one -- the rest go with no caption, one message
   /// per photo, same as any photo sent from the grid.
   Future<void> _attach() async {
     if (_sending) return;
-    // The phone's own photos, or another app's. Closing the sheet without
-    // choosing anything sends nothing.
-    final picked = await showAttachmentSheet(context);
+    // The camera, or the phone's photo library (which also offers another
+    // app). Closing either without a photo sends nothing.
+    final source = await showAttachMenu(context);
+    if (source == null || !mounted) return;
+    final picked = switch (source) {
+      AttachSource.library => await showAttachmentSheet(context),
+      AttachSource.camera => await _takePhoto(),
+    };
     if (picked.images.isEmpty || !mounted) return;
     setState(() => _sending = true);
     final body = _controller.text;

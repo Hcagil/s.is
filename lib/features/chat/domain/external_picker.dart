@@ -48,6 +48,13 @@ abstract interface class ExternalPicker {
   /// attachment.
   Future<ExternalPickResult> pickAttachments();
 
+  /// Opens the phone's camera for one photo taken right now, returned in the
+  /// same long-edge-1600 JPEG shape as [pickAttachments] (always one image,
+  /// [ExternalPickedImages.dropped] 0). Cancelled when the member closes the
+  /// camera without a photo; [ExternalPickFailed] when there is no camera or
+  /// the photo cannot be read.
+  Future<ExternalPickResult> takePhoto();
+
   /// Opens the chooser for exactly one photo, returned uncropped and
   /// upright, ready for the crop screen -- the same shape [Gallery.loadForCrop]
   /// returns.

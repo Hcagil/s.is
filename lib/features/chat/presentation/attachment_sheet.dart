@@ -31,6 +31,37 @@ Future<({List<PickedImage> images, int dropped})> showAttachmentSheet(
   return result ?? (images: const <PickedImage>[], dropped: 0);
 }
 
+/// What the paperclip's small menu offers.
+enum AttachSource { camera, library }
+
+/// The paperclip's small menu: take a photo now, or pick from the photo
+/// library. Null when dismissed.
+Future<AttachSource?> showAttachMenu(BuildContext context) =>
+    showModalBottomSheet<AttachSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          key: const ValueKey('attach-menu'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const ValueKey('attach-camera'),
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Camera'),
+              onTap: () => Navigator.of(sheet).pop(AttachSource.camera),
+            ),
+            ListTile(
+              key: const ValueKey('attach-library'),
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Photo library'),
+              onTap: () => Navigator.of(sheet).pop(AttachSource.library),
+            ),
+          ],
+        ),
+      ),
+    );
+
 /// The phone's recent photos to send from. Asks for photo access the first
 /// time it opens; when access is missing or partial, shows SIS's own screen
 /// for it instead of the phone's photos.
@@ -133,9 +164,14 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
   Future<void> _choose(GalleryPhoto p) async {
     if (_opening) return;
     setState(() => _opening = true);
-    final image = widget.square
-        ? await ref.read(galleryProvider).loadForCrop(p)
-        : await ref.read(galleryProvider).load(p);
+    PickedImage? image;
+    try {
+      image = widget.square
+          ? await ref.read(galleryProvider).loadForCrop(p)
+          : await ref.read(galleryProvider).load(p);
+    } catch (_) {
+      image = null; // a thrown load is a failed load, never a stuck sheet
+    }
     if (!mounted) return;
     setState(() => _opening = false);
     if (image == null) {
@@ -390,16 +426,21 @@ class _ThumbState extends ConsumerState<_Thumb> {
   Widget build(BuildContext context) {
     return FutureBuilder<Uint8List?>(
       future: _bytes,
-      builder: (context, snapshot) => switch (snapshot.data) {
-        final Uint8List data => InkWell(
-          onTap: widget.onTap,
-          child: Image.memory(data, fit: BoxFit.cover, gaplessPlayback: true),
-        ),
-        // Not read yet, or unreadable: a quiet tile, not a tap target.
-        null => ColoredBox(
-          color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        ),
-      },
+      builder: (context, snapshot) => InkWell(
+        onTap: widget.onTap,
+        child: switch (snapshot.data) {
+          final Uint8List data => Image.memory(
+            data,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+          ),
+          // Not read yet, or unreadable: a quiet tile, but still tappable (a
+          // limited-access photo can be slow, and a tap must never be lost).
+          null => ColoredBox(
+            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          ),
+        },
+      ),
     );
   }
 }

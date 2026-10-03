@@ -13,18 +13,27 @@ Future<void> openPhotoViewer(
   List<String> paths,
   int index, {
   bool isAvatar = false,
+  PhotoMenu? onMenu,
 }) => Navigator.of(context).push(
   // Not opaque: the chat shows through while a swipe-down fades the black.
   PageRouteBuilder<void>(
     opaque: false,
     transitionDuration: const Duration(milliseconds: 200),
     reverseTransitionDuration: const Duration(milliseconds: 200),
-    pageBuilder: (_, _, _) =>
-        PhotoViewer(paths: paths, initialIndex: index, isAvatar: isAvatar),
+    pageBuilder: (_, _, _) => PhotoViewer(
+      paths: paths,
+      initialIndex: index,
+      isAvatar: isAvatar,
+      onMenu: onMenu,
+    ),
     transitionsBuilder: (_, animation, _, child) =>
         FadeTransition(opacity: animation, child: child),
   ),
 );
+
+/// Opens the message menu for the photo at [path]; true when the viewer
+/// should close (reply started, or the photo was deleted).
+typedef PhotoMenu = Future<bool> Function(BuildContext context, String path);
 
 /// Full-screen photos, dark whatever the theme: photos read best on black.
 class PhotoViewer extends StatefulWidget {
@@ -33,6 +42,7 @@ class PhotoViewer extends StatefulWidget {
     required this.paths,
     this.initialIndex = 0,
     this.isAvatar = false,
+    this.onMenu,
   });
 
   /// Attachment storage paths, in the order the caller shows them -- or, when
@@ -43,6 +53,9 @@ class PhotoViewer extends StatefulWidget {
   /// True when [paths] are avatar-bucket pictures (profile or group), read
   /// through [avatarBytesProvider] instead of [attachmentBytesProvider].
   final bool isAvatar;
+
+  /// When set, the app bar shows a menu button for the shown photo.
+  final PhotoMenu? onMenu;
 
   @override
   State<PhotoViewer> createState() => _PhotoViewerState();
@@ -105,6 +118,22 @@ class _PhotoViewerState extends State<PhotoViewer>
           key: const ValueKey('viewer-position'),
           style: const TextStyle(color: Colors.white, fontSize: 16),
         ),
+        actions: [
+          if (widget.onMenu != null)
+            IconButton(
+              key: const ValueKey('viewer-menu'),
+              icon: const Icon(Icons.more_horiz),
+              tooltip: 'More',
+              onPressed: () async {
+                final nav = Navigator.of(context);
+                final close = await widget.onMenu!(
+                  context,
+                  widget.paths[_index],
+                );
+                if (close && mounted) nav.pop();
+              },
+            ),
+        ],
       ),
       body: Transform.translate(
         offset: Offset(0, _dy),

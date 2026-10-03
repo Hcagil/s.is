@@ -950,15 +950,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       // My own photo's stored row (the Realtime echo or the POST answer,
       // whichever is first) takes the pending bubble's place and keeps its
       // local image: one bubble, never two, and no swap to the downloaded
-      // copy. ponytail: matched by caption; photos go one at a time
-      // (sendImages awaits each), so the first pending one is it.
+      // copy. Matched by caption and the photo's own preview (see
+      // Message.isPendingOf), so photos in the air together never swap.
       final p = message.attachmentPath != null && message.isFrom(_me ?? '')
-          ? current.indexWhere(
-              (m) =>
-                  m.localImage != null &&
-                  m.attachmentPath == null &&
-                  m.body == message.body,
-            )
+          ? current.indexWhere((m) => m.isPendingOf(message))
           : -1;
       state = AsyncData(
         p >= 0
@@ -1002,6 +997,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       body: body.trim(),
       createdAt: DateTime.now(),
       localImage: image.bytes,
+      attachmentPreview: image.preview,
     );
     _append(pending);
     final result = await ref

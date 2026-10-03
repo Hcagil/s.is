@@ -136,6 +136,22 @@ final class Message {
   bool get isPending =>
       sending || (localImage != null && attachmentPath == null);
 
+  /// Whether this is the pending photo bubble that [stored] is the stored
+  /// row of: same caption and the same preview bytes, which each photo has of
+  /// its own, so two photos in the air with one caption pair up correctly.
+  /// ponytail: a side without a preview matches on caption alone.
+  bool isPendingOf(Message stored) {
+    if (localImage == null || attachmentPath != null) return false;
+    if (body != stored.body) return false;
+    final a = attachmentPreview, b = stored.attachmentPreview;
+    if (a == null || b == null) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   /// A copy of this message carrying [bytes] as its [localImage]: a stored
   /// photo message keeps showing the phone's own copy of the photo it was
   /// sent from, so nothing is swapped when the stored row replaces the

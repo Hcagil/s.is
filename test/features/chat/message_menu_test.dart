@@ -10,13 +10,16 @@
 //    exists only when the viewer was given onMenu, and closes the viewer when
 //    onMenu says so.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/theme.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
+import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/chat/presentation/photo_viewer.dart';
@@ -56,10 +59,13 @@ Future<ProviderContainer> pump(
   List<Message> messages, {
   LinkOpenerFake? opener,
 }) async {
-  final chat = ChatFake(
-    self: me.userId,
-    latency: const Duration(milliseconds: 5),
-  )..history['c1'] = [...messages];
+  final chat =
+      ChatFake(self: me.userId, latency: const Duration(milliseconds: 5))
+        ..history['c1'] = [...messages]
+        ..conversationsResult = const Ok([
+          Conversation(id: 'c1', title: 'Bob'),
+          Conversation(id: 'c2', title: 'Work'),
+        ]);
   for (final m in messages) {
     if (m.attachmentPath case final path?) chat.store(path);
   }
@@ -375,6 +381,250 @@ void main() {
       await tester.pumpAndSettle();
       expect(asked, ['c1/1.png', 'c1/1.png']);
       expect(find.byType(PhotoViewer), findsNothing);
+    });
+  });
+
+  group('the floating card (0.30.9)', () {
+    const safeTop = 40.0;
+    const safeBottom = 30.0;
+    const screen = Size(400, 800);
+
+    /// A phone with a notch and a home bar.
+    void phone(WidgetTester tester) {
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = screen
+        ..padding = const FakeViewPadding(top: safeTop, bottom: safeBottom)
+        ..viewPadding = const FakeViewPadding(top: safeTop, bottom: safeBottom);
+      addTearDown(tester.view.reset);
+    }
+
+    void expectOnScreen(Rect r) {
+      expect(r.left, greaterThanOrEqualTo(0), reason: 'left $r');
+      expect(r.right, lessThanOrEqualTo(screen.width), reason: 'right $r');
+      expect(r.top, greaterThanOrEqualTo(safeTop), reason: 'top $r');
+      expect(
+        r.bottom,
+        lessThanOrEqualTo(screen.height - safeBottom),
+        reason: 'bottom $r',
+      );
+    }
+
+    testWidgets('is on screen one frame plus 120 ms after the tap', (
+      tester,
+    ) async {
+      await pump(tester, [msg('m1', from: bob)]);
+      await tester.tap(message('m1'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(menu, findsOneWidget);
+      for (final fade in tester.widgetList<FadeTransition>(
+        find.ancestor(of: menu, matching: find.byType(FadeTransition)),
+      )) {
+        expect(fade.opacity.value, 1.0);
+      }
+      expect(find.byKey(const ValueKey('menu-reply')).hitTestable(), findsOne);
+    });
+
+    testWidgets('is no bottom sheet', (tester) async {
+      await pump(tester, [msg('m1', from: bob)]);
+      await tester.tap(message('m1'));
+      await tester.pumpAndSettle();
+      expect(menu, findsOneWidget);
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(
+        find.ancestor(of: menu, matching: find.byType(ListTile)),
+        findsNothing,
+      );
+    });
+
+    testWidgets('a bubble low on the screen: the card sits above it', (
+      tester,
+    ) async {
+      phone(tester);
+      await pump(tester, [msg('m1', from: bob)]);
+      final bubble = tester.getRect(message('m1'));
+      expect(bubble.top, greaterThan(screen.height / 2), reason: 'low');
+      await tester.tap(message('m1'));
+      await tester.pumpAndSettle();
+
+      final card = tester.getRect(menu);
+      expect(card.bottom, lessThanOrEqualTo(bubble.top));
+      expect(bubble.top - card.bottom, lessThanOrEqualTo(24), reason: 'hugs');
+      expectOnScreen(card);
+    });
+
+    testWidgets('the card hugs the bubble after the keyboard goes down', (
+      tester,
+    ) async {
+      // A real keyboard: up while typing, and it slides away a few frames
+      // AFTER the tap that unfocuses the composer, moving the bubble.
+      phone(tester);
+      await pump(tester, [msg('m1', from: bob, body: 'lunch?')]);
+      await raiseKeyboard(tester);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      await tester.pumpAndSettle();
+
+      await tester.tap(message('m1'));
+      await tester.pump();
+      expect(keyboardUp(tester), isFalse, reason: 'precondition: unfocused');
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pumpAndSettle();
+
+      final bubble = tester.getRect(message('m1'));
+      final card = tester.getRect(menu);
+      expectOnScreen(card);
+      expect(card.bottom, lessThanOrEqualTo(bubble.top));
+      expect(
+        bubble.top - card.bottom,
+        lessThanOrEqualTo(24),
+        reason: 'the card floats right above the bubble, not where it was',
+      );
+    });
+
+    testWidgets('a bubble near the top: the card flips below it', (
+      tester,
+    ) async {
+      phone(tester);
+      await pump(tester, [
+        for (var i = 0; i < 40; i++)
+          msg('m$i', from: bob, body: 'line $i', minute: i),
+      ]);
+      final list = tester.getRect(
+        find
+            .ancestor(of: message('m39'), matching: find.byType(Scrollable))
+            .first,
+      );
+      // The topmost bubble that is wholly inside the list.
+      final top =
+          [
+              for (var i = 0; i < 40; i++)
+                if (message('m$i').evaluate().isNotEmpty)
+                  (i, tester.getRect(message('m$i'))),
+            ].where((e) => e.$2.top >= list.top).toList()
+            ..sort((a, b) => a.$2.top.compareTo(b.$2.top));
+      final (id, bubble) = top.first;
+      expect(bubble.top, lessThan(200), reason: 'near the top');
+
+      await tester.tap(message('m$id'));
+      await tester.pumpAndSettle();
+      final card = tester.getRect(menu);
+      expect(card.top, greaterThanOrEqualTo(bubble.bottom));
+      expect(card.top - bubble.bottom, lessThanOrEqualTo(24), reason: 'hugs');
+      expectOnScreen(card);
+    });
+
+    testWidgets('a tap outside: closed, nothing done', (tester) async {
+      phone(tester);
+      await pump(tester, [msg('m1', body: 'lunch?')]);
+      await tester.tap(message('m1'));
+      await tester.pumpAndSettle();
+      final card = tester.getRect(menu);
+      final spot = Offset(screen.width - 10, card.top - 10);
+      expect(card.contains(spot), isFalse);
+      expect(tester.getRect(message('m1')).contains(spot), isFalse);
+
+      await tester.tapAt(spot);
+      await tester.pumpAndSettle();
+      expect(menu, findsNothing);
+      expect(find.byKey(const ValueKey('reply-bar')), findsNothing);
+      expect(find.byKey(const ValueKey('edit-bar')), findsNothing);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(MessageScreen), findsOneWidget);
+    });
+
+    testWidgets('Back: only the card closes, nothing done', (tester) async {
+      await pump(tester, [msg('m1', body: 'lunch?')]);
+      await tester.tap(message('m1'));
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(menu, findsNothing);
+      expect(find.byType(MessageScreen), findsOneWidget);
+      expect(find.byKey(const ValueKey('reply-bar')), findsNothing);
+      expect(find.byKey(const ValueKey('edit-bar')), findsNothing);
+    });
+
+    testWidgets('a photo bubble opens it off the photo', (tester) async {
+      await pump(tester, [
+        msg('p1', from: bob, body: 'caption', attachment: 'c1/1.png'),
+      ]);
+      await tester.tap(find.byKey(const ValueKey('body-p1')));
+      await tester.pumpAndSettle();
+      expect(menu, findsOneWidget);
+      expect(find.byType(PhotoViewer), findsNothing);
+    });
+
+    testWidgets('copy writes the clipboard and says Copied', (tester) async {
+      final copied = <String?>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied.add((call.arguments as Map)['text'] as String?);
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await pump(tester, [msg('m1', from: bob, body: 'lunch at noon')]);
+      await tester.tap(message('m1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('menu-copy')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(copied, ['lunch at noon']);
+      expect(find.text('Copied'), findsOneWidget);
+      expect(menu, findsNothing);
+      // Let the notice time out.
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('forward opens the forward picker', (tester) async {
+      await pump(tester, [msg('m1', from: bob)]);
+      await tester.tap(message('m1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('menu-forward')));
+      await tester.pumpAndSettle();
+      expect(menu, findsNothing);
+      expect(find.byKey(const ValueKey('forward-c2')), findsOneWidget);
+    });
+
+    testWidgets('edit opens the edit bar with the text', (tester) async {
+      await pump(tester, [msg('m1', body: 'typo hre')]);
+      await tester.tap(message('m1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('menu-edit')));
+      await tester.pumpAndSettle();
+      expect(menu, findsNothing);
+      expect(find.byKey(const ValueKey('edit-bar')), findsOneWidget);
+      expect(tester.widget<TextField>(composer).controller!.text, 'typo hre');
+    });
+
+    testWidgets('the viewer card hangs from the top-right, unhighlighted', (
+      tester,
+    ) async {
+      phone(tester);
+      await pump(tester, [msg('p1', body: 'caption', attachment: 'c1/1.png')]);
+      await tester.tap(find.byKey(const ValueKey('attachment-c1/1.png')));
+      await tester.pumpAndSettle();
+      final button = tester.getRect(find.byKey(const ValueKey('viewer-menu')));
+      await tester.tap(find.byKey(const ValueKey('viewer-menu')));
+      await tester.pumpAndSettle();
+
+      final card = tester.getRect(menu);
+      expectOnScreen(card);
+      expect(card.right, greaterThan(screen.width - 32), reason: 'right');
+      expect(card.top, greaterThanOrEqualTo(button.top), reason: 'under');
+      expect(card.top - button.bottom, lessThanOrEqualTo(24), reason: 'hangs');
+      expect(find.byType(BottomSheet), findsNothing);
     });
   });
 

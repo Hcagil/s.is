@@ -329,12 +329,55 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   }
 
   /// A tap on a message: closes the keyboard and any open swipe row, then
-  /// opens the action menu. Photo, link and quote taps are handled deeper in
-  /// the bubble and win over this.
-  Future<void> _openMessageMenu(Message message) async {
+  /// opens the action card above the bubble (below it when there is no room).
+  /// Photo, link and quote taps are handled deeper in the bubble and win over
+  /// this.
+  Future<void> _openMessageMenu(Message message, {required bool mine}) async {
     FocusManager.instance.primaryFocus?.unfocus();
     _openSwipeId.value = null;
-    await showMessageMenu(context, ref, message);
+    // The bubble moves while the keyboard drops, so the card is placed after
+    // it settles; capped at 30 frames.
+    if (View.of(context).viewInsets.bottom > 0) {
+      for (
+        var i = 0;
+        i < 30 && mounted && View.of(context).viewInsets.bottom > 0;
+        i++
+      ) {
+        await WidgetsBinding.instance.endOfFrame;
+      }
+      if (!mounted) return;
+    }
+    final anchor = _bubbleRect(message.id);
+    await showMessageMenu(
+      context,
+      ref,
+      message,
+      anchor: anchor,
+      alignEnd: mine,
+    );
+  }
+
+  /// The bubble's rectangle in global coordinates, or null when it is not on
+  /// screen. The bubble Container's own 12/4 margin is part of its box and is
+  /// removed, so the lift hugs the bubble.
+  Rect? _bubbleRect(String messageId) {
+    final root = _bubbleKeys[messageId]?.currentContext;
+    if (root == null) return null;
+    RenderBox? box;
+    void find(Element e) {
+      if (box != null) return;
+      if (e.widget.key == ValueKey('message-$messageId')) {
+        box = e.renderObject as RenderBox?;
+        return;
+      }
+      e.visitChildren(find);
+    }
+
+    (root as Element).visitChildren(find);
+    final b = box;
+    if (b == null || !b.attached) return null;
+    final r = b.localToGlobal(Offset.zero) & b.size;
+    return Rect.fromLTRB(r.left + 12, r.top + 4, r.right - 12, r.bottom - 4);
   }
 
   @override
@@ -579,7 +622,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                               canDeleteForEveryone: true,
                             );
                           },
-                          onTap: () => _openMessageMenu(message),
+                          onTap: () => _openMessageMenu(message, mine: mine),
                           child: _Bubble(
                             message,
                             key: ValueKey('read-$unread-${message.id}'),

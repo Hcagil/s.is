@@ -444,6 +444,52 @@ void main() {
       expect((h.avatar! as AvatarPicked).image.bytes, h.cropper.output);
     });
 
+    testWidgets('the card is up on the first frames after the tap, next '
+        'to the picture it was opened from', (t) async {
+      final h = Host();
+      t.view.physicalSize = const Size(1080, 2340);
+      t.view.devicePixelRatio = 2.625;
+      addTearDown(t.view.reset);
+      await t.pumpWidget(h.app());
+      await t.tap(byKey('avatar-true'));
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 16));
+      expect(byKey('avatar-card'), findsOneWidget, reason: 'not at once');
+      await settle(t);
+      final anchor = t.getRect(byKey('avatar-true'));
+      final card = t.getRect(byKey('avatar-card'));
+      final gap = card.top >= anchor.bottom
+          ? card.top - anchor.bottom
+          : anchor.top - card.bottom;
+      expect(gap, lessThan(48), reason: 'card $card far from anchor $anchor');
+      expect(find.text('Take photo'), findsOneWidget);
+    });
+
+    testWidgets('Take photo: the camera, then the crop; Use gives '
+        'AvatarPicked with the crop', (t) async {
+      final host = Host();
+      host.picker.shot = picked;
+      final h = await mount(t, 'avatar-true', host: host);
+      await tapKey(t, 'avatar-camera');
+      await steps(t, 30);
+      expect(h.picker.cameraCalls, 1);
+      await cropAndUse(t);
+      await settle(t);
+      expect(h.resolved, isTrue);
+      expect(h.avatar, isA<AvatarPicked>());
+      expect(h.cropper.calls.single.source, picked.bytes);
+      expect((h.avatar! as AvatarPicked).image.bytes, h.cropper.output);
+    });
+
+    testWidgets('a tap outside the card: null', (t) async {
+      final h = await mount(t, 'avatar-true');
+      await t.tapAt(const Offset(5, 700));
+      await settle(t);
+      expect(byKey('avatar-card'), findsNothing);
+      expect(h.resolved, isTrue);
+      expect(h.avatar, isNull);
+    });
+
     testWidgets('Remove: AvatarRemoved', (t) async {
       final h = await mount(t, 'avatar-true');
       await tapKey(t, 'avatar-remove');

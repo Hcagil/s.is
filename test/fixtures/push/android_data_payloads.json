@@ -6,7 +6,8 @@
     "user_id": "<user>",
     "message_id": "<message>",
     "sender": "Ann Sender",
-    "chat": "Edge Team"
+    "chat": "Edge Team",
+    "badge": "1"
   },
   "group_sender": {
     "conversation_id": "<conversation>",
@@ -15,20 +16,23 @@
     "user_id": "<user>",
     "message_id": "<message>",
     "sender": "Ann Sender",
-    "chat": "Edge Team"
+    "chat": "Edge Team",
+    "badge": "1"
   },
   "group_none": {
     "conversation_id": "<conversation>",
     "title": "SIS",
     "body": "New message",
     "user_id": "<user>",
-    "message_id": "<message>"
+    "message_id": "<message>",
+    "badge": "1"
   },
   "direct_full": {
     "conversation_id": "<conversation>",
     "title": "Ann Sender",
     "body": "edge direct hello",
     "user_id": "<user>",
-    "message_id": "<message>"
+    "message_id": "<message>",
+    "badge": "1"
   }
 }

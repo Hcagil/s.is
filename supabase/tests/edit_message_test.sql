@@ -361,14 +361,14 @@ select ok((select 'edited_at' = any(attnames) and 'body' = any(attnames) from pg
 -- A deleted row keeps only who sent it and when; "edited" is not kept.
 select test_as('00000000-0000-0000-0000-0000000ed001', 'ed000000-0000-0000-0000-0000000ed001');
 select is(public.delete_message((select to_delete from _m)), null,
-          'ann deletes the older edited message (under an hour: vanished)');
+          'ann deletes the older edited message (under an hour: still a placeholder)');
 select lives_ok(format($$select public.edit_message(%L, 'wipe me')$$, (select to_wipe from _m)),
                 'ann edits a 3-hour-old message');
 select is(public.delete_message((select to_wipe from _m)), null,
-          'and deletes it (over an hour: placeholder)');
+          'and deletes it (over an hour: a placeholder too)');
 reset role;
 select is((select (deleted::text, edited_at) from public.messages where id = (select to_delete from _m)),
-          row('vanished'::text, null::timestamptz), 'a vanished message is no longer marked edited');
+          row('placeholder'::text, null::timestamptz), 'a message deleted under an hour old is a placeholder, no longer marked edited');
 select is((select (deleted::text, edited_at) from public.messages where id = (select to_wipe from _m)),
           row('placeholder'::text, null::timestamptz), 'a placeholder is no longer marked edited');
 

@@ -27,7 +27,11 @@ select plan(30);
 --     profiles_read uses shared_conversation_ever and attachments_read uses
 --     attachment_readable (group_membership_test.sql proves each);
 --     since v0.27.0 messages_send also refuses the system conversation
---     (whats_new_test.sql proves the clause);
+--     (whats_new_test.sql proves the clause); since v0.30.8 the deleter
+--     delete_message recorded (sender or group admin) may read and remove
+--     the unreferenced photo -- attachments_read adds may_remove_attachment
+--     and attachments_remove_deleted drops its owner clause
+--     (delete_rules_test.sql proves both);
 --  3. plan text: a member reading conversation_members and
 --     conversation_previews evaluates has_app_access() in an InitPlan, never
 --     in a per-row Filter;
@@ -106,8 +110,8 @@ END)$e$),
   ('public', 'profiles', 'profiles_update_own', $e$PERMISSIVE|{authenticated}|UPDATE|(app_private.has_app_access() AND (user_id = auth.uid()))|(app_private.has_app_access() AND (user_id = auth.uid()) AND ((avatar_object IS NULL) OR app_private.avatar_path_pinned(avatar_object, ('profile/'::text || (user_id)::text))))$e$),
   ('realtime', 'messages', 'realtime_receive', $e$PERMISSIVE|{authenticated}|SELECT|(app_private.has_app_access() AND (((realtime.topic() = 'presence:members'::text) AND (extension = 'presence'::text)) OR ((extension = 'broadcast'::text) AND app_private.is_member(app_private.typing_conversation(realtime.topic()))) OR ((extension = 'broadcast'::text) AND app_private.is_member(app_private.reads_conversation(realtime.topic())) AND app_private.shares_read_status())))|<null>$e$),
   ('realtime', 'messages', 'realtime_send', $e$PERMISSIVE|{authenticated}|INSERT|<null>|(app_private.has_app_access() AND (((realtime.topic() = 'presence:members'::text) AND (extension = 'presence'::text) AND app_private.shares_presence()) OR ((extension = 'broadcast'::text) AND app_private.is_member(app_private.typing_conversation(realtime.topic())) AND app_private.shares_typing())))$e$),
-  ('storage', 'objects', 'attachments_read', $e$PERMISSIVE|{authenticated}|SELECT|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND app_private.attachment_readable(name, owner_id))|<null>$e$),
-  ('storage', 'objects', 'attachments_remove_deleted', $e$PERMISSIVE|{authenticated}|DELETE|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND (owner_id = (auth.uid())::text) AND app_private.may_remove_attachment(name))|<null>$e$),
+  ('storage', 'objects', 'attachments_read', $e$PERMISSIVE|{authenticated}|SELECT|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND (app_private.attachment_readable(name, owner_id) OR app_private.may_remove_attachment(name)))|<null>$e$),
+  ('storage', 'objects', 'attachments_remove_deleted', $e$PERMISSIVE|{authenticated}|DELETE|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND app_private.may_remove_attachment(name))|<null>$e$),
   ('storage', 'objects', 'attachments_write', $e$PERMISSIVE|{authenticated}|INSERT|<null>|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND app_private.is_member_of_path(name) AND (owner_id = (auth.uid())::text))$e$);
 
 select is(

@@ -136,6 +136,27 @@ final class Message {
   bool get isPending =>
       sending || (localImage != null && attachmentPath == null);
 
+  /// A copy of this message carrying [bytes] as its [localImage]: a stored
+  /// photo message keeps showing the phone's own copy of the photo it was
+  /// sent from, so nothing is swapped when the stored row replaces the
+  /// pending bubble.
+  Message withLocalImage(Uint8List? bytes) => Message(
+    id: id,
+    conversationId: conversationId,
+    senderId: senderId,
+    body: body,
+    createdAt: createdAt,
+    attachmentPath: attachmentPath,
+    attachmentPreview: attachmentPreview,
+    localImage: bytes,
+    deletion: deletion,
+    deletedBy: deletedBy,
+    editedAt: editedAt,
+    replyTo: replyTo,
+    forwarded: forwarded,
+    sending: sending,
+  );
+
   /// Whether [userId] wrote this message; decides which side it is drawn on.
   bool isFrom(String userId) => senderId == userId;
 }

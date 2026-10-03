@@ -799,6 +799,11 @@ void main() {
       expect(echoed.senderId, liamClient!.auth.currentUser!.id);
       expect(echoed.senderId, sent.value.senderId);
       expect(echoed.attachmentPreview, sent.value.attachmentPreview);
+      // Message.isPendingOf falls back to caption alone when a preview is
+      // missing; a photo sent from the app must come back with its own
+      // preview both ways, or two same-caption photos could swap unseen.
+      expect(sent.value.attachmentPreview, _png, reason: 'answer lost preview');
+      expect(echoed.attachmentPreview, _png, reason: 'echo lost preview');
     });
 
     test(
@@ -851,6 +856,7 @@ void main() {
         expect(mine, hasLength(1), reason: 'the photo is in the chat twice');
         expect(mine.single.id, id);
         expect(mine.single.isPending, isFalse);
+        expect(mine.single.attachmentPreview, _png);
         expect(
           mine.single.localImage,
           bytes,

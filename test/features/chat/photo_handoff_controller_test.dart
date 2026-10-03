@@ -276,4 +276,79 @@ void main() {
     expect(byId[rowA.id]!.localImage, a.bytes, reason: 'photos swapped');
     expect(byId[rowB.id]!.localImage, b.bytes, reason: 'photos swapped');
   });
+
+  test('the pending entry carries the picked photo\'s own preview', () async {
+    final chat = _Uploads();
+    final c = await scope(chat);
+    final image = shot(7);
+
+    unawaited(
+      c.read(messagesProvider.notifier).sendImage(body: 'x', chosen: image),
+    );
+    await flush();
+
+    expect(photos(c).single.isPending, isTrue);
+    expect(
+      photos(c).single.attachmentPreview,
+      image.preview,
+      reason:
+          'without its preview the pending photo matches any echo with '
+          'its caption',
+    );
+  });
+
+  test(
+    'only my own stored photo row claims a pending photo: someone else\'s '
+    'photo, or my text, with the same caption and preview never does',
+    () async {
+      final chat = _Uploads();
+      final c = await scope(chat);
+      final image = shot(1);
+
+      unawaited(
+        c
+            .read(messagesProvider.notifier)
+            .sendImage(body: 'same', chosen: image),
+      );
+      await flush();
+
+      // Another member's photo, identical caption and preview.
+      chat.deliver(
+        Message(
+          id: 'theirs',
+          conversationId: 'c1',
+          senderId: 'u2',
+          body: 'same',
+          createdAt: DateTime.now(),
+          attachmentPath: 'c1/theirs.jpg',
+          attachmentPreview: image.preview,
+        ),
+      );
+      // My own text message with the same caption.
+      chat.deliver(
+        Message(
+          id: 'my-text',
+          conversationId: 'c1',
+          senderId: me.userId,
+          body: 'same',
+          createdAt: DateTime.now(),
+        ),
+      );
+      await flush();
+
+      final all = c.read(messagesProvider).requireValue;
+      final mine = all.where((m) => m.isPending).toList();
+      expect(mine, hasLength(1), reason: 'the pending photo was claimed');
+      expect(mine.single.localImage, image.bytes);
+      final theirs = all.singleWhere((m) => m.id == 'theirs');
+      expect(theirs.localImage, isNull, reason: 'their photo took my bytes');
+      final text = all.singleWhere((m) => m.id == 'my-text');
+      expect(
+        text.localImage,
+        isNull,
+        reason: 'my text took the photo\'s place',
+      );
+      expect(mine.single.id, isNot('my-text'));
+    },
+  );
 }

@@ -27,15 +27,18 @@ final class _NoBadge implements AppBadge {
 /// another device, a message arriving, a delete) and when the returned
 /// function is called, which the app does on every return to the screen --
 /// so the number is corrected the moment the app is opened, never left stale.
-/// A failed read leaves the number as it was. A session still restoring is
-/// not a sign-out and sets nothing.
+/// A failed read leaves the number as it was. A session still restoring, or
+/// one that failed, is not a sign-out and sets nothing; a signed-out or
+/// denied member gets 0.
 final badgeSyncProvider = Provider<void Function()>((ref) {
   final me = ref.watch(currentUserIdProvider);
   if (me == null) {
-    final signedOut = ref.watch(
-      sessionControllerProvider.select((s) => s.value is SignedOut),
+    final noAccess = ref.watch(
+      sessionControllerProvider.select(
+        (s) => s.value is SignedOut || s.value is Denied,
+      ),
     );
-    if (signedOut) {
+    if (noAccess) {
       Future.microtask(() => ref.read(appBadgeProvider).set(0));
     }
     return () {};

@@ -807,49 +807,53 @@ class _Bubble extends StatelessWidget {
                   ),
                 ),
               if (message.replyTo != null && !message.isDeleted)
-                Container(
-                  key: ValueKey('quote-${message.id}'),
-                  margin: const EdgeInsets.only(bottom: 6),
-                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                  decoration: BoxDecoration(
-                    color: (mine ? Colors.white : brand.text).withValues(
-                      alpha: 0.12,
-                    ),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border(
-                      left: BorderSide(
-                        color: mine
-                            ? Colors.white
-                            : Theme.of(context).colorScheme.primary,
-                        width: 3,
+                GestureDetector(
+                  // A tap on a quote is its own (it opens nothing); it must not reach the bubble's menu tap.
+                  onTap: () {},
+                  child: Container(
+                    key: ValueKey('quote-${message.id}'),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                    decoration: BoxDecoration(
+                      color: (mine ? Colors.white : brand.text).withValues(
+                        alpha: 0.12,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border(
+                        left: BorderSide(
+                          color: mine
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.primary,
+                          width: 3,
+                        ),
                       ),
                     ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (quotedName != null)
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (quotedName != null)
+                          Text(
+                            quotedName!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: mine
+                                  ? Colors.white
+                                  : Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
                         Text(
-                          quotedName!,
+                          quoteText(quoted),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: mine
-                                ? Colors.white
-                                : Theme.of(context).colorScheme.primary,
+                            fontSize: 13,
+                            color: mine ? Colors.white : brand.text,
                           ),
                         ),
-                      Text(
-                        quoteText(quoted),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: mine ? Colors.white : brand.text,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               if (sender != null)

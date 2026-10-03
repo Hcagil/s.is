@@ -179,7 +179,9 @@ class _SwipeableMessageState extends State<SwipeableMessage> {
           ? widget.child
           : GestureDetector(
               behavior: HitTestBehavior.deferToChild,
+              // Long-press is reserved (v0.42): a no-op competes with the tap so a long hold opens nothing.
               onTap: widget.onTap,
+              onLongPress: () {},
               child: widget.child,
             );
     }
@@ -196,6 +198,7 @@ class _SwipeableMessageState extends State<SwipeableMessage> {
         onHorizontalDragEnd: (_) => _finishDrag(),
         onHorizontalDragCancel: _finishDrag,
         onTap: widget.onTap,
+        onLongPress: () {},
         child: Column(
           crossAxisAlignment: widget.mine
               ? CrossAxisAlignment.end

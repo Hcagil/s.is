@@ -40,6 +40,8 @@ Future<AttachSource?> showAttachMenu(BuildContext context) =>
     showModalBottomSheet<AttachSource>(
       context: context,
       showDragHandle: true,
+      // The paperclip leaves the keyboard up: the sheet must not take focus.
+      requestFocus: false,
       builder: (sheet) => SafeArea(
         child: Column(
           key: const ValueKey('attach-menu'),

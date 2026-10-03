@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -948,8 +949,23 @@ final class SupabaseChatRepository implements ChatRepository {
         // app_private.deleted_attachments); add a scheduled sweep of that
         // list if it is ever seen to matter.
         try {
-          await _client.storage.from('attachments').remove([path]);
-        } catch (_) {}
+          final removed = await _client.storage.from('attachments').remove([
+            path,
+          ]);
+          if (removed.isEmpty) {
+            log(
+              'deleteForEveryone: photo file was not removed',
+              name: 'sis.data',
+              level: 900,
+            );
+          }
+        } catch (e) {
+          log(
+            'deleteForEveryone: photo file removal failed: ${e.runtimeType}',
+            name: 'sis.data',
+            level: 900,
+          );
+        }
         await _cache.remove(path);
       }
       return const Ok(null);

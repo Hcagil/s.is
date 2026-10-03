@@ -11,7 +11,10 @@
 --    group can show "deleted by an admin".
 --  * The deleted photo file is removed by whoever deleted the message: the
 --    delete policy on storage no longer asks the remover to be the uploader,
---    only that delete_message recorded the path for them.
+--    only that delete_message recorded the path for them. A storage DELETE only
+--    reaches rows the SELECT policy shows, and a wiped message no longer points
+--    at its photo, so attachments_read also lets that same recorded deleter see
+--    the object (and only that object) until it is gone.
 --
 -- Realtime still delivers the wipe as an UPDATE to everyone who may read the
 -- row (a real DELETE would fan out to the whole table).
@@ -113,3 +116,14 @@ create policy attachments_remove_deleted on storage.objects for delete to authen
   using (bucket_id = 'attachments'
          and (select app_private.has_app_access())
          and app_private.may_remove_attachment(name));
+
+-- attachments_read as in 20260929120000, plus: the deleter delete_message
+-- recorded may see the (now unreferenced) object, so the delete above can
+-- reach it. may_remove_attachment needs a deleted_attachments row for the
+-- caller and no live message on the path: nobody else gains any read.
+drop policy attachments_read on storage.objects;
+create policy attachments_read on storage.objects for select to authenticated
+  using (bucket_id = 'attachments'
+         and (select app_private.has_app_access())
+         and (app_private.attachment_readable(name, owner_id)
+              or app_private.may_remove_attachment(name)));

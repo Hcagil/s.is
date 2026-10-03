@@ -1,4 +1,4 @@
-@Tags(['integration'])
+@Tags(['integration', 'speed'])
 library;
 
 import 'dart:convert';
@@ -18,9 +18,10 @@ import '../support/speed_probe.dart';
 /// per request. The Realtime websocket is not delayed (only PostgREST and
 /// auth requests are), so the join figures are a floor.
 ///
-/// It prints `SPEED | ...` lines and asserts only that calls succeed.
-/// Run: flutter test --run-skipped --tags integration --concurrency=1 \
-///        test/integration/speed_baseline_test.dart
+/// It prints `SPEED | ...` lines and asserts only that calls succeed. It
+/// lives outside test/integration so CI never spends time on it.
+/// Run (local stack up): flutter test --run-skipped --tags speed \
+///        --concurrency=1 test/speed/speed_baseline_test.dart
 /// Accounts pace/quill/rush are this suite's own (supabase/seed.sql).
 const _url = String.fromEnvironment(
   'SUPABASE_TEST_URL',
@@ -88,8 +89,9 @@ void main() {
     );
   }
 
-  /// Opens [conv] the way MessagesController does: join first, then read.
-  /// Returns the join time and the read time of one open.
+  /// The join, then the read, one after the other -- the open before 0.30.12.
+  /// MessagesController now runs both together, so an open costs about the
+  /// larger of the two. Returns the join time and the read time of one open.
   Future<(Duration, Duration)> openOnce(String conv) async {
     final clock = Stopwatch()..start();
     final stream = _ok(await repo.incoming(conv));

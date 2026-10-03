@@ -277,6 +277,36 @@ void main() {
     expect(p.chat.liveIncoming, isEmpty, reason: 'old subscription kept');
   });
 
+  // 0.30.12: chats seen earlier in the run show from memory -- but only to
+  // the account that saw them.
+  testWidgets("messagesProvider never shows the old account's remembered "
+      'chat to the new one, not even for a frame', (t) async {
+    final p = await signedInAsHeybana(t);
+    final seen = <AsyncValue<List<Message>>>[];
+    p.c.listen(messagesProvider, (_, next) => seen.add(next));
+    p.c.read(openConversationProvider.notifier).open('c-ac');
+    await settle(t);
+    expect(p.c.read(messagesProvider).requireValue.map((m) => m.body), [
+      onlyHeybana,
+    ], reason: 'fixture');
+    p.c.read(openConversationProvider.notifier).close();
+    await settle(t);
+
+    await switchTo(t, p, cagilhay);
+    seen.clear();
+    p.c.read(openConversationProvider.notifier).open('c-ac');
+    final now = p.c.read(messagesProvider);
+    await settle(t);
+
+    for (final s in [now, ...seen]) {
+      expect(
+        (s.value ?? const <Message>[]).map((m) => m.body),
+        isNot(contains(onlyHeybana)),
+        reason: '$s',
+      );
+    }
+  });
+
   testWidgets('draftsProvider starts empty for the new account', (t) async {
     final p = await signedInAsHeybana(t);
     p.c.listen(draftsProvider, (_, _) {});

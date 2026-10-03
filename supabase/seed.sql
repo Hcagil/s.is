@@ -132,10 +132,14 @@
 --   gwen/hugh/iona test/integration/group_colors_seam_test.dart
 --     (gwen's group with hugh and iona: each reads the others' colour slots
 --      and names; gwen's 1:1 with hugh carries none)
---   pace/quill/rush test/integration/speed_baseline_test.dart
---     (timing harness: pace opens, reads and sends in a short chat and a long
---      one with photo previews; quill is the other member and writes into
---      them; rush has no chat. It prints numbers and asserts no behaviour)
+--   kip/lyle       test/integration/parallel_open_seam_test.dart
+--     (kip opens his chat with lyle while lyle writes, edits and deletes
+--      around kip's history read and Realtime join)
+--   pace/quill/rush test/speed/speed_baseline_test.dart
+--     (timing harness, run by hand, never in CI: pace opens, reads and sends
+--      in a short chat and a long one with photo previews; quill is the other
+--      member and writes into them; rush has no chat. It prints numbers and
+--      asserts no behaviour)
 --   rho/sig        test/integration/catch_up_seam_test.dart
 --     (rho's socket dies as a backgrounded phone's does; sig writes to her
 --      meanwhile, and catch-up must bring it in)
@@ -241,5 +245,7 @@ insert into app_private.allowlist(email) values
   ('iona@integration.test'),
   ('pace@integration.test'),
   ('quill@integration.test'),
-  ('rush@integration.test')
+  ('rush@integration.test'),
+  ('kip@integration.test'),
+  ('lyle@integration.test')
 on conflict do nothing;

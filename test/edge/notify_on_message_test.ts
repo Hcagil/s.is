@@ -59,6 +59,13 @@ const realFetch = globalThis.fetch;
 // and 0.30.8 columns returns it: no sender, no chat, no badge (a function
 // deployed ahead of its migration, or rolled back behind it).
 let oldSchema = false;
+// 0.30.12: what Google's token endpoint and FCM saw, and how they answer.
+let mints = 0; // access tokens minted
+let mintGate: Promise<void> | null = null; // holds the token endpoint's answer
+let mintExtra: Record<string, unknown> = { expires_in: 3600 };
+const tokenPrefix = 'ya29.edge-secret-';
+let fcmRefusals = 0; // the next N FCM sends are refused with 401
+const fcmAttempts: string[] = []; // the Authorization header of every FCM send
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   if (oldSchema && url.includes('/rest/v1/rpc/push_targets')) {
@@ -67,9 +74,18 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     return Response.json(rows.map(({ sender: _s, chat: _c, badge: _b, ...rest }) => rest), { status: res.status });
   }
   if (url.startsWith('https://oauth2.googleapis.com/')) {
-    return Response.json({ access_token: 'test-access-token', expires_in: 3600, token_type: 'Bearer' });
+    mints++;
+    const n = mints;
+    if (mintGate) await mintGate;
+    return Response.json({ access_token: `${tokenPrefix}${n}`, token_type: 'Bearer', ...mintExtra });
   }
   if (url.startsWith('https://fcm.googleapis.com/')) {
+    const auth = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined)).get('authorization') ?? '';
+    fcmAttempts.push(auth);
+    if (fcmRefusals > 0) {
+      fcmRefusals--;
+      return Response.json({ error: { code: 401, status: 'UNAUTHENTICATED' } }, { status: 401 });
+    }
     const body = JSON.parse(String(init?.body ?? (input as Request).body));
     sent.push({ url, message: body.message });
     return Response.json({ name: `projects/sis-test/messages/${sent.length}` });
@@ -691,6 +707,303 @@ Deno.test({
         await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((x) => x.id))}`;
         await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
       }).catch(() => {});
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// 0.30.12: the Google access token is minted once and reused. Contract: kept
+// at module scope; refreshed 5 minutes before it expires (expires_in, 3600 s
+// when Google leaves it out); a 401 from FCM re-mints once and retries once,
+// a second 401 is the error 'fcm 401'; sends that need a token at the same
+// time share one mint; the token's text is never logged.
+//
+// Each test loads its own copy of the function (a fresh module, so a fresh
+// cache), drives a real message through the real database, and watches the
+// two Google endpoints and every console line.
+
+/** A fresh copy of the deployed function, with an empty token cache. */
+async function freshFunction() {
+  await import(`../../supabase/functions/notify-on-message/index.ts?fresh=${crypto.randomUUID()}`);
+}
+
+/** A group where [n] recipients each have one Android device. */
+async function groupOf(n: number) {
+  const run = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const people = Array.from({ length: n + 1 }, (_, i) => ({
+    id: crypto.randomUUID(),
+    session: crypto.randomUUID(),
+    email: `tok-${i}-${run}@edge.test`,
+    name: `Tok ${i}`,
+    token: `edge-tok-${i}-${run}`.padEnd(16, '0'),
+  }));
+  const [sender, ...recipients] = people;
+  for (const x of people) {
+    await sql`insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+              values (${x.id}, ${x.email}, now(), ${sql.json({ full_name: x.name })})`;
+    await sql`insert into app_private.allowlist(email) values (${x.email})`;
+    await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+              values (${x.session}, ${x.id}, now(), now())`;
+    await as(x.id, x.email, x.session, (tx) => tx`select public.activate_session()`);
+  }
+  for (const r of recipients) {
+    await as(r.id, r.email, r.session, (tx) => tx`select public.register_device_token(${r.token}, 'android', true)`);
+    await sql`insert into app_private.tag_finds(finder, found_id) values (${sender.id}, ${r.id})`;
+  }
+  const [{ id: conversationId }] = await as(sender.id, sender.email, sender.session,
+    (tx) => tx`select public.start_group_conversation(${`tok-${run}`}, ${recipients.map((r) => r.id)}::uuid[]) as id`);
+  return {
+    async message(body = 'token test'): Promise<string> {
+      const [{ id }] = await as(sender.id, sender.email, sender.session,
+        (tx) => tx`insert into public.messages(conversation_id, sender_id, body)
+                   values (${conversationId}, ${sender.id}, ${body}) returning id`);
+      return id as string;
+    },
+    async cleanup() {
+      await sql.begin(async (tx) => {
+        await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
+      }).catch(() => {});
+    },
+  };
+}
+
+/** Posts the webhook for [messageId]; waits for every background send, failed ones included. */
+async function deliverSettled(messageId: string) {
+  pending.length = 0;
+  const res = await handler!(new Request('http://localhost/notify-on-message', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'INSERT', table: 'messages', record: { id: messageId } }),
+  }));
+  const text = await res.text();
+  const settled = await Promise.allSettled([...pending]);
+  const errors = settled.flatMap((r) => r.status === 'rejected' ? [String(r.reason?.message ?? r.reason)] : []);
+  return { status: res.status, text, errors };
+}
+
+/** Every console line written while [body] runs, and its result. */
+async function logged<T>(body: () => Promise<T>): Promise<{ lines: string[]; value: T }> {
+  const lines: string[] = [];
+  const kinds = ['log', 'info', 'warn', 'error', 'debug'] as const;
+  const saved = kinds.map((k) => console[k]);
+  for (const k of kinds) {
+    console[k] = (...args: unknown[]) => {
+      lines.push(args.map((a) => (typeof a === 'string' ? a : (() => {
+        try { return a instanceof Error ? `${a.message} ${a.stack}` : JSON.stringify(a); } catch { return String(a); }
+      })())).join(' '));
+    };
+  }
+  try {
+    return { lines, value: await body() };
+  } finally {
+    kinds.forEach((k, i) => (console[k] = saved[i]));
+  }
+}
+
+/** Moves the function's clock: Date.now, new Date() and performance.now. */
+function shiftClock() {
+  const RealDate = Date;
+  const realPerf = performance.now.bind(performance);
+  let offset = 0;
+  class ShiftedDate extends RealDate {
+    constructor(...args: unknown[]) {
+      if (args.length === 0) super(RealDate.now() + offset);
+      // deno-lint-ignore no-explicit-any
+      else super(...(args as [any]));
+    }
+    static override now() { return RealDate.now() + offset; }
+  }
+  globalThis.Date = ShiftedDate as DateConstructor;
+  performance.now = () => realPerf() + offset;
+  return {
+    advance(ms: number) { offset += ms; },
+    restore() {
+      globalThis.Date = RealDate;
+      performance.now = realPerf;
+    },
+  };
+}
+
+function resetGoogle() {
+  mints = 0;
+  mintGate = null;
+  mintExtra = { expires_in: 3600 };
+  fcmRefusals = 0;
+  fcmAttempts.length = 0;
+  sent.length = 0;
+}
+
+const tokenLeaks = (lines: string[]) => lines.filter((l) => l.includes(tokenPrefix));
+
+Deno.test({
+  name: 'token: one mint serves many sends, to many recipients, across messages',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const g = await groupOf(3);
+    try {
+      await freshFunction();
+      resetGoogle();
+      const { lines } = await logged(async () => {
+        for (let i = 0; i < 3; i++) {
+          const r = await deliverSettled(await g.message(`many ${i}`));
+          assertEquals(r.status, 204, JSON.stringify(r));
+        }
+      });
+      assertEquals(sent.length, 9, 'three messages to three recipients');
+      assertEquals(mints, 1, 'one mint for every send');
+      assertEquals(new Set(fcmAttempts).size, 1, `one token used throughout: ${fcmAttempts.length} sends`);
+      assertEquals(tokenLeaks(lines), [], 'the token was logged');
+    } finally {
+      await g.cleanup();
+    }
+  },
+});
+
+Deno.test({
+  name: 'token: refreshed 5 minutes before it expires, not earlier',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const g = await groupOf(1);
+    const clock = shiftClock();
+    try {
+      await freshFunction();
+      resetGoogle();
+      mintExtra = { expires_in: 600 }; // ten minutes: refresh due after five
+      await deliverSettled(await g.message('t0'));
+      assertEquals(mints, 1);
+
+      clock.advance(4 * 60_000);
+      await deliverSettled(await g.message('t4'));
+      assertEquals(mints, 1, 'six minutes left: still good');
+
+      clock.advance(2 * 60_000);
+      await deliverSettled(await g.message('t6'));
+      assertEquals(mints, 2, 'four minutes left: inside the margin, re-minted');
+      assertEquals(sent.length, 3);
+      assert(fcmAttempts[2] !== fcmAttempts[0], 'the last send used the new token');
+    } finally {
+      clock.restore();
+      await g.cleanup();
+    }
+  },
+});
+
+Deno.test({
+  name: 'token: without expires_in it lasts 3600 s, less the margin',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const g = await groupOf(1);
+    const clock = shiftClock();
+    try {
+      await freshFunction();
+      resetGoogle();
+      mintExtra = {};
+      await deliverSettled(await g.message('d0'));
+      clock.advance(50 * 60_000);
+      await deliverSettled(await g.message('d50'));
+      assertEquals(mints, 1, 'ten minutes left of the default hour');
+      clock.advance(7 * 60_000);
+      await deliverSettled(await g.message('d57'));
+      assertEquals(mints, 2, 'three minutes left: re-minted');
+      assertEquals(sent.length, 3);
+    } finally {
+      clock.restore();
+      await g.cleanup();
+    }
+  },
+});
+
+Deno.test({
+  name: 'token: a 401 re-mints once and retries once; the push goes out',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const g = await groupOf(1);
+    try {
+      await freshFunction();
+      resetGoogle();
+      await deliverSettled(await g.message('warm'));
+      assertEquals(mints, 1);
+      fcmAttempts.length = 0;
+      sent.length = 0;
+
+      fcmRefusals = 1; // Google revoked the cached token
+      const { lines, value: r } = await logged(async () => deliverSettled(await g.message('after revoke')));
+      assertEquals(r.status, 204, JSON.stringify(r));
+      assertEquals(mints, 2, 'one re-mint');
+      assertEquals(fcmAttempts.length, 2, 'the refused send and one retry');
+      assert(fcmAttempts[1] !== fcmAttempts[0], 'the retry carries the new token');
+      assertEquals(sent.length, 1, 'the push went out');
+      assertEquals(tokenLeaks(lines), [], 'the token was logged');
+    } finally {
+      await g.cleanup();
+    }
+  },
+});
+
+Deno.test({
+  name: "token: a second 401 is the error 'fcm 401', with no further retry and no token in the logs",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const g = await groupOf(1);
+    try {
+      await freshFunction();
+      resetGoogle();
+      fcmRefusals = 5;
+      const { lines, value: r } = await logged(async () => deliverSettled(await g.message('refused')));
+      assertEquals(fcmAttempts.length, 2, `one send and one retry, no more: ${fcmAttempts.length}`);
+      assertEquals(mints, 2, 'the first mint and one re-mint');
+      assertEquals(sent.length, 0);
+      const everything = [r.text, ...r.errors, ...lines].join('\n');
+      // The refused send counts as failed, not delivered. (The 'fcm 401'
+      // error itself is internal: the function reports per-message counts.)
+      assert(/sent 0 of 1/.test(everything) || everything.includes('fcm 401'),
+        `the refused send was not reported as failed: ${everything}`);
+      assertEquals(tokenLeaks([everything]), [], 'the token was logged');
+    } finally {
+      await g.cleanup();
+    }
+  },
+});
+
+Deno.test({
+  name: 'token: sends that need a token at the same time share one mint',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const g = await groupOf(2);
+    try {
+      await freshFunction();
+      resetGoogle();
+      let open!: () => void;
+      mintGate = new Promise<void>((resolve) => (open = resolve));
+      const ids = [await g.message('together 1'), await g.message('together 2')];
+      pending.length = 0;
+      const post = (id: string) => handler!(new Request('http://localhost/notify-on-message', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'INSERT', table: 'messages', record: { id } }),
+      }));
+      const both = Promise.allSettled(ids.map(post));
+      // Let both reach the token endpoint before Google answers.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      open();
+      await both;
+      for (let seen = -1; seen !== pending.length;) {
+        seen = pending.length;
+        await Promise.allSettled([...pending]);
+      }
+      assertEquals(mints, 1, 'concurrent sends minted separately');
+      assertEquals(sent.length, 4, 'two messages to two recipients');
+    } finally {
+      mintGate = null;
+      await g.cleanup();
     }
   },
 });

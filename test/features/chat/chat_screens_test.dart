@@ -389,7 +389,10 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 6));
     });
 
-    testWidgets('subscribes before its first read', (tester) async {
+    // 0.30.12: the join and the read start together; the read made once
+    // the subscription is confirmed closes the window between them.
+    testWidgets('joins and reads together, and reads again once the '
+        'subscription is confirmed', (tester) async {
       final chat = ChatFake()..holdSubscription();
       final container = await _scope(chat);
       container.read(openConversationProvider.notifier).open('c1');
@@ -412,18 +415,20 @@ void main() {
                 c != 'conversations',
           )
           .toList();
-      expect(messageCalls(), [
-        'incoming:c1',
-      ], reason: 'a read before the subscription is confirmed loses messages');
       expect(
-        sisWait,
-        findsOneWidget,
-        reason: 'an unconfirmed subscription is still loading',
+        messageCalls(),
+        unorderedEquals(['incoming:c1', 'messages:c1']),
+        reason: 'the read must not wait for the subscription',
       );
 
+      final before = messageCalls().length;
       chat.confirmSubscription();
       await tester.pumpAndSettle();
-      expect(messageCalls(), ['incoming:c1', 'messages:c1']);
+      expect(
+        messageCalls().sublist(before),
+        contains('messages:c1'),
+        reason: 'a read after the confirmation closes the gap',
+      );
     });
 
     testWidgets('a message arriving after the screen is built appears', (

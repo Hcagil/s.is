@@ -117,11 +117,15 @@ void main() {
     ]);
   });
 
+  /// Opens c1 and lets the open run to its end: the join, the read and the
+  /// background verify re-read (0.30.12), so a gap made afterwards is real.
   Future<void> openC1() async {
     c.listen(messagesProvider, (_, _) {});
     c.read(openConversationProvider.notifier).open('c1');
     await c.read(messagesProvider.future);
     chat.confirmSubscription();
+    await eventually(() => count('messages:c1') >= 2, reason: 'verify read');
+    await Future<void>.delayed(const Duration(milliseconds: 20));
   }
 
   Future<void> loadList() async {
@@ -165,20 +169,25 @@ void main() {
       );
     });
 
-    test('joins before it reads, so nothing falls between the two', () async {
+    // 0.30.12: the join and the read run together; a read made once the
+    // join is confirmed is what leaves nothing between the two.
+    test('joins again and reads once the join is confirmed, so nothing falls '
+        'between the two', () async {
       await openC1();
       final mark = chat.calls.length;
+      chat.holdSubscription();
 
       messages().catchUp();
-      await eventually(() => count('messages:c1', mark) == 1);
+      await eventually(() => count('incoming:c1', mark) == 1);
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      final confirmed = chat.calls.length;
+      chat.confirmSubscription();
 
-      final after = chat.calls.sublist(mark);
-      expect(after.indexOf('incoming:c1'), isNonNegative, reason: '$after');
-      expect(
-        after.indexOf('incoming:c1'),
-        lessThan(after.indexOf('messages:c1')),
-        reason: '$after',
+      await eventually(
+        () => count('messages:c1', confirmed) >= 1,
+        reason: 'no read after the join was confirmed: ${chat.calls}',
       );
+      await Future<void>.delayed(const Duration(milliseconds: 30));
     });
 
     test('while the chat is still loading: a no-op', () async {
@@ -194,7 +203,8 @@ void main() {
       await c.read(messagesProvider.future);
       await Future<void>.delayed(const Duration(milliseconds: 30));
 
-      expect(count('messages:c1'), 1, reason: '${chat.calls}');
+      // The open's own read and its verify re-read; catchUp added nothing.
+      expect(count('messages:c1'), 2, reason: '${chat.calls}');
       expect(count('incoming:c1'), 1, reason: '${chat.calls}');
     });
 

@@ -8,6 +8,8 @@
 // Mounted as production mounts it: SisApp behind the session gate, with fakes
 // only at the repository boundary, the same pattern as the other home/settings
 // suites.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -82,6 +84,14 @@ Future<ProviderContainer> pumpApp(
   return ProviderScope.containerOf(t.element(find.byType(SisApp)));
 }
 
+/// The tap's route is on the Navigator within these frames, whatever the
+/// list is doing: the stream event, then the push (a route cannot be pushed
+/// mid-build). Nothing here waits for a read -- the list's is held open.
+Future<void> nextFrames(WidgetTester t) async {
+  await t.pump();
+  await t.pump();
+}
+
 void main() {
   testWidgets('a tapped notification for a conversation already on the list '
       'opens it, without re-reading the list', (t) async {
@@ -144,21 +154,119 @@ void main() {
     expect(push.cleared, ['c2']);
   });
 
-  testWidgets('a notification for a conversation that is still unknown is '
-      'ignored, not guessed at', (t) async {
+  // 0.30.12: a tap opens the chat at once; one the list never learns about
+  // (after it settles and one quiet re-read) is closed again.
+  testWidgets('a notification for a conversation that is still unknown opens '
+      'at once, and is closed again when the list never learns it', (t) async {
     final chat = FakeChat(list: [c1]);
     final push = PushSourceFake();
     await pumpApp(t, chat: chat, push: push);
+    // Re-reads are held, so the chat is seen open before the list decides.
+    final gate = chat.listGate = Completer<void>();
 
     push.openConversation('does-not-exist');
-    await t.pumpAndSettle();
-
-    expect(find.byType(MessageScreen), findsNothing);
-    expect(find.byType(HomeScreen), findsOneWidget);
+    await nextFrames(t);
     expect(
-      push.cleared,
-      isEmpty,
-      reason: 'nothing was opened, so nothing should be cleared',
+      find.byType(MessageScreen, skipOffstage: false),
+      findsOneWidget,
+      reason: 'the tap must open something at once',
+    );
+    expect(
+      find.descendant(
+        of: find.byType(AppBar, skipOffstage: false),
+        matching: find.text('Conversation', skipOffstage: false),
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+      reason: 'an unknown chat has a neutral title, not a guess',
+    );
+
+    gate.complete();
+    chat.listGate = null;
+    await t.pumpAndSettle();
+    expect(find.byType(MessageScreen, skipOffstage: false), findsNothing);
+    expect(find.byType(HomeScreen), findsOneWidget);
+  });
+
+  testWidgets('a tap while the list is re-reading opens the chat in the same '
+      'frame, titled from the list it already holds', (t) async {
+    final chat = FakeChat(list: [c1, c2]);
+    final push = PushSourceFake();
+    final c = await pumpApp(t, chat: chat, push: push);
+    final gate = chat.listGate = Completer<void>();
+    c.invalidate(conversationListProvider);
+    await t.pump();
+
+    push.openConversation('c1');
+    await nextFrames(t);
+    expect(find.byType(MessageScreen, skipOffstage: false), findsOneWidget);
+    expect(c.read(openConversationProvider), 'c1');
+
+    gate.complete();
+    chat.listGate = null;
+    await t.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('Weekend plan'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(MessageScreen, skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('a tap for another chat while one is open replaces it in the '
+      'same frame, even while the list is re-reading', (t) async {
+    final chat = FakeChat(list: [c1, c2]);
+    final push = PushSourceFake();
+    final c = await pumpApp(t, chat: chat, push: push);
+    await t.tap(find.text('Weekend plan'));
+    await t.pumpAndSettle();
+    final gate = chat.listGate = Completer<void>();
+    c.invalidate(conversationListProvider);
+    await t.pump();
+
+    push.openConversation('c2');
+    await nextFrames(t);
+    expect(c.read(openConversationProvider), 'c2');
+
+    gate.complete();
+    chat.listGate = null;
+    await t.pumpAndSettle();
+    expect(find.byType(MessageScreen), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('New project'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a chat unknown at the tap but learned by the list stays open, '
+      'its title filled in', (t) async {
+    final chat = FakeChat(list: [c1]);
+    final push = PushSourceFake();
+    final c = await pumpApp(t, chat: chat, push: push);
+    final gate = chat.listGate = Completer<void>();
+    c.invalidate(conversationListProvider);
+    await t.pump();
+
+    chat.list = [c1, c2]; // the server has it; the list does not yet
+    push.openConversation('c2');
+    await nextFrames(t);
+    expect(find.byType(MessageScreen, skipOffstage: false), findsOneWidget);
+
+    gate.complete();
+    chat.listGate = null;
+    await t.pumpAndSettle();
+    expect(find.byType(MessageScreen), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('New project'),
+      ),
+      findsOneWidget,
     );
   });
 

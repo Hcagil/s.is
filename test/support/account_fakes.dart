@@ -291,7 +291,13 @@ class SessionChat implements ChatRepository {
   @override
   Future<Result<List<Message>>> messages(String conversationId) async {
     final who = await _as('messages:$conversationId');
-    return Ok([...?_roomFor(conversationId, who)?.messages]);
+    final hidden = hiddenBy[who] ?? const <String>{};
+    return Ok([
+      ...?_roomFor(
+        conversationId,
+        who,
+      )?.messages.where((m) => !hidden.contains(m.id)),
+    ]);
   }
 
   @override
@@ -562,9 +568,36 @@ class SessionChat implements ChatRepository {
       senderId: who,
       body: '',
       createdAt: room.messages[i].createdAt,
-      deletion: MessageDeletion.vanished,
+      deletion: MessageDeletion.placeholder,
+      deletedBy: who,
     );
     return const Ok(null);
+  }
+
+  /// Per account, the message ids it hid for itself (hide_message).
+  final hiddenBy = <String, Set<String>>{};
+
+  @override
+  Future<Result<void>> hideForMe(Message message) async {
+    final who = await _as('hideForMe:${message.id}');
+    if (who == null) return const Err(DeniedFailure());
+    final room = _roomFor(message.conversationId, who);
+    if (room == null || !room.messages.any((m) => m.id == message.id)) {
+      return const Err(DeniedFailure());
+    }
+    (hiddenBy[who] ??= {}).add(message.id);
+    return const Ok(null);
+  }
+
+  @override
+  Future<Result<int>> unreadTotal() async {
+    final who = await _as('unreadTotal');
+    if (who == null) return const Err(DeniedFailure());
+    final list = await conversations();
+    return switch (list) {
+      Ok(:final value) => Ok(value.fold(0, (n, c) => n + c.unread)),
+      Err(:final failure) => Err(failure),
+    };
   }
 
   @override

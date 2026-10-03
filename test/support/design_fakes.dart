@@ -271,12 +271,27 @@ class DesignChat implements ChatRepository {
       senderId: rows[i].senderId,
       body: '',
       createdAt: rows[i].createdAt,
-      deletion: MessageDeletion.vanished,
+      deletion: MessageDeletion.placeholder,
+      deletedBy: rows[i].senderId,
     );
     rows[i] = wiped;
     deliver(wiped);
     return const Ok(null);
   }
+
+  @override
+  Future<Result<void>> hideForMe(Message message) async {
+    final rows = history[message.conversationId];
+    final before = rows?.length ?? 0;
+    rows?.removeWhere((m) => m.id == message.id);
+    return (rows?.length ?? 0) < before
+        ? const Ok(null)
+        : const Err(DeniedFailure());
+  }
+
+  @override
+  Future<Result<int>> unreadTotal() async =>
+      Ok(list.fold(0, (n, c) => n + c.unread));
 
   @override
   Future<Result<Message>> editMessage(Message message, String body) async {

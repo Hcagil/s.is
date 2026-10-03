@@ -253,6 +253,10 @@ class _Switch implements ChatRepository {
     String? previousPath,
   }) => live.setGroupAvatar(conversationId, image, previousPath: previousPath);
   @override
+  Future<Result<void>> hideForMe(Message m) => live.hideForMe(m);
+  @override
+  Future<Result<int>> unreadTotal() => live.unreadTotal();
+  @override
   Future<Result<void>> deleteForEveryone(Message message) =>
       live.deleteForEveryone(message);
   @override

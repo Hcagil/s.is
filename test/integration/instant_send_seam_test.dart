@@ -198,6 +198,10 @@ class _Relay implements ChatRepository {
   Future<Result<Stream<ReadMark>>> readUpdates(String id) =>
       real.readUpdates(id);
   @override
+  Future<Result<void>> hideForMe(Message m) => real.hideForMe(m);
+  @override
+  Future<Result<int>> unreadTotal() => real.unreadTotal();
+  @override
   Future<Result<void>> deleteForEveryone(Message m) =>
       real.deleteForEveryone(m);
   @override

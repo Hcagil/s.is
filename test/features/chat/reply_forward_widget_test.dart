@@ -431,4 +431,133 @@ void main() {
       expect(find.text('Forwarded'), findsOneWidget);
     });
   });
+
+  // 0.30.10: forwarding is a full page (forward-page), not a sheet. It names
+  // what is being forwarded (forward-strip), searches the chats, offers the
+  // people you have no chat with yet (forward-person-<id>), and its Send
+  // creates those chats first; if one cannot be created nothing is sent.
+  group('the forward page (0.30.10)', () {
+    const cleo = Member(userId: 'u3', displayName: 'Cleo');
+    Finder byKey(String k) => find.byKey(ValueKey(k));
+
+    ChatFake world() => ChatFake()
+      ..conversationsResult = const Ok([
+        Conversation(id: 'c1', other: bob),
+        Conversation(id: 'c2', title: 'Work'),
+        Conversation(id: 'c3', title: 'Family'),
+      ])
+      ..membersResult = const Ok([bob, cleo])
+      ..messagesResult = Ok([
+        msg('m1', from: bob.userId, body: 'look at this'),
+      ]);
+
+    Future<void> openPage(WidgetTester t, ChatFake chat) async {
+      await pump(t, chat);
+      await t.drag(byKey('message-m1'), swipeOpen);
+      await t.pumpAndSettle();
+      await t.tap(byKey('action-forward'));
+      // The page is there on the first frame after the tap: no network wait.
+      // Two frames: the tap's own frame and the push's.
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 16));
+      expect(byKey('forward-page'), findsOneWidget, reason: 'not at once');
+      await t.pumpAndSettle();
+    }
+
+    String textUnder(String k) => find
+        .descendant(of: byKey(k), matching: find.byType(RichText))
+        .evaluate()
+        .map((e) => (e.widget as RichText).text.toPlainText())
+        .join(' ');
+
+    testWidgets('names what is forwarded in the strip', (t) async {
+      await openPage(t, world());
+      final strip = textUnder('forward-strip');
+      expect(strip, contains('Forwarding:'));
+      expect(strip, contains('look at this'));
+    });
+
+    testWidgets('search narrows the chats; nothing matching shows the empty '
+        'line', (t) async {
+      await openPage(t, world());
+      await t.enterText(byKey('forward-search'), 'wor');
+      await t.pumpAndSettle();
+      expect(byKey('forward-c2'), findsOneWidget);
+      expect(byKey('forward-c3'), findsNothing);
+      expect(byKey('forward-empty'), findsNothing);
+
+      await t.enterText(byKey('forward-search'), 'zzzz');
+      await t.pumpAndSettle();
+      expect(byKey('forward-c2'), findsNothing);
+      expect(byKey('forward-empty'), findsOneWidget);
+    });
+
+    testWidgets('someone you have no chat with is offered as a person; '
+        'Send starts that chat first and forwards into it', (t) async {
+      final chat = world()..forwardResult = const Ok(null);
+      await openPage(t, chat);
+      // Bob already has a chat with you (the open one): not a person row.
+      expect(byKey('forward-person-u2'), findsNothing);
+      await t.scrollUntilVisible(
+        byKey('forward-person-u3'),
+        100,
+        scrollable: find
+            .descendant(
+              of: byKey('forward-page'),
+              matching: find.byType(Scrollable),
+            )
+            .last,
+      );
+      await t.tap(byKey('forward-person-u3'));
+      await t.pumpAndSettle();
+      expect(find.text('Send (1)'), findsOneWidget);
+      await t.tap(byKey('forward-send'));
+      await t.pumpAndSettle();
+
+      expect(chat.started, ['u3']);
+      expect(chat.forwarded.single.conversationIds, ['c-new']);
+      expect(byKey('forward-page'), findsNothing, reason: 'page stayed');
+      await drainNotice(t);
+    });
+
+    testWidgets('a chat that cannot be started: its reason is shown and '
+        'nothing is forwarded, not even to the ticked chat', (t) async {
+      final chat = world()
+        ..startResult = const Err(ProviderFailure('cannot reach Cleo'));
+      await openPage(t, chat);
+      await t.tap(byKey('forward-c2'));
+      await t.pumpAndSettle();
+      await t.scrollUntilVisible(
+        byKey('forward-person-u3'),
+        100,
+        scrollable: find
+            .descendant(
+              of: byKey('forward-page'),
+              matching: find.byType(Scrollable),
+            )
+            .last,
+      );
+      await t.tap(byKey('forward-person-u3'));
+      await t.pumpAndSettle();
+      expect(find.text('Send (2)'), findsOneWidget);
+      await t.tap(byKey('forward-send'));
+      await t.pumpAndSettle();
+
+      expect(chat.forwarded, isEmpty);
+      expect(find.textContaining('cannot reach Cleo'), findsOneWidget);
+      await drainNotice(t);
+    });
+
+    testWidgets('back closes the page and forwards nothing', (t) async {
+      final chat = world();
+      await openPage(t, chat);
+      await t.tap(byKey('forward-c2'));
+      await t.pumpAndSettle();
+      await t.pageBack();
+      await t.pumpAndSettle();
+      expect(byKey('forward-page'), findsNothing);
+      expect(chat.forwarded, isEmpty);
+      expect(chat.started, isEmpty);
+    });
+  });
 }

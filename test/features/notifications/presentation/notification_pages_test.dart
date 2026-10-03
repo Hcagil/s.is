@@ -381,7 +381,7 @@ void main() {
       expect(find.textContaining('Until'), findsOneWidget);
     });
 
-    testWidgets('a muted tile\'s sheet offers Unmute, which clears it', (
+    testWidgets('a muted tile\'s card offers Unmute, which clears it', (
       t,
     ) async {
       final fake = NotificationSettingsFake(
@@ -422,6 +422,78 @@ void main() {
       expect(find.text('Mute notifications'), findsOneWidget);
       expect(find.textContaining('the server refused'), findsOneWidget);
       await drainNotice(t);
+    });
+  });
+
+  // 0.30.10: the lengths are a floating card (mute-card) below-right of the
+  // tile, not a bottom sheet; a tap applies and closes; a tap outside
+  // closes it with nothing changed.
+  group('the mute card (0.30.10)', () {
+    testWidgets('up on the first frames, below the tile and against its '
+        'right edge', (t) async {
+      final fake = NotificationSettingsFake();
+      // Mid-screen, with room both above and below: the side is a choice.
+      await t.pumpWidget(
+        ProviderScope(
+          overrides: [
+            notificationSettingsRepositoryProvider.overrideWithValue(fake),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  SizedBox(height: 260),
+                  MuteTile(kind: MuteKind.person, target: 'ub'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+      await t.tap(byKey('mute-tile'));
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 16));
+      expect(byKey('mute-card'), findsOneWidget, reason: 'not at once');
+      await t.pumpAndSettle();
+      final tile = t.getRect(byKey('mute-tile'));
+      final card = t.getRect(byKey('mute-card'));
+      expect(card.top, greaterThanOrEqualTo(tile.center.dy), reason: 'above');
+      expect(card.right, greaterThan(tile.center.dx), reason: 'not right');
+      expect(card.left, greaterThan(tile.left), reason: 'not right-aligned');
+      expect(find.byType(BottomSheet), findsNothing);
+    });
+
+    testWidgets('a length applies and closes the card', (t) async {
+      final fake = NotificationSettingsFake();
+      await t.pumpWidget(
+        aloneMuteTile(fake, kind: MuteKind.person, target: 'ub'),
+      );
+      await t.pumpAndSettle();
+      await t.tap(byKey('mute-tile'));
+      await t.pumpAndSettle();
+      await t.tap(byKey('mute-always'));
+      await t.pumpAndSettle();
+      expect(byKey('mute-card'), findsNothing);
+      expect(fake.muteCalls.single.$3, isNull, reason: 'always = no end');
+    });
+
+    testWidgets('a tap outside closes it and changes nothing', (t) async {
+      final fake = NotificationSettingsFake(
+        mutes: const [Mute(kind: MuteKind.person, target: 'ub')],
+      );
+      await t.pumpWidget(
+        aloneMuteTile(fake, kind: MuteKind.person, target: 'ub'),
+      );
+      await t.pumpAndSettle();
+      await t.tap(byKey('mute-tile'));
+      await t.pumpAndSettle();
+      await t.tapAt(const Offset(10, 590));
+      await t.pumpAndSettle();
+      expect(byKey('mute-card'), findsNothing);
+      expect(fake.muteCalls, isEmpty);
+      expect(fake.unmuteCalls, isEmpty);
+      expect(find.text('Muted'), findsOneWidget);
     });
   });
 }

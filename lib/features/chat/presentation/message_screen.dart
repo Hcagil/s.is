@@ -21,15 +21,14 @@ import '../../presence/domain/last_seen.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
 import '../application/group_controller.dart';
-import '../domain/attachment.dart';
 import '../domain/emoji.dart';
-import '../domain/external_picker.dart';
 import '../domain/group_member.dart';
 import '../domain/highlight.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
 import '../domain/timeline.dart';
 import '../domain/read_marks.dart';
+import 'attachment_preview_page.dart';
 import 'attachment_sheet.dart';
 import 'chat_search_bar.dart';
 import 'group_event_line.dart';
@@ -354,6 +353,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       message,
       anchor: anchor,
       alignEnd: mine,
+      group: widget.group,
     );
   }
 
@@ -597,7 +597,6 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                           message,
                           me: me,
                           now: DateTime.now(),
-                          group: widget.group,
                         );
                         final bubble = SwipeableMessage(
                           key: _keyFor(message.id),
@@ -620,6 +619,9 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                               message,
                               action,
                               canDeleteForEveryone: true,
+                              anchor: _bubbleRect(message.id),
+                              alignEnd: mine,
+                              group: widget.group,
                             );
                           },
                           onTap: () => _openMessageMenu(message, mine: mine),
@@ -1478,47 +1480,24 @@ class _ComposerState extends ConsumerState<_Composer> {
     }
   }
 
-  /// One photo taken now. It has the same shape as the library's, so it
-  /// flows through the same caption / upload / optimistic-bubble path. A
-  /// cancelled camera sends nothing; a failure says so.
-  Future<({List<PickedImage> images, int dropped})> _takePhoto() async {
-    const none = (images: <PickedImage>[], dropped: 0);
-    final result = await ref.read(externalPickerProvider).takePhoto();
-    if (!mounted) return none;
-    switch (result) {
-      case ExternalPickedImages(:final images) when images.isNotEmpty:
-        return (images: images, dropped: 0);
-      case ExternalPickCancelled():
-        return none;
-      case ExternalPickedImages() || ExternalPickFailed():
-        showSisNotice(
-          context,
-          'The camera could not take a photo.',
-          isError: true,
-        );
-        return none;
-    }
-  }
-
-  /// Picks and sends one or more images, with whatever is typed as the
-  /// caption of the first one -- the rest go with no caption, one message
-  /// per photo, same as any photo sent from the grid.
+  /// Picks one or more images (the paperclip's photo grid: recent photos,
+  /// the camera tile, or "Gallery"), previews them with a caption box, and
+  /// sends them -- the caption goes with the first one, the rest with none,
+  /// one message per photo. Backing out of either step sends nothing.
   Future<void> _attach() async {
     if (_sending) return;
-    // The camera, or the phone's photo library (which also offers another
-    // app). Closing either without a photo sends nothing.
-    final source = await showAttachMenu(context);
-    if (source == null || !mounted) return;
-    final picked = switch (source) {
-      AttachSource.library => await showAttachmentSheet(context),
-      AttachSource.camera => await _takePhoto(),
-    };
+    final picked = await showAttachmentSheet(context);
     if (picked.images.isEmpty || !mounted) return;
+    final reviewed = await showAttachmentPreview(
+      context,
+      images: picked.images,
+      caption: _controller.text,
+    );
+    if (reviewed == null || reviewed.images.isEmpty || !mounted) return;
     setState(() => _sending = true);
-    final body = _controller.text;
     final result = await ref
         .read(messagesProvider.notifier)
-        .sendImages(picked.images, body: body);
+        .sendImages(reviewed.images, body: reviewed.caption);
     if (!mounted) return;
     setState(() => _sending = false);
     switch (result) {

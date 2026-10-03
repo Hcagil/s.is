@@ -267,8 +267,9 @@ void main() {
       await t.enterText(byKey('composer-field'), caption);
       await t.pump();
       await tapWhenShown(t, 'composer-attach');
-      await tapWhenShown(t, 'attach-library');
       await tapWhenShown(t, 'sheet-from-app');
+      // 0.30.10: every pick lands on the preview page; its Send sends.
+      await tapWhenShown(t, 'preview-send');
 
       var arrived = <Message>[];
       Future<void> poll() async {
@@ -322,8 +323,9 @@ void main() {
       await mount(t, dead, picker);
 
       await tapWhenShown(t, 'composer-attach');
-      await tapWhenShown(t, 'attach-library');
       await tapWhenShown(t, 'sheet-from-app');
+      // 0.30.10: every pick lands on the preview page; its Send sends.
+      await tapWhenShown(t, 'preview-send');
       await until(
         t,
         () => t
@@ -426,7 +428,7 @@ void main() {
         await tap('home-settings');
         await tap('settings-profile');
         await tap('profile-avatar-edit');
-        await tap('avatar-choose');
+        await tap('avatar-library');
         await tap('sheet-from-app');
         await until(
           t,

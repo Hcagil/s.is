@@ -7,6 +7,8 @@
 // MessagesController -- never how the sheet is built. Mounted through the
 // real composer, exactly as production opens it: entry to the sheet is not
 // a fixture, it's part of the contract.
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,6 +23,7 @@ import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
+import '../../support/attach_flow.dart' hide key;
 import '../../support/gallery_paging.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
@@ -65,13 +68,8 @@ Future<ProviderContainer> pump(
   return container;
 }
 
-Future<void> openSheet(WidgetTester tester) async {
-  // The paperclip opens a small menu (0.30.8); the library is one choice.
-  await tester.tap(find.byKey(const ValueKey('composer-attach')));
-  await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const ValueKey('attach-library')));
-  await tester.pumpAndSettle();
-}
+// 0.30.10: the paperclip opens the grid itself, no menu in between.
+Future<void> openSheet(WidgetTester tester) => openGrid(tester);
 
 String composerText(WidgetTester tester) => tester
     .widget<EditableText>(
@@ -377,8 +375,6 @@ void main() {
       final chat = ChatFake();
       await pump(tester, chat, gallery);
       await tester.tap(find.byKey(const ValueKey('composer-attach')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('attach-library')));
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
@@ -386,29 +382,86 @@ void main() {
       expect(find.byType(Image), findsNothing, reason: 'no picture yet');
 
       await tester.tap(find.byKey(const ValueKey('sheet-photo-p1')));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('sheet-send')),
+        findsOneWidget,
+        reason: 'the tap on a tile with no picture yet still ticks it',
+      );
+      await tester.tap(find.byKey(const ValueKey('sheet-send')));
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
 
       expect(gallery.loadedIds, ['p1']);
       gallery.releaseThumbnails();
-      await tester.pumpAndSettle();
+      await previewSend(tester);
+      await settleImages(tester);
       expect(chat.sentImages, hasLength(1));
     });
   });
 
-  group('choosing a photo', () {
-    testWidgets('sends exactly the tapped photo and closes the sheet', (
-      tester,
-    ) async {
-      final chosen = PickedImage(
-        bytes: photoPng,
+  group('choosing photos', () {
+    testWidgets('a tap ticks a photo and a second tap unticks it; nothing '
+        'loads and nothing is sent until Send', (tester) async {
+      final gallery = GalleryFake(photos: [photo('p1'), photo('p2')])
+        ..thumbnails.addAll({'p1': photoPng, 'p2': photoPng});
+      final chat = ChatFake();
+      await pump(tester, chat, gallery);
+      await openSheet(tester);
+      expect(
+        find.byKey(const ValueKey('sheet-send')),
+        findsNothing,
+        reason: 'nothing ticked: no Send',
+      );
+
+      await tester.tap(find.byKey(const ValueKey('sheet-photo-p1')));
+      await tester.pump();
+      expect(find.text('Send 1 photo'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('sheet-photo-p2')));
+      await tester.pump();
+      expect(find.text('Send 2 photos'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('sheet-photo-p1')));
+      await tester.pump();
+      expect(find.text('Send 1 photo'), findsOneWidget, reason: 'unticked');
+      await tester.tap(find.byKey(const ValueKey('sheet-photo-p2')));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('sheet-send')), findsNothing);
+
+      expect(gallery.loadedIds, isEmpty, reason: 'a tick reads no photo');
+      expect(chat.sentImages, isEmpty);
+    });
+
+    testWidgets('the tick circle ticks too', (tester) async {
+      final gallery = GalleryFake(photos: [photo('p1')])
+        ..thumbnails['p1'] = photoPng;
+      await pump(tester, ChatFake(), gallery);
+      await openSheet(tester);
+
+      await tester.tap(find.byKey(const ValueKey('sheet-tick-p1')));
+      await tester.pump();
+
+      expect(find.text('Send 1 photo'), findsOneWidget);
+    });
+
+    testWidgets('Send opens the preview with exactly the ticked photos, in '
+        'tick order, and the typed caption; its Send sends them and closes '
+        'everything', (tester) async {
+      PickedImage shot(int i) => PickedImage(
+        bytes: Uint8List.fromList([...photoPng, i]),
         contentType: 'image/png',
         extension: 'png',
       );
-      final gallery = GalleryFake(photos: [photo('p1'), photo('p2')])
-        ..thumbnails.addAll({'p1': photoPng, 'p2': photoPng})
-        ..loadResults['p2'] = chosen;
+      final gallery =
+          GalleryFake(photos: [photo('p1'), photo('p2'), photo('p3')])
+            ..thumbnails.addAll({
+              'p1': photoPng,
+              'p2': photoPng,
+              'p3': photoPng,
+            })
+            ..loadResults['p1'] = shot(1)
+            ..loadResults['p2'] = shot(2)
+            ..loadResults['p3'] = shot(3);
       final chat = ChatFake();
       await pump(tester, chat, gallery);
       await tester.enterText(
@@ -418,26 +471,83 @@ void main() {
       await tester.pump();
       await openSheet(tester);
 
-      await tester.tap(find.byKey(const ValueKey('sheet-photo-p2')));
+      await tick(tester, ['p3', 'p1']);
+      await sendTicked(tester);
+
+      expect(gallery.loadedIds, unorderedEquals(['p3', 'p1']));
+      expect(find.byKey(const ValueKey('preview-page')), findsOneWidget);
+      expect(find.text('1 / 2'), findsOneWidget);
+      expect(previewCaption(tester), 'from the grid');
+      expect(chat.sentImages, isEmpty, reason: 'the preview sends, not Send');
+
+      await previewSend(tester);
       await settleImages(tester);
 
-      expect(gallery.loadedIds, ['p2']);
-      expect(chat.sentImages, hasLength(1));
-      expect(chat.sentImages.single.body, 'from the grid');
       expect(
-        chat.sentImages.single.image.bytes,
-        photoPng,
-        reason: 'the exact photo tapped must be what is uploaded',
+        [for (final s in chat.sentImages) s.image.bytes],
+        [shot(3).bytes, shot(1).bytes],
+        reason: 'exactly the ticked photos, in the order they were ticked',
       );
+      expect([for (final s in chat.sentImages) s.body], ['from the grid', '']);
       expect(composerText(tester), isEmpty);
+      expect(find.byKey(const ValueKey('preview-page')), findsNothing);
       expect(
         find.byType(GridView),
         findsNothing,
-        reason: 'the sheet must have closed once a photo was chosen',
+        reason: 'the grid must have closed once the photos were sent',
       );
     });
 
-    testWidgets('a second tap while the first is loading does nothing', (
+    testWidgets('back from the preview sends nothing and keeps the caption', (
+      tester,
+    ) async {
+      final gallery = GalleryFake(photos: [photo('p1')])
+        ..thumbnails['p1'] = photoPng;
+      final chat = ChatFake();
+      await pump(tester, chat, gallery);
+      await tester.enterText(
+        find.byKey(const ValueKey('composer-field')),
+        'keep me',
+      );
+      await tester.pump();
+      await openSheet(tester);
+      await tick(tester, ['p1']);
+      await sendTicked(tester);
+
+      await tester.tap(find.byKey(const ValueKey('preview-back')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('preview-page')), findsNothing);
+      expect(chat.sentImages, isEmpty);
+      expect(composerText(tester), 'keep me');
+      expect(find.byType(SisNotice), findsNothing);
+    });
+
+    testWidgets('an 11th tick is refused with a notice; 10 stay ticked', (
+      tester,
+    ) async {
+      final gallery = GalleryFake(photos: photoLibrary(12));
+      for (final p in gallery.photos) {
+        gallery.thumbnails[p.id] = photoPng;
+      }
+      await pump(tester, ChatFake(), gallery);
+      await openSheet(tester);
+
+      await tick(tester, [for (var i = 0; i < 10; i++) 'p$i']);
+      expect(find.byType(SisNotice), findsNothing, reason: '10 is allowed');
+      expect(find.text('Send 10 photos'), findsOneWidget);
+
+      await tick(tester, ['p10']);
+
+      expect(find.text('Send 10 photos'), findsOneWidget);
+      final shown = tester.widget<SisNotice>(find.byType(SisNotice));
+      expect(shown.message, contains('10'));
+      expect(shown.isError, isFalse);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('a second Send while the photos are loading does nothing', (
       tester,
     ) async {
       final gallery = GalleryFake(photos: [photo('p1')])
@@ -445,10 +555,14 @@ void main() {
         ..holdLoad();
       await pump(tester, ChatFake(), gallery);
       await openSheet(tester);
+      await tick(tester, ['p1']);
 
-      await tester.tap(find.byKey(const ValueKey('sheet-photo-p1')));
+      await tester.tap(find.byKey(const ValueKey('sheet-send')));
       await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('sheet-photo-p1')));
+      await tester.tap(
+        find.byKey(const ValueKey('sheet-send')),
+        warnIfMissed: false,
+      );
       await tester.pump();
 
       expect(gallery.loadedIds, [
@@ -456,7 +570,33 @@ void main() {
       ], reason: 'a tap while a load is already in flight must be ignored');
 
       gallery.releaseLoad();
-      await settleImages(tester);
+      await frames(tester);
+      expect(find.byKey(const ValueKey('preview-page')), findsOneWidget);
+    });
+
+    testWidgets('one photo of two that cannot be opened: a notice, and the '
+        'preview opens with the one that can', (tester) async {
+      final gallery = GalleryFake(photos: [photo('p1'), photo('p2')])
+        ..thumbnails.addAll({'p1': photoPng, 'p2': photoPng})
+        ..loadResults['p2'] = null;
+      await pump(tester, ChatFake(), gallery);
+      await openSheet(tester);
+      await tick(tester, ['p1', 'p2']);
+
+      await sendTicked(tester);
+
+      expect(find.byKey(const ValueKey('preview-page')), findsOneWidget);
+      expect(find.byKey(const ValueKey('preview-photo-0')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('preview-count')),
+        findsNothing,
+        reason: 'only one photo made it',
+      );
+      final shown = tester.widget<SisNotice>(find.byType(SisNotice));
+      expect(shown.isError, isTrue);
+      expect(shown.message, contains('could not be opened'));
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
     });
 
     testWidgets(
@@ -469,26 +609,31 @@ void main() {
         final chat = ChatFake();
         await pump(tester, chat, gallery);
         await openSheet(tester);
+        await tick(tester, ['p1']);
 
-        await tester.tap(find.byKey(const ValueKey('sheet-photo-p1')));
+        await tester.tap(find.byKey(const ValueKey('sheet-send')));
         await tester.pump();
         await tester.pump();
 
         expect(find.byType(SisNotice), findsOneWidget);
-        expect(find.text('That photo could not be opened.'), findsOneWidget);
+        expect(
+          tester.widget<SisNotice>(find.byType(SisNotice)).message,
+          contains('could not be opened'),
+        );
         expect(find.byType(SnackBar), findsNothing);
+        expect(find.byKey(const ValueKey('preview-page')), findsNothing);
         expect(chat.sentImages, isEmpty);
         expect(
           find.byKey(const ValueKey('sheet-photo-p1')),
           findsOneWidget,
           reason: 'the sheet must still be open after a failed load',
         );
-        // Not stuck "opening": the same tile opens again on the next tap.
+        // Not stuck "opening": Send reads it again on the next tap.
         gallery.loadResults.remove('p1');
-        await tester.tap(find.byKey(const ValueKey('sheet-photo-p1')));
-        await tester.pump();
-        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('sheet-send')));
+        await frames(tester);
         expect(gallery.loadedIds, ['p1', 'p1']);
+        expect(find.byKey(const ValueKey('preview-page')), findsOneWidget);
         // Lets the notice's own timer run out so it does not outlive the
         // test.
         await tester.pump(const Duration(seconds: 5));
@@ -540,8 +685,6 @@ void main() {
       );
       await pump(tester, ChatFake(), gallery);
       await tester.tap(find.byKey(const ValueKey('composer-attach')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('attach-library')));
       await steps(tester);
       expect(find.byKey(const ValueKey('sheet-photo-p0')), findsOneWidget);
       return gallery;

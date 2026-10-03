@@ -3,7 +3,8 @@
 //  * a tap on a message opens the `message-menu` sheet (tiles `menu-<action>`),
 //    closes the keyboard and any open swipe row;
 //  * a tap on empty space only closes the keyboard; scrolling does not;
-//    send and the paperclip keep it open;
+//    send and the paperclip keep it open (0.30.10: the paperclip opens the
+//    photo grid with requestFocus false);
 //  * long-press opens nothing;
 //  * a photo, a link or a quote keeps its own tap;
 //  * the photo viewer's `viewer-menu` offers Reply, Forward and Delete only,
@@ -75,6 +76,7 @@ Future<ProviderContainer> pump(
         chatRepositoryProvider.overrideWithValue(chat),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         linkOpenerProvider.overrideWithValue(opener ?? LinkOpenerFake()),
+        galleryProvider.overrideWithValue(GalleryFake()),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
         sessionControllerProvider.overrideWith(_SignedIn.new),
       ],
@@ -264,7 +266,9 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('composer-attach')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('attach-menu')), findsOneWidget);
+      // 0.30.10: the paperclip opens the photo grid itself.
+      expect(find.text('Recent photos'), findsOneWidget);
+      expect(find.byKey(const ValueKey('sheet-from-app')), findsOneWidget);
       expect(keyboardUp(tester), isTrue);
     });
   });

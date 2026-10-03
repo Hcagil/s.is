@@ -12,9 +12,11 @@ import '../domain/external_picker.dart';
 import '../domain/gallery.dart';
 import 'crop_screen.dart';
 
-/// Shows the attachment sheet; an empty `images` list when the member
+/// Shows the paperclip's photo grid; an empty `images` list when the member
 /// closes it or backs out without choosing a photo. `dropped` is how many
-/// more photos "From an app" offered beyond the cap -- 0 unless it was hit.
+/// more photos "Gallery" offered beyond the cap -- 0 unless it was hit. A chat
+/// photo is not sent from here: the caller opens the preview page with the
+/// returned photos.
 /// With [square] the sheet crops the chosen photo itself (the crop screen
 /// opens over the grid, so back returns to it) and returns the cropped image.
 Future<({List<PickedImage> images, int dropped})> showAttachmentSheet(
@@ -26,43 +28,12 @@ Future<({List<PickedImage> images, int dropped})> showAttachmentSheet(
         context: context,
         isScrollControlled: true,
         showDragHandle: true,
+        // The paperclip leaves the keyboard up: the panel must not take focus.
+        requestFocus: false,
         builder: (_) => AttachmentSheet(square: square),
       );
   return result ?? (images: const <PickedImage>[], dropped: 0);
 }
-
-/// What the paperclip's small menu offers.
-enum AttachSource { camera, library }
-
-/// The paperclip's small menu: take a photo now, or pick from the photo
-/// library. Null when dismissed.
-Future<AttachSource?> showAttachMenu(BuildContext context) =>
-    showModalBottomSheet<AttachSource>(
-      context: context,
-      showDragHandle: true,
-      // The paperclip leaves the keyboard up: the sheet must not take focus.
-      requestFocus: false,
-      builder: (sheet) => SafeArea(
-        child: Column(
-          key: const ValueKey('attach-menu'),
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              key: const ValueKey('attach-camera'),
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Camera'),
-              onTap: () => Navigator.of(sheet).pop(AttachSource.camera),
-            ),
-            ListTile(
-              key: const ValueKey('attach-library'),
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Photo library'),
-              onTap: () => Navigator.of(sheet).pop(AttachSource.library),
-            ),
-          ],
-        ),
-      ),
-    );
 
 /// The phone's recent photos to send from. Asks for photo access the first
 /// time it opens; when access is missing or partial, shows SIS's own screen
@@ -96,6 +67,8 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
   // discards its own stale result instead of appending it onto page 0.
   int _generation = 0;
   final _scroll = ScrollController();
+  // Ticked photos, in tick order (a chat photo only; a picture is one tap).
+  final _picked = <GalleryPhoto>[];
 
   @override
   void initState() {
@@ -163,14 +136,28 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     }
   }
 
+  /// A tap on a tile. A picture (square) is chosen at once and cropped; a
+  /// chat photo is ticked or unticked.
   Future<void> _choose(GalleryPhoto p) async {
+    if (!widget.square) {
+      final at = _picked.indexWhere((e) => e.id == p.id);
+      if (at >= 0) {
+        setState(() => _picked.removeAt(at));
+      } else if (_picked.length >= ExternalPicker.maxAttachments) {
+        showSisNotice(
+          context,
+          'You can send up to ${ExternalPicker.maxAttachments} photos at once.',
+        );
+      } else {
+        setState(() => _picked.add(p));
+      }
+      return;
+    }
     if (_opening) return;
     setState(() => _opening = true);
     PickedImage? image;
     try {
-      image = widget.square
-          ? await ref.read(galleryProvider).loadForCrop(p)
-          : await ref.read(galleryProvider).load(p);
+      image = await ref.read(galleryProvider).loadForCrop(p);
     } catch (_) {
       image = null; // a thrown load is a failed load, never a stuck sheet
     }
@@ -181,6 +168,56 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
       return;
     }
     await _finish([image], 0);
+  }
+
+  /// Loads every ticked photo and hands them back, in tick order.
+  Future<void> _sendPicked() async {
+    if (_opening) return;
+    setState(() => _opening = true);
+    final loaded = <PickedImage>[];
+    for (final p in _picked) {
+      try {
+        final image = await ref.read(galleryProvider).load(p);
+        if (image != null) loaded.add(image);
+      } catch (_) {
+        // a thrown load is a failed load; the others still go
+      }
+    }
+    if (!mounted) return;
+    setState(() => _opening = false);
+    if (loaded.isEmpty) {
+      showSisNotice(
+        context,
+        'Those photos could not be opened.',
+        isError: true,
+      );
+      return;
+    }
+    if (loaded.length < _picked.length) {
+      showSisNotice(context, 'Some photos could not be opened.', isError: true);
+    }
+    await _finish(loaded, 0);
+  }
+
+  /// The camera tile: one photo, straight to the caller.
+  Future<void> _takePhoto() async {
+    if (_opening) return;
+    setState(() => _opening = true);
+    final result = await ref.read(externalPickerProvider).takePhoto();
+    if (!mounted) return;
+    setState(() => _opening = false);
+    switch (result) {
+      case ExternalPickedImages(:final images) when images.isNotEmpty:
+        await _finish(images, 0);
+      case ExternalPickCancelled():
+        return;
+      case ExternalPickedImages() || ExternalPickFailed():
+        showSisNotice(
+          context,
+          'The camera could not take a photo.',
+          isError: true,
+        );
+    }
   }
 
   Future<void> _selectMore() async {
@@ -260,7 +297,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
         children: [
           Expanded(
             child: Text(
-              'Photos',
+              'Recent photos',
               style: Theme.of(context).textTheme.titleMedium,
               overflow: TextOverflow.ellipsis,
             ),
@@ -271,11 +308,11 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
               onPressed: _selectMore,
               child: const Text('Allow more'),
             ),
-          IconButton(
+          TextButton.icon(
             key: const ValueKey('sheet-from-app'),
             onPressed: _fromApp,
-            icon: const Icon(Icons.apps_rounded),
-            tooltip: 'From an app',
+            icon: const Icon(Icons.photo_library_outlined, size: 18),
+            label: const Text('Gallery'),
           ),
         ],
       ),
@@ -291,13 +328,18 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
               mainAxisSpacing: 2,
               crossAxisSpacing: 2,
             ),
-            itemCount: _photos.length,
+            itemCount: _photos.length + (widget.square ? 0 : 1),
             itemBuilder: (context, i) {
-              final p = _photos[i];
+              if (!widget.square && i == 0) {
+                return _CameraTile(onTap: _opening ? null : _takePhoto);
+              }
+              final p = _photos[i - (widget.square ? 0 : 1)];
               return _Thumb(
                 key: ValueKey('sheet-photo-${p.id}'),
                 photo: p,
                 onTap: () => _choose(p),
+                showTick: !widget.square,
+                selected: _picked.any((e) => e.id == p.id),
               );
             },
           );
@@ -308,6 +350,21 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
         children: [
           header,
           Expanded(child: body),
+          if (_picked.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  key: const ValueKey('sheet-send'),
+                  onPressed: _opening ? null : _sendPicked,
+                  child: Text(
+                    'Send ${_picked.length} '
+                    'photo${_picked.length == 1 ? '' : 's'}',
+                  ),
+                ),
+              ),
+            ),
           SizedBox(
             height: 3,
             child: _loadingMore ? const SisProgressLine() : null,
@@ -389,8 +446,8 @@ class _PhotoAccessRequest extends StatelessWidget {
                   TextButton.icon(
                     key: const ValueKey('sheet-from-app'),
                     onPressed: onFromApp,
-                    icon: const Icon(Icons.apps_rounded, size: 18),
-                    label: const Text('From an app'),
+                    icon: const Icon(Icons.photo_library_outlined, size: 18),
+                    label: const Text('Gallery'),
                   ),
                   const SizedBox(height: 8),
                   TextButton(
@@ -408,11 +465,48 @@ class _PhotoAccessRequest extends StatelessWidget {
   }
 }
 
+/// The grid's first cell: take a photo now.
+class _CameraTile extends StatelessWidget {
+  const _CameraTile({required this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      key: const ValueKey('sheet-camera'),
+      onTap: onTap,
+      child: ColoredBox(
+        color: scheme.surfaceContainerHigh,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.photo_camera_rounded, size: 32, color: scheme.onSurface),
+            const SizedBox(height: 4),
+            Text('Camera', style: Theme.of(context).textTheme.labelSmall),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Thumb extends ConsumerStatefulWidget {
-  const _Thumb({super.key, required this.photo, required this.onTap});
+  const _Thumb({
+    super.key,
+    required this.photo,
+    required this.onTap,
+    this.showTick = false,
+    this.selected = false,
+  });
 
   final GalleryPhoto photo;
   final VoidCallback onTap;
+
+  /// Draws the tick circle in the corner (a chat photo, not a picture).
+  final bool showTick;
+  final bool selected;
 
   @override
   ConsumerState<_Thumb> createState() => _ThumbState();
@@ -426,22 +520,49 @@ class _ThumbState extends ConsumerState<_Thumb> {
 
   @override
   Widget build(BuildContext context) {
+    final brand = SisBrand.of(context).brand;
     return FutureBuilder<Uint8List?>(
       future: _bytes,
       builder: (context, snapshot) => InkWell(
         onTap: widget.onTap,
-        child: switch (snapshot.data) {
-          final Uint8List data => Image.memory(
-            data,
-            fit: BoxFit.cover,
-            gaplessPlayback: true,
-          ),
-          // Not read yet, or unreadable: a quiet tile, but still tappable (a
-          // limited-access photo can be slow, and a tap must never be lost).
-          null => ColoredBox(
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
-          ),
-        },
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            switch (snapshot.data) {
+              final Uint8List data => Image.memory(
+                data,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+              ),
+              // Not read yet, or unreadable: a quiet tile, but still tappable
+              // (a limited-access photo can be slow, and a tap must never be
+              // lost).
+              null => ColoredBox(
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
+              ),
+            },
+            if (widget.selected)
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: brand, width: 3),
+                ),
+              ),
+            if (widget.showTick)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Icon(
+                  widget.selected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked,
+                  key: ValueKey('sheet-tick-${widget.photo.id}'),
+                  size: 24,
+                  color: widget.selected ? brand : Colors.white,
+                  shadows: const [Shadow(blurRadius: 3)],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

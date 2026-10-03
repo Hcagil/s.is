@@ -6,14 +6,16 @@
 //    scroll offset), the sheet stays open and the caller gets nothing yet;
 //    Use pops the sheet with the cropped image as images.first. An empty
 //    list means the sheet closed without a pick.
-//  - square: false (a chat photo) pops the sheet on the tap with the photo;
-//    no crop route ever.
+//  - square: false (a chat photo): a tap ticks, "Send N photos" pops the
+//    sheet with the ticked photos; no crop route ever. (0.30.10)
+//  - square: true has no camera tile and no tick circles. (0.30.10)
 //  - "From an app" (sheet-from-app) with square: true crops over the grid
 //    too; back returns to it, and a cancelled or failed pick leaves it.
 //  - loadForCrop giving null: a notice, still on the grid. A failed crop:
 //    "That photo could not be used." on the crop screen, which stays.
-//  - showAvatarSheet(context, hasAvatar:) gives AvatarPicked (the crop),
-//    AvatarRemoved, or null.
+//  - showAvatarCard(context, ref, anchor:, hasAvatar:) (0.30.10, replaces
+//    the avatar sheet) gives AvatarPicked (the crop), AvatarRemoved, or
+//    null.
 //
 // The profile and group flows run on the whole app as main.dart mounts it
 // (World, shared with avatar_widgets_test.dart); the return-value contract
@@ -26,7 +28,7 @@ import 'package:sis/app/theme.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/presentation/attachment_sheet.dart';
-import 'package:sis/features/chat/presentation/avatar_sheet.dart';
+import 'package:sis/features/chat/presentation/avatar_card.dart';
 import 'package:sis/features/chat/presentation/crop_screen.dart';
 
 import '../../support/fakes.dart';
@@ -147,13 +149,21 @@ class Host {
                   child: Text('open $square'),
                 ),
               for (final has in [true, false])
-                TextButton(
-                  key: ValueKey('avatar-$has'),
-                  onPressed: () async {
-                    avatar = await showAvatarSheet(context, hasAvatar: has);
-                    resolved = true;
-                  },
-                  child: Text('avatar $has'),
+                Consumer(
+                  builder: (context, ref, _) => TextButton(
+                    key: ValueKey('avatar-$has'),
+                    onPressed: () async {
+                      final box = context.findRenderObject()! as RenderBox;
+                      avatar = await showAvatarCard(
+                        context,
+                        ref,
+                        anchor: box.localToGlobal(Offset.zero) & box.size,
+                        hasAvatar: has,
+                      );
+                      resolved = true;
+                    },
+                    child: Text('avatar $has'),
+                  ),
                 ),
             ],
           ),
@@ -192,7 +202,7 @@ void main() {
           await openGroupPage(t);
           await tapKey(t, 'group-avatar-edit');
         }
-        await tapKey(t, 'avatar-choose');
+        await tapKey(t, 'avatar-library');
         expectGridOpen('opened');
 
         final offset = await scrollPastFirstPage(t, w.gallery);
@@ -239,7 +249,7 @@ void main() {
       await home(t, w);
       await openProfilePage(t);
       await tapKey(t, 'profile-avatar-edit');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       await act(t, byKey('sheet-photo-p1'));
       await cropAndUse(t);
 
@@ -259,7 +269,7 @@ void main() {
       await home(t, w);
       await openProfilePage(t);
       await tapKey(t, 'profile-avatar-edit');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       await act(t, byKey('sheet-photo-p1'));
 
       expect(w.gallery.cropLoads, ['p1']);
@@ -282,7 +292,7 @@ void main() {
       await home(t, w);
       await openProfilePage(t);
       await tapKey(t, 'profile-avatar-edit');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
 
       await act(t, byKey('sheet-from-app'));
       await backOutOfCrop(t);
@@ -305,7 +315,7 @@ void main() {
         await home(t, w);
         await openProfilePage(t);
         await tapKey(t, 'profile-avatar-edit');
-        await tapKey(t, 'avatar-choose');
+        await tapKey(t, 'avatar-library');
 
         await act(t, byKey('sheet-from-app'));
         expect(w.picker.pictureCalls, 1);
@@ -349,11 +359,14 @@ void main() {
       expect(h.cropper.calls.single.source, picked.bytes);
     });
 
-    testWidgets('not square: the tap resolves the photo itself; no crop', (
-      t,
-    ) async {
+    testWidgets('not square: a tap ticks, Send resolves the ticked photo; no '
+        'crop', (t) async {
       final h = await mount(t, 'open-false');
       await t.tap(byKey('sheet-photo-p0'));
+      await steps(t);
+      expect(h.resolved, isFalse, reason: 'a tick is not a pick');
+      expect(byKey('sheet-tick-p0'), findsOneWidget);
+      await t.tap(byKey('sheet-send'));
       var sawCrop = false;
       for (var i = 0; i < 30; i++) {
         await t.pump(const Duration(milliseconds: 20));
@@ -361,12 +374,28 @@ void main() {
       }
       await settle(t);
       expect(sawCrop, isFalse, reason: 'a chat photo went through the crop');
-      expect(h.resolved, isTrue, reason: 'the tap did not pop the sheet');
+      expect(h.resolved, isTrue, reason: 'Send did not pop the sheet');
       expect(h.sheet!.images.single.bytes, pngBytes);
       expect(h.gallery.loadedIds, ['p0']);
       expect(h.gallery.cropLoads, isEmpty);
       expect(h.cropper.calls, isEmpty);
       expect(find.byType(GridView), findsNothing);
+    });
+
+    testWidgets('square: no camera tile, no tick circles; not square: both', (
+      t,
+    ) async {
+      await mount(t, 'open-true');
+      expect(byKey('sheet-photo-p0'), findsOneWidget);
+      expect(byKey('sheet-camera'), findsNothing);
+      expect(byKey('sheet-tick-p0'), findsNothing);
+      await systemBack(t);
+      await settle(t);
+
+      await t.tap(byKey('open-false'));
+      await settle(t);
+      expect(byKey('sheet-camera'), findsOneWidget);
+      expect(byKey('sheet-tick-p0'), findsOneWidget);
     });
 
     for (final square in [true, false]) {
@@ -397,11 +426,11 @@ void main() {
     });
   });
 
-  group('showAvatarSheet resolves', () {
+  group('showAvatarCard resolves', () {
     testWidgets('Choose photo, back from the crop, another photo, Use: '
         'AvatarPicked with the crop', (t) async {
       final h = await mount(t, 'avatar-true');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       await act(t, byKey('sheet-photo-p0'));
       await backOutOfCrop(t);
       expectGridOpen('back');
@@ -415,6 +444,52 @@ void main() {
       expect((h.avatar! as AvatarPicked).image.bytes, h.cropper.output);
     });
 
+    testWidgets('the card is up on the first frames after the tap, next '
+        'to the picture it was opened from', (t) async {
+      final h = Host();
+      t.view.physicalSize = const Size(1080, 2340);
+      t.view.devicePixelRatio = 2.625;
+      addTearDown(t.view.reset);
+      await t.pumpWidget(h.app());
+      await t.tap(byKey('avatar-true'));
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 16));
+      expect(byKey('avatar-card'), findsOneWidget, reason: 'not at once');
+      await settle(t);
+      final anchor = t.getRect(byKey('avatar-true'));
+      final card = t.getRect(byKey('avatar-card'));
+      final gap = card.top >= anchor.bottom
+          ? card.top - anchor.bottom
+          : anchor.top - card.bottom;
+      expect(gap, lessThan(48), reason: 'card $card far from anchor $anchor');
+      expect(find.text('Take photo'), findsOneWidget);
+    });
+
+    testWidgets('Take photo: the camera, then the crop; Use gives '
+        'AvatarPicked with the crop', (t) async {
+      final host = Host();
+      host.picker.shot = picked;
+      final h = await mount(t, 'avatar-true', host: host);
+      await tapKey(t, 'avatar-camera');
+      await steps(t, 30);
+      expect(h.picker.cameraCalls, 1);
+      await cropAndUse(t);
+      await settle(t);
+      expect(h.resolved, isTrue);
+      expect(h.avatar, isA<AvatarPicked>());
+      expect(h.cropper.calls.single.source, picked.bytes);
+      expect((h.avatar! as AvatarPicked).image.bytes, h.cropper.output);
+    });
+
+    testWidgets('a tap outside the card: null', (t) async {
+      final h = await mount(t, 'avatar-true');
+      await t.tapAt(const Offset(5, 700));
+      await settle(t);
+      expect(byKey('avatar-card'), findsNothing);
+      expect(h.resolved, isTrue);
+      expect(h.avatar, isNull);
+    });
+
     testWidgets('Remove: AvatarRemoved', (t) async {
       final h = await mount(t, 'avatar-true');
       await tapKey(t, 'avatar-remove');
@@ -424,7 +499,7 @@ void main() {
 
     testWidgets('no picture yet: no Remove', (t) async {
       await mount(t, 'avatar-false');
-      expect(byKey('avatar-choose'), findsOneWidget);
+      expect(byKey('avatar-library'), findsOneWidget);
       expect(byKey('avatar-remove'), findsNothing);
     });
 
@@ -438,7 +513,7 @@ void main() {
 
     testWidgets('back from the crop, then closed: null', (t) async {
       final h = await mount(t, 'avatar-true');
-      await tapKey(t, 'avatar-choose');
+      await tapKey(t, 'avatar-library');
       await act(t, byKey('sheet-photo-p0'));
       await backOutOfCrop(t);
       await systemBack(t);

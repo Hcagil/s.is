@@ -24,6 +24,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
+import '../../support/attach_flow.dart' hide key;
 import '../../support/fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
@@ -61,6 +62,33 @@ class _HoldingChat extends ChatFake {
   }
 }
 
+/// A chat repository that refuses the [refuseAt]-th upload (1-based), the
+/// way the server refuses one: recorded, then an error.
+class _RefusingChat extends ChatFake {
+  _RefusingChat(this.refuseAt);
+  final int refuseAt;
+  int sendCalls = 0;
+
+  @override
+  Future<Result<Message>> sendImage({
+    required String conversationId,
+    required PickedImage image,
+    String body = '',
+    String? replyTo,
+  }) async {
+    final result = await super.sendImage(
+      conversationId: conversationId,
+      image: image,
+      body: body,
+      replyTo: replyTo,
+    );
+    if (++sendCalls == refuseAt) {
+      return const Err(NetworkFailure('The upload did not finish.'));
+    }
+    return result;
+  }
+}
+
 /// A real, decodable photo told apart from its siblings by one trailing
 /// byte after the PNG's end (decoders ignore it), with its tiny preview.
 PickedImage shot(int i) => PickedImage(
@@ -68,13 +96,6 @@ PickedImage shot(int i) => PickedImage(
   contentType: 'image/jpeg',
   extension: 'jpg',
   preview: pngBytes,
-);
-
-/// What the upload refuses: nothing in it.
-final unreadable = PickedImage(
-  bytes: Uint8List(0),
-  contentType: 'image/jpeg',
-  extension: 'jpg',
 );
 
 GalleryFake galleryAt(GalleryAccess access) => GalleryFake(
@@ -124,19 +145,18 @@ Future<void> type(WidgetTester tester, String text) async {
   await tester.pump();
 }
 
-Future<void> openSheet(WidgetTester tester) async {
-  // The paperclip opens a small menu (0.30.8); the library is one choice.
-  await tester.tap(find.byKey(const ValueKey('composer-attach')));
-  await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const ValueKey('attach-library')));
-  await tester.pumpAndSettle();
-}
+// 0.30.10: the paperclip opens the grid itself, no menu in between.
+Future<void> openSheet(WidgetTester tester) => openGrid(tester);
 
-/// Taps "From an app" and lets the round trip and the sends run, without
-/// letting any notice's timer run out.
+/// Taps "Gallery" and lets the round trip run: what comes back lands on the
+/// preview page, whose Send (if it opened) is tapped so the sends run --
+/// without letting any notice's timer run out.
 Future<void> fromApp(WidgetTester tester) async {
   await tester.tap(fromAppEntry);
   await steps(tester);
+  if (find.byKey(const ValueKey('preview-page')).evaluate().isNotEmpty) {
+    await previewSend(tester);
+  }
 }
 
 final fromAppEntry = find.byKey(const ValueKey('sheet-from-app'));
@@ -162,23 +182,17 @@ Future<void> drain(WidgetTester tester) async {
 void main() {
   group('the entry is there at every access level', () {
     for (final access in [GalleryAccess.full, GalleryAccess.limited]) {
-      testWidgets('${access.name}: an icon in the grid\'s header, "From an '
-          'app"', (tester) async {
+      testWidgets('${access.name}: a "Gallery" entry in the grid\'s '
+          'header', (tester) async {
         await pump(tester, ChatFake(), galleryAt(access), ExternalPickerFake());
         await openSheet(tester);
 
         expect(find.byType(GridView), findsOneWidget);
         expect(fromAppEntry, findsOneWidget);
         expect(
-          find.descendant(
-            of: fromAppEntry,
-            matching: find.byWidgetPredicate(
-              (w) => w is Tooltip && w.message == 'From an app',
-            ),
-            matchRoot: true,
-          ),
+          find.descendant(of: fromAppEntry, matching: find.text('Gallery')),
           findsOneWidget,
-          reason: 'an icon with no tooltip says nothing to a screen reader',
+          reason: 'the header entry is labelled "Gallery" (0.30.10)',
         );
       });
     }
@@ -187,7 +201,7 @@ void main() {
       GalleryAccess.denied,
       GalleryAccess.permanentlyDenied,
     ]) {
-      testWidgets('${access.name}: a "From an app" button on the access '
+      testWidgets('${access.name}: a "Gallery" button on the access '
           'screen', (tester) async {
         await pump(tester, ChatFake(), galleryAt(access), ExternalPickerFake());
         await openSheet(tester);
@@ -196,7 +210,7 @@ void main() {
         expect(find.byType(GridView), findsNothing);
         expect(fromAppEntry, findsOneWidget);
         expect(
-          find.descendant(of: fromAppEntry, matching: find.text('From an app')),
+          find.descendant(of: fromAppEntry, matching: find.text('Gallery')),
           findsOneWidget,
           reason: 'on the access screen the entry is a labelled button',
         );
@@ -321,15 +335,12 @@ void main() {
   group('a send that fails part way', () {
     testWidgets('keeps what was sent, says why, sends none of the rest and '
         'never claims the cap', (tester) async {
-      final chat = ChatFake();
+      // The third upload is refused. (0.30.10: every photo is shown on the
+      // preview page first, so it must decode; the refusal comes from the
+      // upload, as a real one does.)
+      final chat = _RefusingChat(3);
       final picker = ExternalPickerFake()
-        ..offered = [
-          shot(1),
-          shot(2),
-          unreadable,
-          shot(4),
-          for (var i = 5; i <= 12; i++) shot(i),
-        ];
+        ..offered = [for (var i = 1; i <= 12; i++) shot(i)];
       await pump(tester, chat, galleryAt(GalleryAccess.full), picker);
       await type(tester, 'part way');
       await openSheet(tester);
@@ -338,7 +349,7 @@ void main() {
 
       expect(
         [for (final s in chat.sentImages) s.image.bytes],
-        [shot(1).bytes, shot(2).bytes, unreadable.bytes],
+        [shot(1).bytes, shot(2).bytes, shot(3).bytes],
         reason: 'the batch stops at the refused photo',
       );
       expect(find.byKey(const ValueKey('message-img-1')), findsOneWidget);
@@ -405,12 +416,14 @@ void main() {
     }
   });
 
-  group('the camera choice (0.30.8)', () {
+  group('the camera tile (0.30.10)', () {
     Future<void> camera(WidgetTester tester) async {
-      await tester.tap(find.byKey(const ValueKey('composer-attach')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('attach-camera')));
+      await openGrid(tester);
+      await tester.tap(find.byKey(const ValueKey('sheet-camera')));
       await steps(tester);
+      if (find.byKey(const ValueKey('preview-page')).evaluate().isNotEmpty) {
+        await previewSend(tester);
+      }
     }
 
     const cameraFailed = 'The camera could not take a photo.';

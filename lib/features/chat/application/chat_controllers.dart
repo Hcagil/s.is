@@ -1048,6 +1048,29 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     return result;
   }
 
+  /// Forwards [message] to [conversationIds] and to [personIds]: a person
+  /// with no chat yet gets a direct chat first (created on send). The first
+  /// chat that cannot be created is the [Err]; nothing is sent then.
+  Future<Result<void>> forwardTo(
+    Message message, {
+    required List<String> conversationIds,
+    List<String> personIds = const [],
+  }) async {
+    final ids = [...conversationIds];
+    for (final person in personIds) {
+      final started = await ref
+          .read(conversationListProvider.notifier)
+          .startWith(person);
+      switch (started) {
+        case Ok(:final value):
+          if (!ids.contains(value)) ids.add(value);
+        case Err(:final failure):
+          return Err(failure);
+      }
+    }
+    return forward(message, ids);
+  }
+
   /// Replaces the shown messages with a window around [anchor] (oldest
   /// first, anchor included) -- for jumping to a search hit older than what
   /// is currently loaded. The [Err] reason is the caller's to show; state is

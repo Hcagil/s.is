@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/notice.dart';
+import '../../../app/theme.dart';
+import '../../../core/date_label.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
@@ -12,8 +14,9 @@ import '../../presence/domain/last_seen.dart';
 import '../domain/group_member.dart';
 import '../domain/message.dart';
 import '../domain/read_marks.dart';
-import 'forward_sheet.dart';
+import 'forward_page.dart';
 import 'message_menu_card.dart';
+import 'person_avatar.dart';
 import 'swipeable_message.dart';
 
 enum _DeleteChoice { forMe, forEveryone }
@@ -27,12 +30,19 @@ enum _DeleteChoice { forMe, forEveryone }
 /// [canDeleteForEveryone] says whether the delete dialog also offers
 /// "Delete for everyone" (the sender, or a group admin); "Delete for me"
 /// is always there.
+///
+/// [anchor] (the bubble's global rect; [alignEnd] for your own messages) is
+/// where the read-by card floats; [group] tells a group's card from a 1:1
+/// chat's single "Read" line.
 Future<bool> runMessageAction(
   BuildContext context,
   WidgetRef ref,
   Message message,
   MessageAction action, {
   bool canDeleteForEveryone = false,
+  Rect? anchor,
+  bool alignEnd = false,
+  bool group = true,
 }) async {
   switch (action) {
     case MessageAction.reply:
@@ -44,10 +54,10 @@ Future<bool> runMessageAction(
       ref.read(editingProvider.notifier).start(message);
       return false;
     case MessageAction.forward:
-      await showForwardSheet(context, ref, message);
+      await showForwardPage(context, ref, message);
       return false;
     case MessageAction.readBy:
-      await _showReaders(context, ref, message);
+      await _showReaders(context, ref, message, anchor, alignEnd, group);
       return false;
     case MessageAction.delete:
       break;
@@ -121,6 +131,7 @@ Future<bool> showMessageMenu(
   Rect? anchor,
   bool alignEnd = false,
   bool photoViewer = false,
+  bool group = true,
 }) async {
   final me = switch (ref.read(sessionControllerProvider).value) {
     Allowed(:final member) => member.userId,
@@ -177,54 +188,145 @@ Future<bool> showMessageMenu(
     action,
     canDeleteForEveryone:
         me != null && message.canDeleteForEveryone(me, admin: admin),
+    anchor: anchor,
+    alignEnd: alignEnd,
+    group: group,
   );
 }
 
 /// Who has read [message], among the members who share read status with
-/// you, and when.
+/// you, and when: a floating card above the message in a group; in a 1:1
+/// chat just a "Read 14:36" line.
 Future<void> _showReaders(
   BuildContext context,
   WidgetRef ref,
   Message message,
-) {
+  Rect? anchor,
+  bool alignEnd,
+  bool group,
+) async {
   final marks = ref.read(readMarksProvider).value ?? const <ReadMark>[];
-  final names = {
-    for (final gm
-        in ref.read(groupRosterProvider(message.conversationId)).value ??
-            const [])
-      gm.member.userId: gm.member.displayName,
-  };
   final readers = [
     for (final m in marks)
       if (m.hasRead(message.createdAt)) m,
   ];
-  return showModalBottomSheet<void>(
-    context: context,
-    showDragHandle: true,
-    builder: (sheet) => SafeArea(
-      child: Column(
-        key: const ValueKey('readers'),
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
-              'Read by',
-              style: Theme.of(sheet).textTheme.titleMedium,
-            ),
-          ),
-          if (readers.isEmpty)
-            const ListTile(title: Text('Nobody yet'), enabled: false)
-          else
-            for (final m in readers)
-              ListTile(
-                key: ValueKey('reader-${m.userId}'),
-                leading: const Icon(Icons.done_all),
-                title: Text(names[m.userId] ?? 'Member'),
-                subtitle: Text(lastSeenLabel(m.readAt!, DateTime.now())),
-              ),
-        ],
+  final people = {
+    for (final gm
+        in ref.read(groupRosterProvider(message.conversationId)).value ??
+            const <GroupMember>[])
+      gm.member.userId: gm.member,
+  };
+  final size = MediaQuery.sizeOf(context);
+  final at = !group && readers.isNotEmpty
+      ? readers.first.readAt!.toLocal()
+      : null;
+  if (!group) {
+    // 1:1: the same floating card, one line, no list.
+    await showFloatingCard<void>(
+      context,
+      anchor: anchor ?? Rect.fromLTWH(size.width / 2, size.height / 2, 0, 0),
+      alignEnd: alignEnd,
+      highlightAnchor: anchor != null,
+      cardKey: const ValueKey('readers'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Text(
+          at == null
+              ? 'Not read yet'
+              : 'Read ${twoDigit(at.hour)}:${twoDigit(at.minute)}',
+          key: const ValueKey('readers-line'),
+        ),
       ),
+    );
+    return;
+  }
+  await showFloatingCard<void>(
+    context,
+    anchor: anchor ?? Rect.fromLTWH(size.width / 2, size.height / 2, 0, 0),
+    alignEnd: alignEnd,
+    highlightAnchor: anchor != null,
+    cardKey: const ValueKey('readers'),
+    child: Builder(
+      builder: (card) {
+        final t = SisBrand.of(card);
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 320),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Text(
+                  readers.isEmpty ? 'Read by' : 'Read by ${readers.length}',
+                  key: const ValueKey('readers-title'),
+                  style: Theme.of(card).textTheme.titleSmall,
+                ),
+              ),
+              if (readers.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+                  child: Text('Nobody yet', style: TextStyle(color: t.muted)),
+                )
+              else
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final m in readers)
+                          Padding(
+                            key: ValueKey('reader-${m.userId}'),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                PersonAvatar(
+                                  label:
+                                      people[m.userId]?.displayName ?? 'Member',
+                                  seed: m.userId,
+                                  radius: 16,
+                                  avatarPath: people[m.userId]?.avatarPath,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        people[m.userId]?.displayName ??
+                                            'Member',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        lastSeenLabel(
+                                          m.readAt!,
+                                          DateTime.now(),
+                                        ).replaceFirst('last seen ', ''),
+                                        style: TextStyle(
+                                          color: t.muted,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        );
+      },
     ),
   );
 }

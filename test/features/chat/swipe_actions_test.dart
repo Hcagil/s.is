@@ -396,13 +396,14 @@ void main() {
   });
 
   group('what the row offers', () {
-    testWidgets('your own fresh text in a 1:1: reply, forward, edit, delete', (
-      tester,
-    ) async {
-      await pump(tester, chatWith([msg('m1')]));
-      await open(tester, 'm1');
-      expect(shownBoxes(), ['reply', 'forward', 'edit', 'delete']);
-    });
+    testWidgets(
+      'your own fresh text in a 1:1: read-by, reply, forward, edit, delete',
+      (tester) async {
+        await pump(tester, chatWith([msg('m1')]));
+        await open(tester, 'm1');
+        expect(shownBoxes(), ['read-by', 'reply', 'forward', 'edit', 'delete']);
+      },
+    );
 
     testWidgets('your own fresh text in a group adds read-by', (tester) async {
       await pump(tester, chatWith([msg('m1')]), group: true);
@@ -422,7 +423,7 @@ void main() {
     testWidgets('your own forwarded message: no edit', (tester) async {
       await pump(tester, chatWith([msg('m1', forwarded: true)]));
       await open(tester, 'm1');
-      expect(shownBoxes(), ['reply', 'forward', 'delete']);
+      expect(shownBoxes(), ['read-by', 'reply', 'forward', 'delete']);
     });
 
     testWidgets("somebody else's text: reply and forward only", (tester) async {
@@ -436,7 +437,7 @@ void main() {
         ..store('c1/1.png');
       await pump(tester, chat);
       await open(tester, 'p1');
-      expect(shownBoxes(), ['reply', 'forward', 'edit', 'delete']);
+      expect(shownBoxes(), ['read-by', 'reply', 'forward', 'edit', 'delete']);
     });
 
     testWidgets("somebody else's photo: reply and forward", (tester) async {

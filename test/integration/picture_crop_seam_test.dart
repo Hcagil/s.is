@@ -279,7 +279,7 @@ void main() {
   /// screen, ready to use.
   Future<void> chooseAndFrame(WidgetTester t, String badge) async {
     await tap(t, badge);
-    await tap(t, 'avatar-choose');
+    await tap(t, 'avatar-library');
     await tap(t, 'sheet-photo-p1');
     await until(t, () => useOffered(t), 'the crop screen offering Use');
     await t.pump(const Duration(seconds: 1));

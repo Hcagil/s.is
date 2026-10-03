@@ -22,6 +22,7 @@ import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 
+import '../../support/attach_flow.dart' hide key;
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
 
@@ -92,19 +93,23 @@ Future<ProviderContainer> pump(
   return container;
 }
 
-/// Opens the attachment sheet from the composer.
-Future<void> openSheet(WidgetTester tester) async {
-  // The paperclip opens a small menu (0.30.8); the library is one choice.
-  await tester.tap(find.byKey(const ValueKey('composer-attach')));
-  await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const ValueKey('attach-library')));
-  await tester.pumpAndSettle();
-}
+/// Opens the attachment grid from the composer (0.30.10: no menu between).
+Future<void> openSheet(WidgetTester tester) => openGrid(tester);
 
-/// Opens the sheet and taps the phone's one photo.
+/// Opens the grid, ticks the phone's one photo and taps Send N photos: the
+/// photo loads and, once it has, the preview page opens.
 Future<void> choosePhoto(WidgetTester tester) async {
   await openSheet(tester);
   await tester.tap(find.byKey(const ValueKey('sheet-photo-p1')));
+  await tester.pump();
+  await tester.tap(find.byKey(const ValueKey('sheet-send')));
+}
+
+/// [choosePhoto], then Send on the preview page.
+Future<void> choosePhotoAndSend(WidgetTester tester) async {
+  await choosePhoto(tester);
+  await frames(tester);
+  await previewSend(tester);
 }
 
 String composerText(WidgetTester tester) => tester
@@ -387,6 +392,9 @@ void main() {
       );
 
       gallery.releaseLoad();
+      await frames(tester);
+      expect(chat.sentImages, isEmpty, reason: 'the preview page sends');
+      await previewSend(tester);
       await settleImages(tester);
       expect(chat.sentImages.single.image.bytes, pngBytes);
     });
@@ -436,7 +444,7 @@ void main() {
         'worth keeping',
       );
       await tester.pump();
-      await choosePhoto(tester);
+      await choosePhotoAndSend(tester);
       await settleImages(tester);
 
       expect(
@@ -458,7 +466,7 @@ void main() {
         'look at this',
       );
       await tester.pump();
-      await choosePhoto(tester);
+      await choosePhotoAndSend(tester);
       await settleImages(tester);
 
       expect(chat.sentImages.single.body, 'look at this');
@@ -570,6 +578,8 @@ void main() {
       // it -- a bare pump() catches it mid-transition, off the bottom of
       // the screen. Nothing here is held yet, so settling is safe.
       await choosePhoto(tester);
+      await frames(tester);
+      await tester.tap(find.byKey(const ValueKey('preview-send')));
       // Let the photo load and the pending message get appended, without
       // the (held) upload ever answering.
       for (var i = 0; i < 5; i++) {

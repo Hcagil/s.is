@@ -52,7 +52,7 @@ List<SisNotice> notices(WidgetTester t) =>
 /// camera badge -> Choose photo -> the sheet.
 Future<void> toSheet(WidgetTester t, String avatar) async {
   await tapKey(t, avatar);
-  await tapKey(t, 'avatar-choose');
+  await tapKey(t, 'avatar-library');
   expect(byKey('sheet-from-app'), findsOneWidget);
 }
 

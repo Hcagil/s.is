@@ -1,8 +1,12 @@
-// "Read by", from the product rule: in a group, swiping your own message
-// shows who has read it and when (the time as lastSeenLabel words it), and
-// "Nobody yet" when nobody has. Only members who share read status can be
-// listed. Run under TZ=JST-9 like every unit test: the times below are UTC
-// instants whose local date differs from their UTC date.
+// "Read by", from the product rule and the 0.30.10 contract: swiping your
+// own message offers "Read by", which opens a floating card (key readers)
+// ABOVE the bubble -- in a group a title ("Read by N" / "Nobody yet") and one
+// row per reader (reader-<userId>) with the local date or time, height
+// capped at 320 with the rows scrolling; in a 1:1 the same card holds one
+// line (readers-line), "Read HH:mm" or "Not read yet". Only members who
+// share read status can be listed. A tap outside or Back closes it. Run
+// under TZ=JST-9 like every unit test: the times below are UTC instants
+// whose local date differs from their UTC date.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,7 +19,6 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
-import 'package:sis/features/presence/domain/last_seen.dart';
 
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
@@ -49,12 +52,22 @@ Future<void> pump(
   List<ReadMark> marks, {
   String from = 'u1',
   bool group = true,
+  List<Member> others = const [bob, cem, dee],
+  DateTime? sent,
 }) async {
   final chat = ChatFake()
-    ..messagesResult = Ok([msg(from)])
-    ..membersResult = const Ok([bob, cem, dee])
+    ..messagesResult = Ok([
+      Message(
+        id: 'm1',
+        conversationId: 'g1',
+        senderId: from,
+        body: 'hello club',
+        createdAt: sent ?? sentAt,
+      ),
+    ])
+    ..membersResult = Ok(others)
     ..readMarksData['g1'] = marks;
-  chat.roster['g1'] = [me, bob, cem, dee];
+  chat.roster['g1'] = [me, ...others];
   final c = await settled(
     ProviderContainer.test(
       overrides: [
@@ -93,97 +106,258 @@ Future<void> openReadBy(WidgetTester t) async {
   await t.pumpAndSettle();
 }
 
+Finder get card => find.byKey(const ValueKey('readers'));
+
+String titleText(WidgetTester t) => t
+    .widgetList<Text>(
+      find.descendant(
+        of: find.byKey(const ValueKey('readers-title')),
+        matching: find.byType(Text),
+        matchRoot: true,
+      ),
+    )
+    .map((w) => w.data ?? '')
+    .join(' ');
+
+/// Every text in [row], joined.
+String textsIn(WidgetTester t, Finder row) => t
+    .widgetList<Text>(find.descendant(of: row, matching: find.byType(Text)))
+    .map((w) => w.data ?? w.textSpan?.toPlainText() ?? '')
+    .join(' ');
+
+/// The card says "Nobody yet" and claims no count.
+void expectNobodyYet() {
+  expect(
+    find.descendant(of: card, matching: find.text('Nobody yet')),
+    findsOneWidget,
+  );
+  expect(find.textContaining(RegExp(r'Read by \d')), findsNothing);
+}
+
 void main() {
-  testWidgets('lists each member who has read it, with when', (t) async {
-    await pump(t, [
-      ReadMark(userId: 'u2', shares: true, readAt: bobRead),
-      ReadMark(userId: 'u3', shares: true, readAt: cemRead),
-    ]);
-    await openReadBy(t);
+  group('a group', () {
+    testWidgets('lists each member who has read it, with the local date', (
+      t,
+    ) async {
+      await pump(t, [
+        ReadMark(userId: 'u2', shares: true, readAt: bobRead),
+        ReadMark(userId: 'u3', shares: true, readAt: cemRead),
+      ]);
+      await openReadBy(t);
 
-    expect(find.text('Bob'), findsOneWidget);
-    expect(find.text('Cem'), findsOneWidget);
-    final now = DateTime.now();
-    expect(find.text(lastSeenLabel(bobRead, now)), findsOneWidget);
-    expect(find.text(lastSeenLabel(cemRead, now)), findsOneWidget);
-    expect(
-      find.textContaining('02.01.20'),
-      findsOneWidget,
-      reason: "Bob's time must be the local date, not the UTC one",
-    );
-    expect(find.text('Nobody yet'), findsNothing);
+      expect(card, findsOneWidget);
+      expect(titleText(t), 'Read by 2');
+      final bobRow = find.byKey(const ValueKey('reader-u2'));
+      final cemRow = find.byKey(const ValueKey('reader-u3'));
+      expect(bobRow, findsOneWidget);
+      expect(cemRow, findsOneWidget);
+      expect(textsIn(t, bobRow), contains('Bob'));
+      expect(
+        textsIn(t, bobRow),
+        contains('02.01.20'),
+        reason: "Bob's time must be the local date, not the UTC one",
+      );
+      expect(textsIn(t, bobRow), isNot(contains('01.01.20')));
+      expect(textsIn(t, cemRow), contains('Cem'));
+      expect(textsIn(t, cemRow), contains('03.01.20'));
+      expect(find.text('Nobody yet'), findsNothing);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.byType(BottomSheet), findsNothing);
+    });
+
+    testWidgets('leaves out who read only before it was sent, who never '
+        'read, and who does not share', (t) async {
+      await pump(t, [
+        ReadMark(userId: 'u2', shares: true, readAt: bobRead),
+        ReadMark(
+          userId: 'u3',
+          shares: true,
+          readAt: sentAt.subtract(const Duration(days: 1)),
+        ),
+        const ReadMark(userId: 'u4', shares: false),
+      ]);
+      await openReadBy(t);
+
+      expect(titleText(t), 'Read by 1');
+      expect(find.byKey(const ValueKey('reader-u2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('reader-u3')), findsNothing);
+      expect(find.byKey(const ValueKey('reader-u4')), findsNothing);
+      expect(find.text('Cem'), findsNothing);
+      expect(find.text('Dee'), findsNothing);
+    });
+
+    testWidgets('"Nobody yet" when nobody has read it', (t) async {
+      await pump(t, [
+        const ReadMark(userId: 'u2', shares: true),
+        ReadMark(
+          userId: 'u3',
+          shares: true,
+          readAt: sentAt.subtract(const Duration(minutes: 1)),
+        ),
+      ]);
+      await openReadBy(t);
+
+      expectNobodyYet();
+      expect(find.byKey(const ValueKey('reader-u2')), findsNothing);
+      expect(find.byKey(const ValueKey('reader-u3')), findsNothing);
+    });
+
+    testWidgets('"Nobody yet" when nobody shares read status', (t) async {
+      await pump(t, const [
+        ReadMark(userId: 'u2', shares: false),
+        ReadMark(userId: 'u3', shares: false),
+      ]);
+      await openReadBy(t);
+
+      expectNobodyYet();
+    });
+
+    testWidgets('the card floats above the bubble, inside the screen', (
+      t,
+    ) async {
+      await pump(t, [ReadMark(userId: 'u2', shares: true, readAt: bobRead)]);
+      final bubble = t.getRect(find.byKey(const ValueKey('message-m1')));
+      await openReadBy(t);
+
+      final box = t.getRect(card);
+      expect(
+        box.bottom,
+        lessThanOrEqualTo(bubble.top),
+        reason: 'the card sits above the bubble, not over or under it',
+      );
+      final screen =
+          Offset.zero & t.view.physicalSize / t.view.devicePixelRatio;
+      expect(screen.contains(box.topLeft), isTrue);
+      expect(screen.contains(box.bottomRight - const Offset(1, 1)), isTrue);
+    });
+
+    testWidgets('many readers: at most 320 high and the rows scroll', (
+      t,
+    ) async {
+      t.view.physicalSize = const Size(1080, 2340);
+      t.view.devicePixelRatio = 2.625;
+      addTearDown(t.view.reset);
+      final crowd = [
+        for (var i = 10; i < 40; i++)
+          Member(userId: 'u$i', displayName: 'Reader $i'),
+      ];
+      await pump(t, [
+        for (final m in crowd)
+          ReadMark(userId: m.userId, shares: true, readAt: bobRead),
+      ], others: crowd);
+      // Low on the screen, so the room above it is not what caps the card.
+      await openReadBy(t);
+
+      expect(titleText(t), 'Read by 30');
+      expect(t.getSize(card).height, lessThanOrEqualTo(320));
+      final list = find.descendant(of: card, matching: find.byType(Scrollable));
+      expect(list, findsOneWidget, reason: 'the rows do not scroll');
+      expect(
+        find.byKey(const ValueKey('reader-u39')).hitTestable(),
+        findsNothing,
+      );
+      await t.scrollUntilVisible(
+        find.byKey(const ValueKey('reader-u39')),
+        100,
+        scrollable: list,
+      );
+      expect(
+        find.byKey(const ValueKey('reader-u39')).hitTestable(),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a tap outside closes it, and nothing else happens', (t) async {
+      await pump(t, [ReadMark(userId: 'u2', shares: true, readAt: bobRead)]);
+      await openReadBy(t);
+      expect(card, findsOneWidget);
+
+      await t.tapAt(const Offset(20, 300));
+      await t.pumpAndSettle();
+
+      expect(card, findsNothing);
+      expect(find.byKey(const ValueKey('message-menu')), findsNothing);
+      expect(find.byKey(const ValueKey('message-m1')), findsOneWidget);
+    });
+
+    testWidgets('Back closes only the card', (t) async {
+      await pump(t, [ReadMark(userId: 'u2', shares: true, readAt: bobRead)]);
+      await openReadBy(t);
+
+      await t.binding.handlePopRoute();
+      await t.pumpAndSettle();
+
+      expect(card, findsNothing);
+      expect(find.byType(MessageScreen), findsOneWidget);
+    });
+
+    testWidgets("someone else's message offers no \"Read by\"", (t) async {
+      await pump(t, [
+        ReadMark(userId: 'u3', shares: true, readAt: cemRead),
+      ], from: 'u2');
+      await touch(t);
+      expect(
+        find.byKey(const ValueKey('action-reply')),
+        findsOneWidget,
+        reason: 'the row did open',
+      );
+      expect(find.byKey(const ValueKey('action-read-by')), findsNothing);
+    });
   });
 
-  testWidgets('leaves out who read only before it was sent, who never '
-      'read, and who does not share', (t) async {
-    await pump(t, [
-      ReadMark(userId: 'u2', shares: true, readAt: bobRead),
-      ReadMark(
-        userId: 'u3',
-        shares: true,
-        readAt: sentAt.subtract(const Duration(days: 1)),
-      ),
-      const ReadMark(userId: 'u4', shares: false),
-    ]);
-    await openReadBy(t);
+  group('a 1:1 (0.30.10)', () {
+    String hhmm(DateTime d) {
+      final l = d.toLocal();
+      String two(int n) => n.toString().padLeft(2, '0');
+      return '${two(l.hour)}:${two(l.minute)}';
+    }
 
-    expect(find.text('Bob'), findsOneWidget);
-    expect(find.text('Cem'), findsNothing);
-    expect(find.text('Dee'), findsNothing);
-    expect(find.text('Nobody yet'), findsNothing);
-  });
+    testWidgets('read: the card holds one line, "Read HH:mm" in local time, '
+        'and no list', (t) async {
+      final sent = DateTime.now().toUtc().subtract(const Duration(hours: 1));
+      final read = sent.add(const Duration(minutes: 7));
+      await pump(
+        t,
+        [ReadMark(userId: 'u2', shares: true, readAt: read)],
+        group: false,
+        others: const [bob],
+        sent: sent,
+      );
+      await openReadBy(t);
 
-  testWidgets('"Nobody yet" when nobody has read it', (t) async {
-    await pump(t, [
-      const ReadMark(userId: 'u2', shares: true),
-      ReadMark(
-        userId: 'u3',
-        shares: true,
-        readAt: sentAt.subtract(const Duration(minutes: 1)),
-      ),
-    ]);
-    await openReadBy(t);
+      expect(card, findsOneWidget);
+      final line = find.byKey(const ValueKey('readers-line'));
+      expect(line, findsOneWidget);
+      expect(
+        find.descendant(
+          of: line,
+          matching: find.text('Read ${hhmm(read)}'),
+          matchRoot: true,
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('reader-u2')), findsNothing);
+      expect(find.byKey(const ValueKey('readers-title')), findsNothing);
+      expect(find.byType(SnackBar), findsNothing);
+    });
 
-    expect(find.text('Nobody yet'), findsOneWidget);
-    expect(find.text('Bob'), findsNothing);
-    expect(find.text('Cem'), findsNothing);
-  });
+    testWidgets('not read: "Not read yet"', (t) async {
+      await pump(
+        t,
+        const [ReadMark(userId: 'u2', shares: true)],
+        group: false,
+        others: const [bob],
+      );
+      await openReadBy(t);
 
-  testWidgets('"Nobody yet" when nobody shares read status', (t) async {
-    await pump(t, const [
-      ReadMark(userId: 'u2', shares: false),
-      ReadMark(userId: 'u3', shares: false),
-    ]);
-    await openReadBy(t);
-
-    expect(find.text('Nobody yet'), findsOneWidget);
-  });
-
-  testWidgets("someone else's message offers no \"Read by\"", (t) async {
-    await pump(t, [
-      ReadMark(userId: 'u3', shares: true, readAt: cemRead),
-    ], from: 'u2');
-    await touch(t);
-    expect(
-      find.byKey(const ValueKey('action-reply')),
-      findsOneWidget,
-      reason: 'the row did open',
-    );
-    expect(find.byKey(const ValueKey('action-read-by')), findsNothing);
-  });
-
-  testWidgets('a 1:1 offers no "Read by": the bubble already says it', (
-    t,
-  ) async {
-    await pump(t, [
-      ReadMark(userId: 'u2', shares: true, readAt: bobRead),
-    ], group: false);
-    await touch(t);
-    expect(
-      find.byKey(const ValueKey('action-reply')),
-      findsOneWidget,
-      reason: 'the row did open',
-    );
-    expect(find.byKey(const ValueKey('action-read-by')), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('readers-line')),
+          matching: find.text('Not read yet'),
+          matchRoot: true,
+        ),
+        findsOneWidget,
+      );
+    });
   });
 }

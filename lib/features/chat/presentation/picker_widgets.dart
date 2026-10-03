@@ -157,9 +157,14 @@ class PickerBottomBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: child,
+        // Its own Material: a ListTile or switch in the bar must not paint
+        // under the coloured DecoratedBox.
+        child: Material(
+          type: MaterialType.transparency,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: child,
+          ),
         ),
       ),
     );

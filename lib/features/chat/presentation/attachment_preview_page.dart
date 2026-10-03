@@ -34,6 +34,17 @@ class AttachmentPreviewPage extends StatefulWidget {
   State<AttachmentPreviewPage> createState() => _AttachmentPreviewPageState();
 }
 
+/// Bytes that cannot be decoded as a picture show a quiet tile, never a throw.
+Widget _undecodable(BuildContext context, Object error, StackTrace? stack) {
+  final scheme = Theme.of(context).colorScheme;
+  return ColoredBox(
+    color: scheme.surfaceContainerHigh,
+    child: Center(
+      child: Icon(Icons.broken_image_outlined, color: scheme.onSurfaceVariant),
+    ),
+  );
+}
+
 class _AttachmentPreviewPageState extends State<AttachmentPreviewPage> {
   late final List<PickedImage> _images = List.of(widget.images);
   late final _caption = TextEditingController(text: widget.caption);
@@ -97,6 +108,7 @@ class _AttachmentPreviewPageState extends State<AttachmentPreviewPage> {
                 key: ValueKey('preview-photo-$i'),
                 fit: BoxFit.contain,
                 gaplessPlayback: true,
+                errorBuilder: _undecodable,
               ),
             ),
           ),
@@ -127,7 +139,11 @@ class _AttachmentPreviewPageState extends State<AttachmentPreviewPage> {
                         width: 2,
                       ),
                     ),
-                    child: Image.memory(_images[i].bytes, fit: BoxFit.cover),
+                    child: Image.memory(
+                      _images[i].bytes,
+                      fit: BoxFit.cover,
+                      errorBuilder: _undecodable,
+                    ),
                   ),
                 ),
               ),

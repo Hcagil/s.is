@@ -9,7 +9,7 @@ import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
-import '../../chat/presentation/avatar_sheet.dart';
+import '../../chat/presentation/avatar_card.dart';
 import '../../chat/presentation/person_avatar.dart';
 import '../../chat/presentation/photo_viewer.dart';
 import '../../notifications/application/push_controller.dart';
@@ -185,9 +185,11 @@ class ProfileSettingsScreen extends ConsumerStatefulWidget {
 class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   bool _busy = false;
 
-  Future<void> _changeAvatar(OwnProfile profile) async {
-    final choice = await showAvatarSheet(
+  Future<void> _changeAvatar(OwnProfile profile, Rect picture) async {
+    final choice = await showAvatarCard(
       context,
+      ref,
+      anchor: picture,
       hasAvatar: profile.avatarPath != null,
     );
     if (choice == null || !mounted) return;
@@ -243,7 +245,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
               AvatarEditBadge(
                 key: const ValueKey('profile-avatar-edit'),
                 busy: _busy,
-                onTap: () => _changeAvatar(profile),
+                onTap: (picture) => _changeAvatar(profile, picture),
               ),
             ],
           ),

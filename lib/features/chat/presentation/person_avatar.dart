@@ -107,11 +107,13 @@ class PersonAvatar extends ConsumerWidget {
 }
 
 /// The small camera badge over an avatar circle, positioned like the brand
-/// dot: for editing the picture. [onTap] is null while [busy].
+/// dot: for editing the picture. [onTap] gets the picture's global rect (the
+/// 96 dp circle the badge sits on), where the avatar card opens; it is not
+/// called while [busy].
 class AvatarEditBadge extends StatelessWidget {
   const AvatarEditBadge({super.key, required this.onTap, this.busy = false});
 
-  final VoidCallback? onTap;
+  final void Function(Rect picture)? onTap;
   final bool busy;
 
   @override
@@ -119,7 +121,20 @@ class AvatarEditBadge extends StatelessWidget {
     right: -2,
     bottom: -2,
     child: GestureDetector(
-      onTap: busy ? null : onTap,
+      onTap: busy || onTap == null
+          ? null
+          : () {
+              final box = context.findRenderObject() as RenderBox;
+              final r = box.localToGlobal(Offset.zero) & box.size;
+              onTap!(
+                Rect.fromLTRB(
+                  r.right + 2 - 96,
+                  r.bottom + 2 - 96,
+                  r.right + 2,
+                  r.bottom + 2,
+                ),
+              );
+            },
       child: Container(
         width: 32,
         height: 32,

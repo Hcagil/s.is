@@ -7,6 +7,7 @@ import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../../chat/application/chat_controllers.dart';
 import '../../chat/presentation/conversation_list.dart';
+import '../../chat/presentation/message_menu_card.dart';
 import '../application/notification_settings_controller.dart';
 import '../domain/notification_settings.dart';
 import 'alert_widgets.dart';
@@ -172,12 +173,56 @@ class _MutedList extends ConsumerWidget {
 }
 
 /// Shows and changes whether one conversation or person is muted. Tapping it
-/// opens a sheet to pick a length, or to unmute.
+/// opens a floating card below-right to pick a length, or to unmute; a tap on
+/// a row applies it and closes the card.
 class MuteTile extends ConsumerWidget {
   const MuteTile({super.key, required this.kind, required this.target});
 
   final MuteKind kind;
   final String target;
+
+  Future<void> _open(BuildContext context, WidgetRef ref, Mute? active) async {
+    final box = context.findRenderObject() as RenderBox;
+    final anchor = box.localToGlobal(Offset.zero) & box.size;
+    final choice = await showMenuCard<String>(
+      context,
+      anchor: anchor,
+      alignEnd: true,
+      below: true,
+      highlightAnchor: false,
+      cardKey: const ValueKey('mute-card'),
+      actions: [
+        for (final l in MuteLength.values)
+          MenuCardAction<String>(
+            value: l.name,
+            keyId: 'mute-${l.name}',
+            rowKey: ValueKey('mute-${l.name}'),
+            icon: switch (l) {
+              MuteLength.eightHours => Icons.schedule_outlined,
+              MuteLength.oneWeek => Icons.date_range_outlined,
+              MuteLength.always => Icons.notifications_off_outlined,
+            },
+            label: l.label,
+          ),
+        if (active != null)
+          const MenuCardAction<String>(
+            value: 'off',
+            keyId: 'mute-off',
+            rowKey: ValueKey('mute-off'),
+            icon: Icons.notifications_active_outlined,
+            label: 'Unmute',
+          ),
+      ],
+    );
+    if (choice == null || !context.mounted) return;
+    final notifier = ref.read(mutesProvider.notifier);
+    final r = choice == 'off'
+        ? await notifier.unmute(kind, target)
+        : await notifier.mute(kind, target, MuteLength.values.byName(choice));
+    if (r case Err(:final failure) when context.mounted) {
+      showSisNotice(context, failure.message, isError: true);
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -194,44 +239,7 @@ class MuteTile extends ConsumerWidget {
       subtitle: active == null
           ? null
           : Text(muteLabel(active.until, DateTime.now())),
-      onTap: () => showModalBottomSheet<void>(
-        context: context,
-        builder: (sheetContext) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final l in MuteLength.values)
-                ListTile(
-                  key: ValueKey('mute-${l.name}'),
-                  title: Text(l.label),
-                  onTap: () async {
-                    Navigator.of(sheetContext).pop();
-                    final r = await ref
-                        .read(mutesProvider.notifier)
-                        .mute(kind, target, l);
-                    if (r case Err(:final failure) when context.mounted) {
-                      showSisNotice(context, failure.message, isError: true);
-                    }
-                  },
-                ),
-              if (active != null)
-                ListTile(
-                  key: const ValueKey('mute-off'),
-                  title: const Text('Unmute'),
-                  onTap: () async {
-                    Navigator.of(sheetContext).pop();
-                    final r = await ref
-                        .read(mutesProvider.notifier)
-                        .unmute(kind, target);
-                    if (r case Err(:final failure) when context.mounted) {
-                      showSisNotice(context, failure.message, isError: true);
-                    }
-                  },
-                ),
-            ],
-          ),
-        ),
-      ),
+      onTap: () => _open(context, ref, active),
     );
   }
 }

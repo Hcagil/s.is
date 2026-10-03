@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
-import '../../auth/domain/member.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../domain/message.dart';
@@ -13,6 +12,8 @@ import '../application/chat_controllers.dart';
 import '../domain/conversation.dart';
 import '../domain/highlight.dart';
 import 'message_screen.dart';
+import 'new_chat_page.dart';
+import 'new_group_page.dart';
 import 'person_avatar.dart';
 
 /// Reason text for any failure, so a screen never shows a bare exception.
@@ -94,11 +95,7 @@ class ConversationList extends ConsumerWidget {
 }
 
 Future<void> _startChat(BuildContext context, WidgetRef ref) async {
-  final picked = await showModalBottomSheet<Member>(
-    context: context,
-    isScrollControlled: true,
-    builder: (_) => const _MemberPicker(),
-  );
+  final picked = await showNewChatPage(context);
   if (picked == null || !context.mounted) return;
 
   final result = await ref
@@ -120,12 +117,7 @@ Future<void> _startChat(BuildContext context, WidgetRef ref) async {
 }
 
 Future<void> _startGroup(BuildContext context, WidgetRef ref) async {
-  final picked =
-      await showModalBottomSheet<({String title, List<Member> members})>(
-        context: context,
-        isScrollControlled: true,
-        builder: (_) => const _GroupComposer(),
-      );
+  final picked = await showNewGroupPage(context);
   if (picked == null || !context.mounted) return;
 
   final result = await ref
@@ -146,292 +138,6 @@ Future<void> _startGroup(BuildContext context, WidgetRef ref) async {
       );
     case Err(:final failure):
       showSisNotice(context, failure.message, isError: true);
-  }
-}
-
-/// Title plus at least one other member. Both are required, so the button
-/// stays disabled rather than letting the server refuse the call.
-class _GroupComposer extends ConsumerStatefulWidget {
-  const _GroupComposer();
-
-  @override
-  ConsumerState<_GroupComposer> createState() => _GroupComposerState();
-}
-
-class _GroupComposerState extends ConsumerState<_GroupComposer> {
-  final _title = TextEditingController();
-  final _chosen = <Member>{};
-
-  @override
-  void dispose() {
-    _title.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final members = ref.watch(yourPeopleProvider);
-    final ready = _title.text.trim().isNotEmpty && _chosen.isNotEmpty;
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              key: const ValueKey('group-title'),
-              controller: _title,
-              textCapitalization: TextCapitalization.words,
-              maxLength: 80,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                labelText: 'Group name',
-                counterText: '',
-              ),
-            ),
-            const SizedBox(height: 8),
-            Flexible(
-              child: switch (members) {
-                AsyncData(:final value) when value.isEmpty => const ListTile(
-                  title: Text('Nobody else has signed in yet'),
-                ),
-                AsyncData(:final value) => ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final m in value)
-                      CheckboxListTile(
-                        key: ValueKey('group-member-${m.userId}'),
-                        value: _chosen.any((c) => c.userId == m.userId),
-                        title: Text(m.displayName),
-                        subtitle: m.tag == null ? null : Text('@${m.tag}'),
-                        onChanged: (on) => setState(() {
-                          if (on ?? false) {
-                            _chosen.add(m);
-                          } else {
-                            _chosen.removeWhere((c) => c.userId == m.userId);
-                          }
-                        }),
-                      ),
-                  ],
-                ),
-                AsyncError(:final error) => ListTile(
-                  title: Text(reasonOf(error)),
-                ),
-                _ => const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: SisLoadingLogo(size: 40)),
-                ),
-              },
-            ),
-            const SizedBox(height: 8),
-            FilledButton(
-              key: const ValueKey('group-create'),
-              onPressed: ready
-                  ? () => Navigator.of(context).pop((
-                      title: _title.text.trim(),
-                      members: _chosen.toList(),
-                    ))
-                  : null,
-              child: const Text('Create group'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MemberPicker extends ConsumerStatefulWidget {
-  const _MemberPicker();
-
-  @override
-  ConsumerState<_MemberPicker> createState() => _MemberPickerState();
-}
-
-class _MemberPickerState extends ConsumerState<_MemberPicker> {
-  final _tagField = TextEditingController();
-  bool _searching = false;
-  String? _searchError;
-  Member? _found;
-  bool _searchedEmpty = false;
-
-  @override
-  void dispose() {
-    _tagField.dispose();
-    super.dispose();
-  }
-
-  Future<void> _search() async {
-    final tag = _tagField.text.trim();
-    if (tag.isEmpty) return;
-    setState(() {
-      _searching = true;
-      _searchError = null;
-      _found = null;
-      _searchedEmpty = false;
-    });
-    final result = await ref
-        .read(contactsControllerProvider.notifier)
-        .findByTag(tag);
-    if (!mounted) return;
-    setState(() {
-      _searching = false;
-      switch (result) {
-        case Ok(:final value) when value != null:
-          _found = value;
-        case Ok():
-          _searchedEmpty = true;
-        case Err(:final failure):
-          _searchError = failure.message;
-      }
-    });
-  }
-
-  Future<void> _toggleContact(Member m, bool isContact) async {
-    final notifier = ref.read(contactsControllerProvider.notifier);
-    final result = isContact
-        ? await notifier.remove(m.userId)
-        : await notifier.add(m.userId);
-    if (!mounted) return;
-    if (result case Err(:final failure)) {
-      showSisNotice(context, failure.message, isError: true);
-    } else {
-      showSisNotice(
-        context,
-        isContact ? 'Removed from contacts' : 'Added to contacts',
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final people = ref.watch(yourPeopleProvider);
-    final contactIds =
-        ref.watch(contactsControllerProvider).value ?? const <String>{};
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: TextField(
-                key: const ValueKey('find-by-tag-field'),
-                controller: _tagField,
-                textInputAction: TextInputAction.search,
-                onSubmitted: (_) => _search(),
-                decoration: InputDecoration(
-                  hintText: 'Find by exact tag',
-                  prefixIcon: const Icon(Icons.alternate_email_rounded),
-                  suffixIcon: IconButton(
-                    key: const ValueKey('find-by-tag-submit'),
-                    icon: _searching
-                        ? const SisLoadingLogo(size: 18)
-                        : const Icon(Icons.search),
-                    onPressed: _searching ? null : _search,
-                  ),
-                ),
-              ),
-            ),
-            if (_searchError != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text(
-                  _searchError!,
-                  key: const ValueKey('find-by-tag-error'),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-            if (_searchedEmpty)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text(
-                  'Nobody has that tag',
-                  key: ValueKey('find-by-tag-empty'),
-                ),
-              ),
-            if (_found case final found?)
-              ListTile(
-                key: ValueKey('find-by-tag-result-${found.userId}'),
-                leading: PersonAvatar(
-                  label: found.displayName,
-                  seed: found.userId,
-                  avatarPath: found.avatarPath,
-                ),
-                title: Text(found.displayName),
-                subtitle: found.tag == null ? null : Text('@${found.tag}'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      key: ValueKey('find-by-tag-toggle-${found.userId}'),
-                      icon: Icon(
-                        contactIds.contains(found.userId)
-                            ? Icons.person_remove_outlined
-                            : Icons.person_add_alt_1_outlined,
-                      ),
-                      tooltip: contactIds.contains(found.userId)
-                          ? 'Remove from contacts'
-                          : 'Add to contacts',
-                      onPressed: () => _toggleContact(
-                        found,
-                        contactIds.contains(found.userId),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    FilledButton(
-                      key: ValueKey('find-by-tag-chat-${found.userId}'),
-                      onPressed: () => Navigator.of(context).pop(found),
-                      child: const Text('Chat'),
-                    ),
-                  ],
-                ),
-              ),
-            const Divider(height: 1),
-            Flexible(
-              child: switch (people) {
-                AsyncData(:final value) when value.isEmpty => const ListTile(
-                  title: Text('Nobody yet — find someone by their tag'),
-                ),
-                AsyncData(:final value) => ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final m in value)
-                      ListTile(
-                        key: ValueKey('member-${m.userId}'),
-                        leading: PersonAvatar(
-                          label: m.displayName,
-                          seed: m.userId,
-                          online: false,
-                          dotKey: ValueKey('picker-online-${m.userId}'),
-                          avatarPath: m.avatarPath,
-                        ),
-                        title: Text(m.displayName),
-                        subtitle: m.tag == null ? null : Text('@${m.tag}'),
-                        onTap: () => Navigator.of(context).pop(m),
-                      ),
-                  ],
-                ),
-                AsyncError(:final error) => ListTile(
-                  title: Text(reasonOf(error)),
-                ),
-                _ => const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: SisLoadingLogo(size: 40)),
-                ),
-              },
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

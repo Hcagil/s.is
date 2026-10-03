@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/controls.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
@@ -17,7 +16,8 @@ import '../application/chat_controllers.dart';
 import '../application/group_controller.dart';
 import '../domain/group_member.dart';
 import '../domain/message.dart';
-import 'avatar_sheet.dart';
+import 'add_members_page.dart';
+import 'avatar_card.dart';
 import 'conversation_list.dart';
 import 'message_screen.dart';
 import 'person_avatar.dart';
@@ -241,9 +241,11 @@ class GroupScreen extends ConsumerStatefulWidget {
 class _GroupScreenState extends ConsumerState<GroupScreen> {
   bool _busy = false;
 
-  Future<void> _changeAvatar(String? avatarPath) async {
-    final choice = await showAvatarSheet(
+  Future<void> _changeAvatar(String? avatarPath, Rect picture) async {
+    final choice = await showAvatarCard(
       context,
+      ref,
+      anchor: picture,
       hasAvatar: avatarPath != null,
     );
     if (choice == null || !mounted) return;
@@ -319,7 +321,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                 AvatarEditBadge(
                   key: const ValueKey('group-avatar-edit'),
                   busy: _busy,
-                  onTap: () => _changeAvatar(avatarPath),
+                  onTap: (picture) => _changeAvatar(avatarPath, picture),
                 ),
               ],
             ),
@@ -351,7 +353,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
             Expanded(
               child: TabBarView(
                 children: [
-                  _MembersTab(conversationId),
+                  _MembersTab(conversationId, title: title),
                   _MediaTab(conversationId),
                   _LinksTab(conversationId, names: names),
                 ],
@@ -365,9 +367,12 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
 }
 
 class _MembersTab extends ConsumerWidget {
-  const _MembersTab(this.conversationId);
+  const _MembersTab(this.conversationId, {required this.title});
 
   final String conversationId;
+
+  /// The group's name, shown on the add-members page.
+  final String title;
 
   Future<void> _remove(
     BuildContext context,
@@ -484,11 +489,12 @@ class _MembersTab extends ConsumerWidget {
                 key: const ValueKey('add-members'),
                 leading: const Icon(Icons.person_add_alt_1_outlined),
                 title: const Text('Add members'),
-                onTap: () => showAddMembersSheet(
+                onTap: () => showAddMembersPage(
                   context,
                   ref,
                   conversationId,
                   current: {for (final m in current) m.member.userId},
+                  groupTitle: title,
                 ),
               ),
             for (final m in current)
@@ -601,123 +607,6 @@ class _MembersTab extends ConsumerWidget {
           ],
         );
       },
-    );
-  }
-}
-
-/// The admin's "Add members" sheet: pick from your people, not already in
-/// the group, plus the "Show old messages?" choice each pick gets.
-Future<void> showAddMembersSheet(
-  BuildContext context,
-  WidgetRef ref,
-  String conversationId, {
-  required Set<String> current,
-}) => showModalBottomSheet<void>(
-  context: context,
-  isScrollControlled: true,
-  builder: (_) => _AddMembersSheet(conversationId, current: current),
-);
-
-class _AddMembersSheet extends ConsumerStatefulWidget {
-  const _AddMembersSheet(this.conversationId, {required this.current});
-
-  final String conversationId;
-  final Set<String> current;
-
-  @override
-  ConsumerState<_AddMembersSheet> createState() => _AddMembersSheetState();
-}
-
-class _AddMembersSheetState extends ConsumerState<_AddMembersSheet> {
-  final _chosen = <Member>{};
-  bool _withHistory = false;
-  bool _busy = false;
-
-  Future<void> _add() async {
-    setState(() => _busy = true);
-    final result = await ref.read(groupControllerProvider).addMembers(
-      widget.conversationId,
-      [for (final m in _chosen) m.userId],
-      withHistory: _withHistory,
-    );
-    if (!mounted) return;
-    setState(() => _busy = false);
-    switch (result) {
-      case Ok():
-        Navigator.of(context).pop();
-        showSisNotice(context, 'Added to the group');
-      case Err(:final failure):
-        showSisNotice(context, failure.message, isError: true);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final people = ref.watch(yourPeopleProvider);
-    final choices = switch (people) {
-      AsyncData(:final value) => [
-        for (final m in value)
-          if (!widget.current.contains(m.userId)) m,
-      ],
-      _ => null,
-    };
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Add members', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            SisSwitchTile(
-              title: 'Show old messages?',
-              subtitle: 'Off shows only messages sent from now on.',
-              value: _withHistory,
-              onChanged: (v) => setState(() => _withHistory = v),
-            ),
-            Flexible(
-              child: switch (choices) {
-                null => const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: SisLoadingLogo(size: 40)),
-                ),
-                [] => const ListTile(title: Text('Nobody left to add')),
-                final list => ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final m in list)
-                      CheckboxListTile(
-                        key: ValueKey('add-member-${m.userId}'),
-                        value: _chosen.any((c) => c.userId == m.userId),
-                        title: Text(m.displayName),
-                        subtitle: m.tag == null ? null : Text('@${m.tag}'),
-                        onChanged: (on) => setState(() {
-                          if (on ?? false) {
-                            _chosen.add(m);
-                          } else {
-                            _chosen.removeWhere((c) => c.userId == m.userId);
-                          }
-                        }),
-                      ),
-                  ],
-                ),
-              },
-            ),
-            const SizedBox(height: 8),
-            FilledButton(
-              key: const ValueKey('add-members-confirm'),
-              onPressed: _chosen.isEmpty || _busy ? null : _add,
-              child: Text(_busy ? 'Adding…' : 'Add'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

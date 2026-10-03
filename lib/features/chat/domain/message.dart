@@ -211,14 +211,19 @@ List<MessageAction> allowedMessageActions(
 /// edit window) and delete (any stored message: the dialog then offers
 /// delete for me, and delete for everyone only when
 /// [Message.canDeleteForEveryone] allows). Copy is never in the swipe row.
+/// With [withReadBy] your own message also offers read-by, first.
 List<MessageAction> menuMessageActions(
   Message message, {
   required String? me,
   required DateTime now,
+  bool withReadBy = false,
 }) {
   final canShare = !message.isPending && !message.isDeleted;
   final canEdit = me != null && message.canEdit(me, now);
+  final canSeeReaders =
+      withReadBy && me != null && message.isFrom(me) && canShare;
   return [
+    if (canSeeReaders) MessageAction.readBy,
     if (canShare) MessageAction.reply,
     if (canShare && message.body.isNotEmpty) MessageAction.copy,
     if (canShare) MessageAction.forward,

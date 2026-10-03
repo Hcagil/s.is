@@ -81,6 +81,8 @@ job_android() {
   step "Check formatting" "${CI[@]}" run --rm flutter dart format --output=none --set-exit-if-changed lib test || return 1
   step "Analyze" "${CI[@]}" run --rm flutter flutter analyze || return 1
   step "Test" "${CI[@]}" run --rm -e TZ=JST-9 flutter flutter test || return 1
+  step "Firebase config present" test -f android/app/google-services.json || return 1
+  step "Android unit tests" "${CI[@]}" run --rm flutter sh -c 'flutter build apk --config-only && cd android && ./gradlew --no-daemon :app:testDebugUnitTest' || return 1
   step "Build release bundle" bundle
 }
 

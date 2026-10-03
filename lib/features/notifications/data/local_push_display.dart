@@ -54,6 +54,10 @@ final class LocalPushDisplay {
   static DateTime? _lastFlushEnd;
   static DateTime? _lastPostAt; // when this isolate last posted to the plugin
 
+  /// Conversations Android already alerted for, until a flush posts them
+  /// (per isolate).
+  static final Set<String> _nativeAlerted = {};
+
   /// A fresh isolate, for tests.
   @visibleForTesting
   static void resetForTest() {
@@ -62,6 +66,7 @@ final class LocalPushDisplay {
     _postedThrough = 0;
     _lastFlushEnd = null;
     _lastPostAt = null;
+    _nativeAlerted.clear();
   }
 
   /// Must run before [show] in each isolate. [onTap] receives the tapped
@@ -106,12 +111,17 @@ final class LocalPushDisplay {
   /// was posted for it.
   ///
   /// [sender] and [chat] are the server's separate fields for a group message.
+  ///
+  /// [alreadyAlerted]: Android already drew this push itself and alerted
+  /// (InstantPush.kt); this post replaces that notification in place (same
+  /// id) without sound or heads-up again.
   static Future<bool> show({
     required String conversationId,
     required String title,
     required String body,
     String? sender,
     String? chat,
+    bool alreadyAlerted = false,
   }) async {
     final at = DateTime.now();
     String? lineOwner; // who the line is stored for
@@ -120,6 +130,7 @@ final class LocalPushDisplay {
       await prefs.reload();
       lineOwner = prefs.getString(_ownerKey);
       if (lineOwner == null) return null;
+      if (alreadyAlerted) _nativeAlerted.add(conversationId);
       await _save(
         addToInbox(
           await _load(),
@@ -259,7 +270,8 @@ final class LocalPushDisplay {
   /// Posts everything not yet shown: each chat with unread lines, then the
   /// summary, [_enqueueGap] apart. Runs inside [_locked]. Alerts (sound,
   /// heads-up) only when the shade has been quiet for [_quiet], and then only
-  /// for the first chat; every other post is silent.
+  /// for the first chat Android had not already alerted for; every other
+  /// post is silent.
   ///
   /// The member can sign out or switch in the app's isolate while a flush is
   /// posting: the owner is noted at load and re-read (fresh from disk) before
@@ -276,6 +288,9 @@ final class LocalPushDisplay {
     if (dirty.isEmpty) return true;
     final last = _lastFlushEnd;
     final loud = last == null || DateTime.now().difference(last) > _quiet;
+    final alertIndex = dirty.indexWhere(
+      (c) => !_nativeAlerted.contains(c.conversationId),
+    );
     final defaults = await _alerts.loadDefaults();
     final chats = await _alerts.loadChats();
     final pictures = await NotificationAvatars.forChats(owner, [
@@ -286,7 +301,7 @@ final class LocalPushDisplay {
       if (!await _still(owner)) return false;
       await _showChat(
         dirty[i],
-        alert: loud && i == 0,
+        alert: loud && i == alertIndex,
         picture: pictures[dirty[i].conversationId],
         effective: resolveAlert(
           defaults,
@@ -302,6 +317,7 @@ final class LocalPushDisplay {
       markPosted(inbox, {for (final c in dirty) c.conversationId}),
       owner: owner,
     );
+    _nativeAlerted.removeAll([for (final c in dirty) c.conversationId]);
     return true;
   }
 

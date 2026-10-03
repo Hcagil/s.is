@@ -132,8 +132,9 @@ final class PushReceiptLog {
   static final _priorityWord = RegExp(r'^[a-z?]{1,10}$');
 
   /// What the Android side noted when [messageId]'s push reached the phone
-  /// (PushArrivalReceiver.kt), as `native=ms prio=delivered/original`,
-  /// or null when nothing was noted (iPhone, an older build, or already
+  /// (PushArrivalReceiver.kt), as `native=ms prio=delivered/original`, plus
+  /// ` fast=native` when that side already drew the push itself
+  /// (InstantPush.kt), or null when nothing was noted (iPhone, an older build, or already
   /// taken). Removes the note. Never throws.
   static Future<String?> takeArrival(String? messageId) async {
     if (messageId == null) return null;
@@ -146,14 +147,15 @@ final class PushReceiptLog {
       await prefs.remove(key);
       final p = raw.split(',');
       final ms = int.tryParse(p[0]);
-      if (p.length != 3 ||
+      final fast = p.length == 4 && p[3] == 'n';
+      if ((p.length != 3 && !fast) ||
           ms == null ||
           ms <= 0 ||
           !_priorityWord.hasMatch(p[1]) ||
           !_priorityWord.hasMatch(p[2])) {
         return null;
       }
-      return 'native=$ms prio=${p[1]}/${p[2]}';
+      return 'native=$ms prio=${p[1]}/${p[2]}${fast ? ' fast=native' : ''}';
     } catch (_) {
       return null;
     }

@@ -34,6 +34,9 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
+    // Robolectric tests draw notifications with the app's own icon and colour.
+    testOptions.unitTests.isIncludeAndroidResources = true
+
     defaultConfig {
         applicationId = "com.esd.sis"
         // You can update the following values to match your application needs.
@@ -84,4 +87,17 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    testImplementation("junit:junit:4.13.2")
+    // android.jar's org.json is a stub in JVM unit tests; this is the real one.
+    testImplementation("org.json:json:20240303")
+    // Runs PushArrivalReceiver / InstantPush.show against Android's real framework classes on the JVM.
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test:core:1.6.1")
+}
+
+// With Android resources in unit tests, AGP packages the merged assets that the Flutter
+// plugin's copyFlutterAssets<Variant> task writes; Gradle requires that order be declared.
+tasks.configureEach {
+    val variant = Regex("^package(\\w+)UnitTestForUnitTest$").find(name)?.groupValues?.get(1)
+    if (variant != null) dependsOn("copyFlutterAssets$variant")
 }

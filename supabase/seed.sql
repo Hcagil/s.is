@@ -132,6 +132,10 @@
 --   gwen/hugh/iona test/integration/group_colors_seam_test.dart
 --     (gwen's group with hugh and iona: each reads the others' colour slots
 --      and names; gwen's 1:1 with hugh carries none)
+--   pace/quill/rush test/integration/speed_baseline_test.dart
+--     (timing harness: pace opens, reads and sends in a short chat and a long
+--      one with photo previews; quill is the other member and writes into
+--      them; rush has no chat. It prints numbers and asserts no behaviour)
 --   rho/sig        test/integration/catch_up_seam_test.dart
 --     (rho's socket dies as a backgrounded phone's does; sig writes to her
 --      meanwhile, and catch-up must bring it in)
@@ -234,5 +238,8 @@ insert into app_private.allowlist(email) values
   ('nico@integration.test'),
   ('gwen@integration.test'),
   ('hugh@integration.test'),
-  ('iona@integration.test')
+  ('iona@integration.test'),
+  ('pace@integration.test'),
+  ('quill@integration.test'),
+  ('rush@integration.test')
 on conflict do nothing;

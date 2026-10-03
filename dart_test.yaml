@@ -9,6 +9,11 @@
 tags:
   integration:
     skip: "needs a running local Supabase stack"
+  # Timing probes (test/speed): they print numbers and assert nothing about
+  # behaviour. Run explicitly:
+  #   flutter test --run-skipped --tags speed test/speed
+  speed:
+    skip: "timing probe; run explicitly"
   # A readiness probe for Realtime, not a test. CI runs it once before the
   # integration suites; it never belongs in the ordinary run.
   warmup:

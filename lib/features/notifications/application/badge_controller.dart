@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
+import '../../auth/domain/session_state.dart';
 import '../../chat/application/chat_controllers.dart';
 import '../domain/push.dart';
 
@@ -26,11 +27,17 @@ final class _NoBadge implements AppBadge {
 /// another device, a message arriving, a delete) and when the returned
 /// function is called, which the app does on every return to the screen --
 /// so the number is corrected the moment the app is opened, never left stale.
-/// A failed read leaves the number as it was.
+/// A failed read leaves the number as it was. A session still restoring is
+/// not a sign-out and sets nothing.
 final badgeSyncProvider = Provider<void Function()>((ref) {
   final me = ref.watch(currentUserIdProvider);
   if (me == null) {
-    Future.microtask(() => ref.read(appBadgeProvider).set(0));
+    final signedOut = ref.watch(
+      sessionControllerProvider.select((s) => s.value is SignedOut),
+    );
+    if (signedOut) {
+      Future.microtask(() => ref.read(appBadgeProvider).set(0));
+    }
     return () {};
   }
 

@@ -16,6 +16,8 @@ import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/domain/chat_repository.dart';
+import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/group_colors.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -42,7 +44,7 @@ const c2 = Conversation(id: 'c2', title: 'New project');
 
 Future<ProviderContainer> pumpApp(
   WidgetTester t, {
-  required FakeChat chat,
+  required ChatRepository chat,
   required PushSourceFake push,
 }) async {
   await t.pumpWidget(
@@ -317,6 +319,64 @@ void main() {
         reason: 'Back must not reveal Weekend plan underneath',
       );
       expect(find.byType(HomeScreen), findsOneWidget);
+    });
+
+    testWidgets('the chat that was open is no longer open: a new message in '
+        'it counts as unread, before and after Back', (t) async {
+      final earlier = DateTime.now().subtract(const Duration(hours: 1));
+      // ChatFake is the database too: an insert is a row, unread included.
+      final chat = ChatFake(self: 'u1')
+        ..conversationsResult = Ok([
+          Conversation(
+            id: 'c1',
+            title: 'Weekend plan',
+            lastMessage: 'hi',
+            lastMessageAt: earlier,
+            lastSenderId: 'u2',
+          ),
+          Conversation(
+            id: 'c2',
+            title: 'New project',
+            lastMessage: 'yo',
+            lastMessageAt: earlier,
+            lastSenderId: 'u2',
+          ),
+        ]);
+      final push = PushSourceFake();
+      final c = await pumpApp(t, chat: chat, push: push);
+      int unreadC1() => c
+          .read(conversationListProvider)
+          .value!
+          .singleWhere((x) => x.id == 'c1')
+          .unread;
+      Message inC1(String id) => Message(
+        id: id,
+        conversationId: 'c1',
+        senderId: 'u2',
+        body: 'still there?',
+        createdAt: DateTime.now(),
+      );
+
+      await t.tap(find.text('Weekend plan'));
+      await t.pumpAndSettle();
+      expect(c.read(openConversationProvider), 'c1');
+
+      push.openConversation('c2');
+      await t.pumpAndSettle();
+      expect(c.read(openConversationProvider), 'c2');
+      chat.deliver(inC1('m1'));
+      await t.pumpAndSettle();
+      expect(unreadC1(), 1, reason: 'c1 is not being viewed');
+
+      await back(t);
+      expect(
+        c.read(openConversationProvider),
+        isNull,
+        reason: 'Back from c2 must not reopen c1 as the viewed chat',
+      );
+      chat.deliver(inC1('m2'));
+      await t.pumpAndSettle();
+      expect(unreadC1(), 2, reason: 'not suppressed as "currently viewing"');
     });
 
     testWidgets('cold: Back from the launched chat lands on the list', (

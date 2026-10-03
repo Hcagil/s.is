@@ -4,12 +4,16 @@
 //  * badgeSyncProvider, while listened to, re-reads unreadTotal() when the
 //    chat list's unread numbers change and sets the badge to it once, after a
 //    debounce of about 800 ms -- a burst of changes is one read;
-//  * signed out it sets 0 and reads nothing; a failed read sets nothing;
+//  * with no user id, SignedOut or Denied sets 0 once and reads nothing;
+//    a restoring session, SessionLoading, SessionError and SetupRequired set
+//    nothing; a failed read sets nothing;
 //  * the function it returns schedules a read, and the app calls it on every
 //    return to the screen (onShow).
 //
 // The list side is the real conversationListProvider over ChatFake, whose
 // deliver() moves unread the way a Realtime insert does.
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,6 +55,14 @@ class _SignedIn extends SessionController {
 class _SignedOut extends SessionController {
   @override
   Future<SessionState> build() async => const SignedOut();
+}
+
+class _Fixed extends SessionController {
+  _Fixed(this.given);
+  final SessionState? given; // null: still restoring, never answers
+  @override
+  Future<SessionState> build() =>
+      given == null ? Completer<SessionState>().future : Future.value(given);
 }
 
 Future<void> wait(int ms) => Future<void>.delayed(Duration(milliseconds: ms));
@@ -146,6 +158,42 @@ void main() {
       expect(badge.sets, [0]);
       expect(reads(), 0);
     });
+
+    Future<void> mountWith(SessionState? state) async {
+      final c = ProviderContainer.test(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(chat),
+          appBadgeProvider.overrideWithValue(badge),
+          sessionControllerProvider.overrideWith(() => _Fixed(state)),
+        ],
+      );
+      c.listen(currentUserIdProvider, (_, _) {});
+      c.listen(conversationListProvider, (_, _) {});
+      c.listen(badgeSyncProvider, (_, _) {});
+    }
+
+    test(
+      'Denied (not on the allowlist): cleared to 0 once, nothing read',
+      () async {
+        await mountWith(const Denied());
+        await wait(1600);
+        expect(badge.sets, [0]);
+        expect(reads(), 0);
+      },
+    );
+
+    for (final (name, state) in <(String, SessionState?)>[
+      ('still restoring (no answer yet)', null),
+      ('SessionLoading', const SessionLoading()),
+      ('SessionError', const SessionError('boom')),
+      ('SetupRequired', const SetupRequired()),
+    ]) {
+      test('$name: the badge is left as it was', () async {
+        await mountWith(state);
+        await wait(1600);
+        expect(badge.sets, isEmpty);
+      });
+    }
 
     test('a failed read leaves the badge as it was', () async {
       chat.unreadTotalResult = const Err(NetworkFailure('offline'));

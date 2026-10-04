@@ -7,7 +7,9 @@
 //    photo grid with requestFocus false);
 //  * long-press opens nothing;
 //  * a photo, a link or a quote keeps its own tap;
-//  * the photo viewer's `viewer-menu` offers Reply, Forward and Delete only,
+//  * your own stored message offers read-by first, in every chat;
+//  * the photo viewer's `viewer-menu` offers Reply, Forward and Delete only
+//    (never read-by),
 //    exists only when the viewer was given onMenu, and closes the viewer when
 //    onMenu says so.
 import 'package:flutter/material.dart';
@@ -146,7 +148,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(menu, findsOneWidget);
-      expect(menuTiles(tester), ['reply', 'copy', 'forward', 'edit', 'delete']);
+      // A 1:1: read-by first, as in a group.
+      expect(menuTiles(tester), [
+        'read-by',
+        'reply',
+        'copy',
+        'forward',
+        'edit',
+        'delete',
+      ]);
     });
 
     testWidgets('somebody else\'s text: no edit, delete (for me) stays', (

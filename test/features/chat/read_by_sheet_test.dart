@@ -1,6 +1,6 @@
 // "Read by", from the product rule and the 0.30.10 contract: your
-// own message offers "Read by" (0.30.13: a screen-reader action; the tap
-// card should offer it too), which opens a floating card (key readers)
+// own message offers "Read by" (0.30.13: first in the tap card and a
+// screen-reader action), which opens a floating card (key readers)
 // ABOVE the bubble -- in a group a title ("Read by N" / "Nobody yet") and one
 // row per reader (reader-<userId>) with the local date or time, height
 // capped at 320 with the rows scrolling; in a 1:1 the same card holds one
@@ -96,9 +96,8 @@ Future<void> touch(WidgetTester t) async {
   await t.pumpAndSettle();
 }
 
-/// Opens the card the way that still reaches it since 0.30.13 removed the
-/// swipe row: the bubble's screen-reader action. Whether a sighted member can
-/// reach it is its own test ("reachable from the tap card").
+/// Opens the card through the bubble's screen-reader action. The tap card
+/// path is its own test ("reachable from the tap card").
 Future<void> openReadBy(WidgetTester t) async {
   final handle = t.ensureSemantics();
   final node = actionsNode(t, find.byKey(const ValueKey('message-m1')));
@@ -316,9 +315,7 @@ void main() {
       handle.dispose();
     });
 
-    // 0.30.13 removed the swipe row, the only sighted way to "Read by". The
-    // owner's contract keeps every action in the tap card ("Reply/Forward/
-    // Edit/Delete... live there now").
+    // 0.30.13: the tap card offers "Read by" first on your own message.
     testWidgets('your own message: "Read by" is reachable from the tap card', (
       t,
     ) async {
@@ -366,6 +363,20 @@ void main() {
       expect(find.byKey(const ValueKey('reader-u2')), findsNothing);
       expect(find.byKey(const ValueKey('readers-title')), findsNothing);
       expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('the tap card offers "Read by" in a 1:1 too, and it opens '
+        'the card', (t) async {
+      await pump(
+        t,
+        const [ReadMark(userId: 'u2', shares: true)],
+        group: false,
+        others: const [bob],
+      );
+      await touch(t);
+      await t.tap(find.byKey(const ValueKey('menu-read-by')));
+      await t.pumpAndSettle();
+      expect(find.byKey(const ValueKey('readers-line')), findsOneWidget);
     });
 
     testWidgets('not read: "Not read yet"', (t) async {

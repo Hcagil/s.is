@@ -64,6 +64,9 @@ Future<void> openConversation(
   String? searchQuery,
   String? searchHitId,
 }) async {
+  // The caller's `ref` dies with its widget (a list tile can be rebuilt away
+  // while the chat is open); the container lives as long as the app.
+  final container = ProviderScope.containerOf(context);
   final list = ref.read(conversationListProvider.notifier);
   // A conversation can be opened from inside another (a group member's page
   // -> Message); leaving it must hand the screen back to that one.
@@ -90,16 +93,16 @@ Future<void> openConversation(
   // Only while this chat is still the open one: the member may already have
   // opened another during the markRead above, and closing (or restoring
   // `previous`) then would pull that chat's messages out from under it.
-  if (ref.read(openConversationProvider) == conversationId) {
+  if (container.read(openConversationProvider) == conversationId) {
     if (previous == null) {
-      ref.read(openConversationProvider.notifier).close();
+      container.read(openConversationProvider.notifier).close();
     } else {
-      ref.read(openConversationProvider.notifier).open(previous);
+      container.read(openConversationProvider.notifier).open(previous);
     }
   }
   // The list is also kept live by Realtime; this re-read is the fallback when
   // that subscription could not be established.
-  await ref.read(conversationListProvider.notifier).reloadQuietly();
+  await container.read(conversationListProvider.notifier).reloadQuietly();
 }
 
 /// "typing…" beats "online", which beats "last seen". In a 1:1 chat the
@@ -1262,13 +1265,19 @@ class _Attachment extends ConsumerWidget {
       context,
       paths,
       index,
-      onMenu: (viewerContext, shown) {
-        final message = (ref.read(messagesProvider).value ?? const <Message>[])
-            .where((m) => m.attachmentPath == shown)
-            .firstOrNull;
+      onMenu: (viewerContext, viewerRef, shown) {
+        final message =
+            (viewerRef.read(messagesProvider).value ?? const <Message>[])
+                .where((m) => m.attachmentPath == shown)
+                .firstOrNull;
         return message == null
             ? Future.value(false)
-            : showMessageMenu(viewerContext, ref, message, photoViewer: true);
+            : showMessageMenu(
+                viewerContext,
+                viewerRef,
+                message,
+                photoViewer: true,
+              );
       },
     );
   }

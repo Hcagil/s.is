@@ -32,11 +32,16 @@ Future<void> openPhotoViewer(
 );
 
 /// Opens the message menu for the photo at [path]; true when the viewer
-/// should close (reply started, or the photo was deleted).
-typedef PhotoMenu = Future<bool> Function(BuildContext context, String path);
+/// should close (reply started, or the photo was deleted). The [ref] is the
+/// viewer's own, so it outlives whichever bubble opened the viewer.
+typedef PhotoMenu = Future<bool> Function(
+  BuildContext context,
+  WidgetRef ref,
+  String path,
+);
 
 /// Full-screen photos, dark whatever the theme: photos read best on black.
-class PhotoViewer extends StatefulWidget {
+class PhotoViewer extends ConsumerStatefulWidget {
   const PhotoViewer({
     super.key,
     required this.paths,
@@ -58,10 +63,10 @@ class PhotoViewer extends StatefulWidget {
   final PhotoMenu? onMenu;
 
   @override
-  State<PhotoViewer> createState() => _PhotoViewerState();
+  ConsumerState<PhotoViewer> createState() => _PhotoViewerState();
 }
 
-class _PhotoViewerState extends State<PhotoViewer>
+class _PhotoViewerState extends ConsumerState<PhotoViewer>
     with SingleTickerProviderStateMixin {
   /// A drag that ends past this many logical pixels, or a fling faster than
   /// [_closeVelocity], closes the viewer; anything shorter springs back.
@@ -128,6 +133,7 @@ class _PhotoViewerState extends State<PhotoViewer>
                 final nav = Navigator.of(context);
                 final close = await widget.onMenu!(
                   context,
+                  ref,
                   widget.paths[_index],
                 );
                 if (close && mounted) nav.pop();

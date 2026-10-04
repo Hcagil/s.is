@@ -1,5 +1,6 @@
-import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
+
+import 'swipe_back.dart';
 
 /// The Nocturne design: ink violet, Manrope, rounded but precise shapes.
 /// Values are the design tokens in docs/DESIGN.md §10; change them there first.
@@ -53,13 +54,14 @@ ThemeData sisTheme(Brightness brightness) {
       titleMedium: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
     ),
     scaffoldBackgroundColor: t.background,
-    // Every page slides in the iOS way on both platforms: dragging from the
-    // left edge leaves it, also on an Android phone with button navigation or
-    // the system gesture off. The Android system back gesture keeps working.
+    // Every page slides in the iOS way on both platforms and leaves with a
+    // right drag that can start anywhere on it (see swipe_back.dart): the
+    // Android system gesture owns both screen edges, so an edge-only swipe
+    // never fires there.
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {
-        TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.android: SwipeBackTransitionsBuilder(),
+        TargetPlatform.iOS: SwipeBackTransitionsBuilder(),
       },
     ),
     extensions: [t],

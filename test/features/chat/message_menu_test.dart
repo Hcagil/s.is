@@ -1,13 +1,15 @@
 // The 0.30.8 message menu and keyboard rules, driven through the real
 // message screen. Written from the contract only:
 //  * a tap on a message opens the `message-menu` sheet (tiles `menu-<action>`),
-//    closes the keyboard and any open swipe row;
+//    closes the keyboard (0.30.13: the swipe row is gone, left = reply);
 //  * a tap on empty space only closes the keyboard; scrolling does not;
 //    send and the paperclip keep it open (0.30.10: the paperclip opens the
 //    photo grid with requestFocus false);
 //  * long-press opens nothing;
 //  * a photo, a link or a quote keeps its own tap;
-//  * the photo viewer's `viewer-menu` offers Reply, Forward and Delete only,
+//  * your own stored message offers read-by first, in every chat;
+//  * the photo viewer's `viewer-menu` offers Reply, Forward and Delete only
+//    (never read-by),
 //    exists only when the viewer was given onMenu, and closes the viewer when
 //    onMenu says so.
 import 'package:flutter/material.dart';
@@ -27,7 +29,6 @@ import 'package:sis/features/chat/presentation/photo_viewer.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
-import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = 'u2';
@@ -147,7 +148,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(menu, findsOneWidget);
-      expect(menuTiles(tester), ['reply', 'copy', 'forward', 'edit', 'delete']);
+      // A 1:1: read-by first, as in a group.
+      expect(menuTiles(tester), [
+        'read-by',
+        'reply',
+        'copy',
+        'forward',
+        'edit',
+        'delete',
+      ]);
     });
 
     testWidgets('somebody else\'s text: no edit, delete (for me) stays', (
@@ -170,24 +179,23 @@ void main() {
       expect(keyboardUp(tester), isFalse);
     });
 
-    testWidgets('closes a swipe row that is open', (tester) async {
+    // 0.30.13: the swipe row is gone; a left swipe replies and opens no
+    // card, and the tap that follows still opens it.
+    testWidgets('a left swipe opens no card; a tap after it does', (
+      tester,
+    ) async {
       await pump(tester, [
         msg('m1', from: bob),
         msg('m2', from: bob, minute: 1),
       ]);
-      await tester.drag(message('m1'), swipeOpen);
+      await tester.drag(message('m1'), const Offset(-120, 0));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('action-reply')), findsOneWidget);
+      expect(menu, findsNothing);
+      expect(find.byKey(const ValueKey('reply-bar')), findsOneWidget);
 
       await tester.tap(message('m2'));
       await tester.pumpAndSettle();
       expect(menu, findsOneWidget);
-      // Dismiss the sheet the way a member does: the scrim.
-      await tester.tapAt(const Offset(5, 5));
-      await tester.pumpAndSettle();
-
-      expect(menu, findsNothing);
-      expect(find.byKey(const ValueKey('action-reply')), findsNothing);
     });
 
     testWidgets('menu-reply starts a reply to that message', (tester) async {
@@ -370,7 +378,7 @@ void main() {
     ) async {
       var answer = false;
       final asked = <String>[];
-      await standalone(tester, (_, path) async {
+      await standalone(tester, (_, _, path) async {
         asked.add(path);
         return answer;
       });
@@ -385,6 +393,85 @@ void main() {
       await tester.pumpAndSettle();
       expect(asked, ['c1/1.png', 'c1/1.png']);
       expect(find.byType(PhotoViewer), findsNothing);
+    });
+  });
+
+  // 0.30.13: the bubble that opened the viewer can be unmounted while the
+  // viewer is open (new messages scroll it out of the lazy list). The
+  // viewer menu must still reply, forward and delete -- it may not lean on
+  // the bubble's ref, which is dead by then.
+  group('the viewer menu after the bubble that opened it is gone', () {
+    Future<ChatFake> openThenUnmount(WidgetTester tester) async {
+      final c = await pump(tester, [
+        msg('p1', body: '', attachment: 'c1/1.png'),
+      ]);
+      final chat = c.read(chatRepositoryProvider) as ChatFake;
+      await tester.tap(find.byKey(const ValueKey('attachment-c1/1.png')));
+      await tester.pumpAndSettle();
+      expect(find.byType(PhotoViewer), findsOneWidget);
+      for (var i = 0; i < 40; i++) {
+        chat.deliver(
+          Message(
+            id: 'n$i',
+            conversationId: 'c1',
+            senderId: bob,
+            body: 'new $i\nline\nline',
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('attachment-c1/1.png'), skipOffstage: false),
+        findsNothing,
+        reason: 'precondition: the opening bubble is unmounted',
+      );
+      expect(find.byType(PhotoViewer), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('viewer-menu')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      // Your own photo: still never read-by in the viewer.
+      expect(menuTiles(tester), ['reply', 'forward', 'delete']);
+      return chat;
+    }
+
+    testWidgets('reply closes the viewer and starts the reply', (tester) async {
+      await openThenUnmount(tester);
+      await tester.tap(find.byKey(const ValueKey('menu-reply')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(PhotoViewer), findsNothing);
+      final c = ProviderScope.containerOf(
+        tester.element(find.byType(MessageScreen)),
+      );
+      expect(c.read(replyingToProvider)?.id, 'p1');
+      expect(find.byKey(const ValueKey('reply-bar')), findsOneWidget);
+    });
+
+    testWidgets('forward sends it to the chat picked', (tester) async {
+      final chat = await openThenUnmount(tester);
+      await tester.tap(find.byKey(const ValueKey('menu-forward')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('forward-c2')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('forward-send')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(chat.forwarded, hasLength(1));
+      expect(chat.forwarded.single.messageId, 'p1');
+      expect(chat.forwarded.single.conversationIds, ['c2']);
+      await tester.pump(const Duration(seconds: 10)); // the snackbar's timer
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('delete for everyone deletes it', (tester) async {
+      final chat = await openThenUnmount(tester);
+      await tester.tap(find.byKey(const ValueKey('menu-delete')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('delete-confirm')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(chat.deleted, ['p1']);
     });
   });
 

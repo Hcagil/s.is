@@ -319,22 +319,20 @@ void main() {
       );
     });
 
-    test(
-      'the tap menu never offers readBy, even on your own stored message',
-      () {
-        final msg = buildMessage(
-          senderId: me,
-          createdAt: now.subtract(const Duration(minutes: 5)),
-        );
-        expect(
-          allowedMessageActions(msg, me: me, now: now).first,
-          MessageAction.readBy,
-        );
-        expect(
-          menuMessageActions(msg, me: me, now: now),
-          isNot(contains(MessageAction.readBy)),
-        );
-      },
-    );
+    test('the tap menu offers readBy first on your own stored message, as the '
+        'screen reader does', () {
+      final msg = buildMessage(
+        senderId: me,
+        createdAt: now.subtract(const Duration(minutes: 5)),
+      );
+      expect(
+        allowedMessageActions(msg, me: me, now: now).first,
+        MessageAction.readBy,
+      );
+      expect(
+        menuMessageActions(msg, me: me, now: now).first,
+        MessageAction.readBy,
+      );
+    });
   });
 }

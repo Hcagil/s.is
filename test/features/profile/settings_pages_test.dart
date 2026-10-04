@@ -30,6 +30,8 @@ import 'package:sis/features/profile/presentation/settings_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 import 'package:sis/main.dart' as entry;
 
+import '../../support/chat_launcher.dart'
+    show phoneView, platforms, screenHeight, screenWidth, stroke;
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
 
@@ -464,5 +466,62 @@ void main() {
       await t.pumpAndSettle();
       expect(find.textContaining('SIL OPEN FONT LICENSE'), findsWidgets);
     });
+  });
+
+  // 0.30.13: one right drag from mid-screen leaves any pushed page, on a
+  // phone-sized view, through SisApp as production mounts it.
+  group('a mid-screen right drag goes back one page', () {
+    Future<void> swipeBack(WidgetTester t) async {
+      await stroke(
+        t,
+        Offset(screenWidth(t) * 0.45, screenHeight(t) * 0.5),
+        Offset(screenWidth(t) * 0.6, 0),
+      );
+      await t.pumpAndSettle();
+    }
+
+    testWidgets('settings back to home', (t) async {
+      phoneView(t);
+      await pumpApp(t);
+      await openSettings(t);
+      await swipeBack(t);
+      expect(find.byType(SettingsScreen), findsNothing);
+      expect(find.byType(HomeScreen), findsOneWidget);
+    }, variant: platforms);
+
+    for (final (key, title) in [
+      ('settings-profile', 'Profile'),
+      ('settings-privacy', 'Privacy'),
+      ('settings-account', 'Account'),
+      ('settings-about', 'About'),
+    ]) {
+      testWidgets('"$title" back to settings', (t) async {
+        phoneView(t);
+        await pumpApp(t);
+        await openPage(t, key);
+        expect(appBarTitle(title), findsOneWidget);
+        await swipeBack(t);
+        expect(appBarTitle(title), findsNothing);
+        expect(appBarTitle('Settings'), findsOneWidget);
+      }, variant: platforms);
+    }
+
+    testWidgets('the licences page back to About', (t) async {
+      phoneView(t);
+      await pumpApp(t);
+      await openPage(t, 'settings-about');
+      await t.tap(byKey('about-licences'));
+      for (var i = 0; i < 20; i++) {
+        await t.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await t.pump();
+      }
+      await t.pumpAndSettle();
+      expect(find.byType(SisLicencesPage), findsOneWidget);
+      await swipeBack(t);
+      expect(find.byType(SisLicencesPage), findsNothing);
+      expect(appBarTitle('About'), findsOneWidget);
+    }, variant: platforms);
   });
 }

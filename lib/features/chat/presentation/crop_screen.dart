@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
+import '../../../app/swipe_back.dart';
 import '../application/chat_controllers.dart';
 import '../domain/attachment.dart';
 
@@ -16,7 +17,10 @@ import '../domain/attachment.dart';
 /// returns null and changes nothing.
 Future<PickedImage?> openCropScreen(BuildContext context, PickedImage source) =>
     Navigator.of(context).push<PickedImage?>(
-      MaterialPageRoute(builder: (_) => CropScreen(source: source)),
+      MaterialPageRoute(
+        settings: noSwipeBack,
+        builder: (_) => CropScreen(source: source),
+      ),
     );
 
 /// The square-crop screen: a photo under a square frame, moved and zoomed

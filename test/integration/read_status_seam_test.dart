@@ -35,9 +35,9 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
-import '../support/sis_ui.dart';
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/sis_ui.dart';
 
 /// Read status on its seams, wired as main.dart wires it: the REAL
 /// [ReadMarksController] over the real chat and profile repositories, the
@@ -688,10 +688,12 @@ void main() {
         );
         expect(yellow(t, message.id), isFalse);
 
-        await t.drag(bubble(message.id), swipeOpen);
+        // Through the screen-reader action: the tap card offers no
+        // "Read by" in 0.30.13 (read_by_sheet_test pins that defect).
+        final semantics = t.ensureSemantics();
+        invokeAction(actionsNode(t, bubble(message.id))!, 'Read by');
         await t.pumpAndSettle();
-        await t.tap(find.byKey(const ValueKey('action-read-by')));
-        await t.pumpAndSettle();
+        semantics.dispose();
         // 0.30.10: an own card, keyed `readers`; each reader's row shows
         // the read time as lastSeenLabel without its "last seen " prefix.
         final card = find.byKey(const ValueKey('readers'));

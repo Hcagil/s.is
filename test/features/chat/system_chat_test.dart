@@ -27,7 +27,6 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
-import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
 const bob = Member(userId: 'ub', displayName: 'Bob Stone', tag: 'bobby');
@@ -238,9 +237,9 @@ void main() {
       ];
       await openChat(t, w, 'c1');
 
-      await t.drag(byKey('message-m1'), swipeOpen);
+      await t.tap(byKey('message-m1'));
       await settle(t);
-      await t.tap(byKey('action-forward'));
+      await t.tap(byKey('menu-forward'));
       await settle(t);
 
       expect(byKey('forward-g1'), findsOneWidget, reason: 'the sheet is open');

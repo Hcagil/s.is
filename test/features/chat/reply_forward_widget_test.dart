@@ -73,19 +73,23 @@ Future<ProviderContainer> pump(WidgetTester tester, ChatFake chat) async {
 }
 
 void main() {
-  group('what a swipe offers', () {
-    testWidgets('a stored message from someone else offers reply and forward, '
-        'never delete', (tester) async {
+  // 0.30.13: the tap card is the only place actions are offered (the swipe
+  // row is gone). Its rule (menuMessageActions): delete is offered on any
+  // stored message, the dialog then offering "for me" only when it is not
+  // yours.
+  group('what a tap offers', () {
+    testWidgets('a stored message from someone else offers reply, forward '
+        'and delete (for me)', (tester) async {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', from: bob.userId)]);
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('action-reply')), findsOneWidget);
-      expect(find.byKey(const ValueKey('action-forward')), findsOneWidget);
-      expect(find.byKey(const ValueKey('action-delete')), findsNothing);
+      expect(find.byKey(const ValueKey('menu-reply')), findsOneWidget);
+      expect(find.byKey(const ValueKey('menu-forward')), findsOneWidget);
+      expect(find.byKey(const ValueKey('menu-delete')), findsOneWidget);
     });
 
     testWidgets('your own stored message under 6h offers all three', (
@@ -95,12 +99,12 @@ void main() {
         ..messagesResult = Ok([msg('m1', from: me.userId)]);
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('action-reply')), findsOneWidget);
-      expect(find.byKey(const ValueKey('action-forward')), findsOneWidget);
-      expect(find.byKey(const ValueKey('action-delete')), findsOneWidget);
+      expect(find.byKey(const ValueKey('menu-reply')), findsOneWidget);
+      expect(find.byKey(const ValueKey('menu-forward')), findsOneWidget);
+      expect(find.byKey(const ValueKey('menu-delete')), findsOneWidget);
     });
 
     testWidgets('a pending message offers nothing', (tester) async {
@@ -121,18 +125,18 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
       }
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
 
-      expect(find.byKey(const ValueKey('action-reply')), findsNothing);
-      expect(find.byKey(const ValueKey('action-forward')), findsNothing);
-      expect(find.byKey(const ValueKey('action-delete')), findsNothing);
+      expect(find.byKey(const ValueKey('menu-reply')), findsNothing);
+      expect(find.byKey(const ValueKey('menu-forward')), findsNothing);
+      expect(find.byKey(const ValueKey('menu-delete')), findsNothing);
     });
 
     testWidgets(
-      'a deleted message offers nothing, not even to its own sender',
+      'a deleted message offers no reply, forward or edit, even to its sender',
       (tester) async {
         final chat = ChatFake()
           ..messagesResult = Ok([
@@ -145,12 +149,12 @@ void main() {
           ]);
         await pump(tester, chat);
 
-        await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+        await tester.tap(find.byKey(const ValueKey('message-m1')));
         await tester.pumpAndSettle();
 
-        expect(find.byKey(const ValueKey('action-reply')), findsNothing);
-        expect(find.byKey(const ValueKey('action-forward')), findsNothing);
-        expect(find.byKey(const ValueKey('action-delete')), findsNothing);
+        expect(find.byKey(const ValueKey('menu-reply')), findsNothing);
+        expect(find.byKey(const ValueKey('menu-forward')), findsNothing);
+        expect(find.byKey(const ValueKey('menu-edit')), findsNothing);
       },
     );
   });
@@ -166,9 +170,9 @@ void main() {
         ]);
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('action-reply')));
+      await tester.tap(find.byKey(const ValueKey('menu-reply')));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('reply-bar')), findsOneWidget);
@@ -183,9 +187,9 @@ void main() {
         ..messagesResult = Ok([msg('m1', from: me.userId)]);
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('action-reply')));
+      await tester.tap(find.byKey(const ValueKey('menu-reply')));
       await tester.pumpAndSettle();
 
       expect(find.text('Replying to You'), findsOneWidget);
@@ -196,9 +200,9 @@ void main() {
         ..messagesResult = Ok([msg('m1', from: bob.userId)]);
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('action-reply')));
+      await tester.tap(find.byKey(const ValueKey('menu-reply')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('reply-bar')), findsOneWidget);
 
@@ -214,9 +218,9 @@ void main() {
         ..messagesResult = Ok([msg('m1', from: bob.userId)]);
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('action-reply')));
+      await tester.tap(find.byKey(const ValueKey('menu-reply')));
       await tester.pumpAndSettle();
 
       await tester.enterText(
@@ -240,9 +244,9 @@ void main() {
         );
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('action-reply')));
+      await tester.tap(find.byKey(const ValueKey('menu-reply')));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('composer-field')),
@@ -324,9 +328,9 @@ void main() {
       final chat = chatWithConversations();
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('action-forward')));
+      await tester.tap(find.byKey(const ValueKey('menu-forward')));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('forward-c1')), findsNothing);
@@ -338,9 +342,9 @@ void main() {
         'the count', (tester) async {
       final chat = chatWithConversations();
       await pump(tester, chat);
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('action-forward')));
+      await tester.tap(find.byKey(const ValueKey('menu-forward')));
       await tester.pumpAndSettle();
 
       final sendButton = tester.widget<FilledButton>(
@@ -363,9 +367,9 @@ void main() {
     ) async {
       final chat = chatWithConversations();
       await pump(tester, chat);
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('action-forward')));
+      await tester.tap(find.byKey(const ValueKey('menu-forward')));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('forward-c2')));
@@ -384,9 +388,9 @@ void main() {
     ) async {
       final chat = chatWithConversations();
       await pump(tester, chat);
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('action-forward')));
+      await tester.tap(find.byKey(const ValueKey('menu-forward')));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('forward-c2')));
@@ -404,9 +408,9 @@ void main() {
       final chat = chatWithConversations()
         ..forwardResult = const Err(ProviderFailure('not your chat'));
       await pump(tester, chat);
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('action-forward')));
+      await tester.tap(find.byKey(const ValueKey('menu-forward')));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('forward-c2')));
@@ -453,9 +457,9 @@ void main() {
 
     Future<void> openPage(WidgetTester t, ChatFake chat) async {
       await pump(t, chat);
-      await t.drag(byKey('message-m1'), swipeOpen);
+      await t.tap(byKey('message-m1'));
       await t.pumpAndSettle();
-      await t.tap(byKey('action-forward'));
+      await t.tap(byKey('menu-forward'));
       // The page is there on the first frame after the tap: no network wait.
       // Two frames: the tap's own frame and the push's.
       await t.pump();

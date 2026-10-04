@@ -21,7 +21,6 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
-import '../support/sis_ui.dart';
 import '../support/service_key.dart';
 import '../support/reach.dart';
 
@@ -279,14 +278,20 @@ void main() {
         'a',
         find.byKey(ValueKey('message-${photoMessage.id}')),
       );
-      await t.drag(photoFinder, swipeOpen);
+      // A tap on a photo opens the viewer; its menu is the photo's card.
+      await t.tap(photoFinder);
       await until(
         t,
-        () =>
-            find.byKey(const ValueKey('action-forward')).evaluate().isNotEmpty,
-        'the action row to open on the photo',
+        () => find.byKey(const ValueKey('viewer-menu')).evaluate().isNotEmpty,
+        'the photo viewer to open',
       );
-      await t.tap(find.byKey(const ValueKey('action-forward')));
+      await t.tap(find.byKey(const ValueKey('viewer-menu')));
+      await until(
+        t,
+        () => find.byKey(const ValueKey('menu-forward')).evaluate().isNotEmpty,
+        'the photo\'s card to open from the viewer',
+      );
+      await t.tap(find.byKey(const ValueKey('menu-forward')));
       await settle(t);
       // The picker's checkboxes come from a real conversationListProvider
       // read (conversations()), not from anything already on screen -- a
@@ -334,18 +339,37 @@ void main() {
         'reid\'s "Forwarded" snackbar to dismiss',
       );
 
+      // Forwarding from the viewer leaves the viewer open over the chat;
+      // reid closes it with its own back button, as on a phone.
+      if (find.byKey(const ValueKey('viewer-menu')).evaluate().isNotEmpty) {
+        final back = find.ancestor(
+          of: find.byKey(const ValueKey('viewer-menu')),
+          matching: find.byType(AppBar),
+        );
+        await t.tap(
+          find.descendant(
+            of: back,
+            matching: find.byWidgetPredicate(
+              (w) => w is BackButton || w is CloseButton,
+            ),
+          ),
+        );
+        await settle(t);
+      }
+      expect(find.byKey(const ValueKey('viewer-menu')), findsNothing);
+
       // -- reply, through the real UI ---------------------------------------
       final quotedFinder = within(
         'a',
         find.byKey(ValueKey('message-${quotedMessage.id}')),
       );
-      await t.drag(quotedFinder, swipeOpen);
+      await t.tap(quotedFinder);
       await until(
         t,
-        () => find.byKey(const ValueKey('action-reply')).evaluate().isNotEmpty,
+        () => find.byKey(const ValueKey('menu-reply')).evaluate().isNotEmpty,
         'the action row to open on the quoted message',
       );
-      await t.tap(find.byKey(const ValueKey('action-reply')));
+      await t.tap(find.byKey(const ValueKey('menu-reply')));
       await settle(t);
       expect(
         within('a', find.byKey(const ValueKey('reply-bar'))),

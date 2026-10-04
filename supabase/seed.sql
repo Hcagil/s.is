@@ -147,6 +147,10 @@
 --   rho/sig        test/integration/catch_up_seam_test.dart
 --     (rho's socket dies as a backgrounded phone's does; sig writes to her
 --      meanwhile, and catch-up must bring it in)
+--   csa/csb/csc/csd/cse/csz test/integration/cold_start_session_integration_test.dart
+--     (each starts from its stored last session and is then revoked one way:
+--      allowlist, a second phone, offline, a deleted auth session; csz is
+--      the chat partner)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -254,5 +258,11 @@ insert into app_private.allowlist(email) values
   ('lyle@integration.test'),
   ('nami@integration.test'),
   ('odo@integration.test'),
-  ('pim@integration.test')
+  ('pim@integration.test'),
+  ('csa@integration.test'),
+  ('csb@integration.test'),
+  ('csc@integration.test'),
+  ('csd@integration.test'),
+  ('cse@integration.test'),
+  ('csz@integration.test')
 on conflict do nothing;

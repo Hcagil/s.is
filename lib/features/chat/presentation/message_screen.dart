@@ -171,10 +171,6 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   final _scroll = ScrollController();
   final _bubbleKeys = <String, GlobalKey>{};
 
-  /// The id of the message whose swipe action row is currently open, or
-  /// null. At most one bubble's row is open at a time; scrolling the list
-  /// closes it (see [initState]), as does a tap anywhere else in the list.
-  final _openSwipeId = ValueNotifier<String?>(null);
   late bool _searching =
       widget.initialSearchQuery != null &&
       widget.initialSearchQuery!.trim().isNotEmpty;
@@ -196,20 +192,8 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   int _generation = 0;
 
   @override
-  void initState() {
-    super.initState();
-    _scroll.addListener(_closeSwipeOnScroll);
-  }
-
-  void _closeSwipeOnScroll() {
-    if (_openSwipeId.value != null) _openSwipeId.value = null;
-  }
-
-  @override
   void dispose() {
-    _scroll.removeListener(_closeSwipeOnScroll);
     _scroll.dispose();
-    _openSwipeId.dispose();
     super.dispose();
   }
 
@@ -328,13 +312,12 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     return null;
   }
 
-  /// A tap on a message: closes the keyboard and any open swipe row, then
-  /// opens the action card above the bubble (below it when there is no room).
+  /// A tap on a message: closes the keyboard, then opens the action card
+  /// above the bubble (below it when there is no room).
   /// Photo, link and quote taps are handled deeper in the bubble and win over
   /// this.
   Future<void> _openMessageMenu(Message message, {required bool mine}) async {
     FocusManager.instance.primaryFocus?.unfocus();
-    _openSwipeId.value = null;
     // The bubble moves while the keyboard drops, so the card is placed after
     // it settles; capped at 30 frames.
     if (View.of(context).viewInsets.bottom > 0) {
@@ -570,10 +553,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
-                  onTap: () {
-                    _openSwipeId.value = null;
-                    FocusManager.instance.primaryFocus?.unfocus();
-                  },
+                  onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
                   child: switch (messages) {
                     AsyncData() when timeline.isEmpty => const Center(
                       child: Text('No messages yet. Say something.'),
@@ -618,18 +598,18 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                           final bubble = SwipeableMessage(
                             key: _keyFor(message.id),
                             messageId: message.id,
-                            mine: mine,
                             actions: allowedActions,
-                            openId: _openSwipeId,
-                            onOpenChanged: (open) {
-                              if (open) {
-                                _openSwipeId.value = message.id;
-                              } else if (_openSwipeId.value == message.id) {
-                                _openSwipeId.value = null;
-                              }
-                            },
+                            onReply: () => runMessageAction(
+                              context,
+                              ref,
+                              message,
+                              MessageAction.reply,
+                              canDeleteForEveryone: true,
+                              anchor: _bubbleRect(message.id),
+                              alignEnd: mine,
+                              group: isGroup,
+                            ),
                             onAction: (action) {
-                              _openSwipeId.value = null;
                               runMessageAction(
                                 context,
                                 ref,
@@ -1386,10 +1366,12 @@ class _Composer extends ConsumerStatefulWidget {
   ConsumerState<_Composer> createState() => _ComposerState();
 }
 
-class _ComposerState extends ConsumerState<_Composer> {
+class _ComposerState extends ConsumerState<_Composer>
+    with WidgetsBindingObserver {
   final _controller = TextEditingController();
   final _focus = FocusNode();
   bool _sending = false;
+  double _lastInset = 0;
 
   /// This composer's conversation is fixed for its whole lifetime: opening
   /// a different one always pushes a new [MessageScreen] (see
@@ -1405,6 +1387,7 @@ class _ComposerState extends ConsumerState<_Composer> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final id = ref.read(openConversationProvider);
     _conversationId = id;
     if (id == null) return;
@@ -1448,8 +1431,21 @@ class _ComposerState extends ConsumerState<_Composer> {
     _applyingDraft = false;
   }
 
+  /// The system back gesture closes the keyboard but leaves the field
+  /// focused; releasing the focus when the keyboard goes away keeps the
+  /// focus and the platform input state in step, so the next back leaves
+  /// the page.
+  @override
+  void didChangeMetrics() {
+    if (!mounted) return;
+    final inset = View.of(context).viewInsets.bottom;
+    if (_lastInset > 0 && inset == 0 && _focus.hasFocus) _focus.unfocus();
+    _lastInset = inset;
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _focus.dispose();
     _controller.dispose();
     super.dispose();
@@ -1613,6 +1609,9 @@ class _ComposerState extends ConsumerState<_Composer> {
             ref.read(openConversationProvider) != id) {
           return;
         }
+        // A reply the member started (swipe or menu) opens the keyboard;
+        // draft restores set _applyingDraft and returned above.
+        if (next != null && next.id != previous?.id) _focus.requestFocus();
         _applyingDraft = true;
         ref.read(draftsProvider.notifier).setReply(id, next);
         _applyingDraft = false;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/swipe_back.dart';
 import '../../../app/theme.dart';
 import '../domain/attachment.dart';
 import '../domain/message.dart';
@@ -14,6 +15,7 @@ Future<({List<PickedImage> images, String caption})?> showAttachmentPreview(
   String caption = '',
 }) => Navigator.of(context).push<({List<PickedImage> images, String caption})>(
   MaterialPageRoute(
+    settings: noSwipeBack,
     builder: (_) => AttachmentPreviewPage(images: images, caption: caption),
   ),
 );

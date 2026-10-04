@@ -173,6 +173,25 @@ final class Message {
     sending: sending,
   );
 
+  /// A copy carrying [bytes] as its [attachmentPreview] (a first read leaves
+  /// previews out; they arrive in one batched read).
+  Message withPreview(Uint8List? bytes) => Message(
+    id: id,
+    conversationId: conversationId,
+    senderId: senderId,
+    body: body,
+    createdAt: createdAt,
+    attachmentPath: attachmentPath,
+    attachmentPreview: bytes,
+    localImage: localImage,
+    deletion: deletion,
+    deletedBy: deletedBy,
+    editedAt: editedAt,
+    replyTo: replyTo,
+    forwarded: forwarded,
+    sending: sending,
+  );
+
   /// Whether [userId] wrote this message; decides which side it is drawn on.
   bool isFrom(String userId) => senderId == userId;
 }

@@ -195,6 +195,20 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   int _generation = 0;
 
   @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_maybeLoadOlder);
+  }
+
+  /// Near the top of the loaded history (the list is reversed, so "after" is
+  /// older): asks for the next older page. Cheap when nothing is left.
+  void _maybeLoadOlder() {
+    if (_scroll.hasClients && _scroll.position.extentAfter < 600) {
+      unawaited(ref.read(messagesProvider.notifier).loadOlder());
+    }
+  }
+
+  @override
   void dispose() {
     _scroll.dispose();
     super.dispose();
@@ -383,6 +397,9 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     // A message from someone ends their "typing…" at once rather than
     // leaving it over the message they just sent.
     ref.listen(messagesProvider, (previous, next) {
+      // A page that did not fill the screen, or one that just landed, may
+      // still leave the top in reach: look again once laid out.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeLoadOlder());
       final latest = next.value;
       if (latest == null || latest.isEmpty) return;
       if (previous?.value?.lastOrNull?.id == latest.last.id) return;
@@ -444,6 +461,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     // until every sharing member has read them.
     final marks = ref.watch(readMarksProvider).value ?? const <ReadMark>[];
     final timeline = ref.watch(chatTimelineProvider);
+    final loadingOlder = ref.watch(olderLoadingProvider);
     final value = messages.value ?? const <Message>[];
     final messageIndexById = {
       for (var idx = 0; idx < (messages.value ?? const []).length; idx++)
@@ -570,8 +588,17 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                         // bubble built even when it is far from the current
                         // scroll offset (see _scrollTo).
                         scrollCacheExtent: ScrollCacheExtent.pixels(2000),
-                        itemCount: timeline.length,
+                        // One extra row at the very top while an older page is
+                        // being read.
+                        itemCount: timeline.length + (loadingOlder ? 1 : 0),
                         itemBuilder: (context, i) {
+                          if (i == timeline.length) {
+                            return const Padding(
+                              key: ValueKey('older-loading'),
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Center(child: SisLoadingLogo(size: 24)),
+                            );
+                          }
                           final entry = timeline[timeline.length - 1 - i];
                           if (entry is EventEntry) {
                             return GroupEventLine(

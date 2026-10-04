@@ -43,14 +43,14 @@ import '../support/reach.dart';
 /// Message search's screens on their seams (v0.16), the whole app mounted as
 /// main.dart mounts it for vedat: the real chat, presence and profile
 /// repositories on the local stack, the real search RPC, messagesAround and
-/// the real 500-message read. Only Google sign-in, the Play update API and
+/// the real newest-page read. Only Google sign-in, the Play update API and
 /// Firebase push -- nothing local to run them on -- are fakes. The failure
 /// path of each connection the screens add (search, messagesAround) is the
 /// same call on a real repository at a dead host.
 ///
 /// Each run makes its own group of vedat and yesim holding 600 messages
 /// (backdated through the service key), four of them carrying this run's
-/// tag: two older than the newest 500, one loaded far up, one near the end.
+/// tag: two older than the newest page, one loaded far up, one near the end.
 ///
 /// Requires a running local Supabase, SUPABASE_TEST_SERVICE_KEY (see
 /// test/support/service_key.dart), --concurrency=1. Accounts vedat/yesim
@@ -200,6 +200,10 @@ class _Switch implements ChatRepository {
   Future<Result<List<Message>>> sharedLinks(String id) => live.sharedLinks(id);
   @override
   Future<Result<List<Message>>> messages(String id) => live.messages(id);
+
+  @override
+  Future<Result<Map<String, Uint8List>>> attachmentPreviews(List<String> ids) =>
+      live.attachmentPreviews(ids);
   @override
   Future<Result<Message>> send({
     required String id,
@@ -286,8 +290,8 @@ List<Override> _production(SupabaseClient client, ChatRepository chat) => [
 ];
 
 /// Which of the 600 carry the tag (oldest first): 20 and 40 are older than
-/// the newest 500 (100..599), 150 is loaded far up, 590 near the end.
-const _hitAt = [20, 40, 150, 590];
+/// the newest page (550..599), 560 is loaded far up, 590 near the end.
+const _hitAt = [20, 40, 560, 590];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -501,11 +505,11 @@ void main() {
     await t.tap(byKey('chat-search-button'));
     await settle(t);
     await t.enterText(editable('chat-search-field'), _tag);
-    // 590 and 150 are loaded; 40 and 20 are not, and only the server knows.
+    // 590 and 560 are loaded; 40 and 20 are not, and only the server knows.
     await until(t, () => count() == '1/2+', 'the in-chat count');
   }
 
-  testWidgets('list search -> tap a hit older than the newest 500 -> the chat '
+  testWidgets('list search -> tap a hit older than the newest page -> the chat '
       'opens on it: in-chat search on the same query, it current, in view', (
     t,
   ) async {
@@ -548,7 +552,7 @@ void main() {
       await settle(t);
       expect(inView(t, 590), isTrue, reason: where(t, 590));
       await step(t, 'chat-search-older', '2/2+');
-      expect(inView(t, 150), isTrue, reason: where(t, 150));
+      expect(inView(t, 560), isTrue, reason: where(t, 560));
       expect(chat.inChat(room), isEmpty, reason: 'answered from the phone');
     } finally {
       await shutDown(t);
@@ -576,7 +580,7 @@ void main() {
       await step(t, 'chat-search-newer', '3/4');
       expect(inView(t, 40), isTrue, reason: where(t, 40));
       await step(t, 'chat-search-newer', '2/4');
-      expect(inView(t, 150), isTrue, reason: 'back out: ${where(t, 150)}');
+      expect(inView(t, 560), isTrue, reason: 'back out: ${where(t, 560)}');
       await step(t, 'chat-search-newer', '1/4');
       expect(inView(t, 590), isTrue, reason: where(t, 590));
       expect(chat.inChat(room), [_tag], reason: 'answered once, for good');
@@ -611,8 +615,8 @@ void main() {
         t,
         () =>
             container.read(messagesProvider).value?.last.id == late.id &&
-            container.read(messagesProvider).value?.length == 500,
-        'the live newest 500, ending with what arrived while searching',
+            container.read(messagesProvider).value?.length == messagePageSize,
+        'the live newest page, ending with what arrived while searching',
       );
       await settle(t);
       expect(byKey('chat-search-field'), findsNothing);
@@ -673,7 +677,7 @@ void main() {
           .map((m) => m.id)
           .toList();
       final before = shown();
-      await t.tap(byKey('chat-search-older')); // 150: loaded
+      await t.tap(byKey('chat-search-older')); // 560: loaded
       await until(t, () => count() == '2/2+', '2/2+');
       await settle(t);
       await t.tap(byKey('chat-search-older')); // 40: not loaded
@@ -804,7 +808,7 @@ void main() {
       await until(t, () => chat.inChat(room).isNotEmpty, 'the request');
       await settle(t);
       expect(count(), '2/2+');
-      expect(inView(t, 150), isTrue, reason: where(t, 150));
+      expect(inView(t, 560), isTrue, reason: where(t, 560));
       expect(
         noticeSaying(offlineMessage),
         findsOneWidget,

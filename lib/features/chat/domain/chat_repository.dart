@@ -9,6 +9,10 @@ import 'group_member.dart';
 import 'message.dart';
 import 'read_marks.dart';
 
+/// How many messages one read of a conversation returns: the newest page on
+/// open, and each older page when scrolling up.
+const messagePageSize = 50;
+
 /// Chat boundary; the only way the app reaches conversations and messages.
 ///
 /// Every call is subject to row-level security: the caller sees a conversation
@@ -76,16 +80,24 @@ abstract interface class ChatRepository {
   /// list, never a failure.
   Future<Result<List<GroupEvent>>> groupEvents(String conversationId);
 
-  /// Messages with a photo in [conversationId], newest first, capped like
-  /// [messages].
+  /// Messages with a photo in [conversationId], newest first, capped at 500.
   Future<Result<List<Message>>> sharedMedia(String conversationId);
 
-  /// Messages whose text contains a web address, newest first, capped like
-  /// [messages]. Which part is the link is the caller's to extract.
+  /// Messages whose text contains a web address, newest first, capped at 500.
+  /// Which part is the link is the caller's to extract.
   Future<Result<List<Message>>> sharedLinks(String conversationId);
 
-  /// Messages in [conversationId], oldest first.
+  /// The newest [messagePageSize] messages in [conversationId], oldest first,
+  /// WITHOUT their photo previews (see [attachmentPreviews]); older history is
+  /// read with [messagesAround]. A page shorter than [messagePageSize] means
+  /// nothing is older.
   Future<Result<List<Message>>> messages(String conversationId);
+
+  /// The tiny blurred previews of the photo messages [messageIds], in one
+  /// batched read, keyed by message id; a message with no preview is absent.
+  Future<Result<Map<String, Uint8List>>> attachmentPreviews(
+    List<String> messageIds,
+  );
 
   /// Sends [body] to [conversationId] as message [id] and returns the
   /// stored message.

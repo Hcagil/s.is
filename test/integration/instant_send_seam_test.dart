@@ -154,6 +154,10 @@ class _Relay implements ChatRepository {
   Future<Result<List<Message>>> sharedLinks(String id) => real.sharedLinks(id);
   @override
   Future<Result<List<Message>>> messages(String id) => real.messages(id);
+
+  @override
+  Future<Result<Map<String, Uint8List>>> attachmentPreviews(List<String> ids) =>
+      real.attachmentPreviews(ids);
   @override
   Future<Result<Stream<Message>>> incomingAll() => real.incomingAll();
   @override

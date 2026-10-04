@@ -539,8 +539,8 @@ void main() {
   });
 
   group('attachment_preview round trip', () {
-    test('sendImage stores it, and it comes back through messages() for the '
-        'other member', () async {
+    test('sendImage stores it, and it comes back through attachmentPreviews() '
+        'for the other member (0.30.14: not through messages())', () async {
       final image = PickedImage(
         bytes: _png,
         contentType: 'image/png',
@@ -561,6 +561,12 @@ void main() {
       );
       expect(
         seen.attachmentPreview,
+        isNull,
+        reason: 'the first read leaves the preview column out',
+      );
+      final previews = await mia.attachmentPreviews([sent.value.id]);
+      expect(
+        (previews as Ok<Map<String, Uint8List>>).value[sent.value.id],
         _png,
         reason: 'the preview must survive the round trip through the row',
       );

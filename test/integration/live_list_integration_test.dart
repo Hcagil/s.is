@@ -133,6 +133,10 @@ class _RealtimeDown implements ChatRepository {
   Future<Result<void>> markRead(String id) => live.markRead(id);
   @override
   Future<Result<List<Message>>> messages(String id) => live.messages(id);
+
+  @override
+  Future<Result<Map<String, Uint8List>>> attachmentPreviews(List<String> ids) =>
+      live.attachmentPreviews(ids);
   @override
   Future<Result<Message>> send({
     required String id,

@@ -1,7 +1,7 @@
 // Message search on screen (v0.16), written from the contract, reached the
 // way a member reaches it: the whole app as main.dart mounts it (SisApp under
 // the production provider set), fakes only at the repository boundaries.
-// ChatFake answers messages() with the newest 500 like the real read, so a
+// ChatFake answers messages() with the newest page like the real read, so a
 // hit "older than what is loaded" is genuinely not loaded here.
 //
 // Highlight is judged by how characters are drawn, not by how the widget is
@@ -53,27 +53,27 @@ const longWords =
     'the bubble so that its time cannot sit on the last line';
 
 /// Bodies of the "apple" hits in c1, by index (oldest first). 20 and 40
-/// are older than the newest 500; 150 is loaded but far up the list.
+/// are older than the newest page (50); 551 is the oldest loaded hit.
 const appleBodies = {
   20: 'Apple pie at noon', // bob
   40: 'I baked an apple crumble', // me
-  150: 'mine and long: $longWords, with an apple in it', // me
-  550: 'apple and APPLE again', // bob, short: inline time
+  551: 'mine and long: $longWords, with an apple in it', // me
+  560: 'apple and APPLE again', // bob, short: inline time
   590: 'green apple', // me, short: inline time
   595: 'theirs and long: $longWords, and one apple', // bob
 };
 
 /// c1 hits for "apple", newest first.
-const c1Hits = ['c1-595', 'c1-590', 'c1-550', 'c1-150', 'c1-40', 'c1-20'];
+const c1Hits = ['c1-595', 'c1-590', 'c1-560', 'c1-551', 'c1-40', 'c1-20'];
 
 List<Message> c1History() => [
   for (var i = 0; i < 600; i++)
     Message(
       id: 'c1-$i',
       conversationId: 'c1',
-      senderId: const {40, 150, 590}.contains(i) || (i.isEven && i % 3 == 0)
+      senderId: const {40, 551, 590}.contains(i) || (i.isEven && i % 3 == 0)
           ? 'u1'
-          : const {20, 550, 595}.contains(i)
+          : const {20, 560, 595}.contains(i)
           ? 'ub'
           : (i.isOdd ? 'ub' : 'u1'),
       body: appleBodies[i] ?? 'hay $i',
@@ -519,12 +519,12 @@ void main() {
       final w = World();
       await home(t, w);
       await type(t, 'list-search-field', 'aPPle');
-      standsOut(row('c1-550'), appleBodies[550]!, 'apple');
+      standsOut(row('c1-560'), appleBodies[560]!, 'apple');
       standsOut(row('c1-590'), appleBodies[590]!, 'apple');
       standsOut(row('g1-juice'), 'apple juice anyone?', 'apple');
 
       final snippet = find
-          .descendant(of: row('c1-550'), matching: find.byType(RichText))
+          .descendant(of: row('c1-560'), matching: find.byType(RichText))
           .evaluate()
           .firstWhere(
             (e) => (e.widget as RichText).text.toPlainText().contains('again'),
@@ -561,26 +561,26 @@ void main() {
       final w = World();
       await home(t, w);
       await type(t, 'list-search-field', 'apple');
-      expect(row('c1-550'), findsOneWidget);
+      expect(row('c1-560'), findsOneWidget);
       expect(notice, findsNothing);
 
       w.chat.searchResult = offline();
       await type(t, 'list-search-field', 'apples');
       expect(noticeSaying('No connection.'), findsOneWidget);
-      expect(row('c1-550'), findsOneWidget, reason: 'results stay');
+      expect(row('c1-560'), findsOneWidget, reason: 'results stay');
       expect(find.text('No messages found'), findsNothing);
       await drainNotice(t);
 
       w.chat.searchResult = offline();
       await type(t, 'list-search-field', 'applesauce');
       expect(noticeSaying('No connection.'), findsOneWidget, reason: 'again');
-      expect(row('c1-550'), findsOneWidget);
+      expect(row('c1-560'), findsOneWidget);
       await drainNotice(t);
     });
   });
 
   group('from a list result into the chat', () {
-    testWidgets('a hit older than the newest 500: the chat opens on it, '
+    testWidgets('a hit older than the newest page: the chat opens on it, '
         'search open on the query, it current and scrolled into view', (
       t,
     ) async {
@@ -637,10 +637,10 @@ void main() {
       final w = World();
       await home(t, w);
       await type(t, 'list-search-field', 'apple');
-      await t.tap(row('c1-550'));
+      await t.tap(row('c1-560'));
       await settle(t, 40);
       expect(count(), '3/6');
-      inView(t, 'c1-550');
+      inView(t, 'c1-560');
     });
 
     testWidgets('a group hit opens the group on it', (t) async {
@@ -734,7 +734,7 @@ void main() {
         inView(t, id);
       }
 
-      // Newest to oldest: 595 590 550 150 (loaded: "n/4+") then, once the
+      // Newest to oldest: 595 590 560 551 (loaded: "n/4+") then, once the
       // server is asked from the oldest loaded hit, 40 20 (not loaded: "n/6").
       for (final (i, id) in c1Hits.indexed.skip(1)) {
         final previous = c1Hits[i - 1];
@@ -795,11 +795,11 @@ void main() {
       }
 
       // Further up, each checked as it becomes the current hit: theirs
-      // inline (550), mine long (150), mine and theirs never loaded (40, 20).
+      // inline (560), mine long (551), mine and theirs never loaded (40, 20).
       await t.tap(byKey('chat-search-older'));
       await settle(t, 40);
       expect(count(), '2/4+');
-      for (final (i, n) in [550, 150, 40, 20].indexed) {
+      for (final (i, n) in [560, 551, 40, 20].indexed) {
         await t.tap(byKey('chat-search-older'));
         await settle(t, 40);
         expect(count(), i < 2 ? '${i + 3}/4+' : '${i + 3}/6');
@@ -905,7 +905,7 @@ void main() {
       await settle(t, 40);
       expect(byKey('chat-search-field'), findsNothing);
       expect(byKey('conversation-title'), findsOneWidget);
-      expect(bubble('c1-20'), findsNothing, reason: 'back to the newest 500');
+      expect(bubble('c1-20'), findsNothing, reason: 'back to the newest page');
       inView(t, 'c1-599');
       expect(
         drawn(bubble('c1-590')).map((c) => c.$2),
@@ -945,7 +945,7 @@ void main() {
       }
       expect(count(), '4/4+');
       final before = shownIds(t);
-      expect(before, contains('c1-150'));
+      expect(before, contains('c1-551'));
       expect(before, isNot(contains('c1-40')), reason: 'fixture: not loaded');
       w.chat.messagesAroundResult = offline();
       await t.tap(byKey('chat-search-older'));
@@ -1032,7 +1032,7 @@ void main() {
     });
 
     testWidgets('after jumping to an old hit, a new query answers from the '
-        'chat\'s newest 500 and starts at its newest hit', (t) async {
+        'chat\'s newest page and starts at its newest hit', (t) async {
       final w = World();
       await home(t, w);
       await openChat(t, 'c1');
@@ -1043,7 +1043,7 @@ void main() {
       }
       expect(count(), '5/6');
       expect(shownIds(t), contains('c1-59'), reason: 'fixture: jumped to 40');
-      // "hay 59" is hay 591-594, 596-599 in the newest 500, and hay 59
+      // "hay 59" is hay 591-594, 596-599 in the newest page, and hay 59
       // (only in the jumped window).
       await type(t, 'chat-search-field', 'hay 59');
       await settle(t, 40);
@@ -1130,7 +1130,7 @@ void main() {
       await t.tap(byKey('chat-search-older'));
       await settle(t, 40);
       expect(count(), '4/4+');
-      inView(t, 'c1-150');
+      inView(t, 'c1-551');
       expect(
         noticeSaying(offlineText),
         findsOneWidget,

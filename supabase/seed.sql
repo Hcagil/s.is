@@ -140,6 +140,10 @@
 --      in a short chat and a long one with photo previews; quill is the other
 --      member and writes into them; rush has no chat. It prints numbers and
 --      asserts no behaviour)
+--   nami/odo/pim   test/integration/newest_page_integration_test.dart
+--     (odo writes a 130-message chat with photos to nami; nami reads its
+--      newest page, the batched previews, and pages older history; pim is a
+--      stranger to their chat)
 --   rho/sig        test/integration/catch_up_seam_test.dart
 --     (rho's socket dies as a backgrounded phone's does; sig writes to her
 --      meanwhile, and catch-up must bring it in)
@@ -247,5 +251,8 @@ insert into app_private.allowlist(email) values
   ('quill@integration.test'),
   ('rush@integration.test'),
   ('kip@integration.test'),
-  ('lyle@integration.test')
+  ('lyle@integration.test'),
+  ('nami@integration.test'),
+  ('odo@integration.test'),
+  ('pim@integration.test')
 on conflict do nothing;

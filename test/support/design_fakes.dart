@@ -37,6 +37,8 @@ import 'fakes.dart'
     show
         AttachmentCacheFake,
         PushRegistryFake,
+        newestPage,
+        previewsOf,
         PushSourceFake,
         aroundRows,
         editedCopy,
@@ -190,7 +192,12 @@ class DesignChat implements ChatRepository {
 
   @override
   Future<Result<List<Message>>> messages(String conversationId) async =>
-      Ok(history[conversationId] ?? const []);
+      Ok(newestPage(history[conversationId] ?? const []));
+
+  @override
+  Future<Result<Map<String, Uint8List>>> attachmentPreviews(
+    List<String> ids,
+  ) async => Ok(previewsOf(history.values.expand((rows) => rows), ids));
 
   @override
   Future<Result<Message>> send({

@@ -670,6 +670,22 @@ final messagesProvider =
       retry: _never,
     );
 
+/// True while an older page of the open conversation is being read: the
+/// screen shows a small loader at the top of the list meanwhile.
+final olderLoadingProvider = NotifierProvider<OlderLoading, bool>(
+  OlderLoading.new,
+);
+
+class OlderLoading extends Notifier<bool> {
+  @override
+  bool build() {
+    ref.watch(openConversationProvider);
+    return false;
+  }
+
+  void set(bool loading) => state = loading;
+}
+
 /// Messages of the open conversation, oldest first.
 ///
 /// The initial read and the Realtime stream are merged by message id.
@@ -695,6 +711,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// window; false once live (including before any jump at all).
   bool get isJumped => _jumped;
 
+  /// Set by [returnToLive]: the next build carries nothing over from the
+  /// jumped window (it is not contiguous with the live page).
+  bool _fromJump = false;
+
   /// The anchor id of the most recent [jumpToAround] call -- an answer for
   /// any earlier one is dropped, even if it arrives later.
   String? _requestedAnchorId;
@@ -703,6 +723,22 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// the previous value into a reload, so a rebuild for a different chat would
   /// otherwise answer `.value` with the chat just left.
   String? _stateFor;
+
+  /// Bumped by every build: an answer that started under an older build is
+  /// dropped.
+  int _epoch = 0;
+
+  /// True once the oldest message of the conversation is loaded (a read that
+  /// came back shorter than [messagePageSize]).
+  bool _noOlder = false;
+  bool _loadingOlder = false;
+
+  /// Photo messages whose preview was already asked for in this build, so a
+  /// message that has none is not asked again and again.
+  final _previewAsked = <String>{};
+
+  /// Whether scrolling up may still find older messages.
+  bool get hasOlder => !_noOlder;
 
   /// The newest messages of chats left this run, shown at once when one is
   /// opened again while the read is out. Cleared on an account change.
@@ -717,7 +753,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     ];
     _memory.remove(id);
     if (kept.isEmpty) return;
-    _memory[id] = kept;
+    // Only the newest page is kept: that is what the next open reads first.
+    _memory[id] = kept.length > messagePageSize
+        ? kept.sublist(kept.length - messagePageSize)
+        : kept;
     if (_memory.length > 8) _memory.remove(_memory.keys.first);
   }
 
@@ -746,6 +785,26 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       state = const AsyncLoading();
     }
     if (conversationId == null) return const [];
+    _epoch++;
+    if (_loadingOlder) {
+      // The page in flight belongs to the replaced build, which will not clear
+      // the loader; a provider may not be written during build, so a turn later.
+      Future.microtask(() {
+        if (ref.mounted) ref.read(olderLoadingProvider.notifier).set(false);
+      });
+    }
+    _loadingOlder = false;
+    _noOlder = false;
+    _previewAsked.clear();
+    // What this chat already shows (its remembered newest page, or what a
+    // catch-up rebuild keeps): previews and older rows outlive the new read.
+    final fromJump = wasJumped || _fromJump;
+    _fromJump = false;
+    // A jumped window is not contiguous with the live page: none of it is
+    // carried over (its previews are read again).
+    final shownBefore = fromJump
+        ? const <Message>[]
+        : (state.value ?? const <Message>[]);
 
     final repo = ref.read(chatRepositoryProvider);
     final buffered = <Message>[];
@@ -815,11 +874,40 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         throw failure;
       case Ok(:final value):
         loaded = true;
-        final merged = [...value];
+        final known = {
+          for (final m in shownBefore)
+            if (m.attachmentPreview != null) m.id: m.attachmentPreview!,
+        };
+        final merged = [
+          for (final m in value)
+            m.attachmentPreview == null && known[m.id] != null
+                ? m.withPreview(known[m.id])
+                : m,
+        ];
+        _noOlder = value.length < messagePageSize;
+        // Older rows already loaded stay (a scroll position deep in history
+        // must not be cut off by a catch-up) -- but only when the new page
+        // overlaps them, so the history never has a gap.
+        final inPage = {for (final m in value) m.id};
+        if (value.isNotEmpty && shownBefore.any((m) => inPage.contains(m.id))) {
+          merged.addAll([
+            for (final m in shownBefore)
+              if (!m.isPending &&
+                  !inPage.contains(m.id) &&
+                  m.createdAt.isBefore(value.first.createdAt))
+                m,
+          ]);
+        }
         for (final message in buffered) {
           if (message.conversationId != conversationId) continue;
           final i = merged.indexWhere((m) => m.id == message.id);
           if (i < 0) {
+            // An edit or delete of a row older than the page is not for this
+            // list: ignored, never added out of place.
+            if (value.isNotEmpty &&
+                message.createdAt.isBefore(value.first.createdAt)) {
+              continue;
+            }
             merged.add(message);
           } else if (message.isDeleted || message.editedAt != null) {
             merged[i] = message;
@@ -835,7 +923,18 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         final pending = ref.read(sendQueueProvider)[conversationId] ?? const [];
         // A later turn, so the list below is already the state when it runs.
         final edits = _ownEdits;
-        unawaited(Future(() => _verify(conversationId, edits, () => alive)));
+        // Previews (one batched read) start at once, beside the verify read;
+        // verify may add rows, so they are looked at again after it.
+        unawaited(
+          Future(() {
+            unawaited(_fillPreviews(conversationId, () => alive));
+            return _verify(
+              conversationId,
+              edits,
+              () => alive,
+            ).then((_) => _fillPreviews(conversationId, () => alive));
+          }),
+        );
         return [
           ...shown,
           for (final p in pending)
@@ -852,6 +951,89 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   void catchUp() {
     if (_jumped || state.isLoading) return;
     ref.invalidateSelf();
+  }
+
+  /// The first read leaves photo previews out so the first paint never waits
+  /// on them; one batched read (the photo messages without one, at most a
+  /// page) brings them in right after. One request rather than one per
+  /// bubble: a single round trip, and the rows are known already. A failure is
+  /// silent -- the photo itself still loads and replaces the blur.
+  Future<void> _fillPreviews(
+    String conversationId,
+    bool Function() alive,
+  ) async {
+    if (!alive() || !ref.mounted) return;
+    final current = state.value;
+    if (current == null) return;
+    final ids = [
+      for (final m in current)
+        if (m.attachmentPath != null &&
+            m.attachmentPreview == null &&
+            _previewAsked.add(m.id))
+          m.id,
+    ];
+    if (ids.isEmpty) return;
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .attachmentPreviews(ids);
+    if (!alive() || !ref.mounted) return;
+    if (ref.read(openConversationProvider) != conversationId) return;
+    final now = state.value;
+    if (result is! Ok<Map<String, Uint8List>> || now == null) return;
+    final found = result.value;
+    if (found.isEmpty) return;
+    state = AsyncData([
+      for (final m in now)
+        m.attachmentPreview == null && found[m.id] != null
+            ? m.withPreview(found[m.id])
+            : m,
+    ]);
+  }
+
+  /// Reads the page before the oldest shown message and puts it above, by id.
+  /// The screen lists newest-first from the bottom, so rows added past the top
+  /// do not move what the member is looking at. Reuses
+  /// [ChatRepository.messagesAround] (the oldest shown message as anchor; its
+  /// newer half is already shown and is dropped by id). One read at a time;
+  /// an answer for a chat that was left or rebuilt meanwhile is dropped, and
+  /// a failure is silent -- the next scroll tries again.
+  Future<void> loadOlder() async {
+    final conversationId = ref.read(openConversationProvider);
+    final current = state.value;
+    if (conversationId == null ||
+        current == null ||
+        state.isLoading ||
+        _noOlder ||
+        _loadingOlder) {
+      return;
+    }
+    final oldest = current.where((m) => !m.isPending).firstOrNull;
+    if (oldest == null) return;
+    final epoch = _epoch;
+    _loadingOlder = true;
+    ref.read(olderLoadingProvider.notifier).set(true);
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .messagesAround(conversationId, oldest);
+    if (!ref.mounted) return;
+    if (epoch != _epoch) return; // rebuilt meanwhile: the new build owns this
+    ref.read(olderLoadingProvider.notifier).set(false);
+    _loadingOlder = false;
+    final now = state.value;
+    if (result is! Ok<List<Message>> || now == null) return;
+    final shown = {for (final m in now) m.id};
+    final fresh = [
+      for (final m in result.value)
+        if (!shown.contains(m.id) && !m.createdAt.isAfter(oldest.createdAt)) m,
+    ];
+    // Counted before dropping vanished rows: a short page is the real start.
+    if (fresh.length < messagePageSize) _noOlder = true;
+    final older = [
+      for (final m in fresh)
+        if (m.deletion != MessageDeletion.vanished) m,
+    ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    if (older.isEmpty) return;
+    state = AsyncData([...older, ...now]);
   }
 
   /// The first read can be served before the join took effect on the server:
@@ -880,7 +1062,11 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       if (i < 0) {
         next = [...next, m];
       } else if (_newer(m, next[i])) {
-        next = [...next]..[i] = m;
+        final kept = next[i].attachmentPreview;
+        next = [...next]
+          ..[i] = m.attachmentPreview == null && kept != null
+              ? m.withPreview(kept)
+              : m;
       }
     }
     if (identical(next, current)) return;
@@ -1212,6 +1398,11 @@ class MessagesController extends AsyncNotifier<List<Message>> {
             ref.read(openConversationProvider) == conversationId &&
             _requestedAnchorId == anchor.id) {
       _jumped = true;
+      // A page read for the old list must not land in this window.
+      _epoch++;
+      _loadingOlder = false;
+      ref.read(olderLoadingProvider.notifier).set(false);
+      _noOlder = false;
       state = AsyncData(value);
     }
     return switch (result) {
@@ -1225,6 +1416,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   void returnToLive() {
     if (!_jumped) return;
     _jumped = false;
+    _fromJump = true;
     ref.invalidateSelf();
   }
 }

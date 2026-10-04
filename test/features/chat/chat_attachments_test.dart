@@ -628,7 +628,15 @@ void main() {
         ..store('c1/photo.png')
         ..holdBytes();
       await pump(tester, chat, settle: false);
+      // 0.30.14: the first read carries no preview; it follows in one batched
+      // read after the first paint.
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 500));
+      }
 
+      expect(chat.previewCalls, [
+        ['m1'],
+      ]);
       expect(find.byKey(const ValueKey('attachment-preview')), findsOneWidget);
       expect(find.byKey(const ValueKey('attachment-image')), findsNothing);
 

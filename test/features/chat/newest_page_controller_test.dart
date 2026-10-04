@@ -445,6 +445,53 @@ void main() {
       expect(window, aroundRows(chat.history['c1']!, anchor).map((m) => m.id));
     });
 
+    test('a rebuild while a page is pending turns the loader off; the stale '
+        'answer then adds nothing', () async {
+      await open('c1');
+      await quiet();
+      final held = chat.holdAround();
+      final pending = messages().loadOlder();
+      await _until(() => arounds().isNotEmpty, reason: 'no read');
+      expect(c.read(olderLoadingProvider), isTrue);
+      c.invalidate(messagesProvider);
+      await c.read(messagesProvider.future);
+      await Future<void>.microtask(() {});
+      expect(
+        c.read(olderLoadingProvider),
+        isFalse,
+        reason: 'the replaced build\'s page is not this build\'s load',
+      );
+      held.complete();
+      await pending;
+      await quiet();
+      expect(c.read(olderLoadingProvider), isFalse);
+      expect(shown(), [for (var i = 70; i < 120; i++) 'c1-$i']);
+    });
+
+    test('a jump while a page is pending turns the loader off; the stale '
+        'answer then adds nothing', () async {
+      await open('c1');
+      await quiet();
+      final held = chat.holdAround();
+      final pending = messages().loadOlder();
+      await _until(() => arounds().isNotEmpty, reason: 'no read');
+      expect(c.read(olderLoadingProvider), isTrue);
+      final anchor = chat.history['c1']![10];
+      expect(await messages().jumpToAround(anchor), isA<Ok<void>>());
+      await Future<void>.microtask(() {});
+      expect(
+        c.read(olderLoadingProvider),
+        isFalse,
+        reason: 'the jump replaced the page being loaded',
+      );
+      final window = shown();
+      held.complete();
+      await pending;
+      await quiet();
+      expect(c.read(olderLoadingProvider), isFalse);
+      expect(shown(), window);
+    });
+
     test('an answer arriving after the chat was left is dropped', () async {
       await open('c1');
       await quiet();

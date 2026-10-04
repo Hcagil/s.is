@@ -45,6 +45,26 @@ final class SupabaseAuthRepository implements AuthRepository {
   bool get hasSession => _client.auth.currentSession != null;
 
   @override
+  String? get userId => _client.auth.currentUser?.id;
+
+  @override
+  String? get sessionId {
+    final token = _client.auth.currentSession?.accessToken;
+    if (token == null) return null;
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      final claims = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      ) as Map<String, Object?>;
+      final id = claims['session_id'];
+      return id is String ? id : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
   Stream<bool> get signedInChanges =>
       _client.auth.onAuthStateChange.map((s) => s.session != null).distinct();
 

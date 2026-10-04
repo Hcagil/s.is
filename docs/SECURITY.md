@@ -347,30 +347,61 @@ line: it draws nothing without a stored owner, and drops a push addressed to
 someone other than the stored owner, even one the server computed correctly
 before a handover (see DECISIONS 2026-09-25).
 
-**Stored chat list (v0.24.0).** The last conversation list the member saw is
-kept in one file, `chat_list.json`, in the app's private support directory
-(`files/`, never the cache). It holds each conversation's id, title, the
-other person's id, name, tag and picture path (never an email), the one-line
-last-message preview and its time, sender id, unread count and left-group
-flag. This is personal data. It is written to a temporary file and renamed,
-stamped with the owner's user id and a schema version, and any file that does
-not match the reading account, is on an old schema, or is unreadable is
-deleted rather than used. It is shown only after the server has confirmed the
-session (`activate_session()` returned true and the member profile loaded); a
-phone offline at start-up, or a session that is refused, never displays it.
-It is erased on every session end the app observes (sign-out, a cold start
-onto sign-in, or "not allowed"). Once an erase and any save it overtook have
-finished, neither the list file nor its temporary file remains, wherever that
-save had reached, including its final rename (since v0.24.1). A process killed
-mid-save can leave the temporary file, which the app never reads, until the
-next erase or save. A different account's first list load deletes the list
-file. Once the owner
-changes, the previous owner's list is unreachable from the app's list state,
-even while the new owner's list is loading or has failed. Accepted leftover: a
-phone whose access was removed or replaced and that never reaches the server
-again keeps the file; it is unreadable through the app, encrypted with the
-phone, and excluded from backup. Drafts and queued unsent messages
-are still not stored.
+**Stored chat list and last confirmed session (v0.24.0, revised 0.30.15).**
+The last conversation list the member saw is kept in one file,
+`chat_list.json`, in the app's private support directory (`files/`, never the
+cache). It holds each conversation's id, title, the other person's id, name,
+tag and picture path (never an email), the one-line last-message preview and
+its time, sender id, unread count and left-group flag. This is personal data.
+It is written to a temporary file and renamed, stamped with the owner's user
+id and a schema version, and any file that does not match the reading
+account, is on an old schema, or is unreadable is deleted rather than used.
+Once an erase and any save it overtook have finished, neither the list file
+nor its temporary file remains, wherever that save had reached, including its
+final rename (since v0.24.1). A process killed mid-save can leave the
+temporary file, which the app never reads, until the next erase or save.
+Once the owner changes, the previous owner's list is unreachable from the app's
+list state, even while the new owner's list is loading or has failed. Drafts
+and queued unsent messages are not stored.
+
+Since 0.30.15 the list is no longer held back until the server has confirmed
+the session. A second file, `last_session.json` (the marker), sits beside it:
+the user id, the `session_id` claim of the access token, the member (id, name,
+tag, picture path; never the email), whether the first-run screen was
+finished, and `confirmedAt`. It never holds a token. A cold start shows Home
+and the stored list from the two files at once, with no network call before
+the first list frame, only when all of these hold: a saved session exists, the
+marker's user id is the signed-in user, its session id is the current
+token's `session_id`, the member had finished first run, and `confirmedAt` is
+at most 14 days old. Otherwise -- a fresh sign-in, another account (which also
+deletes the marker), a new session id, an older marker (kept until the next
+confirmation overwrites it) -- the gated path runs as before and nothing is
+shown until the server answers.
+
+Behind the stored list the app asks `activate_session()`. `true`: confirmed,
+and `confirmedAt` moves (only a server `true` ever moves it). `false` (revoked,
+or replaced on another device): the Denied screen is assigned in the same
+frame, every open page is closed (a chat opened from a notification in the
+unconfirmed window never stays on top of it), then the marker, the list file
+and the photo cache are wiped. A refresh token the server rejects: signed out
+and wiped. A network error, a timeout or a non-retryable server error: the
+list stays, a small notice shows, the app retries after 2 s, 4 s ... capped at
+60 s and again when the app returns to the foreground; it never confirms and
+never clears on a failure. A session end the app observes (sign-out, "not
+allowed", a cold start onto sign-in) erases both files.
+
+RLS stays the authority. While unconfirmed nothing the server would refuse is
+granted: reads of a revoked member return no rows, `messages_send` and
+`register_device_token` refuse them. Sends made meanwhile are queued like any
+optimistic send; a refusal (42501) is not retried, and Denied drops the queue
+and the drafts. Accepted residual risk: a member revoked while this phone is
+offline sees the stored list (and nothing newer) until the phone reaches the
+server or the 14 days end. Both files are in the app's private directory,
+encrypted with the phone, and excluded from backup: on Android by
+`allowBackup="false"` plus the data-extraction rules, on iOS by
+`NSURLIsExcludedFromBackupKey` set on Application Support at launch (new in
+0.30.15; before it these files could be in iCloud and iTunes backups on iOS).
+Low note: the iOS Keychain session survives an uninstall.
 
 **Accepted risk: CI secrets and pushed branches.** Any branch pushed to
 this repository runs its own workflow files and can reach every repository

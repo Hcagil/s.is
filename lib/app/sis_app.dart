@@ -45,9 +45,10 @@ class SisApp extends StatelessWidget {
 
 /// An allowed member sees the name-and-tag screen once, then home.
 class _AllowedGate extends ConsumerWidget {
-  const _AllowedGate({required this.member});
+  const _AllowedGate({required this.member, required this.onboarded});
 
   final Member member;
+  final bool onboarded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -65,10 +66,14 @@ class _AllowedGate extends ConsumerWidget {
           when ref.watch(notificationExplainerShownProvider).value == false =>
         const NotificationExplainerScreen(),
       AsyncData() => HomeScreen(member: member),
+      // The marker said the first-run screen is done, so Home shows while the
+      // profile loads or fails to load; never an error screen.
+      AsyncError() when onboarded => HomeScreen(member: member),
       AsyncError(:final error) => StatusScreen.error(
         error is Failure ? error.message : '$error',
         onRetry: () => ref.read(ownProfileProvider.notifier).retry(),
       ),
+      _ when onboarded => HomeScreen(member: member),
       _ => const SisFullScreenLoader(),
     };
   }
@@ -104,6 +109,8 @@ class _SessionGateState extends ConsumerState<SessionGate> {
         ref.read(badgeSyncProvider)();
       },
       onResume: () {
+        // An unconfirmed session asks the server again at once.
+        ref.read(sessionControllerProvider.notifier).recheck();
         ref.read(updateControllerProvider.notifier).recheck();
         ref.read(sendQueueProvider.notifier).resumeForeground();
       },
@@ -126,6 +133,16 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     if (startupError != null) return StartupFailedScreen(startupError);
 
     final session = ref.watch(sessionControllerProvider);
+    // A session that ends -- signed out, or Denied (revoked, replaced, found
+    // out only after the stored list was shown) -- leaves no page open: a chat
+    // opened from a notification in the unconfirmed window must not stay on
+    // top of the Denied or sign-in screen. Synchronous on purpose (same frame).
+    ref.listen(sessionControllerProvider, (_, next) {
+      final v = next.value;
+      if ((v is SignedOut || v is Denied) && mounted) {
+        Navigator.of(context).popUntil((r) => r.isFirst);
+      }
+    });
     // For the life of the app, whatever screen it is on: keeps this phone on
     // the delivery list for whoever is signed in, and drops what a previous
     // member's pushes left on it as soon as their session is found to have
@@ -173,7 +190,8 @@ class _SessionGateState extends ConsumerState<SessionGate> {
         reason,
         onRetry: notifier.retry,
       ),
-      AsyncData(value: Allowed(:final member)) => _AllowedGate(member: member),
+      AsyncData(value: Allowed(:final member, :final onboarded)) =>
+        _AllowedGate(member: member, onboarded: onboarded),
       AsyncError(:final error) => StatusScreen.error(
         '$error',
         onRetry: notifier.retry,

@@ -8,6 +8,8 @@
 // faster"). The group "start-up" holds the new order against JoinChat, whose
 // join can take forever and whose stream keeps what arrives before listen().
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -635,7 +637,10 @@ void main() {
       expect(seen.where((s) => s.hasError), isEmpty);
     });
 
-    test('refresh shows loading and reports a failure', () async {
+    // 0.30.16 (offline start): a failed refresh keeps the list on screen
+    // and raises the stale flag; only a refusal is reported as an error.
+    test('refresh shows loading; a failure keeps the list on screen and '
+        'marks it stale', () async {
       final chat = ChatFake(latency: const Duration(milliseconds: 5))
         ..conversationsResult = Ok([conv('c1', 30)]);
       final c = scope(chat);
@@ -646,13 +651,39 @@ void main() {
       seen.clear();
 
       chat.conversationsResult = const Err(NetworkFailure('offline'));
-      await c.read(conversationListProvider.notifier).refresh();
+      try {
+        await c.read(conversationListProvider.notifier).refresh();
+      } catch (_) {}
+      await settle();
+
+      expect(seen.first.isLoading, isTrue, reason: 'loading first: $seen');
+      final state = c.read(conversationListProvider);
+      expect(state, isA<AsyncData<List<Conversation>>>(), reason: '$state');
+      expect(ids(c), ['c1']);
+      expect(c.read(conversationListStaleProvider), isTrue);
+    });
+
+    test('refresh refused: loading, then the failure is reported', () async {
+      final chat = ChatFake(latency: const Duration(milliseconds: 5))
+        ..conversationsResult = Ok([conv('c1', 30)]);
+      final c = scope(chat);
+      final seen = <AsyncValue<List<Conversation>>>[];
+      c.listen(conversationListProvider, (_, next) => seen.add(next));
+      await c.read(conversationListProvider.future);
+      await settle();
+      seen.clear();
+
+      chat.conversationsResult = const Err(DeniedFailure());
+      try {
+        await c.read(conversationListProvider.notifier).refresh();
+      } catch (_) {}
       await settle();
 
       expect(seen.where((s) => s.isLoading), isNotEmpty);
       final state = c.read(conversationListProvider);
-      expect(state.hasError, isTrue);
-      expect((state.error! as Failure).message, 'offline');
+      expect(state.hasError, isTrue, reason: '$state');
+      expect(state.error, isA<DeniedFailure>());
+      expect(c.read(conversationListStaleProvider), isFalse);
     });
   });
 
@@ -762,6 +793,45 @@ void main() {
       expect(find.text('No messages yet'), findsNothing);
       expect(inKey('preview-c1', 'You: first!'), findsOneWidget);
       expect(find.byKey(const ValueKey('preview-time-c1')), findsOneWidget);
+    });
+
+    testWidgets('a failed refresh: the saved-list notice above rows that '
+        'still open; a later good read takes it away', (tester) async {
+      final chat = ChatFake(latency: const Duration(milliseconds: 5))
+        ..conversationsResult = const Ok([Conversation(id: 'c1', other: bob)]);
+      final c = await pump(tester, chat);
+      final notice = find.byKey(const ValueKey('chat-list-stale-notice'));
+      expect(notice, findsNothing);
+
+      chat.conversationsResult = const Err(NetworkFailure('offline'));
+      c
+          .read(conversationListProvider.notifier)
+          .refresh()
+          .then((_) {}, onError: (Object _) {});
+      await tester.pumpAndSettle();
+      expect(c.read(conversationListStaleProvider), isTrue, reason: 'fixture');
+      expect(notice, findsOneWidget);
+      expect(
+        inKey(
+          'chat-list-stale-notice',
+          "Can't refresh your chats right now. Showing your saved chats.",
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('conversation-c1')));
+      await tester.pumpAndSettle();
+      expect(find.byType(MessageScreen), findsOneWidget);
+      expect(c.read(openConversationProvider), 'c1');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      chat.conversationsResult = const Ok([Conversation(id: 'c1', other: bob)]);
+      // Not awaited: the fake's latency runs on the tester's clock.
+      unawaited(c.read(conversationListProvider.notifier).reloadQuietly());
+      await tester.pumpAndSettle();
+      expect(c.read(conversationListStaleProvider), isFalse);
+      expect(notice, findsNothing);
     });
 
     testWidgets('returning from a chat re-reads the list without a spinner', (

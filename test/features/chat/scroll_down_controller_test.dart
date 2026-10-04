@@ -360,6 +360,91 @@ void main() {
     );
   });
 
+  group('a photo sent while jumped survives the re-read of returnToLive', () {
+    // Sending while jumped returns to live, whose background re-read lands
+    // while the upload is still in the air. The re-read rebuilds the list;
+    // the pending photo must not be lost in it, and must not end up twice.
+    final picked = PickedImage(
+      bytes: Uint8List.fromList([1, 2, 3]),
+      contentType: 'image/jpeg',
+      extension: 'jpg',
+      preview: Uint8List.fromList([9, 8, 7]),
+    );
+    Iterable<Message> photos() =>
+        c.read(messagesProvider).requireValue.where((m) => m.body == 'pic');
+    Message stored(String id) => Message(
+      id: id,
+      conversationId: 'c1',
+      senderId: 'me',
+      body: 'pic',
+      createdAt: DateTime.now(),
+      attachmentPath: 'c1/$id.jpg',
+      attachmentPreview: picked.preview,
+    );
+
+    setUp(() async {
+      chat = ChatFake(latency: const Duration(milliseconds: 2), self: 'me');
+      chat.history['c1'] = _history('c1', 600);
+      await openC1();
+      await jump();
+    });
+
+    test('the pending photo is still at the bottom after the re-read '
+        'lands, and becomes the stored row once the send completes', () async {
+      chat.holdSendImage();
+      chat.holdMessages(); // the re-read of returnToLive
+      final asked = reads();
+      final sending = messages().sendImage(chosen: picked, body: 'pic');
+      await idle(10);
+      expect(messages().isJumped, isFalse, reason: 'fixture');
+      expect(reads(), asked + 1, reason: 'fixture: the re-read is in flight');
+      expect(photos().single.isPending, isTrue, reason: 'fixture');
+      chat.releaseMessages();
+      await idle();
+      expect(photos(), hasLength(1), reason: 'kept after the re-read');
+      expect(photos().single.isPending, isTrue);
+      expect(shown().last, photos().single.id, reason: 'at the bottom');
+      chat.releaseSendImage();
+      expect(await sending, isA<Ok<Message>>());
+      await idle();
+      expect(photos(), hasLength(1));
+      expect(photos().single.isPending, isFalse, reason: 'pending row gone');
+      expect(photos().single.attachmentPath, isNotNull);
+    });
+
+    test('no duplicate when the re-read already holds the stored row '
+        '(isPendingOf)', () async {
+      chat.holdSendImage();
+      chat.holdMessages();
+      final sending = messages().sendImage(chosen: picked, body: 'pic');
+      await idle(10);
+      // The server stored the row; the client's upload call has not returned.
+      // The id the upload will answer with: this fake's first image is img-1.
+      chat.history['c1']!.add(stored('img-1'));
+      chat.releaseMessages();
+      await idle();
+      expect(photos(), hasLength(1), reason: 'one bubble, not two');
+      chat.releaseSendImage();
+      await sending;
+      await idle();
+      expect(photos(), hasLength(1));
+    });
+
+    test('no duplicate when the re-read holds the sent row by id', () async {
+      chat.holdMessages();
+      final sending = messages().sendImage(chosen: picked, body: 'pic');
+      expect(await sending, isA<Ok<Message>>());
+      await idle(10);
+      final sent = photos().single;
+      expect(sent.isPending, isFalse, reason: 'fixture: the send completed');
+      // The table now holds that very row; the held re-read returns it.
+      chat.history['c1']!.add(stored(sent.id));
+      chat.releaseMessages();
+      await idle();
+      expect(photos().map((m) => m.id), [sent.id]);
+    });
+  });
+
   group('failed resume catch-up', () {
     // testWidgets runs in fake time, so the 5 s retry timer is driven by
     // pump(duration) rather than waited for.
@@ -533,6 +618,50 @@ void main() {
       final mark = reads();
       messages().verifyNewest();
       await idle();
+      expect(reads(), mark);
+    });
+
+    Future<void> elapse(WidgetTester t, Duration d) async {
+      const step = Duration(milliseconds: 100);
+      for (var left = d; left > Duration.zero; left -= step) {
+        await t.pump(left < step ? left : step);
+      }
+    }
+
+    testWidgets('a no-op on an error that still carries a list', (t) async {
+      chat = ChatFake();
+      chat.history['c1'] = _history('c1', 10);
+      c = make();
+      addTearDown(c.dispose);
+      await settled(c);
+      c.read(openConversationProvider.notifier).open('c1');
+      await elapse(t, const Duration(milliseconds: 200));
+      chat.history.remove('c1');
+      chat.messagesResult = const Err(_offline);
+      messages().catchUp(); // fails, then five retries fail: an error
+      await elapse(t, const Duration(seconds: 27));
+      expect(c.read(messagesProvider).hasError, isTrue, reason: 'fixture');
+      chat.history['c1'] = _history('c1', 11);
+      chat.messagesResult = const Ok(<Message>[]);
+      final mark = reads();
+      messages().verifyNewest();
+      await elapse(t, const Duration(milliseconds: 200));
+      expect(reads(), mark);
+    });
+
+    testWidgets('a no-op on an empty chat', (t) async {
+      chat = ChatFake();
+      chat.history['c1'] = [];
+      c = make();
+      addTearDown(c.dispose);
+      await settled(c);
+      c.read(openConversationProvider.notifier).open('c1');
+      // Past any throttle left by the open itself.
+      await elapse(t, const Duration(seconds: 21));
+      expect(c.read(messagesProvider).requireValue, isEmpty, reason: 'fixture');
+      final mark = reads();
+      messages().verifyNewest();
+      await elapse(t, const Duration(milliseconds: 200));
       expect(reads(), mark);
     });
 

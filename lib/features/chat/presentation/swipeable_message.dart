@@ -91,6 +91,7 @@ class _SwipeableMessageState extends State<SwipeableMessage> {
   double _pull = 0;
   bool _dragging = false;
   bool _armed = false;
+  bool _ticked = false;
 
   @override
   Widget build(BuildContext context) {
@@ -181,13 +182,15 @@ class _SwipeableMessageState extends State<SwipeableMessage> {
     _dragging = true;
     _pull = 0;
     _armed = false;
+    _ticked = false;
   }
 
   void _onUpdate(DragUpdateDetails d) {
     setState(() {
       _pull = (_pull - d.delta.dx).clamp(0.0, _replySwipeMax);
       final armed = _pull >= replySwipeThreshold;
-      if (armed && !_armed) HapticFeedback.selectionClick();
+      if (armed && !_ticked) HapticFeedback.selectionClick();
+      _ticked = _ticked || armed;
       _armed = armed;
     });
   }

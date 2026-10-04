@@ -144,6 +144,13 @@ Future<bool> showMessageMenu(
       me != null &&
       roster.any((m) => m.member.userId == me && m.isAdmin && !m.hasLeft);
   final actions = [
+    if (!photoViewer &&
+        group &&
+        me != null &&
+        message.isFrom(me) &&
+        !message.isPending &&
+        !message.isDeleted)
+      MessageAction.readBy,
     for (final a in menuMessageActions(message, me: me, now: DateTime.now()))
       if (!photoViewer ||
           a == MessageAction.reply ||

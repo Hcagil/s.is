@@ -733,6 +733,9 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   bool _noOlder = false;
   bool _loadingOlder = false;
   bool _loadingNewer = false;
+  int _catchUpRetries = 0;
+  static const _maxCatchUpRetries = 5;
+  DateTime _verifiedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// The live list shown just before the first [jumpToAround] of a jump run:
   /// [returnToLive] shows it at once, without waiting for the network.
@@ -874,11 +877,31 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     });
     final (joined, read) = await (joining, repo.messages(conversationId)).wait;
     if (!alive) return const []; // replaced or closed mid-open: drop it all
-    if (joined case Err(:final failure)) throw failure;
+    // A catch-up that cannot reach the server (resume while offline) keeps
+    // the list on screen and tries again a little later; only a first open,
+    // with nothing to show, is an error.
+    final failed = switch ((joined, read)) {
+      (Err(:final failure), _) => failure,
+      (_, Err(:final failure)) => failure,
+      _ => null,
+    };
+    if (failed != null) {
+      if (shownBefore.isEmpty || _catchUpRetries >= _maxCatchUpRetries) {
+        throw failed;
+      }
+      _catchUpRetries++;
+      unawaited(
+        Future<void>.delayed(const Duration(seconds: 5), () {
+          if (alive && ref.mounted) ref.invalidateSelf();
+        }),
+      );
+      return shownBefore;
+    }
+    _catchUpRetries = 0;
 
     switch (read) {
-      case Err(:final failure):
-        throw failure;
+      case Err():
+        throw StateError('unreachable: read failure handled above');
       case Ok(:final value):
         loaded = true;
         final known = {
@@ -958,6 +981,31 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   void catchUp() {
     if (_jumped || state.isLoading) return;
     ref.invalidateSelf();
+  }
+
+  /// The member is back at the newest message: a Realtime row missed while the
+  /// connection was down (no resume event) is read in by _verify. At most once
+  /// per 20 s, never on a search window, never while a build is loading.
+  void verifyNewest() {
+    final conversationId = ref.read(openConversationProvider);
+    if (conversationId == null ||
+        _jumped ||
+        state.isLoading ||
+        state.value == null) {
+      return;
+    }
+    final now = DateTime.now();
+    if (now.difference(_verifiedAt) < const Duration(seconds: 20)) return;
+    _verifiedAt = now;
+    final epoch = _epoch;
+    bool alive() => ref.mounted && epoch == _epoch;
+    unawaited(
+      _verify(
+        conversationId,
+        _ownEdits,
+        alive,
+      ).then((_) => _fillPreviews(conversationId, alive)),
+    );
   }
 
   /// The first read leaves photo previews out so the first paint never waits

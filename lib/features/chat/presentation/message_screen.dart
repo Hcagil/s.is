@@ -208,8 +208,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   void _maybeLoadOlder() {
     if (!_scroll.hasClients) return;
     final position = _scroll.position;
-    _far.value = position.extentBefore > position.viewportDimension;
+    final far = position.extentBefore > position.viewportDimension;
     final messages = ref.read(messagesProvider.notifier);
+    // Back at the newest message after being away: check nothing was missed.
+    if (_far.value && !far) messages.verifyNewest();
+    _far.value = far;
     if (position.extentAfter < 600) unawaited(messages.loadOlder());
     if (position.extentBefore < 600) unawaited(messages.loadNewer());
   }

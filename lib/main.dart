@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/sis_app.dart';
 import 'core/runtime_config.dart';
+import 'core/startup_marks.dart';
 import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/file_last_session_store.dart';
 import 'features/auth/data/secure_session_storage.dart';
@@ -81,6 +82,7 @@ List<Override> platformOverrides(
 }
 
 Future<void> main() async {
+  StartupMarks.mark('main');
   WidgetsFlutterBinding.ensureInitialized();
   // The bundled fonts are OFL: their licences ship with them.
   LicenseRegistry.addLicense(() async* {
@@ -104,6 +106,7 @@ Future<void> main() async {
         localStorage: SecureSessionStorage(),
       ),
     );
+    StartupMarks.mark('supabase-ready');
     // Push is set up after the first frame (see below); everything that asks
     // the push source waits for it (DeferredPushSource).
     final pushReady = Completer<PushSource>();
@@ -111,6 +114,7 @@ Future<void> main() async {
     pushReady.future.ignore();
     final client = Supabase.instance.client;
     final attachmentCache = FileAttachmentCache();
+    StartupMarks.mark('run-app');
     runApp(
       ProviderScope(
         overrides: [
@@ -162,9 +166,10 @@ Future<void> main() async {
       ),
     );
     unawaited(
-      WidgetsBinding.instance.waitUntilFirstFrameRasterized.then(
-        (_) => _setUpPush(pushReady),
-      ),
+      WidgetsBinding.instance.waitUntilFirstFrameRasterized.then((_) {
+        StartupMarks.mark('first-frame');
+        return _setUpPush(pushReady);
+      }),
     );
   } catch (e) {
     // Malformed config or a broken secure store must show a reason, not a

@@ -620,7 +620,11 @@ void main() {
         t,
         () =>
             container.read(messagesProvider).value?.last.id == late.id &&
-            container.read(messagesProvider).value?.length == messagePageSize,
+            // 0.30.16: close restores the pre-jump live list (which may hold
+            // older pages already scrolled through) and merges the re-read
+            // into it -- at least the newest page, never the jumped window.
+            (container.read(messagesProvider).value?.length ?? 0) >=
+                messagePageSize,
         'the live newest page, ending with what arrived while searching',
       );
       await settle(t);

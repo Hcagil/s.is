@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -18,6 +19,11 @@ final class FileLastSessionStore implements LastSessionStore {
   /// Bumped by [clear]; a [save] in flight when it changes lost the race and
   /// must not resurrect what clear() just erased.
   int _epoch = 0;
+
+  /// The last save still in flight. Saves run one at a time in call order,
+  /// so two never share the .part file; with none in flight a save starts at
+  /// once.
+  Future<void>? _saving;
 
   Future<File> _file() async =>
       File('${(await _root()).path}/last_session.json');
@@ -43,8 +49,24 @@ final class FileLastSessionStore implements LastSessionStore {
   }
 
   @override
-  Future<void> save(LastSession session) async {
+  Future<void> save(LastSession session) {
+    // The clear epoch is taken at call time, so a clear() between the call
+    // and its turn still wins. _save never throws, so the chain never breaks.
     final epoch = _epoch;
+    final before = _saving;
+    final run = before == null
+        ? _save(session, epoch)
+        : before.then((_) => _save(session, epoch));
+    _saving = run;
+    unawaited(
+      run.whenComplete(() {
+        if (identical(_saving, run)) _saving = null;
+      }),
+    );
+    return run;
+  }
+
+  Future<void> _save(LastSession session, int epoch) async {
     try {
       final file = await _file();
       await file.parent.create(recursive: true);

@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
+import '../../../app/theme.dart';
 import '../../../core/failure.dart';
+import '../../../core/startup_marks.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../domain/message.dart';
@@ -15,10 +17,6 @@ import 'message_screen.dart';
 import 'new_chat_page.dart';
 import 'new_group_page.dart';
 import 'person_avatar.dart';
-
-/// Reason text for any failure, so a screen never shows a bare exception.
-String reasonOf(Object error) =>
-    error is Failure ? error.message : error.toString();
 
 /// The member's conversations, newest first, with a picker for starting one.
 class ConversationList extends ConsumerWidget {
@@ -38,9 +36,15 @@ class ConversationList extends ConsumerWidget {
     ) {
       if (next != null) showSisNotice(context, next.message, isError: true);
     });
+    // Debug timing only (label, never data): first build that has rows.
+    if (conversations.value?.isNotEmpty ?? false) {
+      StartupMarks.mark('list-rows');
+    }
+
     return Scaffold(
       body: Column(
         children: [
+          if (ref.watch(conversationListStaleProvider)) const _StaleNotice(),
           const _ListSearchField(),
           Expanded(
             child: !isSearchable(searchQuery)
@@ -58,7 +62,7 @@ class ConversationList extends ConsumerWidget {
                       ),
                     ),
                     AsyncError(:final error) => _Failed(
-                      reason: reasonOf(error),
+                      reason: failureReason(error),
                       onRetry: () =>
                           ref.read(conversationListProvider.notifier).refresh(),
                     ),
@@ -318,6 +322,42 @@ class _Failed extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// A small strip while the list on screen is the saved one because the last
+/// read failed; the list itself stays usable.
+class _StaleNotice extends StatelessWidget {
+  const _StaleNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SisBrand.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: DecoratedBox(
+        key: const ValueKey('chat-list-stale-notice'),
+        decoration: BoxDecoration(
+          color: t.surfaceHigh,
+          border: Border(bottom: BorderSide(color: t.line)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            children: [
+              Icon(Icons.cloud_off_outlined, size: 16, color: t.muted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Can't refresh your chats right now. Showing your saved chats.",
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// "Search messages" above the chat list. Typing (debounced by the

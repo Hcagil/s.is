@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/loading.dart';
+import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
-import 'conversation_list.dart';
 import 'picker_widgets.dart';
 
 /// Opens the new-group page; returns the name and members, or null on back.
@@ -107,7 +107,7 @@ class _NewGroupPageState extends ConsumerState<NewGroupPage> {
                 ],
               ),
               AsyncError(:final error) => ListTile(
-                title: Text(reasonOf(error)),
+                title: Text(failureReason(error)),
               ),
               _ => const Center(child: SisLoadingLogo(size: 40)),
             },

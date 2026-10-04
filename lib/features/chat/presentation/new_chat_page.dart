@@ -6,7 +6,6 @@ import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
-import 'conversation_list.dart';
 import 'person_avatar.dart';
 import 'picker_widgets.dart';
 
@@ -198,7 +197,7 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
                 ],
               ),
               AsyncError(:final error) => ListTile(
-                title: Text(reasonOf(error)),
+                title: Text(failureReason(error)),
               ),
               _ => const Center(child: SisLoadingLogo(size: 40)),
             },

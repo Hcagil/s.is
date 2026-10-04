@@ -1,6 +1,7 @@
 @Tags(['integration'])
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -262,7 +263,25 @@ void main() {
     ) async {
       // The dead client carries cleo's real session before the app asks.
       final c = await app(t, deadButSignedIn);
+      // 0.30.16: the stored list is up in the first frames, while the dead
+      // host's read is still being retried.
+      await t.pump();
+      await t.pump();
+      expect(
+        find.byKey(const ValueKey('conversation-stored-1')),
+        findsOneWidget,
+        reason: 'the stored list before the server read settles',
+      );
       final v = await settledList(t, c);
+      expect(
+        c.read(conversationListStaleProvider),
+        isTrue,
+        reason: 'the read failed',
+      );
+      expect(
+        find.byKey(const ValueKey('chat-list-stale-notice')),
+        findsOneWidget,
+      );
 
       expect(v.hasValue, isTrue, reason: '$v');
       expect([for (final x in v.value!) x.id], ['stored-1'], reason: '$v');
@@ -274,6 +293,50 @@ void main() {
       for (final needle in ['Exception', 'statusCode', 'errno']) {
         expect(find.textContaining(needle), findsNothing);
       }
+    });
+
+    testWidgets('a captive portal (an HTML 502 for every request, through '
+        'the real repository): the stored list stays, with the notice', (
+      t,
+    ) async {
+      final portal = (await t.runAsync(
+        () => HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+      ))!;
+      addTearDown(() => portal.close(force: true));
+      portal.listen((r) {
+        r.response
+          ..statusCode = 502
+          ..headers.contentType = ContentType.html
+          ..write('<html><body>Sign in to the hotel Wi-Fi</body></html>');
+        r.response.close();
+      });
+      final c = await app(t, (live) async {
+        final client = SupabaseClient(
+          'http://127.0.0.1:${portal.port}',
+          _key,
+          authOptions: const AuthClientOptions(
+            authFlowType: AuthFlowType.implicit,
+          ),
+        );
+        await client.auth.recoverSession(
+          jsonEncode(live.auth.currentSession!.toJson()),
+        );
+        return client;
+      });
+      final v = await settledList(t, c);
+
+      expect(v, isA<AsyncData<List<Conversation>>>(), reason: '$v');
+      expect([for (final x in v.value!) x.id], ['stored-1']);
+      expect(c.read(conversationListStaleProvider), isTrue);
+      expect(
+        find.byKey(const ValueKey('conversation-stored-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('chat-list-stale-notice')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('hotel'), findsNothing);
     });
 
     testWidgets('refused (DeniedFailure from the real repository): an '

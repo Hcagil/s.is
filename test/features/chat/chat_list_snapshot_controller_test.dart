@@ -570,67 +570,247 @@ void main() {
     });
   });
 
-  group(
-    '7. only a retryable network failure falls back to the stored list',
-    () {
-      Future<ProviderContainer> coldStart(Failure f) async {
-        await seedAlice();
-        chat.failWith = Err(f);
-        final c = app(const Allowed(alice));
-        await until(() => chat.calls.isNotEmpty, 'the read');
-        await until(() => settled(c) && list(c) is! AsyncLoading, 'settled');
-        await pause(100);
-        return c;
-      }
+  // 0.30.16 (offline start): the stored list stays on screen on ANY load
+  // failure but a refusal, with the stale flag up and the file untouched.
+  group('7. the stored list stays on any load failure but a refusal', () {
+    bool stale(ProviderContainer c) => c.read(conversationListStaleProvider);
+    ConversationListController ctl(ProviderContainer c) =>
+        c.read(conversationListProvider.notifier);
 
-      test('cold start, Denied: an error, not the stored list', () async {
-        final c = await coldStart(const DeniedFailure());
-        expect(list(c).hasError, isTrue, reason: '${list(c)}');
-        expect(list(c).error, isA<DeniedFailure>());
-      });
+    Future<ProviderContainer> coldStart(Failure f, {bool seed = true}) async {
+      if (seed) await seedAlice();
+      final before = store.raw;
+      chat.failWith = Err(f);
+      final c = app(const Allowed(alice));
+      await until(() => chat.calls.isNotEmpty, 'the read');
+      await until(() => settled(c) && list(c) is! AsyncLoading, 'settled');
+      await pause(100);
+      expect(store.raw, before, reason: 'fixture: nothing written yet');
+      return c;
+    }
 
-      test('cold start, a non-retryable NetworkFailure: an error', () async {
-        final c = await coldStart(const NetworkFailure('refused'));
-        expect(list(c).hasError, isTrue, reason: '${list(c)}');
-        expect(list(c).error, isA<NetworkFailure>());
-      });
+    Future<void> tryRefresh(ProviderContainer c) async {
+      try {
+        await ctl(c).refresh();
+      } catch (_) {}
+      await until(() => settled(c), 'settled');
+      await pause(100);
+    }
 
-      test('cold start, a retryable NetworkFailure: the stored list', () async {
-        final c = await coldStart(
-          const NetworkFailure('offline', retryable: true),
+    for (final (name, failure) in [
+      (
+        'a retryable NetworkFailure',
+        const NetworkFailure('o', retryable: true),
+      ),
+      ('a non-retryable NetworkFailure', const NetworkFailure('refused')),
+      ('a ProviderFailure', const ProviderFailure('boom')),
+    ]) {
+      test('cold start, $name: the stored list, stale, the file not '
+          'rewritten', () async {
+        final c = await coldStart(failure);
+        final raw = store.raw;
+        expect(
+          list(c),
+          isA<AsyncData<List<Conversation>>>(),
+          reason: '${list(c)}',
         );
-        expect(list(c).hasError, isFalse, reason: '${list(c)}');
         expect(idsOf(list(c)), aIds);
+        expect(stale(c), isTrue);
+        await pastDebounce();
+        expect(store.saves, isEmpty, reason: '${store.log}');
+        expect(store.raw, raw);
       });
 
-      test('refresh, Denied, with a stored list: an error', () async {
+      test('refresh, $name, a list on screen: loading, then the same list, '
+          'stale, not saved', () async {
         final c = await aliceLoaded();
-        chat.failWith = const Err(DeniedFailure());
-        try {
-          await c.read(conversationListProvider.notifier).refresh();
-        } catch (_) {}
-        await until(() => settled(c), 'settled');
+        await pastDebounce();
+        final saves = store.saves.length;
+        expect(stale(c), isFalse, reason: 'fixture');
+        states.clear();
+        chat.failWith = Err(failure);
+        await tryRefresh(c);
+        expect(states.first.isLoading, isTrue, reason: '$states');
+        expect(
+          list(c),
+          isA<AsyncData<List<Conversation>>>(),
+          reason: '${list(c)}',
+        );
+        expect(idsOf(list(c)), aIds);
+        expect(stale(c), isTrue);
+        await pastDebounce();
+        expect(store.saves, hasLength(saves), reason: '${store.log}');
+      });
+    }
+
+    test('cold start, Denied, with a stored list: an error', () async {
+      final c = await coldStart(const DeniedFailure());
+      expect(list(c).hasError, isTrue, reason: '${list(c)}');
+      expect(list(c).error, isA<DeniedFailure>());
+    });
+
+    test('cold start, offline, no stored list: an error', () async {
+      final c = await coldStart(
+        const NetworkFailure('o', retryable: true),
+        seed: false,
+      );
+      expect(list(c).hasError, isTrue, reason: '${list(c)}');
+      expect(list(c).error, isA<NetworkFailure>());
+    });
+
+    test('refresh, Denied, a list on screen: an error, not stale', () async {
+      final c = await coldStart(const NetworkFailure('o', retryable: true));
+      expect(stale(c), isTrue, reason: 'fixture');
+      chat.failWith = const Err(DeniedFailure());
+      await tryRefresh(c);
+      expect(list(c).hasError, isTrue, reason: '${list(c)}');
+      expect(list(c).error, isA<DeniedFailure>());
+      expect(stale(c), isFalse);
+    });
+
+    test('refresh, offline, no list on screen: an error, not stale', () async {
+      final c = await coldStart(
+        const NetworkFailure('o', retryable: true),
+        seed: false,
+      );
+      expect(list(c).hasError, isTrue, reason: 'fixture');
+      await tryRefresh(c);
+      expect(list(c).hasError, isTrue, reason: '${list(c)}');
+      expect(stale(c), isFalse);
+    });
+
+    test('a successful refresh: the new list, not stale, saved', () async {
+      final c = await coldStart(const NetworkFailure('o', retryable: true));
+      chat.failWith = null;
+      chat.byOwner[alice.userId] = [conv('a-3', 'new', 9)];
+      await tryRefresh(c);
+      expect(idsOf(list(c)), ['a-3']);
+      expect(stale(c), isFalse);
+      await until(
+        () => store.saves.contains('${alice.userId}:a-3'),
+        'the new list saved',
+      );
+    });
+
+    for (final (name, read) in [
+      ('reloadQuietly', (ConversationListController n) => n.reloadQuietly()),
+      ('the resume catch-up', (ConversationListController n) => n.catchUp()),
+    ]) {
+      test('a later successful $name clears the flag', () async {
+        final c = await coldStart(const NetworkFailure('o', retryable: true));
+        expect(stale(c), isTrue, reason: 'fixture');
+        chat.failWith = null;
+        chat.byOwner[alice.userId] = [conv('a-3', 'new', 9)];
+        await read(ctl(c));
+        await until(() => idsOf(list(c)).join() == 'a-3', 'the new list');
+        expect(stale(c), isFalse);
+      });
+    }
+
+    test('a failed quiet reload keeps the flag up', () async {
+      final c = await coldStart(const NetworkFailure('o', retryable: true));
+      await ctl(c).reloadQuietly();
+      await pause(100);
+      expect(idsOf(list(c)), aIds);
+      expect(stale(c), isTrue);
+    });
+
+    // The flag means "the list on screen is the saved one"; with no list on
+    // screen there is nothing saved being shown (the provider's own doc, and
+    // refresh's "no list on screen: flag false").
+    for (final (name, read) in [
+      ('reloadQuietly', (ConversationListController n) => n.reloadQuietly()),
+      ('the resume catch-up', (ConversationListController n) => n.catchUp()),
+    ]) {
+      test('a failed $name with no list on screen: not stale', () async {
+        final c = await coldStart(
+          const NetworkFailure('o', retryable: true),
+          seed: false,
+        );
+        expect(list(c).hasError, isTrue, reason: 'fixture');
+        await read(ctl(c));
         await pause(100);
         expect(list(c).hasError, isTrue, reason: '${list(c)}');
-        expect(list(c).error, isA<DeniedFailure>());
+        expect(stale(c), isFalse);
       });
+    }
 
-      test('refresh, a retryable NetworkFailure: the stored list', () async {
-        final c = await aliceLoaded();
-        chat.failWith = const Err(NetworkFailure('offline', retryable: true));
-        try {
-          await c.read(conversationListProvider.notifier).refresh();
-        } catch (_) {}
-        await until(() => settled(c), 'settled');
-        await pause(100);
-        // refresh() is the explicit retry: its failure is reported (the
-        // controller's own doc), but the list it falls back to is the
-        // stored one, not nothing.
-        expect(list(c).hasValue, isTrue, reason: '${list(c)}');
-        expect(idsOf(list(c)), aIds);
-      });
-    },
-  );
+    test('another account does not inherit the flag', () async {
+      final c = await coldStart(const NetworkFailure('o', retryable: true));
+      expect(stale(c), isTrue, reason: 'fixture');
+      chat.failWith = null;
+      chat.holding = true; // B's first read stays in flight
+      session(c, const SignedOut());
+      await pause();
+      session(c, const Allowed(bora));
+      await until(
+        () => chat.calls.any((x) => x.who == bora.userId),
+        "B's first read",
+      );
+      expect(stale(c), isFalse, reason: "B's load in flight");
+      chat.answerAll();
+      await until(() => idsOf(list(c)).join() == 'b-1', "B's list");
+      expect(stale(c), isFalse);
+    });
+  });
+
+  // 0.30.16: a build replaced by a newer one (A's, after the switch to B)
+  // never writes the stale flag, true or false; B's flag is B's alone.
+  group("12. A's late build never sets B's stale flag", () {
+    bool stale(ProviderContainer c) => c.read(conversationListStaleProvider);
+    // The newest read asked as [who]: the read of that owner's own build
+    // (a build before the session settled may have asked first).
+    int readOf(String who) => chat.calls.lastIndexWhere((x) => x.who == who);
+
+    /// A's cold start over A's stored list, its server read held; then
+    /// straight to B, whose first read is held too.
+    Future<ProviderContainer> aHeldThenB() async {
+      await seedAlice();
+      chat.holding = true;
+      final c = app(const Allowed(alice));
+      await until(() => readOf(alice.userId) >= 0, "A's read");
+      await until(() => idsOf(list(c)).join() == aIds.join(), "A's stored");
+      session(c, const Allowed(bora));
+      await until(() => readOf(bora.userId) >= 0, "B's read");
+      return c;
+    }
+
+    test("A's late build failing does not raise B's flag", () async {
+      final c = await aHeldThenB();
+      chat.answer(readOf(bora.userId));
+      await until(() => idsOf(list(c)).join() == 'b-1', "B's list");
+      expect(stale(c), isFalse, reason: 'fixture');
+      // A's build would fall back to A's stored list and raise the flag.
+      chat.answer(
+        readOf(alice.userId),
+        const Err(NetworkFailure('o', retryable: true)),
+      );
+      await pause(100);
+      expect(stale(c), isFalse);
+      expect(idsOf(list(c)), ['b-1']);
+    });
+
+    test("A's late build succeeding does not clear B's flag", () async {
+      final c = await aHeldThenB();
+      chat.answer(readOf(bora.userId));
+      await until(() => idsOf(list(c)).join() == 'b-1', "B's list");
+      // B's own refresh fails with B's list on screen: B's flag is up.
+      final before = chat.calls.length;
+      final refreshing = c.read(conversationListProvider.notifier).refresh();
+      await until(() => chat.calls.length > before, "B's refresh read");
+      chat.answer(before, const Err(NetworkFailure('o', retryable: true)));
+      try {
+        await refreshing;
+      } catch (_) {}
+      await until(() => settled(c), 'settled');
+      expect(stale(c), isTrue, reason: "fixture: B's failed refresh");
+      // A's build would clear it on success.
+      chat.answer(readOf(alice.userId));
+      await pause(100);
+      expect(stale(c), isTrue);
+      expect(idsOf(list(c)), ['b-1']);
+    });
+  });
 
   group('8. an owner swap mid-refresh never saves the result under the new '
       'owner', () {

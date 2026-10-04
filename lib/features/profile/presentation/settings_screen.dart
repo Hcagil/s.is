@@ -82,10 +82,7 @@ class _WithProfile extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    error is Failure ? error.message : '$error',
-                    textAlign: TextAlign.center,
-                  ),
+                  Text(failureReason(error), textAlign: TextAlign.center),
                   const SizedBox(height: 16),
                   OutlinedButton(
                     onPressed: () =>

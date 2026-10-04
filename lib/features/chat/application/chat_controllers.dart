@@ -202,6 +202,22 @@ final resumeCatchUpProvider = Provider<void Function()>((ref) {
 /// Retries are off; [refresh] is the explicit way back.
 Duration? _never(int retryCount, Object error) => null;
 
+/// True while the chat list on screen is the stored or last-read one because
+/// a load failed; drives the small notice above the list (never an error box).
+final conversationListStaleProvider =
+    NotifierProvider<ConversationListStale, bool>(ConversationListStale.new);
+
+class ConversationListStale extends Notifier<bool> {
+  @override
+  bool build() {
+    // Another account never inherits the last one's notice.
+    ref.watch(currentUserIdProvider);
+    return false;
+  }
+
+  void set(bool stale) => state = stale;
+}
+
 final conversationListProvider =
     AsyncNotifierProvider<ConversationListController, List<Conversation>>(
       ConversationListController.new,
@@ -353,16 +369,18 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       // means one was started during the load: read again rather than drop it.
       if (unknown) list = await _load();
     } catch (e) {
-      // Offline with a cached snapshot already shown: the list stays usable
-      // instead of flipping to an error screen over data already on the
-      // member's own phone. Anything that is not a retryable NetworkFailure
-      // is a real refusal (denied, or the server answering "no"), not a
-      // connectivity blip -- it is shown, not hidden behind stale data.
-      if (cached == null || e is! NetworkFailure || !e.retryable) rethrow;
+      // A stored list already shown stays on every load error but a refusal
+      // (DeniedFailure; the session controller handles a revoked member):
+      // the member's own data beats an error box, and a small notice says it
+      // is old.
+      if (cached == null || e is DeniedFailure) rethrow;
       loaded = true;
       list = cached;
+      if (alive) _setStale(true);
+      return list;
     }
     if (ownerId != null && alive) _saveSnapshot(ownerId, list);
+    if (alive) _setStale(false);
     return list;
   }
 
@@ -479,13 +497,29 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     };
   }
 
+  /// Sets the stale notice; a no-op after dispose.
+  void _setStale(bool stale) {
+    if (ref.mounted) {
+      ref.read(conversationListStaleProvider.notifier).set(stale);
+    }
+  }
+
   Future<void> refresh() async {
     final ownerId = ref.read(currentUserIdProvider);
+    final shown = state.asData?.value;
     state = const AsyncLoading();
     final next = await AsyncValue.guard(_load);
     if (!ref.mounted) return;
     if (ref.read(currentUserIdProvider) != ownerId) return;
+    // A list already on screen stays on every failure but a refusal; the small
+    // notice says it is old. With nothing on screen the error box reports it.
+    if (next is AsyncError && shown != null && next.error is! DeniedFailure) {
+      state = AsyncData(shown);
+      _setStale(true);
+      return;
+    }
     state = next;
+    _setStale(false);
     _saveCurrentIfData();
   }
 
@@ -515,13 +549,15 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   /// Re-reads without showing a spinner: the list on screen stays while the
   /// new one loads. A failed background re-read keeps the list as it was
   /// rather than replacing something correct with an error the member did
-  /// not ask for; the explicit [refresh] still reports failures.
+  /// not ask for; the small notice says it is old, and only while a list is
+  /// on screen.
   Future<void> reloadQuietly() async {
     final ownerId = ref.read(currentUserIdProvider);
     final next = await AsyncValue.guard(_load);
     if (!ref.mounted) return;
     if (ref.read(currentUserIdProvider) != ownerId) return;
     if (next is AsyncData<List<Conversation>>) state = next;
+    _setStale(next is AsyncError && state is AsyncData);
     _saveCurrentIfData();
   }
 
@@ -732,6 +768,14 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// came back shorter than [messagePageSize]).
   bool _noOlder = false;
   bool _loadingOlder = false;
+  bool _loadingNewer = false;
+  int _catchUpRetries = 0;
+  static const _maxCatchUpRetries = 5;
+  DateTime _verifiedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// The live list shown just before the first [jumpToAround] of a jump run:
+  /// [returnToLive] shows it at once, without waiting for the network.
+  List<Message>? _liveBeforeJump;
 
   /// Photo messages whose preview was already asked for in this build, so a
   /// message that has none is not asked again and again.
@@ -794,6 +838,8 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       });
     }
     _loadingOlder = false;
+    _loadingNewer = false;
+    _liveBeforeJump = null;
     _noOlder = false;
     _previewAsked.clear();
     // What this chat already shows (its remembered newest page, or what a
@@ -867,80 +913,112 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     });
     final (joined, read) = await (joining, repo.messages(conversationId)).wait;
     if (!alive) return const []; // replaced or closed mid-open: drop it all
-    if (joined case Err(:final failure)) throw failure;
-
-    switch (read) {
-      case Err(:final failure):
-        throw failure;
-      case Ok(:final value):
-        loaded = true;
-        final known = {
-          for (final m in shownBefore)
-            if (m.attachmentPreview != null) m.id: m.attachmentPreview!,
-        };
-        final merged = [
-          for (final m in value)
-            m.attachmentPreview == null && known[m.id] != null
-                ? m.withPreview(known[m.id])
-                : m,
-        ];
-        _noOlder = value.length < messagePageSize;
-        // Older rows already loaded stay (a scroll position deep in history
-        // must not be cut off by a catch-up) -- but only when the new page
-        // overlaps them, so the history never has a gap.
-        final inPage = {for (final m in value) m.id};
-        if (value.isNotEmpty && shownBefore.any((m) => inPage.contains(m.id))) {
-          merged.addAll([
-            for (final m in shownBefore)
-              if (!m.isPending &&
-                  !inPage.contains(m.id) &&
-                  m.createdAt.isBefore(value.first.createdAt))
-                m,
-          ]);
-        }
-        for (final message in buffered) {
-          if (message.conversationId != conversationId) continue;
-          final i = merged.indexWhere((m) => m.id == message.id);
-          if (i < 0) {
-            // An edit or delete of a row older than the page is not for this
-            // list: ignored, never added out of place.
-            if (value.isNotEmpty &&
-                message.createdAt.isBefore(value.first.createdAt)) {
-              continue;
-            }
-            merged.add(message);
-          } else if (message.isDeleted || message.editedAt != null) {
-            merged[i] = message;
-          }
-        }
-        merged.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-        // Vanished before this screen opened: as if never sent. One that
-        // vanishes while open stays long enough to animate away.
-        final shown = [
-          for (final m in merged)
-            if (m.deletion != MessageDeletion.vanished) m,
-        ];
-        final pending = ref.read(sendQueueProvider)[conversationId] ?? const [];
-        // A later turn, so the list below is already the state when it runs.
-        final edits = _ownEdits;
-        // Previews (one batched read) start at once, beside the verify read;
-        // verify may add rows, so they are looked at again after it.
-        unawaited(
-          Future(() {
-            unawaited(_fillPreviews(conversationId, () => alive));
-            return _verify(
-              conversationId,
-              edits,
-              () => alive,
-            ).then((_) => _fillPreviews(conversationId, () => alive));
-          }),
-        );
-        return [
-          ...shown,
-          for (final p in pending)
-            if (!shown.any((m) => m.id == p.id)) p,
-        ];
+    // A catch-up that cannot reach the server (resume while offline) keeps
+    // the list on screen and tries again a little later; only a first open,
+    // with nothing to show, is an error. A refusal is never retried.
+    final failed = switch ((joined, read)) {
+      (Err(:final failure), _) => failure,
+      (_, Err(:final failure)) => failure,
+      _ => null,
+    };
+    if (failed != null) {
+      if (failed is DeniedFailure ||
+          shownBefore.isEmpty ||
+          _catchUpRetries >= _maxCatchUpRetries) {
+        throw failed;
+      }
+      _catchUpRetries++;
+      unawaited(
+        Future<void>.delayed(const Duration(seconds: 5), () {
+          if (alive && ref.mounted) ref.invalidateSelf();
+        }),
+      );
+      return shownBefore;
     }
+    _catchUpRetries = 0;
+
+    // Both answered Ok here (a failure returned or threw above).
+    final value = (read as Ok<List<Message>>).value;
+    loaded = true;
+    final known = {
+      for (final m in shownBefore)
+        if (m.attachmentPreview != null) m.id: m.attachmentPreview!,
+    };
+    final merged = [
+      for (final m in value)
+        m.attachmentPreview == null && known[m.id] != null
+            ? m.withPreview(known[m.id])
+            : m,
+    ];
+    _noOlder = value.length < messagePageSize;
+    // Older rows already loaded stay (a scroll position deep in history
+    // must not be cut off by a catch-up) -- but only when the new page
+    // overlaps them, so the history never has a gap.
+    final inPage = {for (final m in value) m.id};
+    if (value.isNotEmpty && shownBefore.any((m) => inPage.contains(m.id))) {
+      merged.addAll([
+        for (final m in shownBefore)
+          if (!m.isPending &&
+              !inPage.contains(m.id) &&
+              m.createdAt.isBefore(value.first.createdAt))
+            m,
+      ]);
+    }
+    for (final message in buffered) {
+      if (message.conversationId != conversationId) continue;
+      final i = merged.indexWhere((m) => m.id == message.id);
+      if (i < 0) {
+        // An edit or delete of a row older than the page is not for this
+        // list: ignored, never added out of place.
+        if (value.isNotEmpty &&
+            message.createdAt.isBefore(value.first.createdAt)) {
+          continue;
+        }
+        merged.add(message);
+      } else if (message.isDeleted || message.editedAt != null) {
+        merged[i] = message;
+      }
+    }
+    merged.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    // Vanished before this screen opened: as if never sent. One that
+    // vanishes while open stays long enough to animate away.
+    final shown = [
+      for (final m in merged)
+        if (m.deletion != MessageDeletion.vanished) m,
+    ];
+    final pending = ref.read(sendQueueProvider)[conversationId] ?? const [];
+    // A later turn, so the list below is already the state when it runs.
+    final edits = _ownEdits;
+    // Previews (one batched read) start at once, beside the verify read;
+    // verify may add rows, so they are looked at again after it.
+    unawaited(
+      Future(() {
+        unawaited(_fillPreviews(conversationId, () => alive));
+        return _verify(
+          conversationId,
+          edits,
+          () => alive,
+        ).then((_) => _fillPreviews(conversationId, () => alive));
+      }),
+    );
+    // My own photos still in the air (not in the send queue, which holds
+    // text only) stay across this re-read, e.g. the one returnToLive
+    // starts; a stored copy of one that already landed replaces it.
+    final photos = [
+      for (final m in state.value ?? const <Message>[])
+        if (m.conversationId == conversationId &&
+            m.localImage != null &&
+            m.attachmentPath == null &&
+            !m.sending &&
+            !shown.any((s) => s.id == m.id || m.isPendingOf(s)))
+          m,
+    ];
+    return [
+      ...shown,
+      for (final p in pending)
+        if (!shown.any((m) => m.id == p.id)) p,
+      ...photos,
+    ];
   }
 
   /// The app is visible again after being backgrounded (or a notification
@@ -951,6 +1029,32 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   void catchUp() {
     if (_jumped || state.isLoading) return;
     ref.invalidateSelf();
+  }
+
+  /// The member is back at the newest message: a Realtime row missed while the
+  /// connection was down (no resume event) is read in by _verify. At most once
+  /// per 20 s, never on a search window, never while a build is loading.
+  void verifyNewest() {
+    final conversationId = ref.read(openConversationProvider);
+    if (conversationId == null ||
+        _jumped ||
+        state.isLoading ||
+        state.hasError ||
+        (state.value?.isEmpty ?? true)) {
+      return;
+    }
+    final now = DateTime.now();
+    if (now.difference(_verifiedAt) < const Duration(seconds: 20)) return;
+    _verifiedAt = now;
+    final epoch = _epoch;
+    bool alive() => ref.mounted && epoch == _epoch;
+    unawaited(
+      _verify(
+        conversationId,
+        _ownEdits,
+        alive,
+      ).then((_) => _fillPreviews(conversationId, alive)),
+    );
   }
 
   /// The first read leaves photo previews out so the first paint never waits
@@ -1036,6 +1140,57 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     state = AsyncData([...older, ...now]);
   }
 
+  /// The mirror of [loadOlder] for a jumped window: reads the page after the
+  /// newest shown message and appends it, so scrolling down always reaches the
+  /// live end. A page shorter than [messagePageSize] is the live end: the
+  /// window becomes the live list again (Realtime appends resume) and one
+  /// verify read closes any gap. No-op unless [isJumped]; one read at a time;
+  /// a failure is silent, the next scroll tries again.
+  Future<void> loadNewer() async {
+    final conversationId = ref.read(openConversationProvider);
+    final current = state.value;
+    if (!_jumped ||
+        conversationId == null ||
+        current == null ||
+        state.isLoading ||
+        _loadingNewer) {
+      return;
+    }
+    final newest = current.where((m) => !m.isPending).lastOrNull;
+    if (newest == null) return;
+    final epoch = _epoch;
+    _loadingNewer = true;
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .messagesAround(conversationId, newest);
+    if (!ref.mounted || epoch != _epoch) return;
+    _loadingNewer = false;
+    final now = state.value;
+    if (!_jumped || result is! Ok<List<Message>> || now == null) return;
+    final shown = {for (final m in now) m.id};
+    final fresh = [
+      for (final m in result.value)
+        if (!shown.contains(m.id) && !m.createdAt.isBefore(newest.createdAt)) m,
+    ];
+    // Counted before dropping vanished rows: a short page is the live end.
+    final live = fresh.length < messagePageSize;
+    final newer = [
+      for (final m in fresh)
+        if (m.deletion != MessageDeletion.vanished) m,
+    ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    if (live) {
+      _jumped = false;
+      _liveBeforeJump = null;
+    }
+    if (newer.isNotEmpty || live) state = AsyncData([...now, ...newer]);
+    if (live) {
+      final edits = _ownEdits;
+      unawaited(
+        _verify(conversationId, edits, () => ref.mounted && epoch == _epoch),
+      );
+    }
+  }
+
   /// The first read can be served before the join took effect on the server:
   /// a message sent in between is in neither it nor the stream. A second read,
   /// after both, closes that window. Merged by id, so nothing is shown twice;
@@ -1095,6 +1250,9 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// it was already upserted to the final, non-pending message above, and
   /// must stay.
   void _onQueueChanged(List<Message>? previous, List<Message> next) {
+    // Sending from a jumped window goes back to live first, so the sent
+    // message shows at the bottom without a gap.
+    if (_jumped && next.isNotEmpty) returnToLive();
     final current = state.value;
     if (current == null) return;
     var list = current;
@@ -1228,6 +1386,9 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   }
 
   void _append(Message message) {
+    // A jumped window has no live end: a live row is read when paging down
+    // (loadNewer); appending it here would leave a gap.
+    if (_jumped) return;
     final current = state.value;
     if (current == null) return;
     final i = current.indexWhere((m) => m.id == message.id);
@@ -1284,6 +1445,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       localImage: image.bytes,
       attachmentPreview: image.preview,
     );
+    returnToLive(); // no-op unless jumped; see _onQueueChanged
     _append(pending);
     final result = await ref
         .read(chatRepositoryProvider)
@@ -1397,10 +1559,12 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         when ref.mounted &&
             ref.read(openConversationProvider) == conversationId &&
             _requestedAnchorId == anchor.id) {
+      if (!_jumped) _liveBeforeJump = state.value;
       _jumped = true;
       // A page read for the old list must not land in this window.
       _epoch++;
       _loadingOlder = false;
+      _loadingNewer = false;
       ref.read(olderLoadingProvider.notifier).set(false);
       _noOlder = false;
       state = AsyncData(value);
@@ -1411,12 +1575,19 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     };
   }
 
-  /// Back to the live, newest window -- undoes [jumpToAround]. A no-op when
-  /// nothing was jumped.
+  /// Back to the live, newest window -- undoes [jumpToAround]. The live list
+  /// shown before the jump is back at once (no network wait) and the re-read
+  /// heals it. A no-op when nothing was jumped.
   void returnToLive() {
     if (!_jumped) return;
     _jumped = false;
-    _fromJump = true;
+    final live = _liveBeforeJump;
+    _liveBeforeJump = null;
+    if (live != null) {
+      state = AsyncData(live);
+    } else {
+      _fromJump = true;
+    }
     ref.invalidateSelf();
   }
 }

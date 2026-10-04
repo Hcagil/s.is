@@ -151,6 +151,10 @@
 --     (each starts from its stored last session and is then revoked one way:
 --      allowlist, a second phone, offline, a deleted auth session; csz is
 --      the chat partner)
+--   sda/sdb        test/integration/scroll_down_integration_test.dart
+--     (sdb writes a 160-message chat to sda; sda pages up, jumps to an old
+--      message and pages back down to the newest; sdb writes while sda is
+--      scrolled up or her Realtime is gone)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -264,5 +268,7 @@ insert into app_private.allowlist(email) values
   ('csc@integration.test'),
   ('csd@integration.test'),
   ('cse@integration.test'),
-  ('csz@integration.test')
+  ('csz@integration.test'),
+  ('sda@integration.test'),
+  ('sdb@integration.test')
 on conflict do nothing;

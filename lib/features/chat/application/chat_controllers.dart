@@ -506,13 +506,19 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
 
   Future<void> refresh() async {
     final ownerId = ref.read(currentUserIdProvider);
+    final shown = state.asData?.value;
     state = const AsyncLoading();
     final next = await AsyncValue.guard(_load);
     if (!ref.mounted) return;
     if (ref.read(currentUserIdProvider) != ownerId) return;
+    // A list already on screen stays on every failure but a refusal; the small
+    // notice says it is old. With nothing on screen the error box reports it.
+    if (next is AsyncError && shown != null && next.error is! DeniedFailure) {
+      state = AsyncData(shown);
+      _setStale(true);
+      return;
+    }
     state = next;
-    // An explicit refresh still reports its failure (the error box), so the
-    // saved-list notice has nothing to say here.
     _setStale(false);
     _saveCurrentIfData();
   }

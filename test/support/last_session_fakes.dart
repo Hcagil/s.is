@@ -11,6 +11,8 @@ import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/auth_repository.dart';
 import 'package:sis/features/auth/domain/last_session.dart';
 import 'package:sis/features/auth/domain/member.dart';
+import 'package:sis/features/chat/domain/chat_list_snapshot_store.dart';
+import 'package:sis/features/chat/domain/conversation.dart';
 
 /// The marker file, in memory. Every call takes a turn of the event loop, as
 /// disk does; [holdClear] keeps a clear() in flight so a test can see what the
@@ -157,3 +159,31 @@ LastSession marker({
   onboarded: onboarded,
   confirmedAt: DateTime.now().toUtc().subtract(age),
 );
+
+/// chat_list.json, in memory, per owner as the real file is.
+class MemorySnapshotStore implements ChatListSnapshotStore {
+  MemorySnapshotStore({this.owner, this.list});
+  String? owner;
+  List<Conversation>? list;
+  int clears = 0;
+
+  @override
+  Future<List<Conversation>?> load(String ownerId) async {
+    await Future<void>.delayed(Duration.zero);
+    return ownerId == owner ? list : null;
+  }
+
+  @override
+  Future<void> save(String ownerId, List<Conversation> conversations) async {
+    await Future<void>.delayed(Duration.zero);
+    owner = ownerId;
+    list = conversations;
+  }
+
+  @override
+  Future<void> clear() async {
+    clears++;
+    owner = null;
+    list = null;
+  }
+}

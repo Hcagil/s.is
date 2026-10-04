@@ -549,14 +549,15 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   /// Re-reads without showing a spinner: the list on screen stays while the
   /// new one loads. A failed background re-read keeps the list as it was
   /// rather than replacing something correct with an error the member did
-  /// not ask for; the explicit [refresh] still reports failures.
+  /// not ask for; the small notice says it is old, and only while a list is
+  /// on screen.
   Future<void> reloadQuietly() async {
     final ownerId = ref.read(currentUserIdProvider);
     final next = await AsyncValue.guard(_load);
     if (!ref.mounted) return;
     if (ref.read(currentUserIdProvider) != ownerId) return;
     if (next is AsyncData<List<Conversation>>) state = next;
-    _setStale(next is AsyncError);
+    _setStale(next is AsyncError && state is AsyncData);
     _saveCurrentIfData();
   }
 

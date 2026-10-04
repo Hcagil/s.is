@@ -711,6 +711,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// window; false once live (including before any jump at all).
   bool get isJumped => _jumped;
 
+  /// Set by [returnToLive]: the next build carries nothing over from the
+  /// jumped window (it is not contiguous with the live page).
+  bool _fromJump = false;
+
   /// The anchor id of the most recent [jumpToAround] call -- an answer for
   /// any earlier one is dropped, even if it arrives later.
   String? _requestedAnchorId;
@@ -782,12 +786,25 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     }
     if (conversationId == null) return const [];
     _epoch++;
+    if (_loadingOlder) {
+      // The page in flight belongs to the replaced build, which will not clear
+      // the loader; a provider may not be written during build, so a turn later.
+      Future.microtask(() {
+        if (ref.mounted) ref.read(olderLoadingProvider.notifier).set(false);
+      });
+    }
     _loadingOlder = false;
     _noOlder = false;
     _previewAsked.clear();
     // What this chat already shows (its remembered newest page, or what a
     // catch-up rebuild keeps): previews and older rows outlive the new read.
-    final shownBefore = state.value ?? const <Message>[];
+    final fromJump = wasJumped || _fromJump;
+    _fromJump = false;
+    // A jumped window is not contiguous with the live page: none of it is
+    // carried over (its previews are read again).
+    final shownBefore = fromJump
+        ? const <Message>[]
+        : (state.value ?? const <Message>[]);
 
     final repo = ref.read(chatRepositoryProvider);
     final buffered = <Message>[];
@@ -999,8 +1016,8 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         .read(chatRepositoryProvider)
         .messagesAround(conversationId, oldest);
     if (!ref.mounted) return;
-    ref.read(olderLoadingProvider.notifier).set(false);
     if (epoch != _epoch) return; // rebuilt meanwhile: the new build owns this
+    ref.read(olderLoadingProvider.notifier).set(false);
     _loadingOlder = false;
     final now = state.value;
     if (result is! Ok<List<Message>> || now == null) return;
@@ -1384,6 +1401,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       // A page read for the old list must not land in this window.
       _epoch++;
       _loadingOlder = false;
+      ref.read(olderLoadingProvider.notifier).set(false);
       _noOlder = false;
       state = AsyncData(value);
     }
@@ -1398,6 +1416,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   void returnToLive() {
     if (!_jumped) return;
     _jumped = false;
+    _fromJump = true;
     ref.invalidateSelf();
   }
 }

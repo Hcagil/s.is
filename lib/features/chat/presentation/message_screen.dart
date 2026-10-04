@@ -200,16 +200,52 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     _scroll.addListener(_maybeLoadOlder);
   }
 
-  /// Near the top of the loaded history (the list is reversed, so "after" is
-  /// older): asks for the next older page. Cheap when nothing is left.
+  /// The list is reversed: "after" is older, "before" is newer. Near the top
+  /// of what is loaded, asks for the next older page; near the bottom of a
+  /// jumped window, for the next newer page (see loadNewer). Cheap when
+  /// nothing is left. Also keeps [_far] -- whether the newest message is more
+  /// than a screen away -- which shows the jump-to-latest button.
   void _maybeLoadOlder() {
-    if (_scroll.hasClients && _scroll.position.extentAfter < 600) {
-      unawaited(ref.read(messagesProvider.notifier).loadOlder());
+    if (!_scroll.hasClients) return;
+    final position = _scroll.position;
+    _far.value = position.extentBefore > position.viewportDimension;
+    final messages = ref.read(messagesProvider.notifier);
+    if (position.extentAfter < 600) unawaited(messages.loadOlder());
+    if (position.extentBefore < 600) unawaited(messages.loadNewer());
+  }
+
+  /// True while the list is more than a screen above its newest message.
+  final _far = ValueNotifier<bool>(false);
+
+  /// Jump to the newest message. Nothing waits on the network: a jumped
+  /// window is swapped for the live list synchronously (returnToLive), and
+  /// the scroll starts in the same frame as the tap.
+  void _toLatest() {
+    _generation++; // stops any search scroll still converging
+    final messages = ref.read(messagesProvider.notifier);
+    final jumped = messages.isJumped;
+    if (jumped) messages.returnToLive();
+    if (!_scroll.hasClients) return;
+    final position = _scroll.position;
+    if (jumped) {
+      position.jumpTo(0);
+      return;
     }
+    // Far away: skip most of the distance, glide the last two screens.
+    final near = position.viewportDimension * 2;
+    if (position.pixels > near) position.jumpTo(near);
+    unawaited(
+      position.animateTo(
+        0,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      ),
+    );
   }
 
   @override
   void dispose() {
+    _far.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -575,125 +611,148 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-                  child: switch (messages) {
-                    AsyncData() when timeline.isEmpty => const Center(
-                      child: Text('No messages yet. Say something.'),
-                    ),
-                    _ when messages is! AsyncError && timeline.isNotEmpty =>
-                      ListView.builder(
-                        controller: _scroll,
-                        // Newest at the bottom, which is where the composer is.
-                        reverse: true,
-                        // Generous on purpose: a jump-to-hit needs the target
-                        // bubble built even when it is far from the current
-                        // scroll offset (see _scrollTo).
-                        scrollCacheExtent: ScrollCacheExtent.pixels(2000),
-                        // One extra row at the very top while an older page is
-                        // being read.
-                        itemCount: timeline.length + (loadingOlder ? 1 : 0),
-                        itemBuilder: (context, i) {
-                          if (i == timeline.length) {
-                            return const Padding(
-                              key: ValueKey('older-loading'),
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Center(child: SisLoadingLogo(size: 24)),
-                            );
-                          }
-                          final entry = timeline[timeline.length - 1 - i];
-                          if (entry is EventEntry) {
-                            return GroupEventLine(
-                              entry.event,
-                              names: names,
-                              key: ValueKey('event-${entry.event.id}'),
-                            );
-                          }
-                          final message = (entry as MessageEntry).message;
-                          final index = messageIndexById[message.id] ?? 0;
-                          final mine = me != null && message.isFrom(me);
-                          final quoted = message.replyTo == null
-                              ? null
-                              : value
-                                    .where((m) => m.id == message.replyTo)
-                                    .firstOrNull;
-                          final unread =
-                              mine &&
-                              !message.isDeleted &&
-                              (message.isPending ||
-                                  !isReadByAnyone(marks, message.createdAt));
-                          final allowedActions = allowedMessageActions(
-                            message,
-                            me: me,
-                            now: DateTime.now(),
-                          );
-                          final bubble = SwipeableMessage(
-                            key: _keyFor(message.id),
-                            messageId: message.id,
-                            actions: allowedActions,
-                            onReply: () => runMessageAction(
-                              context,
-                              ref,
-                              message,
-                              MessageAction.reply,
-                              canDeleteForEveryone: true,
-                              anchor: _bubbleRect(message.id),
-                              alignEnd: mine,
-                              group: isGroup,
-                            ),
-                            onAction: (action) {
-                              runMessageAction(
-                                context,
-                                ref,
-                                message,
-                                action,
-                                canDeleteForEveryone: true,
-                                anchor: _bubbleRect(message.id),
-                                alignEnd: mine,
-                                group: isGroup,
-                              );
-                            },
-                            onTap: () => _openMessageMenu(message, mine: mine),
-                            child: _Bubble(
-                              message,
-                              key: ValueKey('read-$unread-${message.id}'),
-                              mine: mine,
-                              unread: unread,
-                              sender:
-                                  isGroup && !mine && startsRun(value, index)
-                                  ? (names[message.senderId] ?? 'Member')
-                                  : null,
-                              senderLeft: departedSenderIds.contains(
-                                message.senderId,
-                              ),
-                              senderSlot: slotByUser[message.senderId],
-                              quoted: quoted,
-                              quotedName: quoted == null
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      switch (messages) {
+                        AsyncData() when timeline.isEmpty => const Center(
+                          child: Text('No messages yet. Say something.'),
+                        ),
+                        _ when messages is! AsyncError && timeline.isNotEmpty =>
+                          ListView.builder(
+                            controller: _scroll,
+                            // Newest at the bottom, which is where the composer is.
+                            reverse: true,
+                            // Generous on purpose: a jump-to-hit needs the target
+                            // bubble built even when it is far from the current
+                            // scroll offset (see _scrollTo).
+                            scrollCacheExtent: ScrollCacheExtent.pixels(2000),
+                            // One extra row at the very top while an older page is
+                            // being read.
+                            itemCount: timeline.length + (loadingOlder ? 1 : 0),
+                            itemBuilder: (context, i) {
+                              if (i == timeline.length) {
+                                return const Padding(
+                                  key: ValueKey('older-loading'),
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  child: Center(
+                                    child: SisLoadingLogo(size: 24),
+                                  ),
+                                );
+                              }
+                              final entry = timeline[timeline.length - 1 - i];
+                              if (entry is EventEntry) {
+                                return GroupEventLine(
+                                  entry.event,
+                                  names: names,
+                                  key: ValueKey('event-${entry.event.id}'),
+                                );
+                              }
+                              final message = (entry as MessageEntry).message;
+                              final index = messageIndexById[message.id] ?? 0;
+                              final mine = me != null && message.isFrom(me);
+                              final quoted = message.replyTo == null
                                   ? null
-                                  : quoted.senderId == me
-                                  ? 'You'
-                                  : (names[quoted.senderId] ?? 'Member'),
-                              highlightQuery: searchQuery,
-                              isCurrentHit: message.id == currentHitId,
+                                  : value
+                                        .where((m) => m.id == message.replyTo)
+                                        .firstOrNull;
+                              final unread =
+                                  mine &&
+                                  !message.isDeleted &&
+                                  (message.isPending ||
+                                      !isReadByAnyone(
+                                        marks,
+                                        message.createdAt,
+                                      ));
+                              final allowedActions = allowedMessageActions(
+                                message,
+                                me: me,
+                                now: DateTime.now(),
+                              );
+                              final bubble = SwipeableMessage(
+                                key: _keyFor(message.id),
+                                messageId: message.id,
+                                actions: allowedActions,
+                                onReply: () => runMessageAction(
+                                  context,
+                                  ref,
+                                  message,
+                                  MessageAction.reply,
+                                  canDeleteForEveryone: true,
+                                  anchor: _bubbleRect(message.id),
+                                  alignEnd: mine,
+                                  group: isGroup,
+                                ),
+                                onAction: (action) {
+                                  runMessageAction(
+                                    context,
+                                    ref,
+                                    message,
+                                    action,
+                                    canDeleteForEveryone: true,
+                                    anchor: _bubbleRect(message.id),
+                                    alignEnd: mine,
+                                    group: isGroup,
+                                  );
+                                },
+                                onTap: () =>
+                                    _openMessageMenu(message, mine: mine),
+                                child: _Bubble(
+                                  message,
+                                  key: ValueKey('read-$unread-${message.id}'),
+                                  mine: mine,
+                                  unread: unread,
+                                  sender:
+                                      isGroup &&
+                                          !mine &&
+                                          startsRun(value, index)
+                                      ? (names[message.senderId] ?? 'Member')
+                                      : null,
+                                  senderLeft: departedSenderIds.contains(
+                                    message.senderId,
+                                  ),
+                                  senderSlot: slotByUser[message.senderId],
+                                  quoted: quoted,
+                                  quotedName: quoted == null
+                                      ? null
+                                      : quoted.senderId == me
+                                      ? 'You'
+                                      : (names[quoted.senderId] ?? 'Member'),
+                                  highlightQuery: searchQuery,
+                                  isCurrentHit: message.id == currentHitId,
+                                ),
+                              );
+                              return message.deletion ==
+                                      MessageDeletion.vanished
+                                  ? _Vanishing(
+                                      key: ValueKey('vanish-${message.id}'),
+                                      child: bubble,
+                                    )
+                                  : bubble;
+                            },
+                          ),
+                        AsyncError(:final error) => Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Text(
+                              reasonOf(error),
+                              textAlign: TextAlign.center,
                             ),
-                          );
-                          return message.deletion == MessageDeletion.vanished
-                              ? _Vanishing(
-                                  key: ValueKey('vanish-${message.id}'),
-                                  child: bubble,
-                                )
-                              : bubble;
-                        },
-                      ),
-                    AsyncError(:final error) => Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Text(
-                          reasonOf(error),
-                          textAlign: TextAlign.center,
+                          ),
+                        ),
+                        _ => const Center(child: SisLoadingLogo()),
+                      },
+                      Positioned(
+                        right: 12,
+                        bottom: 12,
+                        child: _JumpToLatest(
+                          far: _far,
+                          jumped: ref.read(messagesProvider.notifier).isJumped,
+                          onTap: _toLatest,
                         ),
                       ),
-                    ),
-                    _ => const Center(child: SisLoadingLogo()),
-                  },
+                    ],
+                  ),
                 ),
               ),
               const _Composer(),
@@ -1983,5 +2042,57 @@ class _LinkedTextState extends ConsumerState<_LinkedText> {
       );
     }
     return Text.rich(TextSpan(style: widget.style, children: spans));
+  }
+}
+
+/// The small floating circle above the composer that takes the member back to
+/// the newest message. Shown when the newest message is more than a screen
+/// away, or the list is a jumped (search) window.
+class _JumpToLatest extends StatelessWidget {
+  const _JumpToLatest({
+    required this.far,
+    required this.jumped,
+    required this.onTap,
+  });
+
+  final ValueNotifier<bool> far;
+  final bool jumped;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: far,
+      builder: (context, isFar, _) {
+        final show = isFar || jumped;
+        return IgnorePointer(
+          ignoring: !show,
+          child: AnimatedScale(
+            scale: show ? 1 : 0.6,
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOut,
+            child: AnimatedOpacity(
+              opacity: show ? 1 : 0,
+              duration: const Duration(milliseconds: 140),
+              child: Material(
+                key: const ValueKey('jump-to-latest'),
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                elevation: 3,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onTap,
+                  child: const SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: Icon(Icons.keyboard_arrow_down, size: 28),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }

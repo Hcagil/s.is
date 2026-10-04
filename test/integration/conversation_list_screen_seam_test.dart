@@ -183,6 +183,21 @@ void main() {
     FileChatListSnapshotStore store() =>
         FileChatListSnapshotStore(root: () async => dir);
 
+    /// Home's one offline strip (0.30.17), with its one text; the list's
+    /// own strip of 0.30.16 is gone.
+    void expectOneOfflineNotice() {
+      expect(find.byKey(const ValueKey('offline-notice')), findsOneWidget);
+      expect(
+        find.text("Can't reach SIS. Showing your saved chats; trying again."),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('chat-list-stale-notice')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('session-check-notice')), findsNothing);
+    }
+
     /// cleo's app as main.dart wires it, chat over [chatClient], a list
     /// already on the phone from her last run.
     Future<ProviderContainer> app(
@@ -278,10 +293,7 @@ void main() {
         isTrue,
         reason: 'the read failed',
       );
-      expect(
-        find.byKey(const ValueKey('chat-list-stale-notice')),
-        findsOneWidget,
-      );
+      expectOneOfflineNotice();
 
       expect(v.hasValue, isTrue, reason: '$v');
       expect([for (final x in v.value!) x.id], ['stored-1'], reason: '$v');
@@ -332,10 +344,7 @@ void main() {
         find.byKey(const ValueKey('conversation-stored-1')),
         findsOneWidget,
       );
-      expect(
-        find.byKey(const ValueKey('chat-list-stale-notice')),
-        findsOneWidget,
-      );
+      expectOneOfflineNotice();
       expect(find.textContaining('hotel'), findsNothing);
     });
 

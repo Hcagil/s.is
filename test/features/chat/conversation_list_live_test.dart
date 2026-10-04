@@ -795,13 +795,18 @@ void main() {
       expect(find.byKey(const ValueKey('preview-time-c1')), findsOneWidget);
     });
 
-    testWidgets('a failed refresh: the saved-list notice above rows that '
-        'still open; a later good read takes it away', (tester) async {
+    testWidgets('a failed refresh: the list stays, marked stale, its rows '
+        'still open; the list itself draws no strip (Home owns the one '
+        'offline notice); a later good read clears the flag', (tester) async {
       final chat = ChatFake(latency: const Duration(milliseconds: 5))
         ..conversationsResult = const Ok([Conversation(id: 'c1', other: bob)]);
       final c = await pump(tester, chat);
-      final notice = find.byKey(const ValueKey('chat-list-stale-notice'));
-      expect(notice, findsNothing);
+      final strips = [
+        find.byKey(const ValueKey('offline-notice')),
+        find.byKey(const ValueKey('chat-list-stale-notice')),
+        find.textContaining('Showing your saved chats'),
+      ];
+      expect(c.read(conversationListStaleProvider), isFalse);
 
       chat.conversationsResult = const Err(NetworkFailure('offline'));
       c
@@ -809,15 +814,10 @@ void main() {
           .refresh()
           .then((_) {}, onError: (Object _) {});
       await tester.pumpAndSettle();
-      expect(c.read(conversationListStaleProvider), isTrue, reason: 'fixture');
-      expect(notice, findsOneWidget);
-      expect(
-        inKey(
-          'chat-list-stale-notice',
-          "Can't refresh your chats right now. Showing your saved chats.",
-        ),
-        findsOneWidget,
-      );
+      expect(c.read(conversationListStaleProvider), isTrue);
+      for (final s in strips) {
+        expect(s, findsNothing, reason: 'a second strip, inside the list');
+      }
 
       await tester.tap(find.byKey(const ValueKey('conversation-c1')));
       await tester.pumpAndSettle();
@@ -831,7 +831,6 @@ void main() {
       unawaited(c.read(conversationListProvider.notifier).reloadQuietly());
       await tester.pumpAndSettle();
       expect(c.read(conversationListStaleProvider), isFalse);
-      expect(notice, findsNothing);
     });
 
     testWidgets('returning from a chat re-reads the list without a spinner', (

@@ -21,23 +21,25 @@ import '../features/update/application/update_controller.dart';
 import '../features/update/domain/update_state.dart';
 import '../features/update/presentation/update_required_screen.dart';
 import 'loading.dart';
+import 'route_stack.dart';
 import 'theme.dart';
 
 /// Set by main() when bootstrap itself fails; the gate shows the reason.
 final startupErrorProvider = Provider<String?>((_) => null);
 
 /// Root widget: theme plus the session gate.
-class SisApp extends StatelessWidget {
+class SisApp extends ConsumerWidget {
   const SisApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'SIS',
       themeMode: ThemeMode.system,
       theme: sisTheme(Brightness.light),
       darkTheme: sisTheme(Brightness.dark),
+      navigatorObservers: [ref.read(routeStackProvider)],
       home: const SessionGate(),
     );
   }
@@ -140,7 +142,9 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     ref.listen(sessionControllerProvider, (_, next) {
       final v = next.value;
       if ((v is SignedOut || v is Denied) && mounted) {
-        Navigator.of(context).popUntil((r) => r.isFirst);
+        // No transition: chat content must not stay visible, even sliding
+        // out, over the Denied or sign-in screen.
+        ref.read(routeStackProvider).removeAllAboveFirst();
       }
     });
     // For the life of the app, whatever screen it is on: keeps this phone on

@@ -18,7 +18,6 @@ import '../domain/group_member.dart';
 import '../domain/message.dart';
 import 'add_members_page.dart';
 import 'avatar_card.dart';
-import 'conversation_list.dart';
 import 'message_screen.dart';
 import 'person_avatar.dart';
 import 'photo_viewer.dart';
@@ -739,7 +738,7 @@ class _Async<T> extends StatelessWidget {
   Widget build(BuildContext context) => switch (value) {
     AsyncData(:final value) when value.isEmpty => _Empty(empty),
     AsyncData(:final value) => builder(value),
-    AsyncError(:final error) => _Empty(reasonOf(error)),
+    AsyncError(:final error) => _Empty(failureReason(error)),
     _ => const Center(child: SisLoadingLogo(size: 40)),
   };
 }

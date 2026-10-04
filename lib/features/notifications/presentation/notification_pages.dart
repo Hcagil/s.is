@@ -6,7 +6,6 @@ import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../../chat/application/chat_controllers.dart';
-import '../../chat/presentation/conversation_list.dart';
 import '../../chat/presentation/message_menu_card.dart';
 import '../application/notification_settings_controller.dart';
 import '../domain/notification_settings.dart';
@@ -74,7 +73,7 @@ class NotificationsScreen extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(reasonOf(error), textAlign: TextAlign.center),
+                Text(failureReason(error), textAlign: TextAlign.center),
                 const SizedBox(height: 16),
                 OutlinedButton(
                   onPressed: () =>
@@ -116,7 +115,7 @@ class _MutedList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return switch (ref.watch(mutesProvider)) {
       AsyncData(:final value) => _buildActive(context, ref, value),
-      AsyncError(:final error) => ListTile(title: Text(reasonOf(error))),
+      AsyncError(:final error) => ListTile(title: Text(failureReason(error))),
       _ => const SisProgressLine(),
     };
   }

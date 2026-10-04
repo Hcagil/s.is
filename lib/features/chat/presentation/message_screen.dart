@@ -34,7 +34,6 @@ import 'attachment_sheet.dart';
 import 'chat_search_bar.dart';
 import 'group_event_line.dart';
 import 'swipeable_message.dart';
-import 'conversation_list.dart';
 import 'message_actions.dart';
 import 'person_avatar.dart';
 import 'photo_viewer.dart';
@@ -738,7 +737,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                           child: Padding(
                             padding: const EdgeInsets.all(32),
                             child: Text(
-                              reasonOf(error),
+                              failureReason(error),
                               textAlign: TextAlign.center,
                             ),
                           ),

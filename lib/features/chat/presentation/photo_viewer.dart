@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/loading.dart';
+import '../../../core/failure.dart';
 import '../application/chat_controllers.dart';
-import 'conversation_list.dart';
 
 /// Opens [paths] full-screen at [index]: swipe between them, pinch to zoom.
 Future<void> openPhotoViewer(
@@ -216,7 +216,7 @@ class _PhotoState extends ConsumerState<_Photo> {
         ),
       ),
       AsyncError(:final error) => Center(
-        child: Text(reasonOf(error), style: white),
+        child: Text(failureReason(error), style: white),
       ),
       _ => const Center(child: SisLoadingLogo(size: 48)),
     };

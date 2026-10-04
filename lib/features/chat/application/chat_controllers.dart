@@ -376,11 +376,11 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       if (cached == null || e is DeniedFailure) rethrow;
       loaded = true;
       list = cached;
-      _setStale(true);
+      if (alive) _setStale(true);
       return list;
     }
     if (ownerId != null && alive) _saveSnapshot(ownerId, list);
-    _setStale(false);
+    if (alive) _setStale(false);
     return list;
   }
 
@@ -915,14 +915,16 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     if (!alive) return const []; // replaced or closed mid-open: drop it all
     // A catch-up that cannot reach the server (resume while offline) keeps
     // the list on screen and tries again a little later; only a first open,
-    // with nothing to show, is an error.
+    // with nothing to show, is an error. A refusal is never retried.
     final failed = switch ((joined, read)) {
       (Err(:final failure), _) => failure,
       (_, Err(:final failure)) => failure,
       _ => null,
     };
     if (failed != null) {
-      if (shownBefore.isEmpty || _catchUpRetries >= _maxCatchUpRetries) {
+      if (failed is DeniedFailure ||
+          shownBefore.isEmpty ||
+          _catchUpRetries >= _maxCatchUpRetries) {
         throw failed;
       }
       _catchUpRetries++;
@@ -935,91 +937,88 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     }
     _catchUpRetries = 0;
 
-    switch (read) {
-      case Err():
-        throw StateError('unreachable: read failure handled above');
-      case Ok(:final value):
-        loaded = true;
-        final known = {
-          for (final m in shownBefore)
-            if (m.attachmentPreview != null) m.id: m.attachmentPreview!,
-        };
-        final merged = [
-          for (final m in value)
-            m.attachmentPreview == null && known[m.id] != null
-                ? m.withPreview(known[m.id])
-                : m,
-        ];
-        _noOlder = value.length < messagePageSize;
-        // Older rows already loaded stay (a scroll position deep in history
-        // must not be cut off by a catch-up) -- but only when the new page
-        // overlaps them, so the history never has a gap.
-        final inPage = {for (final m in value) m.id};
-        if (value.isNotEmpty && shownBefore.any((m) => inPage.contains(m.id))) {
-          merged.addAll([
-            for (final m in shownBefore)
-              if (!m.isPending &&
-                  !inPage.contains(m.id) &&
-                  m.createdAt.isBefore(value.first.createdAt))
-                m,
-          ]);
-        }
-        for (final message in buffered) {
-          if (message.conversationId != conversationId) continue;
-          final i = merged.indexWhere((m) => m.id == message.id);
-          if (i < 0) {
-            // An edit or delete of a row older than the page is not for this
-            // list: ignored, never added out of place.
-            if (value.isNotEmpty &&
-                message.createdAt.isBefore(value.first.createdAt)) {
-              continue;
-            }
-            merged.add(message);
-          } else if (message.isDeleted || message.editedAt != null) {
-            merged[i] = message;
-          }
-        }
-        merged.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-        // Vanished before this screen opened: as if never sent. One that
-        // vanishes while open stays long enough to animate away.
-        final shown = [
-          for (final m in merged)
-            if (m.deletion != MessageDeletion.vanished) m,
-        ];
-        final pending = ref.read(sendQueueProvider)[conversationId] ?? const [];
-        // A later turn, so the list below is already the state when it runs.
-        final edits = _ownEdits;
-        // Previews (one batched read) start at once, beside the verify read;
-        // verify may add rows, so they are looked at again after it.
-        unawaited(
-          Future(() {
-            unawaited(_fillPreviews(conversationId, () => alive));
-            return _verify(
-              conversationId,
-              edits,
-              () => alive,
-            ).then((_) => _fillPreviews(conversationId, () => alive));
-          }),
-        );
-        // My own photos still in the air (not in the send queue, which holds
-        // text only) stay across this re-read, e.g. the one returnToLive
-        // starts; a stored copy of one that already landed replaces it.
-        final photos = [
-          for (final m in state.value ?? const <Message>[])
-            if (m.conversationId == conversationId &&
-                m.localImage != null &&
-                m.attachmentPath == null &&
-                !m.sending &&
-                !shown.any((s) => s.id == m.id || m.isPendingOf(s)))
-              m,
-        ];
-        return [
-          ...shown,
-          for (final p in pending)
-            if (!shown.any((m) => m.id == p.id)) p,
-          ...photos,
-        ];
+    // Both answered Ok here (a failure returned or threw above).
+    final value = (read as Ok<List<Message>>).value;
+    loaded = true;
+    final known = {
+      for (final m in shownBefore)
+        if (m.attachmentPreview != null) m.id: m.attachmentPreview!,
+    };
+    final merged = [
+      for (final m in value)
+        m.attachmentPreview == null && known[m.id] != null
+            ? m.withPreview(known[m.id])
+            : m,
+    ];
+    _noOlder = value.length < messagePageSize;
+    // Older rows already loaded stay (a scroll position deep in history
+    // must not be cut off by a catch-up) -- but only when the new page
+    // overlaps them, so the history never has a gap.
+    final inPage = {for (final m in value) m.id};
+    if (value.isNotEmpty && shownBefore.any((m) => inPage.contains(m.id))) {
+      merged.addAll([
+        for (final m in shownBefore)
+          if (!m.isPending &&
+              !inPage.contains(m.id) &&
+              m.createdAt.isBefore(value.first.createdAt))
+            m,
+      ]);
     }
+    for (final message in buffered) {
+      if (message.conversationId != conversationId) continue;
+      final i = merged.indexWhere((m) => m.id == message.id);
+      if (i < 0) {
+        // An edit or delete of a row older than the page is not for this
+        // list: ignored, never added out of place.
+        if (value.isNotEmpty &&
+            message.createdAt.isBefore(value.first.createdAt)) {
+          continue;
+        }
+        merged.add(message);
+      } else if (message.isDeleted || message.editedAt != null) {
+        merged[i] = message;
+      }
+    }
+    merged.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    // Vanished before this screen opened: as if never sent. One that
+    // vanishes while open stays long enough to animate away.
+    final shown = [
+      for (final m in merged)
+        if (m.deletion != MessageDeletion.vanished) m,
+    ];
+    final pending = ref.read(sendQueueProvider)[conversationId] ?? const [];
+    // A later turn, so the list below is already the state when it runs.
+    final edits = _ownEdits;
+    // Previews (one batched read) start at once, beside the verify read;
+    // verify may add rows, so they are looked at again after it.
+    unawaited(
+      Future(() {
+        unawaited(_fillPreviews(conversationId, () => alive));
+        return _verify(
+          conversationId,
+          edits,
+          () => alive,
+        ).then((_) => _fillPreviews(conversationId, () => alive));
+      }),
+    );
+    // My own photos still in the air (not in the send queue, which holds
+    // text only) stay across this re-read, e.g. the one returnToLive
+    // starts; a stored copy of one that already landed replaces it.
+    final photos = [
+      for (final m in state.value ?? const <Message>[])
+        if (m.conversationId == conversationId &&
+            m.localImage != null &&
+            m.attachmentPath == null &&
+            !m.sending &&
+            !shown.any((s) => s.id == m.id || m.isPendingOf(s)))
+          m,
+    ];
+    return [
+      ...shown,
+      for (final p in pending)
+        if (!shown.any((m) => m.id == p.id)) p,
+      ...photos,
+    ];
   }
 
   /// The app is visible again after being backgrounded (or a notification

@@ -18,9 +18,6 @@ import 'new_chat_page.dart';
 import 'new_group_page.dart';
 import 'person_avatar.dart';
 
-/// Reason text for any failure, so a screen never shows a bare exception.
-String reasonOf(Object error) => failureReason(error);
-
 /// The member's conversations, newest first, with a picker for starting one.
 class ConversationList extends ConsumerWidget {
   const ConversationList({super.key});
@@ -65,7 +62,7 @@ class ConversationList extends ConsumerWidget {
                       ),
                     ),
                     AsyncError(:final error) => _Failed(
-                      reason: reasonOf(error),
+                      reason: failureReason(error),
                       onRetry: () =>
                           ref.read(conversationListProvider.notifier).refresh(),
                     ),

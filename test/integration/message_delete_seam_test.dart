@@ -19,7 +19,6 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
-import '../support/sis_ui.dart';
 import '../support/service_key.dart';
 import '../support/reach.dart';
 
@@ -315,16 +314,15 @@ void main() {
 
     // A deletes the recent message, through the real UI: a swipe, the
     // action row, the confirm dialog.
-    await t.drag(
+    await t.tap(
       within('a', find.byKey(ValueKey('message-${recentMessage.id}'))),
-      swipeOpen,
     );
     await until(
       t,
-      () => find.byKey(const ValueKey('action-delete')).evaluate().isNotEmpty,
+      () => find.byKey(const ValueKey('menu-delete')).evaluate().isNotEmpty,
       'the action row to open for the recent message',
     );
-    await t.tap(find.byKey(const ValueKey('action-delete')));
+    await t.tap(find.byKey(const ValueKey('menu-delete')));
     await settle(t);
     await t.tap(find.byKey(const ValueKey('delete-confirm')));
     await settle(t);
@@ -369,16 +367,13 @@ void main() {
 
     // The backdated message: two hours old, still deletable, still a
     // placeholder.
-    await t.drag(
-      within('a', find.byKey(ValueKey('message-${oldMessage.id}'))),
-      swipeOpen,
-    );
+    await t.tap(within('a', find.byKey(ValueKey('message-${oldMessage.id}'))));
     await until(
       t,
-      () => find.byKey(const ValueKey('action-delete')).evaluate().isNotEmpty,
+      () => find.byKey(const ValueKey('menu-delete')).evaluate().isNotEmpty,
       'the action row never opened for the second message',
     );
-    await t.tap(find.byKey(const ValueKey('action-delete')));
+    await t.tap(find.byKey(const ValueKey('menu-delete')));
     await settle(t);
     expect(
       find.byKey(const ValueKey('delete-confirm')),

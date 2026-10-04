@@ -21,7 +21,6 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
-import '../support/sis_ui.dart';
 import '../support/service_key.dart';
 import '../support/reach.dart';
 
@@ -169,13 +168,13 @@ void main() {
   }
 
   Future<void> edit(WidgetTester t, String id, String body) async {
-    await t.drag(within('a', find.byKey(ValueKey('message-$id'))), swipeOpen);
+    await t.tap(within('a', find.byKey(ValueKey('message-$id'))));
     await until(
       t,
-      () => find.byKey(const ValueKey('action-edit')).evaluate().isNotEmpty,
+      () => find.byKey(const ValueKey('menu-edit')).evaluate().isNotEmpty,
       'the action row never offered Edit for $id',
     );
-    await t.tap(find.byKey(const ValueKey('action-edit')));
+    await t.tap(find.byKey(const ValueKey('menu-edit')));
     await settle(t);
     expect(within('a', find.byKey(const ValueKey('edit-bar'))), findsOneWidget);
     await t.enterText(

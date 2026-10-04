@@ -87,10 +87,10 @@ Future<void> frames(WidgetTester tester) async {
 }
 
 Finder bubble(String id) => find.byKey(ValueKey('message-$id'));
-final editAction = find.byKey(const ValueKey('action-edit'));
+final editAction = find.byKey(const ValueKey('menu-edit'));
 final editBar = find.byKey(const ValueKey('edit-bar'));
 final editCancel = find.byKey(const ValueKey('edit-cancel'));
-final replyAction = find.byKey(const ValueKey('action-reply'));
+final replyAction = find.byKey(const ValueKey('menu-reply'));
 final replyBar = find.byKey(const ValueKey('reply-bar'));
 final field = find.byKey(const ValueKey('composer-field'));
 final send = find.byKey(const ValueKey('composer-send'));
@@ -106,7 +106,7 @@ String textIn(WidgetTester tester, Finder of) => [
 ].join(' ');
 
 Future<void> swipe(WidgetTester tester, String id) async {
-  await tester.drag(bubble(id), swipeOpen);
+  await tester.tap(bubble(id));
   await tester.pumpAndSettle();
 }
 
@@ -180,7 +180,7 @@ void main() {
           msg('m1', body: '', deletion: MessageDeletion.placeholder),
         ];
       await pump(tester, chat);
-      await tester.drag(find.byKey(const ValueKey('deleted-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('deleted-m1')));
       await tester.pumpAndSettle();
       expect(editAction, findsNothing);
     });
@@ -192,7 +192,7 @@ void main() {
         ..history['c1'] = [msg('m1', pending: true)];
       await pump(tester, chat, settle: false);
       await frames(tester);
-      await tester.drag(bubble('m1'), swipeOpen);
+      await tester.tap(bubble('m1'));
       await frames(tester);
       expect(editAction, findsNothing);
     });

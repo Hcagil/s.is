@@ -183,9 +183,9 @@ Future<void> sendText(WidgetTester t, String text) async {
 }
 
 Future<void> swipeAction(WidgetTester t, String id, String action) async {
-  await t.drag(bubble(id), swipeOpen);
+  await t.tap(bubble(id));
   await settle(t);
-  await t.tap(byKey('action-$action'));
+  await t.tap(byKey('menu-$action'));
   await settle(t);
 }
 

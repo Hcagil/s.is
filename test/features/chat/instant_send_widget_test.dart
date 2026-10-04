@@ -99,9 +99,9 @@ final clock = find.byIcon(Icons.schedule_rounded);
 Finder bubble(String id) => find.byKey(ValueKey('message-$id'));
 final field = find.byKey(const ValueKey('composer-field'));
 final send = find.byKey(const ValueKey('composer-send'));
-final replyAction = find.byKey(const ValueKey('action-reply'));
+final replyAction = find.byKey(const ValueKey('menu-reply'));
 final replyBar = find.byKey(const ValueKey('reply-bar'));
-final editAction = find.byKey(const ValueKey('action-edit'));
+final editAction = find.byKey(const ValueKey('menu-edit'));
 final editBar = find.byKey(const ValueKey('edit-bar'));
 
 String composerText(WidgetTester t) => t
@@ -131,7 +131,7 @@ Future<void> sendText(WidgetTester t, String text) async {
 }
 
 Future<void> reply(WidgetTester t, String id) async {
-  await t.drag(bubble(id), swipeOpen);
+  await t.tap(bubble(id));
   await t.pumpAndSettle();
   await t.tap(replyAction);
   await t.pumpAndSettle();
@@ -371,7 +371,7 @@ void main() {
       ..holdEdit();
     await pump(t, chat);
 
-    await t.drag(bubble('m1'), swipeOpen);
+    await t.tap(bubble('m1'));
     await t.pumpAndSettle();
     await t.tap(editAction);
     await t.pumpAndSettle();

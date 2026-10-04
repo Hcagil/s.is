@@ -17,6 +17,8 @@ import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/presentation/attachment_preview_page.dart';
 
 import '../../support/attach_flow.dart' show key, previewCaption;
+import '../../support/chat_launcher.dart'
+    show osBack, phoneView, platforms, screenHeight, screenWidth, stroke;
 import '../../support/fakes.dart';
 
 typedef Sent = ({List<PickedImage> images, String caption});
@@ -200,5 +202,50 @@ void main() {
       await open(t, Host([photo()], dark: true));
       expect(background(t).computeLuminance(), lessThan(0.5));
     });
+  });
+
+  // 0.30.13: the preview opts out of swipe-back -- its pager keeps the
+  // horizontal drag -- while back still leaves.
+  group('swipe-back opt-out', () {
+    testWidgets('a slow mid-screen right drag on the pager pages back and '
+        'never leaves', (t) async {
+      phoneView(t);
+      final h = await open(t, Host([photo(), photo(), photo()]));
+      await t.tap(key('preview-thumb-2'));
+      await t.pumpAndSettle();
+      expect(count(t), '3/3');
+
+      final at = t.getCenter(key('preview-pager'));
+      await stroke(
+        t,
+        at,
+        Offset(screenWidth(t) * 0.6, 0),
+        over: const Duration(milliseconds: 1500),
+      );
+      await t.pumpAndSettle();
+      expect(key('preview-page'), findsOneWidget, reason: 'it left');
+      expect(h.resolved, isFalse);
+      expect(count(t), '2/3', reason: 'the pager lost its drag');
+    }, variant: platforms);
+
+    testWidgets('on the first photo too, a right drag stays', (t) async {
+      phoneView(t);
+      final h = await open(t, Host([photo()]));
+      await stroke(
+        t,
+        Offset(screenWidth(t) * 0.45, screenHeight(t) * 0.4),
+        Offset(screenWidth(t) * 0.6, 0),
+      );
+      await t.pumpAndSettle();
+      expect(key('preview-page'), findsOneWidget);
+      expect(h.resolved, isFalse);
+    }, variant: platforms);
+
+    testWidgets('OS back through the platform channel still leaves', (t) async {
+      final h = await open(t, Host([photo()]));
+      await osBack(t);
+      expect(h.resolved, isTrue);
+      expect(h.result, isNull);
+    }, variant: platforms);
   });
 }

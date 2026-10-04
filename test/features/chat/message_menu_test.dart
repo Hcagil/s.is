@@ -1,7 +1,7 @@
 // The 0.30.8 message menu and keyboard rules, driven through the real
 // message screen. Written from the contract only:
 //  * a tap on a message opens the `message-menu` sheet (tiles `menu-<action>`),
-//    closes the keyboard and any open swipe row;
+//    closes the keyboard (0.30.13: the swipe row is gone, left = reply);
 //  * a tap on empty space only closes the keyboard; scrolling does not;
 //    send and the paperclip keep it open (0.30.10: the paperclip opens the
 //    photo grid with requestFocus false);
@@ -27,7 +27,6 @@ import 'package:sis/features/chat/presentation/photo_viewer.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
-import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = 'u2';
@@ -170,24 +169,23 @@ void main() {
       expect(keyboardUp(tester), isFalse);
     });
 
-    testWidgets('closes a swipe row that is open', (tester) async {
+    // 0.30.13: the swipe row is gone; a left swipe replies and opens no
+    // card, and the tap that follows still opens it.
+    testWidgets('a left swipe opens no card; a tap after it does', (
+      tester,
+    ) async {
       await pump(tester, [
         msg('m1', from: bob),
         msg('m2', from: bob, minute: 1),
       ]);
-      await tester.drag(message('m1'), swipeOpen);
+      await tester.drag(message('m1'), const Offset(-120, 0));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('action-reply')), findsOneWidget);
+      expect(menu, findsNothing);
+      expect(find.byKey(const ValueKey('reply-bar')), findsOneWidget);
 
       await tester.tap(message('m2'));
       await tester.pumpAndSettle();
       expect(menu, findsOneWidget);
-      // Dismiss the sheet the way a member does: the scrim.
-      await tester.tapAt(const Offset(5, 5));
-      await tester.pumpAndSettle();
-
-      expect(menu, findsNothing);
-      expect(find.byKey(const ValueKey('action-reply')), findsNothing);
     });
 
     testWidgets('menu-reply starts a reply to that message', (tester) async {

@@ -411,9 +411,9 @@ Future<void> everySite(
   check(header, 'Bob Stone', green, 'chat header, 1:1');
 
   // Forward sheet from that chat.
-  await t.drag(byKey('message-m1'), swipeOpen);
+  await t.tap(byKey('message-m1'));
   await settle(t);
-  await t.tap(byKey('action-forward'));
+  await t.tap(byKey('menu-forward'));
   await settle(t);
   check(byKey('forward-g1'), 'Club', blue, 'forward sheet, group');
   await t.tapAt(const Offset(20, 20));

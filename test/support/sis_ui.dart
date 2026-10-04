@@ -1,7 +1,8 @@
 // Finders and waits for SIS's own UI: the pulsing logo and brand line that
 // replace Android's spinners, and the notice pill that replaces SnackBar.
-import 'dart:ui' show CheckedState, Offset, SemanticsFlags, Tristate;
+import 'dart:ui' show CheckedState, SemanticsAction, SemanticsFlags, Tristate;
 
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/controls.dart';
 import 'package:sis/app/loading.dart';
@@ -58,8 +59,29 @@ bool choiceSelected(WidgetTester t, Finder f) {
       flags.isChecked == CheckedState.isTrue;
 }
 
-/// A drag right far enough to open a message's action row. The bubble
-/// stops at its 88 px clamp, past the 64 px threshold. The drag recognizer
-/// keeps the first touch-slop (~18 px) of finger travel, so a drag of 80 px
-/// moves the bubble only about 60 px and does not open it.
-const swipeOpen = Offset(120, 0);
+/// The semantics node carrying the custom (screen-reader) actions of the
+/// bubble at [f], or null: the nearest node at or above it that has any.
+/// Needs `tester.ensureSemantics()`.
+SemanticsNode? actionsNode(WidgetTester tester, Finder f) {
+  SemanticsNode? node = tester.getSemantics(f);
+  while (node != null) {
+    final ids = node.getSemanticsData().customSemanticsActionIds;
+    if (ids != null && ids.isNotEmpty) return node;
+    node = node.parent;
+  }
+  return null;
+}
+
+/// The labels of [node]'s custom actions, in order.
+List<String> actionLabels(SemanticsNode? node) => [
+  for (final id in node?.getSemanticsData().customSemanticsActionIds ?? [])
+    CustomSemanticsAction.getAction(id)!.label ?? '',
+];
+
+/// Runs [node]'s custom action labelled [label], as TalkBack/VoiceOver does.
+void invokeAction(SemanticsNode node, String label) {
+  final id = node.getSemanticsData().customSemanticsActionIds!.firstWhere(
+    (id) => CustomSemanticsAction.getAction(id)!.label == label,
+  );
+  node.owner!.performAction(node.id, SemanticsAction.customAction, id);
+}

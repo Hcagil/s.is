@@ -1,5 +1,6 @@
-// "Read by", from the product rule and the 0.30.10 contract: swiping your
-// own message offers "Read by", which opens a floating card (key readers)
+// "Read by", from the product rule and the 0.30.10 contract: your
+// own message offers "Read by" (0.30.13: a screen-reader action; the tap
+// card should offer it too), which opens a floating card (key readers)
 // ABOVE the bubble -- in a group a title ("Read by N" / "Nobody yet") and one
 // row per reader (reader-<userId>) with the local date or time, height
 // capped at 320 with the rows scrolling; in a 1:1 the same card holds one
@@ -91,19 +92,24 @@ Future<void> pump(
 }
 
 Future<void> touch(WidgetTester t) async {
-  await t.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+  await t.tap(find.byKey(const ValueKey('message-m1')));
   await t.pumpAndSettle();
 }
 
+/// Opens the card the way that still reaches it since 0.30.13 removed the
+/// swipe row: the bubble's screen-reader action. Whether a sighted member can
+/// reach it is its own test ("reachable from the tap card").
 Future<void> openReadBy(WidgetTester t) async {
-  await touch(t);
+  final handle = t.ensureSemantics();
+  final node = actionsNode(t, find.byKey(const ValueKey('message-m1')));
   expect(
-    find.byKey(const ValueKey('action-read-by')),
-    findsOneWidget,
+    actionLabels(node),
+    contains('Read by'),
     reason: 'no "Read by" offered',
   );
-  await t.tap(find.byKey(const ValueKey('action-read-by')));
+  invokeAction(node!, 'Read by');
   await t.pumpAndSettle();
+  handle.dispose();
 }
 
 Finder get card => find.byKey(const ValueKey('readers'));
@@ -297,11 +303,32 @@ void main() {
       ], from: 'u2');
       await touch(t);
       expect(
-        find.byKey(const ValueKey('action-reply')),
+        find.byKey(const ValueKey('menu-reply')),
         findsOneWidget,
         reason: 'the row did open',
       );
-      expect(find.byKey(const ValueKey('action-read-by')), findsNothing);
+      expect(find.byKey(const ValueKey('menu-read-by')), findsNothing);
+      final handle = t.ensureSemantics();
+      expect(
+        actionLabels(actionsNode(t, find.byKey(const ValueKey('message-m1')))),
+        isNot(contains('Read by')),
+      );
+      handle.dispose();
+    });
+
+    // 0.30.13 removed the swipe row, the only sighted way to "Read by". The
+    // owner's contract keeps every action in the tap card ("Reply/Forward/
+    // Edit/Delete... live there now").
+    testWidgets('your own message: "Read by" is reachable from the tap card', (
+      t,
+    ) async {
+      await pump(t, [ReadMark(userId: 'u3', shares: true, readAt: cemRead)]);
+      await touch(t);
+      expect(find.byKey(const ValueKey('message-menu')), findsOneWidget);
+      expect(find.byKey(const ValueKey('menu-read-by')), findsOneWidget);
+      await t.tap(find.byKey(const ValueKey('menu-read-by')));
+      await t.pumpAndSettle();
+      expect(card, findsOneWidget);
     });
   });
 

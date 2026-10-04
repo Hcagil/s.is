@@ -74,38 +74,41 @@ Future<ProviderContainer> pump(
 
 void main() {
   group('the delete sheet', () {
-    testWidgets('a swipe on your own message, under 6h, opens it', (
+    testWidgets('a tap on your own message, under 6h, opens it', (
       tester,
     ) async {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', from: me.userId)]);
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('action-delete')), findsOneWidget);
+      expect(find.byKey(const ValueKey('menu-delete')), findsOneWidget);
     });
 
-    testWidgets('a swipe on somebody else\'s message offers no delete', (
+    testWidgets('a tap on somebody else\'s message offers delete for me only', (
       tester,
     ) async {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', from: bob.userId)]);
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey('action-reply')),
+        find.byKey(const ValueKey('menu-reply')),
         findsOneWidget,
-        reason: 'the row did open',
+        reason: 'the card did open',
       );
-      expect(find.byKey(const ValueKey('action-delete')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('menu-delete')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('delete-for-me')), findsOneWidget);
+      expect(find.byKey(const ValueKey('delete-confirm')), findsNothing);
     });
 
-    testWidgets('a swipe on your own message over 6h still offers delete', (
+    testWidgets('a tap on your own message over 6h still offers delete', (
       tester,
     ) async {
       final chat = ChatFake()
@@ -118,16 +121,16 @@ void main() {
         ]);
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey('action-reply')),
+        find.byKey(const ValueKey('menu-reply')),
         findsOneWidget,
         reason: 'the row did open',
       );
       expect(
-        find.byKey(const ValueKey('action-delete')),
+        find.byKey(const ValueKey('menu-delete')),
         findsOneWidget,
         reason: 'since 0.30.8 the sender may delete at any age',
       );
@@ -138,9 +141,9 @@ void main() {
         ..messagesResult = Ok([msg('m1', from: me.userId)]);
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('action-delete')));
+      await tester.tap(find.byKey(const ValueKey('menu-delete')));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('delete-confirm')), findsOneWidget);
@@ -163,9 +166,9 @@ void main() {
       final chat = ChatFake()..history['c1'] = [msg('m1', from: me.userId)];
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('action-delete')));
+      await tester.tap(find.byKey(const ValueKey('menu-delete')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('delete-confirm')));
       await tester.pumpAndSettle();
@@ -189,9 +192,9 @@ void main() {
         );
       await pump(tester, chat);
 
-      await tester.drag(find.byKey(const ValueKey('message-m1')), swipeOpen);
+      await tester.tap(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('action-delete')));
+      await tester.tap(find.byKey(const ValueKey('menu-delete')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('delete-confirm')));
       await tester.pumpAndSettle();

@@ -21,6 +21,8 @@ import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/presentation/crop_screen.dart';
 
+import '../../support/chat_launcher.dart'
+    show osBack, platforms, screenHeight, screenWidth, stroke;
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
 
@@ -448,5 +450,47 @@ void main() {
       expect(c.bottom, closeTo(1, 0.005));
       expect(c.right - c.left, closeTo(0.5, 0.005));
     });
+  });
+
+  // 0.30.13: the crop screen opts out of swipe-back -- a right drag moves
+  // the photo -- while back still leaves.
+  group('swipe-back opt-out', () {
+    testWidgets('a right drag pans the photo and stays', (t) async {
+      final h = await open(t, 2000, 1000);
+      await pan(t, const Offset(64, 0));
+      expect(find.byType(CropScreen), findsOneWidget, reason: 'it left');
+      expect(h.resolved, isFalse);
+      await use(t);
+      expectRect(
+        lastCall(h),
+        left: 0.15,
+        top: 0,
+        right: 0.65,
+        bottom: 1,
+        tolerance: 0.02,
+        when: 'moved 64 px right',
+      );
+    }, variant: platforms);
+
+    testWidgets('a long right drag from mid-screen stays', (t) async {
+      final h = await open(t, 2000, 1000);
+      await stroke(
+        t,
+        Offset(screenWidth(t) * 0.45, screenHeight(t) * 0.4),
+        Offset(screenWidth(t) * 0.6, 0),
+        over: const Duration(milliseconds: 1500),
+      );
+      await t.pumpAndSettle();
+      expect(find.byType(CropScreen), findsOneWidget, reason: 'it left');
+      expect(h.resolved, isFalse);
+    }, variant: platforms);
+
+    testWidgets('OS back through the platform channel leaves, null', (t) async {
+      final h = await open(t, 2000, 1000);
+      await osBack(t);
+      expect(find.byType(CropScreen), findsNothing);
+      expect(h.resolved, isTrue);
+      expect(h.result, isNull);
+    }, variant: platforms);
   });
 }

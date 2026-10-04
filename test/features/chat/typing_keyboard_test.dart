@@ -11,7 +11,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/held_send_chat.dart';
-import '../../support/sis_ui.dart';
 import 'contacts_ui_test.dart' as contacts;
 import 'instant_send_widget_test.dart' as s;
 
@@ -168,7 +167,7 @@ void main() {
         ..history['c1'] = [s.msg('m1', body: 'mine', from: me.userId)];
       await s.pump(t, chat);
 
-      await t.drag(s.bubble('m1'), swipeOpen);
+      await t.tap(s.bubble('m1'));
       await t.pumpAndSettle();
       await t.tap(s.editAction);
       await t.pumpAndSettle();

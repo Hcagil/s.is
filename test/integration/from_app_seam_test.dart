@@ -292,9 +292,16 @@ void main() {
       expect(arrived, hasLength(3), reason: 'one message per photo');
       expect(arrived.map((m) => m.senderId).toSet(), {xena.userId});
       expect([for (final m in arrived) m.body], [caption, '', '']);
+      // 0.30.14: previews are read by id, not with the page.
+      final previews = _ok(
+        (await t.runAsync(
+          () => walt.attachmentPreviews([for (final m in arrived) m.id]),
+        ))!,
+        'previews',
+      );
       for (final (i, m) in arrived.indexed) {
         expect(m.attachmentPath, isNotNull);
-        expect(m.attachmentPreview, isNotNull);
+        expect(previews[m.id], isNotNull, reason: 'photo ${i + 1} preview');
         final bytes = await t.runAsync(
           () => walt.attachmentBytes(m.attachmentPath!),
         );

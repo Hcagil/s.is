@@ -261,14 +261,17 @@ void main() {
     await mount(t, container);
     await until(t, () => bubble.evaluate().isNotEmpty, 'the message to load');
 
-    expect(
-      preview,
-      findsOneWidget,
-      reason:
-          'bytes cannot possibly be here yet -- the cache read is held '
-          'open -- so the preview that travelled with the message is '
-          'what must be on screen',
-    );
+    // 0.30.14: the preview is read by id just after first paint, not with
+    // the page; the photo bytes cannot be here yet -- the cache read is held
+    // open -- so that preview is what must come on screen.
+    // The fill is timer-delayed: advance the test clock, not only real time.
+    for (var i = 0; i < 50 && preview.evaluate().isEmpty; i++) {
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    expect(preview, findsOneWidget, reason: 'the batched preview, by id');
     expect(photo, findsNothing);
 
     cache.releaseRead();

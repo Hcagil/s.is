@@ -1687,3 +1687,29 @@ and email out of the marker. B5 is `docs/SECURITY.md` and this entry.
 implementation; a retry ladder of 2 s up to 60 s plus a retry on resume; a
 small notice on Home while the check cannot reach the server; iOS excludes
 Application Support from iCloud and iTunes backups. No `supabase/` change.
+
+## 2026-10-04 — Play "Automatic protection" turned off
+
+**Context.** Opening SIS on Android without a connection showed a Google Play
+box ("Check that Google Play is enabled on your device…") over a black screen
+instead of the stored chats. 0.30.16 made the app's own Play update check stay
+silent offline, and the box still came back. The remaining source is Play
+Console's *Automatic protection*, which wraps the published build with Google
+Play's own integrity check; that check needs Play to answer, so offline it
+blocks the start.
+
+**Decision.** The owner turned Automatic protection off in Play Console
+himself (2026-10-04). It applies from the next build Play processes, not to
+builds already installed.
+
+**Why this is safe.** SIS does not rely on an install-source check for
+anything. Every read and write is decided on the server by RLS and the app
+access check; a copy installed from outside Play gets nothing a Play install
+would not. What we give up is Google's blocking of re-distributed or modified
+copies, which matters little for a closed tester group.
+
+**Consequences.** Offline start on Android is no longer blocked by Play. The
+owner re-tests the offline open after the next release (open online, wait a
+minute, close, airplane mode, open: the stored chats appear). If we later want
+install-source assurance, it comes back as an explicit Play Integrity check
+that fails open offline, decided in its own entry.

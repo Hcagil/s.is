@@ -23,6 +23,7 @@ library;
 // Needs SUPABASE_TEST_SERVICE_KEY (test/support/service_key.dart). Run with
 // --concurrency=1 like the rest of the suite.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -167,11 +168,33 @@ Future<void> firstRun(Phone p) async {
   final run = Run(p);
   await run.until(() => isConfirmed(run.state), 'the gated confirm');
   run.c.read(sessionControllerProvider.notifier).markOnboarded();
-  await run.until(
-    () =>
-        p.markerFile.existsSync() &&
-        p.markerFile.readAsStringSync().contains('"onboarded":true'),
-    'the onboarded marker on disk',
+  // Every write of this run has landed (the file unchanged for 300 ms), and
+  // what they left is a readable marker: a corrupt one is dropped by the next
+  // start, which then takes the gated path and looks like a race below.
+  String? last;
+  var since = DateTime.now();
+  await run.until(() {
+    final now = p.markerFile.existsSync()
+        ? p.markerFile.readAsStringSync()
+        : null;
+    if (now != last) {
+      last = now;
+      since = DateTime.now();
+      return false;
+    }
+    return now != null &&
+        DateTime.now().difference(since) > const Duration(milliseconds: 300);
+  }, 'the marker on disk to settle');
+  final Object? onDisk;
+  try {
+    onDisk = jsonDecode(last!);
+  } on FormatException {
+    fail('the first run left a corrupt marker on disk: $last');
+  }
+  expect(
+    onDisk,
+    containsPair('session', containsPair('onboarded', true)),
+    reason: 'the onboarded marker on disk',
   );
   run.c.dispose();
 }

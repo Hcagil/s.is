@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
@@ -40,10 +41,38 @@ const _password = 'integration-password';
 
 const _total = 160;
 
-Future<SupabaseClient> _signedIn(String email) async {
+/// The reader's connection, so a test can see when the app has stopped
+/// talking to the server: the open's own re-read (the verify after the first
+/// paint) runs behind the open and lands whenever the network lets it.
+class _Line extends http.BaseClient {
+  final _inner = http.Client();
+  int inFlight = 0;
+  DateTime lastDone = DateTime.now();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    inFlight++;
+    try {
+      return await _inner.send(request);
+    } finally {
+      inFlight--;
+      lastDone = DateTime.now();
+    }
+  }
+
+  /// No request in flight, and none for [quiet].
+  Future<void> idle({Duration quiet = const Duration(milliseconds: 500)}) =>
+      _eventually(
+        () => inFlight == 0 && DateTime.now().difference(lastDone) > quiet,
+        reason: 'the reader never went quiet',
+      );
+}
+
+Future<SupabaseClient> _signedIn(String email, {http.Client? line}) async {
   final client = SupabaseClient(
     _url,
     _key,
+    httpClient: line,
     authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
   );
   try {
@@ -201,12 +230,17 @@ void main() {
 
   test('verifyNewest picks up a row written while Realtime was gone', () async {
     // Its own reader: dropping Realtime must not touch the other tests.
-    final reader = await _signedIn('sda@integration.test');
+    final line = _Line();
+    final reader = await _signedIn('sda@integration.test', line: line);
     addTearDown(reader.dispose);
     final c = open(reader);
     addTearDown(c.dispose);
     await c.read(messagesProvider.future);
     await _joined(reader);
+    // The open is finished only when its own re-read has landed: one still
+    // in flight would read the row below in and hide whether verifyNewest
+    // does.
+    await line.idle();
     // The socket is gone, as on a phone the OS put to sleep.
     await reader.removeAllChannels();
     final missed = await write('while the socket was gone');

@@ -1138,6 +1138,11 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     if (older.isEmpty) return;
     state = AsyncData([...older, ...now]);
+    // The page came without previews, like the first read: one batched read
+    // brings them, and with them each photo bubble's final size.
+    unawaited(
+      _fillPreviews(conversationId, () => ref.mounted && epoch == _epoch),
+    );
   }
 
   /// The mirror of [loadOlder] for a jumped window: reads the page after the

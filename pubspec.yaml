@@ -1,7 +1,7 @@
 name: sis
 description: SIS — private chat by ESD.
 publish_to: 'none'
-version: 0.30.16
+version: 0.30.17
 
 environment:
   sdk: ^3.13.2

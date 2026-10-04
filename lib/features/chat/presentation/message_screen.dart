@@ -27,6 +27,7 @@ import '../domain/group_member.dart';
 import '../domain/highlight.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
+import '../domain/png_size.dart';
 import '../domain/timeline.dart';
 import '../domain/read_marks.dart';
 import 'attachment_preview_page.dart';
@@ -1370,16 +1371,43 @@ class _Attachment extends ConsumerWidget {
     );
   }
 
+  /// The most a photo takes in a bubble.
+  static const _bounds = BoxConstraints(maxHeight: 260, maxWidth: 280);
+
+  /// The box the photo will take once decoded, known from its preview (a
+  /// tiny PNG of the same shape) before any bytes arrive: the placeholder,
+  /// the blurred preview and the photo all take exactly this box, so the
+  /// bubble never changes height. Null without a preview.
+  ///
+  /// This is what keeps scrolling honest: the list is reversed, and a
+  /// bubble that grows between the viewport and the newest message shoves
+  /// the rows on screen away from it -- scrolling down toward the newest
+  /// message then fights every photo that loads on the way (0.30.16).
+  static Size? _photoBox(Uint8List? preview) {
+    final size = pngDimensions(preview);
+    if (size == null) return null;
+    // Scaled up as well as down: the preview is only 24 px wide.
+    final scale = math.min(
+      _bounds.maxWidth / size.width,
+      _bounds.maxHeight / size.height,
+    );
+    return Size(size.width * scale, size.height * scale);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final path = message.attachmentPath;
+    final box = _photoBox(message.attachmentPreview);
+    Widget sized(Widget child) => box == null
+        ? child
+        : SizedBox(width: box.width, height: box.height, child: child);
     return GestureDetector(
       key: ValueKey('attachment-${path ?? message.id}'),
       onTap: path == null ? null : () => _view(context, ref, path),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(6),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 260, maxWidth: 280),
+          constraints: _bounds,
           child: switch ((message.localImage, path)) {
             // Your own photo, straight from the phone: shown from the tap on,
             // never swapped for the downloaded copy (the swap flashed blank).
@@ -1399,24 +1427,29 @@ class _Attachment extends ConsumerWidget {
             (_, final String path) => switch (ref.watch(
               attachmentBytesProvider(path),
             )) {
-              AsyncData(:final value) => Image.memory(
-                value,
-                key: const ValueKey('attachment-image'),
-                cacheWidth: 560,
-                fit: BoxFit.cover,
-                errorBuilder: (context, _, _) =>
-                    _failed(context, 'Image unavailable'),
+              AsyncData(:final value) => sized(
+                Image.memory(
+                  value,
+                  key: const ValueKey('attachment-image'),
+                  cacheWidth: 560,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, _, _) =>
+                      _failed(context, 'Image unavailable'),
+                ),
               ),
-              AsyncError(:final error) => _failed(
-                context,
-                error is Failure ? error.message : 'Image unavailable',
+              AsyncError(:final error) => sized(
+                _failed(
+                  context,
+                  error is Failure ? error.message : 'Image unavailable',
+                ),
               ),
               // The preview that came with the message, blurred, until the
-              // photo is here.
+              // photo is here. Its box is the photo's own (see _photoBox);
+              // a preview that is not a PNG keeps the old fixed size.
               _ => switch (message.attachmentPreview) {
                 final Uint8List preview => SizedBox(
-                  height: 180,
-                  width: 240,
+                  height: box?.height ?? 180,
+                  width: box?.width ?? 240,
                   child: ImageFiltered(
                     imageFilter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                     child: Image.memory(

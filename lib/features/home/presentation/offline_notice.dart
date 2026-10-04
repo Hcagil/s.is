@@ -2,22 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
-import '../application/session_controller.dart';
+import '../../auth/application/session_controller.dart';
+import '../../chat/application/chat_controllers.dart';
 
-/// A small strip on Home while the stored session could not be confirmed
-/// because the server did not answer; the saved chats stay usable and the
-/// controller keeps retrying.
-class SessionCheckNotice extends ConsumerWidget {
-  const SessionCheckNotice({super.key});
+/// The one strip on Home when the server could not be reached and the chats
+/// on screen are the saved ones, whichever layer noticed it (the session
+/// check or the list read): two causes, one message, never two strips.
+class OfflineNotice extends ConsumerWidget {
+  const OfflineNotice({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!ref.watch(sessionCheckFailedProvider)) return const SizedBox.shrink();
+    final show =
+        ref.watch(sessionCheckFailedProvider) ||
+        ref.watch(conversationListStaleProvider);
+    if (!show) return const SizedBox.shrink();
     final t = SisBrand.of(context);
     return Semantics(
       liveRegion: true,
       child: DecoratedBox(
-        key: const ValueKey('session-check-notice'),
+        key: const ValueKey('offline-notice'),
         decoration: BoxDecoration(
           color: t.surfaceHigh,
           border: Border(bottom: BorderSide(color: t.line)),

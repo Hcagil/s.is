@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
 import '../../auth/domain/member.dart';
-import '../../auth/presentation/session_check_notice.dart';
 import '../../chat/application/chat_controllers.dart';
 import '../../chat/domain/conversation.dart';
 import '../../chat/presentation/conversation_list.dart';
@@ -14,6 +13,7 @@ import '../../notifications/application/push_controller.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../profile/presentation/settings_screen.dart';
 import '../../update/presentation/update_banner.dart';
+import 'offline_notice.dart';
 
 /// Home for an allowed member: the update banner, then the conversations.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -62,7 +62,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: SafeArea(
           child: Column(
             children: const [
-              SessionCheckNotice(),
+              OfflineNotice(),
               UpdateBanner(),
               Expanded(child: ConversationList()),
             ],

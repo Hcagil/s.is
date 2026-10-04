@@ -754,6 +754,64 @@ void main() {
     });
   });
 
+  // 0.30.16: a build replaced by a newer one (A's, after the switch to B)
+  // never writes the stale flag, true or false; B's flag is B's alone.
+  group("12. A's late build never sets B's stale flag", () {
+    bool stale(ProviderContainer c) => c.read(conversationListStaleProvider);
+    // The newest read asked as [who]: the read of that owner's own build
+    // (a build before the session settled may have asked first).
+    int readOf(String who) => chat.calls.lastIndexWhere((x) => x.who == who);
+
+    /// A's cold start over A's stored list, its server read held; then
+    /// straight to B, whose first read is held too.
+    Future<ProviderContainer> aHeldThenB() async {
+      await seedAlice();
+      chat.holding = true;
+      final c = app(const Allowed(alice));
+      await until(() => readOf(alice.userId) >= 0, "A's read");
+      await until(() => idsOf(list(c)).join() == aIds.join(), "A's stored");
+      session(c, const Allowed(bora));
+      await until(() => readOf(bora.userId) >= 0, "B's read");
+      return c;
+    }
+
+    test("A's late build failing does not raise B's flag", () async {
+      final c = await aHeldThenB();
+      chat.answer(readOf(bora.userId));
+      await until(() => idsOf(list(c)).join() == 'b-1', "B's list");
+      expect(stale(c), isFalse, reason: 'fixture');
+      // A's build would fall back to A's stored list and raise the flag.
+      chat.answer(
+        readOf(alice.userId),
+        const Err(NetworkFailure('o', retryable: true)),
+      );
+      await pause(100);
+      expect(stale(c), isFalse);
+      expect(idsOf(list(c)), ['b-1']);
+    });
+
+    test("A's late build succeeding does not clear B's flag", () async {
+      final c = await aHeldThenB();
+      chat.answer(readOf(bora.userId));
+      await until(() => idsOf(list(c)).join() == 'b-1', "B's list");
+      // B's own refresh fails with B's list on screen: B's flag is up.
+      final before = chat.calls.length;
+      final refreshing = c.read(conversationListProvider.notifier).refresh();
+      await until(() => chat.calls.length > before, "B's refresh read");
+      chat.answer(before, const Err(NetworkFailure('o', retryable: true)));
+      try {
+        await refreshing;
+      } catch (_) {}
+      await until(() => settled(c), 'settled');
+      expect(stale(c), isTrue, reason: "fixture: B's failed refresh");
+      // A's build would clear it on success.
+      chat.answer(readOf(alice.userId));
+      await pause(100);
+      expect(stale(c), isTrue);
+      expect(idsOf(list(c)), ['b-1']);
+    });
+  });
+
   group('8. an owner swap mid-refresh never saves the result under the new '
       'owner', () {
     for (final staleLast in [true, false]) {

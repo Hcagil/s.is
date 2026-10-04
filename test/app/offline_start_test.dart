@@ -5,7 +5,7 @@
 //   (PlatformException, Exception, String, ...) is 'Something went wrong.
 //   Try again.', never the raw text.
 // - SessionGate's AsyncError, the own-profile AsyncError and the chat
-//   list's reasonOf all go through it.
+//   list's error box all go through it.
 // - An error on AuthRepository.signedInChanges leaves SessionController's
 //   state as it was: no error state, nothing unhandled.
 //
@@ -35,6 +35,7 @@ import 'package:sis/features/chat/presentation/conversation_list.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
+import 'package:sis/features/profile/presentation/settings_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../support/fakes.dart';
@@ -74,6 +75,22 @@ class _ThrowingProfile extends ProfileFake {
 
   @override
   Future<Result<OwnProfile>> load() async => throw _raw;
+}
+
+class _FailingProfile extends ProfileFake {
+  _FailingProfile()
+    : super(
+        profile: const OwnProfile(
+          userId: 'u1',
+          displayName: 'Maya',
+          tag: 'maya',
+          onboardingDone: false,
+        ),
+      );
+
+  @override
+  Future<Result<OwnProfile>> load() async =>
+      const Err(NetworkFailure('No connection'));
 }
 
 class _ThrowingList extends ConversationListController {
@@ -141,6 +158,33 @@ void main() {
       expect(_genericText, findsOneWidget);
     });
 
+    for (final (name, profile, shown) in [
+      ('a PlatformException', _ThrowingProfile(), _generic),
+      ('a Failure', _FailingProfile(), 'No connection'),
+    ]) {
+      testWidgets('the settings screen, the profile failing with $name', (
+        t,
+      ) async {
+        await t.pumpWidget(
+          ProviderScope(
+            overrides: [
+              runtimeConfigProvider.overrideWithValue(config),
+              authRepositoryProvider.overrideWithValue(FakeAuth(session: true)),
+              updateRepositoryProvider.overrideWithValue(FakeUpdate()),
+              chatRepositoryProvider.overrideWithValue(FakeChat()),
+              presenceRepositoryProvider.overrideWithValue(PresenceFake()),
+              profileRepositoryProvider.overrideWithValue(profile),
+            ],
+            child: const MaterialApp(home: SettingsScreen()),
+          ),
+        );
+        await t.pumpAndSettle();
+        expect(_play, findsNothing);
+        expect(find.text(shown), findsOneWidget);
+        expect(find.text('Try again'), findsOneWidget);
+      });
+    }
+
     testWidgets('the chat list failing with a PlatformException', (t) async {
       await t.pumpWidget(
         ProviderScope(
@@ -154,7 +198,7 @@ void main() {
       await t.pumpAndSettle();
       expect(_play, findsNothing);
       expect(_genericText, findsOneWidget);
-      expect(reasonOf(_raw), _generic);
+      expect(failureReason(_raw), _generic);
     });
   });
 

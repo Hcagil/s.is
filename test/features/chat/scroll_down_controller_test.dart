@@ -542,6 +542,35 @@ void main() {
       expect(c.read(messagesProvider).hasError, isTrue);
     });
 
+    // 0.30.16: a refusal is not a blip. With messages on screen, a
+    // DeniedFailure from the read or the join is an error at once: no retry,
+    // no rebuild 5 s later.
+    for (final (name, refuse) in [
+      (
+        'the read',
+        () {
+          chat.history.remove('c1');
+          chat.messagesResult = const Err(DeniedFailure());
+        },
+      ),
+      ('the join', () => chat.incomingResult = const Err(DeniedFailure())),
+    ]) {
+      testWidgets('$name refused: an error at once, never retried', (t) async {
+        await openFake(t);
+        refuse();
+        final mark = chat.calls.length;
+        messages().catchUp();
+        await elapse(t, const Duration(milliseconds: 100));
+        expect(c.read(messagesProvider).hasError, isTrue, reason: 'at once');
+        expect(c.read(messagesProvider).error, isA<DeniedFailure>());
+        final asked = chat.calls.length;
+        expect(asked, greaterThan(mark), reason: 'fixture: it asked');
+        await elapse(t, const Duration(seconds: 30));
+        expect(chat.calls.sublist(asked), isEmpty, reason: 'no retry/rebuild');
+        expect(c.read(messagesProvider).error, isA<DeniedFailure>());
+      });
+    }
+
     test('on first open, a failure with no list is an error', () async {
       failReads();
       c = make();

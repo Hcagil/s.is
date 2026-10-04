@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sis/core/failure.dart';
+import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 
@@ -401,10 +402,10 @@ void main() {
   });
 
   // v0.18: in-chat search answers from the messages already loaded on the
-  // phone (the open conversation's newest 500) and asks the server only when
+  // phone (the open conversation's newest page) and asks the server only when
   // there is no local hit, or when ↑ older is pressed on the oldest local hit
   // before the server has answered. ChatFake's messages() answers the newest
-  // 500 like the real read, so "not loaded" is real here.
+  // page like the real read, so "not loaded" is real here.
   group('instant from the phone', () {
     final t0 = DateTime.utc(2026, 1, 1);
     late ChatFake chat;
@@ -439,12 +440,12 @@ void main() {
 
     setUp(() async {
       chat = ChatFake(latency: const Duration(milliseconds: 2));
-      // 600 in c1: 0..99 are older than the newest 500 and never loaded.
+      // 600 in c1: 0..549 are older than the newest page (50) and never loaded.
       chat.history['c1'] = history('c1', 600, {
         20: 'Apple pie',
         40: 'an apple crumble',
-        150: 'APPLE juice',
-        550: 'apple again',
+        551: 'APPLE juice',
+        560: 'apple again',
         590: 'green apple',
         595: 'the last apple',
       });
@@ -455,7 +456,7 @@ void main() {
       c.listen(messagesProvider, (_, _) {});
       c.listen(chatSearchProvider, (_, _) {});
       await openLoaded('c1');
-      expect(c.read(messagesProvider).requireValue, hasLength(500));
+      expect(c.read(messagesProvider).requireValue, hasLength(messagePageSize));
     });
 
     tearDown(() => c.dispose());
@@ -464,7 +465,7 @@ void main() {
         'server is not asked', () async {
       final pending = search().search('apple');
       // Not awaited: the local answer is there synchronously.
-      expect(ids(), ['c1-595', 'c1-590', 'c1-550', 'c1-150']);
+      expect(ids(), ['c1-595', 'c1-590', 'c1-560', 'c1-551']);
       expect(state().query, 'apple');
       expect(state().index, 0);
       expect(state().current!.id, 'c1-595');
@@ -472,7 +473,7 @@ void main() {
       expect(await pending, isA<Ok<void>>());
       await drain();
       expect(asked(), isEmpty, reason: 'there were local hits');
-      expect(ids(), ['c1-595', 'c1-590', 'c1-550', 'c1-150']);
+      expect(ids(), ['c1-595', 'c1-590', 'c1-560', 'c1-551']);
     });
 
     test('local matching folds like the server: İ, I, ı and i are one letter, '
@@ -579,7 +580,7 @@ void main() {
       search().next();
       search().next();
       search().next();
-      expect(state().current!.id, 'c1-150', reason: 'oldest local hit');
+      expect(state().current!.id, 'c1-551', reason: 'oldest local hit');
       await drain();
       expect(asked(), isEmpty, reason: 'walking local hits asks nothing');
 
@@ -590,8 +591,8 @@ void main() {
       expect(ids(), [
         'c1-595',
         'c1-590',
-        'c1-550',
-        'c1-150',
+        'c1-560',
+        'c1-551',
         'c1-40',
         'c1-20',
       ], reason: 'local ∪ server, each message once, newest first');
@@ -639,7 +640,7 @@ void main() {
       expect(asked(), isEmpty);
     });
 
-    test('only the loaded newest 500 are searched locally', () async {
+    test('only the loaded newest page is searched locally', () async {
       await search().search('crumble'); // 40: in history, not loaded
       expect(asked(), ['crumble'], reason: 'not on the phone: asks');
       expect(ids(), ['c1-40']);
@@ -771,8 +772,8 @@ void main() {
       search().next();
       await drain();
       expect(asked(), ['apple']);
-      expect(ids(), ['c1-595', 'c1-590', 'c1-550', 'c1-150']);
-      expect(state().current!.id, 'c1-150');
+      expect(ids(), ['c1-595', 'c1-590', 'c1-560', 'c1-551']);
+      expect(state().current!.id, 'c1-551');
       expect(state().serverAnswered, isFalse);
     });
 

@@ -274,7 +274,26 @@ class FakeChat implements ChatRepository {
   @override
   Future<Result<List<Message>>> messages(String conversationId) async {
     if (gate != null) await gate!.future;
-    return messagesResult ?? Ok(initial);
+    return switch (messagesResult ?? Ok(initial)) {
+      Ok(:final value) => Ok(newestPage(value)),
+      final failed => failed,
+    };
+  }
+
+  /// Every attachmentPreviews call's ids, in order.
+  final previewCalls = <List<String>>[];
+
+  @override
+  Future<Result<Map<String, Uint8List>>> attachmentPreviews(
+    List<String> ids,
+  ) async {
+    previewCalls.add(List.of(ids));
+    if (ids.isEmpty) return const Ok(<String, Uint8List>{});
+    final rows = switch (messagesResult ?? Ok(initial)) {
+      Ok(:final value) => value,
+      _ => initial,
+    };
+    return Ok(previewsOf(rows, ids));
   }
 
   /// The client-made id of every send, in order -- a retry repeats one.
@@ -967,12 +986,50 @@ class ChatFake implements ChatRepository {
   Future<Result<List<Message>>> messages(String conversationId) async {
     await _tick('messages:$conversationId');
     if (_read != null) await _read!.future;
-    // The newest 500, oldest first -- the real read's cap; anything older is
-    // reached only through messagesAround.
-    if (history[conversationId] case final rows?) {
-      return Ok(rows.sublist(rows.length > 500 ? rows.length - 500 : 0));
-    }
-    return messagesResult;
+    // The newest page, oldest first, without previews -- the real read's
+    // contract; anything older is reached only through messagesAround and
+    // previews only through attachmentPreviews.
+    if (history[conversationId] case final rows?) return Ok(newestPage(rows));
+    return switch (messagesResult) {
+      Ok(:final value) => Ok(newestPage(value)),
+      final failed => failed,
+    };
+  }
+
+  /// Every attachmentPreviews call's ids, in order.
+  final previewCalls = <List<String>>[];
+
+  /// Forces the outcome; left null it answers from what is stored.
+  Result<Map<String, Uint8List>>? previewsResult;
+
+  final _previewHolds = <Completer<void>>[];
+
+  /// The next [attachmentPreviews] not yet held stays in flight until the
+  /// returned completer completes.
+  Completer<void> holdPreviews() {
+    final c = Completer<void>();
+    _previewHolds.add(c);
+    return c;
+  }
+
+  @override
+  Future<Result<Map<String, Uint8List>>> attachmentPreviews(
+    List<String> ids,
+  ) async {
+    previewCalls.add(List.of(ids));
+    // Like the repository: nothing to ask, no query.
+    if (ids.isEmpty) return const Ok(<String, Uint8List>{});
+    final Completer<void>? held = _previewHolds.isEmpty
+        ? null
+        : _previewHolds.removeAt(0);
+    await _tick('previews:${ids.join(',')}');
+    if (held != null) await held.future;
+    if (previewsResult case final forced?) return forced;
+    final stored = [
+      ...history.values.expand((rows) => rows),
+      if (messagesResult case Ok(:final value)) ...value,
+    ];
+    return Ok(previewsOf(stored, ids));
   }
 
   /// The client-made id of every send, in order -- a retry repeats one.
@@ -3625,4 +3682,43 @@ class ContactsFake implements ContactsRepository {
     await _tick('ids');
     return idsResult ?? Ok({...saved});
   }
+}
+
+/// messages() as the contract states it: the newest [messagePageSize] of
+/// [rows] (oldest first), every photo preview left off -- previews arrive
+/// only through attachmentPreviews.
+List<Message> newestPage(List<Message> rows) => [
+  for (final m in rows.skip(
+    rows.length > messagePageSize ? rows.length - messagePageSize : 0,
+  ))
+    withoutPreview(m),
+];
+
+/// [m] exactly as stored, minus its preview. Written here rather than
+/// through Message.withPreview so a fake does not lean on the code under test.
+Message withoutPreview(Message m) => Message(
+  id: m.id,
+  conversationId: m.conversationId,
+  senderId: m.senderId,
+  body: m.body,
+  createdAt: m.createdAt,
+  attachmentPath: m.attachmentPath,
+  localImage: m.localImage,
+  deletion: m.deletion,
+  deletedBy: m.deletedBy,
+  editedAt: m.editedAt,
+  replyTo: m.replyTo,
+  forwarded: m.forwarded,
+  sending: m.sending,
+);
+
+/// attachmentPreviews as the contract states it, over the stored [rows]:
+/// the preview of each of [ids] that has one; the rest are absent.
+Map<String, Uint8List> previewsOf(Iterable<Message> rows, List<String> ids) {
+  final wanted = ids.toSet();
+  return {
+    for (final m in rows)
+      if (wanted.contains(m.id) && m.attachmentPreview != null)
+        m.id: m.attachmentPreview!,
+  };
 }

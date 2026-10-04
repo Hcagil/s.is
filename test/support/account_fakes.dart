@@ -25,7 +25,8 @@ import 'package:sis/features/presence/domain/presence_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/domain/profile_repository.dart';
 
-import 'fakes.dart' show aroundRows, editedCopy, refuseEdit, searchRows;
+import 'fakes.dart'
+    show aroundRows, editedCopy, newestPage, previewsOf, refuseEdit, searchRows;
 
 /// One conversation as the database stores it.
 class Room {
@@ -289,15 +290,31 @@ class SessionChat implements ChatRepository {
   }
 
   @override
+  Future<Result<Map<String, Uint8List>>> attachmentPreviews(
+    List<String> ids,
+  ) async {
+    if (ids.isEmpty) return const Ok(<String, Uint8List>{});
+    final who = await _as('previews');
+    return Ok(
+      previewsOf([
+        for (final r in backend.rooms)
+          if (r.members.contains(who)) ...r.messages,
+      ], ids),
+    );
+  }
+
+  @override
   Future<Result<List<Message>>> messages(String conversationId) async {
     final who = await _as('messages:$conversationId');
     final hidden = hiddenBy[who] ?? const <String>{};
-    return Ok([
-      ...?_roomFor(
-        conversationId,
-        who,
-      )?.messages.where((m) => !hidden.contains(m.id)),
-    ]);
+    return Ok(
+      newestPage([
+        ...?_roomFor(
+          conversationId,
+          who,
+        )?.messages.where((m) => !hidden.contains(m.id)),
+      ]),
+    );
   }
 
   @override

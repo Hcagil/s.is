@@ -7,12 +7,13 @@
 //   was jumped.
 // - select(id): makes the hit with [id] current when it is among the hits;
 //   a no-op otherwise.
-// Against ChatFake, whose messages() answers the newest 500 like the real
-// read, so "older than what is loaded" is real here.
+// Against ChatFake, whose messages() answers the newest page (50) like the
+// real read, so "older than what is loaded" is real here.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
 
 import '../../support/fakes.dart';
@@ -56,9 +57,9 @@ void main() {
   });
 
   group('jumpToAround', () {
-    test('fixture: only the newest 500 are loaded', () {
-      expect(shown(), hasLength(500));
-      expect(shown().first, 'c1-100');
+    test('fixture: only the newest page is loaded', () {
+      expect(shown(), hasLength(messagePageSize));
+      expect(shown().first, 'c1-550');
       expect(shown().last, 'c1-599');
     });
 
@@ -108,8 +109,8 @@ void main() {
   });
 
   group('returnToLive', () {
-    test('after a jump: back to the newest 500, including what arrived '
-        'meanwhile', () async {
+    test('after a jump: back to the newest page (50, not 500), including what '
+        'arrived meanwhile', () async {
       await messages().jumpToAround(chat.history['c1']![30]);
       final late = Message(
         id: 'c1-new',
@@ -126,9 +127,13 @@ void main() {
       // controller still shows the jumped window (plus the live arrival), and
       // under a loaded full run 50 ms was not always enough.
       await c.read(messagesProvider.future);
+      // ...and for the background verify re-read too: it must not bring the
+      // jumped window back either.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
       final ids = shown();
       expect(ids.last, 'c1-new', reason: 'the live newest message');
-      expect(ids, hasLength(500));
+      expect(ids, hasLength(messagePageSize));
+      expect(ids.first, 'c1-551', reason: 'the newest page as it is now');
       expect(ids, isNot(contains('c1-30')), reason: 'the jumped window left');
     });
 

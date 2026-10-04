@@ -105,6 +105,10 @@ class PasswordAuth implements AuthRepository {
   Future<Result<Member>> currentMember() => real.currentMember();
   @override
   Future<void> signOut() => real.signOut();
+  @override
+  String? get userId => real.userId;
+  @override
+  String? get sessionId => real.sessionId;
 }
 
 /// Polls until [done]; there is no callback for "the server answered".

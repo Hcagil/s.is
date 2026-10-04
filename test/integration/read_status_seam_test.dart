@@ -34,6 +34,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/session_claim.dart';
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
 import '../support/reach.dart';
@@ -99,6 +100,10 @@ class _AccountAuth implements AuthRepository {
   @override
   Future<Result<Member>> currentMember() async =>
       Ok(Member(userId: client.auth.currentUser!.id, displayName: name));
+  @override
+  String? get userId => client.auth.currentUser?.id;
+  @override
+  String? get sessionId => sessionIdOf(client);
   @override
   Future<void> signOut() async {}
 }

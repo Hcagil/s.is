@@ -49,8 +49,16 @@ class FakeAuth implements AuthRepository {
     this.allowed = true,
     this.signInResult = const Ok(null),
     this.member = const Member(userId: 'u1', displayName: 'Maya'),
+    this.sid = 's1',
   });
   bool session;
+
+  /// The access token's `session_id` claim while signed in.
+  String sid;
+
+  /// Server calls made, so a test can prove none ran before a frame.
+  int activations = 0;
+  int memberReads = 0;
   bool allowed;
   Result<void> signInResult;
 
@@ -75,9 +83,21 @@ class FakeAuth implements AuthRepository {
   }
 
   @override
-  Future<Result<bool>> activateSession() async => Ok(allowed);
+  Future<Result<bool>> activateSession() async {
+    activations++;
+    return Ok(allowed);
+  }
+
   @override
-  Future<Result<Member>> currentMember() async => Ok(member);
+  Future<Result<Member>> currentMember() async {
+    memberReads++;
+    return Ok(member);
+  }
+
+  @override
+  String? get userId => session ? member.userId : null;
+  @override
+  String? get sessionId => session ? sid : null;
   @override
   Future<void> signOut() async {
     signOuts++;
@@ -107,6 +127,7 @@ class CheckingAuth extends FakeAuth {
 
   @override
   Future<Result<bool>> activateSession() async {
+    activations++;
     await Future<void>.value(); // a network call: never answers in-line
     final gate = _gate;
     if (gate != null) await gate.future;

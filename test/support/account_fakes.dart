@@ -107,6 +107,15 @@ class SwitchingAuth implements AuthRepository {
 
   @override
   bool get hasSession => backend.signedIn != null;
+  @override
+  String? get userId => backend.signedIn;
+
+  /// A new session id per account, as each sign-in issues one.
+  @override
+  String? get sessionId {
+    final who = backend.signedIn;
+    return who == null ? null : 'session-$who';
+  }
 
   @override
   Stream<bool> get signedInChanges => _changes.stream;

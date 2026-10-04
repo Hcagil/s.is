@@ -76,6 +76,10 @@ class DesignAuth implements AuthRepository {
   @override
   Future<Result<Member>> currentMember() async => const Ok(me);
   @override
+  String? get userId => session ? me.userId : null;
+  @override
+  String? get sessionId => session ? 'design-session' : null;
+  @override
   Future<void> signOut() async {
     session = false;
     _changes.add(false);

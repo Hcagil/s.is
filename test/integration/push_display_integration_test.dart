@@ -92,6 +92,10 @@ class _SignedInAuth implements AuthRepository {
   Future<Result<Member>> currentMember() => real.currentMember();
   @override
   Future<void> signOut() => real.signOut();
+  @override
+  String? get userId => real.userId;
+  @override
+  String? get sessionId => real.sessionId;
 }
 
 Future<void> _until(bool Function() done, String what) async {

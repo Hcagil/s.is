@@ -33,7 +33,8 @@ const cem = Member(userId: 'u3', displayName: 'Cem');
 final platforms = TargetPlatformVariant.only(TargetPlatform.android)
   ..values.add(TargetPlatform.iOS);
 
-class _SignedIn extends SessionController {
+/// Signed in as [me].
+class SignedInForTests extends SessionController {
   @override
   Future<SessionState> build() async => const Allowed(me);
 }
@@ -105,7 +106,7 @@ Future<ProviderContainer> pumpLauncher(
         chatRepositoryProvider.overrideWithValue(repo),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
-        sessionControllerProvider.overrideWith(_SignedIn.new),
+        sessionControllerProvider.overrideWith(SignedInForTests.new),
         pushSourceProvider.overrideWithValue(PushSourceFake()),
         pushRegistryProvider.overrideWithValue(PushRegistryFake()),
       ],

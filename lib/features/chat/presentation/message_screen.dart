@@ -27,6 +27,7 @@ import '../domain/group_member.dart';
 import '../domain/highlight.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
+import '../domain/png_size.dart';
 import '../domain/timeline.dart';
 import '../domain/read_marks.dart';
 import 'attachment_preview_page.dart';
@@ -1383,7 +1384,7 @@ class _Attachment extends ConsumerWidget {
   /// the rows on screen away from it -- scrolling down toward the newest
   /// message then fights every photo that loads on the way (0.30.16).
   static Size? _photoBox(Uint8List? preview) {
-    final size = _pngSize(preview);
+    final size = pngDimensions(preview);
     if (size == null) return null;
     // Scaled up as well as down: the preview is only 24 px wide.
     final scale = math.min(
@@ -1391,20 +1392,6 @@ class _Attachment extends ConsumerWidget {
       _bounds.maxHeight / size.height,
     );
     return Size(size.width * scale, size.height * scale);
-  }
-
-  /// Width and height from a PNG header (the IHDR chunk is always first:
-  /// width at bytes 16-19, height at 20-23, big-endian). Null otherwise.
-  static Size? _pngSize(Uint8List? png) {
-    if (png == null || png.length < 24) return null;
-    if (png[0] != 0x89 || png[1] != 0x50 || png[2] != 0x4E || png[3] != 0x47) {
-      return null;
-    }
-    final data = ByteData.sublistView(png);
-    final w = data.getUint32(16);
-    final h = data.getUint32(20);
-    if (w == 0 || h == 0) return null;
-    return Size(w.toDouble(), h.toDouble());
   }
 
   @override

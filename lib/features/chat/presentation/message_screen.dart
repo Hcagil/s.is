@@ -1385,7 +1385,12 @@ class _Attachment extends ConsumerWidget {
   static Size? _photoBox(Uint8List? preview) {
     final size = _pngSize(preview);
     if (size == null) return null;
-    return _bounds.constrainSizeAndAttemptToPreserveAspectRatio(size);
+    // Scaled up as well as down: the preview is only 24 px wide.
+    final scale = math.min(
+      _bounds.maxWidth / size.width,
+      _bounds.maxHeight / size.height,
+    );
+    return Size(size.width * scale, size.height * scale);
   }
 
   /// Width and height from a PNG header (the IHDR chunk is always first:

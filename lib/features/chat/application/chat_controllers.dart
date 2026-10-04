@@ -202,6 +202,22 @@ final resumeCatchUpProvider = Provider<void Function()>((ref) {
 /// Retries are off; [refresh] is the explicit way back.
 Duration? _never(int retryCount, Object error) => null;
 
+/// True while the chat list on screen is the stored or last-read one because
+/// a load failed; drives the small notice above the list (never an error box).
+final conversationListStaleProvider =
+    NotifierProvider<ConversationListStale, bool>(ConversationListStale.new);
+
+class ConversationListStale extends Notifier<bool> {
+  @override
+  bool build() {
+    // Another account never inherits the last one's notice.
+    ref.watch(currentUserIdProvider);
+    return false;
+  }
+
+  void set(bool stale) => state = stale;
+}
+
 final conversationListProvider =
     AsyncNotifierProvider<ConversationListController, List<Conversation>>(
       ConversationListController.new,
@@ -353,16 +369,18 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       // means one was started during the load: read again rather than drop it.
       if (unknown) list = await _load();
     } catch (e) {
-      // Offline with a cached snapshot already shown: the list stays usable
-      // instead of flipping to an error screen over data already on the
-      // member's own phone. Anything that is not a retryable NetworkFailure
-      // is a real refusal (denied, or the server answering "no"), not a
-      // connectivity blip -- it is shown, not hidden behind stale data.
-      if (cached == null || e is! NetworkFailure || !e.retryable) rethrow;
+      // A stored list already shown stays on every load error but a refusal
+      // (DeniedFailure; the session controller handles a revoked member):
+      // the member's own data beats an error box, and a small notice says it
+      // is old.
+      if (cached == null || e is DeniedFailure) rethrow;
       loaded = true;
       list = cached;
+      _setStale(true);
+      return list;
     }
     if (ownerId != null && alive) _saveSnapshot(ownerId, list);
+    _setStale(false);
     return list;
   }
 
@@ -479,6 +497,13 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     };
   }
 
+  /// Sets the stale notice; a no-op after dispose.
+  void _setStale(bool stale) {
+    if (ref.mounted) {
+      ref.read(conversationListStaleProvider.notifier).set(stale);
+    }
+  }
+
   Future<void> refresh() async {
     final ownerId = ref.read(currentUserIdProvider);
     state = const AsyncLoading();
@@ -486,6 +511,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     if (!ref.mounted) return;
     if (ref.read(currentUserIdProvider) != ownerId) return;
     state = next;
+    // An explicit refresh still reports its failure (the error box), so the
+    // saved-list notice has nothing to say here.
+    _setStale(false);
     _saveCurrentIfData();
   }
 
@@ -522,6 +550,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     if (!ref.mounted) return;
     if (ref.read(currentUserIdProvider) != ownerId) return;
     if (next is AsyncData<List<Conversation>>) state = next;
+    _setStale(next is AsyncError);
     _saveCurrentIfData();
   }
 
@@ -965,10 +994,23 @@ class MessagesController extends AsyncNotifier<List<Message>> {
             ).then((_) => _fillPreviews(conversationId, () => alive));
           }),
         );
+        // My own photos still in the air (not in the send queue, which holds
+        // text only) stay across this re-read, e.g. the one returnToLive
+        // starts; a stored copy of one that already landed replaces it.
+        final photos = [
+          for (final m in state.value ?? const <Message>[])
+            if (m.conversationId == conversationId &&
+                m.localImage != null &&
+                m.attachmentPath == null &&
+                !m.sending &&
+                !shown.any((s) => s.id == m.id || m.isPendingOf(s)))
+              m,
+        ];
         return [
           ...shown,
           for (final p in pending)
             if (!shown.any((m) => m.id == p.id)) p,
+          ...photos,
         ];
     }
   }
@@ -991,7 +1033,8 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     if (conversationId == null ||
         _jumped ||
         state.isLoading ||
-        state.value == null) {
+        state.hasError ||
+        (state.value?.isEmpty ?? true)) {
       return;
     }
     final now = DateTime.now();

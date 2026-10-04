@@ -20,4 +20,11 @@ abstract interface class AuthRepository {
 
   /// Signs out of Google and the backend.
   Future<void> signOut();
+
+  /// The signed-in auth user's id, null when none.
+  String? get userId;
+
+  /// The `session_id` claim of the current access token; null when there is
+  /// none or it cannot be read.
+  String? get sessionId;
 }

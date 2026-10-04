@@ -8,7 +8,20 @@ import UserNotifications
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    excludeSupportFromBackup()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  /// The chat list snapshot and the last-session marker live in Application
+  /// Support; keep them out of iCloud and iTunes backups.
+  private func excludeSupportFromBackup() {
+    guard var url = FileManager.default.urls(
+      for: .applicationSupportDirectory, in: .userDomainMask
+    ).first else { return }
+    try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    var values = URLResourceValues()
+    values.isExcludedFromBackup = true
+    try? url.setResourceValues(values)
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {

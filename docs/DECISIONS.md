@@ -1655,3 +1655,35 @@ created by a one-off `workflow_dispatch` bootstrap that sees only a CSR. The
 yearly rotation and the expiry warning are in `docs/DELIVERY.md`. The earlier
 "revoke at `VALID`" idea (commit 2799c04) was dropped for the same reason as
 the per-run revoke: beta review comes later.
+
+## 2026-10-04 — Optimistic cold start from a last confirmed session (0.30.15)
+
+**Problem.** A cold start waited for three round trips in a row
+(`activate_session`, the member's profile read, `own_profile`) before the
+first list frame, and showed an error screen when the phone was offline. The
+owner's bar is a usable list in under 500 ms with the network never on the
+critical path.
+
+**Options weighed.** (a) Keep gating on the server: slow, and an error screen
+offline. (b) Show the stored list with no binding or bound: a revoked or
+replaced session would stay readable on that phone for good. (c) **Chosen:** a
+marker file (`last_session.json`) bound to the user and the session id, with a
+14-day limit (manager decision), and the confirmation asked behind the list.
+
+**Why RLS stays the authority.** The stored list is already on the phone. The
+server refuses every read and write of a revoked member whatever the app
+shows, so the optimism only decides what an already stored file displays. The
+14 days bound the one residual risk: a member revoked while the phone is
+offline.
+
+**Security-lead design: PASS, with blocking items.** B1 closes every route on
+Denied and on sign-out (this also fixes a Denied that arrives mid-session
+leaving a chat open). B2 binds the marker to user and session. B3 moves
+`confirmedAt` only on a server `true` and caps it at 14 days. B4 keeps token
+and email out of the marker. B5 is `docs/SECURITY.md` and this entry.
+
+**Consequences.** `Allowed.confirmed` and `Allowed.onboarded`;
+`AuthRepository.userId` and `sessionId`; `LastSessionStore` with a JSON file
+implementation; a retry ladder of 2 s up to 60 s plus a retry on resume; a
+small notice on Home while the check cannot reach the server; iOS excludes
+Application Support from iCloud and iTunes backups. No `supabase/` change.

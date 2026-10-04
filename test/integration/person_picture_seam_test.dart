@@ -30,6 +30,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../features/profile/avatar_widgets_test.dart' show avatarIn, picturesIn;
+import '../support/session_claim.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
 
@@ -112,6 +113,10 @@ class _AccountAuth implements AuthRepository {
   @override
   Future<Result<Member>> currentMember() async =>
       Ok(Member(userId: client.auth.currentUser!.id, displayName: 'Ece'));
+  @override
+  String? get userId => client.auth.currentUser?.id;
+  @override
+  String? get sessionId => sessionIdOf(client);
   @override
   Future<void> signOut() async {}
 }

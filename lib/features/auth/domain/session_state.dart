@@ -24,9 +24,17 @@ final class SessionLoading extends SessionState {
 
 /// Allowlisted and holding the active device session.
 final class Allowed extends SessionState {
-  const Allowed(this.member);
+  const Allowed(this.member, {this.confirmed = true, this.onboarded = false});
 
   final Member member;
+
+  /// True once the server has answered "allowed" in this run; false while the
+  /// state comes from the stored last-session marker and the answer is pending.
+  final bool confirmed;
+
+  /// The marker said the member finished the first-run screen, so the gate may
+  /// show Home while the profile loads.
+  final bool onboarded;
 }
 
 /// Signed in with Google but not on the allowlist.

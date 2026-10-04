@@ -156,6 +156,15 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
   @override
   Map<String, List<Message>> build() {
     ref.watch(currentUserIdProvider);
+    // A new owner (or none: Denied, signed out) starts with nothing queued --
+    // a revoked member's waiting sends are dropped, never retried.
+    for (final t in _timers.values) {
+      t.cancel();
+    }
+    _timers.clear();
+    _queues.clear();
+    _retries.clear();
+    _draining.clear();
     ref.onDispose(() {
       for (final t in _timers.values) {
         t.cancel();

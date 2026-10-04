@@ -29,6 +29,13 @@ class OwnProfileController extends AsyncNotifier<OwnProfile> {
   Future<OwnProfile> build() async {
     // The profile of whoever is signed in now; a switch loads the new one.
     ref.watch(currentUserIdProvider);
+    // Once the profile says the first-run screen is done, the session marker
+    // may stand in for the gate on the next cold start.
+    listenSelf((_, next) {
+      if (next.value?.onboardingDone == true) {
+        ref.read(sessionControllerProvider.notifier).markOnboarded();
+      }
+    });
     return switch (await ref.read(profileRepositoryProvider).load()) {
       Ok(:final value) => value,
       Err(:final failure) => throw failure,

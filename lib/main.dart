@@ -14,6 +14,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app/sis_app.dart';
 import 'core/runtime_config.dart';
 import 'features/auth/application/session_controller.dart';
+import 'features/auth/data/file_last_session_store.dart';
 import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
@@ -125,6 +126,7 @@ Future<void> main() async {
           chatListSnapshotStoreProvider.overrideWithValue(
             FileChatListSnapshotStore(),
           ),
+          lastSessionStoreProvider.overrideWithValue(FileLastSessionStore()),
           galleryProvider.overrideWithValue(const PhotoManagerGallery()),
           externalPickerProvider.overrideWithValue(
             const ExternalPickerChannel(),

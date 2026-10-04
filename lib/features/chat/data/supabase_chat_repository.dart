@@ -31,7 +31,8 @@ final class SupabaseChatRepository implements ChatRepository {
   final SupabaseClient _client;
   final AttachmentCache _cache;
 
-  /// How many messages one conversation screen holds.
+  /// The cap of the shared photos and links reads; a conversation screen reads
+  /// pages instead (see [messagePageSize]).
   static const _historyLimit = 500;
 
   /// How many messages [messagesAround] fetches on each side of the anchor.
@@ -266,6 +267,12 @@ final class SupabaseChatRepository implements ChatRepository {
 
   static const _messageColumns =
       'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at';
+
+  /// The columns of a page read (open chat): no photo preview -- those arrive
+  /// separately, see [attachmentPreviews], so the first paint never waits on
+  /// them.
+  static const _pageColumns =
+      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -528,7 +535,7 @@ final class SupabaseChatRepository implements ChatRepository {
     try {
       final rows = await _client
           .from('messages')
-          .select(_messageColumns)
+          .select(_pageColumns)
           .eq('conversation_id', conversationId)
           // Read NEWEST-first with a cap, then reverse. PostgREST truncates a
           // response at max_rows, and an ascending read would silently drop
@@ -536,13 +543,32 @@ final class SupabaseChatRepository implements ChatRepository {
           // which reads as working. Dropping the oldest is the honest
           // truncation.
           .order('created_at', ascending: false)
-          .limit(_historyLimit)
+          .limit(messagePageSize)
           .retriedOnce();
       // The interface documents oldest-first, which is also what the screen
-      // renders.
-      // ponytail: one bounded page. If a conversation outgrows it, add
-      // backward paging keyed on created_at rather than raising the cap.
+      // renders. One newest page; older history is paged with messagesAround.
       return Ok(rows.reversed.map(_toMessage).toList());
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<Map<String, Uint8List>>> attachmentPreviews(
+    List<String> messageIds,
+  ) async {
+    if (messageIds.isEmpty) return const Ok({});
+    try {
+      final rows = await _client
+          .from('messages')
+          .select('id, attachment_preview')
+          .inFilter('id', messageIds)
+          .not('attachment_preview', 'is', null)
+          .retriedOnce();
+      return Ok({
+        for (final row in rows)
+          row['id'] as String: ?_preview(row['attachment_preview']),
+      });
     } catch (e) {
       return Err(_asFailure(e));
     }

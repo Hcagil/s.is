@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -29,6 +30,7 @@ import 'features/notifications/application/badge_controller.dart';
 import 'features/notifications/application/notification_settings_controller.dart';
 import 'features/notifications/application/push_controller.dart';
 import 'features/notifications/data/channel_tone_picker.dart';
+import 'features/notifications/data/deferred_push_source.dart';
 import 'features/notifications/data/firebase_push_source.dart';
 import 'features/notifications/data/local_push_display.dart';
 import 'features/notifications/data/platform_app_badge.dart';
@@ -37,6 +39,7 @@ import 'features/notifications/data/shared_prefs_notification_explainer_store.da
 import 'features/notifications/data/supabase_notification_settings_repository.dart';
 import 'features/notifications/data/supabase_push_receipts.dart';
 import 'features/notifications/data/supabase_push_registry.dart';
+import 'features/notifications/domain/push.dart';
 import 'features/presence/application/presence_controllers.dart';
 import 'features/presence/data/supabase_presence_repository.dart';
 import 'features/profile/application/profile_controller.dart';
@@ -100,15 +103,11 @@ Future<void> main() async {
         localStorage: SecureSessionStorage(),
       ),
     );
-    // Push: reads android/app/google-services.json (Android) or
-    // ios/Runner/GoogleService-Info.plist (iOS), bundled at build time.
-    await Firebase.initializeApp();
-    // Android pushes are data only: the app shows them itself, grouped. iOS
-    // is sent a regular notification and shows it through the system.
-    FirebaseMessaging.onBackgroundMessage(onBackgroundPush);
-    await LocalPushDisplay.init(onTap: FirebasePushSource.tapped);
-    // Drops the pre-0.26 'messages' channel and any combination now unused.
-    await LocalPushDisplay.pruneChannels();
+    // Push is set up after the first frame (see below); everything that asks
+    // the push source waits for it (DeferredPushSource).
+    final pushReady = Completer<PushSource>();
+    // A failed setup is logged by _setUpPush and surfaces in each waiting call.
+    pushReady.future.ignore();
     final client = Supabase.instance.client;
     final attachmentCache = FileAttachmentCache();
     runApp(
@@ -141,7 +140,7 @@ Future<void> main() async {
           ),
           linkOpenerProvider.overrideWithValue(const UrlLauncherLinkOpener()),
           pushSourceProvider.overrideWithValue(
-            FirebasePushSource(FirebaseMessaging.instance),
+            DeferredPushSource(pushReady.future),
           ),
           pushReceiptsProvider.overrideWithValue(SupabasePushReceipts(client)),
           appBadgeProvider.overrideWithValue(const PlatformAppBadge()),
@@ -160,6 +159,11 @@ Future<void> main() async {
         child: const SisApp(),
       ),
     );
+    unawaited(
+      WidgetsBinding.instance.waitUntilFirstFrameRasterized.then(
+        (_) => _setUpPush(pushReady),
+      ),
+    );
   } catch (e) {
     // Malformed config or a broken secure store must show a reason, not a
     // blank screen. Error text can hold config or IDs: only its type is kept.
@@ -174,5 +178,25 @@ Future<void> main() async {
         child: const SisApp(),
       ),
     );
+  }
+}
+
+/// Firebase and the local notification display, set up once the first frame is
+/// on screen: nothing on that frame needs them, and they cost start-up time.
+/// Android pushes are data only (the app shows them itself, grouped); iOS is
+/// sent a regular notification and shows it through the system.
+Future<void> _setUpPush(Completer<PushSource> ready) async {
+  try {
+    // Reads android/app/google-services.json (Android) or
+    // ios/Runner/GoogleService-Info.plist (iOS), bundled at build time.
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(onBackgroundPush);
+    await LocalPushDisplay.init(onTap: FirebasePushSource.tapped);
+    ready.complete(FirebasePushSource(FirebaseMessaging.instance));
+    // Drops the pre-0.26 'messages' channel and any combination now unused.
+    await LocalPushDisplay.pruneChannels();
+  } catch (e) {
+    log('Push setup failed: ${e.runtimeType}', name: 'sis.startup');
+    if (!ready.isCompleted) ready.completeError(e);
   }
 }

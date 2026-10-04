@@ -9,6 +9,7 @@
 // next cold start silently loses the instant stored start.
 //
 // Plain `test`, not testWidgets: real file I/O does not run under fake time.
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -67,6 +68,121 @@ void main() {
     final got = await store().load();
     expect(got, isNotNull, reason: 'the marker was lost or left corrupt');
     expect(got!.onboarded, isTrue, reason: 'the earlier save won');
+  });
+
+  group('saves queued behind one in flight', () {
+    // The disk as the store sees it: each look-up of the directory can be
+    // held, or fail, so a save is known to be in flight (or broken) while
+    // the next ones are called.
+    late List<Completer<void>?> holds;
+    late Set<int> failing;
+    late int asks;
+    FileLastSessionStore heldStore() {
+      holds = [];
+      failing = {};
+      asks = 0;
+      return FileLastSessionStore(
+        root: () async {
+          final n = asks++;
+          final hold = n < holds.length ? holds[n] : null;
+          if (hold != null) await hold.future;
+          if (failing.contains(n)) {
+            throw const FileSystemException('test: disk unavailable');
+          }
+          return dir;
+        },
+      );
+    }
+
+    Future<void> done(Iterable<Future<void>> fs) =>
+        Future.wait(fs).timeout(const Duration(seconds: 5));
+
+    test('five saves called while the first is held complete in call order, '
+        'and the marker is the last one', () async {
+      final s = heldStore();
+      holds = [Completer<void>()];
+      final finished = <int>[];
+      final saves = [
+        for (var i = 1; i <= 5; i++)
+          s.save(marker(sessionId: 'sess-$i')).then((_) => finished.add(i)),
+      ];
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(finished, isEmpty, reason: 'the first save is held');
+      holds[0]!.complete();
+      await done(saves);
+
+      expect(finished, [1, 2, 3, 4, 5]);
+      expect((await store().load())?.sessionId, 'sess-5');
+    });
+
+    test('five saves called back to back, nothing held: the marker is the '
+        'last one and readable', () async {
+      // Each one shorter than the one before: two writes over one file
+      // leave the tail of the longer one behind.
+      final s = store();
+      await done([
+        for (var i = 1; i <= 5; i++)
+          s.save(marker(sessionId: 'sess-${'x' * (6 - i)}')),
+      ]);
+      expect((await store().load())?.sessionId, 'sess-x');
+    });
+
+    test('a failed save does not block the next: it completes and its '
+        'marker is stored', () async {
+      final s = heldStore();
+      holds = [Completer<void>()];
+      failing = {0};
+      final bad = s.save(marker(sessionId: 'sess-bad'));
+      final good = s.save(marker(sessionId: 'sess-good'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      holds[0]!.complete();
+      await done([bad, good]);
+
+      expect((await store().load())?.sessionId, 'sess-good');
+    });
+
+    test(
+      'a failed save with nothing queued, then a later save: stored',
+      () async {
+        final s = heldStore();
+        failing = {0};
+        await done([s.save(marker(sessionId: 'sess-bad'))]);
+        await done([s.save(marker(sessionId: 'sess-good'))]);
+        expect((await store().load())?.sessionId, 'sess-good');
+      },
+    );
+
+    test('clear() called after a save that has not started yet wins', () async {
+      final s = heldStore();
+      holds = [Completer<void>()];
+      final first = s.save(marker(sessionId: 'sess-1'));
+      final queued = s.save(marker(sessionId: 'sess-2')); // waits for first
+      final cleared = s.clear();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      holds[0]!.complete();
+      await done([first, queued, cleared]);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      expect(
+        dir.listSync().map((e) => e.path.split('/').last),
+        isEmpty,
+        reason: 'a queued save resurrected the marker after clear()',
+      );
+      expect(await store().load(), isNull);
+    });
+
+    test('a save called after clear() is kept', () async {
+      final s = heldStore();
+      holds = [Completer<void>()];
+      final first = s.save(marker(sessionId: 'sess-1'));
+      final cleared = s.clear();
+      final after = s.save(marker(sessionId: 'sess-3'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      holds[0]!.complete();
+      await done([first, cleared, after]);
+
+      expect((await store().load())?.sessionId, 'sess-3');
+    });
   });
 
   test('the profile says onboarded the moment the server confirms: the next '

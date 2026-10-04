@@ -72,7 +72,7 @@ class _AllowedGate extends ConsumerWidget {
       // profile loads or fails to load; never an error screen.
       AsyncError() when onboarded => HomeScreen(member: member),
       AsyncError(:final error) => StatusScreen.error(
-        error is Failure ? error.message : '$error',
+        failureReason(error),
         onRetry: () => ref.read(ownProfileProvider.notifier).retry(),
       ),
       _ when onboarded => HomeScreen(member: member),
@@ -197,7 +197,7 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       AsyncData(value: Allowed(:final member, :final onboarded)) =>
         _AllowedGate(member: member, onboarded: onboarded),
       AsyncError(:final error) => StatusScreen.error(
-        '$error',
+        failureReason(error),
         onRetry: notifier.retry,
       ),
       _ => const SisFullScreenLoader(),

@@ -32,6 +32,11 @@ final class ProviderFailure extends Failure {
   final bool userCanceled;
 }
 
+/// Words for any error a screen shows: a Failure's own message, never a raw
+/// SDK error (a platform plugin's text must not reach the member).
+String failureReason(Object error) =>
+    error is Failure ? error.message : 'Something went wrong. Try again.';
+
 sealed class Result<T> {
   const Result();
 }

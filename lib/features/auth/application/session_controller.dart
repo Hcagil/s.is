@@ -103,11 +103,17 @@ class SessionController extends AsyncNotifier<SessionState> {
     }
     final repo = ref.read(authRepositoryProvider);
     _lastSignedIn = repo.hasSession;
-    final sub = repo.signedInChanges.listen((signedIn) {
-      if (signedIn == _lastSignedIn) return;
-      _lastSignedIn = signedIn;
-      unawaited(_refresh(signedIn));
-    });
+    final sub = repo.signedInChanges.listen(
+      (signedIn) {
+        if (signedIn == _lastSignedIn) return;
+        _lastSignedIn = signedIn;
+        unawaited(_refresh(signedIn));
+      },
+      // Offline, a failed token refresh is replayed on this stream as an
+      // error. It says nothing about who is signed in: the session is kept,
+      // and the server check behind the stored list retries by itself.
+      onError: (Object _) {},
+    );
     ref.onDispose(sub.cancel);
     ref.onDispose(() => _retryTimer?.cancel());
     final rev = ++_revision;

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
+import '../../../core/startup_marks.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../domain/message.dart';
@@ -17,8 +18,7 @@ import 'new_group_page.dart';
 import 'person_avatar.dart';
 
 /// Reason text for any failure, so a screen never shows a bare exception.
-String reasonOf(Object error) =>
-    error is Failure ? error.message : error.toString();
+String reasonOf(Object error) => failureReason(error);
 
 /// The member's conversations, newest first, with a picker for starting one.
 class ConversationList extends ConsumerWidget {
@@ -38,6 +38,11 @@ class ConversationList extends ConsumerWidget {
     ) {
       if (next != null) showSisNotice(context, next.message, isError: true);
     });
+    // Debug timing only (label, never data): first build that has rows.
+    if (conversations.value?.isNotEmpty ?? false) {
+      StartupMarks.mark('list-rows');
+    }
+
     return Scaffold(
       body: Column(
         children: [

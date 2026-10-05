@@ -1744,3 +1744,46 @@ the seed allowlist and non-invited fixtures are created through the admin API,
 which the hook does not see. Production enables the hook in the dashboard or
 through the Management API after the migration is applied, and keeps the email
 provider off (since 2026-10-05). Turning `google_only` on needs Apple added to it first.
+
+## 2026-10-05 — The SIS Bot is a server-created account at example.com
+
+**Context.** Testing rounds need an assistant that talks to testers inside SIS:
+the Debug chat and 1:1 chats with testers the owner names. The bot needs an
+email address that nobody else can ever own, because SIS links a Google
+sign-in to an existing user by email. The owner wants no extra Google account,
+no phone check and no captcha.
+
+**Decision.** The bot is a Supabase user created on the server with the
+address `sis-destek-bot@example.com`. It has no password and no Google sign-in.
+Its session is made once by a private admin step, and only the refresh token is
+kept, outside the repository.
+
+**Why it is safe.**
+- `example.com` is reserved by IANA and receives no mail, so no login link,
+  code or password reset can reach anyone.
+- No Google account can be verified on that address.
+- The bot is created with its own name ("SIS Destek") and tag, so nothing is
+  derived from the email.
+- The order closes the sign-up race: create the user (email confirmed) first,
+  then add the allowlist row, and remove the allowlist row before ever deleting
+  the user. The sign-up hook admits the address only through admin creation.
+- On the server the bot can reach only the Debug chat and 1:1 chats with
+  owner-listed testers. It is never an admin, gets no push, is rate-limited,
+  and has an owner-only off switch. RLS and RPC checks cover every path, and
+  the bot session never holds the service-role key.
+
+**Consequences.**
+- Mail to the bot goes nowhere, so the bot has no email recovery. If its
+  session is lost, the owner's admin step makes a new one.
+- Revoking its session or flipping the off switch stops it at once.
+
+**How it is enforced.** Migration `20261005130000_sis_bot.sql`: a trigger on
+`conversation_members` proves every membership (the Debug chat, or the 1:1 with
+a listed tester, role member); the OFF switch sits inside `has_app_access()`;
+find-by-tag, group avatars, release notes, device tokens, profile and contact
+writes, uploads and Realtime are refused for the bot; sends and chat starts are
+rate-limited (RLMT2). The Debug membership is made by the owner-run bootstrap
+while the switch is still OFF, so it is exempt from the ON and rate checks; a
+runbook insert (no JWT) is exempt from ON so listing a tester works while OFF.
+The tool pair is `tool/sis_bot.sh` (bot session only) and
+`tool/sis_bot_admin.sh` (owner-run, service key from the owner's environment).

@@ -398,6 +398,28 @@ void main() {
     giaC.dispose();
   });
 
+  test('the sole admin leaves through the controller, as the leave card '
+      'does: Ok, she is out, and the longest-standing member is the one '
+      'admin', () async {
+    // hol is in from the start; ike is added later, so hol has stood
+    // longest. The order of the ids handed to the start is not the order
+    // anyone joined: hol must win on time, not on position.
+    final g = await newGroup([hol]);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    ok(await gia.repo.addMembers(g, [ike.id], withHistory: true), 'add ike');
+    expect(await currentAdmins(g), {gia.id}, reason: 'fixture');
+
+    final giaC = ProviderContainer.test(
+      overrides: [chatRepositoryProvider.overrideWithValue(gia.repo)],
+    );
+    final r = await giaC.read(groupControllerProvider).leave(g);
+    giaC.dispose();
+
+    expect(r, isA<Ok<bool>>(), reason: '$r');
+    expect(await currentMembers(g), {hol.id, ike.id});
+    expect(await currentAdmins(g), {hol.id});
+  });
+
   group('two admins at once never leave a group without one', () {
     /// A fresh group run by ike and jun, with kai as its ordinary member.
     Future<String> twoAdmins() async {

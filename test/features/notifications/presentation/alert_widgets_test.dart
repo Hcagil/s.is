@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/l10n/app_localizations.dart';
 import 'package:sis/app/controls.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/member.dart';
@@ -105,6 +106,8 @@ void main() {
       ProviderScope(
         overrides: ports(),
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(body: ListView(children: [child])),
         ),
       ),
@@ -133,6 +136,8 @@ void main() {
           ProviderScope(
             overrides: ports(),
             child: const MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
               home: Scaffold(body: AlertDefaultsSection()),
             ),
           ),
@@ -265,6 +270,8 @@ void main() {
           ProviderScope(
             overrides: ports(),
             child: const MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
               home: Scaffold(body: ChatAlertTiles(conversationId: 'g1')),
             ),
           ),
@@ -388,6 +395,8 @@ void main() {
           ProviderScope(
             overrides: pageOverrides(ChatFake()),
             child: const MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
               home: GroupScreen(conversationId: 'g1', title: 'Club'),
             ),
           ),
@@ -411,6 +420,8 @@ void main() {
           ProviderScope(
             overrides: pageOverrides(chat),
             child: const MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
               home: PersonScreen(
                 userId: 'ub',
                 fallbackName: 'Bob',
@@ -434,6 +445,8 @@ void main() {
           ProviderScope(
             overrides: pageOverrides(ChatFake()),
             child: const MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
               home: PersonScreen(
                 userId: 'ub',
                 fallbackName: 'Bob',

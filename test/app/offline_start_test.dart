@@ -24,6 +24,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/l10n/app_localizations.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
@@ -175,7 +176,11 @@ void main() {
               presenceRepositoryProvider.overrideWithValue(PresenceFake()),
               profileRepositoryProvider.overrideWithValue(profile),
             ],
-            child: const MaterialApp(home: SettingsScreen()),
+            child: const MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: SettingsScreen(),
+            ),
           ),
         );
         await t.pumpAndSettle();

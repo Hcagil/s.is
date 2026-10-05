@@ -10,6 +10,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
@@ -442,8 +443,10 @@ Widget designApp({
   DesignChat? chat,
   DesignPresence? presence,
   DesignProfile? profile,
+  List<Override> extra = const [],
 }) => ProviderScope(
   overrides: [
+    ...extra,
     runtimeConfigProvider.overrideWithValue(
       const RuntimeConfig(
         supabaseUrl: 'https://x.supabase.co',

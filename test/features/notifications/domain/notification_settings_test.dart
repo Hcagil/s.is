@@ -45,20 +45,24 @@ void main() {
   });
 
   group('MuteLength', () {
-    test('until: 8 hours, 1 week, or null for always', () {
+    test('until: 1 h, 8 h, 1 d, 3 d, 7 d — never null', () {
       final now = DateTime.utc(2026, 9, 24, 10);
-      expect(
-        MuteLength.eightHours.until(now),
-        now.add(const Duration(hours: 8)),
-      );
-      expect(MuteLength.oneWeek.until(now), now.add(const Duration(days: 7)));
-      expect(MuteLength.always.until(now), isNull);
+      const want = {
+        MuteLength.oneHour: Duration(hours: 1),
+        MuteLength.eightHours: Duration(hours: 8),
+        MuteLength.oneDay: Duration(days: 1),
+        MuteLength.threeDays: Duration(days: 3),
+        MuteLength.oneWeek: Duration(days: 7),
+      };
+      expect(MuteLength.values.toSet(), want.keys.toSet());
+      for (final e in want.entries) {
+        expect(e.key.until(now), now.add(e.value), reason: e.key.name);
+      }
     });
 
-    test('labels', () {
-      expect(MuteLength.eightHours.label, '8 hours');
-      expect(MuteLength.oneWeek.label, '1 week');
-      expect(MuteLength.always.label, 'Always');
+    test('no picker length is Always; a forever-mute still reads Always', () {
+      expect(MuteLength.values.map((l) => l.name), isNot(contains('always')));
+      expect(muteLabel(null, DateTime.utc(2026, 9, 24)), 'Always');
     });
   });
 

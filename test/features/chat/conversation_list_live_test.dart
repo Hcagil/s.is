@@ -637,10 +637,9 @@ void main() {
       expect(seen.where((s) => s.hasError), isEmpty);
     });
 
-    // 0.30.16 (offline start): a failed refresh keeps the list on screen
-    // and raises the stale flag; only a refusal is reported as an error.
-    test('refresh shows loading; a failure keeps the list on screen and '
-        'marks it stale', () async {
+    // 0.30.16 (offline start): a failed refresh keeps the list on screen;
+    // only a refusal is reported as an error.
+    test('refresh shows loading; a failure keeps the list on screen', () async {
       final chat = ChatFake(latency: const Duration(milliseconds: 5))
         ..conversationsResult = Ok([conv('c1', 30)]);
       final c = scope(chat);
@@ -660,7 +659,6 @@ void main() {
       final state = c.read(conversationListProvider);
       expect(state, isA<AsyncData<List<Conversation>>>(), reason: '$state');
       expect(ids(c), ['c1']);
-      expect(c.read(conversationListStaleProvider), isTrue);
     });
 
     test('refresh refused: loading, then the failure is reported', () async {
@@ -683,7 +681,6 @@ void main() {
       final state = c.read(conversationListProvider);
       expect(state.hasError, isTrue, reason: '$state');
       expect(state.error, isA<DeniedFailure>());
-      expect(c.read(conversationListStaleProvider), isFalse);
     });
   });
 
@@ -795,9 +792,10 @@ void main() {
       expect(find.byKey(const ValueKey('preview-time-c1')), findsOneWidget);
     });
 
-    testWidgets('a failed refresh: the list stays, marked stale, its rows '
-        'still open; the list itself draws no strip (Home owns the one '
-        'offline notice); a later good read clears the flag', (tester) async {
+    testWidgets('a failed refresh: the list stays, its rows still open, no '
+        'offline strip anywhere; a later good read replaces it', (
+      tester,
+    ) async {
       final chat = ChatFake(latency: const Duration(milliseconds: 5))
         ..conversationsResult = const Ok([Conversation(id: 'c1', other: bob)]);
       final c = await pump(tester, chat);
@@ -806,7 +804,6 @@ void main() {
         find.byKey(const ValueKey('chat-list-stale-notice')),
         find.textContaining('Showing your saved chats'),
       ];
-      expect(c.read(conversationListStaleProvider), isFalse);
 
       chat.conversationsResult = const Err(NetworkFailure('offline'));
       c
@@ -814,9 +811,8 @@ void main() {
           .refresh()
           .then((_) {}, onError: (Object _) {});
       await tester.pumpAndSettle();
-      expect(c.read(conversationListStaleProvider), isTrue);
       for (final s in strips) {
-        expect(s, findsNothing, reason: 'a second strip, inside the list');
+        expect(s, findsNothing, reason: 'an offline strip is back');
       }
 
       await tester.tap(find.byKey(const ValueKey('conversation-c1')));
@@ -826,11 +822,12 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
 
-      chat.conversationsResult = const Ok([Conversation(id: 'c1', other: bob)]);
+      chat.conversationsResult = const Ok([Conversation(id: 'c2', other: bob)]);
       // Not awaited: the fake's latency runs on the tester's clock.
       unawaited(c.read(conversationListProvider.notifier).reloadQuietly());
       await tester.pumpAndSettle();
-      expect(c.read(conversationListStaleProvider), isFalse);
+      expect(find.byKey(const ValueKey('conversation-c2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('conversation-c1')), findsNothing);
     });
 
     testWidgets('returning from a chat re-reads the list without a spinner', (

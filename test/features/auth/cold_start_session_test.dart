@@ -53,7 +53,6 @@ class Rig {
         memberReadsAtFirstAllowed = auth.memberReads;
       }
     }, fireImmediately: true);
-    c.listen(sessionCheckFailedProvider, (_, _) {}, fireImmediately: true);
   }
   final ColdAuth auth;
   final MemoryLastSessionStore store;
@@ -63,7 +62,6 @@ class Rig {
 
   SessionState? get state => c.read(sessionControllerProvider).value;
   bool get loading => c.read(sessionControllerProvider).isLoading;
-  bool get checkFailed => c.read(sessionCheckFailedProvider);
   SessionController get ctl => c.read(sessionControllerProvider.notifier);
 }
 
@@ -94,7 +92,6 @@ void main() {
       expect(auth.checks, hasLength(1), reason: 'the check was not started');
       expect(auth.checks.single.answered, isFalse);
       expect(r.memberReadsAtFirstAllowed, 0);
-      expect(r.checkFailed, isFalse);
       await end(t);
     });
 
@@ -175,7 +172,6 @@ void main() {
         r.auth.last.fail(f);
         await flush(t);
         expect(r.state, allowed(confirmed: false));
-        expect(r.checkFailed, isTrue);
         expect(store.saves, isEmpty);
         expect(store.clears, 0);
         await end(t);
@@ -221,7 +217,6 @@ void main() {
       r.auth.last.allow();
       await flush(t);
       expect(r.state, allowed(confirmed: true));
-      expect(r.checkFailed, isFalse);
       expect(store.stored, isNotNull);
 
       // Next cold start: offline, then the member turns out revoked.
@@ -235,7 +230,6 @@ void main() {
       r2.auth.last.deny();
       await flush(t);
       expect(r2.state, isA<Denied>());
-      expect(r2.checkFailed, isFalse, reason: 'the notice stayed over Denied');
       expect(store2.stored, isNull);
       await end(t);
     });
@@ -422,7 +416,6 @@ void main() {
       );
       expect(store.stored, isNull);
       expect(store.clears, greaterThanOrEqualTo(1));
-      expect(r.checkFailed, isFalse);
 
       r.auth.checks.first.allow();
       await flush(t);
@@ -485,7 +478,6 @@ void main() {
       await flush(t);
       await t.pump(const Duration(seconds: 3));
       await flush(t);
-      expect(r.checkFailed, isFalse);
       expect(r.auth.checks, hasLength(2));
       expect(r.state, allowed(confirmed: true));
       await end(t);

@@ -140,14 +140,15 @@ select throws_ok($$select app_private.is_member((select id from _conv))$$,
 reset role;
 
 -- 4c Realtime publishes inserts and updates, never deletes, and only the
--- messages table ------------------------------------------------------------
+-- messages and message_reactions tables ---------------------------------------
 -- realtime.apply_rls does not evaluate RLS for DELETE, so a published delete
 -- would reach every subscriber regardless of membership. A deletion for
 -- everyone is delivered as an UPDATE (the wiped row), which IS published and
 -- still respects the read policy per subscriber.
-select is((select count(*)::int from pg_publication_tables
-            where pubname = 'supabase_realtime' and schemaname = 'public' and tablename <> 'messages'),
-          0, 'only messages is published to Realtime');
+select is((select array_agg(schemaname || '.' || tablename order by tablename)::text
+             from pg_publication_tables where pubname = 'supabase_realtime'),
+          '{public.message_reactions,public.messages}',
+          'only messages and message_reactions are published to Realtime');
 select is((select pubinsert and pubupdate and not pubdelete and not pubtruncate
              from pg_publication where pubname = 'supabase_realtime'),
           true, 'Realtime publishes inserts and updates, never deletes or truncates');

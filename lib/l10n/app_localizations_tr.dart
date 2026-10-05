@@ -147,7 +147,6 @@ class AppLocalizationsTr extends AppLocalizations {
   String get muteOneWeek => '1 hafta';
 
   @override
-<<<<<<< HEAD
   String get groupSettingsTitle => 'Grup ayarları';
 
   @override
@@ -200,7 +199,8 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get groupLeftUnsentNotice =>
       'Gruptan ayrıldın. Gönderilmeyen mesajlar gönderilmedi.';
-=======
+
+  @override
   String get attachPhoto => 'Fotoğraf';
 
   @override
@@ -235,5 +235,4 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get pickerRecent => 'Son kullanılanlar';
->>>>>>> 5aade96 (feat(chat): attach card, greyed composer buttons, picker redesign in Forward, Apple sign-in button (Update 1 slice 9))
 }

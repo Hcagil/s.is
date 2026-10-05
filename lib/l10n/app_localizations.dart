@@ -368,7 +368,6 @@ abstract class AppLocalizations {
   /// **'1 week'**
   String get muteOneWeek;
 
-<<<<<<< HEAD
   /// Group info: section label
   ///
   /// In en, this message translates to:
@@ -470,7 +469,7 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Left the group. Unsent messages weren\'t sent.'**
   String get groupLeftUnsentNotice;
-=======
+
   /// Attach card tile under the composer
   ///
   /// In en, this message translates to:
@@ -542,7 +541,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Recent'**
   String get pickerRecent;
->>>>>>> 5aade96 (feat(chat): attach card, greyed composer buttons, picker redesign in Forward, Apple sign-in button (Update 1 slice 9))
 }
 
 class _AppLocalizationsDelegate

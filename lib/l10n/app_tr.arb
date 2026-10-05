@@ -45,7 +45,6 @@
   "muteOneDay": "1 gün",
   "muteThreeDays": "3 gün",
   "muteOneWeek": "1 hafta",
-<<<<<<< HEAD
   "groupSettingsTitle": "Grup ayarları",
   "groupPickSwitch": "Üyeler grup resmini değiştirebilir",
   "groupAddSwitch": "Üyeler kişi ekleyebilir",
@@ -62,8 +61,7 @@
   "cropPreviewHint": "Resim böyle görünecek",
   "cropGestureHint": "Yakınlaştırmak için sıkıştır, taşımak için sürükle",
   "groupLeftNotice": "Gruptan ayrıldın",
-  "groupLeftUnsentNotice": "Gruptan ayrıldın. Gönderilmeyen mesajlar gönderilmedi."
-=======
+  "groupLeftUnsentNotice": "Gruptan ayrıldın. Gönderilmeyen mesajlar gönderilmedi.",
   "attachPhoto": "Fotoğraf",
   "attachVideo": "Video",
   "attachFile": "Dosya",
@@ -76,5 +74,4 @@
   "pickerAddCaption": "Alt yazı ekle",
   "pickerNewChat": "Yeni sohbet",
   "pickerRecent": "Son kullanılanlar"
->>>>>>> 5aade96 (feat(chat): attach card, greyed composer buttons, picker redesign in Forward, Apple sign-in button (Update 1 slice 9))
 }

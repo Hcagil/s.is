@@ -180,7 +180,6 @@
   "@muteOneWeek": {
     "description": "Mute length choice"
   },
-<<<<<<< HEAD
   "groupSettingsTitle": "Group settings",
   "@groupSettingsTitle": {
     "description": "Group info: section label"
@@ -248,7 +247,7 @@
   "groupLeftUnsentNotice": "Left the group. Unsent messages weren't sent.",
   "@groupLeftUnsentNotice": {
     "description": "Notice after leaving a group when queued messages were dropped"
-=======
+  },
   "attachPhoto": "Photo",
   "@attachPhoto": {
     "description": "Attach card tile under the composer"
@@ -296,6 +295,5 @@
   "pickerRecent": "Recent",
   "@pickerRecent": {
     "description": "Picker section header"
->>>>>>> 5aade96 (feat(chat): attach card, greyed composer buttons, picker redesign in Forward, Apple sign-in button (Update 1 slice 9))
   }
 }

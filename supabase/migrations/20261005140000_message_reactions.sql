@@ -70,6 +70,44 @@ create policy message_reactions_read on public.message_reactions for select to a
          and conversation_id = any (app_private.my_conversation_ids())
          and app_private.reaction_readable(message_id));
 
+-- The SIS Bot's send budget (RLMT2), one place for every action that counts as
+-- a 'send': messages_bot_rate (20261005130000) and set_reaction. Logs one 'send'
+-- and refuses past 20 per 10 minutes or 200 per 24 hours. A refused call rolls
+-- back with its log row, so only accepted sends count. The advisory lock
+-- serialises one bot's charges so concurrent calls cannot slip past the limit.
+create function app_private.bot_send_charge(bot uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+declare
+  last10 int;
+  last24 int;
+begin
+  perform pg_advisory_xact_lock(hashtextextended('bot_send:' || bot::text, 0));
+  delete from app_private.bot_actions a
+   where a.bot_id = bot and a.at < now() - interval '24 hours';
+  insert into app_private.bot_actions(bot_id, kind) values (bot, 'send');
+  select count(*) filter (where a.at >= now() - interval '10 minutes'), count(*)
+    into last10, last24
+    from app_private.bot_actions a
+   where a.bot_id = bot and a.kind = 'send';
+  if last10 > 20 or last24 > 200 then
+    raise exception 'too many messages' using errcode = 'RLMT2';
+  end if;
+end $$;
+revoke all on function app_private.bot_send_charge(uuid) from public, anon, authenticated;
+
+create or replace function app_private.messages_bot_rate() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if not app_private.is_bot(new.sender_id) then
+    return new;
+  end if;
+  if new.attachment_path is not null then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
+  perform app_private.bot_send_charge(new.sender_id);
+  return new;
+end $$;
+
 -- Sets the caller's reaction on [message] to [emoji], or clears it when [emoji]
 -- is null. 42501 for every refusal alike (no app access, message missing or
 -- deleted, caller not a current member, message not readable to the caller, the
@@ -94,23 +132,15 @@ begin
   if emoji is null then
     update public.message_reactions r
        set emoji = null, updated_at = now()
-     where r.message_id = message and r.user_id = auth.uid();
+     where r.message_id = message and r.user_id = auth.uid()
+       and r.emoji is not null;
     return;
   end if;
   if octet_length(emoji) not between 1 and 64 or emoji ~ '[[:space:][:cntrl:]]' then
     raise exception 'invalid emoji' using errcode = '22023';
   end if;
   if app_private.is_bot(auth.uid()) then
-    perform pg_advisory_xact_lock(hashtextextended('bot_send:' || auth.uid()::text, 0));
-    delete from app_private.bot_actions a
-     where a.bot_id = auth.uid() and a.at < now() - interval '24 hours';
-    insert into app_private.bot_actions(bot_id, kind) values (auth.uid(), 'send');
-    if (select count(*) filter (where a.at >= now() - interval '10 minutes') from app_private.bot_actions a
-         where a.bot_id = auth.uid() and a.kind = 'send') > 20
-       or (select count(*) from app_private.bot_actions a
-            where a.bot_id = auth.uid() and a.kind = 'send') > 200 then
-      raise exception 'too many messages' using errcode = 'RLMT2';
-    end if;
+    perform app_private.bot_send_charge(auth.uid());
   end if;
   insert into public.message_reactions(message_id, user_id, conversation_id, emoji)
   values (message, auth.uid(), m.conversation_id, emoji)

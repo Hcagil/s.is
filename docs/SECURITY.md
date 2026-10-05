@@ -373,6 +373,20 @@ and "Only who it is from" settings; "No details" carries neither (DECISIONS
 
 Former members keep their colour slot, so the number of slots in use leaks how many members a group has had (up to ten). Low risk, accepted.
 
+### Delivery marks
+
+Delivery marks (`conversation_members.delivered_at`, `read_marks().delivered_at`,
+Realtime `delivered:<conversation>`) are shown to the other current members
+whatever the member's read-receipt or last-seen settings, by product decision
+(as WhatsApp does). So that they cannot reveal read or online times, the stored
+and broadcast position is always the `created_at` of a real message, never a
+clock reading or the moment of a read, and it only moves forward when a newer
+message is reached; a departed member's position never moves. Accepted
+residual: the moment an advance happens is visible live, so other members can
+roughly tell when a member's device received a message. This must not be
+widened: no path may write a clock time into `delivered_at` or broadcast one on
+`delivered:`.
+
 ### Secrets
 
 No secrets in the app or repository. Service-role keys and signing material

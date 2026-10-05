@@ -35,7 +35,7 @@ create function app_private.before_user_created(event jsonb) returns jsonb
 language plpgsql stable set search_path = '' as $$
 declare
   google_only constant boolean := false;
-  addr        text := lower(btrim(event -> 'user' ->> 'email'));
+  addr        text := nullif(lower(btrim(event -> 'user' ->> 'email')), '');
   refuse      constant jsonb := jsonb_build_object('error',
                 jsonb_build_object('http_code', 403, 'message', 'not invited'));
 begin

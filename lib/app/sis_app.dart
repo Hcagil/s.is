@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/failure.dart';
@@ -20,6 +21,7 @@ import '../features/update/application/release_notes_controller.dart';
 import '../features/update/application/update_controller.dart';
 import '../features/update/domain/update_state.dart';
 import '../features/update/presentation/update_required_screen.dart';
+import '../l10n/app_localizations.dart';
 import 'loading.dart';
 import 'route_stack.dart';
 import 'theme.dart';
@@ -36,6 +38,14 @@ class SisApp extends ConsumerWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'SIS',
+      // The locale follows the system; the language switch comes later.
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
       themeMode: ThemeMode.system,
       theme: sisTheme(Brightness.light),
       darkTheme: sisTheme(Brightness.dark),

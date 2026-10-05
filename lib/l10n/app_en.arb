@@ -1,0 +1,19 @@
+{
+  "@@locale": "en",
+  "deliverySending": "Sending",
+  "@deliverySending": {
+    "description": "Screen-reader label of the clock tick on a message waiting to go out"
+  },
+  "deliverySent": "Sent",
+  "@deliverySent": {
+    "description": "Screen-reader label of the one-tick state"
+  },
+  "deliveryDelivered": "Delivered",
+  "@deliveryDelivered": {
+    "description": "Screen-reader label of the two-grey-ticks state"
+  },
+  "deliveryRead": "Read",
+  "@deliveryRead": {
+    "description": "Screen-reader label of the two-blue-ticks state"
+  }
+}

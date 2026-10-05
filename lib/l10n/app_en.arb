@@ -179,5 +179,73 @@
   "muteOneWeek": "1 week",
   "@muteOneWeek": {
     "description": "Mute length choice"
+  },
+  "groupSettingsTitle": "Group settings",
+  "@groupSettingsTitle": {
+    "description": "Group info: section label"
+  },
+  "groupPickSwitch": "Members can change the group picture",
+  "@groupPickSwitch": {
+    "description": "Group info: greyed setting"
+  },
+  "groupAddSwitch": "Members can add people",
+  "@groupAddSwitch": {
+    "description": "Group info: greyed setting"
+  },
+  "groupHistSwitch": "New members see earlier messages",
+  "@groupHistSwitch": {
+    "description": "Group info: greyed setting"
+  },
+  "groupPinWho": "Who may pin messages",
+  "@groupPinWho": {
+    "description": "Group info: greyed setting row"
+  },
+  "groupDeleteForAll": "Delete group for everyone",
+  "@groupDeleteForAll": {
+    "description": "Group info: greyed admin button"
+  },
+  "groupLeave": "Leave group",
+  "@groupLeave": {
+    "description": "Group info: leave button and confirm button"
+  },
+  "groupLeaveTitle": "Leave group?",
+  "@groupLeaveTitle": {
+    "description": "Leave confirm card title"
+  },
+  "groupLeaveBody": "The group stays for the others. You can be added again.",
+  "@groupLeaveBody": {
+    "description": "Leave confirm card text"
+  },
+  "groupLeaveCancel": "Cancel",
+  "@groupLeaveCancel": {
+    "description": "Leave confirm card cancel"
+  },
+  "cropTitle": "Crop picture",
+  "@cropTitle": {
+    "description": "Crop screen title"
+  },
+  "cropChoose": "Choose",
+  "@cropChoose": {
+    "description": "Crop screen confirm button"
+  },
+  "cropPreview": "Preview",
+  "@cropPreview": {
+    "description": "Crop screen preview label"
+  },
+  "cropPreviewHint": "This is how the picture shows up",
+  "@cropPreviewHint": {
+    "description": "Crop screen preview text"
+  },
+  "cropGestureHint": "Pinch to zoom, drag to move",
+  "@cropGestureHint": {
+    "description": "Crop screen gesture hint"
+  },
+  "groupLeftNotice": "Left the group",
+  "@groupLeftNotice": {
+    "description": "Notice after leaving a group"
+  },
+  "groupLeftUnsentNotice": "Left the group. Unsent messages weren't sent.",
+  "@groupLeftUnsentNotice": {
+    "description": "Notice after leaving a group when queued messages were dropped"
   }
 }

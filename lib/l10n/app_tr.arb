@@ -44,5 +44,22 @@
   "muteEightHours": "8 saat",
   "muteOneDay": "1 gün",
   "muteThreeDays": "3 gün",
-  "muteOneWeek": "1 hafta"
+  "muteOneWeek": "1 hafta",
+  "groupSettingsTitle": "Grup ayarları",
+  "groupPickSwitch": "Üyeler grup resmini değiştirebilir",
+  "groupAddSwitch": "Üyeler kişi ekleyebilir",
+  "groupHistSwitch": "Yeni üyeler önceki mesajları görür",
+  "groupPinWho": "Mesajları kimler sabitleyebilir",
+  "groupDeleteForAll": "Grubu herkes için sil",
+  "groupLeave": "Gruptan ayrıl",
+  "groupLeaveTitle": "Gruptan ayrılsın mı?",
+  "groupLeaveBody": "Grup diğerleri için kalır. Tekrar eklenebilirsin.",
+  "groupLeaveCancel": "Vazgeç",
+  "cropTitle": "Resmi kırp",
+  "cropChoose": "Seç",
+  "cropPreview": "Önizleme",
+  "cropPreviewHint": "Resim böyle görünecek",
+  "cropGestureHint": "Yakınlaştırmak için sıkıştır, taşımak için sürükle",
+  "groupLeftNotice": "Gruptan ayrıldın",
+  "groupLeftUnsentNotice": "Gruptan ayrıldın. Gönderilmeyen mesajlar gönderilmedi."
 }

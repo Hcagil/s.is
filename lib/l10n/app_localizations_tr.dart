@@ -145,4 +145,58 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get muteOneWeek => '1 hafta';
+
+  @override
+  String get groupSettingsTitle => 'Grup ayarları';
+
+  @override
+  String get groupPickSwitch => 'Üyeler grup resmini değiştirebilir';
+
+  @override
+  String get groupAddSwitch => 'Üyeler kişi ekleyebilir';
+
+  @override
+  String get groupHistSwitch => 'Yeni üyeler önceki mesajları görür';
+
+  @override
+  String get groupPinWho => 'Mesajları kimler sabitleyebilir';
+
+  @override
+  String get groupDeleteForAll => 'Grubu herkes için sil';
+
+  @override
+  String get groupLeave => 'Gruptan ayrıl';
+
+  @override
+  String get groupLeaveTitle => 'Gruptan ayrılsın mı?';
+
+  @override
+  String get groupLeaveBody =>
+      'Grup diğerleri için kalır. Tekrar eklenebilirsin.';
+
+  @override
+  String get groupLeaveCancel => 'Vazgeç';
+
+  @override
+  String get cropTitle => 'Resmi kırp';
+
+  @override
+  String get cropChoose => 'Seç';
+
+  @override
+  String get cropPreview => 'Önizleme';
+
+  @override
+  String get cropPreviewHint => 'Resim böyle görünecek';
+
+  @override
+  String get cropGestureHint =>
+      'Yakınlaştırmak için sıkıştır, taşımak için sürükle';
+
+  @override
+  String get groupLeftNotice => 'Gruptan ayrıldın';
+
+  @override
+  String get groupLeftUnsentNotice =>
+      'Gruptan ayrıldın. Gönderilmeyen mesajlar gönderilmedi.';
 }

@@ -49,30 +49,49 @@ class _MembersTab extends ConsumerWidget {
   }
 
   Future<void> _leave(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        title: const Text('Leave group?'),
-        content: const Text(
-          'You can still see the messages up to now, but you will not '
-          'receive anything new.',
-        ),
-        actions: [
-          TextButton(
-            key: const ValueKey('leave-cancel'),
-            onPressed: () => Navigator.of(dialog).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('leave-confirm'),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(dialog).colorScheme.error,
-              foregroundColor: Theme.of(dialog).colorScheme.onError,
+    final box = context.findRenderObject() as RenderBox;
+    final anchor = box.localToGlobal(Offset.zero) & box.size;
+    final confirmed = await showFloatingCard<bool>(
+      context,
+      anchor: anchor,
+      highlightAnchor: false,
+      cardKey: const ValueKey('leave-card'),
+      child: Builder(
+        builder: (card) {
+          final l = AppLocalizations.of(card);
+          final scheme = Theme.of(card).colorScheme;
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  l.groupLeaveTitle,
+                  style: Theme.of(card).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(l.groupLeaveBody),
+                const SizedBox(height: 16),
+                FilledButton(
+                  key: const ValueKey('leave-confirm'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: scheme.error,
+                    foregroundColor: scheme.onError,
+                  ),
+                  onPressed: () => Navigator.of(card).pop(true),
+                  child: Text(l.groupLeave),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  key: const ValueKey('leave-cancel'),
+                  onPressed: () => Navigator.of(card).pop(false),
+                  child: Text(l.groupLeaveCancel),
+                ),
+              ],
             ),
-            onPressed: () => Navigator.of(dialog).pop(true),
-            child: const Text('Leave'),
-          ),
-        ],
+          );
+        },
       ),
     );
     if (confirmed != true || !context.mounted) return;
@@ -85,8 +104,8 @@ class _MembersTab extends ConsumerWidget {
         showSisNotice(
           context,
           value
-              ? "Left the group. Unsent messages weren't sent."
-              : 'Left the group',
+              ? AppLocalizations.of(context).groupLeftUnsentNotice
+              : AppLocalizations.of(context).groupLeftNotice,
         );
         Navigator.of(context).pop();
       case Err(:final failure):
@@ -119,10 +138,10 @@ class _MembersTab extends ConsumerWidget {
         return ListView(
           children: [
             if (amAdmin)
-              ListTile(
+              SisSettingsRow(
                 key: const ValueKey('add-members'),
-                leading: const Icon(Icons.person_add_alt_1_outlined),
-                title: const Text('Add members'),
+                icon: Icons.person_add_alt_1_outlined,
+                title: 'Add members',
                 onTap: () => showAddMembersPage(
                   context,
                   ref,
@@ -132,32 +151,30 @@ class _MembersTab extends ConsumerWidget {
                 ),
               ),
             for (final m in current)
-              ListTile(
+              _MemberRow(
                 key: ValueKey('group-member-${m.member.userId}'),
-                leading: PersonAvatar(
+                avatar: PersonAvatar(
                   label: m.member.displayName,
                   seed: m.member.userId,
                   online: online.contains(m.member.userId),
                   avatarPath: m.member.avatarPath,
                   groupSlot: m.colorSlot,
+                  radius: 18,
                 ),
-                title: Text(
-                  m.member.userId == me
-                      ? '${m.member.displayName} (you)'
-                      : m.member.displayName,
-                ),
-                subtitle: Text(
-                  [
-                    if (m.isAdmin) 'Admin',
-                    if (m.member.tag != null) '@${m.member.tag}',
-                  ].join(' · '),
-                ),
+                title: m.member.userId == me
+                    ? '${m.member.displayName} (you)'
+                    : m.member.displayName,
+                subtitle: [
+                  if (m.isAdmin) 'Admin',
+                  if (m.member.tag != null) '@${m.member.tag}',
+                ].join(' · '),
                 trailing: amAdmin && m.member.userId != me
                     ? Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
                             key: ValueKey('toggle-admin-${m.member.userId}'),
+                            visualDensity: VisualDensity.compact,
                             icon: Icon(
                               m.isAdmin
                                   ? Icons.remove_moderator_outlined
@@ -171,6 +188,7 @@ class _MembersTab extends ConsumerWidget {
                           ),
                           IconButton(
                             key: ValueKey('remove-member-${m.member.userId}'),
+                            visualDensity: VisualDensity.compact,
                             icon: const Icon(Icons.person_remove_outlined),
                             tooltip: 'Remove',
                             onPressed: () => _remove(context, ref, m),
@@ -203,44 +221,136 @@ class _MembersTab extends ConsumerWidget {
                 ),
               ),
               for (final m in departed)
-                ListTile(
+                _MemberRow(
                   key: ValueKey('group-member-${m.member.userId}'),
-                  leading: Opacity(
+                  avatar: Opacity(
                     opacity: .5,
                     child: PersonAvatar(
                       label: m.member.displayName,
                       seed: m.member.userId,
                       avatarPath: m.member.avatarPath,
                       groupSlot: m.colorSlot,
+                      radius: 18,
                     ),
                   ),
-                  title: Text(
-                    m.member.displayName,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  subtitle: Text(
-                    m.leftReason == LeftReason.removed ? 'Removed' : 'Left',
-                  ),
+                  title: m.member.displayName,
+                  titleColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                  subtitle: m.leftReason == LeftReason.removed
+                      ? 'Removed'
+                      : 'Left',
                 ),
             ],
-            const Divider(),
-            ListTile(
-              key: const ValueKey('leave-group'),
-              leading: Icon(
-                Icons.logout,
-                color: Theme.of(context).colorScheme.error,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 26),
+              child: Column(
+                children: [
+                  if (amAdmin)
+                    GreyOption(
+                      name: 'deladmin',
+                      label: AppLocalizations.of(context).groupDeleteForAll,
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Theme.of(context)
+                                .colorScheme
+                                .error,
+                            foregroundColor: Theme.of(context)
+                                .colorScheme
+                                .onError,
+                          ),
+                          onPressed: () {},
+                          child: Text(
+                            AppLocalizations.of(context).groupDeleteForAll,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (amAdmin) const SizedBox(height: 10),
+                  Builder(
+                    builder: (button) => SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        key: const ValueKey('leave-group'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Theme.of(context).colorScheme.error,
+                          side: BorderSide(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                        onPressed: () => _leave(button, ref),
+                        child: Text(AppLocalizations.of(context).groupLeave),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              title: Text(
-                'Leave group',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-              onTap: () => _leave(context, ref),
             ),
           ],
         );
       },
+    );
+  }
+}
+
+/// A compact row: avatar, name (and a muted second line), optional trailing.
+class _MemberRow extends StatelessWidget {
+  const _MemberRow({
+    super.key,
+    required this.avatar,
+    required this.title,
+    this.subtitle = '',
+    this.titleColor,
+    this.trailing,
+    this.onTap,
+  });
+
+  final Widget avatar;
+  final String title;
+  final String subtitle;
+  final Color? titleColor;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SisBrand.of(context);
+    final text = Theme.of(context).textTheme;
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: SisTokens.settingsRowPadding,
+            child: Row(
+              children: [
+                avatar,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: text.bodyLarge?.copyWith(color: titleColor),
+                      ),
+                      if (subtitle.isNotEmpty)
+                        Text(
+                          subtitle,
+                          style: text.bodyMedium?.copyWith(color: t.muted),
+                        ),
+                    ],
+                  ),
+                ),
+                ?trailing,
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

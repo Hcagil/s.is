@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/controls.dart';
+import '../../../app/theme.dart';
 import '../application/alert_controller.dart';
 import '../domain/alert_settings.dart';
 
@@ -113,27 +114,34 @@ class _ChoiceTile extends StatelessWidget {
   final ValueChanged<AlertChoice> onChanged;
 
   @override
-  Widget build(BuildContext context) => ListTile(
+  Widget build(BuildContext context) => Padding(
     key: ValueKey(tileKey),
-    title: Text(title),
-    trailing: DropdownButton<AlertChoice>(
-      key: ValueKey('$tileKey-choice'),
-      underline: const SizedBox.shrink(),
-      value: value,
-      items: [
-        for (final c in AlertChoice.values)
-          DropdownMenuItem(
-            value: c,
-            child: Text(switch (c) {
-              AlertChoice.byDefault => 'Default',
-              AlertChoice.on => 'On',
-              AlertChoice.off => 'Off',
-            }),
-          ),
+    padding: SisTokens.settingsRowPadding,
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(title, style: Theme.of(context).textTheme.bodyLarge),
+        ),
+        DropdownButton<AlertChoice>(
+          key: ValueKey('$tileKey-choice'),
+          underline: const SizedBox.shrink(),
+          value: value,
+          items: [
+            for (final c in AlertChoice.values)
+              DropdownMenuItem(
+                value: c,
+                child: Text(switch (c) {
+                  AlertChoice.byDefault => 'Default',
+                  AlertChoice.on => 'On',
+                  AlertChoice.off => 'Off',
+                }),
+              ),
+          ],
+          onChanged: (v) {
+            if (v != null) onChanged(v);
+          },
+        ),
       ],
-      onChanged: (v) {
-        if (v != null) onChanged(v);
-      },
     ),
   );
 }

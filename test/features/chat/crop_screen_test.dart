@@ -2,7 +2,7 @@
 // 2026-09-28 "Pictures like WhatsApp"): the photo under a 320x320 square
 // frame (crop-frame), moved and zoomed with the fingers in an
 // InteractiveViewer (crop-viewer). The photo always covers the square -- zoom
-// in only, never an empty edge -- and the first framing is the centre. "Use"
+// in only, never an empty edge -- and the first framing is the centre. "Choose"
 // (crop-use, disabled while the photo decodes or a crop is running) hands the
 // framed square to the PictureCropper as fractions 0..1 of the source's width
 // and height and resolves with what it returns; a null crop says "That photo
@@ -20,6 +20,7 @@ import 'package:sis/app/theme.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/presentation/crop_screen.dart';
+import 'package:sis/l10n/app_localizations.dart';
 
 import '../../support/chat_launcher.dart'
     show osBack, platforms, screenHeight, screenWidth, stroke;
@@ -47,6 +48,8 @@ class Host {
   Widget app() => ProviderScope(
     overrides: [pictureCropperProvider.overrideWithValue(cropper)],
     child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: sisTheme(Brightness.light),
       home: Builder(
         builder: (context) => Scaffold(
@@ -192,7 +195,7 @@ void expectRect(
 
 void main() {
   group('the screen', () {
-    testWidgets('a 320x320 frame; Use is disabled until the photo has '
+    testWidgets('a 320x320 frame; Choose is disabled until the photo has '
         'decoded, and tapping it early asks for nothing', (t) async {
       t.view.physicalSize = const Size(1080, 2340);
       t.view.devicePixelRatio = 2.625;
@@ -220,7 +223,7 @@ void main() {
       );
     });
 
-    testWidgets('Use resolves with exactly what the cropper made, from the '
+    testWidgets('Choose resolves with exactly what the cropper made, from the '
         'source\'s own bytes, as a 640 px square', (t) async {
       final h = await open(t, 2000, 1000);
       await use(t);
@@ -237,7 +240,7 @@ void main() {
       expect(h.result?.extension, 'jpg');
     });
 
-    testWidgets('while the crop runs, Use is disabled and a second tap '
+    testWidgets('while the crop runs, Choose is disabled and a second tap '
         'asks for nothing more', (t) async {
       final h = await open(t, 2000, 1000);
       h.cropper.hold();
@@ -256,7 +259,7 @@ void main() {
     });
 
     testWidgets('a crop that fails says "$couldNotUse", keeps the screen '
-        'open, and Use works again', (t) async {
+        'open, and Choose works again', (t) async {
       final h = await open(t, 2000, 1000);
       h.cropper.fails = true;
       await use(t);
@@ -492,5 +495,151 @@ void main() {
       expect(h.resolved, isTrue);
       expect(h.result, isNull);
     }, variant: platforms);
+  });
+
+  // Update 1 slice 8: title, Choose, preview, hint, dim, and a zoom slider
+  // that drives the same transform Choose reads.
+  group('the frame and its slider', () {
+    Slider zoom(WidgetTester t) => t.widget<Slider>(byKey('crop-zoom'));
+
+    /// Drags the zoom slider's thumb by [dx] and lets it settle.
+    Future<void> slide(WidgetTester t, double dx) async {
+      final s = zoom(t);
+      final r = t.getRect(byKey('crop-zoom'));
+      // The thumb sits at the value's place along the track.
+      final at = Offset(
+        r.left + 24 + (r.width - 48) * (s.value - s.min) / (s.max - s.min),
+        r.center.dy,
+      );
+      final g = await t.startGesture(at);
+      const n = 10;
+      for (var i = 1; i <= n; i++) {
+        await g.moveTo(at + Offset(dx * i / n, 0));
+        await t.pump(const Duration(milliseconds: 20));
+      }
+      await g.up();
+      await t.pumpAndSettle();
+    }
+
+    testWidgets('"Crop picture", Choose, a live preview, a hint, the dim, '
+        'and a zoom slider from 1 to 4 starting at 1', (t) async {
+      await open(t, 2000, 1000);
+      expect(find.text('Crop picture'), findsOneWidget);
+      expect(
+        find.descendant(of: byKey('crop-use'), matching: find.text('Choose')),
+        findsOneWidget,
+      );
+      expect(find.text('Use'), findsNothing);
+      for (final k in ['crop-preview', 'crop-hint', 'crop-dim']) {
+        expect(byKey(k), findsOneWidget, reason: k);
+      }
+      expect(t.getSize(byKey('crop-frame')), const Size(320, 320));
+      expect(zoom(t).min, 1);
+      expect(zoom(t).max, 4);
+      expect(zoom(t).value, closeTo(1, 1e-6));
+    });
+
+    testWidgets('the slider all the way up: Choose crops a quarter of the '
+        'first square, about the centre', (t) async {
+      final h = await open(t, 2000, 1000);
+      await slide(t, 1000);
+      expect(zoom(t).value, closeTo(4, 1e-6));
+      await use(t);
+      expectSquareInside(lastCall(h), 2000, 1000, 'slider at 4');
+      expectRect(
+        lastCall(h),
+        left: 0.4375,
+        top: 0.375,
+        right: 0.5625,
+        bottom: 0.625,
+        tolerance: 0.01,
+        when: 'slider at 4',
+      );
+    });
+
+    testWidgets('part way up, the crop is the first square over the '
+        'slider\'s value; back down to 1, the first square again', (t) async {
+      final h = await open(t, 2000, 1000);
+      await slide(t, 70);
+      final v = zoom(t).value;
+      expect(v, inExclusiveRange(1.2, 3.8), reason: 'slider barely moved');
+      await use(t);
+      final c = lastCall(h);
+      expectSquareInside(c, 2000, 1000, 'slider at $v');
+      expect(c.right - c.left, closeTo(0.5 / v, 0.01), reason: 'at $v');
+      expect((c.left + c.right) / 2, closeTo(0.5, 0.01));
+      expect((c.top + c.bottom) / 2, closeTo(0.5, 0.01));
+
+      // Use closed the screen; open again and go up, then all the way down.
+      final h2 = await open(t, 2000, 1000);
+      await slide(t, 1000);
+      await slide(t, -1000);
+      expect(zoom(t).value, closeTo(1, 1e-6));
+      await use(t);
+      expectRect(
+        lastCall(h2),
+        left: 0.25,
+        top: 0,
+        right: 0.75,
+        bottom: 1,
+        when: 'slider back at 1',
+      );
+    });
+
+    testWidgets('a drag outside the frame does not move the photo', (t) async {
+      final h = await open(t, 2000, 1000);
+      final frame = t.getRect(byKey('crop-frame'));
+      final from = Offset(frame.center.dx, frame.top - 40);
+      expect(frame.contains(from), isFalse);
+      final g = await t.startGesture(from);
+      for (var i = 1; i <= 20; i++) {
+        await g.moveTo(
+          from + Offset(-150.0 * i / 20, 0),
+          timeStamp: Duration(seconds: i),
+        );
+        await t.pump(const Duration(milliseconds: 20));
+      }
+      await g.up(timeStamp: const Duration(seconds: 25));
+      await t.pumpAndSettle();
+      expect(h.resolved, isFalse);
+      await use(t);
+      expectRect(
+        lastCall(h),
+        left: 0.25,
+        top: 0,
+        right: 0.75,
+        bottom: 1,
+        when: 'dragged outside the frame',
+      );
+    });
+
+    testWidgets('360 wide: lays out without overflow, the frame whole on '
+        'screen', (t) async {
+      final h = Host(source(2000, 1000));
+      t.view.physicalSize = const Size(1080, 2340);
+      t.view.devicePixelRatio = 3;
+      addTearDown(t.view.reset);
+      await t.pumpWidget(h.app());
+      await t.tap(byKey('open'));
+      await steps(t);
+      await untilReady(t);
+      final screen = Offset.zero & const Size(360, 780);
+      for (final k in [
+        'crop-frame',
+        'crop-use',
+        'crop-zoom',
+        'crop-preview',
+        'crop-hint',
+      ]) {
+        final r = t.getRect(byKey(k));
+        expect(
+          screen.contains(r.topLeft) &&
+              screen.contains(r.bottomRight - const Offset(0.01, 0.01)),
+          isTrue,
+          reason: '$k at $r is off a 360x780 screen',
+        );
+      }
+      expect(t.takeException(), isNull);
+    });
   });
 }

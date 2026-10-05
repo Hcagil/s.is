@@ -139,5 +139,45 @@
   "languageTurkish": "Türkçe",
   "@languageTurkish": {
     "description": "Language option, written in its own language"
+  },
+  "chatMenuMute": "Mute",
+  "@chatMenuMute": {
+    "description": "Long-press card on a chat row: expandable mute row"
+  },
+  "chatMenuUnmute": "Unmute",
+  "@chatMenuUnmute": {
+    "description": "Long-press card: ends a chat's mute"
+  },
+  "chatMenuPin": "Pin chat",
+  "@chatMenuPin": {
+    "description": "Long-press card: pin row (greyed, not built yet)"
+  },
+  "chatArchive": "Archive",
+  "@chatArchive": {
+    "description": "Pill revealed by swiping a chat row (greyed, not built yet)"
+  },
+  "chatMutedLabel": "Muted",
+  "@chatMutedLabel": {
+    "description": "Screen-reader label of the bell on a muted chat row"
+  },
+  "muteOneHour": "1 hour",
+  "@muteOneHour": {
+    "description": "Mute length choice"
+  },
+  "muteEightHours": "8 hours",
+  "@muteEightHours": {
+    "description": "Mute length choice"
+  },
+  "muteOneDay": "1 day",
+  "@muteOneDay": {
+    "description": "Mute length choice"
+  },
+  "muteThreeDays": "3 days",
+  "@muteThreeDays": {
+    "description": "Mute length choice"
+  },
+  "muteOneWeek": "1 week",
+  "@muteOneWeek": {
+    "description": "Mute length choice"
   }
 }

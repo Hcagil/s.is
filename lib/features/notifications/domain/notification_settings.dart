@@ -49,22 +49,21 @@ final class Mute {
   bool activeAt(DateTime now) => until == null || until!.isAfter(now);
 }
 
-/// The lengths a member can pick from.
+/// The lengths a member can pick from. A mute with no end (`until == null`)
+/// can no longer be picked, but one already saved stays valid.
 enum MuteLength {
+  oneHour,
   eightHours,
-  oneWeek,
-  always;
+  oneDay,
+  threeDays,
+  oneWeek;
 
-  DateTime? until(DateTime now) => switch (this) {
+  DateTime until(DateTime now) => switch (this) {
+    oneHour => now.add(const Duration(hours: 1)),
     eightHours => now.add(const Duration(hours: 8)),
+    oneDay => now.add(const Duration(days: 1)),
+    threeDays => now.add(const Duration(days: 3)),
     oneWeek => now.add(const Duration(days: 7)),
-    always => null,
-  };
-
-  String get label => switch (this) {
-    eightHours => '8 hours',
-    oneWeek => '1 week',
-    always => 'Always',
   };
 }
 

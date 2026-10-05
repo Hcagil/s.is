@@ -115,4 +115,34 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get languageTurkish => 'Türkçe';
+
+  @override
+  String get chatMenuMute => 'Sessize al';
+
+  @override
+  String get chatMenuUnmute => 'Sesi aç';
+
+  @override
+  String get chatMenuPin => 'Sohbeti sabitle';
+
+  @override
+  String get chatArchive => 'Arşivle';
+
+  @override
+  String get chatMutedLabel => 'Sessiz';
+
+  @override
+  String get muteOneHour => '1 saat';
+
+  @override
+  String get muteEightHours => '8 saat';
+
+  @override
+  String get muteOneDay => '1 gün';
+
+  @override
+  String get muteThreeDays => '3 gün';
+
+  @override
+  String get muteOneWeek => '1 hafta';
 }

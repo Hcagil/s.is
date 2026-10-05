@@ -27,6 +27,7 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
+import 'package:sis/l10n/app_localizations.dart';
 
 import '../../../support/fakes.dart';
 import '../../../support/sis_ui.dart';
@@ -106,6 +107,8 @@ Widget aloneMuteTile(
 }) => ProviderScope(
   overrides: [notificationSettingsRepositoryProvider.overrideWithValue(fake)],
   child: MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(
       body: MuteTile(kind: kind, target: target),
     ),
@@ -238,7 +241,11 @@ void main() {
         notificationSettingsRepositoryProvider.overrideWithValue(fake),
         chatRepositoryProvider.overrideWithValue(ChatFake()),
       ],
-      child: const MaterialApp(home: NotificationsScreen()),
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: NotificationsScreen(),
+      ),
     );
 
     testWidgets('shows a spinner, then the reason and Try again', (t) async {
@@ -354,9 +361,11 @@ void main() {
       await t.tap(byKey('mute-tile'));
       await t.pumpAndSettle();
 
-      expect(byKey('mute-eightHours'), findsOneWidget);
-      expect(byKey('mute-oneWeek'), findsOneWidget);
-      expect(byKey('mute-always'), findsOneWidget);
+      for (final l in MuteLength.values) {
+        expect(byKey('mute-${l.name}'), findsOneWidget, reason: l.name);
+      }
+      expect(byKey('mute-always'), findsNothing, reason: 'Always is gone');
+      expect(find.text('Always'), findsNothing);
       expect(byKey('mute-off'), findsNothing);
     });
 
@@ -438,7 +447,9 @@ void main() {
           overrides: [
             notificationSettingsRepositoryProvider.overrideWithValue(fake),
           ],
-          child: const MaterialApp(
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: Scaffold(
               body: Column(
                 children: [
@@ -472,10 +483,15 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(byKey('mute-tile'));
       await t.pumpAndSettle();
-      await t.tap(byKey('mute-always'));
+      await t.tap(byKey('mute-oneDay'));
       await t.pumpAndSettle();
       expect(byKey('mute-card'), findsNothing);
-      expect(fake.muteCalls.single.$3, isNull, reason: 'always = no end');
+      final until = fake.muteCalls.single.$3;
+      expect(
+        until!.difference(DateTime.now().add(const Duration(days: 1))).abs(),
+        lessThan(const Duration(minutes: 1)),
+        reason: '1 day was picked',
+      );
     });
 
     testWidgets('a tap outside closes it and changes nothing', (t) async {

@@ -1,21 +1,5 @@
 part of 'chat_controllers.dart';
 
-/// True while the chat list on screen is the stored or last-read one because
-/// a load failed; drives the small notice above the list (never an error box).
-final conversationListStaleProvider =
-    NotifierProvider<ConversationListStale, bool>(ConversationListStale.new);
-
-class ConversationListStale extends Notifier<bool> {
-  @override
-  bool build() {
-    // Another account never inherits the last one's notice.
-    ref.watch(currentUserIdProvider);
-    return false;
-  }
-
-  void set(bool stale) => state = stale;
-}
-
 final conversationListProvider =
     AsyncNotifierProvider<ConversationListController, List<Conversation>>(
       ConversationListController.new,
@@ -174,11 +158,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       if (cached == null || e is DeniedFailure) rethrow;
       loaded = true;
       list = cached;
-      if (alive) _setStale(true);
       return list;
     }
     if (ownerId != null && alive) _saveSnapshot(ownerId, list);
-    if (alive) _setStale(false);
     return list;
   }
 
@@ -295,13 +277,6 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     };
   }
 
-  /// Sets the stale notice; a no-op after dispose.
-  void _setStale(bool stale) {
-    if (ref.mounted) {
-      ref.read(conversationListStaleProvider.notifier).set(stale);
-    }
-  }
-
   Future<void> refresh() async {
     final ownerId = ref.read(currentUserIdProvider);
     final shown = state.asData?.value;
@@ -313,11 +288,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     // notice says it is old. With nothing on screen the error box reports it.
     if (next is AsyncError && shown != null && next.error is! DeniedFailure) {
       state = AsyncData(shown);
-      _setStale(true);
       return;
     }
     state = next;
-    _setStale(false);
     _saveCurrentIfData();
   }
 
@@ -355,7 +328,6 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     if (!ref.mounted) return;
     if (ref.read(currentUserIdProvider) != ownerId) return;
     if (next is AsyncData<List<Conversation>>) state = next;
-    _setStale(next is AsyncError && state is AsyncData);
     _saveCurrentIfData();
   }
 

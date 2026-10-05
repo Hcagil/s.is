@@ -13,6 +13,7 @@ import 'package:sis/features/chat/presentation/profile_pages.dart';
 import 'package:sis/features/notifications/application/notification_settings_controller.dart';
 import 'package:sis/features/notifications/domain/notification_settings.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
+import 'package:sis/l10n/app_localizations.dart';
 
 import '../../support/fakes.dart';
 
@@ -24,13 +25,17 @@ Widget host(Widget child, NotificationSettingsFake notif) => ProviderScope(
     presenceRepositoryProvider.overrideWithValue(PresenceFake()),
     notificationSettingsRepositoryProvider.overrideWithValue(notif),
   ],
-  child: MaterialApp(home: child),
+  child: MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: child,
+  ),
 );
 
 Future<void> muteViaTile(WidgetTester t) async {
   await t.tap(byKey('mute-tile'));
   await t.pumpAndSettle();
-  await t.tap(byKey('mute-always'));
+  await t.tap(byKey('mute-oneHour'));
   await t.pumpAndSettle();
 }
 
@@ -60,7 +65,11 @@ void main() {
       reason: 'the person page must mute the person',
     );
     expect(target, 'ub');
-    expect(until, isNull, reason: 'Always was picked');
+    expect(
+      until!.difference(DateTime.now().add(const Duration(hours: 1))).abs(),
+      lessThan(const Duration(minutes: 1)),
+      reason: '1 hour was picked',
+    );
   });
 
   testWidgets('the group page mutes the conversation, not a person', (t) async {
@@ -79,6 +88,10 @@ void main() {
       reason: 'the group page must mute the conversation',
     );
     expect(target, 'g1');
-    expect(until, isNull, reason: 'Always was picked');
+    expect(
+      until!.difference(DateTime.now().add(const Duration(hours: 1))).abs(),
+      lessThan(const Duration(minutes: 1)),
+      reason: '1 hour was picked',
+    );
   });
 }

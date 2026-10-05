@@ -13,7 +13,6 @@ import '../../notifications/application/push_controller.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../profile/presentation/settings_screen.dart';
 import '../../update/presentation/update_banner.dart';
-import 'offline_notice.dart';
 
 /// Home for an allowed member: the update banner, then the conversations.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -62,7 +61,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: SafeArea(
           child: Column(
             children: const [
-              OfflineNotice(),
               UpdateBanner(),
               Expanded(child: ConversationList()),
             ],

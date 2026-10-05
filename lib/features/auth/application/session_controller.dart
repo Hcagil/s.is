@@ -23,19 +23,6 @@ final sessionControllerProvider =
       SessionController.new,
     );
 
-/// True while the stored session could not be confirmed because the server
-/// did not answer; drives the small notice on Home.
-final sessionCheckFailedProvider = NotifierProvider<SessionCheckFailed, bool>(
-  SessionCheckFailed.new,
-);
-
-class SessionCheckFailed extends Notifier<bool> {
-  @override
-  bool build() => false;
-
-  void set(bool failed) => state = failed;
-}
-
 /// The retry ladder for an unconfirmed session: 2 s, 4 s ... up to 60 s; the
 /// last delay repeats until the server answers.
 const sessionRetryDelays = [
@@ -239,10 +226,8 @@ class SessionController extends AsyncNotifier<SessionState> {
     final rev = ++_revision;
     final answer = await repo.activateSession();
     if (!ref.mounted || rev != _revision) return;
-    final failed = ref.read(sessionCheckFailedProvider.notifier);
     switch (answer) {
       case Err():
-        failed.set(true);
         final i = _attempt < sessionRetryDelays.length
             ? _attempt
             : sessionRetryDelays.length - 1;
@@ -252,13 +237,11 @@ class SessionController extends AsyncNotifier<SessionState> {
         });
       case Ok(value: false):
         // Assigned before any await: the lock lands in this very frame.
-        failed.set(false);
         state = const AsyncData(Denied());
         _attempt = 0;
         await _wipeMarker();
       case Ok(value: true):
         _attempt = 0;
-        failed.set(false);
         state = AsyncData(Allowed(from.member, onboarded: from.onboarded));
         await _writeConfirmed(repo, from.member);
         // The profile refresh runs behind: its failure never undoes this.
@@ -298,7 +281,6 @@ class SessionController extends AsyncNotifier<SessionState> {
     final repo = ref.read(authRepositoryProvider);
     if (!signedIn) {
       // Expiry or sign-out elsewhere locks at once, with no loading flash.
-      ref.read(sessionCheckFailedProvider.notifier).set(false);
       state = const AsyncData(SignedOut());
       await _wipeMarker();
       return;
@@ -338,7 +320,6 @@ class SessionController extends AsyncNotifier<SessionState> {
     } finally {
       if (ref.mounted) {
         state = const AsyncData(SignedOut());
-        ref.read(sessionCheckFailedProvider.notifier).set(false);
       }
       unawaited(_wipeMarker());
     }

@@ -34,5 +34,15 @@
   "languageSystem": "Sistem",
   "languageSystemHint": "Telefonu izler",
   "languageEnglish": "English",
-  "languageTurkish": "Türkçe"
+  "languageTurkish": "Türkçe",
+  "chatMenuMute": "Sessize al",
+  "chatMenuUnmute": "Sesi aç",
+  "chatMenuPin": "Sohbeti sabitle",
+  "chatArchive": "Arşivle",
+  "chatMutedLabel": "Sessiz",
+  "muteOneHour": "1 saat",
+  "muteEightHours": "8 saat",
+  "muteOneDay": "1 gün",
+  "muteThreeDays": "3 gün",
+  "muteOneWeek": "1 hafta"
 }

@@ -5,6 +5,7 @@ import '../../../app/controls.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../chat/application/chat_controllers.dart';
 import '../../chat/presentation/message_menu_card.dart';
 import '../application/notification_settings_controller.dart';
@@ -171,6 +172,16 @@ class _MutedList extends ConsumerWidget {
   }
 }
 
+/// The localised name of a mute length, for every card that offers them.
+String muteLengthLabel(AppLocalizations l, MuteLength length) =>
+    switch (length) {
+      MuteLength.oneHour => l.muteOneHour,
+      MuteLength.eightHours => l.muteEightHours,
+      MuteLength.oneDay => l.muteOneDay,
+      MuteLength.threeDays => l.muteThreeDays,
+      MuteLength.oneWeek => l.muteOneWeek,
+    };
+
 /// Shows and changes whether one conversation or person is muted. Tapping it
 /// opens a floating card below-right to pick a length, or to unmute; a tap on
 /// a row applies it and closes the card.
@@ -196,20 +207,18 @@ class MuteTile extends ConsumerWidget {
             value: l.name,
             keyId: 'mute-${l.name}',
             rowKey: ValueKey('mute-${l.name}'),
-            icon: switch (l) {
-              MuteLength.eightHours => Icons.schedule_outlined,
-              MuteLength.oneWeek => Icons.date_range_outlined,
-              MuteLength.always => Icons.notifications_off_outlined,
-            },
-            label: l.label,
+            icon: l == MuteLength.oneWeek
+                ? Icons.date_range_outlined
+                : Icons.schedule_outlined,
+            label: muteLengthLabel(AppLocalizations.of(context), l),
           ),
         if (active != null)
-          const MenuCardAction<String>(
+          MenuCardAction<String>(
             value: 'off',
             keyId: 'mute-off',
-            rowKey: ValueKey('mute-off'),
+            rowKey: const ValueKey('mute-off'),
             icon: Icons.notifications_active_outlined,
-            label: 'Unmute',
+            label: AppLocalizations.of(context).chatMenuUnmute,
           ),
       ],
     );

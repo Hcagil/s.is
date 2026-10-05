@@ -215,13 +215,17 @@ void main() {
 
       await t.tap(byKey('mute-tile'));
       await settle(t);
-      await t.tap(byKey('mute-always'));
+      await t.tap(byKey('mute-threeDays'));
       await settle(t);
 
       final (kind, target, until) = w.notif.muteCalls.single;
       expect(kind, MuteKind.conversation);
       expect(target, 's1');
-      expect(until, isNull);
+      expect(
+        until!.difference(DateTime.now().add(const Duration(days: 3))).abs(),
+        lessThan(const Duration(minutes: 1)),
+        reason: '3 days was picked',
+      );
     });
 
     testWidgets('it is never offered as a forward target', (t) async {

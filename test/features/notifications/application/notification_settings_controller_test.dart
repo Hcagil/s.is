@@ -269,7 +269,7 @@ void main() {
 
         await c
             .read(mutesProvider.notifier)
-            .mute(MuteKind.person, 'u2', MuteLength.always);
+            .mute(MuteKind.person, 'u2', MuteLength.oneWeek);
 
         final state = c.read(mutesProvider).requireValue;
         expect(
@@ -279,7 +279,11 @@ void main() {
               're-muting the same target must replace, not add a second '
               'entry',
         );
-        expect(state.single.until, isNull, reason: 'always = no until');
+        expect(
+          state.single.until!.isAfter(now.add(const Duration(days: 6))),
+          isTrue,
+          reason: 'the second mute replaced the 1-hour one',
+        );
       },
     );
 

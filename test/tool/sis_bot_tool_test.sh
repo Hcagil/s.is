@@ -290,10 +290,10 @@ check "probe: the bot is in no chat but Debug and its listed 1:1s" \
   test "$(sql "select count(*) from public.conversation_members m where m.user_id = '$BOT_ID' and m.left_at is null
               and not app_private.bot_conversation_allowed('$BOT_ID', m.conversation_id)")" = 0
 # Realtime over a real websocket, in the Flutter image.
-if "${COMPOSE[@]}" run --rm flutter flutter test --run-skipped --tags integration \
+if "${COMPOSE[@]}" run --rm flutter flutter test --run-skipped --tags sis_bot_probe \
      --dart-define=SIS_BOT_PROBE_JWT="$BOT_JWT" --dart-define=SIS_BOT_PROBE_HUMAN_JWT="$ANN_JWT" \
      --dart-define=SIS_BOT_PROBE_DEBUG="$DEBUG" --dart-define=SUPABASE_TEST_KEY="$PUBLISHABLE" \
-     test/integration/sis_bot_realtime_probe_test.dart >"$BOX/rt" 2>&1; then
+     test/tool/sis_bot_realtime_probe_test.dart >"$BOX/rt" 2>&1; then
   ok "probe: Realtime refuses the bot, admits the human"
 else
   bad "probe: Realtime: $(grep -E 'Expected|Actual|reason|Failed|Error' "$BOX/rt" | head -8 | tr '\n' ' ')"

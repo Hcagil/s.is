@@ -18,3 +18,7 @@ tags:
   # integration suites; it never belongs in the ordinary run.
   warmup:
     skip: "readiness probe; run explicitly before the integration suites"
+  # The SIS Bot's Realtime probe needs a bootstrapped bot and its tokens, which
+  # only test/tool/sis_bot_tool_test.sh provides; it runs the probe itself.
+  sis_bot_probe:
+    skip: "run by test/tool/sis_bot_tool_test.sh"

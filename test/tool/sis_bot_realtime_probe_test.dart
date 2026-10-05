@@ -1,4 +1,4 @@
-@Tags(['integration'])
+@Tags(['sis_bot_probe'])
 library;
 
 import 'dart:async';
@@ -11,8 +11,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// `not is_bot(auth.uid())`), while a human member joins the same topics.
 ///
 /// Driven by test/tool/sis_bot_tool_test.sh, which bootstraps the bot on the
-/// local stack and passes both tokens in; skipped when run on its own (the
-/// plain integration suite has no bot to probe).
+/// local stack and passes both tokens in. Its own tag (dart_test.yaml) keeps it
+/// out of every other run, including `--run-skipped --tags integration`, which
+/// would override a plain `skip:`: without a bootstrapped bot there is nothing
+/// to probe.
 const _url = String.fromEnvironment(
   'SUPABASE_TEST_URL',
   defaultValue: 'http://host.docker.internal:54321',

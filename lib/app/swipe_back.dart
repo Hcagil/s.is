@@ -53,7 +53,8 @@ class SwipeBackTransitionsBuilder extends PageTransitionsBuilder {
         route,
         context,
         animation,
-        secondaryAnimation,
+        // No parallax: the page under a drag stays put.
+        const AlwaysStoppedAnimation<double>(0),
         child,
       ),
     );

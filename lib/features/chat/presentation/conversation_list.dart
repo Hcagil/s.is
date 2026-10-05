@@ -246,67 +246,74 @@ class _ConversationTile extends ConsumerWidget {
                 overflow: TextOverflow.ellipsis,
                 style: previewStyle,
               ),
-        trailing: conversation.lastMessageAt == null
+        trailing: conversation.lastMessageAt == null && !muted && !unread
             ? null
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    previewTime(conversation.lastMessageAt!, DateTime.now()),
-                    key: ValueKey('preview-time-${conversation.id}'),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: unread ? scheme.primary : null,
-                      fontWeight: unread ? FontWeight.w700 : null,
-                    ),
-                  ),
-                  if (muted) ...[
-                    const SizedBox(height: 4),
-                    Icon(
-                      Icons.notifications_off_outlined,
-                      key: ValueKey('muted-${conversation.id}'),
-                      size: 14,
-                      color: scheme.onSurfaceVariant,
-                      semanticLabel: AppLocalizations.of(context)
-                          .chatMutedLabel,
-                    ),
-                  ],
-                  if (unread) ...[
-                    const SizedBox(height: 4),
-                    Container(
-                      key: ValueKey('unread-${conversation.id}'),
-                      // No `alignment`: an aligned Container grows to all the
-                      // width it is offered, and a ListTile trailing is offered
-                      // the whole row. Sized by its text, at least round.
-                      constraints: const BoxConstraints(minWidth: 20),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
+                  if (conversation.lastMessageAt != null)
+                    Text(
+                      previewTime(conversation.lastMessageAt!, DateTime.now()),
+                      key: ValueKey('preview-time-${conversation.id}'),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: unread ? scheme.primary : null,
+                        fontWeight: unread ? FontWeight.w700 : null,
                       ),
-                      decoration: BoxDecoration(
-                        color: muted ? scheme.onSurfaceVariant : null,
-                        gradient: muted
-                            ? null
-                            : LinearGradient(
-                                colors: [
-                                  scheme.primary.withValues(alpha: 0.5),
-                                  scheme.primary.withValues(alpha: 0.8),
-                                  scheme.primary.withValues(alpha: 0.5),
-                                ],
+                    ),
+                  if (muted || unread) ...[
+                    if (conversation.lastMessageAt != null)
+                      const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (muted)
+                          Icon(
+                            Icons.notifications_off_outlined,
+                            key: ValueKey('muted-${conversation.id}'),
+                            size: 14,
+                            color: scheme.onSurfaceVariant,
+                            semanticLabel: AppLocalizations.of(context)
+                                .chatMutedLabel,
+                          ),
+                        if (muted && unread) const SizedBox(width: 4),
+                        if (unread)
+                          Container(
+                            key: ValueKey('unread-${conversation.id}'),
+                            // No `alignment`: an aligned Container grows to all the
+                            // width it is offered, and a ListTile trailing is offered
+                            // the whole row. Sized by its text, at least round.
+                            constraints: const BoxConstraints(minWidth: 20),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: muted ? scheme.onSurfaceVariant : null,
+                              gradient: muted
+                                  ? null
+                                  : LinearGradient(
+                                      colors: [
+                                        scheme.primary.withValues(alpha: 0.5),
+                                        scheme.primary.withValues(alpha: 0.8),
+                                        scheme.primary.withValues(alpha: 0.5),
+                                      ],
+                                    ),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Text(
+                              conversation.unread > 99
+                                  ? '99+'
+                                  : '${conversation.unread}',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: scheme.onPrimary,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
                               ),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        conversation.unread > 99
-                            ? '99+'
-                            : '${conversation.unread}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: scheme.onPrimary,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ],

@@ -50,7 +50,7 @@ final class Mute {
 }
 
 /// The lengths a member can pick from. A mute with no end (`until == null`)
-/// can no longer be picked but still exists and still reads 'Always'.
+/// can no longer be picked, but one already saved stays valid.
 enum MuteLength {
   oneHour,
   eightHours,
@@ -64,14 +64,6 @@ enum MuteLength {
     oneDay => now.add(const Duration(days: 1)),
     threeDays => now.add(const Duration(days: 3)),
     oneWeek => now.add(const Duration(days: 7)),
-  };
-
-  String get label => switch (this) {
-    oneHour => '1 hour',
-    eightHours => '8 hours',
-    oneDay => '1 day',
-    threeDays => '3 days',
-    oneWeek => '1 week',
   };
 }
 

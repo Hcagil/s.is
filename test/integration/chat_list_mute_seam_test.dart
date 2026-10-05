@@ -27,6 +27,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
 import '../support/fakes.dart';
+import '../support/reach.dart';
 import '../support/sis_ui.dart' as ui;
 
 /// The chat list's long-press mute (Update 1 slice 4) wired as main.dart
@@ -95,6 +96,8 @@ void main() {
         .from('profiles')
         .update({'onboarding_done': true})
         .eq('user_id', cleo.auth.currentUser!.id);
+    // Reach (docs/SECURITY.md): cleo finds ann by tag, as the picker does.
+    await findByTag(cleo, [ann]);
     convId = _ok(
       await SupabaseChatRepository(cleo)
           .startDirectConversation(ann.auth.currentUser!.id),

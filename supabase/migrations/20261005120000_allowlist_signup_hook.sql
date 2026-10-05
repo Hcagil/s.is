@@ -26,9 +26,11 @@
 -- that admin API, and its reserved-domain address is refused here for every
 -- public path, allowlist row or not: no sign-up or generated link creates it.
 --
--- Wiring: supabase/config.toml [auth.hook.before_user_created] (left off
--- locally, where the integration fixtures sign up through email) and, in
--- production, the dashboard or Management API; neither is in this file.
+-- Wiring: the hook also runs locally (supabase/config.toml
+-- [auth.hook.before_user_created]); invited fixtures are on the seed
+-- allowlist and non-invited fixtures are created through the admin API. In
+-- production it is enabled in the dashboard or through the Management API
+-- after this migration is applied; neither is in this file.
 -- Runs as supabase_auth_admin (security invoker), which may read the
 -- allowlist and nothing else in app_private.
 create function app_private.before_user_created(event jsonb) returns jsonb

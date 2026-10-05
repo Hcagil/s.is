@@ -1739,6 +1739,8 @@ run the hook (verified on gotrue v2.196.0), so the bot is created through it and
 its address is refused for every public path. The hook does not cover existing
 users or linking, so `has_app_access()` stays the authoritative gate.
 
-**Consequences.** The local config keeps the hook off, because the integration
-fixtures sign up through email; production turns the hook on and the email
-provider off. Turning `google_only` on needs Apple added to it first.
+**Consequences.** The local config runs the hook too: invited fixtures are on
+the seed allowlist and non-invited fixtures are created through the admin API,
+which the hook does not see. Production enables the hook in the dashboard or
+through the Management API after the migration is applied, and keeps the email
+provider off (since 2026-10-05). Turning `google_only` on needs Apple added to it first.

@@ -1787,3 +1787,27 @@ while the switch is still OFF, so it is exempt from the ON and rate checks; a
 runbook insert (no JWT) is exempt from ON so listing a tester works while OFF.
 The tool pair is `tool/sis_bot.sh` (bot session only) and
 `tool/sis_bot_admin.sh` (owner-run, in the owner's own terminal; service key read only from a mode-600 file the owner names, never from an environment variable).
+
+## 2026-10-05 — English and Turkish through gen-l10n; system font
+
+**Context.** Update 1 brings every screen in Turkish as well as English. The
+"What's new" decision of 2026-09-30 said English only because the app had no
+localisation. The approved Update 1 design also sets text in the phone's own
+font.
+
+**Decision.** Strings live in `lib/l10n/app_en.arb` and `app_tr.arb` and are
+read through the generated `AppLocalizations` (gen-l10n, configured in
+`l10n.yaml`). The app follows the system language; there is no in-app
+language switch. The generated Dart files are checked in, so analysis and
+builds do not depend on a generation step. This adds the SDK package
+`flutter_localizations` and its required `intl` dependency. Text uses the
+platform default font (no `fontFamily` in the theme); the Sora wordmark is
+unchanged.
+
+**Consequences.**
+- Every new string goes into both ARB files in the same change, and a test
+  keeps their keys equal and their values non-empty.
+- Localised text is a presentation concern: `application/` and `core/` return
+  typed failures or reason codes, never sentences.
+- iOS offers Turkish only once `CFBundleLocalizations` lists `tr` (and `tr` is
+  in `knownRegions`); that change ships with the Update 1 release.

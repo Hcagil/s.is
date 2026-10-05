@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'swipe_back.dart';
 
-/// The Nocturne design: ink violet, Manrope, rounded but precise shapes.
+/// The Nocturne design: ink violet, the system font (Manrope stays bundled
+/// as the switch-off font), rounded but precise shapes.
 /// Values are the design tokens in docs/DESIGN.md §10; change them there first.
 ThemeData sisTheme(Brightness brightness) {
   final t = brightness == Brightness.dark ? SisBrand.dark : SisBrand.light;
@@ -33,7 +34,7 @@ ThemeData sisTheme(Brightness brightness) {
   const r12 = BorderRadius.all(Radius.circular(12));
   const r16 = BorderRadius.all(Radius.circular(16));
   final text = ThemeData(brightness: brightness).textTheme
-      .apply(fontFamily: 'Manrope', bodyColor: t.text, displayColor: t.text);
+      .apply(bodyColor: t.text, displayColor: t.text);
   // Filled buttons carry the brand gradient; disabled ones fall back to the
   // theme's flat disabled colour.
   Widget gradient(BuildContext _, Set<WidgetState> states, Widget? child) =>
@@ -48,7 +49,6 @@ ThemeData sisTheme(Brightness brightness) {
     useMaterial3: true,
     brightness: brightness,
     colorScheme: scheme,
-    fontFamily: 'Manrope',
     textTheme: text.copyWith(
       titleLarge: text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
       titleMedium: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -80,7 +80,6 @@ ThemeData sisTheme(Brightness brightness) {
             minimumSize: const Size(64, 50),
             shape: const RoundedRectangleBorder(borderRadius: r12),
             textStyle: const TextStyle(
-              fontFamily: 'Manrope',
               fontWeight: FontWeight.w700,
               fontSize: 16,
             ),
@@ -214,6 +213,9 @@ class SisBrand extends ThemeExtension<SisBrand> {
   final Color background, surface, surfaceHigh, text, muted, line;
   final Color brand, brandDeep, theirs, glow, glowDeep, danger, unreadEdge;
 
+  /// Corner radius of a chat bubble (slice 5 uses it).
+  final double bubbleRadius = 16;
+
   /// Three stops, used only on the logo and the "SIS" wordmark.
   final LinearGradient prism;
 
@@ -222,6 +224,19 @@ class SisBrand extends ThemeExtension<SisBrand> {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [brandDeep, brand],
+  );
+
+  /// S10, a row separator that fades out at both ends.
+  LinearGradient get fadingSeparator =>
+      LinearGradient(colors: [line.withAlpha(0), line, line.withAlpha(0)]);
+
+  /// S3, the soft-edged unread pill.
+  LinearGradient get unreadPillFade => LinearGradient(
+    colors: [
+      brand.withValues(alpha: .5),
+      brand.withValues(alpha: .8),
+      brand.withValues(alpha: .5),
+    ],
   );
 
   static const light = SisBrand(
@@ -273,4 +288,41 @@ class SisBrand extends ThemeExtension<SisBrand> {
   @override
   SisBrand lerp(SisBrand? other, double t) =>
       other == null ? this : (t < .5 ? this : other);
+}
+
+/// Shared design tokens from the Update 1 mockup (S2..S9). Defined here and
+/// wired into screens by later slices.
+abstract final class SisTokens {
+  /// S2: margin between the reaction chips and the time.
+  static const chipToTimeGap = 2.0;
+
+  /// S5: the message time.
+  static const timeFontSize = 10.5;
+  static const timeOpacity = 0.8;
+
+  /// S6: extra letter-spacing on sender names.
+  static const nameLetterSpacing = 0.3;
+
+  /// S7: settings rows.
+  static const settingsRowPadding = EdgeInsets.symmetric(
+    horizontal: 16,
+    vertical: 10,
+  );
+  static const settingsRowRadius = 17.0;
+
+  /// S8: section labels.
+  static const sectionLabelWeight = FontWeight.w600;
+
+  /// S9: a 2% white sheen across the top of confirmation buttons.
+  static const sheenOpacity = 0.02;
+  static const sheenHeightFraction = 0.02;
+
+  /// Delivery tick (option A): soft at rest, a 0.3 s fade on change.
+  static const tickRestOpacity = 0.75;
+  static const tickReadOpacity = 0.95;
+  static const tickFade = Duration(milliseconds: 300);
+  static const tickReadColor = Color(0xFF8FF0FF);
+
+  /// GreyOption: the disabled look.
+  static const greyOpacity = 0.4;
 }

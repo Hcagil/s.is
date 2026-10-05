@@ -1,0 +1,7 @@
+{
+  "@@locale": "tr",
+  "deliverySending": "Gönderiliyor",
+  "deliverySent": "Gönderildi",
+  "deliveryDelivered": "Teslim edildi",
+  "deliveryRead": "Okundu"
+}

@@ -1713,3 +1713,32 @@ owner re-tests the offline open after the next release (open online, wait a
 minute, close, airplane mode, open: the stored chats appear). If we later want
 install-source assurance, it comes back as an explicit Play Integrity check
 that fails open offline, decided in its own entry.
+
+## 2026-10-05 — Uninvited sign-ins are refused before an account exists
+
+**Context.** Anyone who finished Google sign-in got an auth user and a profile
+row, and was only then denied by the allowlist (Play's pre-launch robots made
+eleven such accounts on 2026-09-21). The hosted email provider was found on,
+although the project is documented as Google-only.
+
+**Decision.** A Supabase "before user created" auth hook,
+`app_private.before_user_created`, refuses a sign-up unless the normalised address is on the
+allowlist and is not on a reserved test domain (example.com, .net, .org, which
+covers the SIS Bot). It has a `google_only` switch, left off: the email provider
+is being turned off and Apple sign-in arrives in v0.31, so a provider check
+would only have to be loosened again. It fails closed (no catch-all that allows); break-glass is switching
+the hook off in the dashboard. It runs as `supabase_auth_admin` with read access
+to the allowlist only. The app maps the resulting 403 to the existing Access
+denied screen. In the same migration, `deleted_attachments` gains `recorded_at`
+(a deleter's record only covers an object that existed when it was written) and
+a re-delete of a re-used path takes over the record (security re-gate findings
+L1 and L2).
+
+**Why.** Data minimisation: strangers leave no rows. Admin `createUser` does not
+run the hook (verified on gotrue v2.196.0), so the bot is created through it and
+its address is refused for every public path. The hook does not cover existing
+users or linking, so `has_app_access()` stays the authoritative gate.
+
+**Consequences.** The local config keeps the hook off, because the integration
+fixtures sign up through email; production turns the hook on and the email
+provider off. Turning `google_only` on needs Apple added to it first.

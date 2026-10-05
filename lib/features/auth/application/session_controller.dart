@@ -316,6 +316,10 @@ class SessionController extends AsyncNotifier<SessionState> {
     if (!ref.mounted) return;
     if (r is Err) {
       final f = r.failure;
+      if (f is DeniedFailure) {
+        state = const AsyncData(Denied());
+        return;
+      }
       state = AsyncData(
         f is ProviderFailure && f.userCanceled
             ? SignedOut(reason: f.message)

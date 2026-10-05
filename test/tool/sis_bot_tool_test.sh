@@ -4,13 +4,16 @@
 # `supabase start`). It never touches the repository's own .private/: both
 # tools are copied into a sandbox, so their state file lives there.
 #
-# Covers: bootstrap and list-add; read, send, start (by id and @tag); the
+# Covers: the admin tool's key file (SIS_SERVICE_KEY_FILE: unset, env-only,
+# missing, mode 644, foreign owner -> exit 2); bootstrap and list-add; read, send, start (by id and @tag); the
 # token rotating on every run and the old one refused after the reuse
-# interval; two parallel runs; exit 2 (usage, mode 644), 3 (missing file,
+# interval; two parallel runs; exit 2 (usage, mode 644, foreign owner), 3 (missing file,
 # busy lock, superseded by a second sign-in, revoked), 4 (unlisted chat,
 # unlisted user, OFF), 5 (rate limited); revoke; the sign-up hook refusing a
 # public sign-up of the bot address; and probes with the bot's REAL JWT of
 # storage, avatars, profile update, add_members, set_admin and Realtime.
+# While the tools run, a poller checks that no token or key is in any argv and
+# that sis_bot.sh keeps its temp files in one mode-700 directory it removes.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 REPO=$PWD
@@ -22,13 +25,16 @@ read -r -a COMPOSE <<<"${SIS_BOT_TEST_COMPOSE:-docker compose}"
 env_out=$("${COMPOSE[@]}" run --rm supabase status -o env 2>/dev/null)
 val() { sed -n "s/^$1=\"\(.*\)\"/\1/p" <<<"$env_out"; }
 export SIS_URL=http://127.0.0.1:54321
-export SIS_SERVICE_KEY; SIS_SERVICE_KEY=$(val SERVICE_ROLE_KEY)
+SKEY=$(val SERVICE_ROLE_KEY)   # the test's own; the admin tool gets it only from a file
 export SIS_ANON_KEY; SIS_ANON_KEY=$(val ANON_KEY)
 PUBLISHABLE=$(val PUBLISHABLE_KEY)
-[ -n "$SIS_SERVICE_KEY" ] && [ -n "$SIS_ANON_KEY" ] || { echo "local stack not running"; exit 1; }
-unset SIS_PROJECT_REF SUPABASE_ACCESS_TOKEN   # never the Management API from here
+[ -n "$SKEY" ] && [ -n "$SIS_ANON_KEY" ] || { echo "local stack not running"; exit 1; }
+# Never the Management API from here, and no key in the environment.
+unset SIS_PROJECT_REF SUPABASE_ACCESS_TOKEN SUPABASE_ACCESS_TOKEN_FILE SIS_SERVICE_KEY
 
 BOX=$(mktemp -d); mkdir -p "$BOX/tool"; chmod 700 "$BOX"
+KEYFILE="$BOX/service_key"; (umask 077; printf '%s\n' "$SKEY" >"$KEYFILE")
+export SIS_SERVICE_KEY_FILE="$KEYFILE"
 cp tool/sis_bot.sh tool/sis_bot_admin.sh "$BOX/tool/"
 BOT="$BOX/tool/sis_bot.sh"; ADMIN="$BOX/tool/sis_bot_admin.sh"; STATE="$BOX/.private/sis_bot.json"
 DOM=sisbot-tool.test
@@ -43,8 +49,36 @@ expect_exit() {
   if [ "$got" = "$want" ]; then ok "$name (exit $got)"
   else bad "$name: want exit $want, got $got: $(tr '\n' ' ' <"$BOX/err" | head -c 300)"; fi
 }
+# watch WANT NAME SECRET cmd...: runs cmd (with TMPDIR=$TMPD) while a poller
+# samples what it puts in TMPDIR and every process's argv. Then checks the exit
+# code, that SECRET never appeared in any argv (S-3), and, for tool/sis_bot.sh,
+# that no temp file outlives the run and every temp file sat inside a single
+# mode-700 directory (S-2). /tmp is diffed too, in case TMPDIR is not honoured.
+TMPD="$BOX/tmp"; mkdir -m 700 "$TMPD"
+tmp_top() { find /tmp -mindepth 1 -maxdepth 1 -user "$(id -u)" 2>/dev/null | LC_ALL=C sort; }
+watch() {
+  local want=$1 name=$2 secret=$3; shift 3
+  printf '%s\n' "$secret" >"$BOX/pats"
+  tmp_top >"$BOX/tmp_before"; : >"$BOX/seen"; : >"$BOX/argv_hits"
+  ( while :; do
+      find "$TMPD" -mindepth 1 -printf '%d %m %y %P\n' >>"$BOX/seen" 2>/dev/null || true
+      grep -lsF -f "$BOX/pats" /proc/[0-9]*/cmdline >>"$BOX/argv_hits" 2>/dev/null || true
+    done ) & local poller=$!
+  local got=0; TMPDIR="$TMPD" "$@" >"$BOX/out" 2>"$BOX/err" || got=$?
+  kill "$poller" 2>/dev/null || true; wait "$poller" 2>/dev/null || true
+  if [ "$got" = "$want" ]; then ok "$name (exit $got)"
+  else bad "$name: want exit $want, got $got: $(tr '\n' ' ' <"$BOX/err" | head -c 300)"; fi
+  check "$name: the secret was never in a process argv" test ! -s "$BOX/argv_hits"
+  [ "$1" = "$BOT" ] || return 0
+  local left; left=$( (ls -A "$TMPD"; tmp_top | LC_ALL=C comm -13 "$BOX/tmp_before" -) | tr '\n' ' ')
+  check "$name: no temp file left behind${left:+ ($left)}" test -z "$left"
+  local tops; tops=$(awk '$1 == 1' "$BOX/seen" | sort -u)
+  check "$name: temp files only inside one mode-700 directory ($(wc -l <<<"$tops") seen: $(tr '\n' ' ' <<<"$tops"))" \
+    awk -v n="$(awk '$1 == 1 {print $4}' "$BOX/seen" | sort -u | wc -l)" \
+      'n > 1 {exit 1} $1 == 1 && !($2 == 700 && $3 == "d") {exit 1}' "$BOX/seen"
+}
 sql() { docker exec -i "$DB" psql -U postgres -XAtq -v ON_ERROR_STOP=1 -c "$1"; }
-hdr=(-H "apikey: $SIS_SERVICE_KEY" -H "Authorization: Bearer $SIS_SERVICE_KEY" -H 'content-type: application/json')
+hdr=(-H "apikey: $SKEY" -H "Authorization: Bearer $SKEY" -H 'content-type: application/json')
 create_user() {  # email name -> id
   curl -fsS -X POST "$SIS_URL/auth/v1/admin/users" "${hdr[@]}" \
     -d "{\"email\":\"$1\",\"email_confirm\":true,\"user_metadata\":{\"full_name\":\"$2\"}}" | jq -r .id
@@ -107,7 +141,28 @@ DEBUG=$(rpc "$ANN_JWT" start_group_conversation "{\"title\":\"Debug\",\"members\
 G2=$(rpc "$ANN_JWT" start_group_conversation "{\"title\":\"Not Debug\",\"members\":[\"$BOB\"]}" | jq -r .)
 [[ $DEBUG =~ ^[0-9a-f-]{36}$ && $G2 =~ ^[0-9a-f-]{36}$ ]] || { echo "fixture groups failed: $DEBUG $G2"; exit 1; }
 
-# 4 bootstrap, list ---------------------------------------------------------------
+# 4 the admin tool takes the service key only from a private file (exit 2) -------
+# Each refusal must name the variable or the file it is about.
+refused() {  # NAME VAR FILE env-args...: exit 2, naming VAR or FILE (admin `list`)
+  local name=$1 var=$2 file=$3; shift 3
+  expect_exit 2 "admin refuses: $name" env "$@" "$ADMIN" list
+  check "admin refuses: $name: the message names $var or the file" \
+    grep -qF -e "$var" -e "$file" "$BOX/err" "$BOX/out"
+}
+refused "SIS_SERVICE_KEY_FILE unset" SIS_SERVICE_KEY_FILE SIS_SERVICE_KEY_FILE -u SIS_SERVICE_KEY_FILE
+refused "the key only in SIS_SERVICE_KEY" "set SIS_SERVICE_KEY_FILE" "set SIS_SERVICE_KEY_FILE" \
+  -u SIS_SERVICE_KEY_FILE SIS_SERVICE_KEY="$SKEY"
+refused "a missing key file" SIS_SERVICE_KEY_FILE "$BOX/no_such_key" SIS_SERVICE_KEY_FILE="$BOX/no_such_key"
+cp "$KEYFILE" "$BOX/key_644"; chmod 644 "$BOX/key_644"
+refused "a key file at mode 644" SIS_SERVICE_KEY_FILE "$BOX/key_644" SIS_SERVICE_KEY_FILE="$BOX/key_644"
+# A file owned by someone else needs root to make: a throwaway container does it.
+docker run --rm -v "$BOX:/b" --entrypoint sh "$(docker inspect "$DB" --format '{{.Config.Image}}')" \
+  -c 'cp /b/service_key /b/key_other && chown 4242:4242 /b/key_other && chmod 600 /b/key_other'
+refused "a key file owned by another user" SIS_SERVICE_KEY_FILE "$BOX/key_other" SIS_SERVICE_KEY_FILE="$BOX/key_other"
+refused "a Management API token file at mode 644" SUPABASE_ACCESS_TOKEN_FILE "$BOX/key_644" \
+  SIS_PROJECT_REF=sisbottest SUPABASE_ACCESS_TOKEN_FILE="$BOX/key_644"
+
+# 4b bootstrap, list --------------------------------------------------------------
 expect_exit 0 "admin bootstrap" "$ADMIN" bootstrap --debug "$DEBUG"
 BOT_ID=$(sql "select id from auth.users where email = 'sis-destek-bot@example.com'")
 check "the bot's profile is SIS Destek / sis_destek" \
@@ -115,12 +170,13 @@ check "the bot's profile is SIS Destek / sis_destek" \
 check "the bot is ON after bootstrap" test "$(sql "select enabled from app_private.bot_accounts where user_id = '$BOT_ID'")" = t
 check "the state file is mode 600" test "$(stat -c %a "$STATE")" = 600
 check "the state file holds no admin credential" \
-  bash -c "! grep -qE 'service_role|SERVICE_ROLE|supabase-access-token|$SIS_SERVICE_KEY' '$STATE'"
+  bash -c "! grep -qE 'service_role|SERVICE_ROLE|supabase-access-token' '$STATE' && ! grep -qF -f '$KEYFILE' '$STATE'"
 check "the state file carries the anon key and the bot's id" \
   test "$(jq -r '.anon_key + "|" + .user_id' "$STATE")" = "$SIS_ANON_KEY|$BOT_ID"
 expect_exit 0 "admin list-add by email" "$ADMIN" list-add "bob@$DOM"
 expect_exit 0 "admin list-add by id" "$ADMIN" list-add "$DAN"
 "$ADMIN" list >"$BOX/list" 2>&1 || true
+expect_exit 0 "SIS_SERVICE_KEY is ignored when the key file is set" env SIS_SERVICE_KEY=not-the-key "$ADMIN" list
 check "admin list shows both contacts" bash -c "grep -q '$BOB' '$BOX/list' && grep -q '$DAN' '$BOX/list'"
 
 # 5 read, send, start ---------------------------------------------------------------
@@ -129,7 +185,7 @@ curl -fsS -o /dev/null -X POST "$SIS_URL/rest/v1/messages" -H "apikey: $SIS_ANON
   -H 'content-type: application/json' -d "{\"conversation_id\":\"$DEBUG\",\"sender_id\":\"$ANN\",\"body\":\"hello from ann\"}"
 t0=$(jq -r .refresh_token "$STATE")
 expect_exit 0 "status" "$BOT" status
-expect_exit 0 "read" "$BOT" read
+watch 0 "read" "$t0" "$BOT" read
 check "read prints Debug's message as JSON lines" \
   bash -c "grep -q 'hello from ann' '$BOX/out' && grep -v '^\$' '$BOX/out' | jq -e . >/dev/null"
 t1=$(jq -r .refresh_token "$STATE")
@@ -153,14 +209,14 @@ check "the refusal says not permitted" grep -qi 'not permitted' "$BOX/err" "$BOX
 expect_exit 4 "start with an unlisted user (who shares Debug)" "$BOT" start "$CAT" "x"
 expect_exit 0 "admin off" "$ADMIN" off
 expect_exit 4 "OFF: send to Debug" "$BOT" send "$DEBUG" "x"
-expect_exit 4 "OFF: read" "$BOT" read
+watch 4 "OFF: read" "$(jq -r .refresh_token "$STATE")" "$BOT" read
 expect_exit 0 "admin on" "$ADMIN" on
 expect_exit 0 "ON again: send works" "$BOT" send "$DEBUG" "back on"
 
 # 7 rate limited (5) -------------------------------------------------------------------
 sql "delete from app_private.bot_actions where bot_id = '$BOT_ID';
      insert into app_private.bot_actions(bot_id, kind) select '$BOT_ID', 'send' from generate_series(1, 20)" >/dev/null
-expect_exit 5 "the 21st send in 10 minutes" "$BOT" send "$DEBUG" "one too many"
+watch 5 "the 21st send in 10 minutes" "$(jq -r .refresh_token "$STATE")" "$BOT" send "$DEBUG" "one too many"
 check "the refused send left no log row" \
   test "$(sql "select count(*) from app_private.bot_actions where bot_id = '$BOT_ID' and kind = 'send'")" = 20
 sql "delete from app_private.bot_actions where bot_id = '$BOT_ID'" >/dev/null
@@ -172,6 +228,11 @@ expect_exit 2 "an unknown command" "$BOT" frobnicate
 chmod 644 "$STATE"
 expect_exit 2 "a state file at mode 644 is refused" "$BOT" status
 chmod 600 "$STATE"
+mv "$STATE" "$BOX/saved.json"
+docker run --rm -v "$BOX:/b" --entrypoint sh "$(docker inspect "$DB" --format '{{.Config.Image}}')" \
+  -c 'cp /b/saved.json /b/.private/sis_bot.json && chown 4242:4242 /b/.private/sis_bot.json && chmod 600 /b/.private/sis_bot.json'
+expect_exit 2 "a state file owned by another user is refused" "$BOT" status
+rm -f "$STATE"; mv "$BOX/saved.json" "$STATE"
 
 # 9 parallel runs share the token safely ----------------------------------------------------
 "$BOT" send "$DEBUG" "parallel one" >/dev/null 2>&1 & p1=$!
@@ -200,7 +261,7 @@ mv "$BOX/saved.json" "$STATE"
 
 # A second sign-in of the bot (the probe session below) supersedes the tool's.
 BOT_JWT=$(token_for sis-destek-bot@example.com)
-expect_exit 3 "superseded by a second bot sign-in" "$BOT" status
+watch 3 "superseded by a second bot sign-in" "$(jq -r .refresh_token "$STATE")" "$BOT" status
 check "the advice names the admin mint" grep -q 'mint' "$BOX/err" "$BOX/out"
 
 # 12 probes with the bot's REAL JWT ---------------------------------------------------------
@@ -239,7 +300,7 @@ else
 fi
 
 # 13 admin mint gives the tool a session again; revoke ends it ------------------------------
-expect_exit 0 "admin mint" "$ADMIN" mint
+watch 0 "admin mint" "$SKEY" "$ADMIN" mint
 expect_exit 0 "the tool works on the new session" "$BOT" status
 cp "$STATE" "$BOX/before_revoke.json"
 expect_exit 0 "revoke" "$BOT" revoke

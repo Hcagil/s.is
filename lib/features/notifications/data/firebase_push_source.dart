@@ -81,8 +81,9 @@ Future<String> _deliver(
   if (!await LocalPushDisplay.notificationsEnabled()) {
     return 'dropped:notifications_off';
   }
-  final sender = d['sender'], chat = d['chat'];
+  final sender = d['sender'], chat = d['chat'], messageId = d['message_id'];
   final drawn = await LocalPushDisplay.show(
+    messageId: messageId is String ? messageId : null,
     conversationId: id,
     title: title,
     body: body,

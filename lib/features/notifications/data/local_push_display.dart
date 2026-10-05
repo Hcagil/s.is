@@ -115,12 +115,16 @@ final class LocalPushDisplay {
   /// [alreadyAlerted]: Android already drew this push itself and alerted
   /// (InstantPush.kt); this post replaces that notification in place (same
   /// id) without sound or heads-up again.
+  ///
+  /// [messageId]: the push's message id; a line the Android receiver already
+  /// stored for it is not stored twice.
   static Future<bool> show({
     required String conversationId,
     required String title,
     required String body,
     String? sender,
     String? chat,
+    String? messageId,
     bool alreadyAlerted = false,
   }) async {
     final at = DateTime.now();
@@ -140,6 +144,7 @@ final class LocalPushDisplay {
           at: at,
           sender: sender,
           chat: chat,
+          messageId: messageId,
         ),
       );
       return ++_stored;
@@ -379,10 +384,10 @@ final class LocalPushDisplay {
               Message(
                 l.text,
                 DateTime.fromMillisecondsSinceEpoch(l.at),
-                l.sender.isEmpty
+                lineSenderName(chat, l) == null
                     ? null
                     : Person(
-                        name: l.sender,
+                        name: lineSenderName(chat, l),
                         icon: picture == null || chat.group
                             ? null
                             : ByteArrayAndroidIcon(picture),

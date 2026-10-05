@@ -121,6 +121,192 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Read'**
   String get deliveryRead;
+
+  /// Settings row: themes
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get settingsAppearance;
+
+  /// Settings row and page title: text size
+  ///
+  /// In en, this message translates to:
+  /// **'Text size'**
+  String get settingsTextSize;
+
+  /// Settings row and page title: language
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get settingsLanguage;
+
+  /// Settings row (not available yet)
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-download'**
+  String get settingsAutoDownload;
+
+  /// Theme name
+  ///
+  /// In en, this message translates to:
+  /// **'Violet'**
+  String get themeViolet;
+
+  /// Theme name
+  ///
+  /// In en, this message translates to:
+  /// **'Ocean'**
+  String get themeOcean;
+
+  /// Theme name
+  ///
+  /// In en, this message translates to:
+  /// **'Forest'**
+  String get themeForest;
+
+  /// Theme name
+  ///
+  /// In en, this message translates to:
+  /// **'Sunset'**
+  String get themeSunset;
+
+  /// Theme name
+  ///
+  /// In en, this message translates to:
+  /// **'Graphite'**
+  String get themeGraphite;
+
+  /// Theme name
+  ///
+  /// In en, this message translates to:
+  /// **'Rose'**
+  String get themeRose;
+
+  /// Section label on the Appearance page
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in themes'**
+  String get appearanceBuiltIn;
+
+  /// Section label for custom themes (not available yet)
+  ///
+  /// In en, this message translates to:
+  /// **'My themes'**
+  String get appearanceMyThemes;
+
+  /// Button to make a custom theme (not available yet)
+  ///
+  /// In en, this message translates to:
+  /// **'New theme'**
+  String get appearanceNewTheme;
+
+  /// Hint under the themes
+  ///
+  /// In en, this message translates to:
+  /// **'Themes stay on this phone. There is no export.'**
+  String get appearanceNoExport;
+
+  /// Row for the chat wallpaper (not available yet)
+  ///
+  /// In en, this message translates to:
+  /// **'Wallpaper'**
+  String get appearanceWallpaper;
+
+  /// Slider label for picture wallpaper (not available yet)
+  ///
+  /// In en, this message translates to:
+  /// **'Dim'**
+  String get appearanceDim;
+
+  /// Slider label for picture wallpaper (not available yet)
+  ///
+  /// In en, this message translates to:
+  /// **'Blur'**
+  String get appearanceBlur;
+
+  /// Sample incoming message in the live preview
+  ///
+  /// In en, this message translates to:
+  /// **'Is everyone still in for Saturday?'**
+  String get previewTheirs;
+
+  /// Sample outgoing message in the live preview
+  ///
+  /// In en, this message translates to:
+  /// **'Great, I\'ll bring the cake'**
+  String get previewMine;
+
+  /// Switch title
+  ///
+  /// In en, this message translates to:
+  /// **'Use the phone\'s own font'**
+  String get textSystemFont;
+
+  /// Switch subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Matches your system. Off = SIS font'**
+  String get textSystemFontHint;
+
+  /// Section label
+  ///
+  /// In en, this message translates to:
+  /// **'Chat text size'**
+  String get textChatSize;
+
+  /// Section label
+  ///
+  /// In en, this message translates to:
+  /// **'App text size'**
+  String get textAppSize;
+
+  /// Sample line for the app text size
+  ///
+  /// In en, this message translates to:
+  /// **'Settings and chat list text'**
+  String get textAppSample;
+
+  /// Text size
+  ///
+  /// In en, this message translates to:
+  /// **'Small'**
+  String get textSmall;
+
+  /// Text size
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get textMedium;
+
+  /// Text size
+  ///
+  /// In en, this message translates to:
+  /// **'Large'**
+  String get textLarge;
+
+  /// Language option: follow the phone
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get languageSystem;
+
+  /// Subtitle of the System language option
+  ///
+  /// In en, this message translates to:
+  /// **'Follows the phone'**
+  String get languageSystemHint;
+
+  /// Language option, written in its own language
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get languageEnglish;
+
+  /// Language option, written in its own language
+  ///
+  /// In en, this message translates to:
+  /// **'Türkçe'**
+  String get languageTurkish;
 }
 
 class _AppLocalizationsDelegate

@@ -28,6 +28,8 @@ import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/presentation/settings_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
+import 'package:sis/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sis/main.dart' as entry;
 
 import '../../support/chat_launcher.dart'
@@ -219,6 +221,8 @@ void main() {
       overrides: overrides(profile: p),
       child: MaterialApp(
         theme: sisTheme(Brightness.light),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: const SettingsScreen(),
       ),
     );
@@ -423,6 +427,8 @@ void main() {
     ) async {
       LicenseRegistry.reset();
       addTearDown(LicenseRegistry.reset);
+      // main() reads the stored appearance before runApp.
+      SharedPreferences.setMockInitialValues({});
       // Without dart-defines main() registers the licences, then mounts the
       // "Setup required" app, which is swapped out at once. A frame first, so
       // runApp's warm-up frame is not stamped with the previous test's clock.

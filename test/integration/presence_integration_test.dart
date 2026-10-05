@@ -18,6 +18,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/reach.dart';
+import '../support/service_key.dart';
 
 /// Online status and typing against the real stack: the REAL controllers on
 /// the REAL [SupabasePresenceRepository], over real private Realtime channels
@@ -484,6 +485,11 @@ void main() {
     final who = <String, Future<SupabaseClient> Function()>{
       'anon': () async => _client(),
       'stranger': () async {
+        await ensureUninvitedUser(
+          _url,
+          'stranger-presence@integration.test',
+          _password,
+        );
         final c = await _signIn('stranger-presence@integration.test');
         expect(
           await c.rpc('activate_session'),

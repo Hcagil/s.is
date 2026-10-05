@@ -270,6 +270,37 @@ of **the Play App Signing certificate** and of the upload certificate. A
 missing registration surfaces as a Credential Manager cancellation after
 account selection; the app shows that reason rather than returning silently.
 
+**Sign-up gate (before user created hook).** Google is the only provider. The
+hosted email provider is off (since 2026-10-05; Anonymous sign-ins off,
+"Allow new users to sign up" on, so Google sign-up still works); the local stack keeps email on, with confirmations off, for the
+integration fixtures only. Supabase Auth runs `app_private.before_user_created`
+before it creates a user and refuses (HTTP 403, message `not invited`) unless
+the trimmed, lower-case address is on the allowlist and is not on a reserved
+test domain (`example.com`, `example.net`, `example.org`; this covers
+`sis-destek-bot@example.com`, refused even with an allowlist row). The function
+has a switch, `google_only`, that also refuses any non-Google sign-up; it is
+off, because the email provider is off and Apple sign-in arrives
+in v0.31. A refused person leaves no `auth.users`, identity, profile or
+session row. It fails closed: an error in the function is an Auth error (500)
+and creates nobody; nothing catches an error and allows. Break-glass: the owner
+switches the hook off in Dashboard > Authentication > Hooks. The function runs
+as `supabase_auth_admin`, which holds execute on it, usage on `app_private` and
+SELECT on `allowlist` (one RLS policy) and nothing else; it is not a broad
+security definer. Turning `google_only` on needs Apple added to it first.
+
+The hook is data minimisation, not the gate. It does not run for existing
+users, for linking a Google sign-in to an existing user, or for the admin API,
+so `has_app_access()` and the allowlist table stay authoritative. The SIS Bot
+(`sis-destek-bot@example.com`) is created through the admin API and holds a
+refresh token only; the hook refuses its address unconditionally, even with an
+allowlist row, so public sign-up and generated links can never create it. The
+local `supabase/config.toml` runs the hook too, so local matches hosted:
+invited integration fixtures are on the seed allowlist and the non-invited
+"stranger" fixtures are created through the admin API; pgTAP also calls the
+function with crafted payloads.
+A non-invited Google account now gets a 403 at sign-in, which the app shows as
+the Access denied screen.
+
 iOS: the iOS OAuth client `306417977220-vqg0ne5360a921i23quf294g8e0fjshq` is
 set as `GIDClientID` in `ios/Runner/Info.plist`. The Web client is still passed as
 `serverClientId`, but the iOS SDK issues the ID token with the **iOS client as
@@ -457,5 +488,6 @@ when a collaborator leaves or a dependency is suspected compromised.
   `profiles` row — Google Play's automated pre-launch testing created eleven
   such accounts on 2026-09-21 — so a contact list scoped only by
   `has_app_access()` would list strangers by name and let any member enumerate
-  everyone who ever signed in. Do not widen it back.
+  everyone who ever signed in. Do not widen it back. The sign-up hook (see Sign-in flow) now also stops a
+  stranger's Google sign-in from creating the row at all.
 - **Never** grant `anon` or `authenticated` anything on `app_private`; never disable RLS on a `public` table.

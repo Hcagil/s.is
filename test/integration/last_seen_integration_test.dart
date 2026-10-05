@@ -18,6 +18,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/service_key.dart';
 
 /// Last seen against the real stack: [SupabasePresenceRepository]'s two RPCs,
 /// [SupabaseProfileRepository]'s share_last_seen column, and the REAL
@@ -316,6 +317,11 @@ void main() {
       'a signed-in stranger: the touch is refused, and he sees nobody',
       () async {
         await lars.presence.touchLastSeen();
+        await ensureUninvitedUser(
+          _url,
+          'stranger-lastseen@integration.test',
+          _password,
+        );
         final stranger = await _signIn('stranger-lastseen@integration.test');
         extra.add(stranger);
         expect(

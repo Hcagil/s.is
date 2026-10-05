@@ -149,6 +149,11 @@ class GoTrueStandIn {
   /// refuses a token whose audience is not an authorised client id.
   String? rejectWith;
 
+  /// When set, every id_token grant is answered with this status and JSON body
+  /// verbatim -- e.g. GoTrue's 403 {"code":403,"error_code":"unknown",
+  /// "msg":"not invited"} when the before-user-created hook refuses the user.
+  (int, Map<String, Object?>)? replyWith;
+
   http.Response _error(String msg) => http.Response(
     jsonEncode({'code': 400, 'error_code': 'validation_failed', 'msg': msg}),
     400,
@@ -163,6 +168,13 @@ class GoTrueStandIn {
       final body = jsonDecode(req.body) as Map<String, dynamic>;
       grants.add(body);
       if (rejectWith != null) return _error(rejectWith!);
+      if (replyWith case (final status, final reply)) {
+        return http.Response(
+          jsonEncode(reply),
+          status,
+          headers: {'content-type': 'application/json'},
+        );
+      }
       final passed = body['nonce'] as String? ?? '';
       final inToken =
           jwtClaims(body['id_token'] as String)['nonce'] as String? ?? '';

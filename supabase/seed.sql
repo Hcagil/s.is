@@ -155,6 +155,10 @@
 --     (sdb writes a 160-message chat to sda; sda pages up, jumps to an old
 --      message and pages back down to the newest; sdb writes while sda is
 --      scrolled up or her Realtime is gone)
+--   gate-invited, sis-destek-bot@example.com
+--                  test/integration/signup_gate_test.dart
+--     (the sign-up hook admits gate-invited and refuses the bot address on
+--      its reserved domain although it is allowlisted)
 insert into app_private.allowlist(email) values
   ('ann@integration.test'),
   ('bob@integration.test'),
@@ -270,5 +274,7 @@ insert into app_private.allowlist(email) values
   ('cse@integration.test'),
   ('csz@integration.test'),
   ('sda@integration.test'),
-  ('sdb@integration.test')
+  ('sdb@integration.test'),
+  ('gate-invited@integration.test'),
+  ('sis-destek-bot@example.com')
 on conflict do nothing;

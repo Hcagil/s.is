@@ -9,6 +9,7 @@ import 'package:sis/data/realtime_channels.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
+import '../support/service_key.dart';
 
 /// `joinChannel` / `leaveChannel` against the real Realtime server.
 ///
@@ -70,6 +71,11 @@ Future<SupabaseClient> _member() async {
 }
 
 Future<SupabaseClient> _stranger() async {
+  await ensureUninvitedUser(
+    _url,
+    'stranger-channels@integration.test',
+    _password,
+  );
   final c = await _signIn('stranger-channels@integration.test');
   expect(
     await c.rpc('activate_session'),

@@ -15,6 +15,7 @@ import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/reach.dart';
+import '../support/service_key.dart';
 
 /// Profile and group pictures against the real stack: the private `avatars`
 /// bucket and its policies, profiles.avatar_path, set_group_avatar(), and the
@@ -176,6 +177,11 @@ void main() {
     bea = await _signedIn('bea@integration.test');
     cem = await _signedIn('cem@integration.test', over: _Faulty()) as _Faulty;
     // Signs in with Google-like ease but is on no allowlist.
+    await ensureUninvitedUser(
+      _url,
+      'stranger-avatars@integration.test',
+      _password,
+    );
     stranger = await _signedIn(
       'stranger-avatars@integration.test',
       activate: false,

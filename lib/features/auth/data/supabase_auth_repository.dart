@@ -128,6 +128,8 @@ final class SupabaseAuthRepository implements AuthRepository {
         'Supabase rejected the Google token: ${e.statusCode}',
         name: 'sis.auth',
       );
+      // The sign-up hook refuses an address that is not invited (403).
+      if (e.statusCode == '403') return const Err(DeniedFailure());
       return const Err(ProviderFailure(signInFailedMessage));
     }
   }

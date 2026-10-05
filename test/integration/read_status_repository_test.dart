@@ -14,6 +14,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/service_key.dart';
 
 /// [SupabaseChatRepository.readMarks], `.readUpdates` and `.markRead` against
 /// the real local stack: the real RPCs and the real Realtime broadcast that
@@ -525,6 +526,11 @@ void main() {
 
   group('without app access', () {
     test('a stranger is refused mark_read, and learns nothing', () async {
+      await ensureUninvitedUser(
+        _url,
+        'stranger-reads@integration.test',
+        _password,
+      );
       final stranger = await _signIn('stranger-reads@integration.test');
       extra.add(stranger);
       expect(

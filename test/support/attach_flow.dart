@@ -1,5 +1,5 @@
-// The 0.30.10 paperclip flow, from its contract: the paperclip opens the
-// photo grid straight away (no menu in between); a tap on a photo ticks it;
+// The paperclip flow, from its contract: the paperclip opens the attach
+// card and its Photo tile opens the photo grid; a tap on a photo ticks it;
 // "Send N photos" (sheet-send) loads the ticked photos and opens the preview
 // page; the preview page's round Send (preview-send) is what sends. Camera
 // and "Gallery" (sheet-from-app) also land on the preview page.
@@ -16,9 +16,12 @@ Future<void> frames(WidgetTester t, [int n = 20]) async {
   }
 }
 
-/// Taps the paperclip and lets the grid rise.
+/// Taps the paperclip, picks Photo on the attach card, and lets the grid
+/// rise.
 Future<void> openGrid(WidgetTester t) async {
   await t.tap(key('composer-attach'));
+  await t.pumpAndSettle();
+  await t.tap(key('attach-photo'));
   await t.pumpAndSettle();
 }
 

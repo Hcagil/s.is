@@ -34,6 +34,8 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 const hugh = Member(userId: 'u2', displayName: 'Hugh');
 const iona = Member(userId: 'u3', displayName: 'Iona');
@@ -118,6 +120,8 @@ Future<ProviderContainer> mountChat(
     UncontrolledProviderScope(
       container: c,
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: (theme ?? ThemeData()).copyWith(platform: platform),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
@@ -151,7 +155,8 @@ void main() {
   });
 
   group('the composer at the bottom edge', () {
-    final send = find.byKey(const ValueKey('composer-send'));
+    // An empty field shows the mic in the send button's place.
+    final send = find.byKey(const ValueKey('grey-v_rec'));
 
     Future<double> gap(WidgetTester t, {required TargetPlatform on}) async {
       await mountChat(t, chat, open: 'c1', platform: on);
@@ -375,7 +380,11 @@ void main() {
       await t.pumpWidget(
         UncontrolledProviderScope(
           container: c,
-          child: const MaterialApp(home: ConversationList()),
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ConversationList(),
+          ),
         ),
       );
       await steps(t);

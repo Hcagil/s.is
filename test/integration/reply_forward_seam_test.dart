@@ -24,6 +24,8 @@ import '../support/fakes.dart';
 import '../support/service_key.dart';
 import '../support/reach.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 /// Two members' message screens, mounted at once over the real repository:
 /// reid replies to a message through the actual swipe -> action row -> type
 /// -> send flow and sees the quote on his own screen; he then forwards a
@@ -240,6 +242,9 @@ void main() {
                   child: UncontrolledProviderScope(
                     container: reidContainer,
                     child: MaterialApp(
+                      localizationsDelegates:
+                          AppLocalizations.localizationsDelegates,
+                      supportedLocales: AppLocalizations.supportedLocales,
                       theme: sisTheme(Brightness.light),
                       home: const MessageScreen(title: 'Beth'),
                     ),
@@ -252,6 +257,9 @@ void main() {
                   child: UncontrolledProviderScope(
                     container: coraContainer,
                     child: MaterialApp(
+                      localizationsDelegates:
+                          AppLocalizations.localizationsDelegates,
+                      supportedLocales: AppLocalizations.supportedLocales,
                       theme: sisTheme(Brightness.light),
                       home: const MessageScreen(title: 'Reid'),
                     ),
@@ -380,6 +388,8 @@ void main() {
         within('a', find.byKey(const ValueKey('composer-field'))),
         'sounds good',
       );
+      // The send button replaces the mic once the field has text.
+      await t.pump();
       await t.tap(within('a', find.byKey(const ValueKey('composer-send'))));
       await settle(t);
 

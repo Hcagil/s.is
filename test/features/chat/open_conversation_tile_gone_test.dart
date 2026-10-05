@@ -19,6 +19,8 @@ import '../../support/chat_launcher.dart'
     show SignedInForTests, chatMessage, me, osBack;
 import '../../support/fakes.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 /// A list row: its own ConsumerWidget, so its ref dies when it is removed.
 class _Tile extends ConsumerWidget {
   const _Tile();
@@ -61,6 +63,8 @@ void main() {
       UncontrolledProviderScope(
         container: c,
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           theme: sisTheme(Brightness.light),
           home: Scaffold(
             body: ValueListenableBuilder<bool>(

@@ -147,8 +147,8 @@ void main() {
       await keyboardSend(t);
       // The field is empty now; the second press has nothing to send.
       await keyboardSend(t);
-      await t.tap(s.send);
-      await t.pump();
+      // An empty field offers the mic, not the send button.
+      expect(s.send, findsNothing);
       expectTyping(t, 'after repeated sends in flight');
 
       t.testTextInput.enterText('two');

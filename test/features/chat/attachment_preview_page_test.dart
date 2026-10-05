@@ -21,6 +21,8 @@ import '../../support/chat_launcher.dart'
     show osBack, phoneView, platforms, screenHeight, screenWidth, stroke;
 import '../../support/fakes.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 typedef Sent = ({List<PickedImage> images, String caption});
 
 PickedImage photo() =>
@@ -36,6 +38,8 @@ class Host {
 
   Widget app() => ProviderScope(
     child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: sisTheme(dark ? Brightness.dark : Brightness.light),
       home: Builder(
         builder: (context) => Scaffold(

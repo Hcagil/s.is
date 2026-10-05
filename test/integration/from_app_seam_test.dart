@@ -38,6 +38,8 @@ import '../support/dead_host.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 /// "From an app" on the real stack. The platform (the other app, reached
 /// through Android's chooser) is the only fake: an [ExternalPickerFake] at
 /// externalPickerProvider, exactly where main.dart mounts
@@ -240,6 +242,8 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             theme: sisTheme(Brightness.light),
             home: const MessageScreen(title: 'Walt'),
           ),
@@ -272,6 +276,7 @@ void main() {
       await t.enterText(byKey('composer-field'), caption);
       await t.pump();
       await tapWhenShown(t, 'composer-attach');
+      await tapWhenShown(t, 'attach-photo');
       await tapWhenShown(t, 'sheet-from-app');
       // 0.30.10: every pick lands on the preview page; its Send sends.
       await tapWhenShown(t, 'preview-send');
@@ -335,6 +340,7 @@ void main() {
       await mount(t, dead, picker);
 
       await tapWhenShown(t, 'composer-attach');
+      await tapWhenShown(t, 'attach-photo');
       await tapWhenShown(t, 'sheet-from-app');
       // 0.30.10: every pick lands on the preview page; its Send sends.
       await tapWhenShown(t, 'preview-send');

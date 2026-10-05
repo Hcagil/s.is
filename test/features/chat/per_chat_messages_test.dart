@@ -32,6 +32,8 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const maya = Member(userId: 'u1', displayName: 'Maya');
 final _t0 = DateTime.utc(2026, 10, 1, 12);
 
@@ -314,7 +316,11 @@ void main() {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: const MaterialApp(home: MessageScreen()),
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MessageScreen(),
+          ),
         ),
       );
       await step(tester);
@@ -368,6 +374,8 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: Consumer(
               builder: (context, ref, _) {
                 ctx = context;

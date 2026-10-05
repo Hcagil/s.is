@@ -27,6 +27,8 @@ import '../../support/chat_launcher.dart'
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const couldNotUse = 'That photo could not be used.';
 
 Finder byKey(String key) => find.byKey(ValueKey(key));

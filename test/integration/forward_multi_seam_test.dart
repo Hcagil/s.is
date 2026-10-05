@@ -190,6 +190,14 @@ void main() {
             .ancestor(of: anyTarget.first, matching: find.byType(Scrollable))
             .first,
       );
+      // scrollUntilVisible returns with the lazily built list one frame
+      // stale (rows of different heights): the row can still sit under the
+      // Send bar. Reid taps what he sees once it has landed.
+      await until(
+        t,
+        () => target.hitTestable().evaluate().isNotEmpty,
+        'the picked chat to come to rest above the Send bar',
+      );
       await t.tap(target);
       await settle(t);
     }

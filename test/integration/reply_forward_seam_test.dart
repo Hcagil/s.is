@@ -330,9 +330,19 @@ void main() {
             .first,
       );
       expect(find.byKey(ValueKey('forward-$c1')), findsNothing);
+      // scrollUntilVisible returns with the lazily built list one frame
+      // stale (rows of different heights): the row can still sit under the
+      // Send bar. Reid taps what he sees once it has landed.
+      await until(
+        t,
+        () => target.hitTestable().evaluate().isNotEmpty,
+        'reid\'s chat with cora to come to rest above the Send bar',
+      );
 
       await t.tap(find.byKey(ValueKey('forward-$c2')));
       await settle(t);
+      // The tap really chose cora's chat: a missed tap would send to nobody.
+      expect(find.text('Send (1)'), findsOneWidget);
       await t.tap(find.byKey(const ValueKey('forward-send')));
       await settle(t);
       // Scoped to pane a: cora's own pane may by now also show a

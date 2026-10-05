@@ -191,7 +191,8 @@ object InstantPush {
                 System.currentTimeMillis(),
                 extras.getString("message_id"),
             )
-            prefs.edit().putString(inboxKey, inbox).apply()
+            // commit(), not apply(): written before Dart can read it, narrowing the read-modify-write race.
+            prefs.edit().putString(inboxKey, inbox).commit()
             val inboxChats = PushInbox.parse(inbox)
             val entry = PushInbox.find(inboxChats, conversationId) ?: return false
             val isGroup = entry.optBoolean("g")
@@ -204,7 +205,7 @@ object InstantPush {
             val lines = entry.getJSONArray("l")
             for (i in 0 until lines.length()) {
                 val l = lines.getJSONObject(i)
-                val name = l.optString("s")
+                val name = l.optString("s").ifEmpty { if (isGroup) "" else entry.optString("t") }
                 val person = if (name.isEmpty()) {
                     null
                 } else {

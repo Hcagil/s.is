@@ -47,14 +47,14 @@ object PushInbox {
         }
 
         val at3 = title.indexOf(" @ ")
-        val group = !sender.isNullOrEmpty() && !chat.isNullOrEmpty() || at3 >= 0
+        val group = sender != null && chat != null || at3 >= 0
         val lineSender = when {
-            !sender.isNullOrEmpty() && !chat.isNullOrEmpty() -> sender
+            sender != null && chat != null -> sender
             at3 >= 0 -> title.substring(0, at3)
             else -> title
         }
         val chatTitle = when {
-            !sender.isNullOrEmpty() && !chat.isNullOrEmpty() -> chat
+            sender != null && chat != null -> chat
             at3 >= 0 -> title.substring(at3 + 3)
             else -> title
         }
@@ -127,5 +127,5 @@ object PushInbox {
 
     /** The file name Dart's Uri.encodeComponent gives a storage path in the attachment cache. */
     fun cacheFileName(path: String): String =
-        URLEncoder.encode(path, "UTF-8").replace("+", "%20").replace("*", "%2A")
+        URLEncoder.encode(path, "UTF-8").replace("+", "%20").replace("%21", "!").replace("%7E", "~").replace("%27", "'").replace("%28", "(").replace("%29", ")")
 }

@@ -427,7 +427,7 @@ void main() {
       expect(byKey('grey-pin'), findsOneWidget);
       expect(
         t.getSemantics(byKey('grey-pin')),
-        containsSemantics(hasEnabledState: true, isEnabled: false),
+        isSemantics(hasEnabledState: true, isEnabled: false),
       );
       expect(find.textContaining('soon'), findsNothing);
       expect(find.textContaining('yakında'), findsNothing);

@@ -307,6 +307,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Türkçe'**
   String get languageTurkish;
+
+  /// Long-press card on a chat row: expandable mute row
+  ///
+  /// In en, this message translates to:
+  /// **'Mute'**
+  String get chatMenuMute;
+
+  /// Long-press card: ends a chat's mute
+  ///
+  /// In en, this message translates to:
+  /// **'Unmute'**
+  String get chatMenuUnmute;
+
+  /// Long-press card: pin row (greyed, not built yet)
+  ///
+  /// In en, this message translates to:
+  /// **'Pin chat'**
+  String get chatMenuPin;
+
+  /// Pill revealed by swiping a chat row (greyed, not built yet)
+  ///
+  /// In en, this message translates to:
+  /// **'Archive'**
+  String get chatArchive;
+
+  /// Screen-reader label of the bell on a muted chat row
+  ///
+  /// In en, this message translates to:
+  /// **'Muted'**
+  String get chatMutedLabel;
+
+  /// Mute length choice
+  ///
+  /// In en, this message translates to:
+  /// **'1 hour'**
+  String get muteOneHour;
+
+  /// Mute length choice
+  ///
+  /// In en, this message translates to:
+  /// **'8 hours'**
+  String get muteEightHours;
+
+  /// Mute length choice
+  ///
+  /// In en, this message translates to:
+  /// **'1 day'**
+  String get muteOneDay;
+
+  /// Mute length choice
+  ///
+  /// In en, this message translates to:
+  /// **'3 days'**
+  String get muteThreeDays;
+
+  /// Mute length choice
+  ///
+  /// In en, this message translates to:
+  /// **'1 week'**
+  String get muteOneWeek;
 }
 
 class _AppLocalizationsDelegate

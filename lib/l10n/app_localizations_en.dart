@@ -233,4 +233,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pickerRecent => 'Recent';
+
+  @override
+  String whatsNewVersion(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get whatsNewUpToDate => 'You\'re up to date';
 }

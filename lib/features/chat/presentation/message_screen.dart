@@ -20,6 +20,7 @@ import '../../auth/domain/session_state.dart';
 import '../../notifications/application/push_controller.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../presence/domain/last_seen.dart';
+import '../../update/presentation/whats_new_card.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
 import '../application/group_controller.dart';
@@ -486,6 +487,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     );
     final title = widget.title ?? listed?.label;
     final isGroup = widget.group || (listed?.isGroup ?? false);
+    final isSystem = listed?.isSystem ?? false;
     final otherUserId = widget.otherUserId ?? listed?.other?.userId;
     final status = _status(ref, otherUserId);
     // The group's own roster names every sender, current or departed --
@@ -665,6 +667,18 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                   );
                                 }
                                 final message = (entry as MessageEntry).message;
+                                if (isSystem) {
+                                  return WhatsNewCard(
+                                    key: _keyFor(message.id),
+                                    body: message.body,
+                                    time: previewTime(
+                                      message.createdAt,
+                                      DateTime.now(),
+                                    ),
+                                    isNewest:
+                                        message.id == value.lastOrNull?.id,
+                                  );
+                                }
                                 final index = messageIndexById[message.id] ?? 0;
                                 final mine = me != null && message.isFrom(me);
                                 final quoted = message.replyTo == null
@@ -774,6 +788,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                   ),
                 ),
               ),
+              if (isSystem) const UpToDateMark(),
               const _Composer(),
             ],
           ),

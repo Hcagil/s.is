@@ -105,7 +105,9 @@ class PushArrivalReceiverTest {
 
         receive(push(priority = "normal"))
 
-        assertEquals(1, shade().size)
+        // The chat and its group summary (id 0), as the Dart side posts them.
+        assertEquals(2, shade().size)
+        assertNotNull(shadowOf(manager).getNotification(InstantPush.SUMMARY_ID))
         val posted = shadowOf(manager).getNotification(chatId)
         assertNotNull("posted under the Dart side's id for the chat", posted)
         assertEquals("sis.messages", posted.group)
@@ -114,8 +116,13 @@ class PushArrivalReceiverTest {
         assertNotNull(channel)
         assertNull("the vibrate-only channel makes no sound", channel.sound)
         assertTrue(channel.shouldVibrate())
-        assertEquals("Edge Team", posted.extras.getCharSequence(NotificationCompat.EXTRA_TITLE).toString())
-        assertEquals("Ann Sender: hello there", posted.extras.getCharSequence(NotificationCompat.EXTRA_TEXT).toString())
+        // MessagingStyle, as the Dart side draws a group: the group is the conversation, the
+        // sender is the line's person.
+        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(posted)!!
+        assertEquals("Edge Team", style.conversationTitle.toString())
+        assertTrue(style.isGroupConversation)
+        assertEquals(listOf("hello there"), style.messages.map { it.text.toString() })
+        assertEquals("Ann Sender", style.messages.single().person!!.name.toString())
 
         // Tap: the same intent flutter_local_notifications builds, so Dart opens the chat.
         val tap = shadowOf(posted.contentIntent)
@@ -201,5 +208,63 @@ class PushArrivalReceiverTest {
         assertNotNull("Doze can hold the Dart job this long", note(OLD_23H))
         assertNull(note(OLD_25H))
         assertNotNull(note("3b2e9a40-7f11-4c8e-b2a1-9d5c0e6f4a77"))
+    }
+
+    private val inboxKey = "flutter.sis.push_inbox.member-a"
+
+    private fun lines(): List<NotificationCompat.MessagingStyle.Message> =
+        NotificationCompat.MessagingStyle
+            .extractMessagingStyleFromNotification(shadowOf(manager).getNotification(chatId))!!
+            .messages
+
+    @Test
+    fun `N pushes draw one MessagingStyle with N lines, a summary and the stored inbox`() {
+        val ids = listOf(MSG, "3b2e9a40-7f11-4c8e-b2a1-9d5c0e6f4a77", "00000000-0000-0000-0000-0000000000a3")
+        ids.forEachIndexed { i, id ->
+            receive(push(id = id, priority = "normal") { putString("body", "line $i") })
+        }
+
+        assertEquals(listOf("line 0", "line 1", "line 2"), lines().map { it.text.toString() })
+        assertEquals(List(3) { "Ann Sender" }, lines().map { it.person?.name?.toString() })
+
+        val summary = shadowOf(manager).getNotification(InstantPush.SUMMARY_ID)
+        assertNotNull("the group summary is posted under id 0", summary)
+        assertEquals(InstantPush.CHANNEL_SUMMARY, summary.channelId)
+        assertEquals(InstantPush.GROUP, summary.group)
+        assertEquals(2, shade().size)
+
+        val chats = PushInbox.parse(prefs.getString(inboxKey, null))
+        assertEquals(1, chats.length())
+        val stored = chats.getJSONObject(0)
+        assertEquals(chat, stored.getString("c"))
+        assertEquals(3, stored.getInt("n"))
+        assertEquals(0, stored.getInt("p"))
+        val l = stored.getJSONArray("l")
+        assertEquals(ids, (0 until l.length()).map { l.getJSONObject(it).getString("m") })
+    }
+
+    @Test
+    fun `a redelivered push adds no line`() {
+        receive(push(priority = "normal"))
+        receive(push(priority = "normal"))
+
+        assertEquals(1, lines().size)
+        assertEquals(1, PushInbox.parse(prefs.getString(inboxKey, null)).getJSONObject(0).getInt("n"))
+    }
+
+    @Test
+    fun `lines Dart stored before are kept and the new one goes last`() {
+        prefs.edit().putString(
+            inboxKey,
+            """[{"c":"$chat","t":"Edge Team","g":true,"l":[{"s":"Bo","x":"earlier","a":1}],"n":1,"p":1}]""",
+        ).commit()
+
+        receive(push(priority = "normal"))
+
+        assertEquals(listOf("earlier", "hello there"), lines().map { it.text.toString() })
+        assertEquals(listOf("Bo", "Ann Sender"), lines().map { it.person?.name?.toString() })
+        val stored = PushInbox.parse(prefs.getString(inboxKey, null)).getJSONObject(0)
+        assertEquals(2, stored.getInt("n"))
+        assertEquals(1, stored.getInt("p"))
     }
 }

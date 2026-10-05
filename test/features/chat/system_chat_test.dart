@@ -25,6 +25,7 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
+import 'package:sis/features/update/presentation/whats_new_card.dart';
 
 import '../../support/fakes.dart';
 
@@ -248,6 +249,75 @@ void main() {
 
       expect(byKey('forward-g1'), findsOneWidget, reason: 'the sheet is open');
       expect(byKey('forward-s1'), findsNothing);
+    });
+  });
+  // Seam: the real message screen renders SIS notes through the What's new
+  // cards. FakeUpdate's Play check offers nothing, so the state is idle.
+  group("What's new in the SIS chat", () {
+    Finder saying(String s) => find.byWidgetPredicate(
+      (w) => w is Text && w.data?.toLowerCase() == s.toLowerCase(),
+    );
+    final versionLine = find.byWidgetPredicate(
+      (w) => w is Text && (w.data ?? '').toLowerCase().startsWith('version'),
+    );
+
+    testWidgets('a real-format note (no version line) is a plain card', (
+      t,
+    ) async {
+      const body =
+          'Scrolling back down reaches the newest messages with photos.\n'
+          'One offline notice instead of two.';
+      final w = World();
+      w.chat.history['s1'] = [note('n1', body)];
+      await openChat(t, w, 's1');
+
+      expect(find.byType(WhatsNewCard), findsOneWidget);
+      expect(find.text(body), findsOneWidget, reason: 'the whole body');
+      expect(versionLine, findsNothing);
+      expect(byKey('composer-system'), findsOneWidget);
+    });
+
+    testWidgets('a versioned note is a version card with its bullets', (
+      t,
+    ) async {
+      final w = World();
+      w.chat.history['s1'] = [
+        note('n1', 'Version 0.30\n- Older thing'),
+        note('n2', 'v0.31\n- Chats load faster\n* Photos open in place'),
+      ];
+      await openChat(t, w, 's1');
+
+      expect(find.byType(WhatsNewCard), findsNWidgets(2));
+      expect(saying('Version 0.31'), findsOneWidget);
+      expect(saying('Version 0.30'), findsOneWidget);
+      expect(find.text('Chats load faster'), findsOneWidget);
+      expect(find.text('Photos open in place'), findsOneWidget);
+      expect(find.textContaining('v0.31'), findsNothing, reason: 'parsed');
+      // Idle: nothing to update to, so no card is lit; the chat says so.
+      expect(byKey('whats-new-card-new'), findsNothing);
+      expect(byKey('whats-new-card-old'), findsNWidgets(2));
+      expect(byKey('whats-new-up-to-date'), findsOneWidget);
+      expect(find.text("You're up to date"), findsOneWidget);
+      expect(byKey('composer-system'), findsOneWidget);
+    });
+
+    testWidgets('control: an ordinary chat has no cards and no mark', (
+      t,
+    ) async {
+      final w = World();
+      w.chat.history['c1'] = [
+        Message(
+          id: 'm1',
+          conversationId: 'c1',
+          senderId: bob.userId,
+          body: 'v0.31\n- hi',
+          createdAt: DateTime.now(),
+        ),
+      ];
+      await openChat(t, w, 'c1');
+
+      expect(find.byType(WhatsNewCard), findsNothing);
+      expect(byKey('whats-new-up-to-date'), findsNothing);
     });
   });
 }

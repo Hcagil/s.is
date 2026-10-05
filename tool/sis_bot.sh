@@ -52,19 +52,28 @@ esac
 exec 9>"$LOCK"
 flock -w 30 9 || die 3 "busy: another sis_bot.sh run holds the lock"
 
-TMP=$(mktemp); trap 'rm -f "$TMP"' EXIT
+WORK=$(mktemp -d); TMP="$WORK/body"; trap 'rm -rf "$WORK"' EXIT
 URL=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["url"])' "$FILE")
 ANON=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["anon_key"])' "$FILE")
 ME=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["user_id"])' "$FILE")
 ACCESS=""
 STATUS=0
 
-# api METHOD PATH [JSON]: body in $TMP, HTTP status in $STATUS.
+# api METHOD PATH [JSON]: body in $TMP, HTTP status in $STATUS. Headers and
+# body go to curl as a config on stdin, so no token ever shows in ps/argv.
+CURL_CFG='
+import os
+e = lambda s: s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+print("header = \"apikey: %s\"" % e(os.environ["CFG_ANON"]))
+print("header = \"Content-Type: application/json\"")
+if os.environ["CFG_TOKEN"]:
+    print("header = \"Authorization: Bearer %s\"" % e(os.environ["CFG_TOKEN"]))
+if os.environ["CFG_BODY"]:
+    print("data = \"%s\"" % e(os.environ["CFG_BODY"]))
+'
 api() {
-  local args=(-sS --max-time 30 -o "$TMP" -w '%{http_code}' -X "$1" -H "apikey: $ANON" -H 'Content-Type: application/json')
-  [ -z "$ACCESS" ] || args+=(-H "Authorization: Bearer $ACCESS")
-  [ -z "${3:-}" ] || args+=(-d "$3")
-  STATUS=$(curl "${args[@]}" "$URL$2") || die 1 "network error"
+  STATUS=$(CFG_ANON="$ANON" CFG_TOKEN="$ACCESS" CFG_BODY="${3:-}" python3 -c "$CURL_CFG" \
+    | curl -sS --max-time 30 -K - -o "$TMP" -w '%{http_code}' -X "$1" "$URL$2") || die 1 "network error"
 }
 json() { python3 -c "import json,sys;d=json.load(open(sys.argv[1]));$1" "$TMP"; }
 # api, then map any HTTP error to a plain sentence and an exit code.
@@ -83,7 +92,7 @@ call() {
 
 # 3. Refresh, and 4. persist the rotated token before anything else.
 RT=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["refresh_token"])' "$FILE")
-api POST "/auth/v1/token?grant_type=refresh_token" "$(python3 -c 'import json,sys;print(json.dumps({"refresh_token":sys.argv[1]}))' "$RT")"
+api POST "/auth/v1/token?grant_type=refresh_token" "$(RT="$RT" python3 -c 'import json,os;print(json.dumps({"refresh_token":os.environ["RT"]}))')"
 unset RT
 [ "$STATUS" = 200 ] || die 3 "session lost: the owner runs tool/sis_bot_admin.sh mint"
 ACCESS=$(json 'print(d["access_token"])')
@@ -123,7 +132,7 @@ case "$cmd" in
     q="/rest/v1/messages?select=id,conversation_id,sender_id,body,created_at,reply_to,deleted&order=created_at.asc&limit=500"
     [ -z "$since" ] || q="$q&created_at=gt.$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))' "$since")"
     call GET "$q"
-    NAMES="$names" python3 - "$TMP" "$TMP.convs" >"$TMP.out" <<'PY'
+    NAMES="$names" python3 - "$TMP" "$WORK/convs" >"$WORK/out" <<'PY'
 import json, os, sys
 names = {p["user_id"]: p["display_name"] for p in json.loads(os.environ["NAMES"])}
 convs = []
@@ -138,11 +147,10 @@ for m in json.load(open(sys.argv[1])):
                      ensure_ascii=False))
 open(sys.argv[2], "w").write("\n".join(convs))
 PY
-    cat "$TMP.out"
+    cat "$WORK/out"
     while read -r c; do   # mark every chat shown as read
       [ -z "$c" ] || call POST /rest/v1/rpc/mark_read "{\"conversation\":\"$c\"}"
-    done <"$TMP.convs"
-    rm -f "$TMP.out" "$TMP.convs"
+    done <"$WORK/convs"
     ;;
 
   send)

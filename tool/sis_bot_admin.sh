@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# SIS Bot admin: OWNER-RUN ONLY (typed as `! tool/sis_bot_admin.sh <cmd>`).
+# SIS Bot admin: OWNER-RUN ONLY, in the owner's OWN terminal. Never through
+# Claude Code (`!` runs in its shell, so the key would reach the AI session),
+# and never export the key in the shell that starts Claude Code.
 # The one place that uses the service key. Every run is an authentication in
 # the owner's account: report it. An AI session never runs this.
 #
@@ -11,13 +13,16 @@
 #   revoke                                  OFF + delete every session + delete the local token file
 #   delete                                  OFF, allowlist row, sessions, then the user (cascades)
 #
-# Environment (nothing is read from the repo; the key is never printed or written):
-#   SIS_URL           https://<ref>.supabase.co  (or http://127.0.0.1:54321 locally)
-#   SIS_SERVICE_KEY   the service key, for /auth/v1/admin and /auth/v1/verify only
-#   SIS_ANON_KEY      public key, written into the bot's own token file
-#   SQL: with SIS_PROJECT_REF and SUPABASE_ACCESS_TOKEN set, through the
-#        Management API; otherwise `docker exec` psql in SIS_DB_CONTAINER
-#        (default supabase_db_s.is), which is the local stack.
+# Environment (nothing is read from the repo; no key is ever printed or written):
+#   SIS_URL                     https://<ref>.supabase.co  (or http://127.0.0.1:54321 locally)
+#   SIS_SERVICE_KEY_FILE        file holding the service key. It must be mode 600 and owned
+#                               by you, else exit 2. The key is NEVER read from an
+#                               environment variable (SIS_SERVICE_KEY is ignored).
+#   SIS_ANON_KEY                public key, written into the bot's own token file
+#   SUPABASE_ACCESS_TOKEN_FILE  optional, with SIS_PROJECT_REF: file holding the Management
+#                               API token (same mode/owner rule); SQL then goes through the
+#                               Management API. Otherwise `docker exec` psql in
+#                               SIS_DB_CONTAINER (default supabase_db_s.is): the local stack.
 set -euo pipefail
 set +x
 
@@ -27,23 +32,35 @@ BOT_EMAIL='sis-destek-bot@example.com'
 UUID_RE='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
 EMAIL_RE='^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
 HALF=""   # set once the bot user exists but the bootstrap is not finished
-trap 'rc=$?; unset SIS_SERVICE_KEY SUPABASE_ACCESS_TOKEN
+trap 'rc=$?; unset SERVICE_KEY MGMT_TOKEN
       [ -z "$HALF" ] || [ "$rc" = 0 ] || echo "bootstrap stopped half-way: run tool/sis_bot_admin.sh delete, then try again" >&2' EXIT
 
 die() { echo "$*" >&2; exit 1; }
 need() { [ -n "${!1:-}" ] || die "set $1 in your environment first"; }
-need SIS_URL; need SIS_SERVICE_KEY
+# A secret comes only from a private file the owner names, never from the environment.
+read_secret() { # <name of the variable holding the file path>
+  local f=${!1:-}
+  [ -n "$f" ] && [ -f "$f" ] || { echo "set $1 to a file holding the secret" >&2; exit 2; }
+  [ "$(stat -c '%a %U' "$f")" = "600 $(id -un)" ] \
+    || { echo "$f must be mode 600 and owned by you" >&2; exit 2; }
+  tr -d '\n' <"$f"
+}
+unset SIS_SERVICE_KEY SUPABASE_ACCESS_TOKEN   # never accepted from the environment
+need SIS_URL
+SERVICE_KEY=$(read_secret SIS_SERVICE_KEY_FILE)
+MGMT_TOKEN=""
+[ -z "${SUPABASE_ACCESS_TOKEN_FILE:-}" ] || MGMT_TOKEN=$(read_secret SUPABASE_ACCESS_TOKEN_FILE)
 
 # sql "<statements>": prints the result rows, aborts on error.
 sql() {
-  if [ -n "${SIS_PROJECT_REF:-}" ] && [ -n "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+  if [ -n "${SIS_PROJECT_REF:-}" ] && [ -n "$MGMT_TOKEN" ]; then
     local out
-    out=$(SQL="$1" python3 - <<'PY'
+    out=$(SQL="$1" MGMT_TOKEN="$MGMT_TOKEN" python3 - <<'PY'
 import json, os, urllib.request, sys
 req = urllib.request.Request(
     "https://api.supabase.com/v1/projects/%s/database/query" % os.environ["SIS_PROJECT_REF"],
     data=json.dumps({"query": os.environ["SQL"]}).encode(),
-    headers={"Authorization": "Bearer " + os.environ["SUPABASE_ACCESS_TOKEN"],
+    headers={"Authorization": "Bearer " + os.environ["MGMT_TOKEN"],
              "Content-Type": "application/json", "User-Agent": "sis-bot-admin"})
 try:
     rows = json.load(urllib.request.urlopen(req, timeout=60))
@@ -60,10 +77,20 @@ PY
   fi
 }
 
-# auth METHOD PATH JSON KEY: one Auth API call, body on stdout.
+# auth METHOD PATH JSON KEY: one Auth API call, body on stdout. The key and
+# body go to curl as a config on stdin, never in argv.
+AUTH_CFG='
+import os
+e = lambda s: s.replace("\\", "\\\\").replace("\"", "\\\"")
+k = e(os.environ["CFG_KEY"])
+print("header = \"apikey: %s\"" % k)
+print("header = \"Authorization: Bearer %s\"" % k)
+print("header = \"Content-Type: application/json\"")
+print("data = \"%s\"" % e(os.environ["CFG_BODY"]))
+'
 auth() {
-  curl -sS --max-time 30 --fail-with-body -X "$1" "$SIS_URL$2" \
-    -H "apikey: $4" -H "Authorization: Bearer $4" -H 'Content-Type: application/json' -d "$3"
+  CFG_KEY="$4" CFG_BODY="$3" python3 -c "$AUTH_CFG" \
+    | curl -sS --max-time 30 --fail-with-body -K - -X "$1" "$SIS_URL$2"
 }
 jget() { python3 -c "import json,sys;d=json.load(sys.stdin);print($1)"; }
 
@@ -77,10 +104,10 @@ bot_id() {
 mint_session() { # <bot user id>
   need SIS_ANON_KEY
   local link hash tok
-  link=$(auth POST /auth/v1/admin/generate_link "{\"type\":\"magiclink\",\"email\":\"$BOT_EMAIL\"}" "$SIS_SERVICE_KEY")
+  link=$(auth POST /auth/v1/admin/generate_link "{\"type\":\"magiclink\",\"email\":\"$BOT_EMAIL\"}" "$SERVICE_KEY")
   hash=$(printf '%s' "$link" | jget 'd["hashed_token"]')
   tok=$(auth POST /auth/v1/verify "{\"type\":\"magiclink\",\"token_hash\":\"$hash\"}" "$SIS_ANON_KEY")
-  # The access token goes to activate_session through stdin-fed curl config; nothing is printed.
+  # The tokens reach python through the environment (not argv); nothing is printed.
   TOK="$tok" ANON="$SIS_ANON_KEY" URL="$SIS_URL" UID_="$1" STATE="$STATE" python3 - <<'PY'
 import json, os, time, urllib.request
 t = json.loads(os.environ["TOK"])
@@ -115,7 +142,7 @@ case "$cmd" in
     fi
     [[ $debug =~ $UUID_RE ]] || die "abort: --debug needs a conversation id"
     created=$(auth POST /auth/v1/admin/users \
-      "{\"email\":\"$BOT_EMAIL\",\"email_confirm\":true,\"user_metadata\":{\"full_name\":\"SIS Destek\"}}" "$SIS_SERVICE_KEY")
+      "{\"email\":\"$BOT_EMAIL\",\"email_confirm\":true,\"user_metadata\":{\"full_name\":\"SIS Destek\"}}" "$SERVICE_KEY")
     uid=$(printf '%s' "$created" | jget 'd["id"]')
     [[ $uid =~ $UUID_RE ]] || die "admin create returned no user id"
     HALF=1

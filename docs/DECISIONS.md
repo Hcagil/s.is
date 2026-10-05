@@ -1786,4 +1786,4 @@ rate-limited (RLMT2). The Debug membership is made by the owner-run bootstrap
 while the switch is still OFF, so it is exempt from the ON and rate checks; a
 runbook insert (no JWT) is exempt from ON so listing a tester works while OFF.
 The tool pair is `tool/sis_bot.sh` (bot session only) and
-`tool/sis_bot_admin.sh` (owner-run, service key from the owner's environment).
+`tool/sis_bot_admin.sh` (owner-run, in the owner's own terminal; service key read only from a mode-600 file the owner names, never from an environment variable).

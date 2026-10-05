@@ -339,12 +339,12 @@ break the production sign-in. Revisit with a device test.
 
 `sis-destek-bot@example.com` (display name SIS Destek) is an ordinary auth user created through the admin API by the owner-run `tool/sis_bot_admin.sh`; no migration or repo file holds a bot row. Migration `20261005130000_sis_bot.sql` adds `app_private.bot_accounts` (one row; `enabled` is the OFF switch, born OFF), `bot_contacts` (the owner-listed testers) and `bot_actions` (rate log), none granted to API roles.
 
-- Confinement: a trigger on `conversation_members` admits the bot only to its Debug chat and to the 1:1 with a listed tester, always as `member`. It is never an admin and never auto-promoted (`leave_group`, `promote_on_member_deleted` and the admin guard skip it). Removing a contact deletes the bot's membership at once, so its history there is unreadable.
+- Confinement: a trigger on `conversation_members` admits the bot only to its Debug chat and to the 1:1 with a listed tester, always as `member`. It is never an admin and never auto-promoted (`leave_group`, `promote_on_member_deleted` and the admin guard skip it). Removing a contact deletes the bot's membership at once, so its history there is unreadable. Listing the tester again re-adds the bot, with history from that moment only.
 - OFF: `has_app_access()` is false while `enabled` is false, which stops every policy and RPC at the next statement, even with a live token.
 - Refused for the bot outright (even when ON): `find_by_tag`, `set_group_avatar`, `deliver_release_notes`, `register_device_token` (so it never gets push), profile edits, contacts, attachment upload, avatar paths, and the Realtime receive and send policies (`presence:members` is project-wide).
-- Rate limits, error code `RLMT2`: 20 messages per 10 minutes, 200 per 24 hours, 10 chats started per 24 hours. Text only.
+- Rate limits, error code `RLMT2`: 20 messages per 10 minutes, 200 per 24 hours, 10 chats started per 24 hours by the bot itself (a listed tester starting a 1:1 with the bot does not count against it). Text only.
 - It acts through `tool/sis_bot.sh` with its own refresh token in `.private/sis_bot.json` (mode 600, rotated on every run, locked) and never holds the service key. Revoke with `tool/sis_bot.sh revoke` (global sign-out) or, owner-run, `tool/sis_bot_admin.sh revoke` (OFF plus every session deleted).
-- The admin tool takes the service key from the owner's environment only, never from the repo; every run is an authentication in the owner's account and is reported.
+- The admin tool takes the service key only from a file named by `SIS_SERVICE_KEY_FILE` (mode 600, owned by you, else exit 2), never from an environment variable and never from the repo; the Management API token likewise from `SUPABASE_ACCESS_TOKEN_FILE`. Run it in your own terminal, never through Claude Code `!`, and never export the key in the shell that starts Claude Code. Every run is an authentication in the owner's account and is reported.
 
 ### Push processors and the iOS residual risk
 

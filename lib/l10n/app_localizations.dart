@@ -367,6 +367,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'1 week'**
   String get muteOneWeek;
+
+  /// Group info: section label
+  ///
+  /// In en, this message translates to:
+  /// **'Group settings'**
+  String get groupSettingsTitle;
+
+  /// Group info: greyed setting
+  ///
+  /// In en, this message translates to:
+  /// **'Members can change the group picture'**
+  String get groupPickSwitch;
+
+  /// Group info: greyed setting
+  ///
+  /// In en, this message translates to:
+  /// **'Members can add people'**
+  String get groupAddSwitch;
+
+  /// Group info: greyed setting
+  ///
+  /// In en, this message translates to:
+  /// **'New members see earlier messages'**
+  String get groupHistSwitch;
+
+  /// Group info: greyed setting row
+  ///
+  /// In en, this message translates to:
+  /// **'Who may pin messages'**
+  String get groupPinWho;
+
+  /// Group info: greyed admin button
+  ///
+  /// In en, this message translates to:
+  /// **'Delete group for everyone'**
+  String get groupDeleteForAll;
+
+  /// Group info: leave button and confirm button
+  ///
+  /// In en, this message translates to:
+  /// **'Leave group'**
+  String get groupLeave;
+
+  /// Leave confirm card title
+  ///
+  /// In en, this message translates to:
+  /// **'Leave group?'**
+  String get groupLeaveTitle;
+
+  /// Leave confirm card text
+  ///
+  /// In en, this message translates to:
+  /// **'The group stays for the others. You can be added again.'**
+  String get groupLeaveBody;
+
+  /// Leave confirm card cancel
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get groupLeaveCancel;
+
+  /// Crop screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Crop picture'**
+  String get cropTitle;
+
+  /// Crop screen confirm button
+  ///
+  /// In en, this message translates to:
+  /// **'Choose'**
+  String get cropChoose;
+
+  /// Crop screen preview label
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get cropPreview;
+
+  /// Crop screen preview text
+  ///
+  /// In en, this message translates to:
+  /// **'This is how the picture shows up'**
+  String get cropPreviewHint;
+
+  /// Crop screen gesture hint
+  ///
+  /// In en, this message translates to:
+  /// **'Pinch to zoom, drag to move'**
+  String get cropGestureHint;
 }
 
 class _AppLocalizationsDelegate

@@ -144,4 +144,50 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get muteOneWeek => '1 week';
+
+  @override
+  String get groupSettingsTitle => 'Group settings';
+
+  @override
+  String get groupPickSwitch => 'Members can change the group picture';
+
+  @override
+  String get groupAddSwitch => 'Members can add people';
+
+  @override
+  String get groupHistSwitch => 'New members see earlier messages';
+
+  @override
+  String get groupPinWho => 'Who may pin messages';
+
+  @override
+  String get groupDeleteForAll => 'Delete group for everyone';
+
+  @override
+  String get groupLeave => 'Leave group';
+
+  @override
+  String get groupLeaveTitle => 'Leave group?';
+
+  @override
+  String get groupLeaveBody =>
+      'The group stays for the others. You can be added again.';
+
+  @override
+  String get groupLeaveCancel => 'Cancel';
+
+  @override
+  String get cropTitle => 'Crop picture';
+
+  @override
+  String get cropChoose => 'Choose';
+
+  @override
+  String get cropPreview => 'Preview';
+
+  @override
+  String get cropPreviewHint => 'This is how the picture shows up';
+
+  @override
+  String get cropGestureHint => 'Pinch to zoom, drag to move';
 }

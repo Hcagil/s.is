@@ -49,30 +49,49 @@ class _MembersTab extends ConsumerWidget {
   }
 
   Future<void> _leave(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        title: const Text('Leave group?'),
-        content: const Text(
-          'You can still see the messages up to now, but you will not '
-          'receive anything new.',
-        ),
-        actions: [
-          TextButton(
-            key: const ValueKey('leave-cancel'),
-            onPressed: () => Navigator.of(dialog).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('leave-confirm'),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(dialog).colorScheme.error,
-              foregroundColor: Theme.of(dialog).colorScheme.onError,
+    final box = context.findRenderObject() as RenderBox;
+    final anchor = box.localToGlobal(Offset.zero) & box.size;
+    final confirmed = await showFloatingCard<bool>(
+      context,
+      anchor: anchor,
+      highlightAnchor: false,
+      cardKey: const ValueKey('leave-card'),
+      child: Builder(
+        builder: (card) {
+          final l = AppLocalizations.of(card);
+          final scheme = Theme.of(card).colorScheme;
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  l.groupLeaveTitle,
+                  style: Theme.of(card).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(l.groupLeaveBody),
+                const SizedBox(height: 16),
+                FilledButton(
+                  key: const ValueKey('leave-confirm'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: scheme.error,
+                    foregroundColor: scheme.onError,
+                  ),
+                  onPressed: () => Navigator.of(card).pop(true),
+                  child: Text(l.groupLeave),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  key: const ValueKey('leave-cancel'),
+                  onPressed: () => Navigator.of(card).pop(false),
+                  child: Text(l.groupLeaveCancel),
+                ),
+              ],
             ),
-            onPressed: () => Navigator.of(dialog).pop(true),
-            child: const Text('Leave'),
-          ),
-        ],
+          );
+        },
       ),
     );
     if (confirmed != true || !context.mounted) return;
@@ -119,10 +138,10 @@ class _MembersTab extends ConsumerWidget {
         return ListView(
           children: [
             if (amAdmin)
-              ListTile(
+              SisSettingsRow(
                 key: const ValueKey('add-members'),
-                leading: const Icon(Icons.person_add_alt_1_outlined),
-                title: const Text('Add members'),
+                icon: Icons.person_add_alt_1_outlined,
+                title: 'Add members',
                 onTap: () => showAddMembersPage(
                   context,
                   ref,
@@ -225,18 +244,51 @@ class _MembersTab extends ConsumerWidget {
                   ),
                 ),
             ],
-            const Divider(),
-            ListTile(
-              key: const ValueKey('leave-group'),
-              leading: Icon(
-                Icons.logout,
-                color: Theme.of(context).colorScheme.error,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 26),
+              child: Column(
+                children: [
+                  if (amAdmin)
+                    GreyOption(
+                      name: 'deladmin',
+                      label: AppLocalizations.of(context).groupDeleteForAll,
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Theme.of(context)
+                                .colorScheme
+                                .error,
+                            foregroundColor: Theme.of(context)
+                                .colorScheme
+                                .onError,
+                          ),
+                          onPressed: () {},
+                          child: Text(
+                            AppLocalizations.of(context).groupDeleteForAll,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (amAdmin) const SizedBox(height: 10),
+                  Builder(
+                    builder: (button) => SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        key: const ValueKey('leave-group'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Theme.of(context).colorScheme.error,
+                          side: BorderSide(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                        onPressed: () => _leave(button, ref),
+                        child: Text(AppLocalizations.of(context).groupLeave),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              title: Text(
-                'Leave group',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-              onTap: () => _leave(context, ref),
             ),
           ],
         );

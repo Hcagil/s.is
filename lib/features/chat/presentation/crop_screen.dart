@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../app/swipe_back.dart';
+import '../../../l10n/app_localizations.dart';
 import '../application/chat_controllers.dart';
 import '../domain/attachment.dart';
 
@@ -140,13 +141,14 @@ class _CropScreenState extends ConsumerState<CropScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        title: Text(AppLocalizations.of(context).cropTitle),
         actions: [
           TextButton(
             key: const ValueKey('crop-use'),
             onPressed: image == null || _busy ? null : _use,
-            child: const Text(
-              'Use',
-              style: TextStyle(
+            child: Text(
+              AppLocalizations.of(context).cropChoose,
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
               ),
@@ -166,34 +168,138 @@ class _CropScreenState extends ConsumerState<CropScreen> {
                     )
                   : image == null
                   ? const SisLoadingLogo(size: 48)
-                  : SizedBox(
-                      key: const ValueKey('crop-frame'),
-                      width: _viewport,
-                      height: _viewport,
-                      child: InteractiveViewer(
-                        key: const ValueKey('crop-viewer'),
-                        transformationController: _transform,
-                        constrained: false,
-                        minScale: 1,
-                        maxScale: _maxScale,
-                        boundaryMargin: EdgeInsets.zero,
-                        child: SizedBox(
-                          width: _coverSize(
-                            image.width.toDouble(),
-                            image.height.toDouble(),
-                          ).width,
-                          height: _coverSize(
-                            image.width.toDouble(),
-                            image.height.toDouble(),
-                          ).height,
-                          child: RawImage(image: image, fit: BoxFit.fill),
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          key: const ValueKey('crop-frame'),
+                          width: _viewport,
+                          height: _viewport,
+                          child: InteractiveViewer(
+                            key: const ValueKey('crop-viewer'),
+                            transformationController: _transform,
+                            constrained: false,
+                            minScale: 1,
+                            maxScale: _maxScale,
+                            boundaryMargin: EdgeInsets.zero,
+                            child: SizedBox(
+                              width: _coverSize(
+                                image.width.toDouble(),
+                                image.height.toDouble(),
+                              ).width,
+                              height: _coverSize(
+                                image.width.toDouble(),
+                                image.height.toDouble(),
+                              ).height,
+                              child: RawImage(image: image, fit: BoxFit.fill),
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 20),
+                        _CropPreview(
+                          image: image,
+                          transform: _transform,
+                          cover: _coverSize(
+                            image.width.toDouble(),
+                            image.height.toDouble(),
+                          ),
+                          viewport: _viewport,
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          AppLocalizations.of(context).cropGestureHint,
+                          key: const ValueKey('crop-hint'),
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A live circle of the frame, so the member sees how the round picture will
+/// look while moving the photo.
+class _CropPreview extends StatelessWidget {
+  const _CropPreview({
+    required this.image,
+    required this.transform,
+    required this.cover,
+    required this.viewport,
+  });
+
+  final ui.Image image;
+  final TransformationController transform;
+  final Size cover;
+  final double viewport;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipOval(
+          key: const ValueKey('crop-preview'),
+          child: SizedBox(
+            width: 72,
+            height: 72,
+            child: FittedBox(
+              child: SizedBox(
+                width: viewport,
+                height: viewport,
+                child: ClipRect(
+                  child: ListenableBuilder(
+                    listenable: transform,
+                    builder: (_, _) => Transform(
+                      transform: transform.value,
+                      child: OverflowBox(
+                        alignment: Alignment.topLeft,
+                        minWidth: 0,
+                        minHeight: 0,
+                        maxWidth: cover.width,
+                        maxHeight: cover.height,
+                        child: SizedBox(
+                          width: cover.width,
+                          height: cover.height,
+                          child: RawImage(image: image, fit: BoxFit.fill),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              l.cropPreview,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            SizedBox(
+              width: 200,
+              child: Text(
+                l.cropPreviewHint,
+                style: const TextStyle(color: Colors.white54, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

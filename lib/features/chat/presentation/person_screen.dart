@@ -73,15 +73,19 @@ class PersonScreen extends ConsumerWidget {
                 style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               ),
             _Status(userId),
-            if (showMessage) ...[
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                key: const ValueKey('person-message'),
-                onPressed: () => _message(context, ref, name, direct?.id),
-                icon: const Icon(Icons.chat_bubble_outline_rounded),
-                label: const Text('Message'),
+            if (showMessage)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    key: const ValueKey('person-message'),
+                    onPressed: () => _message(context, ref, name, direct?.id),
+                    icon: const Icon(Icons.chat_bubble_outline_rounded),
+                    label: const Text('Message'),
+                  ),
+                ),
               ),
-            ],
             const SizedBox(height: 8),
             _ContactButton(userId),
             // Muting a person silences them in every chat, groups included.
@@ -148,9 +152,13 @@ class _ContactButton extends ConsumerWidget {
       return const SizedBox.shrink();
     }
     final isContact = ids.contains(userId);
-    return OutlinedButton.icon(
+    return SisSettingsRow(
       key: const ValueKey('person-contact-toggle'),
-      onPressed: () async {
+      icon: isContact
+          ? Icons.person_remove_outlined
+          : Icons.person_add_alt_1_outlined,
+      title: isContact ? 'Remove from contacts' : 'Add to contacts',
+      onTap: () async {
         final notifier = ref.read(contactsControllerProvider.notifier);
         final result = isContact
             ? await notifier.remove(userId)
@@ -159,12 +167,6 @@ class _ContactButton extends ConsumerWidget {
           showSisNotice(context, failure.message, isError: true);
         }
       },
-      icon: Icon(
-        isContact
-            ? Icons.person_remove_outlined
-            : Icons.person_add_alt_1_outlined,
-      ),
-      label: Text(isContact ? 'Remove from contacts' : 'Add to contacts'),
     );
   }
 }

@@ -410,7 +410,7 @@ void main() {
       });
     });
 
-    group('text is set in Manrope ($b)', () {
+    group('text is set in the system font ($b)', () {
       testWidgets('every text in the conversation list', (t) async {
         useBrightness(t, b);
         final chat = chatWorld()
@@ -443,10 +443,11 @@ void main() {
           expect(texts, contains(part));
         }
         expect(texts, contains(RegExp(r'\d\d[:.]\d\d')), reason: 'no time');
+        // The platform default font (Roboto under test); Manrope is gone.
         expect(
-          seen.where((s) => s.$2 != 'Manrope').toList(),
+          seen.where((s) => s.$2 != 'Roboto').toList(),
           isEmpty,
-          reason: 'text not in Manrope',
+          reason: 'text not in the system font',
         );
       });
 
@@ -460,7 +461,14 @@ void main() {
           matching: find.text('Message'),
         );
         expect(hint, findsOneWidget);
-        expect(fontFamilies(t, hint), [('Message', 'Manrope')]);
+        expect(fontFamilies(t, hint), [('Message', 'Roboto')]);
+      });
+
+      testWidgets('the wordmark stays in Sora', (t) async {
+        useBrightness(t, b);
+        await pumpSignedIn(t);
+        expect(wordmarkText, findsOneWidget);
+        expect(fontFamilies(t, find.byType(SisWordmark)), [('SIS', 'Sora')]);
       });
     });
 

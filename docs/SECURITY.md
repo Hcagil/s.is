@@ -271,15 +271,15 @@ missing registration surfaces as a Credential Manager cancellation after
 account selection; the app shows that reason rather than returning silently.
 
 **Sign-up gate (before user created hook).** Google is the only provider. The
-hosted email provider is to be switched off (the owner's change in the
-dashboard); the local stack keeps email on, with confirmations off, for the
+hosted email provider is off (since 2026-10-05; Anonymous sign-ins off,
+"Allow new users to sign up" on, so Google sign-up still works); the local stack keeps email on, with confirmations off, for the
 integration fixtures only. Supabase Auth runs `app_private.before_user_created`
 before it creates a user and refuses (HTTP 403, message `not invited`) unless
 the trimmed, lower-case address is on the allowlist and is not on a reserved
 test domain (`example.com`, `example.net`, `example.org`; this covers
 `sis-destek-bot@example.com`, refused even with an allowlist row). The function
 has a switch, `google_only`, that also refuses any non-Google sign-up; it is
-off, because the email provider is being turned off and Apple sign-in arrives
+off, because the email provider is off and Apple sign-in arrives
 in v0.31. A refused person leaves no `auth.users`, identity, profile or
 session row. It fails closed: an error in the function is an Auth error (500)
 and creates nobody; nothing catches an error and allows. Break-glass: the owner
@@ -294,8 +294,10 @@ so `has_app_access()` and the allowlist table stay authoritative. The SIS Bot
 (`sis-destek-bot@example.com`) is created through the admin API and holds a
 refresh token only; the hook refuses its address unconditionally, even with an
 allowlist row, so public sign-up and generated links can never create it. The
-local `supabase/config.toml` leaves the hook off because the integration
-fixtures sign up through email; pgTAP calls the function with crafted payloads.
+local `supabase/config.toml` runs the hook too, so local matches hosted:
+invited integration fixtures are on the seed allowlist and the non-invited
+"stranger" fixtures are created through the admin API; pgTAP also calls the
+function with crafted payloads.
 A non-invited Google account now gets a 403 at sign-in, which the app shows as
 the Access denied screen.
 

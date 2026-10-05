@@ -477,6 +477,11 @@ void main() {
       for (final MapEntry(key: name, value: run) in paths.entries) {
         newIsolate();
         await PushReceiptLog.removeFirst(1000);
+        // Each path is a first delivery: a line already in the inbox for
+        // this message id is a redelivery, which (correctly) draws nothing.
+        disk.values.removeWhere(
+          (k, _) => k.startsWith('flutter.sis.push_inbox.'),
+        );
         await run();
         final after = await receipts();
         everything.write(jsonEncode(after));

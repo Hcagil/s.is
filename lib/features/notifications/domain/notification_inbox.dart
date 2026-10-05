@@ -1,6 +1,11 @@
 /// One message line in a chat's notification.
 final class InboxLine {
-  const InboxLine({required this.sender, required this.text, required this.at});
+  const InboxLine({
+    required this.sender,
+    required this.text,
+    required this.at,
+    this.id,
+  });
 
   final String sender;
   final String text;
@@ -8,7 +13,10 @@ final class InboxLine {
   /// Milliseconds since the epoch, when the push arrived.
   final int at;
 
-  Map<String, Object> toJson() => {'s': sender, 'x': text, 'a': at};
+  /// The push's message id, used to drop a line stored twice.
+  final String? id;
+
+  Map<String, Object> toJson() => {'s': sender, 'x': text, 'a': at, 'm': ?id};
 
   /// [j] is a stored map, or a bare string (the format before per-line
   /// senders existed).
@@ -19,6 +27,7 @@ final class InboxLine {
       sender: m['s'] as String,
       text: m['x'] as String,
       at: m['a'] as int,
+      id: m['m'] as String?,
     );
   }
 }
@@ -109,6 +118,7 @@ List<InboxChat> addToInbox(
   required String body,
   String? sender,
   String? chat,
+  String? messageId,
   required DateTime at,
 }) {
   final parsed = sender != null && chat != null
@@ -117,9 +127,19 @@ List<InboxChat> addToInbox(
   final existing = inbox
       .where((c) => c.conversationId == conversationId)
       .firstOrNull;
+  // Already stored (the Android receiver draws a push before this runs).
+  if (messageId != null &&
+      (existing?.lines.any((l) => l.id == messageId) ?? false)) {
+    return inbox;
+  }
   final all = [
     ...?existing?.lines,
-    InboxLine(sender: parsed.sender, text: body, at: at.millisecondsSinceEpoch),
+    InboxLine(
+      sender: parsed.sender,
+      text: body,
+      at: at.millisecondsSinceEpoch,
+      id: messageId,
+    ),
   ];
   return [
     for (final c in inbox)
@@ -167,4 +187,12 @@ String inboxSummary(List<InboxChat> inbox) {
   final total = inbox.fold(0, (sum, c) => sum + c.count);
   final messages = total == 1 ? '1 new message' : '$total new messages';
   return inbox.length > 1 ? '$messages from ${inbox.length} chats' : messages;
+}
+
+/// The name of the person a line is shown as: the line's own sender, else the
+/// chat's title for a 1:1 (the other person), else null (a group line of
+/// unknown sender).
+String? lineSenderName(InboxChat chat, InboxLine line) {
+  if (line.sender.isNotEmpty) return line.sender;
+  return chat.group ? null : chat.title;
 }

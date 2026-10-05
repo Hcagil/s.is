@@ -18,6 +18,8 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
 
@@ -64,6 +66,8 @@ Future<ProviderContainer> pump(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: MessageScreen(title: group ? 'Crew' : 'Bob', group: group),
       ),
     ),

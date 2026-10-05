@@ -30,6 +30,8 @@ import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
 const bob = Member(userId: 'ub', displayName: 'Bob Stone', tag: 'bobby');
 const cem = Member(userId: 'u3', displayName: 'Cem Ay', tag: 'cem');
@@ -400,7 +402,11 @@ void main() {
       await t.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: MaterialApp(home: screen),
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: screen,
+          ),
         ),
       );
       await t.pumpAndSettle();

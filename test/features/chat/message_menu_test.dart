@@ -30,6 +30,8 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = 'u2';
 
@@ -88,6 +90,8 @@ Future<ProviderContainer> pump(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: sisTheme(Brightness.light),
         home: const MessageScreen(title: 'Bob'),
       ),
@@ -262,6 +266,7 @@ void main() {
       await pump(tester, [msg('m1', from: bob)]);
       await raiseKeyboard(tester);
       await tester.enterText(composer, 'hello');
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('composer-send')));
       await tester.pumpAndSettle();
 
@@ -273,8 +278,10 @@ void main() {
       await raiseKeyboard(tester);
       await tester.tap(find.byKey(const ValueKey('composer-attach')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('attach-photo')));
+      await tester.pumpAndSettle();
 
-      // 0.30.10: the paperclip opens the photo grid itself.
+      // The paperclip's Photo tile opens the photo grid.
       expect(find.text('Recent photos'), findsOneWidget);
       expect(find.byKey(const ValueKey('sheet-from-app')), findsOneWidget);
       expect(keyboardUp(tester), isTrue);

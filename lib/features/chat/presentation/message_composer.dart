@@ -13,6 +13,7 @@ class _ComposerState extends ConsumerState<_Composer>
   final _focus = FocusNode();
   bool _sending = false;
   double _lastInset = 0;
+  final _attachKey = GlobalKey();
 
   /// This composer's conversation is fixed for its whole lifetime: opening
   /// a different one always pushes a new [MessageScreen] (see
@@ -142,6 +143,11 @@ class _ComposerState extends ConsumerState<_Composer>
   /// one message per photo. Backing out of either step sends nothing.
   Future<void> _attach() async {
     if (_sending) return;
+    final box = _attachKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final anchor = box.localToGlobal(Offset.zero) & box.size;
+    final photo = await showAttachMenu(context, anchor: anchor);
+    if (!photo || !mounted) return;
     final picked = await showAttachmentSheet(context);
     if (picked.images.isEmpty || !mounted) return;
     final reviewed = await showAttachmentPreview(
@@ -290,11 +296,18 @@ class _ComposerState extends ConsumerState<_Composer>
             _ReplyBar(replying),
           Row(
             children: [
-              IconButton(
-                key: const ValueKey('composer-attach'),
-                onPressed: _sending ? null : _attach,
-                icon: const Icon(Icons.attach_file_rounded),
-                tooltip: 'Send a photo',
+              KeyedSubtree(
+                key: _attachKey,
+                child: IconButton(
+                  key: const ValueKey('composer-attach'),
+                  onPressed: _sending ? null : _attach,
+                  icon: const Icon(Icons.attach_file_rounded),
+                  tooltip: 'Send a photo',
+                ),
+              ),
+              GreyOption(
+                name: 'c_btn',
+                child: const _GreyGlyph(Icons.emoji_emotions_outlined),
               ),
               Expanded(
                 child: TextField(
@@ -327,16 +340,32 @@ class _ComposerState extends ConsumerState<_Composer>
                   ),
                 ),
               ),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _controller,
+                builder: (context, value, _) =>
+                    (value.text.isNotEmpty || editing != null)
+                    ? const SizedBox.shrink()
+                    : GreyOption(
+                        name: 'v_dict',
+                        child: const _GreyGlyph(Icons.keyboard_voice_outlined),
+                      ),
+              ),
               const SizedBox(width: 8),
-              IconButton.filled(
-                key: const ValueKey('composer-send'),
-                onPressed: _sending
-                    ? null
-                    : () {
-                        _send();
-                        _focus.requestFocus();
-                      },
-                icon: const Icon(Icons.arrow_upward_rounded),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _controller,
+                builder: (context, value, _) =>
+                    (value.text.isNotEmpty || editing != null)
+                    ? IconButton.filled(
+                        key: const ValueKey('composer-send'),
+                        onPressed: _sending
+                            ? null
+                            : () {
+                                _send();
+                                _focus.requestFocus();
+                              },
+                        icon: const Icon(Icons.arrow_upward_rounded),
+                      )
+                    : GreyOption(name: 'v_rec', child: const _GreyRecGlyph()),
               ),
             ],
           ),
@@ -344,6 +373,46 @@ class _ComposerState extends ConsumerState<_Composer>
       ),
     );
   }
+}
+
+/// A greyed composer icon: no tap target and no handler; the surrounding
+/// GreyOption supplies the dimmed look.
+class _GreyGlyph extends StatelessWidget {
+  const _GreyGlyph(this.icon);
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 40,
+    height: 40,
+    child: Icon(icon, color: Theme.of(context).colorScheme.onSurfaceVariant),
+  );
+}
+
+/// The greyed mic: the filled send button's look (brand gradient disc),
+/// with no handler.
+class _GreyRecGlyph extends StatelessWidget {
+  const _GreyRecGlyph();
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 48,
+    height: 48,
+    child: Center(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: SisBrand.of(context).gradient,
+        ),
+        child: const SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(Icons.mic_rounded, color: Colors.white),
+        ),
+      ),
+    ),
+  );
 }
 
 /// What the composer is answering, with a way to stop.

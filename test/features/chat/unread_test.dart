@@ -21,6 +21,8 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
 const cem = Member(userId: 'u3', displayName: 'Cem');
@@ -355,7 +357,11 @@ void main() {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: const MaterialApp(home: ConversationList()),
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ConversationList(),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -449,7 +455,11 @@ void main() {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: const MaterialApp(home: ConversationList()),
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ConversationList(),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -567,7 +577,11 @@ void main() {
       await t.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: const MaterialApp(home: ConversationList()),
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ConversationList(),
+          ),
         ),
       );
       await t.pumpAndSettle();
@@ -671,7 +685,11 @@ void main() {
       await t.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: const MaterialApp(home: ConversationList()),
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ConversationList(),
+          ),
         ),
       );
       await t.pumpAndSettle();

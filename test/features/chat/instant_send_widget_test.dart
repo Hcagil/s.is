@@ -28,6 +28,8 @@ import '../../support/fakes.dart';
 import '../../support/held_send_chat.dart';
 import '../../support/sis_ui.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const bob = Member(userId: 'u2', displayName: 'Bob');
 const failure = NetworkFailure('Could not reach SIS just now');
 
@@ -68,6 +70,8 @@ Future<ProviderContainer> pump(WidgetTester t, HeldSendChat chat) async {
     UncontrolledProviderScope(
       container: c,
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: sisTheme(Brightness.light),
         home: const MessageScreen(title: 'Bob'),
       ),
@@ -332,6 +336,8 @@ void main() {
         UncontrolledProviderScope(
           container: c,
           child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             theme: sisTheme(Brightness.light),
             home: const ConversationList(),
           ),

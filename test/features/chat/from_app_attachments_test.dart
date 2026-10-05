@@ -27,6 +27,8 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import '../../support/attach_flow.dart' hide key;
 import '../../support/fakes.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 const capNotice = 'Only the first 10 photos were sent.';
 const failNotice = 'That could not be opened.';
@@ -128,7 +130,11 @@ Future<void> pump(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(home: MessageScreen(title: 'Bob')),
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: MessageScreen(title: 'Bob'),
+      ),
     ),
   );
   await tester.pump();

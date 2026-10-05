@@ -18,6 +18,8 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
 
@@ -65,7 +67,11 @@ Future<ProviderContainer> pump(WidgetTester tester, ChatFake chat) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(home: MessageScreen(title: 'Bob')),
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: MessageScreen(title: 'Bob'),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -118,7 +124,11 @@ void main() {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: const MaterialApp(home: MessageScreen(title: 'Bob')),
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MessageScreen(title: 'Bob'),
+          ),
         ),
       );
       for (var i = 0; i < 10; i++) {
@@ -227,6 +237,7 @@ void main() {
         find.byKey(const ValueKey('composer-field')),
         'sure!',
       );
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('composer-send')));
       await tester.pumpAndSettle();
 
@@ -252,6 +263,7 @@ void main() {
         find.byKey(const ValueKey('composer-field')),
         'sure!',
       );
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('composer-send')));
       await tester.pumpAndSettle();
 

@@ -22,6 +22,8 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 
 class _SignedIn extends SessionController {
@@ -81,6 +83,8 @@ void main() {
       UncontrolledProviderScope(
         container: c,
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           theme: ThemeData(platform: platform),
           home: const MessageScreen(title: 'Bob'),
         ),

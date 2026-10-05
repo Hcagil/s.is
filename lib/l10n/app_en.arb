@@ -247,5 +247,53 @@
   "groupLeftUnsentNotice": "Left the group. Unsent messages weren't sent.",
   "@groupLeftUnsentNotice": {
     "description": "Notice after leaving a group when queued messages were dropped"
+  },
+  "attachPhoto": "Photo",
+  "@attachPhoto": {
+    "description": "Attach card tile under the composer"
+  },
+  "attachVideo": "Video",
+  "@attachVideo": {
+    "description": "Attach card tile under the composer"
+  },
+  "attachFile": "File",
+  "@attachFile": {
+    "description": "Attach card tile under the composer"
+  },
+  "attachVoice": "Voice",
+  "@attachVoice": {
+    "description": "Attach card tile under the composer"
+  },
+  "attachLocation": "Location",
+  "@attachLocation": {
+    "description": "Attach card tile under the composer"
+  },
+  "attachContact": "Contact",
+  "@attachContact": {
+    "description": "Attach card tile under the composer"
+  },
+  "attachPoll": "Poll",
+  "@attachPoll": {
+    "description": "Attach card tile under the composer"
+  },
+  "signInWithApple": "Sign in with Apple",
+  "@signInWithApple": {
+    "description": "Sign-in button, iPhone only"
+  },
+  "findFromContacts": "Find people from contacts",
+  "@findFromContacts": {
+    "description": "New chat page row"
+  },
+  "pickerAddCaption": "Add a caption",
+  "@pickerAddCaption": {
+    "description": "Share picker caption box"
+  },
+  "pickerNewChat": "New chat",
+  "@pickerNewChat": {
+    "description": "Picker top row"
+  },
+  "pickerRecent": "Recent",
+  "@pickerRecent": {
+    "description": "Picker section header"
   }
 }

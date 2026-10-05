@@ -28,6 +28,8 @@ import '../support/service_key.dart';
 import '../support/dead_host.dart';
 import '../support/reach.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 /// Image attachments against the real stack: a real upload into a private
 /// bucket, real storage row-level security, a real signed URL fetched over
 /// HTTP, and the real relaxed check constraint on `messages`.
@@ -720,6 +722,8 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             theme: sisTheme(Brightness.light),
             home: const MessageScreen(title: 'photos'),
           ),

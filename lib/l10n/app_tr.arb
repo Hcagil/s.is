@@ -61,5 +61,17 @@
   "cropPreviewHint": "Resim böyle görünecek",
   "cropGestureHint": "Yakınlaştırmak için sıkıştır, taşımak için sürükle",
   "groupLeftNotice": "Gruptan ayrıldın",
-  "groupLeftUnsentNotice": "Gruptan ayrıldın. Gönderilmeyen mesajlar gönderilmedi."
+  "groupLeftUnsentNotice": "Gruptan ayrıldın. Gönderilmeyen mesajlar gönderilmedi.",
+  "attachPhoto": "Fotoğraf",
+  "attachVideo": "Video",
+  "attachFile": "Dosya",
+  "attachVoice": "Ses",
+  "attachLocation": "Konum",
+  "attachContact": "Kişi",
+  "attachPoll": "Anket",
+  "signInWithApple": "Apple ile giriş yap",
+  "findFromContacts": "Kişilerinden insanları bul",
+  "pickerAddCaption": "Alt yazı ekle",
+  "pickerNewChat": "Yeni sohbet",
+  "pickerRecent": "Son kullanılanlar"
 }

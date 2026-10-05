@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/grey_option.dart';
 import '../../../app/notice.dart';
 import '../../../app/theme.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
 import '../domain/message.dart';
+import 'new_chat_page.dart';
 import 'person_avatar.dart';
 import 'picker_widgets.dart';
 
@@ -46,6 +49,45 @@ Future<void> showForwardPage(
   }, isError: r is Err);
 }
 
+/// Up to three overlapping avatars of the ticked targets, left of Send.
+class _ChosenStack extends StatelessWidget {
+  const _ChosenStack({required this.chosen});
+
+  final List<({String label, String seed, String? avatarPath})> chosen;
+
+  @override
+  Widget build(BuildContext context) {
+    if (chosen.isEmpty) return const SizedBox.shrink();
+    final shown = chosen.take(3).toList();
+    final ring = SisBrand.of(context).background;
+    return SizedBox(
+      key: const ValueKey('forward-chosen'),
+      width: 28.0 + (shown.length - 1) * 16,
+      height: 28,
+      child: Stack(
+        children: [
+          for (var i = 0; i < shown.length; i++)
+            Positioned(
+              left: i * 16.0,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ring, width: 2),
+                ),
+                child: PersonAvatar(
+                  label: shown[i].label,
+                  seed: shown[i].seed,
+                  radius: 12,
+                  avatarPath: shown[i].avatarPath,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Full-screen forward target picker: search, a "Forwarding" strip, chats and
 /// people with no chat yet, multi-tick, one full-width Send button. Pops
 /// `(chatIds, personIds)`, or null on back.
@@ -72,6 +114,23 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
   void dispose() {
     _search.dispose();
     super.dispose();
+  }
+
+  /// The "New chat" row: pick a person on the new-chat page and tick them as a target. Someone who already has a chat ticks that chat instead.
+  Future<void> _newChat() async {
+    final m = await showNewChatPage(context);
+    if (m == null || !mounted) return;
+    final chat = (ref.read(conversationListProvider).value ?? const [])
+        .where((c) => !c.isGroup && c.other?.userId == m.userId)
+        .firstOrNull;
+    setState(() {
+      if (chat != null) {
+        // The source chat is never a target; the picker stays as it was.
+        if (chat.id != widget.exclude) _chats.add(chat.id);
+      } else {
+        _people.add(m.userId);
+      }
+    });
   }
 
   void _toggle(Set<String> set, String id) => setState(() {
@@ -110,6 +169,19 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
         ? 'Photo'
         : 'Message';
     final n = _chats.length + _people.length;
+    final chosen = <({String label, String seed, String? avatarPath})>[
+      for (final c in all)
+        if (_chats.contains(c.id))
+          (
+            label: c.label,
+            seed: c.other?.userId ?? c.id,
+            avatarPath: c.avatarPath ?? c.other?.avatarPath,
+          ),
+      for (final m in people)
+        if (_people.contains(m.userId))
+          (label: m.displayName, seed: m.userId, avatarPath: m.avatarPath),
+    ];
+    final l = AppLocalizations.of(context);
     final header = Theme.of(context).textTheme.labelMedium
         ?.copyWith(color: scheme.onSurfaceVariant);
 
@@ -162,10 +234,23 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
           Expanded(
             child: ListView(
               children: [
+                ListTile(
+                  key: const ValueKey('forward-new-chat'),
+                  leading: CircleAvatar(
+                    backgroundColor: t.brand,
+                    foregroundColor: Colors.white,
+                    child: const Icon(Icons.edit_outlined),
+                  ),
+                  title: Text(
+                    l.pickerNewChat,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onTap: _newChat,
+                ),
                 if (chats.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Text('Chats', style: header),
+                    child: Text(l.pickerRecent, style: header),
                   ),
                 for (final c in chats)
                   ListTile(
@@ -213,18 +298,46 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
             ),
           ),
           PickerBottomBar(
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                key: const ValueKey('forward-send'),
-                onPressed: n == 0
-                    ? null
-                    : () => Navigator.of(context).pop((
-                        chatIds: _chats.toList(),
-                        personIds: _people.toList(),
-                      )),
-                child: Text(n == 0 ? 'Send' : 'Send ($n)'),
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GreyOption(
+                  name: 'caption',
+                  child: Container(
+                    width: double.infinity,
+                    height: 40,
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: t.surfaceHigh,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      l.pickerAddCaption,
+                      style: TextStyle(color: t.muted, fontSize: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    _ChosenStack(chosen: chosen),
+                    if (chosen.isNotEmpty) const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        key: const ValueKey('forward-send'),
+                        onPressed: n == 0
+                            ? null
+                            : () => Navigator.of(context).pop((
+                                chatIds: _chats.toList(),
+                                personIds: _people.toList(),
+                              )),
+                        child: Text(n == 0 ? 'Send' : 'Send ($n)'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],

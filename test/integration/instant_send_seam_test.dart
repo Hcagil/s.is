@@ -31,6 +31,8 @@ import '../support/dead_host.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 /// A text message shown the moment it is sent (2026-09-28), on the sender's
 /// own MessageScreen over the real [SupabaseChatRepository]: the server's
 /// row and its real Realtime echo must end as exactly one bubble, whichever
@@ -319,6 +321,8 @@ void main() {
       UncontrolledProviderScope(
         container: c,
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           theme: sisTheme(Brightness.light),
           home: const MessageScreen(title: 'Zane'),
         ),

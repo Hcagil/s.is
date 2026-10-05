@@ -213,12 +213,12 @@ class MuteTile extends ConsumerWidget {
             label: muteLengthLabel(AppLocalizations.of(context), l),
           ),
         if (active != null)
-          const MenuCardAction<String>(
+          MenuCardAction<String>(
             value: 'off',
             keyId: 'mute-off',
-            rowKey: ValueKey('mute-off'),
+            rowKey: const ValueKey('mute-off'),
             icon: Icons.notifications_active_outlined,
-            label: 'Unmute',
+            label: AppLocalizations.of(context).chatMenuUnmute,
           ),
       ],
     );

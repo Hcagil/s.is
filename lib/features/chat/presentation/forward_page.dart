@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/grey_option.dart';
 import '../../../app/notice.dart';
 import '../../../app/theme.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
 import '../domain/message.dart';
+import 'new_chat_page.dart';
 import 'person_avatar.dart';
 import 'picker_widgets.dart';
 
@@ -74,6 +77,22 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
     super.dispose();
   }
 
+  /// The "New chat" row: pick a person on the new-chat page and tick them as a target. Someone who already has a chat ticks that chat instead.
+  Future<void> _newChat() async {
+    final m = await showNewChatPage(context);
+    if (m == null || !mounted) return;
+    final chat = (ref.read(conversationListProvider).value ?? const [])
+        .where((c) => !c.isGroup && c.other?.userId == m.userId)
+        .firstOrNull;
+    setState(() {
+      if (chat != null) {
+        _chats.add(chat.id);
+      } else {
+        _people.add(m.userId);
+      }
+    });
+  }
+
   void _toggle(Set<String> set, String id) => setState(() {
     if (!set.remove(id)) set.add(id);
   });
@@ -110,6 +129,7 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
         ? 'Photo'
         : 'Message';
     final n = _chats.length + _people.length;
+    final l = AppLocalizations.of(context);
     final header = Theme.of(context).textTheme.labelMedium
         ?.copyWith(color: scheme.onSurfaceVariant);
 
@@ -162,10 +182,23 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
           Expanded(
             child: ListView(
               children: [
+                ListTile(
+                  key: const ValueKey('forward-new-chat'),
+                  leading: CircleAvatar(
+                    backgroundColor: t.brand,
+                    foregroundColor: Colors.white,
+                    child: const Icon(Icons.edit_outlined),
+                  ),
+                  title: Text(
+                    l.pickerNewChat,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onTap: _newChat,
+                ),
                 if (chats.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Text('Chats', style: header),
+                    child: Text(l.pickerRecent, style: header),
                   ),
                 for (final c in chats)
                   ListTile(
@@ -213,18 +246,41 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
             ),
           ),
           PickerBottomBar(
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                key: const ValueKey('forward-send'),
-                onPressed: n == 0
-                    ? null
-                    : () => Navigator.of(context).pop((
-                        chatIds: _chats.toList(),
-                        personIds: _people.toList(),
-                      )),
-                child: Text(n == 0 ? 'Send' : 'Send ($n)'),
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GreyOption(
+                  name: 'caption',
+                  child: Container(
+                    width: double.infinity,
+                    height: 40,
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: t.surfaceHigh,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      l.pickerAddCaption,
+                      style: TextStyle(color: t.muted, fontSize: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    key: const ValueKey('forward-send'),
+                    onPressed: n == 0
+                        ? null
+                        : () => Navigator.of(context).pop((
+                            chatIds: _chats.toList(),
+                            personIds: _people.toList(),
+                          )),
+                    child: Text(n == 0 ? 'Send' : 'Send ($n)'),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

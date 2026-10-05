@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
+import '../../../app/grey_option.dart';
+import '../../../l10n/app_localizations.dart';
 import '../application/session_controller.dart';
 
 /// Signed-out screen; shows why the last attempt did not complete, if any.
@@ -52,9 +54,61 @@ class SignInScreen extends ConsumerWidget {
                   child: FilledButton(
                     onPressed: () =>
                         ref.read(sessionControllerProvider.notifier).signIn(),
-                    child: const Text('Continue with Google'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF222222),
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: const BorderSide(color: Color(0xFFD0D0D8)),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'G',
+                          style: TextStyle(
+                            color: Color(0xFF4285F4),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text('Continue with Google'),
+                      ],
+                    ),
                   ),
                 ),
+                if (theme.platform == TargetPlatform.iOS) ...[
+                  const SizedBox(height: 12),
+                  GreyOption(
+                    name: 's_apple',
+                    label: AppLocalizations.of(context).signInWithApple,
+                    child: Container(
+                      width: double.infinity,
+                      height: 48,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF444444)),
+                      ),
+                      child: Text(
+                        AppLocalizations.of(context).signInWithApple,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Text(
                   'Only invited Google accounts can sign in.',

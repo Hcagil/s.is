@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/grey_option.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
 import 'person_avatar.dart';
@@ -169,6 +171,14 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
             ),
           ],
           const Divider(height: 1),
+          GreyOption(
+            name: 'f_perm',
+            label: AppLocalizations.of(context).findFromContacts,
+            child: ListTile(
+              leading: const Icon(Icons.contacts_outlined),
+              title: Text(AppLocalizations.of(context).findFromContacts),
+            ),
+          ),
           Expanded(
             child: switch (people) {
               AsyncData(:final value) when value.isEmpty => const ListTile(

@@ -368,6 +368,7 @@ abstract class AppLocalizations {
   /// **'1 week'**
   String get muteOneWeek;
 
+<<<<<<< HEAD
   /// Group info: section label
   ///
   /// In en, this message translates to:
@@ -469,6 +470,79 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Left the group. Unsent messages weren\'t sent.'**
   String get groupLeftUnsentNotice;
+=======
+  /// Attach card tile under the composer
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get attachPhoto;
+
+  /// Attach card tile under the composer
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get attachVideo;
+
+  /// Attach card tile under the composer
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get attachFile;
+
+  /// Attach card tile under the composer
+  ///
+  /// In en, this message translates to:
+  /// **'Voice'**
+  String get attachVoice;
+
+  /// Attach card tile under the composer
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get attachLocation;
+
+  /// Attach card tile under the composer
+  ///
+  /// In en, this message translates to:
+  /// **'Contact'**
+  String get attachContact;
+
+  /// Attach card tile under the composer
+  ///
+  /// In en, this message translates to:
+  /// **'Poll'**
+  String get attachPoll;
+
+  /// Sign-in button, iPhone only
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with Apple'**
+  String get signInWithApple;
+
+  /// New chat page row
+  ///
+  /// In en, this message translates to:
+  /// **'Find people from contacts'**
+  String get findFromContacts;
+
+  /// Share picker caption box
+  ///
+  /// In en, this message translates to:
+  /// **'Add a caption'**
+  String get pickerAddCaption;
+
+  /// Picker top row
+  ///
+  /// In en, this message translates to:
+  /// **'New chat'**
+  String get pickerNewChat;
+
+  /// Picker section header
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get pickerRecent;
+>>>>>>> 5aade96 (feat(chat): attach card, greyed composer buttons, picker redesign in Forward, Apple sign-in button (Update 1 slice 9))
 }
 
 class _AppLocalizationsDelegate

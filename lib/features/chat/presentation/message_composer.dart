@@ -13,6 +13,7 @@ class _ComposerState extends ConsumerState<_Composer>
   final _focus = FocusNode();
   bool _sending = false;
   double _lastInset = 0;
+  final _attachKey = GlobalKey();
 
   /// This composer's conversation is fixed for its whole lifetime: opening
   /// a different one always pushes a new [MessageScreen] (see
@@ -142,6 +143,11 @@ class _ComposerState extends ConsumerState<_Composer>
   /// one message per photo. Backing out of either step sends nothing.
   Future<void> _attach() async {
     if (_sending) return;
+    final box = _attachKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final anchor = box.localToGlobal(Offset.zero) & box.size;
+    final photo = await showAttachMenu(context, anchor: anchor);
+    if (!photo || !mounted) return;
     final picked = await showAttachmentSheet(context);
     if (picked.images.isEmpty || !mounted) return;
     final reviewed = await showAttachmentPreview(
@@ -290,11 +296,22 @@ class _ComposerState extends ConsumerState<_Composer>
             _ReplyBar(replying),
           Row(
             children: [
-              IconButton(
-                key: const ValueKey('composer-attach'),
-                onPressed: _sending ? null : _attach,
-                icon: const Icon(Icons.attach_file_rounded),
-                tooltip: 'Send a photo',
+              KeyedSubtree(
+                key: _attachKey,
+                child: IconButton(
+                  key: const ValueKey('composer-attach'),
+                  onPressed: _sending ? null : _attach,
+                  icon: const Icon(Icons.attach_file_rounded),
+                  tooltip: 'Send a photo',
+                ),
+              ),
+              GreyOption(
+                name: 'c_btn',
+                child: IconButton(
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {},
+                  icon: const Icon(Icons.emoji_emotions_outlined),
+                ),
               ),
               Expanded(
                 child: TextField(
@@ -327,16 +344,36 @@ class _ComposerState extends ConsumerState<_Composer>
                   ),
                 ),
               ),
+              GreyOption(
+                name: 'v_dict',
+                child: IconButton(
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {},
+                  icon: const Icon(Icons.keyboard_voice_outlined),
+                ),
+              ),
               const SizedBox(width: 8),
-              IconButton.filled(
-                key: const ValueKey('composer-send'),
-                onPressed: _sending
-                    ? null
-                    : () {
-                        _send();
-                        _focus.requestFocus();
-                      },
-                icon: const Icon(Icons.arrow_upward_rounded),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _controller,
+                builder: (context, value, _) =>
+                    (value.text.isNotEmpty || editing != null)
+                    ? IconButton.filled(
+                        key: const ValueKey('composer-send'),
+                        onPressed: _sending
+                            ? null
+                            : () {
+                                _send();
+                                _focus.requestFocus();
+                              },
+                        icon: const Icon(Icons.arrow_upward_rounded),
+                      )
+                    : GreyOption(
+                        name: 'v_rec',
+                        child: IconButton.filled(
+                          onPressed: () {},
+                          icon: const Icon(Icons.mic_rounded),
+                        ),
+                      ),
               ),
             ],
           ),

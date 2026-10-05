@@ -3,14 +3,18 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/grey_option.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../app/theme.dart';
+import '../../../l10n/app_localizations.dart';
 import '../application/chat_controllers.dart';
 import '../domain/attachment.dart';
 import '../domain/external_picker.dart';
 import '../domain/gallery.dart';
 import 'crop_screen.dart';
+import 'message_menu_card.dart';
+import 'person_avatar.dart';
 
 /// Shows the paperclip's photo grid; an empty `images` list when the member
 /// closes it or backs out without choosing a photo. `dropped` is how many
@@ -33,6 +37,140 @@ Future<({List<PickedImage> images, int dropped})> showAttachmentSheet(
         builder: (_) => AttachmentSheet(square: square),
       );
   return result ?? (images: const <PickedImage>[], dropped: 0);
+}
+
+/// Opens the attach card above [anchor] (the paperclip's global rect). True when Photo was tapped; false when closed without choosing. Only Photo is live, the other tiles are greyed.
+Future<bool> showAttachMenu(
+  BuildContext context, {
+  required Rect anchor,
+}) async {
+  final chosen = await showFloatingCard<String>(
+    context,
+    anchor: anchor,
+    cardKey: const ValueKey('attach-menu'),
+    child: const _AttachMenu(),
+  );
+  return chosen == 'photo';
+}
+
+class _AttachMenu extends StatelessWidget {
+  const _AttachMenu();
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 14,
+        children: [
+          InkWell(
+            key: const ValueKey('attach-photo'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).pop('photo'),
+            child: _attachTile(
+              context,
+              slot: 0,
+              icon: Icons.photo_outlined,
+              label: l.attachPhoto,
+            ),
+          ),
+          GreyOption(
+            name: 'att_tvideo',
+            child: _attachTile(
+              context,
+              slot: 1,
+              icon: Icons.videocam_outlined,
+              label: l.attachVideo,
+            ),
+          ),
+          GreyOption(
+            name: 'att_tfile',
+            child: _attachTile(
+              context,
+              slot: 2,
+              icon: Icons.insert_drive_file_outlined,
+              label: l.attachFile,
+            ),
+          ),
+          GreyOption(
+            name: 'att_tvoice',
+            child: _attachTile(
+              context,
+              slot: 3,
+              icon: Icons.mic_none_rounded,
+              label: l.attachVoice,
+            ),
+          ),
+          GreyOption(
+            name: 'att_tloc',
+            child: _attachTile(
+              context,
+              slot: 4,
+              icon: Icons.location_on_outlined,
+              label: l.attachLocation,
+            ),
+          ),
+          GreyOption(
+            name: 'att_tcon',
+            child: _attachTile(
+              context,
+              slot: 5,
+              icon: Icons.person_outline_rounded,
+              label: l.attachContact,
+            ),
+          ),
+          GreyOption(
+            name: 'att_tpoll',
+            child: _attachTile(
+              context,
+              slot: 6,
+              icon: Icons.bar_chart_rounded,
+              label: l.attachPoll,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Widget _attachTile(
+  BuildContext context, {
+  required int slot,
+  required IconData icon,
+  required String label,
+}) {
+  final color = groupColor(context, slot);
+  return SizedBox(
+    width: 52,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color.withValues(alpha: 0.22),
+          ),
+          child: Icon(icon, size: 22, color: color),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 /// The phone's recent photos to send from. Asks for photo access the first

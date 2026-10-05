@@ -147,6 +147,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get muteOneWeek => '1 hafta';
 
   @override
+<<<<<<< HEAD
   String get groupSettingsTitle => 'Grup ayarları';
 
   @override
@@ -199,4 +200,40 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get groupLeftUnsentNotice =>
       'Gruptan ayrıldın. Gönderilmeyen mesajlar gönderilmedi.';
+=======
+  String get attachPhoto => 'Fotoğraf';
+
+  @override
+  String get attachVideo => 'Video';
+
+  @override
+  String get attachFile => 'Dosya';
+
+  @override
+  String get attachVoice => 'Ses';
+
+  @override
+  String get attachLocation => 'Konum';
+
+  @override
+  String get attachContact => 'Kişi';
+
+  @override
+  String get attachPoll => 'Anket';
+
+  @override
+  String get signInWithApple => 'Apple ile giriş yap';
+
+  @override
+  String get findFromContacts => 'Kişilerinden insanları bul';
+
+  @override
+  String get pickerAddCaption => 'Alt yazı ekle';
+
+  @override
+  String get pickerNewChat => 'Yeni sohbet';
+
+  @override
+  String get pickerRecent => 'Son kullanılanlar';
+>>>>>>> 5aade96 (feat(chat): attach card, greyed composer buttons, picker redesign in Forward, Apple sign-in button (Update 1 slice 9))
 }

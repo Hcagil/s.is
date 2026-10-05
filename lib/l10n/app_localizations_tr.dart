@@ -20,4 +20,99 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get deliveryRead => 'Okundu';
+
+  @override
+  String get settingsAppearance => 'Görünüm';
+
+  @override
+  String get settingsTextSize => 'Yazı boyutu';
+
+  @override
+  String get settingsLanguage => 'Dil';
+
+  @override
+  String get settingsAutoDownload => 'Otomatik indirme';
+
+  @override
+  String get themeViolet => 'Mor';
+
+  @override
+  String get themeOcean => 'Okyanus';
+
+  @override
+  String get themeForest => 'Orman';
+
+  @override
+  String get themeSunset => 'Gün batımı';
+
+  @override
+  String get themeGraphite => 'Grafit';
+
+  @override
+  String get themeRose => 'Gül';
+
+  @override
+  String get appearanceBuiltIn => 'Hazır temalar';
+
+  @override
+  String get appearanceMyThemes => 'Temalarım';
+
+  @override
+  String get appearanceNewTheme => 'Yeni tema';
+
+  @override
+  String get appearanceNoExport =>
+      'Temalar bu telefonda kalır. Dışa aktarma yoktur.';
+
+  @override
+  String get appearanceWallpaper => 'Duvar kağıdı';
+
+  @override
+  String get appearanceDim => 'Karartma';
+
+  @override
+  String get appearanceBlur => 'Bulanıklık';
+
+  @override
+  String get previewTheirs => 'Cumartesi için herkes hâlâ var mı?';
+
+  @override
+  String get previewMine => 'Harika, pastayı ben getiririm';
+
+  @override
+  String get textSystemFont => 'Telefonun kendi yazı tipini kullan';
+
+  @override
+  String get textSystemFontHint =>
+      'Sisteminle aynı olur. Kapalıyken SIS yazı tipi kullanılır';
+
+  @override
+  String get textChatSize => 'Sohbet yazı boyutu';
+
+  @override
+  String get textAppSize => 'Uygulama yazı boyutu';
+
+  @override
+  String get textAppSample => 'Ayarlar ve sohbet listesi yazısı';
+
+  @override
+  String get textSmall => 'Küçük';
+
+  @override
+  String get textMedium => 'Orta';
+
+  @override
+  String get textLarge => 'Büyük';
+
+  @override
+  String get languageSystem => 'Sistem';
+
+  @override
+  String get languageSystemHint => 'Telefonu izler';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
+  String get languageTurkish => 'Türkçe';
 }

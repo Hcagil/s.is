@@ -3,6 +3,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/failure.dart';
+import '../features/appearance/application/appearance_controller.dart';
+import '../features/appearance/domain/appearance_settings.dart';
 import '../features/auth/domain/member.dart';
 import '../features/auth/application/session_controller.dart';
 import '../features/auth/domain/session_state.dart';
@@ -35,10 +37,10 @@ class SisApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final look = ref.watch(appearanceProvider);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'SIS',
-      // The locale follows the system; the language switch comes later.
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
@@ -46,10 +48,33 @@ class SisApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: AppLocalizations.supportedLocales,
+      // System: null, the locale follows the phone.
+      locale: switch (look.language) {
+        AppLanguage.system => null,
+        AppLanguage.en => const Locale('en'),
+        AppLanguage.tr => const Locale('tr'),
+      },
       themeMode: ThemeMode.system,
-      theme: sisTheme(Brightness.light),
-      darkTheme: sisTheme(Brightness.dark),
+      theme: sisTheme(
+        Brightness.light,
+        theme: look.themeId,
+        systemFont: look.systemFont,
+      ),
+      darkTheme: sisTheme(
+        Brightness.dark,
+        theme: look.themeId,
+        systemFont: look.systemFont,
+      ),
       navigatorObservers: [ref.read(routeStackProvider)],
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: sisTextScaler(
+            MediaQuery.textScalerOf(context),
+            look.appTextSize.scale,
+          ),
+        ),
+        child: child!,
+      ),
       home: const SessionGate(),
     );
   }

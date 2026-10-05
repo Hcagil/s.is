@@ -1,12 +1,21 @@
 import 'package:flutter/material.dart';
 
+import '../features/appearance/domain/appearance_settings.dart';
 import 'swipe_back.dart';
 
 /// The Nocturne design: ink violet, the system font (Manrope stays bundled
 /// as the switch-off font), rounded but precise shapes.
 /// Values are the design tokens in docs/DESIGN.md §10; change them there first.
-ThemeData sisTheme(Brightness brightness) {
-  final t = brightness == Brightness.dark ? SisBrand.dark : SisBrand.light;
+///
+/// [theme] picks one of the six palettes; [systemFont] false uses Manrope.
+ThemeData sisTheme(
+  Brightness brightness, {
+  AppThemeId theme = AppThemeId.violet,
+  bool systemFont = true,
+}) {
+  final t = sisBrandFor(theme, brightness);
+  // null: the phone's own font; off, SIS's bundled Manrope.
+  final family = systemFont ? null : 'Manrope';
   final scheme = ColorScheme(
     brightness: brightness,
     primary: t.brand,
@@ -33,8 +42,10 @@ ThemeData sisTheme(Brightness brightness) {
   const r8 = BorderRadius.all(Radius.circular(8));
   const r12 = BorderRadius.all(Radius.circular(12));
   const r16 = BorderRadius.all(Radius.circular(16));
-  final text = ThemeData(brightness: brightness).textTheme
-      .apply(bodyColor: t.text, displayColor: t.text);
+  final text = ThemeData(
+    brightness: brightness,
+    fontFamily: family,
+  ).textTheme.apply(bodyColor: t.text, displayColor: t.text);
   // Filled buttons carry the brand gradient; disabled ones fall back to the
   // theme's flat disabled colour.
   Widget gradient(BuildContext _, Set<WidgetState> states, Widget? child) =>
@@ -48,6 +59,7 @@ ThemeData sisTheme(Brightness brightness) {
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
+    fontFamily: family,
     colorScheme: scheme,
     textTheme: text.copyWith(
       titleLarge: text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -283,11 +295,193 @@ class SisBrand extends ThemeExtension<SisBrand> {
       Theme.of(context).extension<SisBrand>() ?? light;
 
   @override
-  SisBrand copyWith() => this;
+  SisBrand copyWith({
+    Color? background,
+    Color? surface,
+    Color? surfaceHigh,
+    Color? text,
+    Color? muted,
+    Color? line,
+    Color? brand,
+    Color? brandDeep,
+    Color? theirs,
+    Color? glow,
+    Color? glowDeep,
+    Color? danger,
+    Color? unreadEdge,
+    LinearGradient? prism,
+  }) => SisBrand(
+    background: background ?? this.background,
+    surface: surface ?? this.surface,
+    surfaceHigh: surfaceHigh ?? this.surfaceHigh,
+    text: text ?? this.text,
+    muted: muted ?? this.muted,
+    line: line ?? this.line,
+    brand: brand ?? this.brand,
+    brandDeep: brandDeep ?? this.brandDeep,
+    theirs: theirs ?? this.theirs,
+    glow: glow ?? this.glow,
+    glowDeep: glowDeep ?? this.glowDeep,
+    danger: danger ?? this.danger,
+    unreadEdge: unreadEdge ?? this.unreadEdge,
+    prism: prism ?? this.prism,
+  );
 
   @override
   SisBrand lerp(SisBrand? other, double t) =>
       other == null ? this : (t < .5 ? this : other);
+}
+
+/// The phone's text scale times the member's app text size. A phone that
+/// scales text non-linearly is read at its 1.0 step (ponytail: exact for
+/// linear scalers, the common case).
+TextScaler sisTextScaler(TextScaler system, double factor) =>
+    factor == 1 ? system : TextScaler.linear(system.scale(1) * factor);
+
+/// One theme's colours for one brightness, as 0xRRGGBB:
+/// background, surface, surfaceHigh, line, text, muted, brand, brandDeep.
+/// Contrast was checked for all twelve: text 15:1+, muted 4.9:1+ on every
+/// surface, white on brandDeep 4.2:1+, white on brand 3.0:1+, brand on
+/// background 3.6:1+.
+typedef _Tone = (int, int, int, int, int, int, int, int);
+
+const Map<AppThemeId, (_Tone light, _Tone dark)> _tones = {
+  AppThemeId.ocean: (
+    (
+      0xF2F7FC,
+      0xFFFFFF,
+      0xE3EEF8,
+      0xD3E2F0,
+      0x0E1B2B,
+      0x52677D,
+      0x1B7FD1,
+      0x1B4FB8,
+    ),
+    (
+      0x0A1626,
+      0x0F2236,
+      0x163350,
+      0x1C3F63,
+      0xE6F3FF,
+      0x8FB0CC,
+      0x2793DB,
+      0x1F5FD6,
+    ),
+  ),
+  AppThemeId.forest: (
+    (
+      0xF1F8F4,
+      0xFFFFFF,
+      0xE1EFE7,
+      0xCFE3D7,
+      0x0E2018,
+      0x4F6B5C,
+      0x2E8F5F,
+      0x1B6B49,
+    ),
+    (
+      0x0A1A14,
+      0x0F2A20,
+      0x163A2C,
+      0x1D4A39,
+      0xE6F7EE,
+      0x8FBBA6,
+      0x33A06C,
+      0x1E7A55,
+    ),
+  ),
+  AppThemeId.sunset: (
+    (
+      0xFDF4F1,
+      0xFFFFFF,
+      0xF8E6E0,
+      0xEFD5CC,
+      0x2A1220,
+      0x7A5560,
+      0xD9562B,
+      0xC23558,
+    ),
+    (
+      0x1C0C1E,
+      0x2A1530,
+      0x3A1C40,
+      0x4A2650,
+      0xFBEAF0,
+      0xC79AB5,
+      0xEE6736,
+      0xC93D62,
+    ),
+  ),
+  AppThemeId.graphite: (
+    (
+      0xF4F5F7,
+      0xFFFFFF,
+      0xE8EAEE,
+      0xD9DCE2,
+      0x15171B,
+      0x5A6270,
+      0x5A6678,
+      0x3A4658,
+    ),
+    (
+      0x15171B,
+      0x1E2126,
+      0x282C33,
+      0x343942,
+      0xECEEF2,
+      0x9AA3B2,
+      0x7B8596,
+      0x4A5568,
+    ),
+  ),
+  AppThemeId.rose: (
+    (
+      0xFCF3F7,
+      0xFFFFFF,
+      0xF6E4EC,
+      0xEDD3DF,
+      0x2A0F1C,
+      0x7D5468,
+      0xD81B60,
+      0xAD1457,
+    ),
+    (
+      0x1A0A14,
+      0x2A1220,
+      0x3A182C,
+      0x4C2238,
+      0xFBE8F1,
+      0xC99AB3,
+      0xE8457F,
+      0xAD1457,
+    ),
+  ),
+};
+
+/// The brand colours of [id] in [brightness]. Violet is [SisBrand.light] /
+/// [SisBrand.dark]; the others keep its logo prism, danger and unread colours.
+SisBrand sisBrandFor(AppThemeId id, Brightness brightness) {
+  final dark = brightness == Brightness.dark;
+  final base = dark ? SisBrand.dark : SisBrand.light;
+  final tones = _tones[id];
+  if (tones == null) return base;
+  final (bg, surface, high, line, text, muted, brand, deep) = dark
+      ? tones.$2
+      : tones.$1;
+  Color c(int rgb) => Color(0xFF000000 | rgb);
+  return base.copyWith(
+    background: c(bg),
+    surface: c(surface),
+    surfaceHigh: c(high),
+    line: c(line),
+    text: c(text),
+    muted: c(muted),
+    brand: c(brand),
+    brandDeep: c(deep),
+    theirs: dark ? c(high) : c(surface),
+    glow: Color(brand | (dark ? 0x3D000000 : 0x29000000)),
+    glowDeep: Color(deep | (dark ? 0x29000000 : 0x1A000000)),
+  );
 }
 
 /// Shared design tokens from the Update 1 mockup (S2..S9). Defined here and

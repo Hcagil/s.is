@@ -15,5 +15,129 @@
   "deliveryRead": "Read",
   "@deliveryRead": {
     "description": "Screen-reader label of the two-blue-ticks state"
+  },
+  "settingsAppearance": "Appearance",
+  "@settingsAppearance": {
+    "description": "Settings row: themes"
+  },
+  "settingsTextSize": "Text size",
+  "@settingsTextSize": {
+    "description": "Settings row and page title: text size"
+  },
+  "settingsLanguage": "Language",
+  "@settingsLanguage": {
+    "description": "Settings row and page title: language"
+  },
+  "settingsAutoDownload": "Auto-download",
+  "@settingsAutoDownload": {
+    "description": "Settings row (not available yet)"
+  },
+  "themeViolet": "Violet",
+  "@themeViolet": {
+    "description": "Theme name"
+  },
+  "themeOcean": "Ocean",
+  "@themeOcean": {
+    "description": "Theme name"
+  },
+  "themeForest": "Forest",
+  "@themeForest": {
+    "description": "Theme name"
+  },
+  "themeSunset": "Sunset",
+  "@themeSunset": {
+    "description": "Theme name"
+  },
+  "themeGraphite": "Graphite",
+  "@themeGraphite": {
+    "description": "Theme name"
+  },
+  "themeRose": "Rose",
+  "@themeRose": {
+    "description": "Theme name"
+  },
+  "appearanceBuiltIn": "Built-in themes",
+  "@appearanceBuiltIn": {
+    "description": "Section label on the Appearance page"
+  },
+  "appearanceMyThemes": "My themes",
+  "@appearanceMyThemes": {
+    "description": "Section label for custom themes (not available yet)"
+  },
+  "appearanceNewTheme": "New theme",
+  "@appearanceNewTheme": {
+    "description": "Button to make a custom theme (not available yet)"
+  },
+  "appearanceNoExport": "Themes stay on this phone. There is no export.",
+  "@appearanceNoExport": {
+    "description": "Hint under the themes"
+  },
+  "appearanceWallpaper": "Wallpaper",
+  "@appearanceWallpaper": {
+    "description": "Row for the chat wallpaper (not available yet)"
+  },
+  "appearanceDim": "Dim",
+  "@appearanceDim": {
+    "description": "Slider label for picture wallpaper (not available yet)"
+  },
+  "appearanceBlur": "Blur",
+  "@appearanceBlur": {
+    "description": "Slider label for picture wallpaper (not available yet)"
+  },
+  "previewTheirs": "Is everyone still in for Saturday?",
+  "@previewTheirs": {
+    "description": "Sample incoming message in the live preview"
+  },
+  "previewMine": "Great, I'll bring the cake",
+  "@previewMine": {
+    "description": "Sample outgoing message in the live preview"
+  },
+  "textSystemFont": "Use the phone's own font",
+  "@textSystemFont": {
+    "description": "Switch title"
+  },
+  "textSystemFontHint": "Matches your system. Off = SIS font",
+  "@textSystemFontHint": {
+    "description": "Switch subtitle"
+  },
+  "textChatSize": "Chat text size",
+  "@textChatSize": {
+    "description": "Section label"
+  },
+  "textAppSize": "App text size",
+  "@textAppSize": {
+    "description": "Section label"
+  },
+  "textAppSample": "Settings and chat list text",
+  "@textAppSample": {
+    "description": "Sample line for the app text size"
+  },
+  "textSmall": "Small",
+  "@textSmall": {
+    "description": "Text size"
+  },
+  "textMedium": "Medium",
+  "@textMedium": {
+    "description": "Text size"
+  },
+  "textLarge": "Large",
+  "@textLarge": {
+    "description": "Text size"
+  },
+  "languageSystem": "System",
+  "@languageSystem": {
+    "description": "Language option: follow the phone"
+  },
+  "languageSystemHint": "Follows the phone",
+  "@languageSystemHint": {
+    "description": "Subtitle of the System language option"
+  },
+  "languageEnglish": "English",
+  "@languageEnglish": {
+    "description": "Language option, written in its own language"
+  },
+  "languageTurkish": "Türkçe",
+  "@languageTurkish": {
+    "description": "Language option, written in its own language"
   }
 }

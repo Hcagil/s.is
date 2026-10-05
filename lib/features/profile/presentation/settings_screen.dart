@@ -3,10 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
 import '../../../app/controls.dart';
+import '../../../app/grey_option.dart';
 import '../../../app/licences_page.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
+import '../../../app/settings_row.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../appearance/application/appearance_controller.dart';
+import '../../appearance/presentation/appearance_labels.dart';
+import '../../appearance/presentation/appearance_page.dart';
+import '../../appearance/presentation/language_page.dart';
+import '../../appearance/presentation/text_size_page.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../../chat/presentation/avatar_card.dart';
@@ -101,19 +109,26 @@ class _WithProfile extends ConsumerWidget {
 }
 
 /// Settings: the member's profile card, then one row per section.
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    ListTile row(String key, IconData icon, String title, Widget page) =>
-        ListTile(
-          key: ValueKey(key),
-          leading: Icon(icon),
-          title: Text(title),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => _open(context, page),
-        );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
+    final look = ref.watch(appearanceProvider);
+    Widget row(
+      String key,
+      IconData icon,
+      String title,
+      Widget page, {
+      String? value,
+    }) => SisSettingsRow(
+      key: ValueKey(key),
+      icon: icon,
+      title: title,
+      value: value,
+      onTap: () => _open(context, page),
+    );
     return _WithProfile(
       title: 'Settings',
       builder: (context, profile) => ListView(
@@ -163,6 +178,35 @@ class SettingsScreen extends StatelessWidget {
             Icons.info_outline_rounded,
             'About',
             const AboutScreen(),
+          ),
+          row(
+            'settings-appearance',
+            Icons.palette_outlined,
+            l.settingsAppearance,
+            const AppearancePage(),
+            value: themeLabel(l, look.themeId),
+          ),
+          row(
+            'settings-text-size',
+            Icons.text_fields_rounded,
+            l.settingsTextSize,
+            const TextSizePage(),
+            value: textSizeLabel(l, look.chatTextSize),
+          ),
+          row(
+            'settings-language',
+            Icons.language_rounded,
+            l.settingsLanguage,
+            const LanguagePage(),
+            value: languageLabel(l, look.language),
+          ),
+          GreyOption(
+            name: 'att_auto',
+            label: l.settingsAutoDownload,
+            child: SisSettingsRow(
+              icon: Icons.download_outlined,
+              title: l.settingsAutoDownload,
+            ),
           ),
         ],
       ),

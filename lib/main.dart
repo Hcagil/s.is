@@ -14,6 +14,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app/sis_app.dart';
 import 'core/runtime_config.dart';
 import 'core/startup_marks.dart';
+import 'features/appearance/application/appearance_controller.dart';
+import 'features/appearance/data/shared_prefs_appearance_store.dart';
 import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/file_last_session_store.dart';
 import 'features/auth/data/secure_session_storage.dart';
@@ -93,8 +95,17 @@ Future<void> main() async {
     }
   });
   final config = RuntimeConfig.fromEnvironment();
+  // Read before runApp (like the session marker), so the first frame already
+  // has the member's theme, font, text size and language: no flash.
+  const appearanceStore = SharedPrefsAppearanceStore();
+  final appearanceOverrides = [
+    appearanceStoreProvider.overrideWithValue(appearanceStore),
+    initialAppearanceProvider.overrideWithValue(await appearanceStore.load()),
+  ];
   if (!config.isComplete) {
-    runApp(const ProviderScope(child: SisApp()));
+    runApp(
+      ProviderScope(overrides: appearanceOverrides, child: const SisApp()),
+    );
     return;
   } // SessionController yields SetupRequired
   try {
@@ -118,6 +129,7 @@ Future<void> main() async {
     runApp(
       ProviderScope(
         overrides: [
+          ...appearanceOverrides,
           runtimeConfigProvider.overrideWithValue(config),
           ...platformOverrides(defaultTargetPlatform, client, config),
           chatRepositoryProvider.overrideWithValue(
@@ -178,6 +190,7 @@ Future<void> main() async {
     runApp(
       ProviderScope(
         overrides: [
+          ...appearanceOverrides,
           startupErrorProvider.overrideWithValue(
             'SIS could not start. Please try again.',
           ),

@@ -13,6 +13,7 @@ import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../app/theme.dart';
 import '../../../core/failure.dart';
+import '../../appearance/presentation/chat_text_scale.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../../notifications/application/push_controller.dart';
@@ -621,147 +622,154 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      switch (messages) {
-                        AsyncData() when timeline.isEmpty => const Center(
-                          child: Text('No messages yet. Say something.'),
-                        ),
-                        _ when messages is! AsyncError && timeline.isNotEmpty =>
-                          ListView.builder(
-                            controller: _scroll,
-                            // Newest at the bottom, which is where the composer is.
-                            reverse: true,
-                            // Generous on purpose: a jump-to-hit needs the target
-                            // bubble built even when it is far from the current
-                            // scroll offset (see _scrollTo).
-                            scrollCacheExtent: ScrollCacheExtent.pixels(2000),
-                            // One extra row at the very top while an older page is
-                            // being read.
-                            itemCount: timeline.length + (loadingOlder ? 1 : 0),
-                            itemBuilder: (context, i) {
-                              if (i == timeline.length) {
-                                return const Padding(
-                                  key: ValueKey('older-loading'),
-                                  padding: EdgeInsets.symmetric(vertical: 12),
-                                  child: Center(
-                                    child: SisLoadingLogo(size: 24),
-                                  ),
-                                );
-                              }
-                              final entry = timeline[timeline.length - 1 - i];
-                              if (entry is EventEntry) {
-                                return GroupEventLine(
-                                  entry.event,
-                                  names: names,
-                                  key: ValueKey('event-${entry.event.id}'),
-                                );
-                              }
-                              final message = (entry as MessageEntry).message;
-                              final index = messageIndexById[message.id] ?? 0;
-                              final mine = me != null && message.isFrom(me);
-                              final quoted = message.replyTo == null
-                                  ? null
-                                  : value
-                                        .where((m) => m.id == message.replyTo)
-                                        .firstOrNull;
-                              final unread =
-                                  mine &&
-                                  !message.isDeleted &&
-                                  (message.isPending ||
-                                      !isReadByAnyone(
-                                        marks,
-                                        message.createdAt,
-                                      ));
-                              final allowedActions = allowedMessageActions(
-                                message,
-                                me: me,
-                                now: DateTime.now(),
-                              );
-                              final bubble = SwipeableMessage(
-                                key: _keyFor(message.id),
-                                messageId: message.id,
-                                actions: allowedActions,
-                                onReply: () => runMessageAction(
-                                  context,
-                                  ref,
+                  child: ChatTextScale(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        switch (messages) {
+                          AsyncData() when timeline.isEmpty => const Center(
+                            child: Text('No messages yet. Say something.'),
+                          ),
+                          _
+                              when messages is! AsyncError &&
+                                  timeline.isNotEmpty =>
+                            ListView.builder(
+                              controller: _scroll,
+                              // Newest at the bottom, which is where the composer is.
+                              reverse: true,
+                              // Generous on purpose: a jump-to-hit needs the target
+                              // bubble built even when it is far from the current
+                              // scroll offset (see _scrollTo).
+                              scrollCacheExtent: ScrollCacheExtent.pixels(2000),
+                              // One extra row at the very top while an older page is
+                              // being read.
+                              itemCount:
+                                  timeline.length + (loadingOlder ? 1 : 0),
+                              itemBuilder: (context, i) {
+                                if (i == timeline.length) {
+                                  return const Padding(
+                                    key: ValueKey('older-loading'),
+                                    padding: EdgeInsets.symmetric(vertical: 12),
+                                    child: Center(
+                                      child: SisLoadingLogo(size: 24),
+                                    ),
+                                  );
+                                }
+                                final entry = timeline[timeline.length - 1 - i];
+                                if (entry is EventEntry) {
+                                  return GroupEventLine(
+                                    entry.event,
+                                    names: names,
+                                    key: ValueKey('event-${entry.event.id}'),
+                                  );
+                                }
+                                final message = (entry as MessageEntry).message;
+                                final index = messageIndexById[message.id] ?? 0;
+                                final mine = me != null && message.isFrom(me);
+                                final quoted = message.replyTo == null
+                                    ? null
+                                    : value
+                                          .where((m) => m.id == message.replyTo)
+                                          .firstOrNull;
+                                final unread =
+                                    mine &&
+                                    !message.isDeleted &&
+                                    (message.isPending ||
+                                        !isReadByAnyone(
+                                          marks,
+                                          message.createdAt,
+                                        ));
+                                final allowedActions = allowedMessageActions(
                                   message,
-                                  MessageAction.reply,
-                                  canDeleteForEveryone: true,
-                                  anchor: _bubbleRect(message.id),
-                                  alignEnd: mine,
-                                  group: isGroup,
-                                ),
-                                onAction: (action) {
-                                  runMessageAction(
+                                  me: me,
+                                  now: DateTime.now(),
+                                );
+                                final bubble = SwipeableMessage(
+                                  key: _keyFor(message.id),
+                                  messageId: message.id,
+                                  actions: allowedActions,
+                                  onReply: () => runMessageAction(
                                     context,
                                     ref,
                                     message,
-                                    action,
+                                    MessageAction.reply,
                                     canDeleteForEveryone: true,
                                     anchor: _bubbleRect(message.id),
                                     alignEnd: mine,
                                     group: isGroup,
-                                  );
-                                },
-                                onTap: () =>
-                                    _openMessageMenu(message, mine: mine),
-                                child: _Bubble(
-                                  message,
-                                  key: ValueKey('read-$unread-${message.id}'),
-                                  mine: mine,
-                                  unread: unread,
-                                  sender:
-                                      isGroup &&
-                                          !mine &&
-                                          startsRun(value, index)
-                                      ? (names[message.senderId] ?? 'Member')
-                                      : null,
-                                  senderLeft: departedSenderIds.contains(
-                                    message.senderId,
                                   ),
-                                  senderSlot: slotByUser[message.senderId],
-                                  quoted: quoted,
-                                  quotedName: quoted == null
-                                      ? null
-                                      : quoted.senderId == me
-                                      ? 'You'
-                                      : (names[quoted.senderId] ?? 'Member'),
-                                  highlightQuery: searchQuery,
-                                  isCurrentHit: message.id == currentHitId,
-                                ),
-                              );
-                              return message.deletion ==
-                                      MessageDeletion.vanished
-                                  ? _Vanishing(
-                                      key: ValueKey('vanish-${message.id}'),
-                                      child: bubble,
-                                    )
-                                  : bubble;
-                            },
-                          ),
-                        AsyncError(:final error) => Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(32),
-                            child: Text(
-                              failureReason(error),
-                              textAlign: TextAlign.center,
+                                  onAction: (action) {
+                                    runMessageAction(
+                                      context,
+                                      ref,
+                                      message,
+                                      action,
+                                      canDeleteForEveryone: true,
+                                      anchor: _bubbleRect(message.id),
+                                      alignEnd: mine,
+                                      group: isGroup,
+                                    );
+                                  },
+                                  onTap: () =>
+                                      _openMessageMenu(message, mine: mine),
+                                  child: _Bubble(
+                                    message,
+                                    key: ValueKey('read-$unread-${message.id}'),
+                                    mine: mine,
+                                    unread: unread,
+                                    sender:
+                                        isGroup &&
+                                            !mine &&
+                                            startsRun(value, index)
+                                        ? (names[message.senderId] ?? 'Member')
+                                        : null,
+                                    senderLeft: departedSenderIds.contains(
+                                      message.senderId,
+                                    ),
+                                    senderSlot: slotByUser[message.senderId],
+                                    quoted: quoted,
+                                    quotedName: quoted == null
+                                        ? null
+                                        : quoted.senderId == me
+                                        ? 'You'
+                                        : (names[quoted.senderId] ?? 'Member'),
+                                    highlightQuery: searchQuery,
+                                    isCurrentHit: message.id == currentHitId,
+                                  ),
+                                );
+                                return message.deletion ==
+                                        MessageDeletion.vanished
+                                    ? _Vanishing(
+                                        key: ValueKey('vanish-${message.id}'),
+                                        child: bubble,
+                                      )
+                                    : bubble;
+                              },
+                            ),
+                          AsyncError(:final error) => Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Text(
+                                failureReason(error),
+                                textAlign: TextAlign.center,
+                              ),
                             ),
                           ),
+                          _ => const Center(child: SisLoadingLogo()),
+                        },
+                        Positioned(
+                          right: 12,
+                          bottom: 12,
+                          child: _JumpToLatest(
+                            far: _far,
+                            jumped: ref
+                                .read(messagesProvider.notifier)
+                                .isJumped,
+                            onTap: _toLatest,
+                          ),
                         ),
-                        _ => const Center(child: SisLoadingLogo()),
-                      },
-                      Positioned(
-                        right: 12,
-                        bottom: 12,
-                        child: _JumpToLatest(
-                          far: _far,
-                          jumped: ref.read(messagesProvider.notifier).isJumped,
-                          onTap: _toLatest,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

@@ -1,5 +1,5 @@
 begin;
-select plan(120);
+select plan(154);
 
 -- Message reactions: public.set_reaction(message, emoji) and the read-only
 -- public.message_reactions table.
@@ -97,6 +97,19 @@ create function backdate(n int, age interval) returns void language sql as $$
   insert into app_private.bot_actions(bot_id, kind, at)
   select u('bot'), 'send', now() - age from generate_series(1, n);
 $$;
+-- the physical row version: a new ctid/xmin means an UPDATE wrote (and was published).
+-- Every call runs in its own lives_ok subtransaction, so a write there gets a new xmin.
+create function ver(m uuid, who text) returns text language sql as $$
+  select ctid::text || '/' || xmin::text || '/' || updated_at::text
+    from public.message_reactions where message_id = m and user_id = u(who)
+$$;
+create function age_row(m uuid, who text) returns void language sql as $$
+  update public.message_reactions set updated_at = now() - interval '1 day' where message_id = m and user_id = u(who)
+$$;
+create function upd_at(m uuid, who text) returns timestamptz language sql as $$
+  select updated_at from public.message_reactions where message_id = m and user_id = u(who)
+$$;
+create temp table snaps(name text primary key, v text);
 
 do $$
 declare n text;
@@ -151,6 +164,17 @@ select function_privs_are('public', 'set_reaction', array['uuid', 'text'], 'anon
                           'anon holds no execute on set_reaction');
 select ok(not has_function_privilege('public', 'public.set_reaction(uuid, text)', 'execute'),
           'PUBLIC holds no execute on set_reaction');
+select has_function('app_private', 'bot_send_charge', array['uuid'], 'app_private.bot_send_charge(uuid) exists');
+select is((select prorettype::regtype::text from pg_proc where oid = 'app_private.bot_send_charge(uuid)'::regprocedure),
+          'void', 'bot_send_charge returns void');
+select ok((select prosecdef from pg_proc where oid = 'app_private.bot_send_charge(uuid)'::regprocedure),
+          'bot_send_charge is security definer');
+select ok(not has_function_privilege('public', 'app_private.bot_send_charge(uuid)', 'execute'),
+          'PUBLIC holds no execute on bot_send_charge');
+select ok(not has_function_privilege('anon', 'app_private.bot_send_charge(uuid)', 'execute'),
+          'anon holds no execute on bot_send_charge');
+select ok(not has_function_privilege('authenticated', 'app_private.bot_send_charge(uuid)', 'execute'),
+          'authenticated holds no execute on bot_send_charge');
 select is((select array_agg(c order by c) from unnest(array['message_id','user_id','conversation_id','emoji',
                                                              'created_at','updated_at']) c
             where has_column_privilege('authenticated', 'public.message_reactions', c, 'select')),
@@ -334,6 +358,33 @@ reset role;
 select is(stored(g('M'), '05'), '👍', 'her refused call changed nothing');
 select is((select count(*) from app_private.bot_actions), 0::bigint, 'humans leave no bot_actions rows');
 
+-- 4b S-1: a clear on an already-cleared row writes nothing (human) ------------------------
+select age_row(g('M'), '02');
+insert into snaps values ('bob set', ver(g('M'), '02'));
+select as_('02');
+select lives_ok(format('select react(%L, null)', g('M')), 'bob clears his 😂');
+reset role;
+select is(stored(g('M'), '02'), '-', 'the first clear writes NULL');
+select ok(upd_at(g('M'), '02') > now() - interval '1 hour', 'and a new updated_at');
+select isnt(ver(g('M'), '02'), (select v from snaps where name = 'bob set'), 'as a new row version');
+insert into snaps values ('bob cleared', ver(g('M'), '02'));
+select as_('02');
+select lives_ok(format('select react(%L, null)', g('M')), 'bob clears again (1)');
+select lives_ok(format('select react(%L, null)', g('M')), 'bob clears again (2)');
+select lives_ok(format('select react(%L, null)', g('M')), 'bob clears again (3)');
+reset role;
+select is(ver(g('M'), '02'), (select v from snaps where name = 'bob cleared'),
+          'repeated clears leave the row untouched: same ctid, xmin and updated_at');
+select is(stored(g('M'), '02'), '-', 'still cleared');
+-- cat has no reaction row on M
+select is(rows_of(g('M')), 3::bigint, 'fixture: M has ann, bob and eve rows, none for cat');
+select as_('03');
+select is((select pg_typeof(public.set_reaction(g('M'), null))::text), 'void',
+          'a clear with no reaction row returns void');
+reset role;
+select is(rows_of(g('M')), 3::bigint, 'and inserts nothing');
+select is(stored(g('M'), '03'), null, 'cat still has no row');
+
 -- 5 the bot ---------------------------------------------------------------------------
 select runbook();
 insert into app_private.bot_accounts(user_id, debug_conversation) values (u('bot'), g('DEBUG'));
@@ -381,6 +432,36 @@ select throws_ok(format('select react(%L, %L)', g('M'), ''), '22023', 'invalid e
                  'a bad emoji from the bot is 22023');
 reset role;
 select is(sends(), 2::bigint, 'refused calls left no log row');
+
+-- S-1 for the bot: a counted set, then clears that write once and log nothing
+select as_('bot');
+select lives_ok(format('select react(%L, %L)', g('M'), '🎉'), 'the bot sets 🎉');
+reset role;
+select is(sends(), 3::bigint, 'the set is counted');
+select age_row(g('M'), 'bot');
+insert into snaps values ('bot set', ver(g('M'), 'bot'));
+select as_('bot');
+select lives_ok(format('select react(%L, null)', g('M')), 'the bot clears it');
+reset role;
+select is(stored(g('M'), 'bot'), '-', 'the first clear writes NULL');
+select ok(upd_at(g('M'), 'bot') > now() - interval '1 hour', 'and a new updated_at');
+select isnt(ver(g('M'), 'bot'), (select v from snaps where name = 'bot set'), 'as a new row version');
+insert into snaps values ('bot cleared', ver(g('M'), 'bot'));
+select as_('bot');
+select lives_ok(format('select react(%L, null)', g('M')), 'the bot clears again (1)');
+select lives_ok(format('select react(%L, null)', g('M')), 'the bot clears again (2)');
+select lives_ok(format('select react(%L, null)', g('M')), 'the bot clears again (3)');
+reset role;
+select is(ver(g('M'), 'bot'), (select v from snaps where name = 'bot cleared'),
+          'repeated bot clears leave the row untouched: same ctid, xmin and updated_at');
+select is(sends(), 3::bigint, 'none of the clears added a bot_actions row');
+select is(stored(g('OLD'), 'bot'), null, 'fixture: the bot has no row on the old note');
+select as_('bot');
+select is((select pg_typeof(public.set_reaction(g('OLD'), null))::text), 'void',
+          'a bot clear with no reaction row returns void');
+reset role;
+select is(stored(g('OLD'), 'bot'), null, 'and inserts nothing');
+select is(sends(), 3::bigint, 'and logs nothing');
 
 -- the shared budget
 select backdate(19, '1 minute');

@@ -1,5 +1,5 @@
 begin;
-select plan(121);
+select plan(120);
 
 -- Delivery marks (Update 1 slice 5a): conversation_members.delivered_at,
 -- public.mark_delivered(), mark_read()'s delivery advance, read_marks()'s
@@ -378,18 +378,17 @@ reset role;
 select is(dlv(c('01'), '01'), now() - interval '1 hour', 'her delivery stays at m2');
 select is(sent(c('01')), 6::bigint, 'and nothing is broadcast');
 
--- departed bea: capped at her leaving (T-5h), and never moved backwards
+-- departed bea: a member who left never advances delivery (read_marks never
+-- shows it), though mark_read still moves her read mark up to her leaving.
 select as_('05');
 select is(mr(c('01')), 'ok', 'bea, departed, marks G read');
 reset role;
-select cmp_ok(dlv(c('01'), '05'), '<=', now() - interval '5 hours', 'her delivery stops at the moment she left');
-select cmp_ok(dlv(c('01'), '05'), '>', now() - interval '2 days', 'control: it did move, up to then');
-update public.conversation_members set delivered_at = now() - interval '4 hours'
- where conversation_id = c('01') and user_id = u('05') and left_at is not null;
-select as_('05');
-select is(mr(c('01')), 'ok', 'bea marks G read again with her delivery planted at T-4h');
-reset role;
-select is(dlv(c('01'), '05'), now() - interval '4 hours', 'mark_read never moves delivery backwards (greatest)');
+select is((select last_read_at from public.conversation_members
+            where conversation_id = c('01') and user_id = u('05')),
+          now() - interval '5 hours', 'control: her read mark moved, up to the moment she left');
+select is(dlv(c('01'), '05'), now() - interval '2 days', 'her delivery does not advance');
+select is((select count(*) from realtime.messages where topic = 'delivered:' || c('01')
+              and payload->>'user_id' = u('05')::text), 0::bigint, 'and nothing is broadcast for her');
 
 -- 7 read_marks reports delivery whatever the read-receipt setting -----------------
 select as_('01');

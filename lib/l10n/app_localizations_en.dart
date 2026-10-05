@@ -190,4 +190,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cropGestureHint => 'Pinch to zoom, drag to move';
+
+  @override
+  String get groupLeftNotice => 'Left the group';
+
+  @override
+  String get groupLeftUnsentNotice =>
+      'Left the group. Unsent messages weren\'t sent.';
 }

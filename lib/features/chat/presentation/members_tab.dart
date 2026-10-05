@@ -104,8 +104,8 @@ class _MembersTab extends ConsumerWidget {
         showSisNotice(
           context,
           value
-              ? "Left the group. Unsent messages weren't sent."
-              : 'Left the group',
+              ? AppLocalizations.of(context).groupLeftUnsentNotice
+              : AppLocalizations.of(context).groupLeftNotice,
         );
         Navigator.of(context).pop();
       case Err(:final failure):

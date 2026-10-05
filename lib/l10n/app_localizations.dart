@@ -457,6 +457,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pinch to zoom, drag to move'**
   String get cropGestureHint;
+
+  /// Notice after leaving a group
+  ///
+  /// In en, this message translates to:
+  /// **'Left the group'**
+  String get groupLeftNotice;
+
+  /// Notice after leaving a group when queued messages were dropped
+  ///
+  /// In en, this message translates to:
+  /// **'Left the group. Unsent messages weren\'t sent.'**
+  String get groupLeftUnsentNotice;
 }
 
 class _AppLocalizationsDelegate

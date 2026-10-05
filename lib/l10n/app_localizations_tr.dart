@@ -192,4 +192,11 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get cropGestureHint =>
       'Yakınlaştırmak için sıkıştır, taşımak için sürükle';
+
+  @override
+  String get groupLeftNotice => 'Gruptan ayrıldın';
+
+  @override
+  String get groupLeftUnsentNotice =>
+      'Gruptan ayrıldın. Gönderilmeyen mesajlar gönderilmedi.';
 }

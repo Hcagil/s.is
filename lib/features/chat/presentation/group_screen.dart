@@ -216,7 +216,7 @@ class _GreySwitchRow extends StatelessWidget {
           Expanded(
             child: Text(title, style: Theme.of(context).textTheme.bodyLarge),
           ),
-          Switch(value: on, onChanged: null),
+          SisSwitch(value: on, onChanged: null),
         ],
       ),
     ),

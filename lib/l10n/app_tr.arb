@@ -59,5 +59,7 @@
   "cropChoose": "Seç",
   "cropPreview": "Önizleme",
   "cropPreviewHint": "Resim böyle görünecek",
-  "cropGestureHint": "Yakınlaştırmak için sıkıştır, taşımak için sürükle"
+  "cropGestureHint": "Yakınlaştırmak için sıkıştır, taşımak için sürükle",
+  "groupLeftNotice": "Gruptan ayrıldın",
+  "groupLeftUnsentNotice": "Gruptan ayrıldın. Gönderilmeyen mesajlar gönderilmedi."
 }

@@ -239,5 +239,13 @@
   "cropGestureHint": "Pinch to zoom, drag to move",
   "@cropGestureHint": {
     "description": "Crop screen gesture hint"
+  },
+  "groupLeftNotice": "Left the group",
+  "@groupLeftNotice": {
+    "description": "Notice after leaving a group"
+  },
+  "groupLeftUnsentNotice": "Left the group. Unsent messages weren't sent.",
+  "@groupLeftUnsentNotice": {
+    "description": "Notice after leaving a group when queued messages were dropped"
   }
 }

@@ -201,6 +201,14 @@ jobs:
           echo "::add-mask::$SUPABASE_TEST_SERVICE_KEY"
           test -n "$SUPABASE_TEST_SERVICE_KEY"
           docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -e TZ=JST-9 -e SUPABASE_TEST_SERVICE_KEY="$SUPABASE_TEST_SERVICE_KEY" flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration
+      # Last: it bootstraps the SIS Bot on this stack through both tools
+      # (tool/sis_bot_admin.sh with the stack's own local keys, never a
+      # repository secret), drives tool/sis_bot.sh's read/send/start and every
+      # exit code, probes the bot's real JWT, then deletes the bot again.
+      - name: SIS Bot tool test
+        run: |
+          export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
+          SIS_BOT_TEST_COMPOSE="docker compose -f compose.yaml -f .github/compose.ci.yaml" test/tool/sis_bot_tool_test.sh
 
   # Proves the iOS project compiles (unsigned). Signing is proved by ios-signed below.
   ios:

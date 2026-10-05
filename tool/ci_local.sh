@@ -97,7 +97,8 @@ job_database() {
   step "Prepare cache directories" mkdir -p .ci-cache/pub .ci-cache/gradle || return 1
   step "Build development image" "${CI[@]}" build flutter || return 1
   step "Wait until Realtime delivers" "${CI[@]}" run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart || return 1
-  step "Repository integration tests" integration
+  step "Repository integration tests" integration || return 1
+  step "SIS Bot tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_bot_tool_test.sh
 }
 
 status=0

@@ -79,7 +79,13 @@ class SignInScreen extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        const Text('Continue with Google'),
+                        const Flexible(
+                          child: Text(
+                            'Continue with Google',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
                   ),

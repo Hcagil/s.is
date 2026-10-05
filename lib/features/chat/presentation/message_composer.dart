@@ -307,11 +307,7 @@ class _ComposerState extends ConsumerState<_Composer>
               ),
               GreyOption(
                 name: 'c_btn',
-                child: IconButton(
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () {},
-                  icon: const Icon(Icons.emoji_emotions_outlined),
-                ),
+                child: const _GreyGlyph(Icons.emoji_emotions_outlined),
               ),
               Expanded(
                 child: TextField(
@@ -351,11 +347,7 @@ class _ComposerState extends ConsumerState<_Composer>
                     ? const SizedBox.shrink()
                     : GreyOption(
                         name: 'v_dict',
-                        child: IconButton(
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () {},
-                          icon: const Icon(Icons.keyboard_voice_outlined),
-                        ),
+                        child: const _GreyGlyph(Icons.keyboard_voice_outlined),
                       ),
               ),
               const SizedBox(width: 8),
@@ -373,13 +365,7 @@ class _ComposerState extends ConsumerState<_Composer>
                               },
                         icon: const Icon(Icons.arrow_upward_rounded),
                       )
-                    : GreyOption(
-                        name: 'v_rec',
-                        child: IconButton.filled(
-                          onPressed: () {},
-                          icon: const Icon(Icons.mic_rounded),
-                        ),
-                      ),
+                    : GreyOption(name: 'v_rec', child: const _GreyRecGlyph()),
               ),
             ],
           ),
@@ -387,6 +373,46 @@ class _ComposerState extends ConsumerState<_Composer>
       ),
     );
   }
+}
+
+/// A greyed composer icon: no tap target and no handler; the surrounding
+/// GreyOption supplies the dimmed look.
+class _GreyGlyph extends StatelessWidget {
+  const _GreyGlyph(this.icon);
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 40,
+    height: 40,
+    child: Icon(icon, color: Theme.of(context).colorScheme.onSurfaceVariant),
+  );
+}
+
+/// The greyed mic: the filled send button's look (brand gradient disc),
+/// with no handler.
+class _GreyRecGlyph extends StatelessWidget {
+  const _GreyRecGlyph();
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 48,
+    height: 48,
+    child: Center(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: SisBrand.of(context).gradient,
+        ),
+        child: const SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(Icons.mic_rounded, color: Colors.white),
+        ),
+      ),
+    ),
+  );
 }
 
 /// What the composer is answering, with a way to stop.

@@ -125,7 +125,8 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
         .firstOrNull;
     setState(() {
       if (chat != null) {
-        _chats.add(chat.id);
+        // The source chat is never a target; the picker stays as it was.
+        if (chat.id != widget.exclude) _chats.add(chat.id);
       } else {
         _people.add(m.userId);
       }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/controls.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
+import '../../../app/settings_row.dart';
 import '../../../core/failure.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../chat/application/chat_controllers.dart';
@@ -236,17 +237,13 @@ class MuteTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final mutes = ref.watch(mutesProvider).value ?? const <Mute>[];
     final active = activeMute(mutes, kind, target, DateTime.now());
-    return ListTile(
+    return SisSettingsRow(
       key: const ValueKey('mute-tile'),
-      leading: Icon(
-        active == null
-            ? Icons.notifications_outlined
-            : Icons.notifications_off_outlined,
-      ),
-      title: Text(active == null ? 'Mute notifications' : 'Muted'),
-      subtitle: active == null
-          ? null
-          : Text(muteLabel(active.until, DateTime.now())),
+      icon: active == null
+          ? Icons.notifications_outlined
+          : Icons.notifications_off_outlined,
+      title: active == null ? 'Mute notifications' : 'Muted',
+      value: active == null ? null : muteLabel(active.until, DateTime.now()),
       onTap: () => _open(context, ref, active),
     );
   }

@@ -41,6 +41,9 @@ class _CropScreenState extends ConsumerState<CropScreen> {
   static const _viewport = 320.0;
   static const _maxScale = 4.0;
 
+  /// How far the dimming reaches past the frame on every side.
+  static const _dimReach = 1200.0;
+
   final _transform = TransformationController();
   ui.Image? _image;
   bool _failed = false;
@@ -92,6 +95,23 @@ class _CropScreenState extends ConsumerState<CropScreen> {
   Size _coverSize(double w, double h) {
     final scale = w < h ? _viewport / w : _viewport / h;
     return Size(w * scale, h * scale);
+  }
+
+  /// Slider zoom: scales about the frame's centre, then keeps the frame
+  /// inside the photo.
+  void _zoomTo(double target, Size cover) {
+    final m = _transform.value;
+    final s = m.getMaxScaleOnAxis();
+    final t = m.getTranslation();
+    const c = _viewport / 2;
+    final tx = (c - (c - t.x) / s * target)
+        .clamp(_viewport - cover.width * target, 0.0)
+        .toDouble();
+    final ty = (c - (c - t.y) / s * target)
+        .clamp(_viewport - cover.height * target, 0.0)
+        .toDouble();
+    _transform.value = Matrix4.diagonal3Values(target, target, 1)
+      ..setTranslationRaw(tx, ty, 0);
   }
 
   Future<void> _use() async {
@@ -175,43 +195,108 @@ class _CropScreenState extends ConsumerState<CropScreen> {
                           key: const ValueKey('crop-frame'),
                           width: _viewport,
                           height: _viewport,
-                          child: InteractiveViewer(
-                            key: const ValueKey('crop-viewer'),
-                            transformationController: _transform,
-                            constrained: false,
-                            minScale: 1,
-                            maxScale: _maxScale,
-                            boundaryMargin: EdgeInsets.zero,
-                            child: SizedBox(
-                              width: _coverSize(
-                                image.width.toDouble(),
-                                image.height.toDouble(),
-                              ).width,
-                              height: _coverSize(
-                                image.width.toDouble(),
-                                image.height.toDouble(),
-                              ).height,
-                              child: RawImage(image: image, fit: BoxFit.fill),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              InteractiveViewer(
+                                key: const ValueKey('crop-viewer'),
+                                transformationController: _transform,
+                                constrained: false,
+                                minScale: 1,
+                                maxScale: _maxScale,
+                                boundaryMargin: EdgeInsets.zero,
+                                clipBehavior: Clip.none,
+                                child: SizedBox(
+                                  width: _coverSize(
+                                    image.width.toDouble(),
+                                    image.height.toDouble(),
+                                  ).width,
+                                  height: _coverSize(
+                                    image.width.toDouble(),
+                                    image.height.toDouble(),
+                                  ).height,
+                                  child: RawImage(
+                                    image: image,
+                                    fit: BoxFit.fill,
+                                  ),
+                                ),
+                              ),
+                              // Everything outside the frame is dimmed.
+                              const Positioned(
+                                left: -_dimReach,
+                                top: -_dimReach,
+                                right: -_dimReach,
+                                bottom: -_dimReach,
+                                child: IgnorePointer(
+                                  child: CustomPaint(
+                                    key: ValueKey('crop-dim'),
+                                    painter: _DimOutside(
+                                      Rect.fromLTWH(
+                                        _dimReach,
+                                        _dimReach,
+                                        _viewport,
+                                        _viewport,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ColoredBox(
+                          color: Colors.black,
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const SizedBox(height: 20),
+                                _CropPreview(
+                                  image: image,
+                                  transform: _transform,
+                                  cover: _coverSize(
+                                    image.width.toDouble(),
+                                    image.height.toDouble(),
+                                  ),
+                                  viewport: _viewport,
+                                ),
+                                const SizedBox(height: 14),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 30,
+                                  ),
+                                  child: ListenableBuilder(
+                                    listenable: _transform,
+                                    builder: (_, _) => Slider(
+                                      key: const ValueKey('crop-zoom'),
+                                      min: 1,
+                                      max: _maxScale,
+                                      value: _transform.value
+                                          .getMaxScaleOnAxis()
+                                          .clamp(1.0, _maxScale)
+                                          .toDouble(),
+                                      onChanged: (v) => _zoomTo(
+                                        v,
+                                        _coverSize(
+                                          image.width.toDouble(),
+                                          image.height.toDouble(),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  AppLocalizations.of(context).cropGestureHint,
+                                  key: const ValueKey('crop-hint'),
+                                  style: const TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
                             ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        _CropPreview(
-                          image: image,
-                          transform: _transform,
-                          cover: _coverSize(
-                            image.width.toDouble(),
-                            image.height.toDouble(),
-                          ),
-                          viewport: _viewport,
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          AppLocalizations.of(context).cropGestureHint,
-                          key: const ValueKey('crop-hint'),
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 12,
                           ),
                         ),
                       ],
@@ -302,4 +387,25 @@ class _CropPreview extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Dims everything except [hole], the crop frame.
+class _DimOutside extends CustomPainter {
+  const _DimOutside(this.hole);
+
+  final Rect hole;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawPath(
+      Path()
+        ..fillType = PathFillType.evenOdd
+        ..addRect(Offset.zero & size)
+        ..addRect(hole),
+      Paint()..color = const Color(0x99000000),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_DimOutside old) => old.hole != hole;
 }

@@ -151,32 +151,30 @@ class _MembersTab extends ConsumerWidget {
                 ),
               ),
             for (final m in current)
-              ListTile(
+              _MemberRow(
                 key: ValueKey('group-member-${m.member.userId}'),
-                leading: PersonAvatar(
+                avatar: PersonAvatar(
                   label: m.member.displayName,
                   seed: m.member.userId,
                   online: online.contains(m.member.userId),
                   avatarPath: m.member.avatarPath,
                   groupSlot: m.colorSlot,
+                  radius: 18,
                 ),
-                title: Text(
-                  m.member.userId == me
-                      ? '${m.member.displayName} (you)'
-                      : m.member.displayName,
-                ),
-                subtitle: Text(
-                  [
-                    if (m.isAdmin) 'Admin',
-                    if (m.member.tag != null) '@${m.member.tag}',
-                  ].join(' · '),
-                ),
+                title: m.member.userId == me
+                    ? '${m.member.displayName} (you)'
+                    : m.member.displayName,
+                subtitle: [
+                  if (m.isAdmin) 'Admin',
+                  if (m.member.tag != null) '@${m.member.tag}',
+                ].join(' · '),
                 trailing: amAdmin && m.member.userId != me
                     ? Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
                             key: ValueKey('toggle-admin-${m.member.userId}'),
+                            visualDensity: VisualDensity.compact,
                             icon: Icon(
                               m.isAdmin
                                   ? Icons.remove_moderator_outlined
@@ -190,6 +188,7 @@ class _MembersTab extends ConsumerWidget {
                           ),
                           IconButton(
                             key: ValueKey('remove-member-${m.member.userId}'),
+                            visualDensity: VisualDensity.compact,
                             icon: const Icon(Icons.person_remove_outlined),
                             tooltip: 'Remove',
                             onPressed: () => _remove(context, ref, m),
@@ -222,26 +221,23 @@ class _MembersTab extends ConsumerWidget {
                 ),
               ),
               for (final m in departed)
-                ListTile(
+                _MemberRow(
                   key: ValueKey('group-member-${m.member.userId}'),
-                  leading: Opacity(
+                  avatar: Opacity(
                     opacity: .5,
                     child: PersonAvatar(
                       label: m.member.displayName,
                       seed: m.member.userId,
                       avatarPath: m.member.avatarPath,
                       groupSlot: m.colorSlot,
+                      radius: 18,
                     ),
                   ),
-                  title: Text(
-                    m.member.displayName,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  subtitle: Text(
-                    m.leftReason == LeftReason.removed ? 'Removed' : 'Left',
-                  ),
+                  title: m.member.displayName,
+                  titleColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                  subtitle: m.leftReason == LeftReason.removed
+                      ? 'Removed'
+                      : 'Left',
                 ),
             ],
             Padding(
@@ -293,6 +289,68 @@ class _MembersTab extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// A compact row: avatar, name (and a muted second line), optional trailing.
+class _MemberRow extends StatelessWidget {
+  const _MemberRow({
+    super.key,
+    required this.avatar,
+    required this.title,
+    this.subtitle = '',
+    this.titleColor,
+    this.trailing,
+    this.onTap,
+  });
+
+  final Widget avatar;
+  final String title;
+  final String subtitle;
+  final Color? titleColor;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SisBrand.of(context);
+    final text = Theme.of(context).textTheme;
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: SisTokens.settingsRowPadding,
+            child: Row(
+              children: [
+                avatar,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: text.bodyLarge?.copyWith(color: titleColor),
+                      ),
+                      if (subtitle.isNotEmpty)
+                        Text(
+                          subtitle,
+                          style: text.bodyMedium?.copyWith(color: t.muted),
+                        ),
+                    ],
+                  ),
+                ),
+                ?trailing,
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

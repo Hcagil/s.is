@@ -344,13 +344,19 @@ class _ComposerState extends ConsumerState<_Composer>
                   ),
                 ),
               ),
-              GreyOption(
-                name: 'v_dict',
-                child: IconButton(
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () {},
-                  icon: const Icon(Icons.keyboard_voice_outlined),
-                ),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _controller,
+                builder: (context, value, _) =>
+                    (value.text.isNotEmpty || editing != null)
+                    ? const SizedBox.shrink()
+                    : GreyOption(
+                        name: 'v_dict',
+                        child: IconButton(
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () {},
+                          icon: const Icon(Icons.keyboard_voice_outlined),
+                        ),
+                      ),
               ),
               const SizedBox(width: 8),
               ValueListenableBuilder<TextEditingValue>(

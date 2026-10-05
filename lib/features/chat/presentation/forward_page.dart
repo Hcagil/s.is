@@ -49,6 +49,45 @@ Future<void> showForwardPage(
   }, isError: r is Err);
 }
 
+/// Up to three overlapping avatars of the ticked targets, left of Send.
+class _ChosenStack extends StatelessWidget {
+  const _ChosenStack({required this.chosen});
+
+  final List<({String label, String seed, String? avatarPath})> chosen;
+
+  @override
+  Widget build(BuildContext context) {
+    if (chosen.isEmpty) return const SizedBox.shrink();
+    final shown = chosen.take(3).toList();
+    final ring = SisBrand.of(context).background;
+    return SizedBox(
+      key: const ValueKey('forward-chosen'),
+      width: 28.0 + (shown.length - 1) * 16,
+      height: 28,
+      child: Stack(
+        children: [
+          for (var i = 0; i < shown.length; i++)
+            Positioned(
+              left: i * 16.0,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ring, width: 2),
+                ),
+                child: PersonAvatar(
+                  label: shown[i].label,
+                  seed: shown[i].seed,
+                  radius: 12,
+                  avatarPath: shown[i].avatarPath,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Full-screen forward target picker: search, a "Forwarding" strip, chats and
 /// people with no chat yet, multi-tick, one full-width Send button. Pops
 /// `(chatIds, personIds)`, or null on back.
@@ -129,6 +168,18 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
         ? 'Photo'
         : 'Message';
     final n = _chats.length + _people.length;
+    final chosen = <({String label, String seed, String? avatarPath})>[
+      for (final c in all)
+        if (_chats.contains(c.id))
+          (
+            label: c.label,
+            seed: c.other?.userId ?? c.id,
+            avatarPath: c.avatarPath ?? c.other?.avatarPath,
+          ),
+      for (final m in people)
+        if (_people.contains(m.userId))
+          (label: m.displayName, seed: m.userId, avatarPath: m.avatarPath),
+    ];
     final l = AppLocalizations.of(context);
     final header = Theme.of(context).textTheme.labelMedium
         ?.copyWith(color: scheme.onSurfaceVariant);
@@ -267,18 +318,23 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    key: const ValueKey('forward-send'),
-                    onPressed: n == 0
-                        ? null
-                        : () => Navigator.of(context).pop((
-                            chatIds: _chats.toList(),
-                            personIds: _people.toList(),
-                          )),
-                    child: Text(n == 0 ? 'Send' : 'Send ($n)'),
-                  ),
+                Row(
+                  children: [
+                    _ChosenStack(chosen: chosen),
+                    if (chosen.isNotEmpty) const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        key: const ValueKey('forward-send'),
+                        onPressed: n == 0
+                            ? null
+                            : () => Navigator.of(context).pop((
+                                chatIds: _chats.toList(),
+                                personIds: _people.toList(),
+                              )),
+                        child: Text(n == 0 ? 'Send' : 'Send ($n)'),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

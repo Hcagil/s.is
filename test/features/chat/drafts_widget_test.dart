@@ -16,6 +16,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/app/delivery_tick.dart';
+import 'package:sis/features/chat/domain/delivery.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
@@ -104,7 +106,11 @@ final field = byKey('composer-field');
 final send = byKey('composer-send');
 final replyBar = byKey('reply-bar');
 final editBar = byKey('edit-bar');
-final clock = find.byIcon(Icons.schedule_rounded);
+
+/// The clock: a delivery tick still pending (it replaced the clock icon).
+final clock = find.byWidgetPredicate(
+  (w) => w is DeliveryTick && w.delivery == Delivery.pending,
+);
 Finder bubble(String id) => byKey('message-$id');
 Finder draftPreview(String conv) => byKey('draft-preview-$conv');
 

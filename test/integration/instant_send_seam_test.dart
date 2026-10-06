@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/app/delivery_tick.dart';
 import 'package:sis/app/notice.dart';
 import 'package:sis/app/theme.dart';
 import 'package:sis/core/failure.dart';
@@ -19,6 +20,7 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/delivery.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -307,7 +309,10 @@ void main() {
     });
   }
 
-  final clock = find.byIcon(Icons.schedule_rounded);
+  // The pending tick (Update 1 slice 5: the clock is a DeliveryTick state).
+  final clock = find.byWidgetPredicate(
+    (w) => w is DeliveryTick && w.delivery == Delivery.pending,
+  );
 
   String composerText(WidgetTester t) => t
       .widget<EditableText>(

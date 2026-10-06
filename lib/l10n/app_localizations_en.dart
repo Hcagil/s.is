@@ -636,10 +636,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Everyone in your people list is already in this group.';
 
   @override
-  String get addMembersOldTitle => 'Show old messages?';
+  String get addMembersOldTitle => 'Show earlier messages';
 
   @override
-  String get addMembersOldHint => 'Off shows only messages sent from now on.';
+  String get addMembersOldHint => 'New member sees history';
+
+  @override
+  String get addMembersAdminDecides =>
+      'Group admin sets whether new members see earlier messages';
 
   @override
   String get addMembersAdding => 'Adding…';

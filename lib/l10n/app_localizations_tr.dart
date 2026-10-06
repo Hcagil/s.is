@@ -638,11 +638,14 @@ class AppLocalizationsTr extends AppLocalizations {
   String get addMembersNoneBody => 'Kişilerindeki herkes zaten bu grupta.';
 
   @override
-  String get addMembersOldTitle => 'Eski mesajlar gösterilsin mi?';
+  String get addMembersOldTitle => 'Önceki mesajları göster';
 
   @override
-  String get addMembersOldHint =>
-      'Kapalıyken yalnızca bundan sonra gönderilenler görünür.';
+  String get addMembersOldHint => 'Yeni üye geçmişi görür';
+
+  @override
+  String get addMembersAdminDecides =>
+      'Yeni üyeler önceki mesajları görecekler mi, grup yöneticisi belirler';
 
   @override
   String get addMembersAdding => 'Ekleniyor…';

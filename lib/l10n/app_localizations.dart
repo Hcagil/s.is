@@ -374,19 +374,19 @@ abstract class AppLocalizations {
   /// **'Group settings'**
   String get groupSettingsTitle;
 
-  /// Group info: setting switch
+  /// Group info: greyed setting
   ///
   /// In en, this message translates to:
   /// **'Members can change the group picture'**
   String get groupPickSwitch;
 
-  /// Group info: setting switch
+  /// Group info: greyed setting
   ///
   /// In en, this message translates to:
   /// **'Members can add people'**
   String get groupAddSwitch;
 
-  /// Group info: setting switch
+  /// Group info: greyed setting
   ///
   /// In en, this message translates to:
   /// **'New members see earlier messages'**
@@ -398,7 +398,7 @@ abstract class AppLocalizations {
   /// **'Who may pin messages'**
   String get groupPinWho;
 
-  /// Group info: admin button
+  /// Group info: greyed admin button
   ///
   /// In en, this message translates to:
   /// **'Delete group for everyone'**
@@ -416,7 +416,7 @@ abstract class AppLocalizations {
   /// **'All messages and photos in this group are gone for everyone. This cannot be undone.'**
   String get groupDeleteBody;
 
-  /// Notice after an admin deleted the group
+  /// Notice after the group was deleted by an admin
   ///
   /// In en, this message translates to:
   /// **'Group deleted'**

@@ -186,15 +186,15 @@
   },
   "groupPickSwitch": "Members can change the group picture",
   "@groupPickSwitch": {
-    "description": "Group info: setting switch"
+    "description": "Group info: greyed setting"
   },
   "groupAddSwitch": "Members can add people",
   "@groupAddSwitch": {
-    "description": "Group info: setting switch"
+    "description": "Group info: greyed setting"
   },
   "groupHistSwitch": "New members see earlier messages",
   "@groupHistSwitch": {
-    "description": "Group info: setting switch"
+    "description": "Group info: greyed setting"
   },
   "groupPinWho": "Who may pin messages",
   "@groupPinWho": {
@@ -202,14 +202,25 @@
   },
   "groupDeleteForAll": "Delete group for everyone",
   "@groupDeleteForAll": {
-    "description": "Group info: admin button"
+    "description": "Group info: greyed admin button"
   },
   "groupDeleteTitle": "Delete {name} for everyone?",
-  "@groupDeleteTitle": {"description": "Delete group confirm card title", "placeholders": {"name": {"type": "String"}}},
+  "@groupDeleteTitle": {
+    "description": "Delete group confirm card title",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "groupDeleteBody": "All messages and photos in this group are gone for everyone. This cannot be undone.",
-  "@groupDeleteBody": {"description": "Delete group confirm card text"},
+  "@groupDeleteBody": {
+    "description": "Delete group confirm card text"
+  },
   "groupDeletedNotice": "Group deleted",
-  "@groupDeletedNotice": {"description": "Notice after an admin deleted the group"},
+  "@groupDeletedNotice": {
+    "description": "Notice after the group was deleted by an admin"
+  },
   "groupLeave": "Leave group",
   "@groupLeave": {
     "description": "Group info: leave button and confirm button"
@@ -661,7 +672,14 @@
   "eventRemoved": "{name} was removed",
   "@eventRemoved": {"description": "Group event line", "placeholders": {"name": {"type": "String"}}},
   "eventPictureChanged": "{name} changed the group picture",
-  "@eventPictureChanged": {"description": "Group event line", "placeholders": {"name": {"type": "String"}}},
+  "@eventPictureChanged": {
+    "description": "Group event line",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "eventAdded": "{name} was added",
   "@eventAdded": {"description": "Group event line", "placeholders": {"name": {"type": "String"}}},
   "previewRemovePhoto": "Remove this photo",

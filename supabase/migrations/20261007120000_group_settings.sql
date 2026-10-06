@@ -9,19 +9,21 @@
 --
 -- Additive: no existing function changes meaning for a group that keeps its
 -- migrated values. Groups that exist today are backfilled with TODAY's
--- behaviour (any member changes the picture, only admins add, new people are
--- offered history by the admin per add); groups created from now on get the
+-- behaviour (any member changes the picture, only admins add, new people start from
+-- now); groups created from now on get the
 -- owner's defaults (picture admins-only, anyone adds, history shown).
 
 -- 1. Settings columns. Added with TODAY's value so every existing row keeps
--- its behaviour, then the default flips for groups created from now on.
+-- its behaviour (new people started from now unless the admin offered
+-- history), then the default flips for groups created from now on.
 alter table public.conversations
   add column members_can_set_avatar  boolean not null default true,
   add column members_can_add         boolean not null default false,
-  add column new_members_see_history boolean not null default true;
+  add column new_members_see_history boolean not null default false;
 alter table public.conversations
   alter column members_can_set_avatar set default false,
-  alter column members_can_add        set default true;
+  alter column members_can_add        set default true,
+  alter column new_members_see_history set default true;
 
 -- 2. Live nudge. A private per-user broadcast topic 'chats:<user id>': the
 -- server sends one event per member whenever a group's settings, picture or

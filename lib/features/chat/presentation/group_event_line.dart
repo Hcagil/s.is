@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
 import '../domain/group_event.dart';
 
-/// An admin-only line: "X left" / "X was removed" / "X was added". Read
+/// A group line: "X left" / "X was removed" / "X was added" (admins only) or
+/// "X changed the group picture" (everyone). Read
 /// from group_events (chatTimelineProvider), which the server already
 /// scopes to a current admin -- nothing here decides visibility itself.
 ///

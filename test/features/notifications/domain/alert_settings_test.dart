@@ -272,40 +272,6 @@ void main() {
     });
   });
 
-  group('alertChannelName', () {
-    final defaults = AlertDefaults(sound: true, vibration: true, tone: 'uri');
-
-    test('sound false => Messages (silent)', () {
-      final d = defaults.copyWith(sound: false);
-      final a = resolveAlert(d, const ChatAlert());
-      expect(alertChannelName(a), 'Messages (silent)');
-    });
-
-    test('sound true and tone null => Messages', () {
-      final d = defaults.withTone(null, null);
-      final a = resolveAlert(d, const ChatAlert());
-      expect(alertChannelName(a), 'Messages');
-    });
-
-    test('sound true and tone set => Messages (custom tone)', () {
-      final d = defaults.withTone('customUri', 'Custom');
-      final a = resolveAlert(d, const ChatAlert());
-      expect(alertChannelName(a), 'Messages (custom tone)');
-    });
-
-    test('no vibration appends ", no vibration"', () {
-      final d = defaults.withTone(null, null).copyWith(vibration: false);
-      final a = resolveAlert(d, const ChatAlert());
-      expect(alertChannelName(a), 'Messages, no vibration');
-    });
-
-    test('silent + no vibration', () {
-      final d = defaults.copyWith(sound: false, vibration: false);
-      final a = resolveAlert(d, const ChatAlert());
-      expect(alertChannelName(a), 'Messages (silent), no vibration');
-    });
-  });
-
   group('usedAlertChannelIds', () {
     final defaults = AlertDefaults(sound: true, vibration: true, tone: 'uri');
 
@@ -465,15 +431,6 @@ void main() {
         h64.toUnsigned(64).toRadixString(16).padLeft(16, '0'),
       };
       expect(ok, contains(hex));
-    });
-
-    test('custom tone with vibration off names it', () {
-      expect(
-        alertChannelName(
-          const EffectiveAlert(sound: true, tone: 't', vibration: false),
-        ),
-        'Messages (custom tone), no vibration',
-      );
     });
 
     test(

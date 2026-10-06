@@ -27,44 +27,6 @@ void main() {
     posted: posted,
   );
 
-  group('lineSenderName', () {
-    test('non‑empty sender in 1:1 chat', () {
-      final chat = createChat(
-        '1',
-        'Chat 1',
-        false,
-        [createLine('Alice', 'Hi', epoch)],
-        1,
-        1,
-      );
-      expect(lineSenderName(chat, chat.lines[0]), equals('Alice'));
-    });
-
-    test('empty sender in 1:1 chat returns chat title', () {
-      final line = createLine('', 'Hi', epoch);
-      final chat = createChat('1', 'Chat 1', false, [line], 1, 1);
-      expect(lineSenderName(chat, line), equals('Chat 1'));
-    });
-
-    test('non‑empty sender in group chat', () {
-      final chat = createChat(
-        '2',
-        'Group Chat',
-        true,
-        [createLine('Bob', 'Hi', epoch)],
-        1,
-        1,
-      );
-      expect(lineSenderName(chat, chat.lines[0]), equals('Bob'));
-    });
-
-    test('empty sender in group chat returns null', () {
-      final line = createLine('', 'Hi', epoch);
-      final chat = createChat('2', 'Group Chat', true, [line], 1, 1);
-      expect(lineSenderName(chat, line), isNull);
-    });
-  });
-
   group('addToInbox dedupe', () {
     test('same messageId for same conversation does not change inbox', () {
       List<InboxChat> inbox = [];

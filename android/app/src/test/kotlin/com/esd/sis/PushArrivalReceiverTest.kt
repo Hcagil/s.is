@@ -49,6 +49,7 @@ class PushArrivalReceiverTest {
         shadowOf(manager).setNotificationsEnabled(true)
         backgrounded()
         prefs.edit().clear().putString("flutter.sis.push_inbox_owner", "member-a").commit()
+        InstantPush.resetPacing()
     }
 
     /** The app's process as Android reports it while the app is not on screen. */
@@ -98,10 +99,9 @@ class PushArrivalReceiverTest {
     private fun note(id: String = MSG) = prefs.getString("flutter.sis.push_arrival.$id", null)
 
     @Test
-    fun `a not-high push of ours is on the shade when onReceive returns, as Dart would draw it`() {
-        prefs.edit()
-            .putString("flutter.sis.alert_chats", """{"$chat":{"s":"off","v":"byDefault"}}""")
-            .commit()
+    fun `a push of ours is on the shade when onReceive returns, as Dart would draw it`() {
+        val chats = """{"$chat":{"s":"off","v":"byDefault"}}"""
+        prefs.edit().putString("flutter.sis.alert_chats", chats).commit()
 
         receive(push(priority = "normal"))
 
@@ -111,10 +111,13 @@ class PushArrivalReceiverTest {
         val posted = shadowOf(manager).getNotification(chatId)
         assertNotNull("posted under the Dart side's id for the chat", posted)
         assertEquals("sis.messages", posted.group)
-        assertEquals("sound off, vibration on", InstantPush.CHANNEL_VIBRATE, posted.channelId)
-        val channel = manager.getNotificationChannel(InstantPush.CHANNEL_VIBRATE)
+        // The chat's own channel, the one the Dart side used before Update 1.
+        val expected = InstantPush.alertChannelId(InstantPush.effectiveAlert(null, chats, chat))
+        assertEquals("sound off, vibration on", "msg-off-v1", expected)
+        assertEquals(expected, posted.channelId)
+        val channel = manager.getNotificationChannel(expected)
         assertNotNull(channel)
-        assertNull("the vibrate-only channel makes no sound", channel.sound)
+        assertNull("the silent channel makes no sound", channel.sound)
         assertTrue(channel.shouldVibrate())
         // MessagingStyle, as the Dart side draws a group: the group is the conversation, the
         // sender is the line's person.
@@ -138,16 +141,19 @@ class PushArrivalReceiverTest {
         receive(push(priority = null))
 
         assertNotNull(shadowOf(manager).getNotification(chatId))
-        assertEquals(InstantPush.CHANNEL_BOTH, shadowOf(manager).getNotification(chatId).channelId)
+        assertEquals("msg-sys-v1", shadowOf(manager).getNotification(chatId).channelId)
+        assertEquals(
+            InstantPush.alertChannelId(InstantPush.effectiveAlert(null, null, chat)),
+            shadowOf(manager).getNotification(chatId).channelId,
+        )
     }
 
     @Test
-    fun `high priority is left to Dart`() {
+    fun `high priority is drawn too`() {
         receive(push(priority = "high"))
 
-        assertTrue(shade().isEmpty())
-        assertFalse(note()!!.endsWith(",n"))
-        assertTrue(note()!!.endsWith(",high,high"))
+        assertNotNull(shadowOf(manager).getNotification(chatId))
+        assertTrue(note()!!, note()!!.endsWith(",high,high,n"))
     }
 
     @Test

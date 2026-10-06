@@ -1,0 +1,192 @@
+{
+  "_comment": "Shared by test/features/notifications/instant_push_parity_test.dart (Dart: SharedPrefsAlertStore + resolveAlert + alertChannelId/alertChannelName) and android/app/src/test/kotlin/com/esd/sis/InstantPushChannelTest.kt (Kotlin: InstantPush.effectiveAlert + alertChannelId/alertChannelName). Input: the raw preference strings flutter.sis.alert_defaults and flutter.sis.alert_chats as the app saves them, and the conversation. Expected: the effective alert and the Android channel it posts to, msg-<off|sys|fnv>-v<0|1>, where fnv is the unpadded lowercase hex 32-bit FNV-1a over the tone's UTF-16 code units. Values come from the Dart side, whose channels are already on members' phones: a chat's channel must not change when native code draws it.",
+  "alerts": [
+    {
+      "name": "nothing saved",
+      "defaults": null,
+      "chats": null,
+      "conversation_id": "c1",
+      "sound": true,
+      "tone": null,
+      "vibration": true,
+      "channel_id": "msg-sys-v1",
+      "channel_name": "Messages"
+    },
+    {
+      "name": "corrupt json reads as nothing saved",
+      "defaults": "{not json",
+      "chats": "[[[",
+      "conversation_id": "c1",
+      "sound": true,
+      "tone": null,
+      "vibration": true,
+      "channel_id": "msg-sys-v1",
+      "channel_name": "Messages"
+    },
+    {
+      "name": "defaults off, chat not listed",
+      "defaults": "{\"s\":false,\"t\":null,\"n\":null,\"v\":false}",
+      "chats": "{\"other\":{\"s\":\"on\",\"v\":\"on\"}}",
+      "conversation_id": "c1",
+      "sound": false,
+      "tone": null,
+      "vibration": false,
+      "channel_id": "msg-off-v0",
+      "channel_name": "Messages (silent), no vibration"
+    },
+    {
+      "name": "defaults on, chat off/off",
+      "defaults": "{\"s\":true,\"t\":null,\"n\":null,\"v\":true}",
+      "chats": "{\"c1\":{\"s\":\"off\",\"v\":\"off\"}}",
+      "conversation_id": "c1",
+      "sound": false,
+      "tone": null,
+      "vibration": false,
+      "channel_id": "msg-off-v0",
+      "channel_name": "Messages (silent), no vibration"
+    },
+    {
+      "name": "defaults off, chat on/on",
+      "defaults": "{\"s\":false,\"t\":null,\"n\":null,\"v\":false}",
+      "chats": "{\"c1\":{\"s\":\"on\",\"v\":\"on\"}}",
+      "conversation_id": "c1",
+      "sound": true,
+      "tone": null,
+      "vibration": true,
+      "channel_id": "msg-sys-v1",
+      "channel_name": "Messages"
+    },
+    {
+      "name": "defaults off, chat byDefault",
+      "defaults": "{\"s\":false,\"t\":null,\"n\":null,\"v\":false}",
+      "chats": "{\"c1\":{\"s\":\"byDefault\",\"v\":\"byDefault\"}}",
+      "conversation_id": "c1",
+      "sound": false,
+      "tone": null,
+      "vibration": false,
+      "channel_id": "msg-off-v0",
+      "channel_name": "Messages (silent), no vibration"
+    },
+    {
+      "name": "defaults missing keys mean on",
+      "defaults": "{}",
+      "chats": "{}",
+      "conversation_id": "c1",
+      "sound": true,
+      "tone": null,
+      "vibration": true,
+      "channel_id": "msg-sys-v1",
+      "channel_name": "Messages"
+    },
+    {
+      "name": "chat sound off only, vibration on",
+      "defaults": null,
+      "chats": "{\"c1\":{\"s\":\"off\",\"v\":\"byDefault\"}}",
+      "conversation_id": "c1",
+      "sound": false,
+      "tone": null,
+      "vibration": true,
+      "channel_id": "msg-off-v1",
+      "channel_name": "Messages (silent)"
+    },
+    {
+      "name": "chat vibration off only, sound on",
+      "defaults": null,
+      "chats": "{\"c1\":{\"s\":\"byDefault\",\"v\":\"off\"}}",
+      "conversation_id": "c1",
+      "sound": true,
+      "tone": null,
+      "vibration": false,
+      "channel_id": "msg-sys-v0",
+      "channel_name": "Messages, no vibration"
+    },
+    {
+      "name": "chats JSON that is not an object",
+      "defaults": null,
+      "chats": "[1,2]",
+      "conversation_id": "c1",
+      "sound": true,
+      "tone": null,
+      "vibration": true,
+      "channel_id": "msg-sys-v1",
+      "channel_name": "Messages"
+    },
+    {
+      "name": "custom tone, vibration on",
+      "defaults": "{\"s\":true,\"t\":\"content://media/internal/audio/media/42\",\"n\":\"Tone\",\"v\":true}",
+      "chats": null,
+      "conversation_id": "c1",
+      "sound": true,
+      "tone": "content://media/internal/audio/media/42",
+      "vibration": true,
+      "channel_id": "msg-dcd38253-v1",
+      "channel_name": "Messages (custom tone)"
+    },
+    {
+      "name": "custom tone, vibration off",
+      "defaults": "{\"s\":true,\"t\":\"content://media/internal/audio/media/42\",\"n\":\"Tone\",\"v\":false}",
+      "chats": null,
+      "conversation_id": "c1",
+      "sound": true,
+      "tone": "content://media/internal/audio/media/42",
+      "vibration": false,
+      "channel_id": "msg-dcd38253-v0",
+      "channel_name": "Messages (custom tone), no vibration"
+    },
+    {
+      "name": "custom tone, chat sound off",
+      "defaults": "{\"s\":true,\"t\":\"content://media/internal/audio/media/42\",\"n\":\"Tone\",\"v\":true}",
+      "chats": "{\"c1\":{\"s\":\"off\",\"v\":\"byDefault\"}}",
+      "conversation_id": "c1",
+      "sound": false,
+      "tone": null,
+      "vibration": true,
+      "channel_id": "msg-off-v1",
+      "channel_name": "Messages (silent)"
+    },
+    {
+      "name": "custom tone, defaults sound off, chat sound on",
+      "defaults": "{\"s\":false,\"t\":\"content://media/internal/audio/media/42\",\"n\":\"Tone\",\"v\":true}",
+      "chats": "{\"c1\":{\"s\":\"on\",\"v\":\"byDefault\"}}",
+      "conversation_id": "c1",
+      "sound": true,
+      "tone": "content://media/internal/audio/media/42",
+      "vibration": true,
+      "channel_id": "msg-dcd38253-v1",
+      "channel_name": "Messages (custom tone)"
+    },
+    {
+      "name": "custom tone beyond ASCII and the BMP (UTF-16 units)",
+      "defaults": "{\"s\":true,\"t\":\"content://media/external/audio/media/ğüş—♪🎵\",\"n\":\"Tone\",\"v\":true}",
+      "chats": null,
+      "conversation_id": "c1",
+      "sound": true,
+      "tone": "content://media/external/audio/media/ğüş—♪🎵",
+      "vibration": true,
+      "channel_id": "msg-ca8959a4-v1",
+      "channel_name": "Messages (custom tone)"
+    },
+    {
+      "name": "custom tone whose hash has leading zero bits",
+      "defaults": "{\"s\":true,\"t\":\"content://media/internal/audio/media/423\",\"n\":\"Tone\",\"v\":true}",
+      "chats": null,
+      "conversation_id": "c1",
+      "sound": true,
+      "tone": "content://media/internal/audio/media/423",
+      "vibration": true,
+      "channel_id": "msg-f63d20-v1",
+      "channel_name": "Messages (custom tone)"
+    },
+    {
+      "name": "another chat override does not touch this chat",
+      "defaults": "{\"s\":false,\"t\":null,\"n\":null,\"v\":false}",
+      "chats": "{\"conv1\":{\"s\":\"on\",\"v\":\"off\"}}",
+      "conversation_id": "conv2",
+      "sound": false,
+      "tone": null,
+      "vibration": false,
+      "channel_id": "msg-off-v0",
+      "channel_name": "Messages (silent), no vibration"
+    }
+  ]
+}

@@ -74,25 +74,29 @@ void main() {
     );
   });
 
-  Future<void> push(String chat, String title, String body) =>
-      LocalPushDisplay.show(conversationId: chat, title: title, body: body);
+  var pushes = 0;
+
+  /// A push arriving: Android's native receiver draws it and stores its line
+  /// (the only drawer since Update 1), writing the preferences file under
+  /// whatever copy an isolate holds, as a native write does.
+  Future<void> push(String chat, String title, String body) async {
+    NativeReceiver(shade, disk).receive({
+      'conversation_id': chat,
+      'title': title,
+      'body': body,
+      'message_id':
+          '00000000-0000-4000-8000-${(++pushes).toString().padLeft(12, '0')}',
+    });
+  }
 
   /// A member is signed in on this phone: pushes are theirs to see.
   Future<void> signedIn() => LocalPushDisplay.forUser('member-a');
 
   group('nobody owns the inbox', () {
     // An offline sign-out ends the session only on this phone: the server
-    // may still send it the previous member's previews. With no owner
-    // stored, show() must neither draw nor keep anything.
-
-    test('a phone nobody has signed in on draws and stores nothing', () async {
-      final before = Map<String, Object>.of(disk.values);
-
-      await push('c1', 'Ava', 'secret');
-
-      expect(shade.posted, isEmpty, reason: '${shade.posted}');
-      expect(disk.values, before, reason: 'stored: ${disk.values}');
-    });
+    // may still send it the previous member's previews. forUser(null) must
+    // take the owner away from the native receiver too, so it neither draws
+    // nor keeps anything.
 
     test('signed out (offline): a push arriving afterwards, in a background '
         'isolate, draws and stores nothing', () async {
@@ -106,7 +110,14 @@ void main() {
       await push('c1', 'Ava', 'another after sign-out');
 
       expect(shade.posted, isEmpty, reason: '${shade.posted}');
-      expect(disk.values, before, reason: 'stored: ${disk.values}');
+      // Only the receiver's arrival notes (timings, no text) are new.
+      expect(
+        Map<String, Object>.of(disk.values)
+          ..removeWhere((k, _) => k.startsWith('flutter.sis.push_arrival.')),
+        Map<String, Object>.of(before)
+          ..removeWhere((k, _) => k.startsWith('flutter.sis.push_arrival.')),
+        reason: 'stored: ${disk.values}',
+      );
       expect(jsonEncode(disk.values), isNot(contains('after sign-out')));
     });
 

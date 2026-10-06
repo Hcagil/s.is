@@ -46,6 +46,7 @@ const _terminal = {
   'dropped:no_owner',
   'dropped:owner_mismatch',
   'dropped:notifications_off',
+  'dropped:not_drawn',
 };
 
 RemoteMessage _push({
@@ -77,20 +78,20 @@ void main() {
   /// What the notifications plugin answers besides the shade's own calls.
   bool? enabled;
   Object? cancelAllThrows;
-  Object? showThrows;
+  Object? enabledThrows;
 
   void newIsolate() => SharedPreferences.resetStatic();
 
   Future<Object?> plugin(MethodCall call) async {
     switch (call.method) {
+      case 'areNotificationsEnabled' when enabledThrows != null:
+        shade.calls.add(call.method);
+        throw enabledThrows!;
       case 'areNotificationsEnabled':
         return enabled;
       case 'cancelAll' when cancelAllThrows != null:
         shade.calls.add(call.method);
         throw cancelAllThrows!;
-      case 'show' when showThrows != null:
-        shade.calls.add(call.method);
-        throw showThrows!;
     }
     return shade.handle(call);
   }
@@ -104,10 +105,21 @@ void main() {
     for (final r in await receipts()) r['stage'],
   ];
 
-  /// The background handler in its own isolate, as FCM runs it.
+  /// A push arriving: Android's native receiver (the only drawer since
+  /// Update 1) at once, then the background handler in its own isolate, as
+  /// FCM runs it. The handler itself never draws on Android.
   Future<void> background(RemoteMessage m) async {
+    NativeReceiver(shade, disk)
+      ..notificationsOn = enabled != false
+      ..receive(m.data, notification: m.notification != null);
     newIsolate();
+    final mark = shade.calls.length;
     await onBackgroundPush(m);
+    expect(
+      shade.calls.sublist(mark),
+      isNot(contains('show')),
+      reason: 'the Dart handler drew on Android',
+    );
   }
 
   setUpAll(() async {
@@ -122,7 +134,7 @@ void main() {
     disk = DiskPrefs();
     enabled = null;
     cancelAllThrows = null;
-    showThrows = null;
+    enabledThrows = null;
     messenger.setMockMethodCallHandler(Shade.channel, plugin);
     messenger.setMockMethodCallHandler(_prefsChannel, disk.handle);
     newIsolate();
@@ -317,6 +329,66 @@ void main() {
       expect(shade.childChats, {_chat});
     });
 
+    test('shown: the note is still ",q" (the receiver is drawing it) when '
+        'the handler runs', () async {
+      await LocalPushDisplay.forUser('member-a');
+      final mark = (await receipts()).length;
+      disk.values['flutter.sis.push_arrival.$_msg'] = '1700000000123,?,?,q';
+
+      newIsolate();
+      await onBackgroundPush(_push(to: 'member-a'));
+
+      final after = (await receipts()).sublist(mark);
+      expect([for (final r in after) r['stage']], ['received', 'shown']);
+      expect(after.first['error'], contains('fast=native'));
+    });
+
+    test('dropped:not_drawn: ours, but the receiver settled its note '
+        'without ",n"', () async {
+      await LocalPushDisplay.forUser('member-a');
+      final mark = (await receipts()).length;
+      disk.values['flutter.sis.push_arrival.$_msg'] = '1700000000123,?,?';
+
+      newIsolate();
+      await onBackgroundPush(_push(to: 'member-a'));
+
+      final after = (await receipts()).sublist(mark);
+      expect(
+        [for (final r in after) r['stage']],
+        ['received', 'dropped:not_drawn'],
+      );
+      expect(after.first['error'], isNot(contains('fast=')));
+    });
+
+    for (final (name, id) in [
+      ('no message id', null),
+      ('a message id that is not a UUID', 'not-a-uuid'),
+    ]) {
+      test('dropped:not_drawn: $name, which the receiver does not '
+          'draw', () async {
+        await LocalPushDisplay.forUser('member-a');
+        final mark = (await receipts()).length;
+
+        await background(
+          _push(
+            data: {
+              'conversation_id': _chat,
+              'title': _title,
+              'body': _body,
+              'message_id': ?id,
+              'user_id': 'member-a',
+            },
+          ),
+        );
+
+        expect((await stages()).sublist(mark), [
+          'received',
+          'dropped:not_drawn',
+        ]);
+        expect(shade.posted, isEmpty);
+      });
+    }
+
     test('dropped:has_notification: Android drew it itself', () async {
       await LocalPushDisplay.forUser('member-a');
       final mark = (await receipts()).length;
@@ -400,10 +472,10 @@ void main() {
       },
     );
 
-    test('error: the display throws; the handler does not', () async {
+    test('error: a platform call throws; the handler does not', () async {
       await LocalPushDisplay.forUser('member-a');
       final mark = (await receipts()).length;
-      showThrows = PlatformException(code: 'error', message: 'plugin broke');
+      enabledThrows = PlatformException(code: 'error', message: 'plugin broke');
 
       await expectLater(background(_push(to: 'member-a')), completes);
 
@@ -465,11 +537,17 @@ void main() {
           enabled = null;
         },
         'shown': () => background(_push(to: 'member-a')),
+        'not_drawn': () async {
+          // Ours and allowed, but the native receiver did not draw it (it
+          // was not there, or failed): no fast=native note.
+          newIsolate();
+          await onBackgroundPush(_push(to: 'member-a'));
+        },
         'error': () async {
-          // A plugin error that quotes its arguments.
-          showThrows = PlatformException(code: 'error', message: _body);
+          // A plugin error that quotes the push.
+          enabledThrows = PlatformException(code: 'error', message: _body);
           await background(_push(to: 'member-a'));
-          showThrows = null;
+          enabledThrows = null;
         },
       };
 
@@ -503,8 +581,8 @@ void main() {
       }
     });
 
-    test('a Doze backlog handled at once: every push gets exactly one '
-        'shown, whichever push\'s flush posted its line', () async {
+    test('a Doze backlog handled at once: every push the receiver drew gets '
+        'exactly one shown', () async {
       await LocalPushDisplay.forUser('member-a');
       newIsolate(); // FCM's background isolate
       await PushReceiptLog.removeFirst(1000);
@@ -512,21 +590,23 @@ void main() {
         for (var i = 0; i < 6; i++) '0000000$i-2a55-4c1f-9e0a-0d7f7b1a2c3d',
       ];
 
-      await Future.wait([
+      final pushes = [
         for (var i = 0; i < ids.length; i++)
-          onBackgroundPush(
-            _push(
-              to: 'member-a',
-              data: {
-                'conversation_id': 'c-${i % 3}',
-                'title': 'Sender $i',
-                'body': 'burst line $i',
-                'message_id': ids[i],
-                'user_id': 'member-a',
-              },
-            ),
+          _push(
+            to: 'member-a',
+            data: {
+              'conversation_id': 'c-${i % 3}',
+              'title': 'Sender $i',
+              'body': 'burst line $i',
+              'message_id': ids[i],
+              'user_id': 'member-a',
+            },
           ),
-      ]);
+      ];
+      for (final m in pushes) {
+        NativeReceiver(shade, disk).receive(m.data);
+      }
+      await Future.wait([for (final m in pushes) onBackgroundPush(m)]);
 
       final all = await receipts();
       for (final id in ids) {
@@ -568,7 +648,6 @@ void main() {
       });
 
       await expectLater(background(_push(to: 'member-a')), completes);
-      expect(shade.posted, isEmpty);
     });
   });
 
@@ -657,30 +736,6 @@ void main() {
     test('a working cancelAll leaves no error receipt', () async {
       await LocalPushDisplay.forUser('member-a');
       expect(await receipts(), isEmpty);
-    });
-
-    test('show() is false and draws nothing without an owner', () async {
-      final shown = await LocalPushDisplay.show(
-        conversationId: _chat,
-        title: _title,
-        body: _body,
-      );
-
-      expect(shown, isFalse);
-      expect(shade.posted, isEmpty);
-      expect(jsonEncode(disk.values), isNot(contains('confidential')));
-    });
-
-    test('show() is true with an owner', () async {
-      await LocalPushDisplay.forUser('member-a');
-      final shown = await LocalPushDisplay.show(
-        conversationId: _chat,
-        title: _title,
-        body: _body,
-      );
-
-      expect(shown, isTrue);
-      expect(shade.childChats, {_chat});
     });
 
     test('notificationsEnabled(): the plugin\'s answer, true when it has '

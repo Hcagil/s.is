@@ -7,12 +7,16 @@
 //
 // One chain per criterion: a control on the settings page or profile page
 // -> AlertController -> SharedPrefsAlertStore -> the preferences file ->
-// a background isolate's LocalPushDisplay -> the channel Android plays.
+// the channel the native drawer posts on for those saved settings (the
+// mapping is pinned to InstantPush.kt by test/fixtures/
+// alert_channel_vectors.json; the drawing itself is NativeDrawTest.kt).
 // Plus the failure path of every connection: the picker failing or being
 // cancelled, and channel housekeeping failing under a save.
 //
 // No Supabase is involved, so this runs in the ordinary suite, not under
 // test/integration.
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -25,6 +29,7 @@ import 'package:sis/features/notifications/application/alert_controller.dart';
 import 'package:sis/features/notifications/data/channel_tone_picker.dart';
 import 'package:sis/features/notifications/data/local_push_display.dart';
 import 'package:sis/features/notifications/data/shared_prefs_alert_store.dart';
+import 'package:sis/features/notifications/domain/alert_settings.dart';
 import 'package:sis/features/notifications/presentation/alert_widgets.dart';
 
 import '../../support/push_platform.dart';
@@ -141,34 +146,46 @@ void main() {
     await settle(t);
   }
 
-  /// A push drawn by a fresh background isolate; returns the chat post's
-  /// Android specifics (the isolate's first flush, so the one that alerts).
+  /// A push drawn in the background. Since Update 1 the native receiver
+  /// draws it: it reads the saved settings straight from the preferences
+  /// file and posts on the channel for them, creating it if needed. That
+  /// channel id is computed here by the Dart reference, which
+  /// test/fixtures/alert_channel_vectors.json holds equal to the Kotlin
+  /// code (InstantPushChannelTest.kt). Returns what the post plays.
   Future<Map<String, Object?>> backgroundPush(
     WidgetTester t,
     String chat,
   ) async {
     return (await t.runAsync(() async {
       SharedPreferences.resetStatic();
-      LocalPushDisplay.resetForTest();
-      await LocalPushDisplay.init();
-      await LocalPushDisplay.forUser('member-a');
-      final mark = shade.shows.length;
-      await LocalPushDisplay.show(
-        conversationId: chat,
-        title: 'Ava',
-        body: 'x',
+      const store = SharedPrefsAlertStore();
+      final a = resolveAlert(
+        await store.loadDefaults(),
+        (await store.loadChats())[chat] ?? const ChatAlert(),
       );
-      final post = shade.shows
-          .sublist(mark)
-          .map((s) => s.n)
-          .firstWhere(
-            (n) => n['payload'] == chat && !Shade.alerting(n).summary,
-          );
-      // Let the flush finish its paced posts before the test moves on.
-      await Future<void>.delayed(const Duration(milliseconds: 800));
-      return Map<String, Object?>.from(post['platformSpecifics']! as Map);
+      final post = <String, Object?>{
+        'channelId': alertChannelId(a),
+        'playSound': a.sound,
+        'sound': a.tone,
+        'enableVibration': a.vibration,
+      };
+      await shade.handle(
+        MethodCall('createNotificationChannel', {
+          ...post,
+          'id': post['channelId'],
+          'name': 'Messages',
+        }),
+      );
+      SharedPreferences.resetStatic();
+      return post;
     }))!;
   }
+
+  /// The settings exactly as the native receiver reads them: the raw JSON
+  /// under the keys it opens ("t" is the tone).
+  Map<String, Object?> saved(String key) =>
+      jsonDecode(disk.values['flutter.sis.$key']! as String)
+          as Map<String, Object?>;
 
   onAndroid('A: sound and vibration set on the settings page survive a '
       'restart', (t) async {
@@ -197,6 +214,7 @@ void main() {
       findsOneWidget,
     );
 
+    expect(saved('alert_defaults')['t'], _tone);
     final post = await backgroundPush(t, 'c1');
     expect(post['sound'], _tone);
     expect(post['playSound'], isTrue);
@@ -228,6 +246,7 @@ void main() {
     expect(post['playSound'], isFalse);
 
     await choose(t, 'chat-alert-sound-choice', 'On');
+    expect(saved('alert_chats')['c1'], containsPair('s', 'on'));
     post = await backgroundPush(t, 'c1');
     expect(post['channelId'], 'msg-sys-v1');
     expect(post['playSound'], isTrue);
@@ -248,7 +267,6 @@ void main() {
       'including the pre-0.26 one', (t) async {
     await t.runAsync(() async {
       SharedPreferences.resetStatic();
-      LocalPushDisplay.resetForTest();
       await LocalPushDisplay.init();
     });
     await shade.handle(
@@ -256,6 +274,14 @@ void main() {
         'id': 'messages',
         'name': 'Messages',
         'importance': 4,
+      }),
+    );
+    // The native drawer's summary channel, as it leaves it.
+    await shade.handle(
+      const MethodCall('createNotificationChannel', {
+        'id': 'summary',
+        'name': 'Summary',
+        'importance': 2,
       }),
     );
     await openApp(t);

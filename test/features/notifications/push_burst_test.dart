@@ -1,15 +1,14 @@
-// 0.30.4: push bursts, arrival timing receipts, sender pictures, and the
-// iPhone's read-clears. Written from the 0.30.4 contract, not the code.
+// 0.30.4: arrival timing receipts and the iPhone's read-clears. Written
+// from the 0.30.4 contract, not the code. (Pacing, sender pictures and the
+// alert rule moved to the native drawer in Update 1: PushArrivalReceiverTest
+// and NativeDrawTest under android/app/src/test.)
 //
 // The device fakes (test/support/push_platform.dart) plus, here:
-// - path_provider's platform side, pointing at two real temp directories,
-//   so the real chat list snapshot store and the real avatar cache are the
-//   collaborators NotificationAvatars reads -- or throwing, as it does when
-//   the platform side is not there.
 // - the Android native receiver (PushArrivalReceiver.kt), which cannot run
 //   here: its write is reproduced exactly as it lands in the preferences
-//   file -- key "flutter.sis.push_arrival.<id>", value "ms,delivered,original"
-//   -- and written UNDER a live isolate's cached copy, as a native write is.
+//   file -- key "flutter.sis.push_arrival.<id>", value
+//   "ms,delivered,original" plus ",q" while drawing and ",n" once drawn --
+//   and written UNDER a live isolate's cached copy, as a native write is.
 // - the iPhone's 'sis/notifications' channel (AppDelegate.swift), which
 //   cannot run here either: the Dart side is pinned to the method name and a
 //   plain String argument, the only shape the Swift handler accepts.
@@ -27,13 +26,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sis/features/auth/domain/member.dart';
-import 'package:sis/features/chat/data/file_attachment_cache.dart';
-import 'package:sis/features/chat/data/file_chat_list_snapshot_store.dart';
-import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/notifications/data/firebase_push_source.dart';
 import 'package:sis/features/notifications/data/local_push_display.dart';
-import 'package:sis/features/notifications/data/notification_avatars.dart';
 import 'package:sis/features/notifications/data/push_receipt_log.dart';
 
 import '../../support/push_platform.dart';
@@ -50,9 +44,6 @@ const _msg = '6f1b7c1e-2a55-4c1f-9e0a-0d7f7b1a2c3d';
 const _title = 'Zelda Secretname';
 const _body = 'the confidential body text';
 const _chat = 'c-private-chat';
-
-final _ava = Uint8List.fromList(List.generate(64, (i) => i));
-final _team = Uint8List.fromList(List.generate(64, (i) => 255 - i));
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -107,9 +98,6 @@ void main() {
   });
 
   tearDown(() async {
-    // Idle again before the next test: a flush still pacing its posts
-    // finishes, and the next test starts on a quiet phone.
-    await Future<void>.delayed(const Duration(milliseconds: 1500));
     debugDefaultTargetPlatformOverride = null;
     messenger.setMockMethodCallHandler(Shade.channel, null);
     messenger.setMockMethodCallHandler(_prefsChannel, null);
@@ -119,126 +107,18 @@ void main() {
     await cache.delete(recursive: true);
   });
 
-  Future<bool> push(String chat, String title, String body) =>
-      LocalPushDisplay.show(conversationId: chat, title: title, body: body);
+  var pushes = 0;
 
-  List<int> gapsSince(int mark) {
-    final t = [for (final s in shade.shows.sublist(mark)) s.at];
-    return [
-      for (var i = 1; i < t.length; i++)
-        t[i].difference(t[i - 1]).inMilliseconds,
-    ];
-  }
-
-  group('pacing', () {
-    test('an idle phone posts at once: no fixed wait before the first '
-        'post', () async {
-      final mark = shade.shows.length;
-      final start = DateTime.now();
-
-      expect(await push('c1', 'Ava', 'hello'), isTrue);
-
-      final first = shade.shows[mark].at.difference(start);
-      expect(
-        first,
-        lessThan(const Duration(milliseconds: 250)),
-        reason: 'waited ${first.inMilliseconds} ms on an idle phone',
-      );
-    });
-
-    test('idle again a while after a flush: the next push posts at once '
-        'too', () async {
-      await push('c1', 'Ava', 'one');
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
-      final mark = shade.shows.length;
-      final start = DateTime.now();
-
-      expect(await push('c2', 'Ben', 'two'), isTrue);
-
-      final first = shade.shows[mark].at.difference(start);
-      expect(first, lessThan(const Duration(milliseconds: 250)));
-    });
-
-    test('every plugin post is at least 300 ms after the previous one, chat '
-        'posts and summary alike, within and across flushes', () async {
-      final mark = shade.shows.length;
-
-      final a = [for (var i = 1; i <= 4; i++) push('a$i', 'A$i', 'wave-a-$i')];
-      expect(await Future.wait(a), everyElement(isTrue));
-      // A second flush right on the heels of the first one's last post.
-      final b = [for (var i = 1; i <= 3; i++) push('b$i', 'B$i', 'wave-b-$i')];
-      expect(await Future.wait(b), everyElement(isTrue));
-
-      final gaps = gapsSince(mark);
-      expect(gaps.length, greaterThanOrEqualTo(6), reason: '$gaps');
-      // 5 ms of slack for the clock read in the fake, nothing more.
-      expect(gaps, everyElement(greaterThanOrEqualTo(295)), reason: '$gaps');
-      expect(shade.peakPostsPerSecond, lessThanOrEqualTo(4), reason: '$gaps');
-      for (var i = 1; i <= 4; i++) {
-        expect(Shade.text(shade.childFor('a$i')), contains('wave-a-$i'));
-      }
-      for (var i = 1; i <= 3; i++) {
-        expect(Shade.text(shade.childFor('b$i')), contains('wave-b-$i'));
-      }
-    }, timeout: const Timeout(Duration(seconds: 30)));
-  });
-
-  group('an owner change while a flush is posting: show() is true only for '
-      'a line that is on screen', () {
-    const secrets = ['secret-1', 'secret-2', 'secret-3', 'secret-4'];
-
-    Future<void> inTheAppIsolate(String? member) async {
-      final before = Map<String, Object>.of(disk.values);
-      newIsolate();
-      await LocalPushDisplay.forUser(member);
-      final after = Map<String, Object>.of(disk.values);
-      disk.values = before;
-      newIsolate();
-      await SharedPreferences.getInstance();
-      disk.values = after;
-    }
-
-    for (final next in <String?>[null, 'member-b']) {
-      test('to ${next ?? 'nobody'}', () async {
-        await push('c0', 'Zed', 'warm');
-        final mark = shade.shows.length;
-        final pending = [
-          for (var i = 0; i < secrets.length; i++)
-            push('c${i + 1}', 'Ava', secrets[i]),
-        ];
-        while (shade.shows.length == mark) {
-          await Future<void>.delayed(const Duration(milliseconds: 5));
-        }
-
-        await inTheAppIsolate(next);
-        final switched = DateTime.now();
-        final results = <bool?>[];
-        for (final f in pending) {
-          results.add(await f.then<bool?>((r) => r, onError: (_) => null));
-        }
-
-        final before = jsonEncode([
-          for (final s in shade.shows)
-            if (!s.at.isAfter(switched)) s.n,
-        ]);
-        final after = [
-          for (final s in shade.shows)
-            if (s.at.isAfter(switched)) s.n,
-        ];
-        expect(after, isEmpty, reason: 'posted after the owner changed');
-        expect(results, contains(false), reason: '$results');
-        for (var i = 0; i < secrets.length; i++) {
-          if (results[i] == true) {
-            expect(
-              before,
-              contains(secrets[i]),
-              reason: 'show() said ${secrets[i]} is shown; it never was',
-            );
-          }
-        }
-      }, timeout: const Timeout(Duration(seconds: 30)));
-    }
-  });
+  /// A push drawn by Android's native receiver (the only drawer since
+  /// Update 1).
+  bool push(String chat, String title, String body) =>
+      NativeReceiver(shade, disk).receive({
+        'conversation_id': chat,
+        'title': title,
+        'body': body,
+        'message_id':
+            '00000000-0000-4000-8000-${(++pushes).toString().padLeft(12, '0')}',
+      });
 
   group('PushReceiptLog', () {
     Future<List<Map<String, Object?>>> receipts() async {
@@ -292,6 +172,41 @@ void main() {
           'native=1700000000123 prio=high/high',
         );
       });
+
+      test('a note the receiver drew (",n") reads as fast=native', () async {
+        disk.values[_arrivalKey(_msg)] = '1700000000123,normal,normal,n';
+        newIsolate();
+
+        final got = await PushReceiptLog.takeArrival(_msg);
+        expect(got, contains('native=1700000000123'));
+        expect(got, contains('prio=normal/normal'));
+        expect(got, contains('fast=native'));
+        expect(disk.values.containsKey(_arrivalKey(_msg)), isFalse);
+      });
+
+      test('a note still queued (",q") reads exactly as a drawn one', () async {
+        disk.values[_arrivalKey(_msg)] = '1700000000123,normal,normal,n';
+        newIsolate();
+        final drawn = await PushReceiptLog.takeArrival(_msg);
+        disk.values[_arrivalKey(_msg)] = '1700000000123,normal,normal,q';
+        newIsolate();
+
+        expect(await PushReceiptLog.takeArrival(_msg), drawn);
+        expect(disk.values.containsKey(_arrivalKey(_msg)), isFalse);
+      });
+
+      test(
+        'a note settled without a suffix (not drawn) has no fast=',
+        () async {
+          disk.values[_arrivalKey(_msg)] = '1700000000123,high,high';
+          newIsolate();
+
+          expect(
+            await PushReceiptLog.takeArrival(_msg),
+            isNot(contains('fast=')),
+          );
+        },
+      );
 
       test('another message\'s note is left alone', () async {
         disk.values[_arrivalKey('other')] = '1,high,high';
@@ -366,7 +281,7 @@ void main() {
     test('sent, dart and native times, and the priorities; the arrival '
         'note is taken', () async {
       final sent = DateTime.now().subtract(const Duration(seconds: 3));
-      disk.values[_arrivalKey(_msg)] = '1700000000123,high,normal';
+      disk.values[_arrivalKey(_msg)] = '1700000000123,high,normal,n';
       final before = DateTime.now().millisecondsSinceEpoch;
 
       final all = await run(message(sent: sent));
@@ -409,163 +324,20 @@ void main() {
     });
 
     test(
-      'a malformed native note: the push is still shown, native=?',
+      'a malformed native note: native=?, not counted as drawn, no throw',
       () async {
         disk.values[_arrivalKey(_msg)] = 'not,a,number';
 
         final all = await run(message());
 
-        expect([for (final r in all) r['stage']], ['received', 'shown']);
+        expect(
+          [for (final r in all) r['stage']],
+          ['received', 'dropped:not_drawn'],
+        );
         final note = all.first['error']! as String;
         expect(shape.firstMatch(note)?.group(3), '?', reason: note);
       },
     );
-  });
-
-  // The real snapshot store and the real avatar cache, at the directories
-  // production resolves through path_provider.
-  Future<void> phoneHas({String owner = 'member-a'}) async {
-    await FileChatListSnapshotStore().save(owner, const [
-      Conversation(
-        id: 'c1',
-        other: Member(
-          userId: 'u-ava',
-          displayName: 'Ava',
-          avatarPath: 'u-ava/pic.jpg',
-        ),
-      ),
-      Conversation(id: 'g1', title: 'Team', avatarPath: 'groups/g1.jpg'),
-      Conversation(
-        id: 'c3',
-        other: Member(userId: 'u-cy', displayName: 'Cy'),
-      ),
-      Conversation(
-        id: 'c4',
-        other: Member(
-          userId: 'u-dee',
-          displayName: 'Dee',
-          avatarPath: 'u-dee/never-cached.jpg',
-        ),
-      ),
-    ]);
-    final files = FileAttachmentCache();
-    await files.write('u-ava/pic.jpg', _ava);
-    await files.write('groups/g1.jpg', _team);
-  }
-
-  group('NotificationAvatars.forChats', () {
-    test('the other member\'s picture for a 1:1, the group\'s for a group; '
-        'nothing for a chat with no picture or no cached file', () async {
-      await phoneHas();
-
-      final got = await NotificationAvatars.forChats('member-a', [
-        'c1',
-        'g1',
-        'c3',
-        'c4',
-        'unknown',
-      ]);
-
-      expect(got.keys.toSet(), {'c1', 'g1'});
-      expect(got['c1'], _ava);
-      expect(got['g1'], _team);
-    });
-
-    test('only the chats asked for', () async {
-      await phoneHas();
-
-      final got = await NotificationAvatars.forChats('member-a', ['g1']);
-
-      expect(got.keys, ['g1']);
-    });
-
-    test('another member\'s snapshot: nothing', () async {
-      await phoneHas(owner: 'member-b');
-
-      expect(await NotificationAvatars.forChats('member-a', ['c1']), isEmpty);
-    });
-
-    test('no snapshot: nothing', () async {
-      expect(await NotificationAvatars.forChats('member-a', ['c1']), isEmpty);
-    });
-
-    test('a corrupt snapshot: nothing, no throw', () async {
-      await phoneHas();
-      for (final f in support.listSync(recursive: true).whereType<File>()) {
-        await f.writeAsString('{not json');
-      }
-
-      expect(await NotificationAvatars.forChats('member-a', ['c1']), isEmpty);
-    });
-
-    test('path_provider throws: nothing, no throw', () async {
-      await phoneHas();
-      pathThrows = PlatformException(code: 'io', message: 'no dir');
-
-      expect(await NotificationAvatars.forChats('member-a', ['c1']), isEmpty);
-    });
-
-    test('path_provider has no platform side: nothing, no throw', () async {
-      await phoneHas();
-      pathThrows = MissingPluginException('no path_provider');
-
-      expect(await NotificationAvatars.forChats('member-a', ['c1']), isEmpty);
-    });
-  });
-
-  group('the Android post carries the picture', () {
-    Map<String, Object?> spec(Map<String, Object?> n) =>
-        Map<String, Object?>.from(n['platformSpecifics']! as Map);
-
-    /// Every Person (any map with a 'name') in [n], by name.
-    List<Map<Object?, Object?>> people(Object? n, String name) => [
-      if (n is Map && n['name'] == name) n,
-      if (n is Map)
-        for (final v in n.values) ...people(v, name),
-      if (n is List)
-        for (final v in n) ...people(v, name),
-    ];
-
-    test('a 1:1: the large icon and the sender\'s Person icon are the '
-        'other member\'s picture', () async {
-      await phoneHas();
-
-      expect(await push('c1', 'Ava', 'hi'), isTrue);
-
-      final n = shade.childFor('c1');
-      expect(spec(n)['largeIcon'], _ava);
-      final ava = people(spec(n), 'Ava');
-      expect(ava, isNotEmpty);
-      expect([for (final p in ava) p['icon']], anyElement(equals(_ava)));
-    });
-
-    test('a group: the large icon is the group\'s picture', () async {
-      await phoneHas();
-
-      expect(await push('g1', 'Ben @ Team', 'yo'), isTrue);
-
-      expect(spec(shade.childFor('g1'))['largeIcon'], _team);
-    });
-
-    test('no picture on the phone: shown, with no large icon', () async {
-      await phoneHas();
-
-      expect(await push('c3', 'Cy', 'hey'), isTrue);
-      expect(await push('c4', 'Dee', 'hey'), isTrue);
-
-      expect(spec(shade.childFor('c3'))['largeIcon'], isNull);
-      expect(spec(shade.childFor('c4'))['largeIcon'], isNull);
-    });
-
-    test('the picture lookup fails: the push is still shown', () async {
-      await phoneHas();
-      pathThrows = PlatformException(code: 'io', message: 'no dir');
-
-      expect(await push('c1', 'Ava', 'hi'), isTrue);
-
-      expect(Shade.text(shade.childFor('c1')), contains('hi'));
-      expect(spec(shade.childFor('c1'))['largeIcon'], isNull);
-    });
   });
 
   group('clear() and the iPhone\'s delivered pushes', () {
@@ -616,7 +388,7 @@ void main() {
     });
 
     test('on Android: no clearThread, and the chat is still cleared', () async {
-      expect(await push('c1', 'Ava', 'hi'), isTrue);
+      expect(push('c1', 'Ava', 'hi'), isTrue);
 
       await LocalPushDisplay.clear('c1');
 

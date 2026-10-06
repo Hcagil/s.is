@@ -1,7 +1,7 @@
 // Update 1 slice 11a: with the app closed, Android's receiver (PushInbox.kt,
 // InstantPush.kt) now writes the notification inbox itself, and the Dart
-// handler that Doze runs 10-50 minutes later dedupes by message id and
-// re-posts quietly. Written from the contract, not the code.
+// handler that Doze runs 10-50 minutes later leaves it alone: since Update 1
+// it draws nothing on Android. Written from the contract, not the code.
 //
 // Two halves:
 // - Parity: test/fixtures/push_inbox_vectors.json is also read by
@@ -10,8 +10,8 @@
 //   name, so neither can drift alone.
 // - The seam: the native write cannot run here, so it is reproduced as it
 //   lands in the preferences file -- the inbox JSON under
-//   "flutter.sis.push_inbox.<owner>", count ahead of posted -- and the real
-//   LocalPushDisplay / onBackgroundPush run afterwards in a fresh isolate.
+//   "flutter.sis.push_inbox.<owner>" (NativeReceiver in push_platform.dart)
+//   -- and the real onBackgroundPush runs afterwards in a fresh isolate.
 //
 // Device fakes: test/support/push_platform.dart. Run under TZ=JST-9.
 import 'dart:convert';
@@ -45,9 +45,6 @@ final _vectors = jsonDecode(
   File('test/fixtures/push_inbox_vectors.json').readAsStringSync(),
 ) as Map<String, Object?>;
 
-final _ava = Uint8List.fromList(List.generate(64, (i) => i));
-final _team = Uint8List.fromList(List.generate(64, (i) => 255 - i));
-
 List<InboxChat> _parse(String? raw) => raw == null
     ? []
     : [
@@ -57,16 +54,6 @@ List<InboxChat> _parse(String? raw) => raw == null
 
 Object? _json(List<InboxChat> inbox) =>
     jsonDecode(jsonEncode([for (final c in inbox) c.toJson()]));
-
-Map<String, Object?> _style(Map<String, Object?> n) =>
-    Map<String, Object?>.from(
-      (n['platformSpecifics']! as Map)['styleInformation']! as Map,
-    );
-
-List<Map<Object?, Object?>?> _persons(Map<String, Object?> n) => [
-  for (final m in _style(n)['messages']! as List)
-    (m as Map)['person'] as Map<Object?, Object?>?,
-];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -179,13 +166,6 @@ void main() {
   group('after the native receiver wrote the inbox', () {
     late Shade shade;
     late DiskPrefs disk;
-    late Directory support;
-    late Directory cache;
-
-    void newIsolate() {
-      SharedPreferences.resetStatic();
-      LocalPushDisplay.resetForTest();
-    }
 
     setUpAll(() async {
       setupFirebaseCoreMocks();
@@ -197,222 +177,46 @@ void main() {
       AndroidFlutterLocalNotificationsPlugin.registerWith();
       shade = Shade();
       disk = DiskPrefs();
-      support = await Directory.systemTemp.createTemp('sis-support-');
-      cache = await Directory.systemTemp.createTemp('sis-cache-');
       messenger.setMockMethodCallHandler(Shade.channel, shade.handle);
       messenger.setMockMethodCallHandler(_prefsChannel, disk.handle);
-      messenger.setMockMethodCallHandler(
-        _pathChannel,
-        (call) async => switch (call.method) {
-          'getApplicationSupportDirectory' => support.path,
-          'getApplicationCacheDirectory' => cache.path,
-          _ => throw MissingPluginException(call.method),
-        },
-      );
-      newIsolate();
+      SharedPreferences.resetStatic();
       await LocalPushDisplay.init();
       await LocalPushDisplay.forUser(_owner);
-      await FileChatListSnapshotStore().save(_owner, const [
-        Conversation(
-          id: 'c1',
-          other: Member(
-            userId: 'u-ava',
-            displayName: 'Ava',
-            avatarPath: 'u-ava/pic.jpg',
-          ),
-        ),
-        Conversation(id: 'g1', title: 'Team', avatarPath: 'groups/g1.jpg'),
-      ]);
-      await FileAttachmentCache().write('u-ava/pic.jpg', _ava);
-      await FileAttachmentCache().write('groups/g1.jpg', _team);
     });
 
-    tearDown(() async {
-      await Future<void>.delayed(const Duration(milliseconds: 1500));
+    tearDown(() {
       debugDefaultTargetPlatformOverride = null;
       messenger.setMockMethodCallHandler(Shade.channel, null);
       messenger.setMockMethodCallHandler(_prefsChannel, null);
-      messenger.setMockMethodCallHandler(_pathChannel, null);
-      await support.delete(recursive: true);
-      await cache.delete(recursive: true);
     });
 
-    /// The inbox as PushInbox.kt leaves it: the line stored with its message
-    /// id, counted but not yet inside a Dart-posted notification (p < n).
-    void nativeWrote(List<Map<String, Object?>> chats) {
-      disk.values[_inboxKey] = jsonEncode(chats);
-    }
-
-    List<InboxChat> stored() => _parse(disk.values[_inboxKey] as String?);
-
-    test('show(messageId:) does not store a native line twice', () async {
-      nativeWrote([
-        {
-          'c': 'c1',
-          't': 'Ava',
-          'g': false,
-          'l': [
-            {'s': 'Ava', 'x': 'hi', 'a': 1700000000000, 'm': _msg},
-          ],
-          'n': 1,
-          'p': 0,
+    test('the late Dart handler leaves the native inbox and the native '
+        'notification as they are: it draws and stores nothing', () async {
+      const message = RemoteMessage(
+        data: {
+          'conversation_id': 'g1',
+          'title': 'Ben @ Team',
+          'body': 'late but here',
+          'sender': 'Ben',
+          'chat': 'Team',
+          'message_id': _msg,
+          'user_id': _owner,
         },
-      ]);
-      newIsolate();
-
-      expect(
-        await LocalPushDisplay.show(
-          conversationId: 'c1',
-          title: 'Ava',
-          body: 'hi',
-          messageId: _msg,
-          alreadyAlerted: true,
-        ),
-        isTrue,
       );
+      expect(NativeReceiver(shade, disk).receive(message.data), isTrue);
+      final inbox = disk.values[_inboxKey];
+      final drawn = Map<int, Object?>.of(shade.posted);
+      SharedPreferences.resetStatic();
+      shade.calls.clear();
 
-      final c1 = stored().single;
-      expect(c1.lines, hasLength(1));
-      expect(c1.count, 1);
-      expect(_style(shade.childFor('c1'))['messages'], hasLength(1));
-    });
+      await onBackgroundPush(message);
 
-    test('a native line and a new one: both drawn, the native one '
-        'once', () async {
-      nativeWrote([
-        {
-          'c': 'c1',
-          't': 'Ava',
-          'g': false,
-          'l': [
-            {'s': 'Ava', 'x': 'first', 'a': 1700000000000, 'm': _msg},
-          ],
-          'n': 1,
-          'p': 0,
-        },
-      ]);
-      newIsolate();
-
-      await LocalPushDisplay.show(
-        conversationId: 'c1',
-        title: 'Ava',
-        body: 'first',
-        messageId: _msg,
-      );
-      await LocalPushDisplay.show(
-        conversationId: 'c1',
-        title: 'Ava',
-        body: 'second',
-        messageId: 'another-id',
-      );
-
-      expect(
-        [for (final l in stored().single.lines) l.text],
-        ['first', 'second'],
-      );
-      expect(stored().single.count, 2);
-    });
-
-    test('onBackgroundPush hands the message id over: the late handler '
-        'does not double the native line', () async {
-      nativeWrote([
-        {
-          'c': 'g1',
-          't': 'Team',
-          'g': true,
-          'l': [
-            {'s': 'Ben', 'x': 'late but here', 'a': 1700000000000, 'm': _msg},
-          ],
-          'n': 1,
-          'p': 0,
-        },
-      ]);
-      disk.values['flutter.sis.push_arrival.$_msg'] = '1700000000000,?,?,n';
-      newIsolate();
-
-      await onBackgroundPush(
-        const RemoteMessage(
-          data: {
-            'conversation_id': 'g1',
-            'title': 'Ben @ Team',
-            'body': 'late but here',
-            'sender': 'Ben',
-            'chat': 'Team',
-            'message_id': _msg,
-            'user_id': _owner,
-          },
-        ),
-      );
-
-      final g1 = stored().single;
+      expect(disk.values[_inboxKey], inbox);
+      final g1 = _parse(disk.values[_inboxKey] as String?).single;
       expect(g1.lines, hasLength(1));
       expect(g1.count, 1);
-      expect(g1.posted, 1, reason: 're-posted by Dart');
-      expect(_style(shade.childFor('g1'))['messages'], hasLength(1));
-    });
-
-    test('a 1:1 Person has a name and the other member\'s picture; an old '
-        'line with no sender is the chat\'s person', () async {
-      nativeWrote([
-        {
-          'c': 'c1',
-          't': 'Ava',
-          'g': false,
-          'l': [
-            {'s': '', 'x': 'old', 'a': 1700000000000},
-          ],
-          'n': 1,
-          'p': 0,
-        },
-      ]);
-      newIsolate();
-
-      await LocalPushDisplay.show(
-        conversationId: 'c1',
-        title: 'Ava',
-        body: 'hi',
-        messageId: _msg,
-      );
-
-      final persons = _persons(shade.childFor('c1'));
-      expect(persons, hasLength(2));
-      for (final p in persons) {
-        expect(p, isNotNull);
-        expect(p!['name'], 'Ava');
-        expect(p['icon'], _ava);
-      }
-    });
-
-    test('a group Person has a name and no icon; a line with no sender '
-        'has no Person', () async {
-      nativeWrote([
-        {
-          'c': 'g1',
-          't': 'Team',
-          'g': true,
-          'l': [
-            {'s': '', 'x': 'old', 'a': 1700000000000},
-          ],
-          'n': 1,
-          'p': 0,
-        },
-      ]);
-      newIsolate();
-
-      await LocalPushDisplay.show(
-        conversationId: 'g1',
-        title: 'Ben @ Team',
-        body: 'yo',
-        sender: 'Ben',
-        chat: 'Team',
-        messageId: _msg,
-      );
-
-      final persons = _persons(shade.childFor('g1'));
-      expect(persons, hasLength(2));
-      expect(persons.first, isNull);
-      expect(persons.last!['name'], 'Ben');
-      expect(persons.last!['icon'], isNull);
+      expect(shade.posted, drawn);
+      expect(shade.calls, isNot(contains('show')));
     });
   });
 }

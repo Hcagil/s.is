@@ -1,89 +1,78 @@
 package com.esd.sis
 
-import org.junit.Test
-import org.junit.Assert.*
-import org.json.JSONObject
 import java.io.File
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 /**
- * The native draw's sound, vibration and channel per chat, from the 0.30.7 contract
- * (docs/DECISIONS.md). Drafted by gpt-oss (test_writer) from the interface only, then corrected.
- * The vectors are shared with the Dart side (instant_push_parity_test.dart), which holds
- * resolveAlert to the same sound/vibration values.
+ * The chat's channel from the saved settings, from the Update 1 contract, not the code. Since
+ * Update 1 only the native side draws, so it must post on the very channel the Dart side created
+ * per chat before (same sound, same vibration, same id): the member notices no change.
+ *
+ * test/fixtures/alert_channel_vectors.json was generated from the Dart reference
+ * (SharedPrefsAlertStore + resolveAlert + alertChannelId); instant_push_parity_test.dart reads
+ * it too, so neither language can drift alone.
  */
 class InstantPushChannelTest {
+    // Gradle runs unit tests with the module directory (android/app) as the working directory.
+    private val vectors = JSONObject(File("../../test/fixtures/alert_channel_vectors.json").readText())
+        .getJSONArray("alerts")
+
+    private fun str(v: JSONObject, k: String): String? = if (v.isNull(k)) null else v.getString(k)
 
     @Test
-    fun `channelFor maps each sound and vibration pair to its own fixed channel`() {
-        assertEquals(InstantPush.CHANNEL_BOTH, InstantPush.channelFor(true, true))
-        assertEquals(InstantPush.CHANNEL_SOUND, InstantPush.channelFor(true, false))
-        assertEquals(InstantPush.CHANNEL_VIBRATE, InstantPush.channelFor(false, true))
-        assertEquals(InstantPush.CHANNEL_QUIET, InstantPush.channelFor(false, false))
-        assertEquals("sis-instant", InstantPush.CHANNEL_BOTH)
-        assertEquals("sis-instant-sound", InstantPush.CHANNEL_SOUND)
-        assertEquals("sis-instant-vibrate", InstantPush.CHANNEL_VIBRATE)
-        assertEquals("sis-instant-quiet", InstantPush.CHANNEL_QUIET)
-        assertNotEquals(InstantPush.CHANNEL_BOTH, InstantPush.CHANNEL_SOUND)
-        assertNotEquals(InstantPush.CHANNEL_BOTH, InstantPush.CHANNEL_VIBRATE)
-        assertNotEquals(InstantPush.CHANNEL_BOTH, InstantPush.CHANNEL_QUIET)
-        assertNotEquals(InstantPush.CHANNEL_SOUND, InstantPush.CHANNEL_VIBRATE)
-        assertNotEquals(InstantPush.CHANNEL_SOUND, InstantPush.CHANNEL_QUIET)
-        assertNotEquals(InstantPush.CHANNEL_VIBRATE, InstantPush.CHANNEL_QUIET)
-    }
-
-    @Test
-    fun `sound, vibration and channel follow the shared vectors`() {
-        val file = File("../../test/fixtures/instant_push_vectors.json")
-        assertTrue(file.exists())
-        val jsonArray = JSONObject(file.readText()).getJSONArray("alerts")
-        assertTrue(jsonArray.length() > 0)
+    fun `effective alert, channel id and name follow every shared vector`() {
+        assertTrue(vectors.length() >= 15)
         val mismatches = mutableListOf<String>()
-        for (i in 0 until jsonArray.length()) {
-            val v = jsonArray.getJSONObject(i)
+        for (i in 0 until vectors.length()) {
+            val v = vectors.getJSONObject(i)
             val name = v.getString("name")
-            val defaultsJson = if (v.isNull("defaults")) null else v.getString("defaults")
-            val chatsJson = if (v.isNull("chats")) null else v.getString("chats")
-            val conversationId = v.getString("conversation_id")
-            val expectedSound = v.getBoolean("sound")
-            val expectedVibration = v.getBoolean("vibration")
-            val expectedChannel = v.getString("channel")
-            val actualSound = InstantPush.alerts(defaultsJson, chatsJson, conversationId)
-            if (actualSound != expectedSound) mismatches.add("$name: alerts mismatch")
-            val actualVibration = InstantPush.vibrates(defaultsJson, chatsJson, conversationId)
-            if (actualVibration != expectedVibration) mismatches.add("$name: vibrates mismatch")
-            val actualChannel = InstantPush.channelFor(actualSound, actualVibration)
-            if (actualChannel != expectedChannel) mismatches.add("$name: channel mismatch")
+            val a = InstantPush.effectiveAlert(str(v, "defaults"), str(v, "chats"), v.getString("conversation_id"))
+            if (a.sound != v.getBoolean("sound")) mismatches += "$name: sound ${a.sound}"
+            if (a.vibration != v.getBoolean("vibration")) mismatches += "$name: vibration ${a.vibration}"
+            if (a.tone != str(v, "tone")) mismatches += "$name: tone ${a.tone}"
+            val id = InstantPush.alertChannelId(a)
+            if (id != v.getString("channel_id")) mismatches += "$name: id $id"
+            val label = InstantPush.alertChannelName(a)
+            if (label != v.getString("channel_name")) mismatches += "$name: name $label"
         }
         assertEquals(emptyList<String>(), mismatches)
     }
 
+    // ---- the id by hand, so a vector file regenerated from a broken Dart side is caught ----
+
+    private fun id(sound: Boolean, tone: String?, vibration: Boolean) =
+        InstantPush.alertChannelId(InstantPush.Alert(sound, tone, vibration))
+
     @Test
-    fun `a chat override of sound on and vibration off over defaults off is the sound-only channel`() {
-        val defaults = """{"s":false,"v":false}"""
-        val chats = """{"conv1":{"s":"on","v":"off"}}"""
-        val conv = "conv1"
-        assertTrue(InstantPush.alerts(defaults, chats, conv))
-        assertFalse(InstantPush.vibrates(defaults, chats, conv))
-        assertEquals(InstantPush.CHANNEL_SOUND, InstantPush.channelFor(InstantPush.alerts(defaults, chats, conv), InstantPush.vibrates(defaults, chats, conv)))
+    fun `silent and system-tone channels`() {
+        assertEquals("msg-off-v1", id(false, null, true))
+        assertEquals("msg-off-v0", id(false, null, false))
+        assertEquals("msg-sys-v1", id(true, null, true))
+        assertEquals("msg-sys-v0", id(true, null, false))
     }
 
     @Test
-    fun `another chat's override does not touch this chat`() {
-        val defaults = """{"s":false,"v":false}"""
-        val chats = """{"conv1":{"s":"on","v":"off"}}"""
-        val conv = "conv2"
-        assertFalse(InstantPush.alerts(defaults, chats, conv))
-        assertFalse(InstantPush.vibrates(defaults, chats, conv))
-        assertEquals(InstantPush.CHANNEL_QUIET, InstantPush.channelFor(InstantPush.alerts(defaults, chats, conv), InstantPush.vibrates(defaults, chats, conv)))
+    fun `a custom tone is FNV-1a 32 over its UTF-16 units, lowercase hex, unpadded`() {
+        // Worked out independently (Python) from the definition.
+        assertEquals("msg-dcd38253-v1", id(true, "content://media/internal/audio/media/42", true))
+        assertEquals("msg-dcd38253-v0", id(true, "content://media/internal/audio/media/42", false))
+        assertEquals("msg-f63d20-v1", id(true, "content://media/internal/audio/media/423", true))
     }
 
     @Test
-    fun `chats JSON that is not an object reads as nothing saved`() {
-        val defaults: String? = null
-        val chats = """[1,2]"""
-        val conv = "conv1"
-        assertTrue(InstantPush.alerts(defaults, chats, conv))
-        assertTrue(InstantPush.vibrates(defaults, chats, conv))
-        assertEquals(InstantPush.CHANNEL_BOTH, InstantPush.channelFor(InstantPush.alerts(defaults, chats, conv), InstantPush.vibrates(defaults, chats, conv)))
+    fun `a tone beyond ASCII hashes its UTF-16 units, not its UTF-8 bytes`() {
+        val tone = "content://media/external/audio/media/\u011f\u00fc\u015f\u2014\u266a\uD83C\uDFB5"
+        assertEquals("msg-ca8959a4-v1", id(true, tone, true))
+        assertNotEquals("msg-3b91ddba-v1", id(true, tone, true))
     }
+
+    @Test
+    fun `a tone only counts while sound is on`() =
+        assertEquals("msg-off-v1", InstantPush.alertChannelId(
+            InstantPush.effectiveAlert("""{"s":false,"t":"content://x/1","v":true}""", null, "c1"),
+        ))
 }

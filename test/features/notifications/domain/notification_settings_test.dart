@@ -1,8 +1,8 @@
 // Pure domain rules, written from the contract: NotificationSettings
-// defaults, MuteLength.until, Mute.activeAt and muteLabel's day-boundary
-// wording.
+// defaults, MuteLength.until, Mute.activeAt and muteEnd's day boundaries
+// (which wording; the words themselves are muteEndLabel's, in presentation).
 //
-// muteLabel converts to local time before comparing days. Run under
+// muteEnd converts to local time before comparing days. Run under
 // TZ=JST-9, as CI does: on a machine already in UTC, converting UTC to local
 // changes nothing, so a test of that conversion would pass even with
 // `.toLocal()` deleted.
@@ -62,7 +62,7 @@ void main() {
 
     test('no picker length is Always; a forever-mute still reads Always', () {
       expect(MuteLength.values.map((l) => l.name), isNot(contains('always')));
-      expect(muteLabel(null, DateTime.utc(2026, 9, 24)), 'Always');
+      expect(muteEnd(null, DateTime.utc(2026, 9, 24)).day, MuteDay.always);
     });
   });
 
@@ -99,64 +99,73 @@ void main() {
     });
   });
 
-  group('muteLabel', () {
-    test('null is "Always"', () {
-      expect(muteLabel(null, DateTime.utc(2026, 9, 24)), 'Always');
+  group('muteEnd', () {
+    void expectEnd(DateTime? until, DateTime now, MuteDay day) {
+      final r = muteEnd(until, now);
+      expect(r.day, day);
+      if (until == null) {
+        expect(r.at, isNull);
+      } else {
+        expect(r.at!.isAtSameMomentAs(until), isTrue, reason: '${r.at}');
+      }
+    }
+
+    test('null is always, with no time', () {
+      expectEnd(null, DateTime.utc(2026, 9, 24), MuteDay.always);
     });
 
-    test('same local day: "Until HH:mm"', () {
-      final now = jst(2026, 9, 24, 8, 0);
-      final until = jst(2026, 9, 24, 18, 5);
-      expect(muteLabel(until, now), 'Until 18:05');
+    test('the same local day is today', () {
+      expectEnd(jst(2026, 9, 24, 18, 5), jst(2026, 9, 24, 8), MuteDay.today);
     });
 
-    test('single-digit hour and minute are zero-padded', () {
-      final now = jst(2026, 9, 24, 0, 0);
-      final until = jst(2026, 9, 24, 5, 3);
-      expect(muteLabel(until, now), 'Until 05:03');
+    test('the last minute of the local day is still today', () {
+      expectEnd(jst(2026, 9, 24, 23, 59), jst(2026, 9, 24, 0), MuteDay.today);
     });
 
-    test('the next local day: "Until tomorrow HH:mm"', () {
-      final now = jst(2026, 9, 24, 23, 0);
-      final until = jst(2026, 9, 25, 9, 0);
-      expect(muteLabel(until, now), 'Until tomorrow 09:00');
+    test('local midnight is tomorrow', () {
+      expectEnd(jst(2026, 9, 25, 0), jst(2026, 9, 24, 23), MuteDay.tomorrow);
     });
 
-    test('later than tomorrow: "Until D Mon HH:mm"', () {
-      final now = jst(2026, 9, 24, 9, 0);
-      final until = jst(2026, 10, 3, 18, 5);
-      expect(muteLabel(until, now), 'Until 3 Oct 18:05');
+    test('the last minute of the next local day is tomorrow', () {
+      expectEnd(
+        jst(2026, 9, 25, 23, 59),
+        jst(2026, 9, 24, 0),
+        MuteDay.tomorrow,
+      );
     });
 
-    test('a UTC day boundary that is not a local one still reads as today: '
-        'proves the comparison is done in local time, not UTC', () {
-      // 23:00 UTC on the 24th is 08:00 JST on the 25th; 01:00 UTC on the
-      // 25th is 10:00 JST, the same local day. In UTC these are two
-      // different calendar days.
-      final now = DateTime.utc(2026, 9, 24, 23, 0);
-      final until = DateTime.utc(2026, 9, 25, 1, 0);
+    test('two local days on is later', () {
+      expectEnd(jst(2026, 9, 26, 0), jst(2026, 9, 24, 23, 59), MuteDay.later);
+      expectEnd(jst(2026, 10, 3, 18, 5), jst(2026, 9, 24, 9), MuteDay.later);
+    });
+
+    test('tomorrow across a month and a year boundary', () {
+      expectEnd(jst(2026, 10, 1, 9), jst(2026, 9, 30, 22), MuteDay.tomorrow);
+      expectEnd(jst(2027, 1, 1, 9), jst(2026, 12, 31, 22), MuteDay.tomorrow);
+    });
+
+    test('the same time a month on is later, not today', () {
+      expectEnd(jst(2026, 10, 24, 9), jst(2026, 9, 24, 9), MuteDay.later);
+    });
+
+    test('a UTC day boundary that is not a local one is today', () {
+      // 23:00Z on the 24th is 08:00 JST on the 25th; 01:00Z on the 25th is
+      // 10:00 JST, the same local day.
+      final now = DateTime.utc(2026, 9, 24, 23);
+      final until = DateTime.utc(2026, 9, 25, 1);
       expect(now.day, isNot(until.day), reason: 'setup: different UTC day');
-      expect(
-        now.toLocal().day,
-        until.toLocal().day,
-        reason: 'setup: same local day',
-      );
-      expect(muteLabel(until, now), 'Until 10:00');
+      expect(now.toLocal().day, until.toLocal().day, reason: 'setup');
+      expectEnd(until, now, MuteDay.today);
     });
 
-    test('a local day that only differs by the timezone reads as tomorrow, '
-        'not the same day, once converted', () {
-      // Both instants fall on UTC the 30th, but 16:00 UTC is already
-      // 01:00 JST on the 1st — the next local day from 14:00 UTC's 23:00.
-      final now = DateTime.utc(2026, 9, 30, 14, 0);
-      final until = DateTime.utc(2026, 9, 30, 16, 0);
+    test('a local day boundary inside one UTC day is tomorrow', () {
+      // 14:00Z and 16:00Z on the 30th are 23:00 JST on the 30th and 01:00
+      // JST on the 1st.
+      final now = DateTime.utc(2026, 9, 30, 14);
+      final until = DateTime.utc(2026, 9, 30, 16);
       expect(now.day, until.day, reason: 'setup: same UTC day');
-      expect(
-        now.toLocal().day,
-        isNot(until.toLocal().day),
-        reason: 'setup: different local day',
-      );
-      expect(muteLabel(until, now), 'Until tomorrow 01:00');
+      expect(now.toLocal().day, isNot(until.toLocal().day), reason: 'setup');
+      expectEnd(until, now, MuteDay.tomorrow);
     });
   });
 }

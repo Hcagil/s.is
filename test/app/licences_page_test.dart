@@ -13,6 +13,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/licences_page.dart';
 import 'package:sis/app/theme.dart';
 
+import '../support/l10n.dart';
+
 class _Entry extends LicenseEntry {
   const _Entry(this.packages, this.paragraphs);
 
@@ -45,7 +47,7 @@ Future<void> _mount(WidgetTester t, List<LicenseEntry> entries) async {
   addTearDown(t.view.reset);
   final first = entries.first.packages.first;
   await t.pumpWidget(
-    MaterialApp(
+    localizedApp(
       theme: sisTheme(Brightness.light),
       home: const SisLicencesPage(
         applicationName: 'SIS',

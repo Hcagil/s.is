@@ -33,4 +33,21 @@ void main() {
       }
     }
   });
+
+  test('every placeholder of an EN message is used in its TR message', () {
+    final meta = jsonDecode(
+      File('lib/l10n/app_en.arb').readAsStringSync(),
+    ) as Map<String, Object?>;
+    for (final key in en.keys) {
+      final m = meta['@$key'] as Map<String, Object?>?;
+      final ph = (m?['placeholders'] as Map<String, Object?>?)?.keys ?? [];
+      for (final name in ph) {
+        expect(
+          tr[key] as String,
+          contains('{$name'),
+          reason: 'tr $key drops {$name}',
+        );
+      }
+    }
+  });
 }

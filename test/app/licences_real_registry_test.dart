@@ -18,6 +18,8 @@ import 'package:sis/app/licences_page.dart';
 import 'package:sis/app/theme.dart';
 import 'package:sis/main.dart' as entry;
 
+import '../support/l10n.dart';
+
 /// Mirrors ServicesBinding._parseLicenses (flutter/services/binding.dart).
 Stream<LicenseEntry> _notices() async* {
   final bytes = await rootBundle.load('NOTICES.Z');
@@ -62,7 +64,7 @@ void main() {
     addTearDown(t.view.reset);
 
     await t.pumpWidget(
-      MaterialApp(
+      localizedApp(
         theme: sisTheme(Brightness.light),
         home: const SisLicencesPage(
           applicationName: 'SIS',

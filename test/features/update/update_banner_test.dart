@@ -8,6 +8,8 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:sis/features/update/domain/update_state.dart';
 import 'package:sis/features/update/presentation/update_banner.dart';
 
+import '../../support/l10n.dart';
+
 class _Showing extends UpdateController {
   _Showing(this.shown);
   final UpdateState shown;
@@ -19,7 +21,7 @@ Future<void> pump(WidgetTester t, UpdateState state) async {
   await t.pumpWidget(
     ProviderScope(
       overrides: [updateControllerProvider.overrideWith(() => _Showing(state))],
-      child: const MaterialApp(
+      child: localizedApp(
         home: MediaQuery(
           data: MediaQueryData(disableAnimations: true),
           child: Scaffold(body: Column(children: [UpdateBanner()])),

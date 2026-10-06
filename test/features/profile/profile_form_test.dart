@@ -11,6 +11,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/presentation/profile_form.dart';
 
 import '../../support/fakes.dart';
+import '../../support/l10n.dart';
 
 const me = OwnProfile(
   userId: 'u1',
@@ -49,7 +50,7 @@ Future<Harness> pumpForm(WidgetTester t, ProfileFake fake) async {
   await t.pumpWidget(
     ProviderScope(
       overrides: [profileRepositoryProvider.overrideWithValue(fake)],
-      child: MaterialApp(
+      child: localizedApp(
         home: Scaffold(
           body: Consumer(
             builder: (context, ref, _) =>

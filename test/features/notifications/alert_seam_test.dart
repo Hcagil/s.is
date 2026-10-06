@@ -33,6 +33,7 @@ import 'package:sis/features/notifications/domain/alert_settings.dart';
 import 'package:sis/features/notifications/presentation/alert_widgets.dart';
 
 import '../../support/push_platform.dart';
+import '../../support/l10n.dart';
 
 const _prefsChannel = MethodChannel('plugins.flutter.io/shared_preferences');
 const _pickerChannel = MethodChannel('sis/tone_picker');
@@ -101,7 +102,7 @@ void main() {
           alertStoreProvider.overrideWithValue(const SharedPrefsAlertStore()),
           tonePickerProvider.overrideWithValue(const ChannelTonePicker()),
         ],
-        child: const MaterialApp(
+        child: localizedApp(
           home: Scaffold(
             body: Column(
               children: [

@@ -34,6 +34,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/runtime_config.dart';
+import 'package:sis/core/startup_failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/member.dart';
@@ -50,6 +51,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/l10n.dart';
 import '../../support/push_platform.dart';
 
 const config = RuntimeConfig(
@@ -907,7 +909,7 @@ void main() {
         await t.pumpWidget(
           ProviderScope(
             overrides: [
-              startupErrorProvider.overrideWithValue('bad secure store'),
+              startupErrorProvider.overrideWithValue(StartupFailure.bootstrap),
               if (withConfig) runtimeConfigProvider.overrideWithValue(config),
             ],
             child: const SisApp(),
@@ -916,7 +918,10 @@ void main() {
         await settle(t);
 
         expect(find.byType(StartupFailedScreen), findsOneWidget);
-        expect(find.textContaining('bad secure store'), findsOneWidget);
+        expect(
+          find.textContaining(l10nEn.statusStartBootstrap),
+          findsOneWidget,
+        );
         await expectNothingBuiltOrThrown(t);
       });
     }

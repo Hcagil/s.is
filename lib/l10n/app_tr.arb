@@ -75,5 +75,18 @@
   "pickerNewChat": "Yeni sohbet",
   "pickerRecent": "Son kullanılanlar",
   "whatsNewVersion": "Sürüm {version}",
-  "whatsNewUpToDate": "Güncelsiniz"
+  "whatsNewUpToDate": "Güncelsiniz",
+  "messageActionReply": "Yanıtla",
+  "messageActionCopy": "Kopyala",
+  "messageActionForward": "İlet",
+  "messageActionEdit": "Düzenle",
+  "messageActionPin": "Mesajı sabitle",
+  "messageActionDeleteForMe": "Benim için sil",
+  "messageActionDeleteForEveryone": "Herkes için sil",
+  "messageSeenBy": "{count} kişi gördü",
+  "messageMoreReactions": "Daha fazla tepki",
+  "messageDeleteTitle": "Mesaj silinsin mi?",
+  "messageDeleteForMeBody": "Yalnızca senin cihazlarında gizlenir.",
+  "messageDeleteForEveryoneBody": "Bu sohbetteki herkes için kaldırılır.",
+  "messageDeleteCancel": "Vazgeç"
 }

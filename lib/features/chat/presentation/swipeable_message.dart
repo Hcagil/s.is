@@ -3,11 +3,13 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/directed_drag.dart';
+import '../../../l10n/app_localizations.dart';
 import '../domain/message.dart';
 
 /// How far left (logical px) a bubble must be dragged before release
-/// replies and the haptic tick fires. Well past an accidental scroll's
-/// horizontal jitter.
+/// replies and the firm haptic impact fires (heavyImpact: Android maps
+/// selectionClick to a tick some phones do not feel). Well past an accidental
+/// scroll's horizontal jitter.
 const double replySwipeThreshold = 64.0;
 
 /// The furthest the bubble follows the finger.
@@ -19,39 +21,44 @@ IconData swipeActionIcon(MessageAction action) => switch (action) {
   MessageAction.reply => Icons.reply,
   MessageAction.forward => Icons.shortcut,
   MessageAction.edit => Icons.edit_outlined,
-  MessageAction.delete => Icons.delete_outline,
+  MessageAction.deleteForMe => Icons.delete_outline,
+  MessageAction.deleteForEveryone => Icons.delete_forever_outlined,
   MessageAction.copy => Icons.copy_outlined,
+  MessageAction.pin => Icons.push_pin_outlined,
 };
 
 /// The short label on [action]'s box.
-String swipeActionLabel(MessageAction action) => switch (action) {
-  MessageAction.reply => 'Reply',
-  MessageAction.forward => 'Forward',
-  MessageAction.edit => 'Edit',
-  MessageAction.delete => 'Delete',
-  MessageAction.copy => 'Copy',
-};
+String swipeActionLabel(AppLocalizations l, MessageAction action) =>
+    switch (action) {
+      MessageAction.reply => l.messageActionReply,
+      MessageAction.forward => l.messageActionForward,
+      MessageAction.edit => l.messageActionEdit,
+      MessageAction.deleteForMe => l.messageActionDeleteForMe,
+      MessageAction.deleteForEveryone => l.messageActionDeleteForEveryone,
+      MessageAction.copy => l.messageActionCopy,
+      MessageAction.pin => l.messageActionPin,
+    };
 
 /// The fuller wording a screen reader announces for [action], as a custom
 /// semantics action on the bubble itself.
-String swipeActionSemanticLabel(MessageAction action) =>
-    action == MessageAction.delete
-    ? 'Delete for everyone'
-    : swipeActionLabel(action);
+String swipeActionSemanticLabel(AppLocalizations l, MessageAction action) =>
+    swipeActionLabel(l, action);
 
 /// The `action-<id>` suffix [action]'s box (and any test) is keyed by.
 String swipeActionKeyId(MessageAction action) => switch (action) {
   MessageAction.reply => 'reply',
   MessageAction.forward => 'forward',
   MessageAction.edit => 'edit',
-  MessageAction.delete => 'delete',
+  MessageAction.deleteForMe => 'delete-for-me',
+  MessageAction.deleteForEveryone => 'delete-for-everyone',
   MessageAction.copy => 'copy',
+  MessageAction.pin => 'pin',
 };
 
 /// Wraps a message bubble so it can be dragged LEFT to reply (offered only when
 /// [actions] contains [MessageAction.reply]); a right drag is deliberately not handled
 /// here, it belongs to the page's swipe-back; actions also feed screen-reader custom
-/// actions; skips every gesture but tap when [actions] is empty.
+/// actions; skips the swipe (tap and long-press stay) when [actions] is empty.
 class SwipeableMessage extends StatefulWidget {
   const SwipeableMessage({
     super.key,
@@ -61,6 +68,7 @@ class SwipeableMessage extends StatefulWidget {
     required this.onAction,
     required this.child,
     this.onTap,
+    this.onLongPress,
   });
 
   /// The message this bubble belongs to.
@@ -78,6 +86,10 @@ class SwipeableMessage extends StatefulWidget {
   /// Called on a tap on the bubble (photo, link and quote taps win over it).
   final VoidCallback? onTap;
 
+  /// Called when the bubble is held (the long-press action card); link and
+  /// photo taps still win a quick tap.
+  final VoidCallback? onLongPress;
+
   final Widget child;
 
   @override
@@ -92,16 +104,16 @@ class _SwipeableMessageState extends State<SwipeableMessage> {
 
   @override
   Widget build(BuildContext context) {
-    // Long-press is reserved (v0.42): a no-op competes with the tap so a long
-    // hold opens nothing.
     Widget tap(Widget child) => GestureDetector(
       behavior: HitTestBehavior.deferToChild,
       onTap: widget.onTap,
-      onLongPress: () {},
+      onLongPress: widget.onLongPress,
       child: child,
     );
     if (widget.actions.isEmpty) {
-      return widget.onTap == null ? widget.child : tap(widget.child);
+      return widget.onTap == null && widget.onLongPress == null
+          ? widget.child
+          : tap(widget.child);
     }
     final canReply = widget.actions.contains(MessageAction.reply);
     final scheme = Theme.of(context).colorScheme;
@@ -146,7 +158,9 @@ class _SwipeableMessageState extends State<SwipeableMessage> {
     return Semantics(
       customSemanticsActions: {
         for (final a in widget.actions)
-          CustomSemanticsAction(label: swipeActionSemanticLabel(a)): () =>
+          CustomSemanticsAction(
+            label: swipeActionSemanticLabel(AppLocalizations.of(context), a),
+          ): () =>
               widget.onAction(a),
       },
       child: canReply
@@ -186,7 +200,7 @@ class _SwipeableMessageState extends State<SwipeableMessage> {
     setState(() {
       _pull = (_pull - d.delta.dx).clamp(0.0, _replySwipeMax);
       final armed = _pull >= replySwipeThreshold;
-      if (armed && !_ticked) HapticFeedback.selectionClick();
+      if (armed && !_ticked) HapticFeedback.heavyImpact();
       _ticked = _ticked || armed;
       _armed = armed;
     });

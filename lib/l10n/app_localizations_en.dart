@@ -241,4 +241,46 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get whatsNewUpToDate => 'You\'re up to date';
+
+  @override
+  String get messageActionReply => 'Reply';
+
+  @override
+  String get messageActionCopy => 'Copy';
+
+  @override
+  String get messageActionForward => 'Forward';
+
+  @override
+  String get messageActionEdit => 'Edit';
+
+  @override
+  String get messageActionPin => 'Pin message';
+
+  @override
+  String get messageActionDeleteForMe => 'Delete for me';
+
+  @override
+  String get messageActionDeleteForEveryone => 'Delete for everyone';
+
+  @override
+  String messageSeenBy(int count) {
+    return 'Seen by $count';
+  }
+
+  @override
+  String get messageMoreReactions => 'More reactions';
+
+  @override
+  String get messageDeleteTitle => 'Delete message?';
+
+  @override
+  String get messageDeleteForMeBody => 'It is hidden on your devices only.';
+
+  @override
+  String get messageDeleteForEveryoneBody =>
+      'It is removed for everyone in this chat.';
+
+  @override
+  String get messageDeleteCancel => 'Cancel';
 }

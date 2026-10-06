@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../app/grey_option.dart';
+
 /// One row of a [showMenuCard] card. [value] is what the card returns when
 /// the row is tapped; [keyId] names the row's test key (`menu-<keyId>`).
 class MenuCardAction<T> {
@@ -12,6 +14,7 @@ class MenuCardAction<T> {
     required this.label,
     this.destructive = false,
     this.rowKey,
+    this.greyName,
   });
 
   final T value;
@@ -23,6 +26,9 @@ class MenuCardAction<T> {
   /// Overrides the row's `menu-<keyId>` key, for callers whose rows already
   /// have a stable key of their own.
   final Key? rowKey;
+
+  /// When set the row is a GreyOption named [greyName] (key `grey-<greyName>`): a disabled look, no tap, for options that are designed but not built yet.
+  final String? greyName;
 }
 
 /// Opens a floating card of [actions] next to [anchor] (global coordinates)
@@ -50,31 +56,11 @@ Future<T?> showMenuCard<T>(
   child: Builder(
     builder: (card) {
       final scheme = Theme.of(card).colorScheme;
-      Color on(MenuCardAction<T> a) =>
-          a.destructive ? scheme.error : scheme.onSurface;
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           for (final a in actions)
-            InkWell(
-              key: a.rowKey ?? ValueKey('menu-${a.keyId}'),
-              onTap: () => Navigator.of(card).pop(a.value),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                child: Row(
-                  children: [
-                    Icon(a.icon, size: 22, color: on(a)),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(a.label, style: TextStyle(color: on(a))),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            _row(a, a.destructive ? scheme.error : scheme.onSurface, card),
         ],
       );
     },
@@ -194,6 +180,28 @@ class _CardLayout extends SingleChildLayoutDelegate {
       alignEnd != old.alignEnd ||
       safe != old.safe ||
       below != old.below;
+}
+
+Widget _row<T>(MenuCardAction<T> a, Color color, BuildContext card) {
+  final row = InkWell(
+    key: a.rowKey ?? ValueKey('menu-${a.keyId}'),
+    onTap: () => Navigator.of(card).pop(a.value),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(a.icon, size: 22, color: color),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(a.label, style: TextStyle(color: color)),
+          ),
+        ],
+      ),
+    ),
+  );
+  return a.greyName == null
+      ? row
+      : GreyOption(name: a.greyName!, label: a.label, child: row);
 }
 
 /// The dim behind the card. With a [hole] the anchor is cut out of it and

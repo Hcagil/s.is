@@ -304,5 +304,58 @@
   "whatsNewUpToDate": "You're up to date",
   "@whatsNewUpToDate": {
     "description": "Mark above the SIS chat's footer when no update is waiting"
+  },
+  "messageActionReply": "Reply",
+  "@messageActionReply": {
+    "description": "Long-press card row: reply"
+  },
+  "messageActionCopy": "Copy",
+  "@messageActionCopy": {
+    "description": "Long-press card row: copy the text"
+  },
+  "messageActionForward": "Forward",
+  "@messageActionForward": {
+    "description": "Long-press card row: forward"
+  },
+  "messageActionEdit": "Edit",
+  "@messageActionEdit": {
+    "description": "Long-press card row: edit an own message"
+  },
+  "messageActionPin": "Pin message",
+  "@messageActionPin": {
+    "description": "Long-press card row: pin (greyed, not built yet)"
+  },
+  "messageActionDeleteForMe": "Delete for me",
+  "@messageActionDeleteForMe": {
+    "description": "Long-press card row: hide on my devices only"
+  },
+  "messageActionDeleteForEveryone": "Delete for everyone",
+  "@messageActionDeleteForEveryone": {
+    "description": "Long-press card row: remove for everyone in the chat"
+  },
+  "messageSeenBy": "Seen by {count}",
+  "@messageSeenBy": {
+    "description": "Pill above a tapped own message: how many members have read it",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "messageMoreReactions": "More reactions",
+  "@messageMoreReactions": {
+    "description": "Screen-reader label of the plus button on the reactions bar"
+  },
+  "messageDeleteTitle": "Delete message?",
+  "@messageDeleteTitle": {
+    "description": "Delete confirm card: title"
+  },
+  "messageDeleteForMeBody": "It is hidden on your devices only.",
+  "@messageDeleteForMeBody": {
+    "description": "Delete confirm card: body for Delete for me"
+  },
+  "messageDeleteForEveryoneBody": "It is removed for everyone in this chat.",
+  "@messageDeleteForEveryoneBody": {
+    "description": "Delete confirm card: body for Delete for everyone"
+  },
+  "messageDeleteCancel": "Cancel",
+  "@messageDeleteCancel": {
+    "description": "Delete confirm card: cancel"
   }
 }

@@ -199,7 +199,7 @@ class _ConversationTile extends ConsumerWidget {
         key: ValueKey('conversation-${conversation.id}'),
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
         leading: PersonAvatar(
-          label: conversation.label,
+          label: conversationLabel(l, conversation),
           // A person keeps one tint everywhere; a group has its own.
           seed: conversation.other?.userId ?? conversation.id,
           online:
@@ -211,7 +211,7 @@ class _ConversationTile extends ConsumerWidget {
           avatarPath: conversation.avatarPath ?? conversation.other?.avatarPath,
         ),
         title: Text(
-          conversation.label,
+          conversationLabel(l, conversation),
           key: left ? ValueKey('left-${conversation.id}') : null,
           style: TextStyle(
             fontWeight: unread ? FontWeight.w800 : FontWeight.w700,
@@ -326,7 +326,7 @@ class _ConversationTile extends ConsumerWidget {
           context,
           ref,
           conversation.id,
-          title: conversation.label,
+          title: conversationLabel(l, conversation),
           otherUserId: conversation.other?.userId,
           group: conversation.isGroup,
         ),
@@ -497,7 +497,9 @@ class _SearchResults extends ConsumerWidget {
       itemBuilder: (context, i) {
         final message = state.results[i];
         final conversation = conversations[message.conversationId];
-        final label = conversation?.label ?? l.listConversation;
+        final label = conversation == null
+            ? l.listConversation
+            : conversationLabel(l, conversation);
         final seed =
             conversation?.other?.userId ??
             conversation?.id ??
@@ -532,7 +534,9 @@ class _SearchResults extends ConsumerWidget {
             context,
             ref,
             message.conversationId,
-            title: conversation?.label,
+            title: conversation == null
+                ? null
+                : conversationLabel(l, conversation),
             otherUserId: conversation?.other?.userId,
             group: conversation?.isGroup ?? false,
             searchQuery: state.query,

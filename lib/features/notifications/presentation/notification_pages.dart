@@ -8,6 +8,7 @@ import '../../../app/settings_row.dart';
 import '../../../core/failure.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../chat/application/chat_controllers.dart';
+import '../../chat/presentation/member_name.dart';
 import '../../chat/presentation/message_menu_card.dart';
 import '../application/notification_settings_controller.dart';
 import '../domain/notification_settings.dart';
@@ -156,12 +157,12 @@ class _MutedList extends ConsumerWidget {
                         .firstOrNull
                         ?.displayName ??
                     l.commonSomeone,
-              MuteKind.conversation =>
-                conversations
-                        .where((c) => c.id == m.target)
-                        .firstOrNull
-                        ?.label ??
-                    l.notifAChat,
+              MuteKind.conversation => switch (conversations
+                  .where((c) => c.id == m.target)
+                  .firstOrNull) {
+                final c? => conversationLabel(l, c),
+                null => l.notifAChat,
+              },
             }),
             subtitle: Text(muteEndLabel(l, m.until, now)),
             trailing: TextButton(

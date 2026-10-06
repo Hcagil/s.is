@@ -501,7 +501,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
             .firstOrNull,
       ),
     );
-    final title = widget.title ?? listed?.label;
+    final title =
+        widget.title ??
+        (listed == null
+            ? null
+            : conversationLabel(AppLocalizations.of(context), listed));
     final isGroup = widget.group || (listed?.isGroup ?? false);
     final isSystem = listed?.isSystem ?? false;
     final otherUserId = widget.otherUserId ?? listed?.other?.userId;

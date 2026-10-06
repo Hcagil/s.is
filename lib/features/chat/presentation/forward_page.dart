@@ -9,6 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
 import '../domain/message.dart';
+import 'member_name.dart';
 import 'new_chat_page.dart';
 import 'person_avatar.dart';
 import 'picker_widgets.dart';
@@ -154,7 +155,8 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
         if (!c.isSystem &&
             !c.hasLeft &&
             c.id != widget.exclude &&
-            (query.isEmpty || c.label.toLowerCase().contains(query)))
+            (query.isEmpty ||
+                conversationLabel(l, c).toLowerCase().contains(query)))
           c,
     ];
     final withChat = {
@@ -177,7 +179,7 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
       for (final c in all)
         if (_chats.contains(c.id))
           (
-            label: c.label,
+            label: conversationLabel(l, c),
             seed: c.other?.userId ?? c.id,
             avatarPath: c.avatarPath ?? c.other?.avatarPath,
           ),
@@ -259,11 +261,11 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
                   ListTile(
                     key: ValueKey('forward-${c.id}'),
                     leading: PersonAvatar(
-                      label: c.label,
+                      label: conversationLabel(l, c),
                       seed: c.other?.userId ?? c.id,
                       avatarPath: c.avatarPath ?? c.other?.avatarPath,
                     ),
-                    title: Text(c.label),
+                    title: Text(conversationLabel(l, c)),
                     subtitle: c.isGroup
                         ? Text(l.commonGroup)
                         : c.other?.tag != null

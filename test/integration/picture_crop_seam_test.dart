@@ -19,6 +19,7 @@ import 'package:sis/features/auth/domain/auth_repository.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
+import 'package:sis/features/chat/data/supabase_group_settings_repository.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/presentation/person_avatar.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
@@ -160,6 +161,13 @@ void main() {
       ).startGroupConversation(title: 'crop seam', memberIds: [_uid(bClient)]),
       'the group',
     );
+    // A new group lets only admins change its picture; its admin opens it to
+    // members, so ece (who did not create it) may set it below.
+    _ok(
+      await SupabaseGroupSettingsRepository(aClient)
+          .setSettings(groupId, membersCanSetAvatar: true),
+      'members may set the picture',
+    );
     // A message puts it at the top of ece's long list, on screen.
     _ok(
       await SupabaseChatRepository(
@@ -253,6 +261,9 @@ void main() {
           updateRepositoryProvider.overrideWithValue(FakeUpdate()),
           chatRepositoryProvider.overrideWithValue(
             SupabaseChatRepository(client, cache: cache),
+          ),
+          groupSettingsRepositoryProvider.overrideWithValue(
+            SupabaseGroupSettingsRepository(client),
           ),
           attachmentCacheProvider.overrideWithValue(cache),
           presenceRepositoryProvider.overrideWithValue(

@@ -14,6 +14,7 @@ import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
+import 'package:sis/features/chat/data/supabase_group_settings_repository.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
@@ -247,6 +248,13 @@ void main() {
       memberIds: [ece.id],
     );
     final group = (started as Ok<String>).value;
+    // A new group lets only admins change its picture; deniz (its admin)
+    // opens it to members so ece may replace it below.
+    expect(
+      await SupabaseGroupSettingsRepository(denizClient)
+          .setSettings(group, membersCanSetAvatar: true),
+      isA<Ok<void>>(),
+    );
 
     expect(await deniz.list.setGroupAvatar(group, _jpeg(10)), isA<Ok<void>>());
     await pumpEventQueue();

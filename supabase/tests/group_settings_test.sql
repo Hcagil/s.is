@@ -1,5 +1,5 @@
 begin;
-select plan(106);
+select plan(112);
 
 -- Group settings (Update 2): the three switches on conversations,
 -- set_group_settings, add_members and set_group_avatar under the switches,
@@ -495,6 +495,37 @@ select is((select paths from deleted_p), array[g('P') || '/gs-p.jpg'],
           'no group picture: delete_group still returns the photo paths, never null');
 select is((select count(*)::int from app_private.deleted_attachments where path = g('P') || '/gs-p.jpg' and user_id = u('01')), 1,
           'and records them for the deleter');
+
+-- may_remove_group_avatar, gate by gate: each negative fails exactly one
+-- clause of the positive (ada, who deleted G, removing a group/G/ object
+-- older than her record).
+insert into storage.objects(bucket_id, name, owner_id, metadata, created_at) values
+  ('avatars', 'group/' || g('G') || '/qa-a.jpg', u('01')::text, '{}'::jsonb, now() - interval '1 hour'),
+  ('avatars', 'group/' || g('DEBUG') || '/qa-l.jpg', u('01')::text, '{}'::jsonb, now() - interval '1 hour'),
+  ('avatars', 'profile/' || u('01') || '/qa-p.jpg', u('01')::text, '{}'::jsonb, now() - interval '1 hour'),
+  ('avatars', 'group/' || g('G') || '/qa-u.jpg', u('01')::text, '{}'::jsonb, now() - interval '1 hour'),
+  ('avatars', 'group/' || g('G') || '/qa-n.jpg', u('01')::text, '{}'::jsonb, now());
+insert into app_private.deleted_attachments(path, user_id, recorded_at) values
+  ('group/' || g('G') || '/qa-a.jpg', u('01'), now() - interval '30 minutes'),
+  ('group/' || g('DEBUG') || '/qa-l.jpg', u('01'), now() - interval '30 minutes'),
+  ('profile/' || u('01') || '/qa-p.jpg', u('01'), now() - interval '30 minutes'),
+  ('group/' || g('G') || '/qa-n.jpg', u('01'), now() - interval '30 minutes');
+-- authenticated has no usage on app_private (the policy reaches it, a
+-- caller cannot): call it as the owner with the member's claims.
+select set_config('request.jwt.claims', json_build_object('sub', u('01'), 'role', 'authenticated')::text, true);
+select ok(app_private.may_remove_group_avatar('group/' || g('G') || '/qa-a.jpg'),
+          'the deleter may remove a recorded picture of the deleted group');
+select ok(not app_private.may_remove_group_avatar('group/' || g('DEBUG') || '/qa-l.jpg'),
+          'never a live group''s picture, even when recorded');
+select ok(not app_private.may_remove_group_avatar('profile/' || u('01') || '/qa-p.jpg'),
+          'never a profile path, even when recorded');
+select ok(not app_private.may_remove_group_avatar('group/' || g('G') || '/qa-u.jpg'),
+          'never a path the deleter did not record');
+select ok(not app_private.may_remove_group_avatar('group/' || g('G') || '/qa-n.jpg'),
+          'never an object newer than the record');
+select set_config('request.jwt.claims', json_build_object('sub', u('02'), 'role', 'authenticated')::text, true);
+select ok(not app_private.may_remove_group_avatar('group/' || g('G') || '/qa-a.jpg'),
+          'never someone else''s record');
 
 select * from finish();
 rollback;

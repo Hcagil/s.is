@@ -17,8 +17,8 @@ class GroupSettingsFake implements GroupSettingsRepository {
   final Duration latency;
   final Duration subscribeDelay;
 
-  /// Every call, in order: 'settings:<id>:<avatar>:<add>:<hist>' (null shown
-  /// as '-'), 'delete:<id>', 'pictures:<id>', 'subscribe'.
+  /// Every call, in order: `settings:<id>:<avatar>:<add>:<hist>` (null shown
+  /// as '-'), `delete:<id>`, `pictures:<id>`, 'subscribe'.
   final calls = <String>[];
 
   /// What the next writes answer; Ok by default.

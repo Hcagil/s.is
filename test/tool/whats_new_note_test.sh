@@ -13,7 +13,9 @@
 #   - no previous release -> only the released commit itself;
 #   - only PRs whose author is OWNER, MEMBER or COLLABORATOR count (anyone else
 #     could edit a merged PR's body and have it sent to every member as SIS);
-#   - the joined note is cut to 4000 characters, the release_notes check;
+#   - the joined note is cut to 3980 characters, then a non-empty note gets a
+#     first line "Version <x.y.z>" from pubspec.yaml (room under the 4000-char
+#     release_notes check and TestFlight limit); an empty note gets no prefix;
 #   - a failing `gh api` pull read fails the run block, and the step is
 #     continue-on-error so that failure never blocks the release;
 #   - each PR is read from the REST endpoint repos/$GITHUB_REPOSITORY/pulls/N
@@ -136,6 +138,9 @@ g commit -q --allow-empty -m 'chore: tidy (#11)'
 g commit -q --allow-empty -m 'docs: no pull request here'
 g commit -q --allow-empty -m 'fix: faster start (#12)'
 head_sha=$(g rev-parse HEAD)
+# The step reads the version from pubspec.yaml in its working directory.
+printf 'name: sis\nversion: 1.2.3+45\n' > "$repo/pubspec.yaml"
+V='Version 1.2.3'
 
 printf 'For users: Old news.\n' > "$tmp/prs/9"
 printf '## Summary\r\nSound.\r\n\r\nFor users: You can pick a sound.\r\n' > "$tmp/prs/10"
@@ -181,7 +186,7 @@ grep -q -- '--linked' "$tmp/calls" || fail "insert not sent to the linked projec
 grep -q 'insert into public.release_notes(build, note) values (179, ' "$tmp/calls" \
   || fail "insert does not target build 179"
 grep -q 'on conflict (build) do nothing' "$tmp/calls" || fail "a re-run would overwrite a dashboard edit"
-expected=$(printf '%s\n%s' 'You can pick a sound.' 'It'"'"'s faster; "quoted" $(rm -rf /) `x` too.')
+expected=$(printf '%s\n%s\n%s' "$V" 'You can pick a sound.' 'It'"'"'s faster; "quoted" $(rm -rf /) `x` too.')
 [ "$(note_of)" = "$expected" ] || fail "note was: [$(note_of)]"
 if grep -q 'rm -rf\|quoted\|faster' "$tmp/calls"; then fail "PR text reached SQL unencoded"; fi
 if grep -q $'\r' <<<"$(note_of)"; then fail "a carriage return survived"; fi
@@ -199,7 +204,7 @@ run_step v0.26.0+178 || fail "step failed when there was nothing to store"
 printf 'For users: Only this one.\n' > "$tmp/prs/12"
 printf 'For users: Not this one.\n' > "$tmp/prs/10"
 run_step '' || fail "step exited non-zero without a previous release"
-[ "$(note_of)" = 'Only this one.' ] || fail "first release note was: [$(note_of)]"
+[ "$(note_of)" = "$V"$'\nOnly this one.' ] || fail "first release note was: [$(note_of)]"
 
 # 4 author association: only OWNER / MEMBER / COLLABORATOR PRs count
 printf 'For users: From the owner.\n' > "$tmp/prs/10"
@@ -208,28 +213,28 @@ printf 'For users: From a stranger.\n' > "$tmp/prs/12"
 echo COLLABORATOR > "$tmp/prs/11.assoc"
 echo NONE > "$tmp/prs/12.assoc"
 run_step v0.26.0+178 || fail "step exited non-zero"
-[ "$(note_of)" = $'From the owner.\nFrom a collaborator.' ] || fail "association filter: note was [$(note_of)]"
+[ "$(note_of)" = "$V"$'\nFrom the owner.\nFrom a collaborator.' ] || fail "association filter: note was [$(note_of)]"
 echo CONTRIBUTOR > "$tmp/prs/12.assoc"
 run_step v0.26.0+178 || fail "step exited non-zero"
 if grep -q stranger <<<"$(note_of)"; then fail "a CONTRIBUTOR's For users line was stored"; fi
 echo MEMBER > "$tmp/prs/12.assoc"
 run_step v0.26.0+178 || fail "step exited non-zero"
-[ "$(note_of)" = $'From the owner.\nFrom a collaborator.\nFrom a stranger.' ] || fail "MEMBER dropped: [$(note_of)]"
+[ "$(note_of)" = "$V"$'\nFrom the owner.\nFrom a collaborator.\nFrom a stranger.' ] || fail "MEMBER dropped: [$(note_of)]"
 for pr in 10 11 12; do echo NONE > "$tmp/prs/$pr.assoc"; done
 run_step v0.26.0+178 || fail "step exited non-zero"
 [ ! -s "$tmp/calls" ] || fail "an insert was made from non-collaborator PRs only"
 for pr in 10 11 12; do echo OWNER > "$tmp/prs/$pr.assoc"; done
 
-# 5 a joined note over 4000 characters is stored cut to exactly 4000
+# 5 a joined note over 3980 characters is cut to 3980, then gets the version line
 long=$(printf 'x%.0s' $(seq 3000))
 printf 'For users: %s\n' "$long" > "$tmp/prs/10"
 printf 'For users: %s\n' "$long" > "$tmp/prs/12"
 printf 'Nothing.\n' > "$tmp/prs/11"
 run_step v0.26.0+178 || fail "step exited non-zero on a long note"
 stored=$(note_of; printf .); stored=${stored%.}
-[ "${#stored}" -eq 4000 ] || fail "long note stored as ${#stored} characters, want 4000"
 both=$(printf '%s\n%s' "$long" "$long")
-[ "$stored" = "${both:0:4000}" ] || fail "long note is not the first 4000 characters"
+[ "$stored" = "$V"$'\n'"${both:0:3980}" ] || fail "long note is not the version line + the first 3980 characters"
+[ "${#stored}" -le 4000 ] || fail "long note stored as ${#stored} characters, over the 4000 check"
 same_note
 
 # 6 a failing gh api read fails the run block, and stores nothing
@@ -247,14 +252,14 @@ rm "$tmp/prs/10.fail"
 printf "For users: Kept.\n" > "$tmp/prs/12"
 touch "$tmp/prs/10.null"
 run_step v0.26.0+178 || fail "step exited non-zero on a null PR body"
-[ "$(note_of)" = "Kept." ] || fail "null body: note was [$(note_of)]"
+[ "$(note_of)" = "$V"$'\nKept.' ] || fail "null body: note was [$(note_of)]"
 rm "$tmp/prs/10.null"
 
 # 8 the b64 output round-trips a multi-line UTF-8 note with quotes exactly,
 # and is written before the insert: a failed insert still hands it on.
 printf "For users: Şarkı seçebilirsin — \"alıntı\" 'tek' \\ \$HOME 🎵\n" > "$tmp/prs/10"
 printf "For users: İkinci satır.\n" > "$tmp/prs/12"
-utf=$(printf '%s\n%s' "Şarkı seçebilirsin — \"alıntı\" 'tek' \\ \$HOME 🎵" "İkinci satır.")
+utf=$(printf '%s\n%s\n%s' "$V" "Şarkı seçebilirsin — \"alıntı\" 'tek' \\ \$HOME 🎵" "İkinci satır.")
 run_step v0.26.0+178 || fail "step exited non-zero on a UTF-8 note"
 check_out
 [ "$(out_of)" = "$utf" ] || fail "b64 output decodes to [$(out_of)], want [$utf]"

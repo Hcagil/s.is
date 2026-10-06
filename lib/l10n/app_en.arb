@@ -295,5 +295,14 @@
   "pickerRecent": "Recent",
   "@pickerRecent": {
     "description": "Picker section header"
+  },
+  "whatsNewVersion": "Version {version}",
+  "@whatsNewVersion": {
+    "description": "Heading of a What's new card in the SIS chat",
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "whatsNewUpToDate": "You're up to date",
+  "@whatsNewUpToDate": {
+    "description": "Mark above the SIS chat's footer when no update is waiting"
   }
 }

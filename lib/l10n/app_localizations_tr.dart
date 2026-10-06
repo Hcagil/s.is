@@ -235,4 +235,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get pickerRecent => 'Son kullanılanlar';
+
+  @override
+  String whatsNewVersion(String version) {
+    return 'Sürüm $version';
+  }
+
+  @override
+  String get whatsNewUpToDate => 'Güncelsiniz';
 }

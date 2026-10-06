@@ -541,6 +541,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Recent'**
   String get pickerRecent;
+
+  /// Heading of a What's new card in the SIS chat
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String whatsNewVersion(String version);
+
+  /// Mark above the SIS chat's footer when no update is waiting
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re up to date'**
+  String get whatsNewUpToDate;
 }
 
 class _AppLocalizationsDelegate

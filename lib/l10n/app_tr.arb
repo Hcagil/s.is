@@ -73,5 +73,7 @@
   "findFromContacts": "Kişilerinden insanları bul",
   "pickerAddCaption": "Alt yazı ekle",
   "pickerNewChat": "Yeni sohbet",
-  "pickerRecent": "Son kullanılanlar"
+  "pickerRecent": "Son kullanılanlar",
+  "whatsNewVersion": "Sürüm {version}",
+  "whatsNewUpToDate": "Güncelsiniz"
 }

@@ -23,6 +23,11 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
   // Reactions that arrive while the load is on its way, applied once it lands.
   final _early = <Reaction>[];
 
+  // While a reconcile fetch is on its way: every reaction applied meanwhile
+  // (live events, own changes, rollbacks), re-applied on top of the fetched
+  // state so the fetch never overwrites something newer. Null otherwise.
+  List<Reaction>? _since;
+
   // Bumped by every build: an answer that lands after the chat closed or
   // switched must not touch the new state.
   int _generation = 0;
@@ -30,7 +35,10 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
   @override
   Future<ReactionsByMessage> build() async {
     _early.clear();
-    _generation++;
+    _since = null;
+    final generation = ++_generation;
+    // Closing or switching the chat bumps it too, so a late answer is dropped.
+    ref.onDispose(() => _generation++);
     final conversationId = ref.watch(openConversationProvider);
     ref.watch(currentUserIdProvider);
     if (conversationId == null) return const {};
@@ -51,6 +59,7 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
           } else {
             unawaited(sub.cancel());
           }
+          if (live) unawaited(_reconcile(conversationId, generation));
         }
       }),
     );
@@ -70,6 +79,13 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
       _early.add(reaction);
       return;
     }
+    _apply(reaction);
+  }
+
+  void _apply(Reaction reaction) {
+    final current = state.value;
+    if (current == null) return;
+    _since?.add(reaction);
     state = AsyncData(applyReaction(current, reaction));
   }
 
@@ -86,12 +102,8 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
     final before = myReaction(current[messageId] ?? const <Reaction>[], me);
     if (before == emoji) return const Ok(null);
     final generation = _generation;
-    state = AsyncData(
-      applyReaction(
-        current,
-        Reaction(messageId: messageId, userId: me, emoji: emoji),
-      ),
-    );
+    _apply(Reaction(messageId: messageId, userId: me, emoji: emoji));
+
     final result = await ref
         .read(reactionRepositoryProvider)
         .setReaction(messageId, emoji);
@@ -101,16 +113,35 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
       case Err():
         final latest = state.value;
         if (latest != null) {
-          state = AsyncData(
-            applyReaction(
-              latest,
-              Reaction(messageId: messageId, userId: me, emoji: before),
-            ),
-          );
+          _apply(Reaction(messageId: messageId, userId: me, emoji: before));
         }
       case Ok():
         ref.invalidate(reactionUsageProvider);
     }
     return result;
+  }
+
+  /// Once, after the join: re-reads the reactions and merges them in. The
+  /// fetched state wins for every message nothing newer touched; reactions
+  /// applied while it was in flight are re-applied on top.
+  Future<void> _reconcile(String conversationId, int generation) async {
+    try {
+      await future;
+    } catch (_) {
+      return; // the load failed; nothing to reconcile
+    }
+    if (generation != _generation) return;
+    _since = [];
+    final fetched = await ref
+        .read(reactionRepositoryProvider)
+        .reactions(conversationId);
+    if (generation != _generation) return;
+    final since = _since ?? const <Reaction>[];
+    _since = null;
+    if (fetched case Ok(:final value)) {
+      state = AsyncData(
+        since.fold<ReactionsByMessage>(groupReactions(value), applyReaction),
+      );
+    }
   }
 }

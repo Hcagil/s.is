@@ -1844,7 +1844,7 @@ Dart and Kotlin through `test/fixtures/alert_channel_vectors.json`.
 - Notification layout changes are made in Kotlin. The group summary has a
   Dart twin for iOS (`_showSummary`); the two carry "keep in sync" comments.
 - Owner decision 2026-10-06: Reply needs unlock on every phone, and both
-  parts ship before Update 1 (1.0.0).
+  parts ship before Update 1.
 
 ## 2026-10-06 — Big updates collect on an integration branch
 

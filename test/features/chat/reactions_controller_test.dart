@@ -253,15 +253,22 @@ void main() {
       expect(fake.setCalls, [('m1', '👍')]);
     });
 
-    test('signed out: DeniedFailure, no call', () async {
-      final fake = ReactionFake(me: null);
-      final c = await ready(fake, signedIn: false);
-      open(c, 'c1');
-      await turns();
-      final result = await c.read(reactionsProvider.notifier).react('m1', '👍');
-      expect((result as Err<void>).failure, isA<DeniedFailure>());
-      expect(fake.setCalls, isEmpty);
-    });
+    test(
+      'signed out: DeniedFailure, no call, even with reactions loaded',
+      () async {
+        // The server still answers (a session that just ended): only the
+        // signed-out check can refuse.
+        final fake = ReactionFake()..seed('c1', [r('m1', 'u2', '👍')]);
+        final c = await ready(fake, signedIn: false);
+        open(c, 'c1');
+        await c.read(reactionsProvider.future);
+        final result = await c
+            .read(reactionsProvider.notifier)
+            .react('m1', '👍');
+        expect((result as Err<void>).failure, isA<DeniedFailure>());
+        expect(fake.setCalls, isEmpty);
+      },
+    );
 
     test('not loaded yet: DeniedFailure, no call, nothing applied', () async {
       final fake = ReactionFake()

@@ -9,9 +9,9 @@ class _MediaTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    const empty = 'No photos shared yet';
+    final empty = AppLocalizations.of(context).mediaEmpty;
     final id = conversationId;
-    if (id == null) return const _Empty(empty);
+    if (id == null) return _Empty(empty);
     return _Async(
       ref.watch(sharedMediaProvider(id)),
       empty: empty,

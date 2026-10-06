@@ -133,8 +133,8 @@ class _Bubble extends StatelessWidget {
                     Flexible(
                       child: Text(
                         message.deletedByAdmin
-                            ? 'Deleted by an admin'
-                            : 'This message was deleted',
+                            ? AppLocalizations.of(context).bubbleDeletedByAdmin
+                            : AppLocalizations.of(context).quoteDeleted,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -165,7 +165,7 @@ class _Bubble extends StatelessWidget {
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          'Forwarded',
+                          AppLocalizations.of(context).commonForwarded,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -218,7 +218,7 @@ class _Bubble extends StatelessWidget {
                             ),
                           ),
                         Text(
-                          quoteText(quoted),
+                          quoteText(AppLocalizations.of(context), quoted),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -296,7 +296,8 @@ class _Bubble extends StatelessWidget {
                   maxContentWidth: _contentWidth,
                   topPadding: message.hasAttachment ? 8 : 0,
                   timeText: message.isEdited
-                      ? 'edited ${clockTime(message.createdAt)}'
+                      ? AppLocalizations.of(context)
+                            .bubbleEdited(clockTime(message.createdAt))
                       : clockTime(message.createdAt),
                   timeStyle: TextStyle(
                     fontSize: SisTokens.timeFontSize,
@@ -334,7 +335,8 @@ class _Bubble extends StatelessWidget {
                       child: _TimeTick(
                         message: message,
                         timeText: message.isEdited
-                            ? 'edited ${clockTime(message.createdAt)}'
+                            ? AppLocalizations.of(context)
+                                  .bubbleEdited(clockTime(message.createdAt))
                             : clockTime(message.createdAt),
                         timeStyle: TextStyle(
                           fontSize: SisTokens.timeFontSize,

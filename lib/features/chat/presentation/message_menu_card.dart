@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../app/grey_option.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// One row of a [showMenuCard] card. [value] is what the card returns when
 /// the row is tapped; [keyId] names the row's test key (`menu-<keyId>`).
@@ -89,7 +90,7 @@ Future<T?> showFloatingCard<T>(
   double anchorRadius = 14,
 }) => showGeneralDialog<T>(
   context: context,
-  barrierLabel: 'Close menu',
+  barrierLabel: AppLocalizations.of(context).menuClose,
   barrierColor: Colors.transparent,
   transitionDuration: const Duration(milliseconds: 120),
   transitionBuilder: (_, animation, _, child) => FadeTransition(

@@ -631,6 +631,1266 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get messageDeleteCancel;
+
+  /// Retry button after something failed to load
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get commonTryAgain;
+
+  /// Name shown for a member who has no display name
+  ///
+  /// In en, this message translates to:
+  /// **'Member'**
+  String get commonMember;
+
+  /// Name shown when a person in an event line is unknown
+  ///
+  /// In en, this message translates to:
+  /// **'Someone'**
+  String get commonSomeone;
+
+  /// Settings title or tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get commonSettings;
+
+  /// Notifications title
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get commonNotifications;
+
+  /// Sound label
+  ///
+  /// In en, this message translates to:
+  /// **'Sound'**
+  String get commonSound;
+
+  /// Vibration label
+  ///
+  /// In en, this message translates to:
+  /// **'Vibration'**
+  String get commonVibration;
+
+  /// Section header above the list of people the member already knows
+  ///
+  /// In en, this message translates to:
+  /// **'Your people'**
+  String get commonYourPeople;
+
+  /// Empty result of a people search
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody found'**
+  String get commonNobodyFound;
+
+  /// Button and page title to start a group
+  ///
+  /// In en, this message translates to:
+  /// **'New group'**
+  String get commonNewGroup;
+
+  /// Message label or text field hint
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get commonMessage;
+
+  /// Photo gallery button
+  ///
+  /// In en, this message translates to:
+  /// **'Gallery'**
+  String get commonGallery;
+
+  /// Add people to a group
+  ///
+  /// In en, this message translates to:
+  /// **'Add members'**
+  String get commonAddMembers;
+
+  /// Save button
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get commonSave;
+
+  /// Continue button
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get commonContinue;
+
+  /// Settings row and page title for privacy
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy'**
+  String get settingsPrivacy;
+
+  /// Settings row and page title for the account
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get settingsAccount;
+
+  /// Settings row and page title for the About page
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get settingsAbout;
+
+  /// Title of the profile settings page
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get settingsProfile;
+
+  /// Notice after the profile was saved
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get settingsSaved;
+
+  /// Notice after the profile picture was removed
+  ///
+  /// In en, this message translates to:
+  /// **'Profile picture removed'**
+  String get settingsPictureRemoved;
+
+  /// Notice after the profile picture was changed
+  ///
+  /// In en, this message translates to:
+  /// **'Profile picture updated'**
+  String get settingsPictureUpdated;
+
+  /// Privacy switch for the online status
+  ///
+  /// In en, this message translates to:
+  /// **'Show when I am online'**
+  String get settingsShowOnline;
+
+  /// Privacy switch for the typing indicator
+  ///
+  /// In en, this message translates to:
+  /// **'Show when I am typing'**
+  String get settingsShowTyping;
+
+  /// Privacy switch for last seen
+  ///
+  /// In en, this message translates to:
+  /// **'Show my last seen'**
+  String get settingsShowLastSeen;
+
+  /// Explains the last seen switch
+  ///
+  /// In en, this message translates to:
+  /// **'While this is off, you can\'t see anyone else\'s either.'**
+  String get settingsShowLastSeenHint;
+
+  /// Privacy switch for read receipts
+  ///
+  /// In en, this message translates to:
+  /// **'Show when I have read messages'**
+  String get settingsShowRead;
+
+  /// Explains the read receipts switch
+  ///
+  /// In en, this message translates to:
+  /// **'While this is off, you can\'t see when others read yours.'**
+  String get settingsShowReadHint;
+
+  /// Heading above the profile picture audience options
+  ///
+  /// In en, this message translates to:
+  /// **'Profile picture visibility'**
+  String get settingsAvatarVisibility;
+
+  /// Profile picture audience: everyone
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone'**
+  String get settingsAvatarEveryone;
+
+  /// Explains the everyone option
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone who can see your profile'**
+  String get settingsAvatarEveryoneHint;
+
+  /// Profile picture audience: saved contacts
+  ///
+  /// In en, this message translates to:
+  /// **'My contacts'**
+  String get settingsAvatarContacts;
+
+  /// Explains the contacts option
+  ///
+  /// In en, this message translates to:
+  /// **'Only people you have saved'**
+  String get settingsAvatarContactsHint;
+
+  /// Profile picture audience: nobody
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody'**
+  String get settingsAvatarNobody;
+
+  /// Explains the nobody option
+  ///
+  /// In en, this message translates to:
+  /// **'Only you -- others see your initials'**
+  String get settingsAvatarNobodyHint;
+
+  /// Label above the signed-in email
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in with Google as'**
+  String get settingsSignedInAs;
+
+  /// Shown when the email is not known
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown account'**
+  String get settingsUnknownAccount;
+
+  /// Sign out button
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out'**
+  String get settingsSignOut;
+
+  /// Installed app version on the About page
+  ///
+  /// In en, this message translates to:
+  /// **'Version {name} ({build})'**
+  String settingsVersion(String name, int build);
+
+  /// Short app tagline on the sign-in and About pages
+  ///
+  /// In en, this message translates to:
+  /// **'Stay in sync'**
+  String get appTagline;
+
+  /// Row that opens the licences page
+  ///
+  /// In en, this message translates to:
+  /// **'Open-source licences'**
+  String get settingsLicences;
+
+  /// Subtitle of the master notifications switch
+  ///
+  /// In en, this message translates to:
+  /// **'New messages when the app is closed'**
+  String get notifSwitchHint;
+
+  /// Header above the notification preview options
+  ///
+  /// In en, this message translates to:
+  /// **'On the lock screen'**
+  String get notifLockScreen;
+
+  /// Preview option: sender and text shown
+  ///
+  /// In en, this message translates to:
+  /// **'Name and message'**
+  String get notifPreviewFull;
+
+  /// Preview option: only the sender shown
+  ///
+  /// In en, this message translates to:
+  /// **'Only who it is from'**
+  String get notifPreviewSender;
+
+  /// Preview option: nothing shown
+  ///
+  /// In en, this message translates to:
+  /// **'No details'**
+  String get notifPreviewNone;
+
+  /// Sample notification text under the name-and-message option
+  ///
+  /// In en, this message translates to:
+  /// **'Ayşe: See you at 8'**
+  String get notifSampleFull;
+
+  /// Sample notification text under the sender-only option
+  ///
+  /// In en, this message translates to:
+  /// **'Ayşe: New message'**
+  String get notifSampleSender;
+
+  /// Sample notification text under the no-details option
+  ///
+  /// In en, this message translates to:
+  /// **'SIS: New message'**
+  String get notifSampleNone;
+
+  /// Empty state of the muted list
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is muted'**
+  String get notifNothingMuted;
+
+  /// Name of a muted chat that is no longer in the list
+  ///
+  /// In en, this message translates to:
+  /// **'A chat'**
+  String get notifAChat;
+
+  /// Title of the mute row on a chat or person page
+  ///
+  /// In en, this message translates to:
+  /// **'Mute notifications'**
+  String get notifMuteTitle;
+
+  /// A mute with no end
+  ///
+  /// In en, this message translates to:
+  /// **'Always'**
+  String get muteAlways;
+
+  /// Mute ends later today
+  ///
+  /// In en, this message translates to:
+  /// **'Until {time}'**
+  String muteUntilToday(String time);
+
+  /// Mute ends tomorrow
+  ///
+  /// In en, this message translates to:
+  /// **'Until tomorrow {time}'**
+  String muteUntilTomorrow(String time);
+
+  /// Mute ends on a later day
+  ///
+  /// In en, this message translates to:
+  /// **'Until {date} {time}'**
+  String muteUntilDate(DateTime date, String time);
+
+  /// Header of the alert defaults section
+  ///
+  /// In en, this message translates to:
+  /// **'Sound and vibration'**
+  String get alertSoundAndVibration;
+
+  /// Subtitle of the sound switch
+  ///
+  /// In en, this message translates to:
+  /// **'Play a sound for new messages'**
+  String get alertSoundHint;
+
+  /// Row that picks the notification tone
+  ///
+  /// In en, this message translates to:
+  /// **'Tone'**
+  String get alertTone;
+
+  /// Tone name when none was picked
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get alertToneDefault;
+
+  /// Subtitle of the vibration switch
+  ///
+  /// In en, this message translates to:
+  /// **'Vibrate for new messages'**
+  String get alertVibrationHint;
+
+  /// Per-chat alert choice: follow the defaults
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get alertChoiceDefault;
+
+  /// Per-chat alert choice: on
+  ///
+  /// In en, this message translates to:
+  /// **'On'**
+  String get alertChoiceOn;
+
+  /// Per-chat alert choice: off
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get alertChoiceOff;
+
+  /// Headline of the notification permission explainer
+  ///
+  /// In en, this message translates to:
+  /// **'SIS will tell you about new messages'**
+  String get notifExplainerTitle;
+
+  /// Name shown for the signed-in member in their own messages and quotes
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get commonYou;
+
+  /// Fallback title of a group, or the subtitle of a group in a list
+  ///
+  /// In en, this message translates to:
+  /// **'Group'**
+  String get commonGroup;
+
+  /// Send button
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get commonSend;
+
+  /// Remove button or tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get commonRemove;
+
+  /// Skip button
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get commonSkip;
+
+  /// Hint of the search field above a list of people
+  ///
+  /// In en, this message translates to:
+  /// **'Search your people'**
+  String get commonSearchPeople;
+
+  /// Label on a forwarded message and notice after forwarding
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarded'**
+  String get commonForwarded;
+
+  /// Shown where a picture could not be loaded
+  ///
+  /// In en, this message translates to:
+  /// **'Image unavailable'**
+  String get commonImageUnavailable;
+
+  /// Notice when more than 10 photos were picked
+  ///
+  /// In en, this message translates to:
+  /// **'Only the first 10 photos were sent.'**
+  String get composerPhotoLimit;
+
+  /// Footer of the read-only SIS chat
+  ///
+  /// In en, this message translates to:
+  /// **'Only SIS can post here'**
+  String get composerReadOnlySystem;
+
+  /// Footer of a group the member has left or was removed from
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re no longer in this group'**
+  String get composerLeftGroup;
+
+  /// Tooltip of the photo button in the composer
+  ///
+  /// In en, this message translates to:
+  /// **'Send a photo'**
+  String get composerSendPhoto;
+
+  /// Title of the reply bar above the composer
+  ///
+  /// In en, this message translates to:
+  /// **'Replying to {name}'**
+  String composerReplyingTo(String name);
+
+  /// Tooltip of the close button on the reply bar
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel reply'**
+  String get composerCancelReply;
+
+  /// Title of the edit bar above the composer
+  ///
+  /// In en, this message translates to:
+  /// **'Editing message'**
+  String get composerEditing;
+
+  /// Tooltip of the close button on the edit bar
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel edit'**
+  String get composerCancelEdit;
+
+  /// Quoted message that can no longer be found
+  ///
+  /// In en, this message translates to:
+  /// **'Original message'**
+  String get quoteOriginal;
+
+  /// Placeholder for a deleted message, in a quote and in the chat
+  ///
+  /// In en, this message translates to:
+  /// **'This message was deleted'**
+  String get quoteDeleted;
+
+  /// A quoted message that is only a photo
+  ///
+  /// In en, this message translates to:
+  /// **'📷 Photo'**
+  String get quotePhoto;
+
+  /// Preview line of a conversation with no messages
+  ///
+  /// In en, this message translates to:
+  /// **'No messages yet'**
+  String get listNoMessages;
+
+  /// Preview line when the member wrote the last message
+  ///
+  /// In en, this message translates to:
+  /// **'You: {message}'**
+  String listYouPrefix(String message);
+
+  /// Empty state of the conversation list
+  ///
+  /// In en, this message translates to:
+  /// **'No conversations yet.\nStart one with New chat.'**
+  String get listEmpty;
+
+  /// Hint of the search field on the conversation list
+  ///
+  /// In en, this message translates to:
+  /// **'Search messages'**
+  String get listSearchHint;
+
+  /// No result for a message search
+  ///
+  /// In en, this message translates to:
+  /// **'No messages found'**
+  String get listNoResults;
+
+  /// Fallback title of a conversation without a name
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation'**
+  String get listConversation;
+
+  /// Header status while the other person types
+  ///
+  /// In en, this message translates to:
+  /// **'typing…'**
+  String get statusTyping;
+
+  /// Group header status while several people type
+  ///
+  /// In en, this message translates to:
+  /// **'{count} people are typing…'**
+  String statusPeopleTyping(int count);
+
+  /// Group header status while one person types
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is typing…'**
+  String statusWhoTyping(String name);
+
+  /// Header status of a person who is online
+  ///
+  /// In en, this message translates to:
+  /// **'online'**
+  String get statusOnline;
+
+  /// Last seen less than a minute ago
+  ///
+  /// In en, this message translates to:
+  /// **'last seen just now'**
+  String get lastSeenJustNow;
+
+  /// Last seen within the hour
+  ///
+  /// In en, this message translates to:
+  /// **'last seen {minutes} min ago'**
+  String lastSeenMinutes(int minutes);
+
+  /// Last seen earlier today
+  ///
+  /// In en, this message translates to:
+  /// **'last seen today at {time}'**
+  String lastSeenToday(String time);
+
+  /// Last seen yesterday
+  ///
+  /// In en, this message translates to:
+  /// **'last seen yesterday at {time}'**
+  String lastSeenYesterday(String time);
+
+  /// Last seen on an older date
+  ///
+  /// In en, this message translates to:
+  /// **'last seen {date}'**
+  String lastSeenDate(String date);
+
+  /// Empty state of a conversation
+  ///
+  /// In en, this message translates to:
+  /// **'No messages yet. Say something.'**
+  String get messageEmpty;
+
+  /// Notice after adding members
+  ///
+  /// In en, this message translates to:
+  /// **'Added to the group'**
+  String get addMembersDone;
+
+  /// Empty state of the add members page
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody left to add'**
+  String get addMembersNoneTitle;
+
+  /// Explains the empty state of the add members page
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone in your people list is already in this group.'**
+  String get addMembersNoneBody;
+
+  /// Switch on the add members page
+  ///
+  /// In en, this message translates to:
+  /// **'Show old messages?'**
+  String get addMembersOldTitle;
+
+  /// Explains the old messages switch
+  ///
+  /// In en, this message translates to:
+  /// **'Off shows only messages sent from now on.'**
+  String get addMembersOldHint;
+
+  /// Label of the add button while it works
+  ///
+  /// In en, this message translates to:
+  /// **'Adding…'**
+  String get addMembersAdding;
+
+  /// Add button on the add members page
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get addMembersAdd;
+
+  /// Add button with the number of chosen people
+  ///
+  /// In en, this message translates to:
+  /// **'Add ({count})'**
+  String addMembersAddCount(int count);
+
+  /// Notice after saving a person as a contact
+  ///
+  /// In en, this message translates to:
+  /// **'Added to contacts'**
+  String get contactAdded;
+
+  /// Notice after removing a contact
+  ///
+  /// In en, this message translates to:
+  /// **'Removed from contacts'**
+  String get contactRemoved;
+
+  /// Button that saves a person as a contact
+  ///
+  /// In en, this message translates to:
+  /// **'Add to contacts'**
+  String get contactAdd;
+
+  /// Button that removes a contact
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from contacts'**
+  String get contactRemove;
+
+  /// Hint of the tag search on the new chat page
+  ///
+  /// In en, this message translates to:
+  /// **'Find by exact tag'**
+  String get newChatTagHint;
+
+  /// No person found for the tag
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody has that tag'**
+  String get newChatNoTag;
+
+  /// Header above the person found by tag
+  ///
+  /// In en, this message translates to:
+  /// **'Found'**
+  String get newChatFound;
+
+  /// Button that opens a chat with the person found
+  ///
+  /// In en, this message translates to:
+  /// **'Chat'**
+  String get newChatChat;
+
+  /// Empty state of the new chat page
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody yet — find someone by their tag'**
+  String get newChatEmpty;
+
+  /// Notice after forwarding to several chats
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarded to {count} chats'**
+  String forwardDoneMany(int count);
+
+  /// Title of the forward page
+  ///
+  /// In en, this message translates to:
+  /// **'Forward to'**
+  String get forwardTitle;
+
+  /// Hint of the search field on the forward page
+  ///
+  /// In en, this message translates to:
+  /// **'Search chats and people'**
+  String get forwardSearch;
+
+  /// Label before the preview of the message being forwarded
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarding: '**
+  String get forwardPrefix;
+
+  /// Header above people on the forward page
+  ///
+  /// In en, this message translates to:
+  /// **'People'**
+  String get forwardPeople;
+
+  /// No result on the forward page
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing found'**
+  String get forwardNothing;
+
+  /// Send button with the number of chosen chats
+  ///
+  /// In en, this message translates to:
+  /// **'Send ({count})'**
+  String forwardSendCount(int count);
+
+  /// Picture menu: use the camera
+  ///
+  /// In en, this message translates to:
+  /// **'Take photo'**
+  String get avatarTakePhoto;
+
+  /// Picture menu: pick from the gallery
+  ///
+  /// In en, this message translates to:
+  /// **'Choose from library'**
+  String get avatarChoose;
+
+  /// Picture menu: remove the picture
+  ///
+  /// In en, this message translates to:
+  /// **'Remove picture'**
+  String get avatarRemove;
+
+  /// Notice when the camera fails
+  ///
+  /// In en, this message translates to:
+  /// **'The camera could not take a photo.'**
+  String get cameraFailed;
+
+  /// Label of the group name field
+  ///
+  /// In en, this message translates to:
+  /// **'Group name'**
+  String get newGroupName;
+
+  /// Empty state of the new group page
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody else has signed in yet'**
+  String get newGroupNobody;
+
+  /// Button that creates the group
+  ///
+  /// In en, this message translates to:
+  /// **'Create group'**
+  String get newGroupCreate;
+
+  /// Notice after removing a member
+  ///
+  /// In en, this message translates to:
+  /// **'{name} removed'**
+  String membersRemoved(String name);
+
+  /// Notice after making a member admin
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is now an admin'**
+  String membersNowAdmin(String name);
+
+  /// Notice after removing admin rights
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is no longer an admin'**
+  String membersNoLongerAdmin(String name);
+
+  /// Empty state of the members tab
+  ///
+  /// In en, this message translates to:
+  /// **'No members'**
+  String get membersEmpty;
+
+  /// The signed-in member's own row in the members tab
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (you)'**
+  String membersYou(String name);
+
+  /// Badge of an admin
+  ///
+  /// In en, this message translates to:
+  /// **'Admin'**
+  String get membersAdmin;
+
+  /// Menu action
+  ///
+  /// In en, this message translates to:
+  /// **'Remove as admin'**
+  String get membersRemoveAdmin;
+
+  /// Menu action
+  ///
+  /// In en, this message translates to:
+  /// **'Make admin'**
+  String get membersMakeAdmin;
+
+  /// Badge of a member who left
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get membersLeft;
+
+  /// Badge of a member who was removed
+  ///
+  /// In en, this message translates to:
+  /// **'Removed'**
+  String get membersRemovedBadge;
+
+  /// Placeholder of a message an admin deleted
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted by an admin'**
+  String get bubbleDeletedByAdmin;
+
+  /// Mark on an edited message
+  ///
+  /// In en, this message translates to:
+  /// **'edited {time}'**
+  String bubbleEdited(String time);
+
+  /// Empty state of the links tab
+  ///
+  /// In en, this message translates to:
+  /// **'No links shared yet'**
+  String get linksEmpty;
+
+  /// Notice when a link cannot be opened
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open {host}'**
+  String linkOpenFailed(String host);
+
+  /// Empty state of the media tab
+  ///
+  /// In en, this message translates to:
+  /// **'No photos shared yet'**
+  String get mediaEmpty;
+
+  /// Group event line
+  ///
+  /// In en, this message translates to:
+  /// **'{name} left'**
+  String eventLeft(String name);
+
+  /// Group event line
+  ///
+  /// In en, this message translates to:
+  /// **'{name} was removed'**
+  String eventRemoved(String name);
+
+  /// Group event line
+  ///
+  /// In en, this message translates to:
+  /// **'{name} was added'**
+  String eventAdded(String name);
+
+  /// Tooltip on the photo preview
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this photo'**
+  String get previewRemovePhoto;
+
+  /// Subtitle on the SIS chat page
+  ///
+  /// In en, this message translates to:
+  /// **'What\'s new in the app'**
+  String get systemChatSubtitle;
+
+  /// Position in the photo viewer
+  ///
+  /// In en, this message translates to:
+  /// **'{index} of {total}'**
+  String viewerCounter(int index, int total);
+
+  /// Tooltip of the photo viewer menu button
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get viewerMore;
+
+  /// Hint of the in-chat search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search in this chat'**
+  String get searchInChat;
+
+  /// No result in the in-chat search
+  ///
+  /// In en, this message translates to:
+  /// **'No results'**
+  String get searchNoResults;
+
+  /// Notice after copying a message
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get messageCopied;
+
+  /// Notice when a picked photo cannot be opened
+  ///
+  /// In en, this message translates to:
+  /// **'That photo could not be opened.'**
+  String get photoOpenFailed;
+
+  /// Notice when a photo cannot be cropped
+  ///
+  /// In en, this message translates to:
+  /// **'That photo could not be used.'**
+  String get cropUnusable;
+
+  /// Screen-reader label of the area that closes a menu
+  ///
+  /// In en, this message translates to:
+  /// **'Close menu'**
+  String get menuClose;
+
+  /// Notice
+  ///
+  /// In en, this message translates to:
+  /// **'Group picture removed'**
+  String get groupPictureRemoved;
+
+  /// Notice
+  ///
+  /// In en, this message translates to:
+  /// **'Group picture updated'**
+  String get groupPictureUpdated;
+
+  /// Member count under the group name
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 member} other{{count} members}}'**
+  String groupMemberCount(int count);
+
+  /// Tab of the group page
+  ///
+  /// In en, this message translates to:
+  /// **'Members'**
+  String get groupTabMembers;
+
+  /// Tab of the group page
+  ///
+  /// In en, this message translates to:
+  /// **'Media'**
+  String get groupTabMedia;
+
+  /// Tab of the group page
+  ///
+  /// In en, this message translates to:
+  /// **'Links'**
+  String get groupTabLinks;
+
+  /// Notice in the attach sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load more photos.'**
+  String get attachLoadMoreFailed;
+
+  /// Notice when the photo limit is reached
+  ///
+  /// In en, this message translates to:
+  /// **'You can send up to {count} photos at once.'**
+  String attachLimit(int count);
+
+  /// Notice
+  ///
+  /// In en, this message translates to:
+  /// **'Those photos could not be opened.'**
+  String get attachOpenFailedMany;
+
+  /// Notice
+  ///
+  /// In en, this message translates to:
+  /// **'Some photos could not be opened.'**
+  String get attachOpenFailedSome;
+
+  /// Notice
+  ///
+  /// In en, this message translates to:
+  /// **'That could not be opened.'**
+  String get attachOpenFailed;
+
+  /// Header of the photo grid
+  ///
+  /// In en, this message translates to:
+  /// **'Recent photos'**
+  String get attachRecentPhotos;
+
+  /// Button that widens the photo access
+  ///
+  /// In en, this message translates to:
+  /// **'Allow more'**
+  String get attachAllowMore;
+
+  /// Empty photo grid
+  ///
+  /// In en, this message translates to:
+  /// **'No photos yet'**
+  String get attachNoPhotos;
+
+  /// Send button of the attach sheet
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Send 1 photo} other{Send {count} photos}}'**
+  String attachSendPhotos(int count);
+
+  /// Title of the photo permission prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Send photos faster'**
+  String get attachFasterTitle;
+
+  /// Explains the photo permission prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Allow access so your gallery loads right here – nothing is uploaded until you send it.'**
+  String get attachFasterBody;
+
+  /// Button when the permission was denied for good
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get attachOpenSettings;
+
+  /// Button that asks for photo access
+  ///
+  /// In en, this message translates to:
+  /// **'Allow photos'**
+  String get attachAllowPhotos;
+
+  /// Button that dismisses the prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get attachNotNow;
+
+  /// Camera tile in the attach sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get attachCamera;
+
+  /// Title of the first-run screen
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome'**
+  String get onboardingWelcome;
+
+  /// Heading of the first-run screen
+  ///
+  /// In en, this message translates to:
+  /// **'How should others see you?'**
+  String get onboardingHeading;
+
+  /// Explains that name and tag can be changed later
+  ///
+  /// In en, this message translates to:
+  /// **'You can change both later in Settings.'**
+  String get onboardingHint;
+
+  /// Tag field status while checking
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get tagChecking;
+
+  /// Tag field status
+  ///
+  /// In en, this message translates to:
+  /// **'@{tag} is available'**
+  String tagFree(String tag);
+
+  /// Tag field status
+  ///
+  /// In en, this message translates to:
+  /// **'@{tag} is taken'**
+  String tagTaken(String tag);
+
+  /// Tag field status
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check availability'**
+  String get tagUnknown;
+
+  /// Label of the display name field
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get profileDisplayName;
+
+  /// Helper under the display name field
+  ///
+  /// In en, this message translates to:
+  /// **'Shown to other members. Need not be unique.'**
+  String get profileDisplayNameHint;
+
+  /// Label of the tag field
+  ///
+  /// In en, this message translates to:
+  /// **'Tag'**
+  String get profileTag;
+
+  /// Helper under the tag field
+  ///
+  /// In en, this message translates to:
+  /// **'Unique. Letters, digits and _; 3 to 20.'**
+  String get profileTagHint;
+
+  /// Sign-in screen description
+  ///
+  /// In en, this message translates to:
+  /// **'Private messages for the people on your list.'**
+  String get signInBody;
+
+  /// Google sign-in button
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with Google'**
+  String get signInGoogle;
+
+  /// Sign-in screen footnote
+  ///
+  /// In en, this message translates to:
+  /// **'Only invited Google accounts can sign in.'**
+  String get signInInvitedOnly;
+
+  /// Title of the screen for an account that is not approved
+  ///
+  /// In en, this message translates to:
+  /// **'Access denied'**
+  String get statusDeniedTitle;
+
+  /// Body of the access denied screen
+  ///
+  /// In en, this message translates to:
+  /// **'This Google account is not currently approved for SIS.'**
+  String get statusDeniedBody;
+
+  /// Title of the connection error screen
+  ///
+  /// In en, this message translates to:
+  /// **'Could not connect'**
+  String get statusConnectTitle;
+
+  /// Title of the start-up error screen
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start SIS'**
+  String get statusStartTitle;
+
+  /// Body of the start-up error screen
+  ///
+  /// In en, this message translates to:
+  /// **'Restart the app. If it keeps failing, reinstall it.\n\n{reason}'**
+  String statusStartBody(String reason);
+
+  /// Update banner
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get updateAvailable;
+
+  /// Update banner: dismiss
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get updateLater;
+
+  /// Update banner: start the download
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get updateAction;
+
+  /// Update banner while downloading
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading update…'**
+  String get updateDownloading;
+
+  /// Update banner when the download is done
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to install'**
+  String get updateReady;
+
+  /// Update banner: install and restart
+  ///
+  /// In en, this message translates to:
+  /// **'Restart'**
+  String get updateRestart;
+
+  /// Title of the blocking update screen
+  ///
+  /// In en, this message translates to:
+  /// **'Update required'**
+  String get updateRequiredTitle;
+
+  /// Body of the blocking update screen
+  ///
+  /// In en, this message translates to:
+  /// **'This version ({installed}) is no longer supported (minimum {minimum}).'**
+  String updateRequiredBody(int installed, int minimum);
+
+  /// Button on the blocking update screen
+  ///
+  /// In en, this message translates to:
+  /// **'Update now'**
+  String get updateNow;
+
+  /// Number of licences of a package
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 licence} other{{count} licences}}'**
+  String licencesCount(int count);
+
+  /// Fallback title for a chat whose name is not known yet
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation'**
+  String get commonConversation;
 }
 
 class _AppLocalizationsDelegate

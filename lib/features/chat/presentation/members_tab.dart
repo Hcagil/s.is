@@ -19,7 +19,10 @@ class _MembersTab extends ConsumerWidget {
     if (!context.mounted) return;
     switch (result) {
       case Ok():
-        showSisNotice(context, '${m.member.displayName} removed');
+        showSisNotice(
+          context,
+          AppLocalizations.of(context).membersRemoved(m.member.displayName),
+        );
       case Err(:final failure):
         showSisNotice(context, failure.message, isError: true);
     }
@@ -37,11 +40,12 @@ class _MembersTab extends ConsumerWidget {
     if (!context.mounted) return;
     switch (result) {
       case Ok():
+        final l = AppLocalizations.of(context);
         showSisNotice(
           context,
           isAdmin
-              ? '${m.member.displayName} is now an admin'
-              : '${m.member.displayName} is no longer an admin',
+              ? l.membersNowAdmin(m.member.displayName)
+              : l.membersNoLongerAdmin(m.member.displayName),
         );
       case Err(:final failure):
         showSisNotice(context, failure.message, isError: true);
@@ -120,9 +124,10 @@ class _MembersTab extends ConsumerWidget {
       _ => null,
     };
     final online = ref.watch(onlineMembersProvider);
+    final l = AppLocalizations.of(context);
     return _Async(
       ref.watch(groupRosterProvider(conversationId)),
-      empty: 'No members',
+      empty: l.membersEmpty,
       builder: (roster) {
         final current = [
           for (final m in roster)
@@ -141,7 +146,7 @@ class _MembersTab extends ConsumerWidget {
               SisSettingsRow(
                 key: const ValueKey('add-members'),
                 icon: Icons.person_add_alt_1_outlined,
-                title: 'Add members',
+                title: l.commonAddMembers,
                 onTap: () => showAddMembersPage(
                   context,
                   ref,
@@ -162,10 +167,10 @@ class _MembersTab extends ConsumerWidget {
                   radius: 18,
                 ),
                 title: m.member.userId == me
-                    ? '${m.member.displayName} (you)'
+                    ? l.membersYou(m.member.displayName)
                     : m.member.displayName,
                 subtitle: [
-                  if (m.isAdmin) 'Admin',
+                  if (m.isAdmin) l.membersAdmin,
                   if (m.member.tag != null) '@${m.member.tag}',
                 ].join(' · '),
                 trailing: amAdmin && m.member.userId != me
@@ -181,8 +186,8 @@ class _MembersTab extends ConsumerWidget {
                                   : Icons.admin_panel_settings_outlined,
                             ),
                             tooltip: m.isAdmin
-                                ? 'Remove as admin'
-                                : 'Make admin',
+                                ? l.membersRemoveAdmin
+                                : l.membersMakeAdmin,
                             onPressed: () =>
                                 _setAdmin(context, ref, m, !m.isAdmin),
                           ),
@@ -190,7 +195,7 @@ class _MembersTab extends ConsumerWidget {
                             key: ValueKey('remove-member-${m.member.userId}'),
                             visualDensity: VisualDensity.compact,
                             icon: const Icon(Icons.person_remove_outlined),
-                            tooltip: 'Remove',
+                            tooltip: l.commonRemove,
                             onPressed: () => _remove(context, ref, m),
                           ),
                         ],
@@ -214,7 +219,7 @@ class _MembersTab extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                 child: Text(
-                  'Left',
+                  l.membersLeft,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -236,8 +241,8 @@ class _MembersTab extends ConsumerWidget {
                   title: m.member.displayName,
                   titleColor: Theme.of(context).colorScheme.onSurfaceVariant,
                   subtitle: m.leftReason == LeftReason.removed
-                      ? 'Removed'
-                      : 'Left',
+                      ? l.membersRemovedBadge
+                      : l.membersLeft,
                 ),
             ],
             Padding(

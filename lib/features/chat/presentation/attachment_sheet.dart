@@ -270,7 +270,11 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     } catch (_) {
       if (!mounted || generation != _generation) return;
       setState(() => _loadingMore = false);
-      showSisNotice(context, 'Could not load more photos.', isError: true);
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).attachLoadMoreFailed,
+        isError: true,
+      );
     }
   }
 
@@ -284,7 +288,8 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
       } else if (_picked.length >= ExternalPicker.maxAttachments) {
         showSisNotice(
           context,
-          'You can send up to ${ExternalPicker.maxAttachments} photos at once.',
+          AppLocalizations.of(context)
+              .attachLimit(ExternalPicker.maxAttachments),
         );
       } else {
         setState(() => _picked.add(p));
@@ -302,7 +307,11 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     if (!mounted) return;
     setState(() => _opening = false);
     if (image == null) {
-      showSisNotice(context, 'That photo could not be opened.', isError: true);
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).photoOpenFailed,
+        isError: true,
+      );
       return;
     }
     await _finish([image], 0);
@@ -326,13 +335,17 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     if (loaded.isEmpty) {
       showSisNotice(
         context,
-        'Those photos could not be opened.',
+        AppLocalizations.of(context).attachOpenFailedMany,
         isError: true,
       );
       return;
     }
     if (loaded.length < _picked.length) {
-      showSisNotice(context, 'Some photos could not be opened.', isError: true);
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).attachOpenFailedSome,
+        isError: true,
+      );
     }
     await _finish(loaded, 0);
   }
@@ -352,7 +365,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
       case ExternalPickedImages() || ExternalPickFailed():
         showSisNotice(
           context,
-          'The camera could not take a photo.',
+          AppLocalizations.of(context).cameraFailed,
           isError: true,
         );
     }
@@ -384,7 +397,11 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
       case ExternalPickCancelled():
         return;
       case ExternalPickedImages() || ExternalPickFailed():
-        showSisNotice(context, 'That could not be opened.', isError: true);
+        showSisNotice(
+          context,
+          AppLocalizations.of(context).attachOpenFailed,
+          isError: true,
+        );
     }
   }
 
@@ -435,7 +452,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
         children: [
           Expanded(
             child: Text(
-              'Recent photos',
+              AppLocalizations.of(context).attachRecentPhotos,
               style: Theme.of(context).textTheme.titleMedium,
               overflow: TextOverflow.ellipsis,
             ),
@@ -444,20 +461,20 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
             TextButton(
               key: const ValueKey('sheet-allow-more'),
               onPressed: _selectMore,
-              child: const Text('Allow more'),
+              child: Text(AppLocalizations.of(context).attachAllowMore),
             ),
           TextButton.icon(
             key: const ValueKey('sheet-from-app'),
             onPressed: _fromApp,
             icon: const Icon(Icons.photo_library_outlined, size: 18),
-            label: const Text('Gallery'),
+            label: Text(AppLocalizations.of(context).commonGallery),
           ),
         ],
       ),
     );
 
     final Widget body = _photos.isEmpty
-        ? const Center(child: Text('No photos yet'))
+        ? Center(child: Text(AppLocalizations.of(context).attachNoPhotos))
         : GridView.builder(
             controller: _scroll,
             padding: const EdgeInsets.all(2),
@@ -497,8 +514,8 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
                   key: const ValueKey('sheet-send'),
                   onPressed: _opening ? null : _sendPicked,
                   child: Text(
-                    'Send ${_picked.length} '
-                    'photo${_picked.length == 1 ? '' : 's'}',
+                    AppLocalizations.of(context)
+                        .attachSendPhotos(_picked.length),
                   ),
                 ),
               ),
@@ -558,14 +575,13 @@ class _PhotoAccessRequest extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Send photos faster',
+                    AppLocalizations.of(context).attachFasterTitle,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Allow access so your gallery loads right here – '
-                    'nothing is uploaded until you send it.',
+                    AppLocalizations.of(context).attachFasterBody,
                     textAlign: TextAlign.center,
                     style: TextStyle(color: t.muted),
                   ),
@@ -576,7 +592,9 @@ class _PhotoAccessRequest extends StatelessWidget {
                       key: const ValueKey('sheet-allow'),
                       onPressed: permanentlyDenied ? onOpenSettings : onAllow,
                       child: Text(
-                        permanentlyDenied ? 'Open settings' : 'Allow photos',
+                        permanentlyDenied
+                            ? AppLocalizations.of(context).attachOpenSettings
+                            : AppLocalizations.of(context).attachAllowPhotos,
                       ),
                     ),
                   ),
@@ -585,13 +603,13 @@ class _PhotoAccessRequest extends StatelessWidget {
                     key: const ValueKey('sheet-from-app'),
                     onPressed: onFromApp,
                     icon: const Icon(Icons.photo_library_outlined, size: 18),
-                    label: const Text('Gallery'),
+                    label: Text(AppLocalizations.of(context).commonGallery),
                   ),
                   const SizedBox(height: 8),
                   TextButton(
                     key: const ValueKey('sheet-not-now'),
                     onPressed: onNotNow,
-                    child: const Text('Not now'),
+                    child: Text(AppLocalizations.of(context).attachNotNow),
                   ),
                 ],
               ),
@@ -622,7 +640,10 @@ class _CameraTile extends StatelessWidget {
           children: [
             Icon(Icons.photo_camera_rounded, size: 32, color: scheme.onSurface),
             const SizedBox(height: 4),
-            Text('Camera', style: Theme.of(context).textTheme.labelSmall),
+            Text(
+              AppLocalizations.of(context).attachCamera,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
           ],
         ),
       ),

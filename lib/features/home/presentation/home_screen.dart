@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../../chat/application/chat_controllers.dart';
 import '../../chat/domain/conversation.dart';
@@ -49,7 +50,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         actions: [
           IconButton(
             key: const ValueKey('home-settings'),
-            tooltip: 'Settings',
+            tooltip: AppLocalizations.of(context).commonSettings,
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),

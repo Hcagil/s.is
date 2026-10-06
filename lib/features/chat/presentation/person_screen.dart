@@ -27,7 +27,8 @@ class PersonScreen extends ConsumerWidget {
     final member = (ref.watch(yourPeopleProvider).value ?? const <Member>[])
         .where((m) => m.userId == userId)
         .firstOrNull;
-    final name = member?.displayName ?? fallbackName ?? 'Member';
+    final l = AppLocalizations.of(context);
+    final name = member?.displayName ?? fallbackName ?? l.commonMember;
     // Your 1:1 with them, if one exists. The page never creates one just to
     // look; the Message button does.
     final direct = (ref.watch(conversationListProvider).value ?? const [])
@@ -82,7 +83,7 @@ class PersonScreen extends ConsumerWidget {
                     key: const ValueKey('person-message'),
                     onPressed: () => _message(context, ref, name, direct?.id),
                     icon: const Icon(Icons.chat_bubble_outline_rounded),
-                    label: const Text('Message'),
+                    label: Text(l.commonMessage),
                   ),
                 ),
               ),
@@ -157,7 +158,9 @@ class _ContactButton extends ConsumerWidget {
       icon: isContact
           ? Icons.person_remove_outlined
           : Icons.person_add_alt_1_outlined,
-      title: isContact ? 'Remove from contacts' : 'Add to contacts',
+      title: isContact
+          ? AppLocalizations.of(context).contactRemove
+          : AppLocalizations.of(context).contactAdd,
       onTap: () async {
         final notifier = ref.read(contactsControllerProvider.notifier);
         final result = isContact
@@ -181,11 +184,12 @@ class _Status extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final online = ref.watch(onlineMembersProvider).contains(userId);
     final at = online ? null : ref.watch(lastSeenProvider(userId)).value;
+    final l = AppLocalizations.of(context);
     final text = online
-        ? 'online'
+        ? l.statusOnline
         : at == null
         ? null
-        : lastSeenLabel(at, DateTime.now());
+        : lastSeenText(l, at, DateTime.now());
     if (text == null) return const SizedBox(height: 4);
     return Padding(
       padding: const EdgeInsets.only(top: 4),

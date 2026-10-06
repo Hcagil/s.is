@@ -22,7 +22,7 @@ class SystemChatScreen extends StatelessWidget {
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
           Text(
-            "What's new in the app",
+            AppLocalizations.of(context).systemChatSubtitle,
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),

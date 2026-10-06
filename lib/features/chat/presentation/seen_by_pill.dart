@@ -46,7 +46,7 @@ class _SeenByPill extends ConsumerWidget {
                     for (final m in readers)
                       Reader(
                         userId: m.userId,
-                        name: people[m.userId]?.name ?? 'Member',
+                        name: people[m.userId]?.name ?? l.commonMember,
                         time: clockTime(m.readAt!),
                         avatarPath: people[m.userId]?.avatarPath,
                         groupSlot: people[m.userId]?.slot,
@@ -71,7 +71,8 @@ class _SeenByPill extends ConsumerWidget {
                               child: PersonAvatar(
                                 radius: 11,
                                 label:
-                                    people[readers[i].userId]?.name ?? 'Member',
+                                    people[readers[i].userId]?.name ??
+                                    l.commonMember,
                                 seed: readers[i].userId,
                                 avatarPath:
                                     people[readers[i].userId]?.avatarPath,

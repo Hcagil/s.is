@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/loading.dart';
 import '../../../app/theme.dart';
+import '../../../l10n/app_localizations.dart';
 import '../application/update_controller.dart';
 import '../domain/update_state.dart';
 
@@ -17,23 +18,32 @@ class UpdateBanner extends ConsumerWidget {
     final child = switch (state) {
       UpdateAvailableFlexible() => Row(
         children: [
-          const Expanded(child: Text('Update available')),
-          TextButton(onPressed: notifier.dismiss, child: const Text('Later')),
-          TextButton(onPressed: notifier.download, child: const Text('Update')),
+          Expanded(child: Text(AppLocalizations.of(context).updateAvailable)),
+          TextButton(
+            onPressed: notifier.dismiss,
+            child: Text(AppLocalizations.of(context).updateLater),
+          ),
+          TextButton(
+            onPressed: notifier.download,
+            child: Text(AppLocalizations.of(context).updateAction),
+          ),
         ],
       ),
-      UpdateDownloading() => const Column(
+      UpdateDownloading() => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Downloading update…'),
-          SizedBox(height: 8),
+          Text(AppLocalizations.of(context).updateDownloading),
+          const SizedBox(height: 8),
           SisProgressLine(),
         ],
       ),
       UpdateReadyToInstall() => Row(
         children: [
-          const Expanded(child: Text('Ready to install')),
-          TextButton(onPressed: notifier.install, child: const Text('Restart')),
+          Expanded(child: Text(AppLocalizations.of(context).updateReady)),
+          TextButton(
+            onPressed: notifier.install,
+            child: Text(AppLocalizations.of(context).updateRestart),
+          ),
         ],
       ),
       _ => null,

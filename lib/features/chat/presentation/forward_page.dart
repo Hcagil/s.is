@@ -44,7 +44,10 @@ Future<void> showForwardPage(
   if (!context.mounted) return;
   final total = chosen.chatIds.length + chosen.personIds.length;
   showSisNotice(context, switch (r) {
-    Ok() => total == 1 ? 'Forwarded' : 'Forwarded to $total chats',
+    Ok() =>
+      total == 1
+          ? AppLocalizations.of(context).commonForwarded
+          : AppLocalizations.of(context).forwardDoneMany(total),
     Err(:final failure) => failure.message,
   }, isError: r is Err);
 }
@@ -139,6 +142,7 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final t = SisBrand.of(context);
     final scheme = Theme.of(context).colorScheme;
     final query = _search.text.trim().toLowerCase();
@@ -166,8 +170,8 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
     final preview = body.isNotEmpty
         ? body
         : widget.message.hasAttachment
-        ? 'Photo'
-        : 'Message';
+        ? l.attachPhoto
+        : l.commonMessage;
     final n = _chats.length + _people.length;
     final chosen = <({String label, String seed, String? avatarPath})>[
       for (final c in all)
@@ -181,19 +185,18 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
         if (_people.contains(m.userId))
           (label: m.displayName, seed: m.userId, avatarPath: m.avatarPath),
     ];
-    final l = AppLocalizations.of(context);
     final header = Theme.of(context).textTheme.labelMedium
         ?.copyWith(color: scheme.onSurfaceVariant);
 
     return Scaffold(
       key: const ValueKey('forward-page'),
-      appBar: AppBar(title: const Text('Forward to')),
+      appBar: AppBar(title: Text(l.forwardTitle)),
       body: Column(
         children: [
           PickerSearchField(
             fieldKey: const ValueKey('forward-search'),
             controller: _search,
-            hint: 'Search chats and people',
+            hint: l.forwardSearch,
             onChanged: (_) => setState(() {}),
           ),
           Padding(
@@ -214,7 +217,7 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
                       TextSpan(
                         children: [
                           TextSpan(
-                            text: 'Forwarding: ',
+                            text: l.forwardPrefix,
                             style: TextStyle(
                               color: t.muted,
                               fontWeight: FontWeight.bold,
@@ -262,7 +265,7 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
                     ),
                     title: Text(c.label),
                     subtitle: c.isGroup
-                        ? const Text('Group')
+                        ? Text(l.commonGroup)
                         : c.other?.tag != null
                         ? Text('@${c.other!.tag}')
                         : null,
@@ -277,7 +280,7 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
                 if (newPeople.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Text('People', style: header),
+                    child: Text(l.forwardPeople, style: header),
                   ),
                 for (final m in newPeople)
                   PersonPickTile(
@@ -287,11 +290,11 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
                     onTap: () => _toggle(_people, m.userId),
                   ),
                 if (chats.isEmpty && newPeople.isEmpty && query.isNotEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(32),
+                  Padding(
+                    padding: const EdgeInsets.all(32),
                     child: Center(
-                      key: ValueKey('forward-empty'),
-                      child: Text('Nothing found'),
+                      key: const ValueKey('forward-empty'),
+                      child: Text(l.forwardNothing),
                     ),
                   ),
               ],
@@ -332,7 +335,9 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
                                 chatIds: _chats.toList(),
                                 personIds: _people.toList(),
                               )),
-                        child: Text(n == 0 ? 'Send' : 'Send ($n)'),
+                        child: Text(
+                          n == 0 ? l.commonSend : l.forwardSendCount(n),
+                        ),
                       ),
                     ),
                   ],

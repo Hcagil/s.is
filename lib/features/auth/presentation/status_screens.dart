@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../../l10n/app_localizations.dart';
+
 /// A full-screen status with one action (denied, or error with retry).
 class StatusScreen extends StatelessWidget {
   const StatusScreen._({
     super.key,
     required this.icon,
-    required this.title,
-    required this.message,
-    required this.actionLabel,
+    required this.denied,
+    this.reason,
     required this.onPressed,
   });
 
@@ -18,9 +19,7 @@ class StatusScreen extends StatelessWidget {
   }) : this._(
          key: key,
          icon: Icons.lock_outline,
-         title: 'Access denied',
-         message: 'This Google account is not currently approved for SIS.',
-         actionLabel: 'Sign out',
+         denied: true,
          onPressed: onSignOut,
        );
 
@@ -32,20 +31,22 @@ class StatusScreen extends StatelessWidget {
   }) : this._(
          key: key,
          icon: Icons.cloud_off_outlined,
-         title: 'Could not connect',
-         message: reason,
-         actionLabel: 'Try again',
+         denied: false,
+         reason: reason,
          onPressed: onRetry,
        );
 
   final IconData icon;
-  final String title;
-  final String message;
-  final String actionLabel;
+  final bool denied;
+  final String? reason;
   final Future<void> Function() onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final title = denied ? l.statusDeniedTitle : l.statusConnectTitle;
+    final message = denied ? l.statusDeniedBody : reason!;
+    final actionLabel = denied ? l.settingsSignOut : l.commonTryAgain;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -127,12 +128,12 @@ class StartupFailedScreen extends StatelessWidget {
                 const Icon(Icons.error_outline, size: 48),
                 const SizedBox(height: 16),
                 Text(
-                  'Could not start SIS',
+                  AppLocalizations.of(context).statusStartTitle,
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Restart the app. If it keeps failing, reinstall it.\n\n$reason',
+                  AppLocalizations.of(context).statusStartBody(reason),
                   textAlign: TextAlign.center,
                 ),
               ],

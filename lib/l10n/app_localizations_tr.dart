@@ -285,4 +285,722 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get messageDeleteCancel => 'Vazgeç';
+
+  @override
+  String get commonTryAgain => 'Tekrar dene';
+
+  @override
+  String get commonMember => 'Üye';
+
+  @override
+  String get commonSomeone => 'Biri';
+
+  @override
+  String get commonSettings => 'Ayarlar';
+
+  @override
+  String get commonNotifications => 'Bildirimler';
+
+  @override
+  String get commonSound => 'Ses';
+
+  @override
+  String get commonVibration => 'Titreşim';
+
+  @override
+  String get commonYourPeople => 'Kişilerin';
+
+  @override
+  String get commonNobodyFound => 'Kimse bulunamadı';
+
+  @override
+  String get commonNewGroup => 'Yeni grup';
+
+  @override
+  String get commonMessage => 'Mesaj';
+
+  @override
+  String get commonGallery => 'Galeri';
+
+  @override
+  String get commonAddMembers => 'Üye ekle';
+
+  @override
+  String get commonSave => 'Kaydet';
+
+  @override
+  String get commonContinue => 'Devam';
+
+  @override
+  String get settingsPrivacy => 'Gizlilik';
+
+  @override
+  String get settingsAccount => 'Hesap';
+
+  @override
+  String get settingsAbout => 'Hakkında';
+
+  @override
+  String get settingsProfile => 'Profil';
+
+  @override
+  String get settingsSaved => 'Kaydedildi';
+
+  @override
+  String get settingsPictureRemoved => 'Profil fotoğrafı kaldırıldı';
+
+  @override
+  String get settingsPictureUpdated => 'Profil fotoğrafı güncellendi';
+
+  @override
+  String get settingsShowOnline => 'Çevrimiçi olduğumu göster';
+
+  @override
+  String get settingsShowTyping => 'Yazdığımı göster';
+
+  @override
+  String get settingsShowLastSeen => 'Son görülmemi göster';
+
+  @override
+  String get settingsShowLastSeenHint =>
+      'Bu kapalıyken sen de kimsenin son görülmesini göremezsin.';
+
+  @override
+  String get settingsShowRead => 'Mesajları okuduğumu göster';
+
+  @override
+  String get settingsShowReadHint =>
+      'Bu kapalıyken başkalarının senin mesajlarını ne zaman okuduğunu göremezsin.';
+
+  @override
+  String get settingsAvatarVisibility => 'Profil fotoğrafını kimler görsün';
+
+  @override
+  String get settingsAvatarEveryone => 'Herkes';
+
+  @override
+  String get settingsAvatarEveryoneHint => 'Profilini görebilen herkes';
+
+  @override
+  String get settingsAvatarContacts => 'Kişilerim';
+
+  @override
+  String get settingsAvatarContactsHint => 'Yalnızca kaydettiğin kişiler';
+
+  @override
+  String get settingsAvatarNobody => 'Hiç kimse';
+
+  @override
+  String get settingsAvatarNobodyHint =>
+      'Yalnızca sen -- diğerleri baş harflerini görür';
+
+  @override
+  String get settingsSignedInAs => 'Google ile giriş yapılan hesap';
+
+  @override
+  String get settingsUnknownAccount => 'Bilinmeyen hesap';
+
+  @override
+  String get settingsSignOut => 'Çıkış yap';
+
+  @override
+  String settingsVersion(String name, int build) {
+    return 'Sürüm $name ($build)';
+  }
+
+  @override
+  String get appTagline => 'Hep bağlantıda kal';
+
+  @override
+  String get settingsLicences => 'Açık kaynak lisansları';
+
+  @override
+  String get notifSwitchHint => 'Uygulama kapalıyken yeni mesajlar';
+
+  @override
+  String get notifLockScreen => 'Kilit ekranında';
+
+  @override
+  String get notifPreviewFull => 'Ad ve mesaj';
+
+  @override
+  String get notifPreviewSender => 'Yalnızca kimden geldiği';
+
+  @override
+  String get notifPreviewNone => 'Ayrıntı yok';
+
+  @override
+  String get notifSampleFull => 'Ayşe: 8\'de görüşürüz';
+
+  @override
+  String get notifSampleSender => 'Ayşe: Yeni mesaj';
+
+  @override
+  String get notifSampleNone => 'SIS: Yeni mesaj';
+
+  @override
+  String get notifNothingMuted => 'Sessize alınan bir şey yok';
+
+  @override
+  String get notifAChat => 'Bir sohbet';
+
+  @override
+  String get notifMuteTitle => 'Bildirimleri sessize al';
+
+  @override
+  String get muteAlways => 'Süresiz';
+
+  @override
+  String muteUntilToday(String time) {
+    return '$time saatine kadar';
+  }
+
+  @override
+  String muteUntilTomorrow(String time) {
+    return 'Yarın $time saatine kadar';
+  }
+
+  @override
+  String muteUntilDate(DateTime date, String time) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat.MMMd(localeName);
+    final String dateString = dateDateFormat.format(date);
+
+    return '$dateString $time saatine kadar';
+  }
+
+  @override
+  String get alertSoundAndVibration => 'Ses ve titreşim';
+
+  @override
+  String get alertSoundHint => 'Yeni mesajlarda ses çal';
+
+  @override
+  String get alertTone => 'Zil sesi';
+
+  @override
+  String get alertToneDefault => 'Sistem varsayılanı';
+
+  @override
+  String get alertVibrationHint => 'Yeni mesajlarda titret';
+
+  @override
+  String get alertChoiceDefault => 'Varsayılan';
+
+  @override
+  String get alertChoiceOn => 'Açık';
+
+  @override
+  String get alertChoiceOff => 'Kapalı';
+
+  @override
+  String get notifExplainerTitle => 'SIS yeni mesajlardan seni haberdar edecek';
+
+  @override
+  String get commonYou => 'Sen';
+
+  @override
+  String get commonGroup => 'Grup';
+
+  @override
+  String get commonSend => 'Gönder';
+
+  @override
+  String get commonRemove => 'Çıkar';
+
+  @override
+  String get commonSkip => 'Atla';
+
+  @override
+  String get commonSearchPeople => 'Kişilerinde ara';
+
+  @override
+  String get commonForwarded => 'İletildi';
+
+  @override
+  String get commonImageUnavailable => 'Görsel kullanılamıyor';
+
+  @override
+  String get composerPhotoLimit => 'Yalnızca ilk 10 fotoğraf gönderildi.';
+
+  @override
+  String get composerReadOnlySystem => 'Burada yalnızca SIS yazabilir';
+
+  @override
+  String get composerLeftGroup => 'Artık bu grubun üyesi değilsin';
+
+  @override
+  String get composerSendPhoto => 'Fotoğraf gönder';
+
+  @override
+  String composerReplyingTo(String name) {
+    return '$name kişisine yanıt';
+  }
+
+  @override
+  String get composerCancelReply => 'Yanıtı iptal et';
+
+  @override
+  String get composerEditing => 'Mesaj düzenleniyor';
+
+  @override
+  String get composerCancelEdit => 'Düzenlemeyi iptal et';
+
+  @override
+  String get quoteOriginal => 'Asıl mesaj';
+
+  @override
+  String get quoteDeleted => 'Bu mesaj silindi';
+
+  @override
+  String get quotePhoto => '📷 Fotoğraf';
+
+  @override
+  String get listNoMessages => 'Henüz mesaj yok';
+
+  @override
+  String listYouPrefix(String message) {
+    return 'Sen: $message';
+  }
+
+  @override
+  String get listEmpty => 'Henüz sohbet yok.\nYeni sohbet ile başla.';
+
+  @override
+  String get listSearchHint => 'Mesajlarda ara';
+
+  @override
+  String get listNoResults => 'Mesaj bulunamadı';
+
+  @override
+  String get listConversation => 'Sohbet';
+
+  @override
+  String get statusTyping => 'yazıyor…';
+
+  @override
+  String statusPeopleTyping(int count) {
+    return '$count kişi yazıyor…';
+  }
+
+  @override
+  String statusWhoTyping(String name) {
+    return '$name yazıyor…';
+  }
+
+  @override
+  String get statusOnline => 'çevrimiçi';
+
+  @override
+  String get lastSeenJustNow => 'az önce görüldü';
+
+  @override
+  String lastSeenMinutes(int minutes) {
+    return '$minutes dk önce görüldü';
+  }
+
+  @override
+  String lastSeenToday(String time) {
+    return 'bugün $time görüldü';
+  }
+
+  @override
+  String lastSeenYesterday(String time) {
+    return 'dün $time görüldü';
+  }
+
+  @override
+  String lastSeenDate(String date) {
+    return '$date görüldü';
+  }
+
+  @override
+  String get messageEmpty => 'Henüz mesaj yok. Bir şey yaz.';
+
+  @override
+  String get addMembersDone => 'Gruba eklendi';
+
+  @override
+  String get addMembersNoneTitle => 'Eklenecek kimse kalmadı';
+
+  @override
+  String get addMembersNoneBody => 'Kişilerindeki herkes zaten bu grupta.';
+
+  @override
+  String get addMembersOldTitle => 'Eski mesajlar gösterilsin mi?';
+
+  @override
+  String get addMembersOldHint =>
+      'Kapalıyken yalnızca bundan sonra gönderilenler görünür.';
+
+  @override
+  String get addMembersAdding => 'Ekleniyor…';
+
+  @override
+  String get addMembersAdd => 'Ekle';
+
+  @override
+  String addMembersAddCount(int count) {
+    return 'Ekle ($count)';
+  }
+
+  @override
+  String get contactAdded => 'Kişilere eklendi';
+
+  @override
+  String get contactRemoved => 'Kişilerden çıkarıldı';
+
+  @override
+  String get contactAdd => 'Kişilere ekle';
+
+  @override
+  String get contactRemove => 'Kişilerden çıkar';
+
+  @override
+  String get newChatTagHint => 'Tam etiketle bul';
+
+  @override
+  String get newChatNoTag => 'Bu etikette kimse yok';
+
+  @override
+  String get newChatFound => 'Bulundu';
+
+  @override
+  String get newChatChat => 'Sohbet';
+
+  @override
+  String get newChatEmpty => 'Henüz kimse yok — etiketiyle birini bul';
+
+  @override
+  String forwardDoneMany(int count) {
+    return '$count sohbete iletildi';
+  }
+
+  @override
+  String get forwardTitle => 'İlet';
+
+  @override
+  String get forwardSearch => 'Sohbetlerde ve kişilerde ara';
+
+  @override
+  String get forwardPrefix => 'İletiliyor: ';
+
+  @override
+  String get forwardPeople => 'Kişiler';
+
+  @override
+  String get forwardNothing => 'Hiçbir şey bulunamadı';
+
+  @override
+  String forwardSendCount(int count) {
+    return 'Gönder ($count)';
+  }
+
+  @override
+  String get avatarTakePhoto => 'Fotoğraf çek';
+
+  @override
+  String get avatarChoose => 'Galeriden seç';
+
+  @override
+  String get avatarRemove => 'Fotoğrafı kaldır';
+
+  @override
+  String get cameraFailed => 'Kamera fotoğraf çekemedi.';
+
+  @override
+  String get newGroupName => 'Grup adı';
+
+  @override
+  String get newGroupNobody => 'Henüz başka kimse giriş yapmadı';
+
+  @override
+  String get newGroupCreate => 'Grubu oluştur';
+
+  @override
+  String membersRemoved(String name) {
+    return '$name çıkarıldı';
+  }
+
+  @override
+  String membersNowAdmin(String name) {
+    return '$name artık yönetici';
+  }
+
+  @override
+  String membersNoLongerAdmin(String name) {
+    return '$name artık yönetici değil';
+  }
+
+  @override
+  String get membersEmpty => 'Üye yok';
+
+  @override
+  String membersYou(String name) {
+    return '$name (sen)';
+  }
+
+  @override
+  String get membersAdmin => 'Yönetici';
+
+  @override
+  String get membersRemoveAdmin => 'Yöneticiliği al';
+
+  @override
+  String get membersMakeAdmin => 'Yönetici yap';
+
+  @override
+  String get membersLeft => 'Ayrıldı';
+
+  @override
+  String get membersRemovedBadge => 'Çıkarıldı';
+
+  @override
+  String get bubbleDeletedByAdmin => 'Yönetici tarafından silindi';
+
+  @override
+  String bubbleEdited(String time) {
+    return 'düzenlendi $time';
+  }
+
+  @override
+  String get linksEmpty => 'Henüz paylaşılan bağlantı yok';
+
+  @override
+  String linkOpenFailed(String host) {
+    return '$host açılamadı';
+  }
+
+  @override
+  String get mediaEmpty => 'Henüz paylaşılan fotoğraf yok';
+
+  @override
+  String eventLeft(String name) {
+    return '$name ayrıldı';
+  }
+
+  @override
+  String eventRemoved(String name) {
+    return '$name çıkarıldı';
+  }
+
+  @override
+  String eventAdded(String name) {
+    return '$name eklendi';
+  }
+
+  @override
+  String get previewRemovePhoto => 'Bu fotoğrafı kaldır';
+
+  @override
+  String get systemChatSubtitle => 'Uygulamadaki yenilikler';
+
+  @override
+  String viewerCounter(int index, int total) {
+    return '$index / $total';
+  }
+
+  @override
+  String get viewerMore => 'Daha fazla';
+
+  @override
+  String get searchInChat => 'Bu sohbette ara';
+
+  @override
+  String get searchNoResults => 'Sonuç yok';
+
+  @override
+  String get messageCopied => 'Kopyalandı';
+
+  @override
+  String get photoOpenFailed => 'Bu fotoğraf açılamadı.';
+
+  @override
+  String get cropUnusable => 'Bu fotoğraf kullanılamadı.';
+
+  @override
+  String get menuClose => 'Menüyü kapat';
+
+  @override
+  String get groupPictureRemoved => 'Grup fotoğrafı kaldırıldı';
+
+  @override
+  String get groupPictureUpdated => 'Grup fotoğrafı güncellendi';
+
+  @override
+  String groupMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count üye',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get groupTabMembers => 'Üyeler';
+
+  @override
+  String get groupTabMedia => 'Medya';
+
+  @override
+  String get groupTabLinks => 'Bağlantılar';
+
+  @override
+  String get attachLoadMoreFailed => 'Daha fazla fotoğraf yüklenemedi.';
+
+  @override
+  String attachLimit(int count) {
+    return 'Tek seferde en fazla $count fotoğraf gönderebilirsin.';
+  }
+
+  @override
+  String get attachOpenFailedMany => 'Bu fotoğraflar açılamadı.';
+
+  @override
+  String get attachOpenFailedSome => 'Bazı fotoğraflar açılamadı.';
+
+  @override
+  String get attachOpenFailed => 'Açılamadı.';
+
+  @override
+  String get attachRecentPhotos => 'Son fotoğraflar';
+
+  @override
+  String get attachAllowMore => 'Daha fazlasına izin ver';
+
+  @override
+  String get attachNoPhotos => 'Henüz fotoğraf yok';
+
+  @override
+  String attachSendPhotos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count fotoğraf gönder',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get attachFasterTitle => 'Fotoğrafları daha hızlı gönder';
+
+  @override
+  String get attachFasterBody =>
+      'Galeri burada hemen yüklensin diye erişime izin ver – sen göndermeden hiçbir şey yüklenmez.';
+
+  @override
+  String get attachOpenSettings => 'Ayarları aç';
+
+  @override
+  String get attachAllowPhotos => 'Fotoğraflara izin ver';
+
+  @override
+  String get attachNotNow => 'Şimdi değil';
+
+  @override
+  String get attachCamera => 'Kamera';
+
+  @override
+  String get onboardingWelcome => 'Hoş geldin';
+
+  @override
+  String get onboardingHeading => 'Diğerleri seni nasıl görsün?';
+
+  @override
+  String get onboardingHint =>
+      'İkisini de sonra Ayarlar\'dan değiştirebilirsin.';
+
+  @override
+  String get tagChecking => 'Kontrol ediliyor…';
+
+  @override
+  String tagFree(String tag) {
+    return '@$tag müsait';
+  }
+
+  @override
+  String tagTaken(String tag) {
+    return '@$tag alınmış';
+  }
+
+  @override
+  String get tagUnknown => 'Müsaitlik kontrol edilemedi';
+
+  @override
+  String get profileDisplayName => 'Görünen ad';
+
+  @override
+  String get profileDisplayNameHint =>
+      'Diğer üyelere görünür. Benzersiz olması gerekmez.';
+
+  @override
+  String get profileTag => 'Etiket';
+
+  @override
+  String get profileTagHint => 'Benzersiz. Harf, rakam ve _; 3-20 karakter.';
+
+  @override
+  String get signInBody => 'Listendeki kişiler için özel mesajlar.';
+
+  @override
+  String get signInGoogle => 'Google ile devam et';
+
+  @override
+  String get signInInvitedOnly =>
+      'Yalnızca davet edilen Google hesapları giriş yapabilir.';
+
+  @override
+  String get statusDeniedTitle => 'Erişim reddedildi';
+
+  @override
+  String get statusDeniedBody =>
+      'Bu Google hesabı şu an SIS için onaylı değil.';
+
+  @override
+  String get statusConnectTitle => 'Bağlanılamadı';
+
+  @override
+  String get statusStartTitle => 'SIS başlatılamadı';
+
+  @override
+  String statusStartBody(String reason) {
+    return 'Uygulamayı yeniden başlat. Yine olmazsa uygulamayı kaldırıp tekrar yükle.\n\n$reason';
+  }
+
+  @override
+  String get updateAvailable => 'Güncelleme var';
+
+  @override
+  String get updateLater => 'Sonra';
+
+  @override
+  String get updateAction => 'Güncelle';
+
+  @override
+  String get updateDownloading => 'Güncelleme indiriliyor…';
+
+  @override
+  String get updateReady => 'Yüklemeye hazır';
+
+  @override
+  String get updateRestart => 'Yeniden başlat';
+
+  @override
+  String get updateRequiredTitle => 'Güncelleme gerekli';
+
+  @override
+  String updateRequiredBody(int installed, int minimum) {
+    return 'Bu sürüm ($installed) artık desteklenmiyor (en az $minimum).';
+  }
+
+  @override
+  String get updateNow => 'Şimdi güncelle';
+
+  @override
+  String licencesCount(int count) {
+    return '$count lisans';
+  }
+
+  @override
+  String get commonConversation => 'Sohbet';
 }

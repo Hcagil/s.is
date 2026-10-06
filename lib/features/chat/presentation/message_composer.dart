@@ -168,7 +168,7 @@ class _ComposerState extends ConsumerState<_Composer>
         if (picked.dropped > 0) {
           showSisNotice(
             context,
-            'Only the first 10 photos were sent.',
+            AppLocalizations.of(context).composerPhotoLimit,
             isError: false,
           );
         }
@@ -179,6 +179,7 @@ class _ComposerState extends ConsumerState<_Composer>
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final id = _conversationId;
     // A group left or been removed from: read-only, nothing more to write.
     // Checked before the listeners below register at all -- there is
@@ -213,9 +214,7 @@ class _ComposerState extends ConsumerState<_Composer>
           16 + _composerBottomInset(context),
         ),
         child: Text(
-          isSystem
-              ? 'Only SIS can post here'
-              : "You're no longer in this group",
+          isSystem ? l.composerReadOnlySystem : l.composerLeftGroup,
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -302,7 +301,7 @@ class _ComposerState extends ConsumerState<_Composer>
                   key: const ValueKey('composer-attach'),
                   onPressed: _sending ? null : _attach,
                   icon: const Icon(Icons.attach_file_rounded),
-                  tooltip: 'Send a photo',
+                  tooltip: l.composerSendPhoto,
                 ),
               ),
               GreyOption(
@@ -334,8 +333,8 @@ class _ComposerState extends ConsumerState<_Composer>
                     if (ref.read(editingProvider) != null) return;
                     ref.read(draftsProvider.notifier).setText(id, text);
                   },
-                  decoration: const InputDecoration(
-                    hintText: 'Message',
+                  decoration: InputDecoration(
+                    hintText: l.commonMessage,
                     counterText: '',
                   ),
                 ),
@@ -423,14 +422,15 @@ class _ReplyBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     final me = ref.watch(currentUserIdProvider);
     final name = message.senderId == me
-        ? 'You'
+        ? l.commonYou
         : (ref.watch(yourPeopleProvider).value ?? const [])
                   .where((m) => m.userId == message.senderId)
                   .firstOrNull
                   ?.displayName ??
-              'Member';
+              l.commonMember;
     return Container(
       key: const ValueKey('reply-bar'),
       margin: const EdgeInsets.fromLTRB(10, 0, 0, 6),
@@ -451,14 +451,14 @@ class _ReplyBar extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Replying to $name',
+                  l.composerReplyingTo(name),
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
                 Text(
-                  quoteText(message),
+                  quoteText(l, message),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -467,7 +467,7 @@ class _ReplyBar extends ConsumerWidget {
           ),
           IconButton(
             key: const ValueKey('reply-cancel'),
-            tooltip: 'Cancel reply',
+            tooltip: l.composerCancelReply,
             icon: const Icon(Icons.close),
             onPressed: () => ref.read(replyingToProvider.notifier).clear(),
           ),
@@ -485,6 +485,7 @@ class _EditBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     return Container(
       key: const ValueKey('edit-bar'),
       margin: const EdgeInsets.fromLTRB(10, 0, 0, 6),
@@ -505,14 +506,14 @@ class _EditBar extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Editing message',
+                  l.composerEditing,
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
                 Text(
-                  quoteText(message),
+                  quoteText(l, message),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -521,7 +522,7 @@ class _EditBar extends ConsumerWidget {
           ),
           IconButton(
             key: const ValueKey('edit-cancel'),
-            tooltip: 'Cancel edit',
+            tooltip: l.composerCancelEdit,
             icon: const Icon(Icons.close),
             onPressed: () => ref.read(editingProvider.notifier).clear(),
           ),
@@ -532,10 +533,10 @@ class _EditBar extends ConsumerWidget {
 }
 
 /// A quoted message in one line: its text, "Photo", or what became of it.
-String quoteText(Message? message) => switch (message) {
-  null => 'Original message',
-  Message(isDeleted: true) => 'This message was deleted',
+String quoteText(AppLocalizations l, Message? message) => switch (message) {
+  null => l.quoteOriginal,
+  Message(isDeleted: true) => l.quoteDeleted,
   Message(:final body) when body.isNotEmpty => body,
-  Message(hasAttachment: true) => '📷 Photo',
-  _ => 'Message',
+  Message(hasAttachment: true) => l.quotePhoto,
+  _ => l.commonMessage,
 };

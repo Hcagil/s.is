@@ -20,6 +20,7 @@ class NotificationsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     Future<void> save(NotificationSettings next) async {
       final r = await ref
           .read(notificationSettingsProvider.notifier)
@@ -30,19 +31,19 @@ class NotificationsScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
+      appBar: AppBar(title: Text(l.commonNotifications)),
       body: switch (ref.watch(notificationSettingsProvider)) {
         AsyncData(:final value) => ListView(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           children: [
             SisSwitchTile(
               key: const ValueKey('notif-enabled'),
-              title: 'Notifications',
-              subtitle: 'New messages when the app is closed',
+              title: l.commonNotifications,
+              subtitle: l.notifSwitchHint,
               value: value.enabled,
               onChanged: (on) => save(value.copyWith(enabled: on)),
             ),
-            const _Header('On the lock screen'),
+            _Header(l.notifLockScreen),
             Column(
               children: [
                 for (final p in NotificationPreview.values)
@@ -52,20 +53,20 @@ class NotificationsScreen extends ConsumerWidget {
                     groupValue: value.preview,
                     onChanged: (p) => save(value.copyWith(preview: p)),
                     title: switch (p) {
-                      NotificationPreview.full => 'Name and message',
-                      NotificationPreview.sender => 'Only who it is from',
-                      NotificationPreview.none => 'No details',
+                      NotificationPreview.full => l.notifPreviewFull,
+                      NotificationPreview.sender => l.notifPreviewSender,
+                      NotificationPreview.none => l.notifPreviewNone,
                     },
                     subtitle: switch (p) {
-                      NotificationPreview.full => 'Ayşe: See you at 8',
-                      NotificationPreview.sender => 'Ayşe: New message',
-                      NotificationPreview.none => 'SIS: New message',
+                      NotificationPreview.full => l.notifSampleFull,
+                      NotificationPreview.sender => l.notifSampleSender,
+                      NotificationPreview.none => l.notifSampleNone,
                     },
                   ),
               ],
             ),
             const AlertDefaultsSection(),
-            const _Header('Muted'),
+            _Header(l.chatMutedLabel),
             const _MutedList(),
           ],
         ),
@@ -80,7 +81,7 @@ class NotificationsScreen extends ConsumerWidget {
                 OutlinedButton(
                   onPressed: () =>
                       ref.read(notificationSettingsProvider.notifier).retry(),
-                  child: const Text('Try again'),
+                  child: Text(l.commonTryAgain),
                 ),
               ],
             ),
@@ -123,10 +124,11 @@ class _MutedList extends ConsumerWidget {
   }
 
   Widget _buildActive(BuildContext context, WidgetRef ref, List<Mute> mutes) {
+    final l = AppLocalizations.of(context);
     final now = DateTime.now();
     final active = mutes.where((m) => m.activeAt(now)).toList();
     if (active.isEmpty) {
-      return const ListTile(title: Text('Nothing is muted'), enabled: false);
+      return ListTile(title: Text(l.notifNothingMuted), enabled: false);
     }
     final members = ref.watch(yourPeopleProvider).value ?? const [];
     final conversations = ref.watch(conversationListProvider).value ?? const [];
@@ -153,19 +155,19 @@ class _MutedList extends ConsumerWidget {
                         .where((mem) => mem.userId == m.target)
                         .firstOrNull
                         ?.displayName ??
-                    'Someone',
+                    l.commonSomeone,
               MuteKind.conversation =>
                 conversations
                         .where((c) => c.id == m.target)
                         .firstOrNull
                         ?.label ??
-                    'A chat',
+                    l.notifAChat,
             }),
-            subtitle: Text(muteLabel(m.until, now)),
+            subtitle: Text(muteEndLabel(l, m.until, now)),
             trailing: TextButton(
               key: ValueKey('unmute-${m.kind.name}-${m.target}'),
               onPressed: () => unmute(m.kind, m.target),
-              child: const Text('Unmute'),
+              child: Text(l.chatMenuUnmute),
             ),
           ),
       ],
@@ -182,6 +184,22 @@ String muteLengthLabel(AppLocalizations l, MuteLength length) =>
       MuteLength.threeDays => l.muteThreeDays,
       MuteLength.oneWeek => l.muteOneWeek,
     };
+
+/// How a mute's end reads on screen, in the member's language.
+String muteEndLabel(AppLocalizations l, DateTime? until, DateTime now) {
+  final end = muteEnd(until, now);
+  final at = end.at;
+  if (at == null) return l.muteAlways;
+  final time =
+      '${at.hour.toString().padLeft(2, '0')}:'
+      '${at.minute.toString().padLeft(2, '0')}';
+  return switch (end.day) {
+    MuteDay.always => l.muteAlways,
+    MuteDay.today => l.muteUntilToday(time),
+    MuteDay.tomorrow => l.muteUntilTomorrow(time),
+    MuteDay.later => l.muteUntilDate(at, time),
+  };
+}
 
 /// Shows and changes whether one conversation or person is muted. Tapping it
 /// opens a floating card below-right to pick a length, or to unmute; a tap on
@@ -235,6 +253,7 @@ class MuteTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     final mutes = ref.watch(mutesProvider).value ?? const <Mute>[];
     final active = activeMute(mutes, kind, target, DateTime.now());
     return SisSettingsRow(
@@ -242,8 +261,10 @@ class MuteTile extends ConsumerWidget {
       icon: active == null
           ? Icons.notifications_outlined
           : Icons.notifications_off_outlined,
-      title: active == null ? 'Mute notifications' : 'Muted',
-      value: active == null ? null : muteLabel(active.until, DateTime.now()),
+      title: active == null ? l.notifMuteTitle : l.chatMutedLabel,
+      value: active == null
+          ? null
+          : muteEndLabel(l, active.until, DateTime.now()),
       onTap: () => _open(context, ref, active),
     );
   }

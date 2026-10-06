@@ -16,7 +16,7 @@ import '../../notifications/domain/notification_settings.dart';
 import '../../notifications/presentation/alert_widgets.dart';
 import '../../notifications/presentation/notification_pages.dart';
 import '../../presence/application/presence_controllers.dart';
-import '../../presence/domain/last_seen.dart';
+import '../../presence/presentation/last_seen_text.dart';
 import '../application/chat_controllers.dart';
 import '../application/group_controller.dart';
 import '../domain/group_member.dart';

@@ -274,9 +274,10 @@ begin
   select coalesce(array_agg(m.attachment_path), '{}') into paths
     from public.messages m
    where m.conversation_id = conversation and m.attachment_path is not null;
-  select paths || c.avatar_path into paths
-    from public.conversations c
-   where c.id = conversation and c.avatar_path is not null;
+  paths := paths || coalesce(
+    (select array[c.avatar_path] from public.conversations c
+      where c.id = conversation and c.avatar_path is not null),
+    '{}');
   insert into app_private.deleted_attachments(path, user_id)
     select p, auth.uid() from unnest(paths) as p
     on conflict (path) do update

@@ -53,9 +53,9 @@ final class SupabaseGroupSettingsRepository implements GroupSettingsRepository {
         'delete_group',
         params: {'conversation': conversationId},
       );
-      if (paths is List && paths.isNotEmpty) {
+      if (paths != null) {
         try {
-          final all = List<String>.from(paths);
+          final all = paths is List ? List<String>.from(paths) : <String>[];
           final pictures = all.where((p) => p.startsWith('group/')).toList();
           final files = all.where((p) => !p.startsWith('group/')).toList();
           if (files.isNotEmpty) {

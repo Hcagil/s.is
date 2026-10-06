@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/startup_failure.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// A full-screen status with one action (denied, or error with retry).
@@ -113,7 +114,7 @@ class SetupRequiredScreen extends StatelessWidget {
 class StartupFailedScreen extends StatelessWidget {
   const StartupFailedScreen(this.reason, {super.key});
 
-  final String reason;
+  final StartupFailure reason;
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +134,11 @@ class StartupFailedScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  AppLocalizations.of(context).statusStartBody(reason),
+                  AppLocalizations.of(context).statusStartBody(switch (reason) {
+                    StartupFailure.bootstrap => AppLocalizations.of(
+                      context,
+                    ).statusStartBootstrap,
+                  }),
                   textAlign: TextAlign.center,
                 ),
               ],

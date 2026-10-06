@@ -21,7 +21,9 @@ class _MembersTab extends ConsumerWidget {
       case Ok():
         showSisNotice(
           context,
-          AppLocalizations.of(context).membersRemoved(m.member.displayName),
+          AppLocalizations.of(context).membersRemoved(
+            nameOrMember(AppLocalizations.of(context), m.member.displayName),
+          ),
         );
       case Err(:final failure):
         showSisNotice(context, failure.message, isError: true);
@@ -44,8 +46,8 @@ class _MembersTab extends ConsumerWidget {
         showSisNotice(
           context,
           isAdmin
-              ? l.membersNowAdmin(m.member.displayName)
-              : l.membersNoLongerAdmin(m.member.displayName),
+              ? l.membersNowAdmin(nameOrMember(l, m.member.displayName))
+              : l.membersNoLongerAdmin(nameOrMember(l, m.member.displayName)),
         );
       case Err(:final failure):
         showSisNotice(context, failure.message, isError: true);
@@ -159,7 +161,7 @@ class _MembersTab extends ConsumerWidget {
               _MemberRow(
                 key: ValueKey('group-member-${m.member.userId}'),
                 avatar: PersonAvatar(
-                  label: m.member.displayName,
+                  label: nameOrMember(l, m.member.displayName),
                   seed: m.member.userId,
                   online: online.contains(m.member.userId),
                   avatarPath: m.member.avatarPath,
@@ -167,8 +169,8 @@ class _MembersTab extends ConsumerWidget {
                   radius: 18,
                 ),
                 title: m.member.userId == me
-                    ? l.membersYou(m.member.displayName)
-                    : m.member.displayName,
+                    ? l.membersYou(nameOrMember(l, m.member.displayName))
+                    : nameOrMember(l, m.member.displayName),
                 subtitle: [
                   if (m.isAdmin) l.membersAdmin,
                   if (m.member.tag != null) '@${m.member.tag}',
@@ -208,7 +210,7 @@ class _MembersTab extends ConsumerWidget {
                         MaterialPageRoute<void>(
                           builder: (_) => PersonScreen(
                             userId: m.member.userId,
-                            fallbackName: m.member.displayName,
+                            fallbackName: nameOrMember(l, m.member.displayName),
                             fallbackAvatarPath: m.member.avatarPath,
                           ),
                         ),
@@ -231,14 +233,14 @@ class _MembersTab extends ConsumerWidget {
                   avatar: Opacity(
                     opacity: .5,
                     child: PersonAvatar(
-                      label: m.member.displayName,
+                      label: nameOrMember(l, m.member.displayName),
                       seed: m.member.userId,
                       avatarPath: m.member.avatarPath,
                       groupSlot: m.colorSlot,
                       radius: 18,
                     ),
                   ),
-                  title: m.member.displayName,
+                  title: nameOrMember(l, m.member.displayName),
                   titleColor: Theme.of(context).colorScheme.onSurfaceVariant,
                   subtitle: m.leftReason == LeftReason.removed
                       ? l.membersRemovedBadge

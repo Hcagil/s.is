@@ -1006,4 +1006,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonConversation => 'Conversation';
+
+  @override
+  String get statusStartBootstrap => 'SIS could not start. Please try again.';
 }

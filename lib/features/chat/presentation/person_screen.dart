@@ -148,6 +148,7 @@ class _ContactButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     final ids = ref.watch(contactsControllerProvider).value;
     if (ids == null || userId == ref.watch(currentUserIdProvider)) {
       return const SizedBox.shrink();
@@ -158,9 +159,7 @@ class _ContactButton extends ConsumerWidget {
       icon: isContact
           ? Icons.person_remove_outlined
           : Icons.person_add_alt_1_outlined,
-      title: isContact
-          ? AppLocalizations.of(context).contactRemove
-          : AppLocalizations.of(context).contactAdd,
+      title: isContact ? l.contactRemove : l.contactAdd,
       onTap: () async {
         final notifier = ref.read(contactsControllerProvider.notifier);
         final result = isContact

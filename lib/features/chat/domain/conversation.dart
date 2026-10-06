@@ -130,6 +130,9 @@ final class Conversation {
   bool get isGroup => title != null;
 
   /// What the list shows: the group's title, or who you are talking to.
-  String get label =>
-      isSystem ? 'SIS' : (title ?? other?.displayName ?? 'Conversation');
+  String get label {
+    if (isSystem) return 'SIS';
+    final name = other?.displayName ?? '';
+    return title ?? (name.isEmpty ? 'Conversation' : name);
+  }
 }

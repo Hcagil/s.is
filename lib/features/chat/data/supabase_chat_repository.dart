@@ -230,8 +230,7 @@ final class SupabaseChatRepository implements ChatRepository {
                 ? null
                 : Member(
                     userId: otherByConversation[id]!,
-                    displayName:
-                        nameByUser[otherByConversation[id]!] ?? 'Member',
+                    displayName: nameByUser[otherByConversation[id]!] ?? '',
                     avatarPath: avatarByUser[otherByConversation[id]!],
                   ),
             lastMessage: previewBy[id]?.body,
@@ -247,7 +246,7 @@ final class SupabaseChatRepository implements ChatRepository {
                     for (final e
                         in (slotByConversation[id] ?? const <String, int>{})
                             .entries)
-                      e.key: GroupVoice(nameByUser[e.key] ?? 'Member', e.value),
+                      e.key: GroupVoice(nameByUser[e.key] ?? '', e.value),
                   },
           ),
       ];
@@ -365,7 +364,7 @@ final class SupabaseChatRepository implements ChatRepository {
             member: Member(
               userId: row['user_id'] as String,
               displayName:
-                  byId[row['user_id']]?['display_name'] as String? ?? 'Member',
+                  byId[row['user_id']]?['display_name'] as String? ?? '',
               tag: byId[row['user_id']]?['tag'] as String?,
               avatarPath: byId[row['user_id']]?['avatar_path'] as String?,
             ),

@@ -12,6 +12,7 @@ import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
 import '../domain/conversation.dart';
 import '../domain/highlight.dart';
+import 'member_name.dart';
 import 'message_screen.dart';
 import 'new_chat_page.dart';
 import 'new_group_page.dart';
@@ -224,7 +225,7 @@ class _ConversationTile extends ConsumerWidget {
                 TextSpan(
                   children: [
                     TextSpan(
-                      text: voice.name,
+                      text: nameOrMember(l, voice.name),
                       style: TextStyle(
                         color: groupColor(context, voice.slot),
                         fontWeight: FontWeight.w600,

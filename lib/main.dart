@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/sis_app.dart';
 import 'core/runtime_config.dart';
+import 'core/startup_failure.dart';
 import 'core/startup_marks.dart';
 import 'features/appearance/application/appearance_controller.dart';
 import 'features/appearance/data/shared_prefs_appearance_store.dart';
@@ -195,9 +196,7 @@ Future<void> main() async {
       ProviderScope(
         overrides: [
           ...appearanceOverrides,
-          startupErrorProvider.overrideWithValue(
-            'SIS could not start. Please try again.',
-          ),
+          startupErrorProvider.overrideWithValue(StartupFailure.bootstrap),
         ],
         child: const SisApp(),
       ),

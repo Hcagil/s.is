@@ -298,5 +298,6 @@
   "updateRequiredBody": "Bu sürüm ({installed}) artık desteklenmiyor (en az {minimum}).",
   "updateNow": "Şimdi güncelle",
   "licencesCount": "{count} lisans",
-  "commonConversation": "Sohbet"
+  "commonConversation": "Sohbet",
+  "statusStartBootstrap": "SIS başlatılamadı. Tekrar dene."
 }

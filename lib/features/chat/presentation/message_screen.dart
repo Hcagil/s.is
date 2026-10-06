@@ -43,6 +43,7 @@ import 'chat_search_bar.dart';
 import 'group_event_line.dart';
 import 'swipeable_message.dart';
 import 'message_actions.dart';
+import 'member_name.dart';
 import 'message_menu_card.dart';
 import 'person_avatar.dart';
 import 'photo_viewer.dart';
@@ -514,7 +515,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
               const <GroupMember>[]
         : const <GroupMember>[];
     final names = {
-      for (final m in roster) m.member.userId: m.member.displayName,
+      for (final m in roster)
+        m.member.userId: nameOrMember(
+          AppLocalizations.of(context),
+          m.member.displayName,
+        ),
     };
     final departedSenderIds = {
       for (final m in roster)
@@ -536,13 +541,19 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     final ReaderPeople people = {
       for (final m in roster)
         m.member.userId: (
-          name: m.member.displayName,
+          name: nameOrMember(
+            AppLocalizations.of(context),
+            m.member.displayName,
+          ),
           avatarPath: m.member.avatarPath,
           slot: m.colorSlot,
         ),
       if (!isGroup && otherUserId != null)
         otherUserId: (
-          name: listed?.other?.displayName ?? title ?? 'Member',
+          name: nameOrMember(
+            AppLocalizations.of(context),
+            listed?.other?.displayName ?? title ?? '',
+          ),
           avatarPath: listed?.other?.avatarPath,
           slot: null,
         ),

@@ -777,5 +777,7 @@
   "licencesCount": "{count, plural, =1{1 licence} other{{count} licences}}",
   "@licencesCount": {"description": "Number of licences of a package", "placeholders": {"count": {"type": "int"}}},
   "commonConversation": "Conversation",
-  "@commonConversation": {"description": "Fallback title for a chat whose name is not known yet"}
+  "@commonConversation": {"description": "Fallback title for a chat whose name is not known yet"},
+  "statusStartBootstrap": "SIS could not start. Please try again.",
+  "@statusStartBootstrap": {"description": "Reason shown on the start-up error screen when start-up itself failed"}
 }

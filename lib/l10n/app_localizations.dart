@@ -1891,6 +1891,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Conversation'**
   String get commonConversation;
+
+  /// Reason shown on the start-up error screen when start-up itself failed
+  ///
+  /// In en, this message translates to:
+  /// **'SIS could not start. Please try again.'**
+  String get statusStartBootstrap;
 }
 
 class _AppLocalizationsDelegate

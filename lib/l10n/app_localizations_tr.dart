@@ -1003,4 +1003,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get commonConversation => 'Sohbet';
+
+  @override
+  String get statusStartBootstrap => 'SIS başlatılamadı. Tekrar dene.';
 }

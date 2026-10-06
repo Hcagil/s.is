@@ -57,7 +57,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
     final members = ref.watch(conversationMembersProvider(conversationId));
     final names = {
       for (final m in members.value ?? const <Member>[])
-        m.userId: m.displayName,
+        m.userId: nameOrMember(AppLocalizations.of(context), m.displayName),
     };
     // Current members only -- a departed member still has a row (was_member
     // keeps their history readable), but does not belong in "N members".

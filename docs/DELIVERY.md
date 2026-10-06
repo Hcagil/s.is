@@ -25,6 +25,9 @@ Types: `feat` (user-visible feature), `fix` (bug), `chore` (maintenance,
 dependencies, tooling), `docs`, `ci` (workflows), `refactor`, `test`, `db`
 (migrations). Examples: `feat/google-sign-in`, `ci/play-release-workflow`,
 `db/conversations-schema`, `fix/sign-in-reason-hidden`.
+The description says in plain words what the change does, so the branch
+list reads on its own: no release codes, slice numbers or task ids
+(`fix/notification-reply-needs-unlock`, not `fix/u1-reply-hide`).
 
 The squash commit title follows Conventional Commits —
 `type(scope): summary` (e.g. `feat(auth): google native sign-in with

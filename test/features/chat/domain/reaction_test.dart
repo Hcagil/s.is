@@ -17,8 +17,6 @@ void main() {
   });
 
   group('applyReaction', () {
-    final now = DateTime.utc(2023, 1, 1, 12, 0, 0);
-
     test('adds a new reaction', () {
       final map = <String, List<Reaction>>{};
       final r = Reaction(messageId: 'm1', userId: 'u1', emoji: '👍');

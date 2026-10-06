@@ -1,7 +1,6 @@
 @Tags(['integration'])
 library;
 
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -68,6 +67,24 @@ Failure _err<T>(Result<T> r) {
   return (r as Err<T>).failure;
 }
 
+/// A new group of [owner] and [member]. Reach (find by tag) is only sought
+/// when the server refuses without it: find_by_tag is rate limited, and the
+/// pair keeps its reach across runs.
+Future<String> _group(
+  SupabaseClient owner,
+  SupabaseClient member,
+  String title,
+) async {
+  final chat = SupabaseChatRepository(owner);
+  final ids = [member.auth.currentUser!.id];
+  var r = await chat.startGroupConversation(title: title, memberIds: ids);
+  if (r is Err<String>) {
+    await findByTag(owner, [member]);
+    r = await chat.startGroupConversation(title: title, memberIds: ids);
+  }
+  return _ok(r);
+}
+
 List<(String, String, String?)> _rows(Iterable<Reaction> rs) => [
   for (final r in rs) (r.messageId, r.userId, r.emoji),
 ];
@@ -101,19 +118,8 @@ void main() {
     remy = SupabaseReactionRepository(remyClient);
     priyaId = priyaClient.auth.currentUser!.id;
     quinlanId = quinlanClient.auth.currentUser!.id;
-    await findByTag(priyaClient, [quinlanClient, remyClient]);
-    club = _ok(
-      await priyaChat.startGroupConversation(
-        title: _stamp('reactions '),
-        memberIds: [quinlanId],
-      ),
-    );
-    other = _ok(
-      await priyaChat.startGroupConversation(
-        title: _stamp('reactions other '),
-        memberIds: [quinlanId],
-      ),
-    );
+    club = await _group(priyaClient, quinlanClient, _stamp('reactions '));
+    other = await _group(priyaClient, quinlanClient, _stamp('reactions o '));
     cleanup.addAll([club, other]);
   });
 
@@ -173,6 +179,8 @@ void main() {
       final sub = stream.listen(heard.add);
       addTearDown(sub.cancel);
       final topic = 'realtime:reactions:$club';
+      // The contract names the channel; topic is the only way to read it.
+      // ignore: invalid_use_of_internal_member
       bool open() => quinlanClient.getChannels().any((c) => c.topic == topic);
       expect(open(), isTrue, reason: 'the channel is reactions:<cid>');
 
@@ -300,12 +308,7 @@ void main() {
 
     setUpAll(() async {
       service = _client(serviceKey());
-      bulk = _ok(
-        await priyaChat.startGroupConversation(
-          title: _stamp('reactions bulk '),
-          memberIds: [quinlanId],
-        ),
-      );
+      bulk = await _group(priyaClient, quinlanClient, _stamp('reactions b '));
       cleanup.add(bulk);
       ids = [for (var i = 0; i < 1001; i++) randomMessageId()];
       final t0 = DateTime.now().toUtc().subtract(const Duration(hours: 1));

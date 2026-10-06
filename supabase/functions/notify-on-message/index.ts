@@ -7,6 +7,7 @@
 // old) and returns who to notify and what each of them may see. A forged or
 // replayed call can at most send a notification that was due anyway, once.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { ACTION_TTL_SECONDS, sha256Hex, signActionToken } from '../_shared/action_token.ts';
 
 // What each recipient may see is decided in SQL, by their own preview
 // setting (app_private.push_targets_for_message); this only delivers it.
@@ -147,9 +148,32 @@ async function send(id: string): Promise<void> {
 
   const token = await accessToken(serviceAccount);
   const projectId = serviceAccount.project_id;
+  // The buttons on the notification (Mark as read, Reply) call
+  // notification-action with a token made here, per recipient and device; see
+  // _shared/action_token.ts. Both keys ride in the data block, which builds
+  // that do not know the buttons ignore.
+  const actionKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const actionUrl = `${Deno.env.get('SUPABASE_URL')!}/functions/v1/notification-action`;
 
   const results = await Promise.allSettled(
-    targets.map((t) => {
+    targets.map(async (t) => {
+      // A token that cannot be made (missing or invalid key) costs the
+      // buttons only; the push itself still goes out.
+      let actionData: Record<string, string> = {};
+      try {
+        actionData = {
+          action_token: await signActionToken({
+            u: t.user_id,
+            c: t.conversation_id,
+            d: await sha256Hex(t.token),
+            a: ['mark_read', 'reply'],
+            e: Math.floor(Date.now() / 1000) + ACTION_TTL_SECONDS,
+          }, actionKey),
+          action_url: actionUrl,
+        };
+      } catch (e) {
+        console.error('action token not minted', (e as Error).message);
+      }
       // iOS shows nothing a data-only push carries (it throttles or drops
       // them) and this app draws no push of its own there, so an iPhone
       // always gets a regular notification, grouped per chat by the system
@@ -196,6 +220,7 @@ async function send(id: string): Promise<void> {
               title: t.title,
               body: t.body,
               ...(group ? { sender: t.sender!, chat: t.chat! } : {}),
+              ...actionData,
               // Android has no remote badge: the app's own notification sets
               // it (Notification.setNumber) from this.
               ...(badge != null ? { badge: String(badge) } : {}),
@@ -206,6 +231,9 @@ async function send(id: string): Promise<void> {
                     payload: {
                       aps: {
                         'thread-id': t.conversation_id,
+                        // The buttons AppDelegate.swift registers for this
+                        // category; an older build has none and shows none.
+                        category: 'SIS_MESSAGE',
                         sound: 'default',
                         ...(badge != null ? { badge } : {}),
                       },

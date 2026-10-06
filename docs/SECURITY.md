@@ -369,6 +369,37 @@ fields, and as an iPhone's alert title and body) under the "Name and message"
 and "Only who it is from" settings; "No details" carries neither (DECISIONS
 2026-10-01).
 
+### Notification buttons (Mark as read, Reply)
+
+A notification's buttons run where no Supabase session exists (the Android
+background isolate, the iOS notification handler), so `notify-on-message`
+signs a short-lived action token into the push and `notification-action`
+(deployed `--no-verify-jwt`) is the only thing that accepts it.
+
+- Token: `v1.<payload>.<signature>`, HMAC-SHA256 with the service-role key.
+  Claims: user, conversation, sha256 of that device's push token, allowed
+  actions, expiry (one hour). Rotating the service-role key voids every
+  outstanding token, which is the intended revocation.
+- The function checks signature, expiry, that the token's conversation is the
+  request's, and that the action is in the token. It then calls
+  `notification_action(...)` (service role only), which acts as the member:
+  it requires the device row bound to the member's active session (a replaced
+  device is refused), repeats the `messages_send` checks (app access,
+  membership, not the system chat) and marks the chat read through the
+  existing `mark_read`.
+- A reply carries a client-generated message id: the same id again is a
+  success without a second message; a different body under a used id is 409.
+- Rate limit: 20 actions per member per rolling minute (`P0429`, HTTP 429),
+  kept in `app_private.notification_action_log` (RLS on, no policies).
+- Who can read the push data: the token travels in the push, so FCM and APNs
+  can read it, and so can any notification-listener app on the phone, which
+  can then fire the buttons for up to an hour (the token names one member, one
+  chat and one device, and dies when the device is replaced). The recipient's
+  user id (UUID) is also in the push data now.
+- A request over 20000 bytes or a reply over 4000 characters is refused (400)
+  before the database; every refused ticket is 403, a missing token 400.
+- Lock-screen Reply: decision pending (owner).
+
 ### Group name colour slot (finding L1)
 
 Former members keep their colour slot, so the number of slots in use leaks how many members a group has had (up to ten). Low risk, accepted.

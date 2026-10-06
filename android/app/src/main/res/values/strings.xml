@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="action_mark_read">Mark as read</string>
+    <string name="action_reply">Reply</string>
+    <string name="action_reply_hint">Message</string>
+    <string name="action_not_sent">Not sent</string>
+</resources>

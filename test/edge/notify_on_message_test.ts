@@ -20,6 +20,7 @@
 //     test/edge/notify_on_message_test.ts
 import postgres from 'npm:postgres@3.4.5';
 import { assert, assertEquals } from 'jsr:@std/assert@1';
+import { ACTION_TTL_SECONDS, sha256Hex, verifyActionToken } from '../../supabase/functions/_shared/action_token.ts';
 
 const apiUrl = Deno.env.get('SUPABASE_TEST_URL') ?? 'http://host.docker.internal:54321';
 const dbUrl = Deno.env.get('SUPABASE_TEST_DB_URL') ??
@@ -87,11 +88,43 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       return Response.json({ error: { code: 401, status: 'UNAUTHENTICATED' } }, { status: 401 });
     }
     const body = JSON.parse(String(init?.body ?? (input as Request).body));
-    sent.push({ url, message: body.message });
+    sent.push({ url, message: await checkActions(body.message) });
     return Response.json({ name: `projects/sis-test/messages/${sent.length}` });
   }
   return realFetch(input, init);
 };
+
+// Update 1 slice 11b: every push carries the notification buttons' ticket --
+// action_token (signed for exactly this recipient, chat and device) and
+// action_url -- and an iPhone alert names the SIS_MESSAGE category. Checked
+// here on every send, then removed, so the shapes below stay the pre-11b
+// ones: the old keys must be unchanged.
+const actionUrl = `${apiUrl}/functions/v1/notification-action`;
+async function checkActions(message: Record<string, unknown>) {
+  const m = structuredClone(message);
+  const data = m.data as Record<string, unknown>;
+  const raw = JSON.stringify(message);
+  assertEquals(data.action_url, actionUrl, `action_url: ${raw}`);
+  const claims = await verifyActionToken(String(data.action_token), serviceKey);
+  assert(claims, `action_token does not verify: ${raw}`);
+  const now = Math.floor(Date.now() / 1000);
+  assertEquals({ ...claims, e: 0 }, {
+    u: data.user_id,
+    c: data.conversation_id,
+    d: await sha256Hex(String(m.token)),
+    a: ['mark_read', 'reply'],
+    e: 0,
+  }, `the token names this recipient, chat and device: ${raw}`);
+  assert(Math.abs(claims.e - (now + ACTION_TTL_SECONDS)) <= 60, `expires in an hour: ${claims.e}`);
+  delete data.action_token;
+  delete data.action_url;
+  const aps = (m.apns as { payload?: { aps?: Record<string, unknown> } } | undefined)?.payload?.aps;
+  if (aps) {
+    assertEquals(aps.category, 'SIS_MESSAGE', `an iPhone alert names the category: ${raw}`);
+    delete aps.category;
+  }
+  return m;
+}
 
 // The runtime the function is deployed into.
 let handler: ((req: Request) => Response | Promise<Response>) | undefined;

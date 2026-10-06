@@ -88,6 +88,16 @@ object PushInbox {
         return null
     }
 
+    /** [raw] without the chat [conversationId], as JSON text (twin of Dart's removeFromInbox); other chats keep their order. */
+    fun remove(raw: String?, conversationId: String): String {
+        val chats = parse(raw)
+        val result = JSONArray()
+        for (i in 0 until chats.length()) {
+            if (chats.getJSONObject(i).optString("c") != conversationId) result.put(chats.getJSONObject(i))
+        }
+        return result.toString()
+    }
+
     /** '1 new message' / 'N new messages', plus ' from K chats' for several chats; '' when empty. */
     fun summary(chats: JSONArray): String {
         if (chats.length() == 0) return ""

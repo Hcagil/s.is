@@ -90,6 +90,53 @@ object InstantPush {
         return if (group && !sender.isNullOrEmpty()) "$sender: $text" else text
     }
 
+    /** The tap contract of flutter_local_notifications, so the app opens the chat as it does for the notification Dart draws. Null when the app has no launch intent. */
+    fun tapIntent(context: Context, id: Int, conversationId: String): PendingIntent? {
+        val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return null
+        launch.action = "SELECT_NOTIFICATION"
+        launch.putExtra("notificationId", id)
+        launch.putExtra("payload", conversationId)
+        return PendingIntent.getActivity(context, id, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    }
+
+    /** The two buttons (Mark as read, Reply with a text box) for a chat's notification. The request code is the notification id; the intents differ by data, so chats and buttons never share a PendingIntent. The reply one is mutable because the system fills in the typed text. */
+    fun addActions(context: Context, builder: NotificationCompat.Builder, conversationId: String, id: Int, token: String, url: String) {
+        val read = PendingIntent.getBroadcast(context, id, NotificationActionReceiver.intentFor(context, conversationId, token, url, false), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val reply = PendingIntent.getBroadcast(context, id, NotificationActionReceiver.intentFor(context, conversationId, token, url, true), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+        builder.addAction(NotificationCompat.Action.Builder(0, context.getString(R.string.action_mark_read), read).setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ).setShowsUserInterface(false).build())
+        builder.addAction(NotificationCompat.Action.Builder(0, context.getString(R.string.action_reply), reply).setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).setShowsUserInterface(false).addRemoteInput(androidx.core.app.RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY).setLabel(context.getString(R.string.action_reply_hint)).build()).build())
+    }
+
+    /** One silent group summary over every waiting chat (the Dart side posts the same, id 0); removed when no chat is left. */
+    fun postSummary(context: Context, inboxChats: org.json.JSONArray) {
+        if (inboxChats.length() == 0) {
+            NotificationManagerCompat.from(context).cancel(SUMMARY_ID)
+            return
+        }
+        val summary = NotificationCompat.Builder(context, CHANNEL_SUMMARY)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setColor(ContextCompat.getColor(context, R.color.notification_accent))
+            .setContentTitle("SIS")
+            .setContentText(PushInbox.summary(inboxChats))
+            .setStyle(
+                NotificationCompat.InboxStyle().also { s ->
+                    for (i in inboxChats.length() - 1 downTo 0) {
+                        val c = inboxChats.getJSONObject(i)
+                        val all = c.getJSONArray("l")
+                        s.addLine(c.optString("t") + ": " + all.getJSONObject(all.length() - 1).optString("x"))
+                    }
+                    s.setSummaryText(PushInbox.summary(inboxChats))
+                },
+            )
+            .setGroup(GROUP)
+            .setGroupSummary(true)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setAutoCancel(true)
+            .build()
+        NotificationManagerCompat.from(context).notify(SUMMARY_ID, summary)
+    }
+
     fun show(context: Context, extras: Bundle): Boolean {
         try {
             val conversationId = extras.getString("conversation_id")
@@ -158,18 +205,7 @@ object InstantPush {
                 vibrates(defaults, chats, conversationId),
             )
 
-            // Same tap contract as flutter_local_notifications, so the app opens the chat as it does for
-            // the notification Dart draws.
-            val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return false
-            launch.action = "SELECT_NOTIFICATION"
-            launch.putExtra("notificationId", id)
-            launch.putExtra("payload", conversationId)
-            val tap = PendingIntent.getActivity(
-                context,
-                id,
-                launch,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
+            val tap = tapIntent(context, id, conversationId) ?: return false
 
             val line = body(text, extras.getString("sender"), !chat.isNullOrEmpty())
             // The unread total the server computed for this member (see the push
@@ -229,33 +265,17 @@ object InstantPush {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setWhen(System.currentTimeMillis())
                 .apply { if (badge > 0) setNumber(badge) }
+                .apply {
+                    // The buttons need the action token the push carried; an older server sends none.
+                    val token = extras.getString("action_token")
+                    val url = extras.getString("action_url")
+                    if (!token.isNullOrEmpty() && url != null && url.startsWith("https://")) addActions(context, this, conversationId, id, token, url)
+                }
                 .build()
 
             NotificationManagerCompat.from(context).notify(id, notification)
 
-            // One silent group summary over every waiting chat (the Dart side posts the same, id 0).
-            val summary = NotificationCompat.Builder(context, CHANNEL_SUMMARY)
-                .setSmallIcon(R.drawable.ic_launcher_monochrome)
-                .setColor(ContextCompat.getColor(context, R.color.notification_accent))
-                .setContentTitle("SIS")
-                .setContentText(PushInbox.summary(inboxChats))
-                .setStyle(
-                    NotificationCompat.InboxStyle().also { s ->
-                        for (i in inboxChats.length() - 1 downTo 0) {
-                            val c = inboxChats.getJSONObject(i)
-                            val all = c.getJSONArray("l")
-                            s.addLine(c.optString("t") + ": " + all.getJSONObject(all.length() - 1).optString("x"))
-                        }
-                        s.setSummaryText(PushInbox.summary(inboxChats))
-                    },
-                )
-                .setGroup(GROUP)
-                .setGroupSummary(true)
-                .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setAutoCancel(true)
-                .build()
-            NotificationManagerCompat.from(context).notify(SUMMARY_ID, summary)
+            postSummary(context, inboxChats)
             return true
         } catch (e: Exception) {
             android.util.Log.w("InstantPush", "draw failed: ${e.javaClass.simpleName}")

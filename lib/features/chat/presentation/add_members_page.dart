@@ -78,7 +78,9 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
     final result = await ref.read(groupControllerProvider).addMembers(
       widget.conversationId,
       [for (final m in _chosen) m.userId],
-      withHistory: true,
+      withHistory: ref
+          .read(groupSettingsProvider(widget.conversationId))
+          .newMembersSeeHistory,
     );
     if (!mounted) return;
     setState(() => _busy = false);

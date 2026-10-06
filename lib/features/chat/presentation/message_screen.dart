@@ -33,6 +33,7 @@ import '../domain/highlight.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
 import '../domain/png_size.dart';
+import '../domain/reaction.dart';
 import '../domain/timeline.dart';
 import '../domain/read_marks.dart';
 import 'attachment_preview_page.dart';
@@ -46,6 +47,7 @@ import 'photo_viewer.dart';
 import 'profile_pages.dart';
 
 part 'message_bubble.dart';
+part 'reaction_chips.dart';
 part 'message_body_with_time.dart';
 part 'message_attachment.dart';
 part 'message_composer.dart';
@@ -514,6 +516,10 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     // of your own messages is on screen). The select never changes, so this
     // screen does not rebuild on a tick: each of your bubbles watches its own.
     ref.watch(readMarksProvider.select((_) => null));
+    // Same for the reactions: one load and one live subscription per open
+    // chat, not one per bubble that scrolls into view. Each bubble's chips
+    // select only their own message's list.
+    ref.watch(reactionsProvider.select((_) => null));
     final timeline = ref.watch(chatTimelineProvider);
     final loadingOlder = ref.watch(olderLoadingProvider);
     final value = messages.value ?? const <Message>[];

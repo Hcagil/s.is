@@ -136,6 +136,11 @@ final class Message {
   bool get isPending =>
       sending || (localImage != null && attachmentPath == null);
 
+  /// Whether a reaction may go on this message: it is stored and not deleted.
+  /// The system chat refuses them too; that is the conversation's rule,
+  /// checked where the conversation is known.
+  bool get canReact => !isPending && !isDeleted;
+
   /// Whether this is the pending photo bubble that [stored] is the stored
   /// row of: same caption and the same preview bytes, which each photo has of
   /// its own, so two photos in the air with one caption pair up correctly.
@@ -230,15 +235,13 @@ bool isSearchable(String query) =>
 
 /// One action a member may take on a message: reply, forward, edit their
 /// own text/caption, delete (for me, or for everyone: their own, or any
-/// member's for a group admin), copy the text (tap menu only), or, on their
-/// own message, see who has read it.
-enum MessageAction { readBy, reply, forward, edit, delete, copy }
+/// member's for a group admin), copy the text (tap menu only).
+enum MessageAction { reply, forward, edit, delete, copy }
 
 /// The actions [me] may take on [message] at [now], in the order they are
 /// offered -- reply and forward need a stored message with something in
 /// it; edit and delete for everyone are the sender's own message within
-/// [deleteForEveryoneWindow]; read-by shows on your own message in every
-/// chat, groups and 1:1, alongside reply/forward. This is the single source of truth for
+/// [deleteForEveryoneWindow]. This is the single source of truth for
 /// "what does this message allow": both the swipe action row and each
 /// bubble's screen-reader custom actions read it, so the rule lives once.
 List<MessageAction> allowedMessageActions(
@@ -251,9 +254,7 @@ List<MessageAction> allowedMessageActions(
       me != null && message.canDeleteForEveryone(me, admin: admin);
   final canEdit = me != null && message.canEdit(me, now);
   final canShare = !message.isPending && !message.isDeleted;
-  final canSeeReaders = me != null && message.isFrom(me) && canShare;
   return [
-    if (canSeeReaders) MessageAction.readBy,
     if (canShare) MessageAction.reply,
     if (canShare) MessageAction.forward,
     if (canEdit) MessageAction.edit,
@@ -266,7 +267,6 @@ List<MessageAction> allowedMessageActions(
 /// edit window) and delete (any stored message: the dialog then offers
 /// delete for me, and delete for everyone only when
 /// [Message.canDeleteForEveryone] allows). Copy is never in the swipe row.
-/// On your own stored message, read-by comes first.
 List<MessageAction> menuMessageActions(
   Message message, {
   required String? me,
@@ -274,9 +274,7 @@ List<MessageAction> menuMessageActions(
 }) {
   final canShare = !message.isPending && !message.isDeleted;
   final canEdit = me != null && message.canEdit(me, now);
-  final canSeeReaders = me != null && message.isFrom(me) && canShare;
   return [
-    if (canSeeReaders) MessageAction.readBy,
     if (canShare) MessageAction.reply,
     if (canShare && message.body.isNotEmpty) MessageAction.copy,
     if (canShare) MessageAction.forward,

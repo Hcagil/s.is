@@ -34,3 +34,9 @@ final class ReadMark {
   bool hasRead(DateTime sentAt) =>
       shares && readAt != null && !readAt!.isBefore(sentAt);
 }
+
+/// The members who have read a message sent at [sentAt], earliest reader
+/// first. [marks] is not changed.
+List<ReadMark> readersOf(List<ReadMark> marks, DateTime sentAt) =>
+    marks.where((m) => m.hasRead(sentAt)).toList()
+      ..sort((a, b) => a.readAt!.compareTo(b.readAt!));

@@ -75,7 +75,7 @@ class _Bubble extends StatelessWidget {
     // Square-ish corner on the sender's side marks whose bubble it is.
     final r = Radius.circular(brand.bubbleRadius);
     const tail = Radius.circular(4);
-    return Align(
+    final bubble = Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         key: ValueKey('message-${message.id}'),
@@ -351,6 +351,16 @@ class _Bubble extends StatelessWidget {
           ),
         ),
       ),
+    );
+    // Deleted and still-sending messages take no reactions.
+    if (!message.canReact) return bubble;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        bubble,
+        _ReactionChips(messageId: message.id, mine: mine),
+      ],
     );
   }
 }

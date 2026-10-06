@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="action_mark_read">Okundu olarak işaretle</string>
+    <string name="action_reply">Yanıtla</string>
+    <string name="action_reply_hint">Mesaj</string>
+    <string name="action_not_sent">Gönderilemedi</string>
+</resources>

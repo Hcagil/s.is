@@ -1,4 +1,4 @@
-// Widget tests for replying and forwarding: the swipe action row's offer,
+// Widget tests for replying and forwarding: the long-press card's offer,
 // the reply bar, the quoted bubble, and the forward picker. Written from the
 // contract -- what a member sees and what the repository is asked to do --
 // never how the widgets are built.
@@ -17,6 +17,8 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
+
+import 'package:sis/l10n/app_localizations.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -65,7 +67,11 @@ Future<ProviderContainer> pump(WidgetTester tester, ChatFake chat) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(home: MessageScreen(title: 'Bob')),
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: MessageScreen(title: 'Bob'),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -73,38 +79,45 @@ Future<ProviderContainer> pump(WidgetTester tester, ChatFake chat) async {
 }
 
 void main() {
-  // 0.30.13: the tap card is the only place actions are offered (the swipe
-  // row is gone). Its rule (menuMessageActions): delete is offered on any
-  // stored message, the dialog then offering "for me" only when it is not
-  // yours.
-  group('what a tap offers', () {
+  // Update 1 slice 7: the long-press card is the only place actions are
+  // offered (the swipe row is gone). Its rule (menuMessageActions): delete
+  // for me on any stored message, delete for everyone only on your own.
+  group('what a long-press offers', () {
     testWidgets('a stored message from someone else offers reply, forward '
-        'and delete (for me)', (tester) async {
+        'and delete for me only', (tester) async {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', from: bob.userId)]);
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
+      await tester.longPress(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('menu-reply')), findsOneWidget);
       expect(find.byKey(const ValueKey('menu-forward')), findsOneWidget);
-      expect(find.byKey(const ValueKey('menu-delete')), findsOneWidget);
+      expect(find.byKey(const ValueKey('menu-delete-for-me')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('menu-delete-for-everyone')),
+        findsNothing,
+      );
     });
 
-    testWidgets('your own stored message under 6h offers all three', (
+    testWidgets('your own stored message under 6h offers all of them', (
       tester,
     ) async {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', from: me.userId)]);
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
+      await tester.longPress(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('menu-reply')), findsOneWidget);
       expect(find.byKey(const ValueKey('menu-forward')), findsOneWidget);
-      expect(find.byKey(const ValueKey('menu-delete')), findsOneWidget);
+      expect(find.byKey(const ValueKey('menu-delete-for-me')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('menu-delete-for-everyone')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('a pending message offers nothing', (tester) async {
@@ -118,21 +131,26 @@ void main() {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: const MaterialApp(home: MessageScreen(title: 'Bob')),
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MessageScreen(title: 'Bob'),
+          ),
         ),
       );
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
+      await tester.longPress(find.byKey(const ValueKey('message-m1')));
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
 
       expect(find.byKey(const ValueKey('menu-reply')), findsNothing);
       expect(find.byKey(const ValueKey('menu-forward')), findsNothing);
-      expect(find.byKey(const ValueKey('menu-delete')), findsNothing);
+      expect(find.byKey(const ValueKey('menu-delete-for-me')), findsNothing);
+      expect(find.byKey(const ValueKey('message-menu')), findsNothing);
     });
 
     testWidgets(
@@ -149,7 +167,7 @@ void main() {
           ]);
         await pump(tester, chat);
 
-        await tester.tap(find.byKey(const ValueKey('message-m1')));
+        await tester.longPress(find.byKey(const ValueKey('message-m1')));
         await tester.pumpAndSettle();
 
         expect(find.byKey(const ValueKey('menu-reply')), findsNothing);
@@ -170,7 +188,7 @@ void main() {
         ]);
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
+      await tester.longPress(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-reply')));
       await tester.pumpAndSettle();
@@ -187,7 +205,7 @@ void main() {
         ..messagesResult = Ok([msg('m1', from: me.userId)]);
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
+      await tester.longPress(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-reply')));
       await tester.pumpAndSettle();
@@ -200,7 +218,7 @@ void main() {
         ..messagesResult = Ok([msg('m1', from: bob.userId)]);
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
+      await tester.longPress(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-reply')));
       await tester.pumpAndSettle();
@@ -218,7 +236,7 @@ void main() {
         ..messagesResult = Ok([msg('m1', from: bob.userId)]);
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
+      await tester.longPress(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-reply')));
       await tester.pumpAndSettle();
@@ -227,6 +245,7 @@ void main() {
         find.byKey(const ValueKey('composer-field')),
         'sure!',
       );
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('composer-send')));
       await tester.pumpAndSettle();
 
@@ -244,7 +263,7 @@ void main() {
         );
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
+      await tester.longPress(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-reply')));
       await tester.pumpAndSettle();
@@ -252,6 +271,7 @@ void main() {
         find.byKey(const ValueKey('composer-field')),
         'sure!',
       );
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('composer-send')));
       await tester.pumpAndSettle();
 
@@ -328,7 +348,7 @@ void main() {
       final chat = chatWithConversations();
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
+      await tester.longPress(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-forward')));
       await tester.pumpAndSettle();
@@ -342,7 +362,7 @@ void main() {
         'the count', (tester) async {
       final chat = chatWithConversations();
       await pump(tester, chat);
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
+      await tester.longPress(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-forward')));
       await tester.pumpAndSettle();
@@ -367,7 +387,7 @@ void main() {
     ) async {
       final chat = chatWithConversations();
       await pump(tester, chat);
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
+      await tester.longPress(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-forward')));
       await tester.pumpAndSettle();
@@ -388,7 +408,7 @@ void main() {
     ) async {
       final chat = chatWithConversations();
       await pump(tester, chat);
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
+      await tester.longPress(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-forward')));
       await tester.pumpAndSettle();
@@ -408,7 +428,7 @@ void main() {
       final chat = chatWithConversations()
         ..forwardResult = const Err(ProviderFailure('not your chat'));
       await pump(tester, chat);
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
+      await tester.longPress(find.byKey(const ValueKey('message-m1')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-forward')));
       await tester.pumpAndSettle();
@@ -457,7 +477,7 @@ void main() {
 
     Future<void> openPage(WidgetTester t, ChatFake chat) async {
       await pump(t, chat);
-      await t.tap(byKey('message-m1'));
+      await t.longPress(byKey('message-m1'));
       await t.pumpAndSettle();
       await t.tap(byKey('menu-forward'));
       // The page is there on the first frame after the tap: no network wait.

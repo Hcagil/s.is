@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/app/delivery_tick.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
@@ -19,6 +20,7 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/delivery.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -27,7 +29,6 @@ import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/data/supabase_presence_repository.dart';
-import 'package:sis/features/presence/domain/last_seen.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
@@ -38,7 +39,6 @@ import '../support/session_claim.dart';
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
 import '../support/reach.dart';
-import '../support/sis_ui.dart';
 
 /// Read status on its seams, wired as main.dart wires it: the REAL
 /// [ReadMarksController] over the real chat and profile repositories, the
@@ -112,10 +112,19 @@ class _AccountAuth implements AuthRepository {
 /// the same calls on a real repository at a dead host (the connection that
 /// fails is the real one), or by a slower real answer.
 class _Wired implements ChatRepository {
-  _Wired(this.live, {this.marks, this.updates});
+  _Wired(this.live, {this.marks, this.updates, this.delivered});
   final ChatRepository live;
   final ChatRepository? marks;
   final ChatRepository? updates;
+  final ChatRepository? delivered;
+
+  @override
+  Future<Result<void>> markDelivered(String conversationId, {DateTime? upTo}) =>
+      (delivered ?? live).markDelivered(conversationId, upTo: upTo);
+
+  @override
+  Future<Result<Stream<ReadMark>>> deliveredUpdates(String conversationId) =>
+      (delivered ?? live).deliveredUpdates(conversationId);
 
   /// Holds the real readMarks answer this long AFTER the server gave it:
   /// a slow network between the database and the phone.
@@ -398,11 +407,8 @@ void main() {
       expect(_markOf(c, theoId)?.shares, isTrue, reason: 'both share');
       final message = await sent(direct);
       expect(
-        isReadByAnyone(
-          c.read(readMarksProvider).requireValue,
-          message.createdAt,
-        ),
-        isFalse,
+        deliveryOf(message, c.read(readMarksProvider).requireValue),
+        isNot(Delivery.read),
         reason: 'fixture: theo has not read it yet',
       );
 
@@ -412,11 +418,8 @@ void main() {
         meanwhile: () => theo.markRead(direct),
       );
       expect(
-        isReadByAnyone(
-          c.read(readMarksProvider).requireValue,
-          message.createdAt,
-        ),
-        isTrue,
+        deliveryOf(message, c.read(readMarksProvider).requireValue),
+        Delivery.read,
       );
     }, timeout: const Timeout(Duration(minutes: 1)));
 
@@ -494,24 +497,24 @@ void main() {
       );
     }, timeout: const Timeout(Duration(minutes: 2)));
 
-    test(
-      'the other member hiding theirs makes my messages simply normal',
-      () async {
-        await share(theoClient, false);
-        final c = await opened(direct);
-        final message = await sent(direct);
+    test('the other member hiding theirs: his reading shows as two grey, never '
+        'blue', () async {
+      await share(theoClient, false);
+      final c = await opened(direct);
+      final message = await sent(direct);
 
-        expect(_markOf(c, theoId)?.shares, isFalse);
-        expect(
-          isReadByAnyone(
-            c.read(readMarksProvider).requireValue,
-            message.createdAt,
-          ),
-          isTrue,
-          reason: 'nothing shared: the message looks normal',
-        );
-      },
-    );
+      expect(_markOf(c, theoId)?.shares, isFalse);
+      Delivery now() =>
+          deliveryOf(message, c.read(readMarksProvider).requireValue);
+      expect(now(), Delivery.sent);
+      await eventually(
+        () => now() == Delivery.delivered,
+        'his read to arrive as a delivery',
+        meanwhile: () => theo.markRead(direct),
+      );
+      await Future<void>.delayed(const Duration(seconds: 2));
+      expect(now(), Delivery.delivered, reason: 'turned blue');
+    }, timeout: const Timeout(Duration(minutes: 1)));
 
     test(
       'read marks unreachable: an error state, the messages still load',
@@ -544,6 +547,43 @@ void main() {
 
       expect(c.read(readMarksProvider).hasError, isFalse);
       expect(_markOf(c, theoId)?.readAt, isNotNull);
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    test("theo's delivery reaches the open conversation live, and leaves "
+        'his read alone', () async {
+      expect(await theo.markRead(direct), isA<Ok<void>>());
+      final c = await opened(direct);
+      final readBefore = _markOf(c, theoId)?.readAt;
+      expect(readBefore, isNotNull, reason: 'fixture');
+      final message = await sent(direct);
+      expect(
+        _markOf(c, theoId)?.hasDelivered(message.createdAt),
+        isFalse,
+        reason: 'fixture: not delivered yet',
+      );
+      await eventually(
+        () => _markOf(c, theoId)?.hasDelivered(message.createdAt) ?? false,
+        "theo's delivery to arrive",
+        meanwhile: () => theo.markDelivered(direct),
+      );
+      final m = _markOf(c, theoId)!;
+      expect(m.shares, isTrue, reason: 'the delivery event replaced the mark');
+      expect(m.readAt, readBefore, reason: 'the delivery event moved readAt');
+    }, timeout: const Timeout(Duration(minutes: 1)));
+
+    test('delivery updates unreachable (join fails): the marks still load, '
+        'with deliveredAt, and reads still arrive', () async {
+      expect(await theo.markDelivered(direct), isA<Ok<void>>());
+      final c = await opened(direct, chat: _Wired(sana, delivered: dead));
+      expect(c.read(readMarksProvider).hasError, isFalse);
+      expect(_markOf(c, theoId)?.deliveredAt, isNotNull);
+
+      final message = await sent(direct);
+      await eventually(
+        () => _markOf(c, theoId)?.hasRead(message.createdAt) ?? false,
+        "theo's read to arrive without the delivery channel",
+        meanwhile: () => theo.markRead(direct),
+      );
     }, timeout: const Timeout(Duration(minutes: 2)));
   });
 
@@ -587,28 +627,10 @@ void main() {
     Finder tile(String id) => find.byKey(ValueKey('conversation-$id'));
     Finder bubble(String id) => find.byKey(ValueKey('message-$id'));
 
-    /// Whether the bubble has the yellow unread edge: the outermost
-    /// decoration at `ValueKey('message-$id')` bordered in 0xFFFFD54F.
-    bool yellow(WidgetTester t, String id) {
-      final box =
-          find
-                  .descendant(
-                    of: bubble(id),
-                    matching: find.byType(DecoratedBox),
-                    matchRoot: true,
-                  )
-                  .evaluate()
-                  .first
-                  .widget
-              as DecoratedBox;
-      final border = (box.decoration as BoxDecoration).border as Border?;
-      return border != null &&
-          [
-            border.top,
-            border.right,
-            border.bottom,
-            border.left,
-          ].every((s) => s.color == const Color(0xFFFFD54F));
+    /// The state my bubble's tick shows (`tick-<id>`, a DeliveryTick).
+    Delivery? tick(WidgetTester t, String id) {
+      final f = find.byKey(ValueKey('tick-$id'));
+      return f.evaluate().isEmpty ? null : t.widget<DeliveryTick>(f).delivery;
     }
 
     Future<Message> openWithMine(
@@ -636,20 +658,27 @@ void main() {
       return message;
     }
 
-    testWidgets('1:1: my message has the yellow edge until theo reads it, '
-        'then none, live', (t) async {
+    testWidgets('1:1: one tick until theo has it, two grey once it reaches '
+        'him, two blue once he reads it, live', (t) async {
       try {
         final message = await openWithMine(t, direct);
         await until(
           t,
-          () => yellow(t, message.id),
-          'yellow edge before theo reads',
+          () => tick(t, message.id) == Delivery.sent,
+          'one tick before theo has it',
         );
 
         await until(
           t,
-          () => !yellow(t, message.id),
-          'normal once theo has read it',
+          () => tick(t, message.id) == Delivery.delivered,
+          'two grey once it reached theo',
+          meanwhile: () => theo.markDelivered(direct),
+        );
+
+        await until(
+          t,
+          () => tick(t, message.id) == Delivery.read,
+          'two blue once theo has read it',
           meanwhile: () => theo.markRead(direct),
         );
       } finally {
@@ -657,31 +686,37 @@ void main() {
       }
     }, timeout: const Timeout(Duration(minutes: 2)));
 
-    testWidgets('group: yellow edge until the first sharer reads it; "Read '
-        'by" names every reader, with when', (t) async {
+    testWidgets('group: blue only once EVERY member has read it, two grey '
+        'once it reached every member; both are its readers', (t) async {
       try {
-        final names = {
-          for (final m in (await t.runAsync(
-            () => sana.conversationMembers(club),
-          ) as Ok<List<Member>>).value)
-            m.userId: m.displayName,
-        };
         final message = await openWithMine(t, club);
         await until(
           t,
-          () => yellow(t, message.id),
-          'yellow edge before anyone reads',
+          () => tick(t, message.id) == Delivery.sent,
+          'one tick before anyone has it',
         );
 
-        // theo alone is enough, though wren shares and has not read it.
-        await until(
-          t,
-          () => !yellow(t, message.id),
-          'read once theo has read it',
-          meanwhile: () => theo.markRead(club),
-        );
         final container = ProviderScope.containerOf(
           t.element(find.byType(MessageScreen)),
+        );
+        // theo reads it; wren has not even received it: still one tick.
+        await until(
+          t,
+          () => _markOf(container, theoId)?.hasRead(message.createdAt) ?? false,
+          "theo's read to arrive",
+          meanwhile: () => theo.markRead(club),
+        );
+        expect(
+          tick(t, message.id),
+          Delivery.sent,
+          reason: 'one reader of two turned it read/delivered',
+        );
+
+        await until(
+          t,
+          () => tick(t, message.id) == Delivery.delivered,
+          'two grey once it reached wren too',
+          meanwhile: () => wren.markDelivered(club),
         );
         expect(
           _markOf(container, wrenId)?.hasRead(message.createdAt),
@@ -695,54 +730,32 @@ void main() {
           "wren's read to arrive",
           meanwhile: () => wren.markRead(club),
         );
-        expect(yellow(t, message.id), isFalse);
-
-        // Through the screen-reader action: the tap card offers no
-        // "Read by" in 0.30.13 (read_by_sheet_test pins that defect).
-        final semantics = t.ensureSemantics();
-        invokeAction(actionsNode(t, bubble(message.id))!, 'Read by');
-        await t.pumpAndSettle();
-        semantics.dispose();
-        // 0.30.10: an own card, keyed `readers`; each reader's row shows
-        // the read time as lastSeenLabel without its "last seen " prefix.
-        final card = find.byKey(const ValueKey('readers'));
-        expect(card, findsOneWidget);
-        expect(
-          find.descendant(
-            of: card,
-            matching: find.byKey(const ValueKey('readers-title')),
-          ),
-          findsOneWidget,
+        await until(
+          t,
+          () => tick(t, message.id) == Delivery.read,
+          'two blue once every member has read it',
         );
-        final now = DateTime.now();
-        for (final id in [theoId, wrenId]) {
-          final row = find.descendant(
-            of: card,
-            matching: find.byKey(ValueKey('reader-$id')),
-          );
-          expect(row, findsOneWidget, reason: 'reader $id has a row');
-          expect(
-            find.descendant(of: row, matching: find.text(names[id]!)),
-            findsOneWidget,
-            reason: 'reader $id is named',
-          );
-          final at = _markOf(container, id)!.readAt!;
-          final when = lastSeenLabel(at, now).replaceFirst('last seen ', '');
-          expect(when.startsWith('last seen'), isFalse);
-          expect(
-            find.descendant(of: row, matching: find.text(when)),
-            findsOneWidget,
-            reason: 'reader $id shows when: "$when"',
-          );
-        }
-        expect(find.text('Nobody yet'), findsNothing);
+
+        // The readers, as the slice-7 readers card will list them: both,
+        // from the live marks the screen holds (the old "Read by" sheet left
+        // the action set with reactions).
+        final readers = readersOf(
+          container.read(readMarksProvider).value!,
+          message.createdAt,
+        );
+        expect(readers.map((m) => m.userId).toSet(), {theoId, wrenId});
+        expect(
+          readers.first.readAt!.isAfter(readers.last.readAt!),
+          isFalse,
+          reason: 'earliest reader first',
+        );
       } finally {
         await shutDown(t);
       }
     }, timeout: const Timeout(Duration(minutes: 3)));
 
     testWidgets('read status unreachable: the conversation still opens and, '
-        'once the connection has failed, my message looks normal', (t) async {
+        'once the connection has failed, my message shows one tick', (t) async {
       try {
         final message = await openWithMine(
           t,
@@ -758,7 +771,7 @@ void main() {
           'the read-status connection to fail',
         );
         expect(bubble(message.id), findsOneWidget);
-        expect(yellow(t, message.id), isFalse);
+        expect(tick(t, message.id), Delivery.sent);
       } finally {
         await shutDown(t);
       }

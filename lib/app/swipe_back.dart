@@ -34,9 +34,10 @@ class SwipeBackTransitionsBuilder extends PageTransitionsBuilder {
   @override
   Duration get reverseTransitionDuration => _slide.reverseTransitionDuration;
 
+  // The page underneath stays put during a right-drag (no parallax), on both
+  // platforms.
   @override
-  DelegatedTransitionBuilder? get delegatedTransition =>
-      _slide.delegatedTransition;
+  DelegatedTransitionBuilder? get delegatedTransition => null;
 
   @override
   Widget buildTransitions<T>(
@@ -52,7 +53,8 @@ class SwipeBackTransitionsBuilder extends PageTransitionsBuilder {
         route,
         context,
         animation,
-        secondaryAnimation,
+        // No parallax: the page under a drag stays put.
+        const AlwaysStoppedAnimation<double>(0),
         child,
       ),
     );

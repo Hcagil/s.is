@@ -166,6 +166,17 @@ class SwitchingAuth implements AuthRepository {
 /// row-level security's manners: no session or no membership reads as
 /// nothing, and a write is refused.
 class SessionChat implements ChatRepository {
+  // Slice 5a signatures only (delivery marks); no behaviour.
+  @override
+  Future<Result<void>> markDelivered(
+    String conversationId, {
+    DateTime? upTo,
+  }) async => const Ok(null);
+
+  @override
+  Future<Result<Stream<ReadMark>>> deliveredUpdates(
+    String conversationId,
+  ) async => const Ok(Stream<ReadMark>.empty());
   SessionChat(this.backend);
   final Backend backend;
 

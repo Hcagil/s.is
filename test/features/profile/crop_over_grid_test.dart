@@ -24,6 +24,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/l10n/app_localizations.dart';
 import 'package:sis/app/theme.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
@@ -134,6 +135,8 @@ class Host {
       pictureCropperProvider.overrideWithValue(cropper),
     ],
     child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: sisTheme(Brightness.light),
       home: Builder(
         builder: (context) => Scaffold(
@@ -328,7 +331,7 @@ void main() {
   });
 
   group('showAttachmentSheet resolves', () {
-    testWidgets('square: back from the crop resolves nothing; Use resolves '
+    testWidgets('square: back from the crop resolves nothing; Choose resolves '
         'the crop as images.first', (t) async {
       final h = await mount(t, 'open-true');
       await act(t, byKey('sheet-photo-p0'));
@@ -348,7 +351,7 @@ void main() {
       expect(find.byType(GridView), findsNothing);
     });
 
-    testWidgets('square, from an app: Use resolves the crop of what the app '
+    testWidgets('square, from an app: Choose resolves the crop of what the app '
         'gave', (t) async {
       final h = Host()..picker.picture = picked;
       await mount(t, 'open-true', host: h);
@@ -427,7 +430,7 @@ void main() {
   });
 
   group('showAvatarCard resolves', () {
-    testWidgets('Choose photo, back from the crop, another photo, Use: '
+    testWidgets('Choose photo, back from the crop, another photo, Choose: '
         'AvatarPicked with the crop', (t) async {
       final h = await mount(t, 'avatar-true');
       await tapKey(t, 'avatar-library');
@@ -465,7 +468,7 @@ void main() {
       expect(find.text('Take photo'), findsOneWidget);
     });
 
-    testWidgets('Take photo: the camera, then the crop; Use gives '
+    testWidgets('Take photo: the camera, then the crop; Choose gives '
         'AvatarPicked with the crop', (t) async {
       final host = Host();
       host.picker.shot = picked;

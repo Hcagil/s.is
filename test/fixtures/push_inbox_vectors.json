@@ -1,0 +1,868 @@
+{
+ "_comment": "Shared by test/features/notifications/push_inbox_parity_test.dart (Dart) and android/app/src/test/kotlin/com/esd/sis/PushInboxTest.kt (Kotlin). The Android receiver (PushInbox.kt) writes the notification inbox at flutter.sis.push_inbox.<owner> while the Dart handler is held back by Doze; the Dart handler later reads and extends the same JSON. Both sides must produce the same inbox from the same pushes (adds), the same summary line (summaries), the same picture path from the chat list snapshot (avatars), and the same cache file name for a picture path, which is Dart's Uri.encodeComponent (cache_names). Expected values are written from the contract, not from either implementation.",
+ "max_lines": 25,
+ "adds": [
+  {
+   "name": "a plain title makes a 1:1",
+   "start": null,
+   "steps": [
+    {
+     "conversation_id": "c1",
+     "title": "Ava",
+     "sender": null,
+     "chat": null,
+     "text": "hi",
+     "at": 1000,
+     "message_id": "m1"
+    }
+   ],
+   "inbox": [
+    {
+     "c": "c1",
+     "t": "Ava",
+     "g": false,
+     "l": [
+      {
+       "s": "Ava",
+       "x": "hi",
+       "a": 1000,
+       "m": "m1"
+      }
+     ],
+     "n": 1,
+     "p": 0
+    }
+   ]
+  },
+  {
+   "name": "a title 'A @ B' makes a group",
+   "start": null,
+   "steps": [
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "yo",
+     "at": 1000,
+     "message_id": "m1"
+    }
+   ],
+   "inbox": [
+    {
+     "c": "g1",
+     "t": "Team",
+     "g": true,
+     "l": [
+      {
+       "s": "Ben",
+       "x": "yo",
+       "a": 1000,
+       "m": "m1"
+      }
+     ],
+     "n": 1,
+     "p": 0
+    }
+   ]
+  },
+  {
+   "name": "the sender and chat fields win over the title",
+   "start": null,
+   "steps": [
+    {
+     "conversation_id": "g1",
+     "title": "Zed @ Other",
+     "sender": "Ann",
+     "chat": "Edge Team",
+     "text": "yo",
+     "at": 1000,
+     "message_id": "m1"
+    }
+   ],
+   "inbox": [
+    {
+     "c": "g1",
+     "t": "Edge Team",
+     "g": true,
+     "l": [
+      {
+       "s": "Ann",
+       "x": "yo",
+       "a": 1000,
+       "m": "m1"
+      }
+     ],
+     "n": 1,
+     "p": 0
+    }
+   ]
+  },
+  {
+   "name": "the new line goes last, n+1, p kept, the chat moves to the end",
+   "start": "[{\"c\": \"c1\", \"t\": \"Ava\", \"g\": false, \"l\": [{\"s\": \"Ava\", \"x\": \"one\", \"a\": 1000, \"m\": \"m1\"}], \"n\": 2, \"p\": 2}, {\"c\": \"g1\", \"t\": \"Team\", \"g\": true, \"l\": [{\"s\": \"Ben\", \"x\": \"yo\", \"a\": 1500, \"m\": \"m2\"}], \"n\": 1, \"p\": 0}]",
+   "steps": [
+    {
+     "conversation_id": "c1",
+     "title": "Ava",
+     "sender": null,
+     "chat": null,
+     "text": "two",
+     "at": 2000,
+     "message_id": "m3"
+    }
+   ],
+   "inbox": [
+    {
+     "c": "g1",
+     "t": "Team",
+     "g": true,
+     "l": [
+      {
+       "s": "Ben",
+       "x": "yo",
+       "a": 1500,
+       "m": "m2"
+      }
+     ],
+     "n": 1,
+     "p": 0
+    },
+    {
+     "c": "c1",
+     "t": "Ava",
+     "g": false,
+     "l": [
+      {
+       "s": "Ava",
+       "x": "one",
+       "a": 1000,
+       "m": "m1"
+      },
+      {
+       "s": "Ava",
+       "x": "two",
+       "a": 2000,
+       "m": "m3"
+      }
+     ],
+     "n": 3,
+     "p": 2
+    }
+   ]
+  },
+  {
+   "name": "the same message id for the same chat is a no-op",
+   "start": "[{\"c\": \"c1\", \"t\": \"Ava\", \"g\": false, \"l\": [{\"s\": \"Ava\", \"x\": \"one\", \"a\": 1000, \"m\": \"m1\"}], \"n\": 2, \"p\": 2}, {\"c\": \"g1\", \"t\": \"Team\", \"g\": true, \"l\": [{\"s\": \"Ben\", \"x\": \"yo\", \"a\": 1500, \"m\": \"m2\"}], \"n\": 1, \"p\": 0}]",
+   "steps": [
+    {
+     "conversation_id": "c1",
+     "title": "Ava",
+     "sender": null,
+     "chat": null,
+     "text": "one again",
+     "at": 3000,
+     "message_id": "m1"
+    }
+   ],
+   "inbox": [
+    {
+     "c": "c1",
+     "t": "Ava",
+     "g": false,
+     "l": [
+      {
+       "s": "Ava",
+       "x": "one",
+       "a": 1000,
+       "m": "m1"
+      }
+     ],
+     "n": 2,
+     "p": 2
+    },
+    {
+     "c": "g1",
+     "t": "Team",
+     "g": true,
+     "l": [
+      {
+       "s": "Ben",
+       "x": "yo",
+       "a": 1500,
+       "m": "m2"
+      }
+     ],
+     "n": 1,
+     "p": 0
+    }
+   ]
+  },
+  {
+   "name": "a redelivery after another chat moved keeps the order",
+   "start": null,
+   "steps": [
+    {
+     "conversation_id": "c1",
+     "title": "Ava",
+     "sender": null,
+     "chat": null,
+     "text": "one",
+     "at": 1000,
+     "message_id": "m1"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "yo",
+     "at": 1100,
+     "message_id": "m2"
+    },
+    {
+     "conversation_id": "c1",
+     "title": "Ava",
+     "sender": null,
+     "chat": null,
+     "text": "one",
+     "at": 1200,
+     "message_id": "m1"
+    }
+   ],
+   "inbox": [
+    {
+     "c": "c1",
+     "t": "Ava",
+     "g": false,
+     "l": [
+      {
+       "s": "Ava",
+       "x": "one",
+       "a": 1000,
+       "m": "m1"
+      }
+     ],
+     "n": 1,
+     "p": 0
+    },
+    {
+     "c": "g1",
+     "t": "Team",
+     "g": true,
+     "l": [
+      {
+       "s": "Ben",
+       "x": "yo",
+       "a": 1100,
+       "m": "m2"
+      }
+     ],
+     "n": 1,
+     "p": 0
+    }
+   ]
+  },
+  {
+   "name": "no message id never dedupes",
+   "start": null,
+   "steps": [
+    {
+     "conversation_id": "c1",
+     "title": "Ava",
+     "sender": null,
+     "chat": null,
+     "text": "a",
+     "at": 1000,
+     "message_id": null
+    },
+    {
+     "conversation_id": "c1",
+     "title": "Ava",
+     "sender": null,
+     "chat": null,
+     "text": "b",
+     "at": 1001,
+     "message_id": null
+    }
+   ],
+   "inbox": [
+    {
+     "c": "c1",
+     "t": "Ava",
+     "g": false,
+     "l": [
+      {
+       "s": "Ava",
+       "x": "a",
+       "a": 1000
+      },
+      {
+       "s": "Ava",
+       "x": "b",
+       "a": 1001
+      }
+     ],
+     "n": 2,
+     "p": 0
+    }
+   ]
+  },
+  {
+   "name": "a stored line without an id is kept beside a new one",
+   "start": "[{\"c\": \"c1\", \"t\": \"Ava\", \"g\": false, \"l\": [{\"s\": \"Ava\", \"x\": \"old\", \"a\": 500}], \"n\": 1, \"p\": 1}]",
+   "steps": [
+    {
+     "conversation_id": "c1",
+     "title": "Ava",
+     "sender": null,
+     "chat": null,
+     "text": "new",
+     "at": 1000,
+     "message_id": "m1"
+    }
+   ],
+   "inbox": [
+    {
+     "c": "c1",
+     "t": "Ava",
+     "g": false,
+     "l": [
+      {
+       "s": "Ava",
+       "x": "old",
+       "a": 500
+      },
+      {
+       "s": "Ava",
+       "x": "new",
+       "a": 1000,
+       "m": "m1"
+      }
+     ],
+     "n": 2,
+     "p": 1
+    }
+   ]
+  },
+  {
+   "name": "at most 25 lines: 26 pushes drop the oldest",
+   "start": null,
+   "steps": [
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t1",
+     "at": 1001,
+     "message_id": "m1"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t2",
+     "at": 1002,
+     "message_id": "m2"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t3",
+     "at": 1003,
+     "message_id": "m3"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t4",
+     "at": 1004,
+     "message_id": "m4"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t5",
+     "at": 1005,
+     "message_id": "m5"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t6",
+     "at": 1006,
+     "message_id": "m6"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t7",
+     "at": 1007,
+     "message_id": "m7"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t8",
+     "at": 1008,
+     "message_id": "m8"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t9",
+     "at": 1009,
+     "message_id": "m9"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t10",
+     "at": 1010,
+     "message_id": "m10"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t11",
+     "at": 1011,
+     "message_id": "m11"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t12",
+     "at": 1012,
+     "message_id": "m12"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t13",
+     "at": 1013,
+     "message_id": "m13"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t14",
+     "at": 1014,
+     "message_id": "m14"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t15",
+     "at": 1015,
+     "message_id": "m15"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t16",
+     "at": 1016,
+     "message_id": "m16"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t17",
+     "at": 1017,
+     "message_id": "m17"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t18",
+     "at": 1018,
+     "message_id": "m18"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t19",
+     "at": 1019,
+     "message_id": "m19"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t20",
+     "at": 1020,
+     "message_id": "m20"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t21",
+     "at": 1021,
+     "message_id": "m21"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t22",
+     "at": 1022,
+     "message_id": "m22"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t23",
+     "at": 1023,
+     "message_id": "m23"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t24",
+     "at": 1024,
+     "message_id": "m24"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t25",
+     "at": 1025,
+     "message_id": "m25"
+    },
+    {
+     "conversation_id": "g1",
+     "title": "Ben @ Team",
+     "sender": null,
+     "chat": null,
+     "text": "t26",
+     "at": 1026,
+     "message_id": "m26"
+    }
+   ],
+   "inbox": [
+    {
+     "c": "g1",
+     "t": "Team",
+     "g": true,
+     "l": [
+      {
+       "s": "Ben",
+       "x": "t2",
+       "a": 1002,
+       "m": "m2"
+      },
+      {
+       "s": "Ben",
+       "x": "t3",
+       "a": 1003,
+       "m": "m3"
+      },
+      {
+       "s": "Ben",
+       "x": "t4",
+       "a": 1004,
+       "m": "m4"
+      },
+      {
+       "s": "Ben",
+       "x": "t5",
+       "a": 1005,
+       "m": "m5"
+      },
+      {
+       "s": "Ben",
+       "x": "t6",
+       "a": 1006,
+       "m": "m6"
+      },
+      {
+       "s": "Ben",
+       "x": "t7",
+       "a": 1007,
+       "m": "m7"
+      },
+      {
+       "s": "Ben",
+       "x": "t8",
+       "a": 1008,
+       "m": "m8"
+      },
+      {
+       "s": "Ben",
+       "x": "t9",
+       "a": 1009,
+       "m": "m9"
+      },
+      {
+       "s": "Ben",
+       "x": "t10",
+       "a": 1010,
+       "m": "m10"
+      },
+      {
+       "s": "Ben",
+       "x": "t11",
+       "a": 1011,
+       "m": "m11"
+      },
+      {
+       "s": "Ben",
+       "x": "t12",
+       "a": 1012,
+       "m": "m12"
+      },
+      {
+       "s": "Ben",
+       "x": "t13",
+       "a": 1013,
+       "m": "m13"
+      },
+      {
+       "s": "Ben",
+       "x": "t14",
+       "a": 1014,
+       "m": "m14"
+      },
+      {
+       "s": "Ben",
+       "x": "t15",
+       "a": 1015,
+       "m": "m15"
+      },
+      {
+       "s": "Ben",
+       "x": "t16",
+       "a": 1016,
+       "m": "m16"
+      },
+      {
+       "s": "Ben",
+       "x": "t17",
+       "a": 1017,
+       "m": "m17"
+      },
+      {
+       "s": "Ben",
+       "x": "t18",
+       "a": 1018,
+       "m": "m18"
+      },
+      {
+       "s": "Ben",
+       "x": "t19",
+       "a": 1019,
+       "m": "m19"
+      },
+      {
+       "s": "Ben",
+       "x": "t20",
+       "a": 1020,
+       "m": "m20"
+      },
+      {
+       "s": "Ben",
+       "x": "t21",
+       "a": 1021,
+       "m": "m21"
+      },
+      {
+       "s": "Ben",
+       "x": "t22",
+       "a": 1022,
+       "m": "m22"
+      },
+      {
+       "s": "Ben",
+       "x": "t23",
+       "a": 1023,
+       "m": "m23"
+      },
+      {
+       "s": "Ben",
+       "x": "t24",
+       "a": 1024,
+       "m": "m24"
+      },
+      {
+       "s": "Ben",
+       "x": "t25",
+       "a": 1025,
+       "m": "m25"
+      },
+      {
+       "s": "Ben",
+       "x": "t26",
+       "a": 1026,
+       "m": "m26"
+      }
+     ],
+     "n": 26,
+     "p": 0
+    }
+   ]
+  }
+ ],
+ "summaries": [
+  {
+   "inbox": [],
+   "text": ""
+  },
+  {
+   "inbox": [
+    {
+     "c": "c1",
+     "t": "T",
+     "g": false,
+     "l": [],
+     "n": 1,
+     "p": 0
+    }
+   ],
+   "text": "1 new message"
+  },
+  {
+   "inbox": [
+    {
+     "c": "c1",
+     "t": "T",
+     "g": false,
+     "l": [],
+     "n": 3,
+     "p": 0
+    }
+   ],
+   "text": "3 new messages"
+  },
+  {
+   "inbox": [
+    {
+     "c": "c1",
+     "t": "T",
+     "g": false,
+     "l": [],
+     "n": 1,
+     "p": 0
+    },
+    {
+     "c": "c2",
+     "t": "T",
+     "g": false,
+     "l": [],
+     "n": 2,
+     "p": 0
+    }
+   ],
+   "text": "3 new messages from 2 chats"
+  }
+ ],
+ "avatars": {
+  "snapshot": "{\"v\":1,\"owner\":\"member-a\",\"list\":[{\"id\":\"c1\",\"title\":null,\"other\":{\"id\":\"u-ava\",\"name\":\"Ava\",\"tag\":null,\"avatar\":\"u-ava/pic.jpg\"},\"lastMessage\":null,\"lastMessageAt\":null,\"lastSenderId\":null,\"unread\":0,\"avatarPath\":null,\"hasLeft\":false,\"isSystem\":false,\"senders\":{}},{\"id\":\"g1\",\"title\":\"Team\",\"other\":null,\"lastMessage\":null,\"lastMessageAt\":null,\"lastSenderId\":null,\"unread\":0,\"avatarPath\":\"groups/g1.jpg\",\"hasLeft\":false,\"isSystem\":false,\"senders\":{}},{\"id\":\"c3\",\"title\":null,\"other\":{\"id\":\"u-cy\",\"name\":\"Cy\",\"tag\":null,\"avatar\":null},\"lastMessage\":null,\"lastMessageAt\":null,\"lastSenderId\":null,\"unread\":0,\"avatarPath\":null,\"hasLeft\":false,\"isSystem\":false,\"senders\":{}}]}",
+  "cases": [
+   {
+    "name": "a 1:1 is the other member's picture",
+    "owner": "member-a",
+    "conversation_id": "c1",
+    "path": "u-ava/pic.jpg"
+   },
+   {
+    "name": "a group is its own picture",
+    "owner": "member-a",
+    "conversation_id": "g1",
+    "path": "groups/g1.jpg"
+   },
+   {
+    "name": "no picture",
+    "owner": "member-a",
+    "conversation_id": "c3",
+    "path": null
+   },
+   {
+    "name": "a chat not in the list",
+    "owner": "member-a",
+    "conversation_id": "nope",
+    "path": null
+   },
+   {
+    "name": "another member's snapshot",
+    "owner": "member-b",
+    "conversation_id": "c1",
+    "path": null
+   }
+  ]
+ },
+ "cache_names": [
+  {
+   "path": "u-ava/pic.jpg",
+   "file": "u-ava%2Fpic.jpg"
+  },
+  {
+   "path": "groups/g1.jpg",
+   "file": "groups%2Fg1.jpg"
+  },
+  {
+   "path": "a b/!~'()*.jpg",
+   "file": "a%20b%2F!~'()*.jpg"
+  },
+  {
+   "path": "x+y=z&q?#.jpg",
+   "file": "x%2By%3Dz%26q%3F%23.jpg"
+  },
+  {
+   "path": "ü/ç.png",
+   "file": "%C3%BC%2F%C3%A7.png"
+  },
+  {
+   "path": "100%.png",
+   "file": "100%25.png"
+  },
+  {
+   "path": "😀.jpg",
+   "file": "%F0%9F%98%80.jpg"
+  }
+ ]
+}

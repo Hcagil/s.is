@@ -4,46 +4,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/notice.dart';
 import '../../../app/theme.dart';
-import '../../../core/date_label.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../application/chat_controllers.dart';
 import '../application/group_controller.dart';
-import '../../presence/domain/last_seen.dart';
 import '../domain/group_member.dart';
 import '../domain/message.dart';
-import '../domain/read_marks.dart';
 import 'forward_page.dart';
 import 'message_menu_card.dart';
-import 'person_avatar.dart';
 import 'swipeable_message.dart';
 
-enum _DeleteChoice { forMe, forEveryone }
-
-/// Carries out [action] on [message]; reached from the swipe row and from
-/// the tap menu. Which actions are offered for a message at all is
-/// decided once, by `allowedMessageActions` / `menuMessageActions` in
-/// `../domain/message.dart`; this function never re-checks that -- it
-/// trusts the caller offered only an allowed action.
-///
-/// [canDeleteForEveryone] says whether the delete dialog also offers
-/// "Delete for everyone" (the sender, or a group admin); "Delete for me"
-/// is always there.
-///
-/// [anchor] (the bubble's global rect; [alignEnd] for your own messages) is
-/// where the read-by card floats; [group] tells a group's card from a 1:1
-/// chat's single "Read" line.
+/// Carries out [action] on [message]; reached from the swipe-reply, the
+/// screen-reader custom actions and the long-press card. Which actions are
+/// offered for a message at all is decided once, by `allowedMessageActions` /
+/// `menuMessageActions` in `../domain/message.dart`; this function never
+/// re-checks that -- it trusts the caller offered only an allowed action.
+/// The two delete actions ask for a confirmation card first; pin is greyed
+/// (not built yet) and does nothing.
 Future<bool> runMessageAction(
   BuildContext context,
   WidgetRef ref,
   Message message,
-  MessageAction action, {
-  bool canDeleteForEveryone = false,
-  Rect? anchor,
-  bool alignEnd = false,
-  bool group = true,
-}) async {
+  MessageAction action,
+) async {
   switch (action) {
     case MessageAction.reply:
       ref.read(editingProvider.notifier).clear();
@@ -56,74 +41,132 @@ Future<bool> runMessageAction(
     case MessageAction.forward:
       await showForwardPage(context, ref, message);
       return false;
-    case MessageAction.readBy:
-      await _showReaders(context, ref, message, anchor, alignEnd, group);
-      return false;
-    case MessageAction.delete:
-      break;
     case MessageAction.copy:
       await Clipboard.setData(ClipboardData(text: message.body));
-      if (context.mounted) showSisNotice(context, 'Copied');
+      if (context.mounted) {
+        showSisNotice(context, AppLocalizations.of(context).messageCopied);
+      }
       return false;
+    case MessageAction.pin:
+      return false;
+    case MessageAction.deleteForMe:
+    case MessageAction.deleteForEveryone:
+      break;
   }
   if (!context.mounted) return false;
 
-  final choice = await showDialog<_DeleteChoice>(
-    context: context,
-    builder: (dialog) {
-      final colorScheme = Theme.of(dialog).colorScheme;
-      return AlertDialog(
-        title: const Text('Delete message?'),
-        content: Text(
-          canDeleteForEveryone
-              ? 'Delete for me hides it on your devices only. Delete for '
-                    'everyone removes it for everyone in this chat.'
-              : 'Delete for me hides it on your devices only.',
-        ),
-        actions: [
-          TextButton(
-            key: const ValueKey('delete-cancel'),
-            onPressed: () => Navigator.of(dialog).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            key: const ValueKey('delete-for-me'),
-            onPressed: () => Navigator.of(dialog).pop(_DeleteChoice.forMe),
-            child: const Text('Delete for me'),
-          ),
-          if (canDeleteForEveryone)
-            FilledButton(
-              key: const ValueKey('delete-confirm'),
-              style: FilledButton.styleFrom(
-                backgroundColor: colorScheme.error,
-                foregroundColor: colorScheme.onError,
-              ),
-              onPressed: () =>
-                  Navigator.of(dialog).pop(_DeleteChoice.forEveryone),
-              child: const Text('Delete for everyone'),
-            ),
-        ],
-      );
-    },
-  );
-
-  if (choice == null || !context.mounted) return false;
+  final forEveryone = action == MessageAction.deleteForEveryone;
+  final confirmed = await _confirmDelete(context, forEveryone: forEveryone);
+  if (confirmed != true || !context.mounted) return false;
 
   final notifier = ref.read(messagesProvider.notifier);
-  final r = await (choice == _DeleteChoice.forMe
-      ? notifier.hideForMe(message)
-      : notifier.deleteForEveryone(message));
+  final r = await (forEveryone
+      ? notifier.deleteForEveryone(message)
+      : notifier.hideForMe(message));
   if (r case Err(:final failure) when context.mounted) {
     showSisNotice(context, failure.message, isError: true);
   }
   return true;
 }
 
-/// Opens the tap menu for [message], a floating card next to [anchor] (the
-/// tapped bubble's global rect; [alignEnd] for your own messages), and
-/// carries out the chosen action. [photoViewer] limits it to reply, forward
-/// and delete and hangs the card under the viewer's top-right menu button.
-/// True when the action ended the interaction (see [runMessageAction]).
+/// The floating confirmation for a delete: true to go ahead, false or null
+/// to leave the message alone.
+Future<bool?> _confirmDelete(
+  BuildContext context, {
+  required bool forEveryone,
+}) {
+  final anchor = Rect.fromCenter(
+    center: MediaQuery.sizeOf(context).center(Offset.zero),
+    width: 0,
+    height: 0,
+  );
+  return showFloatingCard<bool>(
+    context,
+    anchor: anchor,
+    highlightAnchor: false,
+    cardKey: const ValueKey('delete-card'),
+    child: Builder(
+      builder: (card) {
+        final l = AppLocalizations.of(card);
+        final scheme = Theme.of(card).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l.messageDeleteTitle,
+                style: Theme.of(card).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                forEveryone
+                    ? l.messageDeleteForEveryoneBody
+                    : l.messageDeleteForMeBody,
+              ),
+              const SizedBox(height: 16),
+              _Sheen(
+                child: FilledButton(
+                  key: const ValueKey('delete-confirm'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: scheme.error,
+                    foregroundColor: scheme.onError,
+                  ),
+                  onPressed: () => Navigator.of(card).pop(true),
+                  child: Text(
+                    forEveryone
+                        ? l.messageActionDeleteForEveryone
+                        : l.messageActionDeleteForMe,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                key: const ValueKey('delete-cancel'),
+                onPressed: () => Navigator.of(card).pop(false),
+                child: Text(l.messageDeleteCancel),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
+
+/// A faint white sheen over the top of [child] (the delete confirmation
+/// button), without touching its hit testing.
+class _Sheen extends StatelessWidget {
+  const _Sheen({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    position: DecorationPosition.foreground,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(20),
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.white.withValues(alpha: SisTokens.sheenOpacity),
+          Colors.white.withValues(alpha: 0),
+        ],
+        stops: const [0, 0.5],
+      ),
+    ),
+    child: child,
+  );
+}
+
+/// Opens the long-press action card for [message], a floating card next to
+/// [anchor] (the pressed bubble's global rect, kept lit; [alignEnd] for your
+/// own messages), and carries out the chosen action. [photoViewer] limits it
+/// to reply, forward and the two delete rows and hangs the card under the
+/// viewer's top-right menu button. True when the action ended the interaction
+/// (see [runMessageAction]).
 Future<bool> showMessageMenu(
   BuildContext context,
   WidgetRef ref,
@@ -131,7 +174,6 @@ Future<bool> showMessageMenu(
   Rect? anchor,
   bool alignEnd = false,
   bool photoViewer = false,
-  bool group = true,
 }) async {
   final me = switch (ref.read(sessionControllerProvider).value) {
     Allowed(:final member) => member.userId,
@@ -144,11 +186,17 @@ Future<bool> showMessageMenu(
       me != null &&
       roster.any((m) => m.member.userId == me && m.isAdmin && !m.hasLeft);
   final actions = [
-    for (final a in menuMessageActions(message, me: me, now: DateTime.now()))
+    for (final a in menuMessageActions(
+      message,
+      me: me,
+      now: DateTime.now(),
+      admin: admin,
+    ))
       if (!photoViewer ||
           a == MessageAction.reply ||
           a == MessageAction.forward ||
-          a == MessageAction.delete)
+          a == MessageAction.deleteForMe ||
+          a == MessageAction.deleteForEveryone)
         a,
   ];
   if (actions.isEmpty) return false;
@@ -175,158 +223,14 @@ Future<bool> showMessageMenu(
           value: a,
           keyId: swipeActionKeyId(a),
           icon: swipeActionIcon(a),
-          label: swipeActionLabel(a),
-          destructive: a == MessageAction.delete,
+          label: swipeActionLabel(AppLocalizations.of(context), a),
+          destructive:
+              a == MessageAction.deleteForMe ||
+              a == MessageAction.deleteForEveryone,
+          greyName: a == MessageAction.pin ? 'pin' : null,
         ),
     ],
   );
   if (action == null || !context.mounted) return false;
-  return runMessageAction(
-    context,
-    ref,
-    message,
-    action,
-    canDeleteForEveryone:
-        me != null && message.canDeleteForEveryone(me, admin: admin),
-    anchor: anchor,
-    alignEnd: alignEnd,
-    group: group,
-  );
-}
-
-/// Who has read [message], among the members who share read status with
-/// you, and when: a floating card above the message in a group; in a 1:1
-/// chat just a "Read 14:36" line.
-Future<void> _showReaders(
-  BuildContext context,
-  WidgetRef ref,
-  Message message,
-  Rect? anchor,
-  bool alignEnd,
-  bool group,
-) async {
-  final marks = ref.read(readMarksProvider).value ?? const <ReadMark>[];
-  final readers = [
-    for (final m in marks)
-      if (m.hasRead(message.createdAt)) m,
-  ];
-  final people = {
-    for (final gm
-        in ref.read(groupRosterProvider(message.conversationId)).value ??
-            const <GroupMember>[])
-      gm.member.userId: gm.member,
-  };
-  final size = MediaQuery.sizeOf(context);
-  final at = !group && readers.isNotEmpty
-      ? readers.first.readAt!.toLocal()
-      : null;
-  if (!group) {
-    // 1:1: the same floating card, one line, no list.
-    await showFloatingCard<void>(
-      context,
-      anchor: anchor ?? Rect.fromLTWH(size.width / 2, size.height / 2, 0, 0),
-      alignEnd: alignEnd,
-      highlightAnchor: anchor != null,
-      cardKey: const ValueKey('readers'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Text(
-          at == null
-              ? 'Not read yet'
-              : 'Read ${twoDigit(at.hour)}:${twoDigit(at.minute)}',
-          key: const ValueKey('readers-line'),
-        ),
-      ),
-    );
-    return;
-  }
-  await showFloatingCard<void>(
-    context,
-    anchor: anchor ?? Rect.fromLTWH(size.width / 2, size.height / 2, 0, 0),
-    alignEnd: alignEnd,
-    highlightAnchor: anchor != null,
-    cardKey: const ValueKey('readers'),
-    child: Builder(
-      builder: (card) {
-        final t = SisBrand.of(card);
-        return ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 320),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Text(
-                  readers.isEmpty ? 'Read by' : 'Read by ${readers.length}',
-                  key: const ValueKey('readers-title'),
-                  style: Theme.of(card).textTheme.titleSmall,
-                ),
-              ),
-              if (readers.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-                  child: Text('Nobody yet', style: TextStyle(color: t.muted)),
-                )
-              else
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (final m in readers)
-                          Padding(
-                            key: ValueKey('reader-${m.userId}'),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            child: Row(
-                              children: [
-                                PersonAvatar(
-                                  label:
-                                      people[m.userId]?.displayName ?? 'Member',
-                                  seed: m.userId,
-                                  radius: 16,
-                                  avatarPath: people[m.userId]?.avatarPath,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        people[m.userId]?.displayName ??
-                                            'Member',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        lastSeenLabel(
-                                          m.readAt!,
-                                          DateTime.now(),
-                                        ).replaceFirst('last seen ', ''),
-                                        style: TextStyle(
-                                          color: t.muted,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 4),
-            ],
-          ),
-        );
-      },
-    ),
-  );
+  return runMessageAction(context, ref, message, action);
 }

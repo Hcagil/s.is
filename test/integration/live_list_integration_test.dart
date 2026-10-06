@@ -89,6 +89,17 @@ String _stamp(String what) => '$what ${DateTime.now().microsecondsSinceEpoch}';
 /// survive — reads working, Realtime not — and both halves are the real
 /// implementation, so the Err is the one production produces.
 class _RealtimeDown implements ChatRepository {
+  // Slice 5a signatures only (delivery marks); no behaviour.
+  @override
+  Future<Result<void>> markDelivered(
+    String conversationId, {
+    DateTime? upTo,
+  }) async => const Ok(null);
+
+  @override
+  Future<Result<Stream<ReadMark>>> deliveredUpdates(
+    String conversationId,
+  ) async => const Ok(Stream<ReadMark>.empty());
   _RealtimeDown(this.live, this.dead);
   final ChatRepository live;
   final ChatRepository dead;

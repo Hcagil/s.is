@@ -9,6 +9,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/app/delivery_tick.dart';
 import 'package:sis/app/theme.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
@@ -17,6 +18,7 @@ import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/delivery.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/chat/presentation/conversation_list.dart';
@@ -27,6 +29,8 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import '../../support/fakes.dart';
 import '../../support/held_send_chat.dart';
 import '../../support/sis_ui.dart';
+
+import 'package:sis/l10n/app_localizations.dart';
 
 const bob = Member(userId: 'u2', displayName: 'Bob');
 const failure = NetworkFailure('Could not reach SIS just now');
@@ -68,6 +72,8 @@ Future<ProviderContainer> pump(WidgetTester t, HeldSendChat chat) async {
     UncontrolledProviderScope(
       container: c,
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: sisTheme(Brightness.light),
         home: const MessageScreen(title: 'Bob'),
       ),
@@ -95,7 +101,14 @@ Finder _keyedFor(String prefix) => find.byWidgetPredicate((w) {
 });
 Finder get pendingBubble => _keyedFor('message-');
 Finder get pendingTime => _keyedFor('time-');
-final clock = find.byIcon(Icons.schedule_rounded);
+Finder get pendingTick => _keyedFor('tick-');
+
+/// Any delivery tick showing [d].
+Finder tickShowing(Delivery d) =>
+    find.byWidgetPredicate((w) => w is DeliveryTick && w.delivery == d);
+
+/// The clock: a tick still pending.
+final clock = tickShowing(Delivery.pending);
 Finder bubble(String id) => find.byKey(ValueKey('message-$id'));
 final field = find.byKey(const ValueKey('composer-field'));
 final send = find.byKey(const ValueKey('composer-send'));
@@ -131,7 +144,7 @@ Future<void> sendText(WidgetTester t, String text) async {
 }
 
 Future<void> reply(WidgetTester t, String id) async {
-  await t.tap(bubble(id));
+  await t.longPress(bubble(id));
   await t.pumpAndSettle();
   await t.tap(replyAction);
   await t.pumpAndSettle();
@@ -175,13 +188,16 @@ void main() {
 
       expect(pendingBubble, findsOneWidget, reason: 'shown before any answer');
       expect(textIn(t, pendingBubble), contains('hello there'));
-      final mark = find.descendant(
-        of: pendingTime,
-        matching: clock,
-        matchRoot: true,
+      expect(pendingTick, findsOneWidget, reason: 'the clock is its tick');
+      expect(t.widget<DeliveryTick>(pendingTick).delivery, Delivery.pending);
+      expect(pendingTime, findsOneWidget);
+      final time = t.getRect(pendingTime), tick = t.getRect(pendingTick);
+      expect(
+        tick.left - time.right,
+        closeTo(4, 0.5),
+        reason: 'the clock sits next to the time: $time $tick',
       );
-      expect(mark, findsOneWidget, reason: 'the clock sits in the time slot');
-      expect(t.widget<Icon>(mark).size, 12);
+      expect(tick.width, closeTo(14, 0.5));
       expect(composerText(t), isEmpty);
 
       await sendText(t, 'and again');
@@ -216,6 +232,11 @@ void main() {
       expect(clock, findsNothing);
       expect(pendingBubble, findsNothing);
       final id = chat.asked.single.id;
+      expect(
+        t.widget<DeliveryTick>(find.byKey(ValueKey('tick-$id'))).delivery,
+        Delivery.sent,
+        reason: 'stored, nobody else known to have it: one tick',
+      );
       expect(textIn(t, bubble(id)), contains('hello there'));
       expect(
         textIn(t, find.byKey(ValueKey('time-$id'))),
@@ -223,8 +244,8 @@ void main() {
       );
     });
 
-    testWidgets('a message on its way has no yellow unread edge; once stored '
-        'and unread, it has', (t) async {
+    testWidgets('no bubble has the old yellow unread edge; a message on its '
+        'way shows the clock, once stored and unread one tick', (t) async {
       // Bob shares read receipts and has read nothing: my stored messages
       // are unread.
       final chat = HeldSendChat()
@@ -233,12 +254,20 @@ void main() {
 
       await sendText(t, 'hello there');
       expect(edgeColours(t, pendingBubble), isNot(contains(yellow)));
+      expect(t.widget<DeliveryTick>(pendingTick).delivery, Delivery.pending);
 
       chat.ok(0);
       await t.pumpAndSettle();
-      expect(edgeColours(t, bubble(chat.asked.single.id)), {
-        yellow,
-      }, reason: 'control: the stored, unread message does show the edge');
+      final id = chat.asked.single.id;
+      expect(
+        edgeColours(t, bubble(id)),
+        isNot(contains(yellow)),
+        reason: 'the ticks replace the amber edge',
+      );
+      expect(
+        t.widget<DeliveryTick>(find.byKey(ValueKey('tick-$id'))).delivery,
+        Delivery.sent,
+      );
     });
   });
 
@@ -332,6 +361,8 @@ void main() {
         UncontrolledProviderScope(
           container: c,
           child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             theme: sisTheme(Brightness.light),
             home: const ConversationList(),
           ),
@@ -371,7 +402,7 @@ void main() {
       ..holdEdit();
     await pump(t, chat);
 
-    await t.tap(bubble('m1'));
+    await t.longPress(bubble('m1'));
     await t.pumpAndSettle();
     await t.tap(editAction);
     await t.pumpAndSettle();

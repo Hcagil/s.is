@@ -41,6 +41,8 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const maya = Member(userId: 'u1', displayName: 'Maya');
 final _t0 = DateTime.utc(2026, 10, 1, 12);
 
@@ -694,7 +696,11 @@ void main() {
     await t.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(home: MessageScreen(title: 'Ann')),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MessageScreen(title: 'Ann'),
+        ),
       ),
     );
     await t.pumpAndSettle();

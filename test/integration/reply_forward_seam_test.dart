@@ -24,6 +24,8 @@ import '../support/fakes.dart';
 import '../support/service_key.dart';
 import '../support/reach.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 /// Two members' message screens, mounted at once over the real repository:
 /// reid replies to a message through the actual swipe -> action row -> type
 /// -> send flow and sees the quote on his own screen; he then forwards a
@@ -240,6 +242,9 @@ void main() {
                   child: UncontrolledProviderScope(
                     container: reidContainer,
                     child: MaterialApp(
+                      localizationsDelegates:
+                          AppLocalizations.localizationsDelegates,
+                      supportedLocales: AppLocalizations.supportedLocales,
                       theme: sisTheme(Brightness.light),
                       home: const MessageScreen(title: 'Beth'),
                     ),
@@ -252,6 +257,9 @@ void main() {
                   child: UncontrolledProviderScope(
                     container: coraContainer,
                     child: MaterialApp(
+                      localizationsDelegates:
+                          AppLocalizations.localizationsDelegates,
+                      supportedLocales: AppLocalizations.supportedLocales,
                       theme: sisTheme(Brightness.light),
                       home: const MessageScreen(title: 'Reid'),
                     ),
@@ -322,9 +330,19 @@ void main() {
             .first,
       );
       expect(find.byKey(ValueKey('forward-$c1')), findsNothing);
+      // scrollUntilVisible returns with the lazily built list one frame
+      // stale (rows of different heights): the row can still sit under the
+      // Send bar. Reid taps what he sees once it has landed.
+      await until(
+        t,
+        () => target.hitTestable().evaluate().isNotEmpty,
+        'reid\'s chat with cora to come to rest above the Send bar',
+      );
 
       await t.tap(find.byKey(ValueKey('forward-$c2')));
       await settle(t);
+      // The tap really chose cora's chat: a missed tap would send to nobody.
+      expect(find.text('Send (1)'), findsOneWidget);
       await t.tap(find.byKey(const ValueKey('forward-send')));
       await settle(t);
       // Scoped to pane a: cora's own pane may by now also show a
@@ -363,7 +381,7 @@ void main() {
         'a',
         find.byKey(ValueKey('message-${quotedMessage.id}')),
       );
-      await t.tap(quotedFinder);
+      await t.longPress(quotedFinder);
       await until(
         t,
         () => find.byKey(const ValueKey('menu-reply')).evaluate().isNotEmpty,
@@ -380,6 +398,8 @@ void main() {
         within('a', find.byKey(const ValueKey('composer-field'))),
         'sounds good',
       );
+      // The send button replaces the mic once the field has text.
+      await t.pump();
       await t.tap(within('a', find.byKey(const ValueKey('composer-send'))));
       await settle(t);
 

@@ -10,8 +10,13 @@ hand-wired `ChangeNotifier`s (no enforceable boundaries).
 lib/
   main.dart               bootstrap only: config → ProviderScope → App
   app/                    MaterialApp, theme (theme.dart), brand widgets
-                          (brand.dart: logo, wordmark, glow) that any
+                          (brand.dart: logo, wordmark, glow), design tokens
+                          (SisTokens) and shared widgets (GreyOption,
+                          SisSettingsRow, DeliveryTick) that any
                           presentation/ may import, top-level routing
+  l10n/                   app_en.arb, app_tr.arb and the generated
+                          AppLocalizations (gen-l10n, checked in);
+                          only presentation/ and app/ use it
   core/                   RuntimeConfig, Failure types, Result — no widgets, no SDKs
   data/                   SDK helpers shared by more than one feature's data/
                           layer (realtime_channels.dart); same rules as data/

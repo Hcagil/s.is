@@ -49,46 +49,40 @@ final class Mute {
   bool activeAt(DateTime now) => until == null || until!.isAfter(now);
 }
 
-/// The lengths a member can pick from.
+/// The lengths a member can pick from. A mute with no end (`until == null`)
+/// can no longer be picked, but one already saved stays valid.
 enum MuteLength {
+  oneHour,
   eightHours,
-  oneWeek,
-  always;
+  oneDay,
+  threeDays,
+  oneWeek;
 
-  DateTime? until(DateTime now) => switch (this) {
+  DateTime until(DateTime now) => switch (this) {
+    oneHour => now.add(const Duration(hours: 1)),
     eightHours => now.add(const Duration(hours: 8)),
+    oneDay => now.add(const Duration(days: 1)),
+    threeDays => now.add(const Duration(days: 3)),
     oneWeek => now.add(const Duration(days: 7)),
-    always => null,
-  };
-
-  String get label => switch (this) {
-    eightHours => '8 hours',
-    oneWeek => '1 week',
-    always => 'Always',
   };
 }
 
-const _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
+/// Which day a mute ends on, relative to now.
+enum MuteDay { always, today, tomorrow, later }
 
-/// How a mute's end reads on screen: 'Always', 'Until 18:05',
-/// 'Until tomorrow 09:00', 'Until 3 Oct 18:05'.
-String muteLabel(DateTime? until, DateTime now) {
-  if (until == null) return 'Always';
+/// When a mute ends: the day bucket plus the end time in local time
+/// (`at` is null when the mute has no end).
+({MuteDay day, DateTime? at}) muteEnd(DateTime? until, DateTime now) {
+  if (until == null) return (day: MuteDay.always, at: null);
   final localUntil = until.toLocal();
   final localNow = now.toLocal();
   final day = DateTime(localUntil.year, localUntil.month, localUntil.day);
   final today = DateTime(localNow.year, localNow.month, localNow.day);
-  final time =
-      '${localUntil.hour.toString().padLeft(2, '0')}:'
-      '${localUntil.minute.toString().padLeft(2, '0')}';
-  if (day == today) return 'Until $time';
+  if (day == today) return (day: MuteDay.today, at: localUntil);
   if (day == DateTime(today.year, today.month, today.day + 1)) {
-    return 'Until tomorrow $time';
+    return (day: MuteDay.tomorrow, at: localUntil);
   }
-  return 'Until ${localUntil.day} ${_months[localUntil.month - 1]} $time';
+  return (day: MuteDay.later, at: localUntil);
 }
 
 /// The member's own notification settings and mutes; nobody else can read

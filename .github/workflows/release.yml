@@ -118,6 +118,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BUILD: ${{ needs.scope.outputs.code }}
+          VERSION: ${{ needs.scope.outputs.name }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -o pipefail
@@ -129,19 +130,23 @@ jobs:
                 echo "PR #$pr" >&2
                 gh api "repos/${GITHUB_REPOSITORY}/pulls/$pr" --jq 'select(.author_association | IN("OWNER","MEMBER","COLLABORATOR")) | .body' </dev/null | tr -d '\r' | sed -n 's/^For users: *//p' || exit 1
               done | sed '/^[[:space:]]*$/d')
-          note=${note:0:4000}
+          note=${note:0:3980}
           echo "Note: $note"
           if [ -z "$note" ]; then echo "No user-facing change in $range"; exit 0; fi
+          note="Version $VERSION"$'\n'"$note"
           b64=$(printf '%s' "$note" | base64 -w0)
           echo "b64=$b64" >> "$GITHUB_OUTPUT"
           supabase db query --linked "insert into public.release_notes(build, note) values ($BUILD, convert_from(decode('$b64', 'base64'), 'utf8')) on conflict (build) do nothing"
-      # The push sender. Deployed before the trigger learns its URL, so the
+      # The push sender, and notification-action, the endpoint its notification
+      # buttons call (the push carries a signed token instead of a session).
+      # Deployed before the trigger learns its URL, so the
       # trigger never calls a function that is not there yet. No JWT: the
       # database trigger holds none; push_targets() makes a forged call
       # harmless (docs/DECISIONS.md, 2026-09-24).
       - name: Deploy the push sender
         run: |
           supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" FCM_SERVICE_ACCOUNT="$FCM_SERVICE_ACCOUNT"
+          supabase functions deploy notification-action --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
           supabase functions deploy notify-on-message --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
           supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/notify-on-message', 'notify_on_message_url') where not exists (select 1 from vault.secrets where name = 'notify_on_message_url')"
         env:

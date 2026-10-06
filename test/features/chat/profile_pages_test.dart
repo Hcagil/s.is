@@ -8,14 +8,20 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/app/controls.dart';
+import 'package:sis/app/notice.dart';
+import 'package:sis/app/settings_row.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/group_controller.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/group_colors.dart';
 import 'package:sis/features/chat/domain/initials.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -24,13 +30,14 @@ import 'package:sis/features/chat/presentation/photo_viewer.dart';
 import 'package:sis/features/chat/presentation/profile_pages.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
-import 'package:sis/features/presence/domain/last_seen.dart';
+import 'package:sis/features/presence/presentation/last_seen_text.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/presentation/settings_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/l10n.dart';
 import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
@@ -67,7 +74,8 @@ Message m(
 final lateUtc = DateTime.utc(2026, 9, 21, 20);
 
 class World {
-  World() {
+  World({String? self, this.extra = const []})
+    : chat = ChatFake(latency: const Duration(milliseconds: 2), self: self) {
     chat
       ..conversationsResult = const Ok([withBob, club])
       ..membersResult = const Ok([bob, cem])
@@ -115,7 +123,10 @@ class World {
     }
   }
 
-  final chat = ChatFake(latency: const Duration(milliseconds: 2));
+  final ChatFake chat;
+
+  /// Overrides added after the production ones.
+  final List<Override> extra;
   final presence = PresenceFake();
   final opener = LinkOpenerFake();
   final profile = ProfileFake(
@@ -140,6 +151,7 @@ class World {
       linkOpenerProvider.overrideWithValue(opener),
       pushSourceProvider.overrideWithValue(PushSourceFake()),
       pushRegistryProvider.overrideWithValue(PushRegistryFake()),
+      ...extra,
     ],
     child: const SisApp(),
   );
@@ -185,7 +197,22 @@ Future<void> pumpApp(WidgetTester t, World w) async {
   expect(find.text('New chat'), findsOneWidget, reason: 'home did not open');
 }
 
+/// Scrolls the page up, then down, until [f] is built. The group page is a
+/// NestedScrollView: a tab's content is not built while the header fills
+/// the screen, so ensureVisible alone cannot find it.
+Future<void> reveal(WidgetTester t, Finder f) async {
+  for (final dy in [-200.0, 200.0]) {
+    for (var i = 0; i < 20 && f.evaluate().isEmpty; i++) {
+      final page = find.byType(NestedScrollView);
+      if (page.evaluate().isEmpty) return;
+      await t.drag(page.first, Offset(0, dy), warnIfMissed: false);
+      await settle(t);
+    }
+  }
+}
+
 Future<void> tapKey(WidgetTester t, String key) async {
+  await reveal(t, byKey(key));
   await t.ensureVisible(byKey(key));
   await t.pump();
   await t.tap(byKey(key));
@@ -356,7 +383,7 @@ void main() {
       await bobFromChat(t, w);
       expect(
         textOf(byKey('person-status')).trim(),
-        lastSeenLabel(at, DateTime.now()),
+        lastSeenText(l10nEn, at, DateTime.now()),
       );
     });
 
@@ -749,4 +776,299 @@ void main() {
       );
     },
   );
+
+  // Update 1 slice 8: the group page's leave card, greyed options and rows.
+  group('leave', () {
+    /// Club with [me] as an admin (or not) beside bob and cem; when [me] is
+    /// not an admin, bob is, so the group always has one.
+    World clubWith({required bool admin, List<Override> extra = const []}) {
+      final w = World(self: 'u1', extra: extra);
+      w.chat.groupRosters['g1'] = [
+        GroupMember(member: me, isAdmin: admin),
+        GroupMember(member: bob, isAdmin: !admin, colorSlot: 1),
+        const GroupMember(member: cem, isAdmin: false, colorSlot: 2),
+      ];
+      return w;
+    }
+
+    Future<void> openCard(WidgetTester t) async {
+      await tapKey(t, 'leave-group');
+      expect(byKey('leave-card'), findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing, reason: 'a dialog');
+      expect(byKey('leave-confirm'), findsOneWidget);
+      expect(byKey('leave-cancel'), findsOneWidget);
+    }
+
+    for (final admin in [false, true]) {
+      final who = admin ? 'an admin' : 'a member';
+
+      testWidgets('$who: cancel closes the card and changes nothing', (
+        t,
+      ) async {
+        final w = clubWith(admin: admin);
+        await clubPage(t, w);
+        await openCard(t);
+        await tapKey(t, 'leave-cancel');
+        expect(byKey('leave-card'), findsNothing);
+        expect(find.byType(GroupScreen), findsOneWidget);
+        expect(w.chat.groupWrites, isEmpty);
+        expect(notice, findsNothing);
+      });
+
+      testWidgets('$who: confirm leaves through the real controller, says '
+          '"Left the group" and pops the page', (t) async {
+        final w = clubWith(admin: admin);
+        await clubPage(t, w);
+        await openCard(t);
+        await t.tap(byKey('leave-confirm'));
+        await settle(t);
+        expect(w.chat.groupWrites, ['leave:g1']);
+        expect(find.byType(GroupScreen), findsNothing, reason: 'not popped');
+        expect(byKey('leave-card'), findsNothing);
+        expect(t.widgetList<SisNotice>(notice).map((n) => n.message), [
+          'Left the group',
+        ]);
+        await drainNotice(t);
+      });
+    }
+
+    for (final unsent in [true, false]) {
+      testWidgets('the notice follows leave\'s bool: $unsent', (t) async {
+        late _LeaveSpy spy;
+        final w = clubWith(
+          admin: false,
+          extra: [
+            groupControllerProvider.overrideWith(
+              (ref) => spy = _LeaveSpy(ref, unsent),
+            ),
+          ],
+        );
+        await clubPage(t, w);
+        await openCard(t);
+        await t.tap(byKey('leave-confirm'));
+        await settle(t);
+        expect(spy.left, ['g1']);
+        expect(t.widgetList<SisNotice>(notice).map((n) => n.message), [
+          unsent
+              ? 'Left the group. Unsent messages weren\'t sent.'
+              : 'Left the group',
+        ]);
+        expect(find.byType(GroupScreen), findsNothing);
+        await drainNotice(t);
+      });
+    }
+  });
+
+  group('greyed options', () {
+    World clubWith({required bool admin}) {
+      final w = World(self: 'u1');
+      w.chat.groupRosters['g1'] = [
+        GroupMember(member: me, isAdmin: admin),
+        GroupMember(member: bob, isAdmin: !admin, colorSlot: 1),
+        const GroupMember(member: cem, isAdmin: false, colorSlot: 2),
+      ];
+      return w;
+    }
+
+    /// The value of the switch under the grey row [key], Material or own.
+    bool on(WidgetTester t, String key) {
+      final w = t.widget(
+        find.descendant(
+          of: byKey(key),
+          matching: find.byWidgetPredicate(
+            (w) => w is Switch || w is SisSwitch,
+          ),
+        ),
+      );
+      return w is SisSwitch ? w.value : (w as Switch).value;
+    }
+
+    Map<String, bool> switches(WidgetTester t) => {
+      for (final k in ['grey-pickswitch', 'grey-addsw', 'grey-histsw'])
+        k: on(t, k),
+    };
+
+    for (final admin in [false, true]) {
+      final who = admin ? 'an admin' : 'a member';
+      testWidgets('$who sees the values as today, the edit badge, and '
+          'tapping any of them changes nothing', (t) async {
+        final w = clubWith(admin: admin);
+        await clubPage(t, w);
+        expect(byKey('group-avatar-edit'), findsOneWidget);
+        await reveal(t, byKey('grey-pickswitch'));
+        const today = {
+          'grey-pickswitch': true,
+          'grey-addsw': false,
+          'grey-histsw': false,
+        };
+        expect(switches(t), today);
+        expect(
+          find.descendant(of: byKey('grey-p_who'), matching: find.byType(Text)),
+          findsOneWidget,
+          reason: 'grey-p_who is a title with no value',
+        );
+        final grey = [
+          'grey-pickswitch',
+          'grey-addsw',
+          'grey-histsw',
+          'grey-p_who',
+          if (admin) 'grey-deladmin',
+        ];
+        if (!admin) {
+          await reveal(t, byKey('leave-group'));
+          expect(byKey('leave-group'), findsOneWidget);
+          expect(byKey('grey-deladmin'), findsNothing);
+        }
+        for (final k in grey) {
+          await reveal(t, byKey(k));
+          await t.ensureVisible(byKey(k));
+          await t.pump();
+          await t.tap(byKey(k), warnIfMissed: false);
+          await settle(t);
+          expect(find.byType(GroupScreen), findsOneWidget, reason: k);
+          expect(
+            ModalRoute.of(t.element(find.byType(GroupScreen)))!.isCurrent,
+            isTrue,
+            reason: '$k opened something',
+          );
+          expect(w.chat.groupWrites, isEmpty, reason: k);
+          await reveal(t, byKey('grey-pickswitch'));
+          expect(switches(t), today, reason: 'after tapping $k');
+        }
+      });
+    }
+  });
+
+  group('rows', () {
+    testWidgets('mute, add members and contact are settings rows; Message '
+        'spans the page', (t) async {
+      final w = World(
+        self: 'u1',
+        extra: [
+          contactsRepositoryProvider.overrideWithValue(
+            ContactsFake(directory: [me, bob, cem], reachable: ['ub']),
+          ),
+        ],
+      );
+      w.chat.groupRosters['g1'] = [
+        const GroupMember(member: me, isAdmin: true),
+        const GroupMember(member: bob, isAdmin: false, colorSlot: 1),
+        const GroupMember(member: cem, isAdmin: false, colorSlot: 2),
+      ];
+      await clubPage(t, w);
+      expect(t.widget(byKey('mute-tile')), isA<SisSettingsRow>());
+      await reveal(t, byKey('add-members'));
+      expect(t.widget(byKey('add-members')), isA<SisSettingsRow>());
+      for (final k in [
+        'group-member-ub',
+        'toggle-admin-ub',
+        'remove-member-ub',
+      ]) {
+        await reveal(t, byKey(k));
+        expect(byKey(k), findsOneWidget, reason: k);
+      }
+      await tapKey(t, 'group-member-ub');
+      expect(find.byType(PersonScreen), findsOneWidget);
+      await reveal(t, byKey('person-contact-toggle'));
+      expect(t.widget(byKey('person-contact-toggle')), isA<SisSettingsRow>());
+      await reveal(t, byKey('person-message'));
+      final page = t.getSize(find.byType(PersonScreen)).width;
+      expect(
+        t.getSize(byKey('person-message')).width,
+        greaterThan(page * 0.8),
+        reason: 'Message is not full width',
+      );
+    });
+  });
+
+  group('360 wide', () {
+    testWidgets('the group page, every part of it, lays out without '
+        'overflow', (t) async {
+      t.view.physicalSize = const Size(1080, 2340);
+      t.view.devicePixelRatio = 3;
+      addTearDown(t.view.reset);
+      final w = World(self: 'u1');
+      w.chat.groupRosters['g1'] = [
+        const GroupMember(member: me, isAdmin: true),
+        const GroupMember(member: bob, isAdmin: false, colorSlot: 1),
+        const GroupMember(member: cem, isAdmin: false, colorSlot: 2),
+      ];
+      await clubPage(t, w);
+      expect(t.getSize(find.byType(GroupScreen)).width, 360);
+      for (final k in [
+        'grey-deladmin',
+        'remove-member-u3',
+        'leave-group',
+        'mute-tile',
+      ]) {
+        await reveal(t, byKey(k));
+        expect(byKey(k), findsOneWidget, reason: k);
+      }
+      await openCardAt(t);
+      await tapKey(t, 'leave-cancel');
+      for (final tab in ['tab-media', 'tab-links']) {
+        await tapKey(t, tab);
+      }
+      expect(t.takeException(), isNull);
+    });
+  });
+
+  // Slice 12: the data layer returns '' for a member whose profile name is
+  // unknown (as the contract says SupabaseChatRepository does). Every place
+  // that names them must show the localised "Member", never a blank and
+  // never the domain's own wording.
+  group('an unknown name', () {
+    const nameless = Member(userId: 'u9', displayName: '');
+    const withNameless = Conversation(
+      id: 'c9',
+      other: nameless,
+      lastMessage: 'who?',
+    );
+
+    World unknown() => World()
+      ..chat.conversationsResult = const Ok([withBob, club, withNameless])
+      ..chat.roster['c9'] = [me, nameless]
+      ..chat.roster['g1'] = [me, bob, nameless];
+
+    testWidgets('the chat list row says "Member"', (t) async {
+      await pumpApp(t, unknown());
+      expect(textOf(byKey('conversation-c9')), contains(l10nEn.commonMember));
+    });
+
+    testWidgets('the open 1:1 header says "Member"', (t) async {
+      await pumpApp(t, unknown());
+      await openChat(t, 'c9');
+      expect(
+        textOf(byKey('conversation-title')),
+        contains(l10nEn.commonMember),
+      );
+    });
+
+    testWidgets('the group roster row says "Member"', (t) async {
+      await clubPage(t, unknown());
+      await tapKey(t, 'tab-members');
+      await reveal(t, byKey('group-member-u9'));
+      expect(textOf(byKey('group-member-u9')), contains(l10nEn.commonMember));
+    });
+  });
+}
+
+Future<void> openCardAt(WidgetTester t) async {
+  await tapKey(t, 'leave-group');
+  expect(byKey('leave-card'), findsOneWidget);
+}
+
+/// The production controller, but [leave] answers [unsent] and records the
+/// call: the screen's notice is the subject, not the send queue.
+class _LeaveSpy extends GroupController {
+  _LeaveSpy(super.ref, this.unsent);
+  final bool unsent;
+  final left = <String>[];
+
+  @override
+  Future<Result<bool>> leave(String conversationId) async {
+    left.add(conversationId);
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    return Ok(unsent);
+  }
 }

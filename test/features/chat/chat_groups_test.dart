@@ -19,6 +19,8 @@ import 'package:sis/features/notifications/application/push_controller.dart';
 
 import '../../support/fakes.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
 const cleo = Member(userId: 'u3', displayName: 'Cleo');
@@ -53,7 +55,11 @@ Future<ProviderContainer> pump(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: MaterialApp(home: home),
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: home,
+      ),
     ),
   );
   await tester.pumpAndSettle();

@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/theme.dart';
 import 'package:sis/features/chat/presentation/message_menu_card.dart';
+import 'package:sis/l10n/app_localizations.dart';
 
 const _screen = Size(400, 800);
 const _safeTop = 40.0;
@@ -59,6 +60,8 @@ Future<List<String?>> open(
   final results = <String?>[];
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: sisTheme(Brightness.light),
       home: Scaffold(
         body: Builder(

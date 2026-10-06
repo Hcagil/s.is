@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
 import '../application/profile_controller.dart';
 import '../domain/own_profile.dart';
 import 'profile_form.dart';
@@ -21,7 +22,7 @@ class OnboardingScreen extends ConsumerWidget {
     final controller = ref.read(ownProfileProvider.notifier);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Welcome'),
+        title: Text(AppLocalizations.of(context).onboardingWelcome),
         actions: [
           TextButton(
             key: const ValueKey('onboarding-skip'),
@@ -31,7 +32,7 @@ class OnboardingScreen extends ConsumerWidget {
                 showSisNotice(context, failure.message, isError: true);
               }
             },
-            child: const Text('Skip'),
+            child: Text(AppLocalizations.of(context).commonSkip),
           ),
         ],
       ),
@@ -40,15 +41,15 @@ class OnboardingScreen extends ConsumerWidget {
           padding: const EdgeInsets.all(24),
           children: [
             Text(
-              'How should others see you?',
+              AppLocalizations.of(context).onboardingHeading,
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
-            const Text('You can change both later in Settings.'),
+            Text(AppLocalizations.of(context).onboardingHint),
             const SizedBox(height: 24),
             ProfileForm(
               profile: profile,
-              submitLabel: 'Continue',
+              submitLabel: AppLocalizations.of(context).commonContinue,
               onSubmit: (name, tag) =>
                   controller.completeOnboarding(displayName: name, tag: tag),
             ),

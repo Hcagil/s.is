@@ -1,6 +1,11 @@
 /// One message line in a chat's notification.
 final class InboxLine {
-  const InboxLine({required this.sender, required this.text, required this.at});
+  const InboxLine({
+    required this.sender,
+    required this.text,
+    required this.at,
+    this.id,
+  });
 
   final String sender;
   final String text;
@@ -8,7 +13,10 @@ final class InboxLine {
   /// Milliseconds since the epoch, when the push arrived.
   final int at;
 
-  Map<String, Object> toJson() => {'s': sender, 'x': text, 'a': at};
+  /// The push's message id, used to drop a line stored twice.
+  final String? id;
+
+  Map<String, Object> toJson() => {'s': sender, 'x': text, 'a': at, 'm': ?id};
 
   /// [j] is a stored map, or a bare string (the format before per-line
   /// senders existed).
@@ -19,6 +27,7 @@ final class InboxLine {
       sender: m['s'] as String,
       text: m['x'] as String,
       at: m['a'] as int,
+      id: m['m'] as String?,
     );
   }
 }
@@ -70,15 +79,6 @@ final class InboxChat {
       posted: j['p'] as int? ?? n,
     );
   }
-
-  InboxChat withPosted(int posted) => InboxChat(
-    conversationId: conversationId,
-    title: title,
-    group: group,
-    lines: lines,
-    count: count,
-    posted: posted,
-  );
 }
 
 /// How many lines one chat's notification keeps: what Android's
@@ -109,6 +109,7 @@ List<InboxChat> addToInbox(
   required String body,
   String? sender,
   String? chat,
+  String? messageId,
   required DateTime at,
 }) {
   final parsed = sender != null && chat != null
@@ -117,9 +118,19 @@ List<InboxChat> addToInbox(
   final existing = inbox
       .where((c) => c.conversationId == conversationId)
       .firstOrNull;
+  // Already stored (the Android receiver draws a push before this runs).
+  if (messageId != null &&
+      (existing?.lines.any((l) => l.id == messageId) ?? false)) {
+    return inbox;
+  }
   final all = [
     ...?existing?.lines,
-    InboxLine(sender: parsed.sender, text: body, at: at.millisecondsSinceEpoch),
+    InboxLine(
+      sender: parsed.sender,
+      text: body,
+      at: at.millisecondsSinceEpoch,
+      id: messageId,
+    ),
   ];
   return [
     for (final c in inbox)
@@ -143,21 +154,6 @@ List<InboxChat> removeFromInbox(List<InboxChat> inbox, String conversationId) =>
       for (final c in inbox)
         if (c.conversationId != conversationId) c,
     ];
-
-/// The chats holding messages no posted notification shows yet.
-List<InboxChat> dirtyChats(List<InboxChat> inbox) => [
-  for (final c in inbox)
-    if (c.count != c.posted) c,
-];
-
-/// [inbox] with every listed chat recorded as fully posted.
-List<InboxChat> markPosted(
-  List<InboxChat> inbox,
-  Set<String> conversationIds,
-) => [
-  for (final c in inbox)
-    conversationIds.contains(c.conversationId) ? c.withPosted(c.count) : c,
-];
 
 /// The one-line summary over everything waiting: '1 new message',
 /// 'N new messages', with ' from K chats' when more than one chat is waiting.

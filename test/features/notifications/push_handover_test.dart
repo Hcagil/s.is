@@ -3,10 +3,11 @@
 //
 // Mounted as main.dart mounts it: the whole app behind the session gate,
 // the production FirebasePushSource over Firebase Messaging, LocalPushDisplay
-// initialised with FirebasePushSource.tapped, and pushes shown by the
-// production background handler (onBackgroundPush). Only the device is a
-// fake (test/support/push_platform.dart): the notification shade, the
-// SharedPreferences file and Firebase's platform side -- and, at the
+// initialised with FirebasePushSource.tapped, and pushes received by the
+// production background handler (onBackgroundPush) after Android's native
+// receiver drew them. Only the device is a fake
+// (test/support/push_platform.dart): the notification shade, the native
+// receiver, the SharedPreferences file and Firebase's platform side -- and, at the
 // repository boundary, auth, chat, profile and presence.
 //
 // Every session end is its own path through the app, and each must hand
@@ -33,6 +34,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/runtime_config.dart';
+import 'package:sis/core/startup_failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/member.dart';
@@ -49,6 +51,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/l10n.dart';
 import '../../support/push_platform.dart';
 
 const config = RuntimeConfig(
@@ -79,18 +82,26 @@ Map<String, Object> legacyInbox() => {
 };
 const legacySecrets = ['legacy secret one', 'legacy secret two', 'Olga'];
 
+var _pushes = 0;
+
 /// A data-only push, as notify-on-message sends it to this build: addressed
 /// to the recipient [to]. Without [to], as a server from before user_id was
-/// sent does.
-RemoteMessage dataPush(String chat, String title, String body, {String? to}) =>
-    RemoteMessage(
-      data: {
-        'conversation_id': chat,
-        'title': title,
-        'body': body,
-        'user_id': ?to,
-      },
-    );
+/// sent does. Each carries its own message id, as FCM's do.
+RemoteMessage dataPush(
+  String chat,
+  String title,
+  String body, {
+  String? to,
+}) => RemoteMessage(
+  data: {
+    'conversation_id': chat,
+    'title': title,
+    'body': body,
+    'user_id': ?to,
+    'message_id':
+        '00000000-0000-4000-8000-${(++_pushes).toString().padLeft(12, '0')}',
+  },
+);
 
 /// A push with a notification block, as sent to a device still registered
 /// as an older build: Android draws it itself.
@@ -199,9 +210,14 @@ void main() {
     await t.pumpAndSettle();
   }
 
-  /// A push arriving while the app is in the background or closed: the
-  /// production background handler, in its own isolate.
+  /// A push arriving while the app is in the background or closed: Android's
+  /// native receiver draws it (the only drawer since Update 1), then the
+  /// production background handler runs in its own isolate.
   Future<void> background(WidgetTester t, RemoteMessage m) async {
+    NativeReceiver(
+      shade,
+      disk,
+    ).receive(m.data, notification: m.notification != null);
     newIsolate();
     await drive(t, () => onBackgroundPush(m));
   }
@@ -893,7 +909,7 @@ void main() {
         await t.pumpWidget(
           ProviderScope(
             overrides: [
-              startupErrorProvider.overrideWithValue('bad secure store'),
+              startupErrorProvider.overrideWithValue(StartupFailure.bootstrap),
               if (withConfig) runtimeConfigProvider.overrideWithValue(config),
             ],
             child: const SisApp(),
@@ -902,7 +918,10 @@ void main() {
         await settle(t);
 
         expect(find.byType(StartupFailedScreen), findsOneWidget);
-        expect(find.textContaining('bad secure store'), findsOneWidget);
+        expect(
+          find.textContaining(l10nEn.statusStartBootstrap),
+          findsOneWidget,
+        );
         await expectNothingBuiltOrThrown(t);
       });
     }

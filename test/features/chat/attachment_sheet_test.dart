@@ -26,6 +26,8 @@ import '../../support/fakes.dart';
 import '../../support/attach_flow.dart' hide key;
 import '../../support/gallery_paging.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 
 class _SignedIn extends SessionController {
@@ -61,7 +63,11 @@ Future<ProviderContainer> pump(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(home: MessageScreen(title: 'Bob')),
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: MessageScreen(title: 'Bob'),
+      ),
     ),
   );
   await tester.pump();
@@ -375,6 +381,8 @@ void main() {
       final chat = ChatFake();
       await pump(tester, chat, gallery);
       await tester.tap(find.byKey(const ValueKey('composer-attach')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('attach-photo')));
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
@@ -685,6 +693,8 @@ void main() {
       );
       await pump(tester, ChatFake(), gallery);
       await tester.tap(find.byKey(const ValueKey('composer-attach')));
+      await steps(tester);
+      await tester.tap(find.byKey(const ValueKey('attach-photo')));
       await steps(tester);
       expect(find.byKey(const ValueKey('sheet-photo-p0')), findsOneWidget);
       return gallery;

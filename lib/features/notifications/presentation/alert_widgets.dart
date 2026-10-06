@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/controls.dart';
+import '../../../app/theme.dart';
+import '../../../l10n/app_localizations.dart';
 import '../application/alert_controller.dart';
 import '../domain/alert_settings.dart';
 
@@ -15,6 +17,7 @@ class AlertDefaultsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     final defaults = ref.watch(alertPrefsProvider).value?.defaults;
     if (defaults == null) return const SizedBox.shrink();
     final controller = ref.read(alertPrefsProvider.notifier);
@@ -26,7 +29,7 @@ class AlertDefaultsSection extends ConsumerWidget {
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              'Sound and vibration',
+              l.alertSoundAndVibration,
               style: theme.textTheme.titleSmall?.copyWith(
                 color: theme.colorScheme.primary,
               ),
@@ -35,8 +38,8 @@ class AlertDefaultsSection extends ConsumerWidget {
         ),
         SisSwitchTile(
           key: const ValueKey('alert-sound'),
-          title: 'Sound',
-          subtitle: 'Play a sound for new messages',
+          title: l.commonSound,
+          subtitle: l.alertSoundHint,
           value: defaults.sound,
           onChanged: (on) =>
               controller.setDefaults(defaults.copyWith(sound: on)),
@@ -44,8 +47,8 @@ class AlertDefaultsSection extends ConsumerWidget {
         if (_isAndroid)
           ListTile(
             key: const ValueKey('alert-tone'),
-            title: const Text('Tone'),
-            subtitle: Text(defaults.toneName ?? 'System default'),
+            title: Text(l.alertTone),
+            subtitle: Text(defaults.toneName ?? l.alertToneDefault),
             enabled: defaults.sound,
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: controller.pickTone,
@@ -53,8 +56,8 @@ class AlertDefaultsSection extends ConsumerWidget {
         if (_isAndroid)
           SisSwitchTile(
             key: const ValueKey('alert-vibration'),
-            title: 'Vibration',
-            subtitle: 'Vibrate for new messages',
+            title: l.commonVibration,
+            subtitle: l.alertVibrationHint,
             value: defaults.vibration,
             onChanged: (on) =>
                 controller.setDefaults(defaults.copyWith(vibration: on)),
@@ -73,6 +76,7 @@ class ChatAlertTiles extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     final prefs = ref.watch(alertPrefsProvider).value;
     if (prefs == null) return const SizedBox.shrink();
     final chat = prefs.chat(conversationId);
@@ -81,7 +85,7 @@ class ChatAlertTiles extends ConsumerWidget {
       children: [
         _ChoiceTile(
           tileKey: 'chat-alert-sound',
-          title: 'Sound',
+          title: l.commonSound,
           value: chat.sound,
           onChanged: (v) =>
               controller.setChat(conversationId, chat.copyWith(sound: v)),
@@ -89,7 +93,7 @@ class ChatAlertTiles extends ConsumerWidget {
         if (_isAndroid)
           _ChoiceTile(
             tileKey: 'chat-alert-vibration',
-            title: 'Vibration',
+            title: l.commonVibration,
             value: chat.vibration,
             onChanged: (v) =>
                 controller.setChat(conversationId, chat.copyWith(vibration: v)),
@@ -113,27 +117,37 @@ class _ChoiceTile extends StatelessWidget {
   final ValueChanged<AlertChoice> onChanged;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    key: ValueKey(tileKey),
-    title: Text(title),
-    trailing: DropdownButton<AlertChoice>(
-      key: ValueKey('$tileKey-choice'),
-      underline: const SizedBox.shrink(),
-      value: value,
-      items: [
-        for (final c in AlertChoice.values)
-          DropdownMenuItem(
-            value: c,
-            child: Text(switch (c) {
-              AlertChoice.byDefault => 'Default',
-              AlertChoice.on => 'On',
-              AlertChoice.off => 'Off',
-            }),
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Padding(
+      key: ValueKey(tileKey),
+      padding: SisTokens.settingsRowPadding,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(title, style: Theme.of(context).textTheme.bodyLarge),
           ),
-      ],
-      onChanged: (v) {
-        if (v != null) onChanged(v);
-      },
-    ),
-  );
+          DropdownButton<AlertChoice>(
+            key: ValueKey('$tileKey-choice'),
+            underline: const SizedBox.shrink(),
+            value: value,
+            items: [
+              for (final c in AlertChoice.values)
+                DropdownMenuItem(
+                  value: c,
+                  child: Text(switch (c) {
+                    AlertChoice.byDefault => l.alertChoiceDefault,
+                    AlertChoice.on => l.alertChoiceOn,
+                    AlertChoice.off => l.alertChoiceOff,
+                  }),
+                ),
+            ],
+            onChanged: (v) {
+              if (v != null) onChanged(v);
+            },
+          ),
+        ],
+      ),
+    );
+  }
 }

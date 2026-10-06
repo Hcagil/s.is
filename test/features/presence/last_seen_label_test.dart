@@ -1,11 +1,18 @@
-// lastSeenLabel, written from the contract. Run under TZ=JST-9 like every
+// lastSeen (which wording) and lastSeenText (the words), written from the
+// contract. The boundary cases below go through both, in English. Run under TZ=JST-9 like every
 // unit test (CI does): the container defaults to UTC, where local and UTC are
 // the same clock and the local-time group below cannot tell them apart.
 //
 // Every other expectation is built from local wall-clock values, so it holds
 // in any zone; JST has no daylight saving, so no hour is skipped or repeated.
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sis/features/presence/domain/last_seen.dart';
+import 'package:sis/features/presence/presentation/last_seen_text.dart';
+import 'package:sis/l10n/app_localizations.dart';
+
+final _en = lookupAppLocalizations(const Locale('en'));
+
+String lastSeenLabel(DateTime at, DateTime now) => lastSeenText(_en, at, now);
 
 void main() {
   final now = DateTime(2026, 9, 23, 15, 40);
@@ -232,5 +239,18 @@ void main() {
         'last seen 02.09.26',
       );
     });
+  });
+
+  group('Turkish', () {
+    final tr = lookupAppLocalizations(const Locale('tr'));
+    for (final (at, want) in [
+      (now, 'az önce görüldü'),
+      (now.subtract(const Duration(minutes: 7)), '7 dk önce görüldü'),
+      (DateTime(2026, 9, 23, 9, 5), 'bugün 09:05 görüldü'),
+      (DateTime(2026, 9, 22, 23, 59), 'dün 23:59 görüldü'),
+      (DateTime(2026, 3, 4, 12), '04.03.26 görüldü'),
+    ]) {
+      test(want, () => expect(lastSeenText(tr, at, now), want));
+    }
   });
 }

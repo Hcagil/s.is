@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/failure.dart';
+import '../core/startup_failure.dart';
+import '../features/appearance/application/appearance_controller.dart';
+import '../features/appearance/domain/appearance_settings.dart';
 import '../features/auth/domain/member.dart';
 import '../features/auth/application/session_controller.dart';
 import '../features/auth/domain/session_state.dart';
@@ -20,12 +24,13 @@ import '../features/update/application/release_notes_controller.dart';
 import '../features/update/application/update_controller.dart';
 import '../features/update/domain/update_state.dart';
 import '../features/update/presentation/update_required_screen.dart';
+import '../l10n/app_localizations.dart';
 import 'loading.dart';
 import 'route_stack.dart';
 import 'theme.dart';
 
 /// Set by main() when bootstrap itself fails; the gate shows the reason.
-final startupErrorProvider = Provider<String?>((_) => null);
+final startupErrorProvider = Provider<StartupFailure?>((_) => null);
 
 /// Root widget: theme plus the session gate.
 class SisApp extends ConsumerWidget {
@@ -33,13 +38,44 @@ class SisApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final look = ref.watch(appearanceProvider);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'SIS',
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      // System: null, the locale follows the phone.
+      locale: switch (look.language) {
+        AppLanguage.system => null,
+        AppLanguage.en => const Locale('en'),
+        AppLanguage.tr => const Locale('tr'),
+      },
       themeMode: ThemeMode.system,
-      theme: sisTheme(Brightness.light),
-      darkTheme: sisTheme(Brightness.dark),
+      theme: sisTheme(
+        Brightness.light,
+        theme: look.themeId,
+        systemFont: look.systemFont,
+      ),
+      darkTheme: sisTheme(
+        Brightness.dark,
+        theme: look.themeId,
+        systemFont: look.systemFont,
+      ),
       navigatorObservers: [ref.read(routeStackProvider)],
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: sisTextScaler(
+            MediaQuery.textScalerOf(context),
+            look.appTextSize.scale,
+          ),
+        ),
+        child: child!,
+      ),
       home: const SessionGate(),
     );
   }

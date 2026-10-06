@@ -66,6 +66,9 @@ class Line extends http.BaseClient {
   Completer<void>? _hold;
   int activations = 0;
 
+  /// activate_session calls dropped while offline.
+  int refusedChecks = 0;
+
   void holdChecks() => _hold = Completer<void>();
   void releaseChecks() {
     _hold?.complete();
@@ -75,6 +78,7 @@ class Line extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     if (offline) {
+      if (request.url.path.endsWith('/rpc/activate_session')) refusedChecks++;
       throw const SocketException('Connection refused (test: offline)');
     }
     if (request.url.path.endsWith('/rpc/activate_session')) {
@@ -138,7 +142,6 @@ class Run {
     c.listen(sessionControllerProvider, (_, next) {
       if (next.value case final v?) states.add(v);
     }, fireImmediately: true);
-    c.listen(sessionCheckFailedProvider, (_, _) {});
   }
   final ProviderContainer c;
   final states = <SessionState>[];
@@ -344,17 +347,20 @@ void main() {
     run.c.dispose();
   });
 
-  test('revoked while the phone was offline: the stored state and the '
-      'notice, then Denied within one retry of reconnecting', () async {
+  test('revoked while the phone was offline: the stored state while the '
+      'ladder retries, then Denied within one retry of reconnecting', () async {
     final p = await phone('csd@integration.test');
     await firstRun(p);
     await offAllowlist(p, 'csd@integration.test');
 
     p.line.offline = true;
     final run = Run(p);
+    // The first check fails and the retry ladder asks again (the Err drives
+    // the ladder; there is no flag or notice any more).
     await run.until(
-      () => run.c.read(sessionCheckFailedProvider),
-      'the failed check notice',
+      () => p.line.refusedChecks >= 2,
+      'a failed check retried by the ladder',
+      timeout: const Duration(seconds: 8),
     );
     expect(isUnconfirmed(run.state!), isTrue, reason: '${run.states}');
     expect(p.markerFile.existsSync(), isTrue, reason: 'offline wiped it');
@@ -377,7 +383,6 @@ void main() {
       DateTime.now().difference(back),
       lessThan(const Duration(seconds: 9)),
     );
-    expect(run.c.read(sessionCheckFailedProvider), isFalse);
     await run.until(() => !p.markerFile.existsSync(), 'the marker wipe');
     run.c.dispose();
   });

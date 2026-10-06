@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/grey_option.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
 import 'person_avatar.dart';
@@ -72,15 +74,14 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
     if (result case Err(:final failure)) {
       showSisNotice(context, failure.message, isError: true);
     } else {
-      showSisNotice(
-        context,
-        isContact ? 'Removed from contacts' : 'Added to contacts',
-      );
+      final l = AppLocalizations.of(context);
+      showSisNotice(context, isContact ? l.contactRemoved : l.contactAdded);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final people = ref.watch(yourPeopleProvider);
     final contactIds =
         ref.watch(contactsControllerProvider).value ?? const <String>{};
@@ -88,13 +89,13 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
         ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant);
     return Scaffold(
       key: const ValueKey('new-chat-page'),
-      appBar: AppBar(title: const Text('New chat')),
+      appBar: AppBar(title: Text(l.pickerNewChat)),
       body: Column(
         children: [
           PickerSearchField(
             fieldKey: const ValueKey('find-by-tag-field'),
             controller: _tagField,
-            hint: 'Find by exact tag',
+            hint: l.newChatTagHint,
             prefixIcon: Icons.alternate_email_rounded,
             textInputAction: TextInputAction.search,
             onSubmitted: (_) => _search(),
@@ -116,11 +117,11 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
               ),
             ),
           if (_searchedEmpty)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
-                'Nobody has that tag',
-                key: ValueKey('find-by-tag-empty'),
+                l.newChatNoTag,
+                key: const ValueKey('find-by-tag-empty'),
               ),
             ),
           if (_found case final found?) ...[
@@ -128,7 +129,7 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Found', style: header),
+                child: Text(l.newChatFound, style: header),
               ),
             ),
             ListTile(
@@ -151,8 +152,8 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
                           : Icons.person_add_alt_1_outlined,
                     ),
                     tooltip: contactIds.contains(found.userId)
-                        ? 'Remove from contacts'
-                        : 'Add to contacts',
+                        ? l.contactRemove
+                        : l.contactAdd,
                     onPressed: () => _toggleContact(
                       found,
                       contactIds.contains(found.userId),
@@ -162,23 +163,31 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
                   FilledButton(
                     key: ValueKey('find-by-tag-chat-${found.userId}'),
                     onPressed: () => Navigator.of(context).pop(found),
-                    child: const Text('Chat'),
+                    child: Text(l.newChatChat),
                   ),
                 ],
               ),
             ),
           ],
           const Divider(height: 1),
+          GreyOption(
+            name: 'f_perm',
+            label: AppLocalizations.of(context).findFromContacts,
+            child: ListTile(
+              leading: const Icon(Icons.contacts_outlined),
+              title: Text(AppLocalizations.of(context).findFromContacts),
+            ),
+          ),
           Expanded(
             child: switch (people) {
-              AsyncData(:final value) when value.isEmpty => const ListTile(
-                title: Text('Nobody yet — find someone by their tag'),
+              AsyncData(:final value) when value.isEmpty => ListTile(
+                title: Text(l.newChatEmpty),
               ),
               AsyncData(:final value) => ListView(
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Text('Your people', style: header),
+                    child: Text(l.commonYourPeople, style: header),
                   ),
                   for (final m in value)
                     ListTile(

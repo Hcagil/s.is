@@ -3,14 +3,18 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/grey_option.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../app/theme.dart';
+import '../../../l10n/app_localizations.dart';
 import '../application/chat_controllers.dart';
 import '../domain/attachment.dart';
 import '../domain/external_picker.dart';
 import '../domain/gallery.dart';
 import 'crop_screen.dart';
+import 'message_menu_card.dart';
+import 'person_avatar.dart';
 
 /// Shows the paperclip's photo grid; an empty `images` list when the member
 /// closes it or backs out without choosing a photo. `dropped` is how many
@@ -33,6 +37,140 @@ Future<({List<PickedImage> images, int dropped})> showAttachmentSheet(
         builder: (_) => AttachmentSheet(square: square),
       );
   return result ?? (images: const <PickedImage>[], dropped: 0);
+}
+
+/// Opens the attach card above [anchor] (the paperclip's global rect). True when Photo was tapped; false when closed without choosing. Only Photo is live, the other tiles are greyed.
+Future<bool> showAttachMenu(
+  BuildContext context, {
+  required Rect anchor,
+}) async {
+  final chosen = await showFloatingCard<String>(
+    context,
+    anchor: anchor,
+    cardKey: const ValueKey('attach-menu'),
+    child: const _AttachMenu(),
+  );
+  return chosen == 'photo';
+}
+
+class _AttachMenu extends StatelessWidget {
+  const _AttachMenu();
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 14,
+        children: [
+          InkWell(
+            key: const ValueKey('attach-photo'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).pop('photo'),
+            child: _attachTile(
+              context,
+              slot: 0,
+              icon: Icons.photo_outlined,
+              label: l.attachPhoto,
+            ),
+          ),
+          GreyOption(
+            name: 'att_tvideo',
+            child: _attachTile(
+              context,
+              slot: 1,
+              icon: Icons.videocam_outlined,
+              label: l.attachVideo,
+            ),
+          ),
+          GreyOption(
+            name: 'att_tfile',
+            child: _attachTile(
+              context,
+              slot: 2,
+              icon: Icons.insert_drive_file_outlined,
+              label: l.attachFile,
+            ),
+          ),
+          GreyOption(
+            name: 'att_tvoice',
+            child: _attachTile(
+              context,
+              slot: 3,
+              icon: Icons.mic_none_rounded,
+              label: l.attachVoice,
+            ),
+          ),
+          GreyOption(
+            name: 'att_tloc',
+            child: _attachTile(
+              context,
+              slot: 4,
+              icon: Icons.location_on_outlined,
+              label: l.attachLocation,
+            ),
+          ),
+          GreyOption(
+            name: 'att_tcon',
+            child: _attachTile(
+              context,
+              slot: 5,
+              icon: Icons.person_outline_rounded,
+              label: l.attachContact,
+            ),
+          ),
+          GreyOption(
+            name: 'att_tpoll',
+            child: _attachTile(
+              context,
+              slot: 6,
+              icon: Icons.bar_chart_rounded,
+              label: l.attachPoll,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Widget _attachTile(
+  BuildContext context, {
+  required int slot,
+  required IconData icon,
+  required String label,
+}) {
+  final color = groupColor(context, slot);
+  return SizedBox(
+    width: 52,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color.withValues(alpha: 0.22),
+          ),
+          child: Icon(icon, size: 22, color: color),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 /// The phone's recent photos to send from. Asks for photo access the first
@@ -132,7 +270,11 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     } catch (_) {
       if (!mounted || generation != _generation) return;
       setState(() => _loadingMore = false);
-      showSisNotice(context, 'Could not load more photos.', isError: true);
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).attachLoadMoreFailed,
+        isError: true,
+      );
     }
   }
 
@@ -146,7 +288,8 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
       } else if (_picked.length >= ExternalPicker.maxAttachments) {
         showSisNotice(
           context,
-          'You can send up to ${ExternalPicker.maxAttachments} photos at once.',
+          AppLocalizations.of(context)
+              .attachLimit(ExternalPicker.maxAttachments),
         );
       } else {
         setState(() => _picked.add(p));
@@ -164,7 +307,11 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     if (!mounted) return;
     setState(() => _opening = false);
     if (image == null) {
-      showSisNotice(context, 'That photo could not be opened.', isError: true);
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).photoOpenFailed,
+        isError: true,
+      );
       return;
     }
     await _finish([image], 0);
@@ -188,13 +335,17 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     if (loaded.isEmpty) {
       showSisNotice(
         context,
-        'Those photos could not be opened.',
+        AppLocalizations.of(context).attachOpenFailedMany,
         isError: true,
       );
       return;
     }
     if (loaded.length < _picked.length) {
-      showSisNotice(context, 'Some photos could not be opened.', isError: true);
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).attachOpenFailedSome,
+        isError: true,
+      );
     }
     await _finish(loaded, 0);
   }
@@ -214,7 +365,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
       case ExternalPickedImages() || ExternalPickFailed():
         showSisNotice(
           context,
-          'The camera could not take a photo.',
+          AppLocalizations.of(context).cameraFailed,
           isError: true,
         );
     }
@@ -246,7 +397,11 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
       case ExternalPickCancelled():
         return;
       case ExternalPickedImages() || ExternalPickFailed():
-        showSisNotice(context, 'That could not be opened.', isError: true);
+        showSisNotice(
+          context,
+          AppLocalizations.of(context).attachOpenFailed,
+          isError: true,
+        );
     }
   }
 
@@ -297,7 +452,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
         children: [
           Expanded(
             child: Text(
-              'Recent photos',
+              AppLocalizations.of(context).attachRecentPhotos,
               style: Theme.of(context).textTheme.titleMedium,
               overflow: TextOverflow.ellipsis,
             ),
@@ -306,20 +461,20 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
             TextButton(
               key: const ValueKey('sheet-allow-more'),
               onPressed: _selectMore,
-              child: const Text('Allow more'),
+              child: Text(AppLocalizations.of(context).attachAllowMore),
             ),
           TextButton.icon(
             key: const ValueKey('sheet-from-app'),
             onPressed: _fromApp,
             icon: const Icon(Icons.photo_library_outlined, size: 18),
-            label: const Text('Gallery'),
+            label: Text(AppLocalizations.of(context).commonGallery),
           ),
         ],
       ),
     );
 
     final Widget body = _photos.isEmpty
-        ? const Center(child: Text('No photos yet'))
+        ? Center(child: Text(AppLocalizations.of(context).attachNoPhotos))
         : GridView.builder(
             controller: _scroll,
             padding: const EdgeInsets.all(2),
@@ -359,8 +514,8 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
                   key: const ValueKey('sheet-send'),
                   onPressed: _opening ? null : _sendPicked,
                   child: Text(
-                    'Send ${_picked.length} '
-                    'photo${_picked.length == 1 ? '' : 's'}',
+                    AppLocalizations.of(context)
+                        .attachSendPhotos(_picked.length),
                   ),
                 ),
               ),
@@ -420,14 +575,13 @@ class _PhotoAccessRequest extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Send photos faster',
+                    AppLocalizations.of(context).attachFasterTitle,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Allow access so your gallery loads right here – '
-                    'nothing is uploaded until you send it.',
+                    AppLocalizations.of(context).attachFasterBody,
                     textAlign: TextAlign.center,
                     style: TextStyle(color: t.muted),
                   ),
@@ -438,7 +592,9 @@ class _PhotoAccessRequest extends StatelessWidget {
                       key: const ValueKey('sheet-allow'),
                       onPressed: permanentlyDenied ? onOpenSettings : onAllow,
                       child: Text(
-                        permanentlyDenied ? 'Open settings' : 'Allow photos',
+                        permanentlyDenied
+                            ? AppLocalizations.of(context).attachOpenSettings
+                            : AppLocalizations.of(context).attachAllowPhotos,
                       ),
                     ),
                   ),
@@ -447,13 +603,13 @@ class _PhotoAccessRequest extends StatelessWidget {
                     key: const ValueKey('sheet-from-app'),
                     onPressed: onFromApp,
                     icon: const Icon(Icons.photo_library_outlined, size: 18),
-                    label: const Text('Gallery'),
+                    label: Text(AppLocalizations.of(context).commonGallery),
                   ),
                   const SizedBox(height: 8),
                   TextButton(
                     key: const ValueKey('sheet-not-now'),
                     onPressed: onNotNow,
-                    child: const Text('Not now'),
+                    child: Text(AppLocalizations.of(context).attachNotNow),
                   ),
                 ],
               ),
@@ -484,7 +640,10 @@ class _CameraTile extends StatelessWidget {
           children: [
             Icon(Icons.photo_camera_rounded, size: 32, color: scheme.onSurface),
             const SizedBox(height: 4),
-            Text('Camera', style: Theme.of(context).textTheme.labelSmall),
+            Text(
+              AppLocalizations.of(context).attachCamera,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
           ],
         ),
       ),

@@ -13,7 +13,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/sis_app.dart';
 import 'core/runtime_config.dart';
+import 'core/startup_failure.dart';
 import 'core/startup_marks.dart';
+import 'features/appearance/application/appearance_controller.dart';
+import 'features/appearance/data/shared_prefs_appearance_store.dart';
 import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/file_last_session_store.dart';
 import 'features/auth/data/secure_session_storage.dart';
@@ -25,6 +28,7 @@ import 'features/chat/data/file_chat_list_snapshot_store.dart';
 import 'features/chat/data/native_picture_cropper.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
+import 'features/chat/data/supabase_reaction_repository.dart';
 import 'features/chat/data/supabase_contacts_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
 import 'features/notifications/application/alert_controller.dart';
@@ -93,8 +97,17 @@ Future<void> main() async {
     }
   });
   final config = RuntimeConfig.fromEnvironment();
+  // Read before runApp (like the session marker), so the first frame already
+  // has the member's theme, font, text size and language: no flash.
+  const appearanceStore = SharedPrefsAppearanceStore();
+  final appearanceOverrides = [
+    appearanceStoreProvider.overrideWithValue(appearanceStore),
+    initialAppearanceProvider.overrideWithValue(await appearanceStore.load()),
+  ];
   if (!config.isComplete) {
-    runApp(const ProviderScope(child: SisApp()));
+    runApp(
+      ProviderScope(overrides: appearanceOverrides, child: const SisApp()),
+    );
     return;
   } // SessionController yields SetupRequired
   try {
@@ -118,10 +131,14 @@ Future<void> main() async {
     runApp(
       ProviderScope(
         overrides: [
+          ...appearanceOverrides,
           runtimeConfigProvider.overrideWithValue(config),
           ...platformOverrides(defaultTargetPlatform, client, config),
           chatRepositoryProvider.overrideWithValue(
             SupabaseChatRepository(client, cache: attachmentCache),
+          ),
+          reactionRepositoryProvider.overrideWithValue(
+            SupabaseReactionRepository(client),
           ),
           contactsRepositoryProvider.overrideWithValue(
             SupabaseContactsRepository(client),
@@ -178,9 +195,8 @@ Future<void> main() async {
     runApp(
       ProviderScope(
         overrides: [
-          startupErrorProvider.overrideWithValue(
-            'SIS could not start. Please try again.',
-          ),
+          ...appearanceOverrides,
+          startupErrorProvider.overrideWithValue(StartupFailure.bootstrap),
         ],
         child: const SisApp(),
       ),

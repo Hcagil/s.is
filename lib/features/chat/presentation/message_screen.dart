@@ -9,25 +9,32 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
+import '../../../app/delivery_tick.dart';
+import '../../../app/grey_option.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../app/theme.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../appearance/presentation/chat_text_scale.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../../notifications/application/push_controller.dart';
 import '../../presence/application/presence_controllers.dart';
-import '../../presence/domain/last_seen.dart';
+import '../../presence/presentation/last_seen_text.dart';
+import '../../update/presentation/whats_new_card.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
 import '../application/group_controller.dart';
 import '../domain/conversation.dart';
+import '../domain/delivery.dart';
 import '../domain/emoji.dart';
 import '../domain/group_member.dart';
 import '../domain/highlight.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
 import '../domain/png_size.dart';
+import '../domain/reaction.dart';
 import '../domain/timeline.dart';
 import '../domain/read_marks.dart';
 import 'attachment_preview_page.dart';
@@ -36,9 +43,22 @@ import 'chat_search_bar.dart';
 import 'group_event_line.dart';
 import 'swipeable_message.dart';
 import 'message_actions.dart';
+import 'member_name.dart';
+import 'message_menu_card.dart';
 import 'person_avatar.dart';
 import 'photo_viewer.dart';
 import 'profile_pages.dart';
+import 'readers_card.dart';
+
+part 'message_bubble.dart';
+part 'reaction_chips.dart';
+part 'seen_by_pill.dart';
+part 'reactions_bar.dart';
+part 'message_body_with_time.dart';
+part 'message_attachment.dart';
+part 'message_composer.dart';
+part 'linked_text.dart';
+part 'jump_to_latest.dart';
 
 /// The chat header's picture: the group's own, or the other member's for a
 /// 1:1. Null while the list has not loaded [conversationId] yet.
@@ -108,24 +128,24 @@ Future<void> openConversation(
 /// "typing…" beats "online", which beats "last seen". In a 1:1 chat the
 /// header already names the person, so it says just "typing…"; in a group,
 /// who is typing by name.
-String? _status(WidgetRef ref, String? other) {
+String? _status(WidgetRef ref, AppLocalizations l, String? other) {
   final typing = ref.watch(typingProvider);
   if (typing.isNotEmpty) {
-    if (other != null) return 'typing…';
-    if (typing.length > 1) return '${typing.length} people are typing…';
+    if (other != null) return l.statusTyping;
+    if (typing.length > 1) return l.statusPeopleTyping(typing.length);
     final names = {
       for (final m in ref.watch(yourPeopleProvider).value ?? const [])
         m.userId: m,
     };
     final who = names[typing.first]?.displayName;
-    return who == null ? 'typing…' : '$who is typing…';
+    return who == null ? l.statusTyping : l.statusWhoTyping(who);
   }
   if (other != null && ref.watch(onlineMembersProvider).contains(other)) {
-    return 'online';
+    return l.statusOnline;
   }
   if (other != null) {
     final at = ref.watch(lastSeenProvider(other)).value;
-    if (at != null) return lastSeenLabel(at, DateTime.now());
+    if (at != null) return lastSeenText(l, at, DateTime.now());
   }
   return null;
 }
@@ -368,11 +388,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     return null;
   }
 
-  /// A tap on a message: closes the keyboard, then opens the action card
-  /// above the bubble (below it when there is no room).
-  /// Photo, link and quote taps are handled deeper in the bubble and win over
-  /// this.
-  Future<void> _openMessageMenu(Message message, {required bool mine}) async {
+  /// A long press on a message: closes the keyboard, then opens the action
+  /// card above the bubble (below it when there is no room), the pressed
+  /// bubble lit. Photo, link and quote taps are handled deeper in the bubble
+  /// and win over this.
+  Future<void> _openActionCard(Message message, {required bool mine}) async {
     FocusManager.instance.primaryFocus?.unfocus();
     // The bubble moves while the keyboard drops, so the card is placed after
     // it settles; capped at 30 frames.
@@ -393,13 +413,19 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       message,
       anchor: anchor,
       alignEnd: mine,
-      group:
-          widget.group ||
-          (ref.read(conversationListProvider).value ?? const <Conversation>[])
-              .any(
-                (c) => c.id == ref.read(openConversationProvider) && c.isGroup,
-              ),
     );
+  }
+
+  /// Sets or clears (null) the member's reaction on [messageId] and closes the
+  /// tap extras; a refusal shows a notice (this screen outlives the bar).
+  Future<void> _react(String messageId, String? emoji) async {
+    ref.read(tappedMessageProvider.notifier).clear();
+    final r = await ref
+        .read(reactionsProvider.notifier)
+        .react(messageId, emoji);
+    if (r case Err(:final failure) when mounted) {
+      showSisNotice(context, failure.message, isError: true);
+    }
   }
 
   /// The bubble's rectangle in global coordinates, or null when it is not on
@@ -475,10 +501,15 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
             .firstOrNull,
       ),
     );
-    final title = widget.title ?? listed?.label;
+    final title =
+        widget.title ??
+        (listed == null
+            ? null
+            : conversationLabel(AppLocalizations.of(context), listed));
     final isGroup = widget.group || (listed?.isGroup ?? false);
+    final isSystem = listed?.isSystem ?? false;
     final otherUserId = widget.otherUserId ?? listed?.other?.userId;
-    final status = _status(ref, otherUserId);
+    final status = _status(ref, AppLocalizations.of(context), otherUserId);
     // The group's own roster names every sender, current or departed --
     // yourPeopleProvider would miss someone no longer reachable, and would
     // also pull in people reachable only through some OTHER shared chat.
@@ -488,7 +519,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
               const <GroupMember>[]
         : const <GroupMember>[];
     final names = {
-      for (final m in roster) m.member.userId: m.member.displayName,
+      for (final m in roster)
+        m.member.userId: nameOrMember(
+          AppLocalizations.of(context),
+          m.member.displayName,
+        ),
     };
     final departedSenderIds = {
       for (final m in roster)
@@ -496,9 +531,37 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     };
     // Each sender's colour slot, from the group's roster (empty in a 1:1).
     final slotByUser = {for (final m in roster) m.member.userId: m.colorSlot};
-    // Read status, where it is shared: your own messages look a little grey
-    // until every sharing member has read them.
-    final marks = ref.watch(readMarksProvider).value ?? const <ReadMark>[];
+    // Keeps the read and delivery marks loaded and live for the whole chat
+    // (an auto-dispose provider the rows would otherwise only start when one
+    // of your own messages is on screen). The select never changes, so this
+    // screen does not rebuild on a tick: each of your bubbles watches its own.
+    ref.watch(readMarksProvider.select((_) => null));
+    // Same for the reactions: one load and one live subscription per open
+    // chat, not one per bubble that scrolls into view. Each bubble's chips
+    // select only their own message's list.
+    ref.watch(reactionsProvider.select((_) => null));
+    // Who the "Seen by" pill and the readers card can name: the roster in a
+    // group, the other member in a 1:1.
+    final ReaderPeople people = {
+      for (final m in roster)
+        m.member.userId: (
+          name: nameOrMember(
+            AppLocalizations.of(context),
+            m.member.displayName,
+          ),
+          avatarPath: m.member.avatarPath,
+          slot: m.colorSlot,
+        ),
+      if (!isGroup && otherUserId != null)
+        otherUserId: (
+          name: nameOrMember(
+            AppLocalizations.of(context),
+            listed?.other?.displayName ?? title ?? '',
+          ),
+          avatarPath: listed?.other?.avatarPath,
+          slot: null,
+        ),
+    };
     final timeline = ref.watch(chatTimelineProvider);
     final loadingOlder = ref.watch(olderLoadingProvider);
     final value = messages.value ?? const <Message>[];
@@ -529,7 +592,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                   final page = system
                       ? SystemChatScreen(conversationId: id)
                       : isGroup
-                      ? GroupScreen(conversationId: id, title: title ?? 'Group')
+                      ? GroupScreen(
+                          conversationId: id,
+                          title:
+                              title ?? AppLocalizations.of(context).commonGroup,
+                        )
                       : otherUserId == null
                       ? null
                       // Already in this chat: no Message button on their page.
@@ -553,7 +620,9 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                     child: Row(
                       children: [
                         PersonAvatar(
-                          label: title ?? 'Conversation',
+                          label:
+                              title ??
+                              AppLocalizations.of(context).commonConversation,
                           seed:
                               otherUserId ??
                               conversationId ??
@@ -568,7 +637,9 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                title ?? 'Conversation',
+                                title ??
+                                    AppLocalizations.of(context)
+                                        .commonConversation,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -614,150 +685,219 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      switch (messages) {
-                        AsyncData() when timeline.isEmpty => const Center(
-                          child: Text('No messages yet. Say something.'),
-                        ),
-                        _ when messages is! AsyncError && timeline.isNotEmpty =>
-                          ListView.builder(
-                            controller: _scroll,
-                            // Newest at the bottom, which is where the composer is.
-                            reverse: true,
-                            // Generous on purpose: a jump-to-hit needs the target
-                            // bubble built even when it is far from the current
-                            // scroll offset (see _scrollTo).
-                            scrollCacheExtent: ScrollCacheExtent.pixels(2000),
-                            // One extra row at the very top while an older page is
-                            // being read.
-                            itemCount: timeline.length + (loadingOlder ? 1 : 0),
-                            itemBuilder: (context, i) {
-                              if (i == timeline.length) {
-                                return const Padding(
-                                  key: ValueKey('older-loading'),
-                                  padding: EdgeInsets.symmetric(vertical: 12),
-                                  child: Center(
-                                    child: SisLoadingLogo(size: 24),
-                                  ),
-                                );
-                              }
-                              final entry = timeline[timeline.length - 1 - i];
-                              if (entry is EventEntry) {
-                                return GroupEventLine(
-                                  entry.event,
-                                  names: names,
-                                  key: ValueKey('event-${entry.event.id}'),
-                                );
-                              }
-                              final message = (entry as MessageEntry).message;
-                              final index = messageIndexById[message.id] ?? 0;
-                              final mine = me != null && message.isFrom(me);
-                              final quoted = message.replyTo == null
-                                  ? null
-                                  : value
-                                        .where((m) => m.id == message.replyTo)
-                                        .firstOrNull;
-                              final unread =
-                                  mine &&
-                                  !message.isDeleted &&
-                                  (message.isPending ||
-                                      !isReadByAnyone(
-                                        marks,
-                                        message.createdAt,
-                                      ));
-                              final allowedActions = allowedMessageActions(
-                                message,
-                                me: me,
-                                now: DateTime.now(),
-                              );
-                              final bubble = SwipeableMessage(
-                                key: _keyFor(message.id),
-                                messageId: message.id,
-                                actions: allowedActions,
-                                onReply: () => runMessageAction(
-                                  context,
-                                  ref,
+                  child: ChatTextScale(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        switch (messages) {
+                          AsyncData() when timeline.isEmpty => Center(
+                            child: Text(
+                              AppLocalizations.of(context).messageEmpty,
+                            ),
+                          ),
+                          _
+                              when messages is! AsyncError &&
+                                  timeline.isNotEmpty =>
+                            ListView.builder(
+                              controller: _scroll,
+                              // Newest at the bottom, which is where the composer is.
+                              reverse: true,
+                              // Generous on purpose: a jump-to-hit needs the target
+                              // bubble built even when it is far from the current
+                              // scroll offset (see _scrollTo).
+                              scrollCacheExtent: ScrollCacheExtent.pixels(2000),
+                              // One extra row at the very top while an older page is
+                              // being read.
+                              itemCount:
+                                  timeline.length + (loadingOlder ? 1 : 0),
+                              itemBuilder: (context, i) {
+                                if (i == timeline.length) {
+                                  return const Padding(
+                                    key: ValueKey('older-loading'),
+                                    padding: EdgeInsets.symmetric(vertical: 12),
+                                    child: Center(
+                                      child: SisLoadingLogo(size: 24),
+                                    ),
+                                  );
+                                }
+                                final entry = timeline[timeline.length - 1 - i];
+                                if (entry is EventEntry) {
+                                  return GroupEventLine(
+                                    entry.event,
+                                    names: names,
+                                    key: ValueKey('event-${entry.event.id}'),
+                                  );
+                                }
+                                final message = (entry as MessageEntry).message;
+                                if (isSystem) {
+                                  return WhatsNewCard(
+                                    key: _keyFor(message.id),
+                                    body: message.body,
+                                    time: previewTime(
+                                      message.createdAt,
+                                      DateTime.now(),
+                                    ),
+                                    isNewest:
+                                        message.id == value.lastOrNull?.id,
+                                  );
+                                }
+                                final index = messageIndexById[message.id] ?? 0;
+                                final mine = me != null && message.isFrom(me);
+                                final quoted = message.replyTo == null
+                                    ? null
+                                    : value
+                                          .where((m) => m.id == message.replyTo)
+                                          .firstOrNull;
+                                final allowedActions = allowedMessageActions(
                                   message,
-                                  MessageAction.reply,
-                                  canDeleteForEveryone: true,
-                                  anchor: _bubbleRect(message.id),
-                                  alignEnd: mine,
-                                  group: isGroup,
-                                ),
-                                onAction: (action) {
-                                  runMessageAction(
+                                  me: me,
+                                  now: DateTime.now(),
+                                );
+                                final bubble = SwipeableMessage(
+                                  key: _keyFor(message.id),
+                                  messageId: message.id,
+                                  actions: allowedActions,
+                                  onReply: () => runMessageAction(
+                                    context,
+                                    ref,
+                                    message,
+                                    MessageAction.reply,
+                                  ),
+                                  onAction: (action) => runMessageAction(
                                     context,
                                     ref,
                                     message,
                                     action,
-                                    canDeleteForEveryone: true,
-                                    anchor: _bubbleRect(message.id),
-                                    alignEnd: mine,
-                                    group: isGroup,
-                                  );
-                                },
-                                onTap: () =>
-                                    _openMessageMenu(message, mine: mine),
-                                child: _Bubble(
-                                  message,
-                                  key: ValueKey('read-$unread-${message.id}'),
-                                  mine: mine,
-                                  unread: unread,
-                                  sender:
-                                      isGroup &&
-                                          !mine &&
-                                          startsRun(value, index)
-                                      ? (names[message.senderId] ?? 'Member')
-                                      : null,
-                                  senderLeft: departedSenderIds.contains(
-                                    message.senderId,
                                   ),
-                                  senderSlot: slotByUser[message.senderId],
-                                  quoted: quoted,
-                                  quotedName: quoted == null
+                                  // A tap shows the "Seen by" pill and the reactions bar; a long press opens the action card. The system chat takes neither.
+                                  onTap: isSystem
                                       ? null
-                                      : quoted.senderId == me
-                                      ? 'You'
-                                      : (names[quoted.senderId] ?? 'Member'),
-                                  highlightQuery: searchQuery,
-                                  isCurrentHit: message.id == currentHitId,
-                                ),
-                              );
-                              return message.deletion ==
-                                      MessageDeletion.vanished
-                                  ? _Vanishing(
-                                      key: ValueKey('vanish-${message.id}'),
-                                      child: bubble,
-                                    )
-                                  : bubble;
-                            },
-                          ),
-                        AsyncError(:final error) => Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(32),
-                            child: Text(
-                              failureReason(error),
-                              textAlign: TextAlign.center,
+                                      : () => ref
+                                            .read(
+                                              tappedMessageProvider.notifier,
+                                            )
+                                            .toggle(message.id),
+                                  onLongPress: isSystem
+                                      ? null
+                                      : () => _openActionCard(
+                                          message,
+                                          mine: mine,
+                                        ),
+                                  child: Consumer(
+                                    builder: (context, ref, _) {
+                                      // Per-row watch: only a bubble whose own tick changed rebuilds.
+                                      final delivery =
+                                          mine && !message.isDeleted
+                                          ? ref.watch(
+                                              readMarksProvider.select(
+                                                (a) => deliveryOf(
+                                                  message,
+                                                  a.value ?? const <ReadMark>[],
+                                                ),
+                                              ),
+                                            )
+                                          : null;
+                                      final bubble = _Bubble(
+                                        message,
+                                        key: ValueKey('bubble-${message.id}'),
+                                        mine: mine,
+                                        delivery: delivery,
+                                        sender:
+                                            isGroup &&
+                                                !mine &&
+                                                startsRun(value, index)
+                                            ? (names[message.senderId] ??
+                                                  AppLocalizations.of(context)
+                                                      .commonMember)
+                                            : null,
+                                        senderLeft: departedSenderIds.contains(
+                                          message.senderId,
+                                        ),
+                                        senderSlot:
+                                            slotByUser[message.senderId],
+                                        quoted: quoted,
+                                        quotedName: quoted == null
+                                            ? null
+                                            : quoted.senderId == me
+                                            ? AppLocalizations.of(context)
+                                                  .commonYou
+                                            : (names[quoted.senderId] ??
+                                                  AppLocalizations.of(context)
+                                                      .commonMember),
+                                        highlightQuery: searchQuery,
+                                        isCurrentHit:
+                                            message.id == currentHitId,
+                                      );
+                                      final tapped = ref.watch(
+                                        tappedMessageProvider.select(
+                                          (t) => t == message.id,
+                                        ),
+                                      );
+                                      final reactable =
+                                          !isSystem && message.canReact;
+                                      // Always a Column, so the bubble keeps its state when the extras come and go.
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          if (tapped &&
+                                              mine &&
+                                              !message.isDeleted)
+                                            _SeenByPill(
+                                              message: message,
+                                              people: people,
+                                            ),
+                                          bubble,
+                                          if (tapped && reactable)
+                                            _ReactionsBar(
+                                              messageId: message.id,
+                                              mine: mine,
+                                              onPick: (e) =>
+                                                  _react(message.id, e),
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                );
+                                return message.deletion ==
+                                        MessageDeletion.vanished
+                                    ? _Vanishing(
+                                        key: ValueKey('vanish-${message.id}'),
+                                        child: bubble,
+                                      )
+                                    : bubble;
+                              },
+                            ),
+                          AsyncError(:final error) => Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Text(
+                                failureReason(error),
+                                textAlign: TextAlign.center,
+                              ),
                             ),
                           ),
+                          _ => const Center(child: SisLoadingLogo()),
+                        },
+                        Positioned(
+                          right: 12,
+                          bottom: 12,
+                          child: _JumpToLatest(
+                            far: _far,
+                            jumped: ref
+                                .read(messagesProvider.notifier)
+                                .isJumped,
+                            onTap: _toLatest,
+                          ),
                         ),
-                        _ => const Center(child: SisLoadingLogo()),
-                      },
-                      Positioned(
-                        right: 12,
-                        bottom: 12,
-                        child: _JumpToLatest(
-                          far: _far,
-                          jumped: ref.read(messagesProvider.notifier).isJumped,
-                          onTap: _toLatest,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
+              if (isSystem) const UpToDateMark(),
               const _Composer(),
             ],
           ),
@@ -765,536 +905,6 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       ),
     );
   }
-}
-
-class _Bubble extends StatelessWidget {
-  const _Bubble(
-    this.message, {
-    super.key,
-    required this.mine,
-    required this.unread,
-    this.sender,
-    this.senderLeft = false,
-    this.senderSlot,
-    this.quoted,
-    this.quotedName,
-    this.highlightQuery,
-    this.isCurrentHit = false,
-  });
-
-  final Message message;
-  final bool mine;
-
-  /// True for an own message no other member has read yet (or still
-  /// sending). Shown as a thin yellow edge, never as a dimmed bubble.
-  final bool unread;
-
-  /// The message this one answers, when it is loaded here, and who wrote it.
-  final Message? quoted;
-  final String? quotedName;
-
-  /// The sender's name, shown above the first bubble of their run in a group.
-  final String? sender;
-
-  /// True when [sender] has left or been removed from the group -- their
-  /// name is greyed rather than tinted, everywhere it is still shown.
-  final bool senderLeft;
-
-  /// [sender]'s colour slot in this group; null (not known yet) falls back to
-  /// the person's own tint.
-  final int? senderSlot;
-
-  /// The active in-chat search query, if any: every match in [message]'s
-  /// body is highlighted.
-  final String? highlightQuery;
-
-  /// This bubble is the search's current hit -- shown with a purple edge,
-  /// on either side, distinct from the amber "unread" edge (which stays on
-  /// a merely-unread bubble that is not the current hit).
-  final bool isCurrentHit;
-
-  // The bubble's own outer cap and the two insets that eat into it: 12 px
-  // padding, plus -- for a "mine" bubble, or the current search hit -- a
-  // 1.5 px border that is always laid out (even transparent, when read).
-  // _BodyWithTime measures its fits-inline decision against [_contentWidth],
-  // not a copy of these numbers, so the two cannot drift apart.
-  static const _maxWidth = 320.0;
-  static const _hPad = 12.0;
-  static const _borderWidth = 1.5;
-
-  bool get _hasBorder => mine || isCurrentHit;
-
-  double get _contentWidth =>
-      _maxWidth - 2 * _hPad - (_hasBorder ? 2 * _borderWidth : 0);
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = SisBrand.of(context);
-    // Square-ish corner on the sender's side marks whose bubble it is.
-    const r = Radius.circular(11);
-    const tail = Radius.circular(4);
-    return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        key: ValueKey('message-${message.id}'),
-        constraints: const BoxConstraints(maxWidth: _maxWidth),
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: _hPad, vertical: 8),
-        decoration: BoxDecoration(
-          color: mine ? null : brand.theirs,
-          gradient: mine ? brand.gradient : null,
-          borderRadius: BorderRadius.only(
-            topLeft: r,
-            topRight: r,
-            bottomLeft: mine ? r : tail,
-            bottomRight: mine ? tail : r,
-          ),
-          border: _hasBorder
-              ? Border.all(
-                  width: _borderWidth,
-                  // The current hit is always the app's purple, distinct
-                  // from the amber "unread" edge -- even on a bubble that
-                  // is both unread and the current hit. A still-sending
-                  // text message shows a clock mark instead of this edge.
-                  color: isCurrentHit
-                      ? Theme.of(context).colorScheme.primary
-                      : (unread && !message.sending
-                            ? brand.unreadEdge
-                            : Colors.transparent),
-                )
-              : null,
-        ),
-        // Without this, a non-stretched Column still hands each child a
-        // *loose* constraint up to the Container's own maxWidth (320): any
-        // child that fills the space it is offered -- Align without a
-        // widthFactor does, below -- reports back a width of 320, so the
-        // Column (sized to its widest child) is 320 wide even for one short
-        // word. IntrinsicWidth measures the content first and passes that
-        // tight width down instead, so Align has nothing left to expand
-        // into.
-        child: IntrinsicWidth(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (message.deletion == MessageDeletion.placeholder)
-                Row(
-                  key: ValueKey('deleted-${message.id}'),
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.block,
-                      size: 16,
-                      color: mine
-                          ? Colors.white70
-                          : brand.text.withValues(alpha: 0.6),
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        message.deletedByAdmin
-                            ? 'Deleted by an admin'
-                            : 'This message was deleted',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontStyle: FontStyle.italic,
-                          color: mine
-                              ? Colors.white70
-                              : brand.text.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              if (message.forwarded)
-                Padding(
-                  key: ValueKey('forwarded-${message.id}'),
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.shortcut,
-                        size: 14,
-                        color: mine
-                            ? Colors.white70
-                            : brand.text.withValues(alpha: 0.6),
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          'Forwarded',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontStyle: FontStyle.italic,
-                            color: mine
-                                ? Colors.white70
-                                : brand.text.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              if (message.replyTo != null && !message.isDeleted)
-                GestureDetector(
-                  // A tap on a quote is its own (it opens nothing); it must not reach the bubble's menu tap.
-                  onTap: () {},
-                  child: Container(
-                    key: ValueKey('quote-${message.id}'),
-                    margin: const EdgeInsets.only(bottom: 6),
-                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                    decoration: BoxDecoration(
-                      color: (mine ? Colors.white : brand.text).withValues(
-                        alpha: 0.12,
-                      ),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border(
-                        left: BorderSide(
-                          color: mine
-                              ? Colors.white
-                              : Theme.of(context).colorScheme.primary,
-                          width: 3,
-                        ),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (quotedName != null)
-                          Text(
-                            quotedName!,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: mine
-                                  ? Colors.white
-                                  : Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                        Text(
-                          quoteText(quoted),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: mine ? Colors.white : brand.text,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              if (sender != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(
-                    sender!,
-                    key: ValueKey('sender-${message.id}'),
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: senderLeft
-                          ? Theme.of(context).colorScheme.onSurfaceVariant
-                          : senderSlot != null
-                          ? groupColor(context, senderSlot!)
-                          : personTint(context, message.senderId, ink: true),
-                    ),
-                  ),
-                ),
-              if (message.hasAttachment) _Attachment(message),
-              // An image may be sent without a caption, so an empty body must
-              // render nothing at all rather than an empty line. A deleted
-              // message never shows a time, but (defensively) may still carry
-              // a body, so the two conditions stay independent below.
-              if (message.body.isNotEmpty && !message.isDeleted)
-                _BodyWithTime(
-                  message: message,
-                  bodyStyle: TextStyle(
-                    fontSize: isBigEmoji(message.body) ? 40 : 15,
-                    color: mine ? Colors.white : brand.text,
-                  ),
-                  linkColor: mine
-                      ? Colors.white
-                      : Theme.of(context).colorScheme.primary,
-                  maxContentWidth: _contentWidth,
-                  topPadding: message.hasAttachment ? 8 : 0,
-                  timeText: message.isEdited
-                      ? 'edited ${clockTime(message.createdAt)}'
-                      : clockTime(message.createdAt),
-                  timeStyle: TextStyle(
-                    fontSize: 11,
-                    color: (mine ? Colors.white : brand.text).withValues(
-                      alpha: 0.6,
-                    ),
-                  ),
-                  highlightQuery: highlightQuery,
-                )
-              else ...[
-                if (message.body.isNotEmpty)
-                  Padding(
-                    padding: EdgeInsets.only(
-                      top: message.hasAttachment ? 8 : 0,
-                    ),
-                    child: _LinkedText(
-                      message.body,
-                      key: ValueKey('body-${message.id}'),
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: mine ? Colors.white : brand.text,
-                      ),
-                      highlightQuery: highlightQuery,
-                      linkColor: mine
-                          ? Colors.white
-                          : Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                if (!message.isDeleted)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        message.isEdited
-                            ? 'edited ${clockTime(message.createdAt)}'
-                            : clockTime(message.createdAt),
-                        key: ValueKey('time-${message.id}'),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: (mine ? Colors.white : brand.text).withValues(
-                            alpha: 0.6,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A message body with its timestamp: inline at the end of the last line
-/// when it fits there (WhatsApp-style, "ok  12:04"), otherwise dropped to
-/// its own row below the body, bottom-right -- the layout the bubble used
-/// before this widget existed.
-///
-/// [body] and [time] are always built as two separate widgets carrying their
-/// original keys and exact text, never merged into one `Text`/`TextSpan`: a
-/// widget test finds each with `find.text()` -- except a still-sending
-/// bubble ([Message.sending]), whose time slot is an [Icon]
-/// (`Icons.schedule_rounded`) under the same `time-<id>` key, found with
-/// `find.byIcon`/`find.byKey` instead.
-class _BodyWithTime extends StatelessWidget {
-  const _BodyWithTime({
-    required this.message,
-    required this.bodyStyle,
-    required this.linkColor,
-    required this.maxContentWidth,
-    required this.topPadding,
-    required this.timeText,
-    required this.timeStyle,
-    this.highlightQuery,
-  });
-
-  final Message message;
-  final TextStyle bodyStyle;
-  final Color linkColor;
-
-  /// The active in-chat search query, if any -- passed straight through to
-  /// both [_LinkedText]s below.
-  final String? highlightQuery;
-
-  /// The bubble's real content column: its outer cap minus padding and,
-  /// for a "mine" bubble, its always-laid-out border. Passed down from
-  /// [_Bubble], which is the one place that inset is defined, so this
-  /// widget never keeps its own copy of that arithmetic to drift from it.
-  final double maxContentWidth;
-  final double topPadding;
-  final String timeText;
-  final TextStyle timeStyle;
-
-  static const _gap = 6.0;
-
-  /// The pending-send icon's size, in place of the clock time while
-  /// [Message.sending] -- close to [timeStyle]'s usual font size (11) so it
-  /// reads as about the same weight in the same corner.
-  static const _clockSize = 12.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final direction = Directionality.of(context);
-    final scaler = MediaQuery.textScalerOf(context);
-    // Text/Text.rich merge the given style onto the ambient DefaultTextStyle
-    // (which is where the app's Manrope font family comes from); a bare
-    // TextStyle here would measure in the platform default font instead and
-    // report the wrong width.
-    final defaultStyle = DefaultTextStyle.of(context).style;
-    // ponytail: measured as one plain span rather than the linked spans
-    // _LinkedText actually renders -- a link's style only changes color and
-    // underline, never font size/weight/family, so the two wrap identically.
-    final bodyPainter = TextPainter(
-      text: TextSpan(text: message.body, style: defaultStyle.merge(bodyStyle)),
-      textDirection: direction,
-      textScaler: scaler,
-    )..layout(maxWidth: maxContentWidth);
-    final lines = bodyPainter.computeLineMetrics();
-    final lastLineWidth = lines.last.width;
-    final bodyHeight = bodyPainter.height;
-    var bodyWidth = 0.0;
-    for (final line in lines) {
-      if (line.width > bodyWidth) bodyWidth = line.width;
-    }
-    // Still sending: a small SIS icon takes the time's place -- never an
-    // emoji, which draws from the phone's own font -- sized directly
-    // rather than measured as text.
-    double timeWidth;
-    if (message.sending) {
-      timeWidth = _clockSize;
-    } else {
-      final timePainter = TextPainter(
-        text: TextSpan(text: timeText, style: defaultStyle.merge(timeStyle)),
-        textDirection: direction,
-        textScaler: scaler,
-      )..layout();
-      timeWidth = timePainter.width;
-      timePainter.dispose();
-    }
-    bodyPainter.dispose();
-
-    // ponytail: RTL always drops to the own-row layout below, never inline.
-    // The fits math above assumes a line's trailing edge is the column's
-    // right edge (true for LTR); measuring an RTL line's *visual* end would
-    // need glyph-level box positions, not just a summed width. Upgrade path:
-    // measure with getBoxesForSelection (as the qa Measured helper does) if
-    // RTL locales ever ship.
-    final fits =
-        direction != TextDirection.rtl &&
-        lastLineWidth + _gap + timeWidth <= maxContentWidth;
-
-    final timeWidget = message.sending
-        ? Icon(
-            Icons.schedule_rounded,
-            key: ValueKey('time-${message.id}'),
-            size: _clockSize,
-            color: timeStyle.color,
-          )
-        : Text(timeText, key: ValueKey('time-${message.id}'), style: timeStyle);
-
-    if (!fits) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: EdgeInsets.only(top: topPadding),
-            child: _LinkedText(
-              message.body,
-              key: ValueKey('body-${message.id}'),
-              style: bodyStyle,
-              linkColor: linkColor,
-              highlightQuery: highlightQuery,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Align(alignment: Alignment.centerRight, child: timeWidget),
-          ),
-        ],
-      );
-    }
-
-    // Widening to fit the time never needs more than the longest line
-    // already wraps to (a longer earlier line already sets the bubble's
-    // width) or the last line plus the time (a short, single-line message).
-    final targetWidth = math.max(bodyWidth, lastLineWidth + _gap + timeWidth);
-    return Padding(
-      padding: EdgeInsets.only(top: topPadding),
-      // A label/quote above the body can be wider than body+time, in which
-      // case IntrinsicWidth makes the whole bubble that wide -- but a fixed
-      // SizedBox here would still only claim targetWidth, stranding the
-      // time mid-bubble instead of at the content's right edge. This custom
-      // layout reports targetWidth for the intrinsic (hugging) pass -- same
-      // as a Text's own intrinsic width -- but at real layout time fills
-      // whatever width the column actually turns out to be, exactly the
-      // way a plain Text/RenderParagraph already behaves (see the
-      // IntrinsicWidth comment above): _Bubble's own hugging is unaffected,
-      // because in the common case (no wider sibling) that real width is
-      // targetWidth anyway.
-      child: CustomMultiChildLayout(
-        delegate: _BodyTimeLayout(
-          targetWidth: targetWidth,
-          bodyWidth: bodyWidth,
-          bodyHeight: bodyHeight,
-        ),
-        children: [
-          LayoutId(
-            id: _BodyTimeSlot.body,
-            child: _LinkedText(
-              message.body,
-              key: ValueKey('body-${message.id}'),
-              style: bodyStyle,
-              linkColor: linkColor,
-              highlightQuery: highlightQuery,
-            ),
-          ),
-          LayoutId(id: _BodyTimeSlot.time, child: timeWidget),
-        ],
-      ),
-    );
-  }
-}
-
-enum _BodyTimeSlot { body, time }
-
-/// Lays the body out at its own (never stretched) [bodyWidth], and the time
-/// at the bottom-right of the real column -- [targetWidth] only when nothing
-/// wider forces the column open (see [_BodyWithTime]'s [CustomMultiChildLayout]
-/// comment for why a plain SizedBox can't do both jobs at once).
-class _BodyTimeLayout extends MultiChildLayoutDelegate {
-  _BodyTimeLayout({
-    required this.targetWidth,
-    required this.bodyWidth,
-    required this.bodyHeight,
-  });
-
-  final double targetWidth;
-  final double bodyWidth;
-  final double bodyHeight;
-
-  @override
-  Size getSize(BoxConstraints constraints) => Size(
-    constraints.hasBoundedWidth ? constraints.maxWidth : targetWidth,
-    bodyHeight,
-  );
-
-  @override
-  void performLayout(Size size) {
-    layoutChild(_BodyTimeSlot.body, BoxConstraints.tightFor(width: bodyWidth));
-    positionChild(_BodyTimeSlot.body, Offset.zero);
-    final timeSize = layoutChild(
-      _BodyTimeSlot.time,
-      BoxConstraints.loose(size),
-    );
-    positionChild(
-      _BodyTimeSlot.time,
-      Offset(size.width - timeSize.width, size.height - timeSize.height),
-    );
-  }
-
-  @override
-  bool shouldRelayout(covariant _BodyTimeLayout oldDelegate) =>
-      targetWidth != oldDelegate.targetWidth ||
-      bodyWidth != oldDelegate.bodyWidth ||
-      bodyHeight != oldDelegate.bodyHeight;
 }
 
 /// A message deleted for everyone within its first hour: it shrinks and
@@ -1331,803 +941,4 @@ class _VanishingState extends State<_Vanishing>
     sizeFactor: _left,
     child: FadeTransition(opacity: _left, child: widget.child),
   );
-}
-
-/// An attachment, fetched through a signed URL issued only to a member.
-///
-/// The URL is short-lived, so it is resolved when the bubble is built rather
-/// than stored with the message.
-class _Attachment extends ConsumerWidget {
-  const _Attachment(this.message);
-
-  final Message message;
-
-  /// The open conversation's photos, oldest first, and this one's place.
-  void _view(BuildContext context, WidgetRef ref, String path) {
-    final paths = [
-      for (final m in ref.read(messagesProvider).value ?? const <Message>[])
-        if (m.attachmentPath != null) m.attachmentPath!,
-    ];
-    final index = paths.indexOf(path);
-    if (index < 0) return;
-    openPhotoViewer(
-      context,
-      paths,
-      index,
-      onMenu: (viewerContext, viewerRef, shown) {
-        final message =
-            (viewerRef.read(messagesProvider).value ?? const <Message>[])
-                .where((m) => m.attachmentPath == shown)
-                .firstOrNull;
-        return message == null
-            ? Future.value(false)
-            : showMessageMenu(
-                viewerContext,
-                viewerRef,
-                message,
-                photoViewer: true,
-              );
-      },
-    );
-  }
-
-  /// The most a photo takes in a bubble.
-  static const _bounds = BoxConstraints(maxHeight: 260, maxWidth: 280);
-
-  /// The box the photo will take once decoded, known from its preview (a
-  /// tiny PNG of the same shape) before any bytes arrive: the placeholder,
-  /// the blurred preview and the photo all take exactly this box, so the
-  /// bubble never changes height. Null without a preview.
-  ///
-  /// This is what keeps scrolling honest: the list is reversed, and a
-  /// bubble that grows between the viewport and the newest message shoves
-  /// the rows on screen away from it -- scrolling down toward the newest
-  /// message then fights every photo that loads on the way (0.30.16).
-  static Size? _photoBox(Uint8List? preview) {
-    final size = pngDimensions(preview);
-    if (size == null) return null;
-    // Scaled up as well as down: the preview is only 24 px wide.
-    final scale = math.min(
-      _bounds.maxWidth / size.width,
-      _bounds.maxHeight / size.height,
-    );
-    return Size(size.width * scale, size.height * scale);
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final path = message.attachmentPath;
-    final box = _photoBox(message.attachmentPreview);
-    Widget sized(Widget child) => box == null
-        ? child
-        : SizedBox(width: box.width, height: box.height, child: child);
-    return GestureDetector(
-      key: ValueKey('attachment-${path ?? message.id}'),
-      onTap: path == null ? null : () => _view(context, ref, path),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: ConstrainedBox(
-          constraints: _bounds,
-          child: switch ((message.localImage, path)) {
-            // Your own photo, straight from the phone: shown from the tap on,
-            // never swapped for the downloaded copy (the swap flashed blank).
-            // The logo spins only while it uploads.
-            (final Uint8List local, _) => Stack(
-              alignment: Alignment.center,
-              children: [
-                Image.memory(
-                  local,
-                  key: const ValueKey('attachment-local'),
-                  cacheWidth: 560,
-                  fit: BoxFit.cover,
-                ),
-                if (path == null) const SisLoadingLogo(size: 40),
-              ],
-            ),
-            (_, final String path) => switch (ref.watch(
-              attachmentBytesProvider(path),
-            )) {
-              AsyncData(:final value) => sized(
-                Image.memory(
-                  value,
-                  key: const ValueKey('attachment-image'),
-                  cacheWidth: 560,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, _, _) =>
-                      _failed(context, 'Image unavailable'),
-                ),
-              ),
-              AsyncError(:final error) => sized(
-                _failed(
-                  context,
-                  error is Failure ? error.message : 'Image unavailable',
-                ),
-              ),
-              // The preview that came with the message, blurred, until the
-              // photo is here. Its box is the photo's own (see _photoBox);
-              // a preview that is not a PNG keeps the old fixed size.
-              _ => switch (message.attachmentPreview) {
-                final Uint8List preview => SizedBox(
-                  height: box?.height ?? 180,
-                  width: box?.width ?? 240,
-                  child: ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                    child: Image.memory(
-                      preview,
-                      key: const ValueKey('attachment-preview'),
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
-                      // Valid base64 can still be a broken image: then just
-                      // wait for the photo.
-                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                    ),
-                  ),
-                ),
-                null => const SizedBox(
-                  height: 120,
-                  width: 180,
-                  child: Center(child: SisLoadingLogo(size: 40)),
-                ),
-              },
-            },
-            _ => const SizedBox.shrink(),
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _failed(BuildContext context, String reason) => Container(
-    height: 96,
-    width: 180,
-    alignment: Alignment.center,
-    color: Theme.of(context).colorScheme.surfaceContainerHigh,
-    child: Padding(
-      padding: const EdgeInsets.all(8),
-      child: Text(reason, textAlign: TextAlign.center),
-    ),
-  );
-}
-
-class _Composer extends ConsumerStatefulWidget {
-  const _Composer();
-
-  @override
-  ConsumerState<_Composer> createState() => _ComposerState();
-}
-
-class _ComposerState extends ConsumerState<_Composer>
-    with WidgetsBindingObserver {
-  final _controller = TextEditingController();
-  final _focus = FocusNode();
-  bool _sending = false;
-  double _lastInset = 0;
-
-  /// This composer's conversation is fixed for its whole lifetime: opening
-  /// a different one always pushes a new [MessageScreen] (see
-  /// [openConversation]), never swaps this one's provider underneath it.
-  String? _conversationId;
-
-  /// True for the span of code that copies a draft INTO the controller or
-  /// [replyingToProvider] -- the two listeners below must not echo that
-  /// copy straight back into the draft store as if the member had typed or
-  /// replied to it themselves.
-  bool _applyingDraft = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    final id = ref.read(openConversationProvider);
-    _conversationId = id;
-    if (id == null) return;
-    // Applying the draft touches other providers (replyingToProvider via
-    // _applyDraft, draftsProvider via consumeFailure) -- unsafe
-    // synchronously here, since initState runs as part of the first build.
-    // Deferred to right after that frame: the same restore path build()'s
-    // listener below uses when a queued send's failure resolves while this
-    // composer is already open.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _restoreDraft(id);
-    });
-  }
-
-  /// Applies [id]'s draft (text + reply target) and shows its pending
-  /// failure notice, if any, exactly once. The one restore path, used both
-  /// right after opening ([initState]) and while already open (the
-  /// [draftsProvider] listener in [build]).
-  void _restoreDraft(String id) {
-    final drafts = ref.read(draftsProvider.notifier);
-    _applyDraft(drafts.draftFor(id));
-    final failure = drafts.consumeFailure(id);
-    if (failure != null && mounted) {
-      showSisNotice(context, failure.message, isError: true);
-    }
-  }
-
-  /// Copies [draft]'s text and reply target onto the composer, without
-  /// re-triggering the write-back listeners below (see [_applyingDraft]).
-  void _applyDraft(Draft draft) {
-    _applyingDraft = true;
-    if (_controller.text != draft.text) {
-      _controller.text = draft.text;
-      _controller.selection = TextSelection.collapsed(
-        offset: _controller.text.length,
-      );
-    }
-    if (draft.replyTo != null) {
-      ref.read(replyingToProvider.notifier).start(draft.replyTo!);
-    }
-    _applyingDraft = false;
-  }
-
-  /// The system back gesture closes the keyboard but leaves the field
-  /// focused; releasing the focus when the keyboard goes away keeps the
-  /// focus and the platform input state in step, so the next back leaves
-  /// the page.
-  @override
-  void didChangeMetrics() {
-    if (!mounted) return;
-    final inset = View.of(context).viewInsets.bottom;
-    if (_lastInset > 0 && inset == 0 && _focus.hasFocus) _focus.unfocus();
-    _lastInset = inset;
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _focus.dispose();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _send() {
-    final body = _controller.text;
-    final editing = ref.read(editingProvider);
-    // The same rule the database enforces, applied before the round trip. A
-    // photo message's caption may be empty; a text-only message may not.
-    final bodyOk = editing != null && editing.hasAttachment
-        ? body.trim().length <= maxMessageLength
-        : isSendableBody(body);
-    if (_sending || !bodyOk) return;
-    if (editing != null) {
-      unawaited(_saveEdit(editing, body));
-      return;
-    }
-    final id = _conversationId;
-    if (id == null) return;
-    // Optimistic: SendQueueController shows the pending bubble and queues
-    // the round trip (retrying on its own if offline); the composer clears
-    // at once and does not wait for it, so it stays usable while a send is
-    // in flight. It also ends this conversation's draft and the reply
-    // target -- a failure comes back through draftsProvider (see the
-    // listener in build()).
-    _controller.clear();
-    ref
-        .read(sendQueueProvider.notifier)
-        .enqueue(id, body: body, replyTo: ref.read(replyingToProvider));
-  }
-
-  Future<void> _saveEdit(Message editing, String body) async {
-    setState(() => _sending = true);
-    final result = await ref
-        .read(messagesProvider.notifier)
-        .editMessage(editing, body);
-    if (!mounted) return;
-    setState(() => _sending = false);
-    switch (result) {
-      case Ok():
-        // Cleared only on success, so nothing a member typed is lost.
-        _controller.clear();
-        ref.read(editingProvider.notifier).clear();
-      case Err(:final failure):
-        showSisNotice(context, failure.message, isError: true);
-    }
-  }
-
-  /// Picks one or more images (the paperclip's photo grid: recent photos,
-  /// the camera tile, or "Gallery"), previews them with a caption box, and
-  /// sends them -- the caption goes with the first one, the rest with none,
-  /// one message per photo. Backing out of either step sends nothing.
-  Future<void> _attach() async {
-    if (_sending) return;
-    final picked = await showAttachmentSheet(context);
-    if (picked.images.isEmpty || !mounted) return;
-    final reviewed = await showAttachmentPreview(
-      context,
-      images: picked.images,
-      caption: _controller.text,
-    );
-    if (reviewed == null || reviewed.images.isEmpty || !mounted) return;
-    setState(() => _sending = true);
-    final result = await ref
-        .read(messagesProvider.notifier)
-        .sendImages(reviewed.images, body: reviewed.caption);
-    if (!mounted) return;
-    setState(() => _sending = false);
-    switch (result) {
-      case Ok():
-        _controller.clear();
-        if (picked.dropped > 0) {
-          showSisNotice(
-            context,
-            'Only the first 10 photos were sent.',
-            isError: false,
-          );
-        }
-      case Err(:final failure):
-        showSisNotice(context, failure.message, isError: true);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final id = _conversationId;
-    // A group left or been removed from: read-only, nothing more to write.
-    // Checked before the listeners below register at all -- there is
-    // nothing left for any of them to restore into a box that cannot send.
-    final hasLeft =
-        id != null &&
-        (ref.watch(conversationListProvider).value ?? const [])
-                .where((c) => c.id == id)
-                .firstOrNull
-                ?.hasLeft ==
-            true;
-    final isSystem =
-        id != null &&
-        (ref.watch(conversationListProvider).value ?? const [])
-                .where((c) => c.id == id)
-                .firstOrNull
-                ?.isSystem ==
-            true;
-    if (hasLeft || isSystem) {
-      return Container(
-        key: ValueKey(isSystem ? 'composer-system' : 'composer-left'),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          border: Border(
-            top: BorderSide(color: Theme.of(context).colorScheme.outline),
-          ),
-        ),
-        padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          16 + _composerBottomInset(context),
-        ),
-        child: Text(
-          isSystem
-              ? 'Only SIS can post here'
-              : "You're no longer in this group",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
-    }
-    final replying = ref.watch(replyingToProvider);
-    final editing = ref.watch(editingProvider);
-    ref.listen(editingProvider, (previous, next) {
-      if (next != null && previous?.id != next.id) {
-        _controller.text = next.body;
-        _controller.selection = TextSelection.collapsed(
-          offset: _controller.text.length,
-        );
-      } else if (next == null && previous != null) {
-        // Edit mode is never a draft: whatever was drafted before editing
-        // began (nothing, if the box was empty) comes back now, not the
-        // edited text.
-        final draft = id == null
-            ? const Draft()
-            : ref.read(draftsProvider.notifier).draftFor(id);
-        _applyDraft(draft);
-      }
-    });
-    if (id != null) {
-      // The member started or cleared a reply outside this composer (a
-      // message's own reply action) -- kept in the draft too, live.
-      // [ReplyingTo] itself watches openConversationProvider and resets to
-      // null on ANY change to it, including this composer's own conversation
-      // closing (back) -- not just an explicit clear. Once that has
-      // happened this listener's `id` is no longer the open conversation, so
-      // this null is not the member clearing anything and must not
-      // overwrite the reply target already saved in the draft.
-      ref.listen(replyingToProvider, (previous, next) {
-        if (_applyingDraft ||
-            ref.read(editingProvider) != null ||
-            ref.read(openConversationProvider) != id) {
-          return;
-        }
-        // A reply the member started (swipe or menu) opens the keyboard;
-        // draft restores set _applyingDraft and returned above.
-        if (next != null && next.id != previous?.id) _focus.requestFocus();
-        _applyingDraft = true;
-        ref.read(draftsProvider.notifier).setReply(id, next);
-        _applyingDraft = false;
-      });
-      // A queued send for this conversation failed while the composer was
-      // already open: its bodies are already prepended into the draft
-      // (DraftsController.restoreFailure) -- reflect that here and show
-      // the notice once. [initState] covers the same failure resolving
-      // before this composer existed; both read the same draft entry, so
-      // this is the composer's one restore path, not two.
-      ref.listen(draftsProvider.select((m) => m[id]), (previous, next) {
-        if (_applyingDraft) return;
-        _restoreDraft(id);
-      });
-    }
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: Theme.of(context).colorScheme.outline),
-        ),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        6,
-        8,
-        10,
-        _isIos(context) ? 4 + _composerBottomInset(context) : 12,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (editing != null)
-            _EditBar(editing)
-          else if (replying != null)
-            _ReplyBar(replying),
-          Row(
-            children: [
-              IconButton(
-                key: const ValueKey('composer-attach'),
-                onPressed: _sending ? null : _attach,
-                icon: const Icon(Icons.attach_file_rounded),
-                tooltip: 'Send a photo',
-              ),
-              Expanded(
-                child: TextField(
-                  key: const ValueKey('composer-field'),
-                  controller: _controller,
-                  maxLength: maxMessageLength,
-                  minLines: 1,
-                  maxLines: 4,
-                  focusNode: _focus,
-                  // Messages, captions and edits all start with a capital; the
-                  // keyboard's own setting still decides (nothing is forced).
-                  textCapitalization: TextCapitalization.sentences,
-                  textInputAction: TextInputAction.send,
-                  // A non-null onEditingComplete replaces Flutter's default,
-                  // which unfocuses the field on the send action and so
-                  // closes the keyboard.
-                  onEditingComplete: _send,
-                  // Throttled, and silent when the member does not share typing.
-                  onChanged: (text) {
-                    if (text.isNotEmpty) {
-                      ref.read(typingProvider.notifier).signalTyping();
-                    }
-                    if (id == null || _applyingDraft) return;
-                    if (ref.read(editingProvider) != null) return;
-                    ref.read(draftsProvider.notifier).setText(id, text);
-                  },
-                  decoration: const InputDecoration(
-                    hintText: 'Message',
-                    counterText: '',
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                key: const ValueKey('composer-send'),
-                onPressed: _sending
-                    ? null
-                    : () {
-                        _send();
-                        _focus.requestFocus();
-                      },
-                icon: const Icon(Icons.arrow_upward_rounded),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// What the composer is answering, with a way to stop.
-class _ReplyBar extends ConsumerWidget {
-  const _ReplyBar(this.message);
-
-  final Message message;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final me = ref.watch(currentUserIdProvider);
-    final name = message.senderId == me
-        ? 'You'
-        : (ref.watch(yourPeopleProvider).value ?? const [])
-                  .where((m) => m.userId == message.senderId)
-                  .firstOrNull
-                  ?.displayName ??
-              'Member';
-    return Container(
-      key: const ValueKey('reply-bar'),
-      margin: const EdgeInsets.fromLTRB(10, 0, 0, 6),
-      padding: const EdgeInsets.fromLTRB(10, 4, 0, 4),
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(
-            color: Theme.of(context).colorScheme.primary,
-            width: 3,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Replying to $name',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                Text(
-                  quoteText(message),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            key: const ValueKey('reply-cancel'),
-            tooltip: 'Cancel reply',
-            icon: const Icon(Icons.close),
-            onPressed: () => ref.read(replyingToProvider.notifier).clear(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// What the composer is editing, with a way to stop.
-class _EditBar extends ConsumerWidget {
-  const _EditBar(this.message);
-
-  final Message message;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      key: const ValueKey('edit-bar'),
-      margin: const EdgeInsets.fromLTRB(10, 0, 0, 6),
-      padding: const EdgeInsets.fromLTRB(10, 4, 0, 4),
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(
-            color: Theme.of(context).colorScheme.primary,
-            width: 3,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Editing message',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                Text(
-                  quoteText(message),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            key: const ValueKey('edit-cancel'),
-            tooltip: 'Cancel edit',
-            icon: const Icon(Icons.close),
-            onPressed: () => ref.read(editingProvider.notifier).clear(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// A quoted message in one line: its text, "Photo", or what became of it.
-String quoteText(Message? message) => switch (message) {
-  null => 'Original message',
-  Message(isDeleted: true) => 'This message was deleted',
-  Message(:final body) when body.isNotEmpty => body,
-  Message(hasAttachment: true) => '📷 Photo',
-  _ => 'Message',
-};
-
-/// Message text with its links tappable, opening in the browser.
-class _LinkedText extends ConsumerStatefulWidget {
-  const _LinkedText(
-    this.text, {
-    super.key,
-    required this.style,
-    required this.linkColor,
-    this.highlightQuery,
-  });
-
-  final String text;
-  final TextStyle style;
-  final Color linkColor;
-
-  /// The active in-chat search query, if any: every match is highlighted,
-  /// not just the current hit (see `_Bubble.isCurrentHit` for that).
-  final String? highlightQuery;
-
-  @override
-  ConsumerState<_LinkedText> createState() => _LinkedTextState();
-}
-
-class _LinkedTextState extends ConsumerState<_LinkedText> {
-  // One recognizer per link, disposed with the widget: a recognizer that is
-  // never disposed leaks its gesture arena entry.
-  final _taps = <TapGestureRecognizer>[];
-
-  void _clear() {
-    for (final t in _taps) {
-      t.dispose();
-    }
-    _taps.clear();
-  }
-
-  @override
-  void dispose() {
-    _clear();
-    super.dispose();
-  }
-
-  Future<void> _open(Uri link) async {
-    final opened = await ref.read(linkOpenerProvider).open(link);
-    if (!opened && mounted) {
-      showSisNotice(context, 'Could not open ${link.host}', isError: true);
-    }
-  }
-
-  /// [text], split around every case-insensitive match of the active search
-  /// query and given a highlighted background. Unlike a link's style, this
-  /// never touches links (a match inside a link stays link-styled only --
-  /// known simplification, links are rare inside a search hit).
-  List<TextSpan> _highlightSpans(String text) {
-    final query = widget.highlightQuery;
-    if (query == null || query.trim().isEmpty) {
-      return [TextSpan(text: text)];
-    }
-    final offsets = matchOffsets(text, query);
-    if (offsets.isEmpty) {
-      return [TextSpan(text: text)];
-    }
-    final length = query.trim().length;
-    final spans = <TextSpan>[];
-    var start = 0;
-    for (final offset in offsets) {
-      if (start < offset) {
-        spans.add(TextSpan(text: text.substring(start, offset)));
-      }
-      spans.add(
-        TextSpan(
-          text: text.substring(offset, offset + length),
-          // The app's own "unread" amber, reused as the search highlight.
-          style: const TextStyle(
-            backgroundColor: Color(0xFFFFD54F),
-            color: Colors.black87,
-          ),
-        ),
-      );
-      start = offset + length;
-    }
-    if (start < text.length) {
-      spans.add(TextSpan(text: text.substring(start)));
-    }
-    return spans;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    _clear();
-    final segments = linkSegments(widget.text);
-    final highlighting =
-        widget.highlightQuery != null &&
-        widget.highlightQuery!.trim().isNotEmpty;
-    if (segments.every((s) => s.link == null) && !highlighting) {
-      return Text(widget.text, style: widget.style);
-    }
-    final spans = <TextSpan>[];
-    for (final s in segments) {
-      final link = s.link;
-      if (link == null) {
-        spans.addAll(_highlightSpans(s.text));
-        continue;
-      }
-      final tap = TapGestureRecognizer()..onTap = () => _open(link);
-      _taps.add(tap);
-      spans.add(
-        TextSpan(
-          text: s.text,
-          recognizer: tap,
-          style: TextStyle(
-            color: widget.linkColor,
-            decoration: TextDecoration.underline,
-            decorationColor: widget.linkColor,
-          ),
-        ),
-      );
-    }
-    return Text.rich(TextSpan(style: widget.style, children: spans));
-  }
-}
-
-/// The small floating circle above the composer that takes the member back to
-/// the newest message. Shown when the newest message is more than a screen
-/// away, or the list is a jumped (search) window.
-class _JumpToLatest extends StatelessWidget {
-  const _JumpToLatest({
-    required this.far,
-    required this.jumped,
-    required this.onTap,
-  });
-
-  final ValueNotifier<bool> far;
-  final bool jumped;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: far,
-      builder: (context, isFar, _) {
-        final show = isFar || jumped;
-        return IgnorePointer(
-          ignoring: !show,
-          child: AnimatedScale(
-            scale: show ? 1 : 0.6,
-            duration: const Duration(milliseconds: 140),
-            curve: Curves.easeOut,
-            child: AnimatedOpacity(
-              opacity: show ? 1 : 0,
-              duration: const Duration(milliseconds: 140),
-              child: Material(
-                key: const ValueKey('jump-to-latest'),
-                color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                elevation: 3,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: onTap,
-                  child: const SizedBox(
-                    width: 44,
-                    height: 44,
-                    child: Icon(Icons.keyboard_arrow_down, size: 28),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }

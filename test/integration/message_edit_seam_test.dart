@@ -24,6 +24,8 @@ import '../support/fakes.dart';
 import '../support/service_key.dart';
 import '../support/reach.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 /// Editing through the real UI, across the seam a unit test cannot reach:
 /// hale swipes her message, picks Edit, changes the text in the
 /// composer and sends -- over the real repository and the real edit_message.
@@ -168,7 +170,7 @@ void main() {
   }
 
   Future<void> edit(WidgetTester t, String id, String body) async {
-    await t.tap(within('a', find.byKey(ValueKey('message-$id'))));
+    await t.longPress(within('a', find.byKey(ValueKey('message-$id'))));
     await until(
       t,
       () => find.byKey(const ValueKey('menu-edit')).evaluate().isNotEmpty,
@@ -246,6 +248,8 @@ void main() {
       UncontrolledProviderScope(
         container: ivoContainer,
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           theme: sisTheme(Brightness.light),
           home: Scaffold(
             // The list gets the full width below the two chats: a third of

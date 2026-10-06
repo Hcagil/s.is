@@ -23,6 +23,8 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = 'u2';
 
@@ -72,6 +74,8 @@ Future<void> pump(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: theme,
         home: const MessageScreen(title: 'Bob'),
       ),
@@ -127,6 +131,11 @@ Finder body(String id) => find.byKey(ValueKey('body-$id'));
 
 Span spanOf(String id, String text) =>
     spansIn(body(id)).singleWhere((s) => s.text == text);
+
+/// The message a tap has opened (tappedMessageProvider), or null.
+String? tapped(WidgetTester tester) => ProviderScope.containerOf(
+  tester.element(find.byType(MessageScreen, skipOffstage: false)),
+).read(tappedMessageProvider);
 
 Future<void> tapText(WidgetTester tester, String id, String text) async {
   await tester.tapOnText(
@@ -266,7 +275,7 @@ void main() {
     });
 
     testWidgets(
-      'tapping the words around a link opens the menu, not the link',
+      'tapping the words around a link opens the message, not the link',
       (tester) async {
         final opener = LinkOpenerFake();
         await pump(
@@ -283,10 +292,11 @@ void main() {
         expect(opener.opened, isEmpty);
         expect(find.byType(PhotoViewer), findsNothing);
         expect(
-          find.byKey(const ValueKey('message-menu')),
-          findsOneWidget,
-          reason: 'plain words are the message: a tap there opens its menu',
+          tapped(tester),
+          'm1',
+          reason: 'plain words are the message: a tap there opens it',
         );
+        expect(find.byKey(const ValueKey('message-menu')), findsNothing);
       },
     );
 
@@ -303,6 +313,7 @@ void main() {
 
       expect(opener.opened, hasLength(1));
       expect(find.byKey(const ValueKey('message-menu')), findsNothing);
+      expect(tapped(tester), isNull, reason: 'the link wins over the bubble');
     });
 
     testWidgets('a link that will not open says which host', (tester) async {
@@ -401,6 +412,7 @@ void main() {
 
       await openPhoto(tester, 'c1/b.png');
 
+      expect(tapped(tester), isNull, reason: 'the photo wins over the bubble');
       expect(position(tester), '2 of 3');
       expect(viewerImage('c1/b.png'), findsOneWidget);
       expect(

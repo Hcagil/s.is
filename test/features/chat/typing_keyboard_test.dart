@@ -147,8 +147,8 @@ void main() {
       await keyboardSend(t);
       // The field is empty now; the second press has nothing to send.
       await keyboardSend(t);
-      await t.tap(s.send);
-      await t.pump();
+      // An empty field offers the mic, not the send button.
+      expect(s.send, findsNothing);
       expectTyping(t, 'after repeated sends in flight');
 
       t.testTextInput.enterText('two');
@@ -167,7 +167,7 @@ void main() {
         ..history['c1'] = [s.msg('m1', body: 'mine', from: me.userId)];
       await s.pump(t, chat);
 
-      await t.tap(s.bubble('m1'));
+      await t.longPress(s.bubble('m1'));
       await t.pumpAndSettle();
       await t.tap(s.editAction);
       await t.pumpAndSettle();

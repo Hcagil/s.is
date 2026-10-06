@@ -13,9 +13,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sis/app/licences_page.dart';
 import 'package:sis/app/theme.dart';
 import 'package:sis/main.dart' as entry;
+
+import '../support/l10n.dart';
 
 /// Mirrors ServicesBinding._parseLicenses (flutter/services/binding.dart).
 Stream<LicenseEntry> _notices() async* {
@@ -37,6 +40,8 @@ void main() {
     LicenseRegistry.reset();
     addTearDown(LicenseRegistry.reset);
     LicenseRegistry.addLicense(_notices);
+    // main() reads the stored appearance before runApp.
+    SharedPreferences.setMockInitialValues({});
     // main() without dart-defines registers the fonts, then mounts the
     // "Setup required" app, which is swapped out below.
     await t.pumpWidget(const SizedBox());
@@ -59,7 +64,7 @@ void main() {
     addTearDown(t.view.reset);
 
     await t.pumpWidget(
-      MaterialApp(
+      localizedApp(
         theme: sisTheme(Brightness.light),
         home: const SisLicencesPage(
           applicationName: 'SIS',

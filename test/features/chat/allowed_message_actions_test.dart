@@ -1,10 +1,9 @@
 // allowedMessageActions, from the rules in docs/DECISIONS.md: reply and
 // forward on any stored message; edit only on your own message younger than
 // 6 hours (never a forwarded one); delete for everyone on your own message at
-// any age, or on anyone's when you are a group admin (0.30.8); read-by first
-// on your own stored message in every chat, groups and 1:1 alike (0.30.10),
-// never on another's; nothing on a pending or deleted message. The tap menu
-// (menuMessageActions) never offers read-by.
+// any age, or on anyone's when you are a group admin (0.30.8); nothing on a
+// pending or deleted message. Read-by left the action set in Update 1
+// (reactions); slice 7 brings a readers card instead.
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -38,7 +37,7 @@ void main() {
   }
 
   group('allowedMessageActions', () {
-    test('Own stored text, age < 6h -> readBy first, in any chat', () {
+    test('Own stored text, age < 6h -> reply first, in any chat', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(hours: 5)),
@@ -47,11 +46,10 @@ void main() {
       expect(
         actions,
         equals([
-          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -67,11 +65,10 @@ void main() {
       expect(
         actions,
         equals([
-          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -87,16 +84,15 @@ void main() {
       expect(
         actions,
         equals([
-          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
 
-    test('Own age exactly 6h -> readBy, reply, forward, delete', () {
+    test('Own age exactly 6h -> reply, forward, delete', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(hours: 6)),
@@ -105,15 +101,14 @@ void main() {
       expect(
         actions,
         equals([
-          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
 
-    test('Own age 6h-1s -> readBy, reply, forward, edit, delete', () {
+    test('Own age 6h-1s -> reply, forward, edit, delete', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(
@@ -124,16 +119,15 @@ void main() {
       expect(
         actions,
         equals([
-          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
 
-    test('Own age 6h+1s -> readBy, reply, forward, delete', () {
+    test('Own age 6h+1s -> reply, forward, delete', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(hours: 6, seconds: 1)),
@@ -142,15 +136,14 @@ void main() {
       expect(
         actions,
         equals([
-          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
 
-    test('Own age 3 days -> readBy, reply, forward, delete', () {
+    test('Own age 3 days -> reply, forward, delete', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(days: 3)),
@@ -159,34 +152,29 @@ void main() {
       expect(
         actions,
         equals([
-          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
 
-    test(
-      'Own forwarded message, age < 6h -> readBy, reply, forward, delete',
-      () {
-        final msg = buildMessage(
-          senderId: me,
-          createdAt: now.subtract(const Duration(hours: 5)),
-          forwarded: true,
-        );
-        final actions = allowedMessageActions(msg, me: me, now: now);
-        expect(
-          actions,
-          equals([
-            MessageAction.readBy,
-            MessageAction.reply,
-            MessageAction.forward,
-            MessageAction.delete,
-          ]),
-        );
-      },
-    );
+    test('Own forwarded message, age < 6h -> reply, forward, delete', () {
+      final msg = buildMessage(
+        senderId: me,
+        createdAt: now.subtract(const Duration(hours: 5)),
+        forwarded: true,
+      );
+      final actions = allowedMessageActions(msg, me: me, now: now);
+      expect(
+        actions,
+        equals([
+          MessageAction.reply,
+          MessageAction.forward,
+          MessageAction.deleteForEveryone,
+        ]),
+      );
+    });
 
     test('Somebody else\'s stored message, age < 6h -> reply & forward', () {
       final msg = buildMessage(
@@ -246,15 +234,14 @@ void main() {
       expect(actionsGroupTrue, equals([]));
     });
 
-    test('me == null: fresh stored message -> no readBy, edit, delete', () {
+    test('me == null: fresh stored message -> no edit, delete', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(minutes: 10)),
       );
       final actions = allowedMessageActions(msg, me: null, now: now);
-      expect(actions, isNot(contains(MessageAction.readBy)));
       expect(actions, isNot(contains(MessageAction.edit)));
-      expect(actions, isNot(contains(MessageAction.delete)));
+      expect(actions, isNot(contains(MessageAction.deleteForEveryone)));
     });
 
     test('me == null: deleted message -> empty list', () {
@@ -282,7 +269,7 @@ void main() {
       );
       expect(
         allowedMessageActions(fresh, me: me, now: now),
-        contains(MessageAction.delete),
+        contains(MessageAction.deleteForEveryone),
       );
       expect(
         allowedMessageActions(fresh, me: me, now: now.toLocal()),
@@ -291,10 +278,9 @@ void main() {
       expect(
         allowedMessageActions(stale, me: me, now: now.toLocal()),
         equals([
-          MessageAction.readBy,
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -306,32 +292,16 @@ void main() {
       );
       expect(
         allowedMessageActions(theirs, me: me, now: now),
-        isNot(contains(MessageAction.delete)),
+        isNot(contains(MessageAction.deleteForEveryone)),
       );
       expect(
         allowedMessageActions(theirs, me: me, now: now, admin: true),
         equals([
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
-        reason: 'delete, but never edit or read-by on another\'s message',
-      );
-    });
-
-    test('the tap menu offers readBy first on your own stored message, as the '
-        'screen reader does', () {
-      final msg = buildMessage(
-        senderId: me,
-        createdAt: now.subtract(const Duration(minutes: 5)),
-      );
-      expect(
-        allowedMessageActions(msg, me: me, now: now).first,
-        MessageAction.readBy,
-      );
-      expect(
-        menuMessageActions(msg, me: me, now: now).first,
-        MessageAction.readBy,
+        reason: 'delete, but never edit on another\'s message',
       );
     });
   });

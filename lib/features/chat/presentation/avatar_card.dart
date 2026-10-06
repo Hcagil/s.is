@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/notice.dart';
+import '../../../l10n/app_localizations.dart';
 import '../application/chat_controllers.dart';
 import '../domain/attachment.dart';
 import '../domain/external_picker.dart';
@@ -36,6 +37,7 @@ Future<AvatarChoice?> showAvatarCard(
   required Rect anchor,
   required bool hasAvatar,
 }) async {
+  final l = AppLocalizations.of(context);
   final action = await showMenuCard<String>(
     context,
     anchor: anchor,
@@ -43,27 +45,27 @@ Future<AvatarChoice?> showAvatarCard(
     anchorRadius: 60,
     cardKey: const ValueKey('avatar-card'),
     actions: [
-      const MenuCardAction(
+      MenuCardAction(
         value: 'camera',
         keyId: 'avatar-camera',
         rowKey: ValueKey('avatar-camera'),
         icon: Icons.photo_camera_outlined,
-        label: 'Take photo',
+        label: l.avatarTakePhoto,
       ),
-      const MenuCardAction(
+      MenuCardAction(
         value: 'library',
         keyId: 'avatar-library',
         rowKey: ValueKey('avatar-library'),
         icon: Icons.photo_library_outlined,
-        label: 'Choose from library',
+        label: l.avatarChoose,
       ),
       if (hasAvatar)
-        const MenuCardAction(
+        MenuCardAction(
           value: 'remove',
           keyId: 'avatar-remove',
           rowKey: ValueKey('avatar-remove'),
           icon: Icons.delete_outline,
-          label: 'Remove picture',
+          label: l.avatarRemove,
           destructive: true,
         ),
     ],
@@ -87,11 +89,7 @@ Future<AvatarChoice?> showAvatarCard(
         case ExternalPickCancelled():
           return null;
         case ExternalPickedImages() || ExternalPickFailed():
-          showSisNotice(
-            context,
-            'The camera could not take a photo.',
-            isError: true,
-          );
+          showSisNotice(context, l.cameraFailed, isError: true);
           return null;
       }
     default:

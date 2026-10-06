@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import 'brand.dart';
 import 'loading.dart';
 import 'theme.dart';
@@ -19,7 +20,7 @@ class SisLicencesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Open-source licences')),
+    appBar: AppBar(title: Text(AppLocalizations.of(context).settingsLicences)),
     body: FutureBuilder<List<LicenseEntry>>(
       future: LicenseRegistry.licenses.toList(),
       builder: (context, snapshot) {
@@ -59,7 +60,10 @@ class SisLicencesPage extends StatelessWidget {
               ListTile(
                 title: Text(package),
                 subtitle: byPackage[package]!.length > 1
-                    ? Text('${byPackage[package]!.length} licences')
+                    ? Text(
+                        AppLocalizations.of(context)
+                            .licencesCount(byPackage[package]!.length),
+                      )
                     : null,
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => Navigator.of(context).push(

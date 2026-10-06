@@ -18,6 +18,8 @@ import 'package:sis/features/chat/presentation/photo_viewer.dart';
 
 import '../../support/fakes.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 const a = 'c1/a.png';
 const b = 'c1/b.png';
 
@@ -34,6 +36,8 @@ Future<void> open(WidgetTester t) async {
     ProviderScope(
       overrides: [chatRepositoryProvider.overrideWithValue(chat)],
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(
           builder: (context) => Scaffold(
             body: Center(

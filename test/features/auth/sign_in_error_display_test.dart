@@ -5,8 +5,8 @@
 // the screen must show only the fixed sentence.
 //
 // Not covered here: main()'s own catch (it needs dart-defines, Supabase and
-// Firebase to run). What is covered is that the startup screen shows exactly
-// the string main() hands startupErrorProvider, nothing more.
+// Firebase to run). What is covered is that the startup screen turns the
+// StartupFailure main() hands startupErrorProvider into the localised text.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:google_sign_in_platform_interface/google_sign_in_platform_interface.dart';
 import 'package:sis/app/sis_app.dart';
+import 'package:sis/core/startup_failure.dart';
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/data/supabase_auth_repository.dart';
@@ -22,6 +23,7 @@ import 'package:sis/features/auth/presentation/status_screens.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../support/google_sign_in_stand_ins.dart';
+import '../../support/l10n.dart';
 
 const sentinel = 'SENTINEL-51c9-raw-exception-text';
 const startupSentence = 'SIS could not start. Please try again.';
@@ -191,30 +193,36 @@ void main() {
   });
 
   group('startup failure', () {
-    // The screen wraps the reason in fixed guidance, so "exactly" means:
-    // two reasons render trees that differ by the reason and nothing else.
-    Future<List<String>> texts(WidgetTester t, String reason) async {
-      await t.pumpWidget(MaterialApp(home: StartupFailedScreen(reason)));
-      return [
-        for (final w in t.widgetList<Text>(find.byType(Text)))
-          (w.data ?? w.textSpan!.toPlainText()).replaceAll(reason, '<R>'),
-      ];
+    // main() hands the gate a reason code, never a sentence; the screen turns
+    // it into the localised statusStartBootstrap.
+    for (final (name, locale, l, other) in [
+      ('en', const Locale('en'), l10nEn, l10nTr),
+      ('tr', const Locale('tr'), l10nTr, l10nEn),
+    ]) {
+      testWidgets('StartupFailedScreen(bootstrap) shows the $name sentence', (
+        t,
+      ) async {
+        await t.pumpWidget(
+          localizedApp(
+            locale: locale,
+            home: const StartupFailedScreen(StartupFailure.bootstrap),
+          ),
+        );
+        expect(find.textContaining(l.statusStartBootstrap), findsOneWidget);
+        expect(find.textContaining(other.statusStartBootstrap), findsNothing);
+        expect(find.textContaining('bootstrap'), findsNothing);
+        expect(t.takeException(), isNull);
+      });
     }
 
-    testWidgets('StartupFailedScreen shows exactly the string it is given', (
+    testWidgets('the gate shows startupErrorProvider as the sentence', (
       t,
     ) async {
-      final a = await texts(t, startupSentence);
-      expect(find.textContaining(startupSentence), findsOneWidget);
-      expect(a.where((x) => x.contains('<R>')), hasLength(1));
-      final b = await texts(t, 'Other reason $sentinel.');
-      expect(a, b, reason: 'the screen added or altered text per reason');
-    });
-
-    testWidgets('the gate shows startupErrorProvider verbatim', (t) async {
       await t.pumpWidget(
         ProviderScope(
-          overrides: [startupErrorProvider.overrideWithValue(startupSentence)],
+          overrides: [
+            startupErrorProvider.overrideWithValue(StartupFailure.bootstrap),
+          ],
           child: const SisApp(),
         ),
       );

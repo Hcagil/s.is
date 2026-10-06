@@ -38,12 +38,22 @@ const bob = Conversation(id: 'c1', lastMessage: 'where are you');
 const noticeText = "Can't reach SIS. Showing your saved chats; trying again.";
 final notice = find.byKey(const ValueKey('offline-notice'));
 final noticeTexts = find.text(noticeText);
-// The two strips 0.30.16 had, one per cause; neither may come back.
+// The strips 0.30.16 and 0.30.17 had; none may come back.
 final oldNotices = [
   find.byKey(const ValueKey('session-check-notice')),
   find.byKey(const ValueKey('chat-list-stale-notice')),
 ];
 final row = find.byKey(const ValueKey('conversation-c1'));
+
+/// The offline strip of every past version, its text included, is absent.
+void noStrip(String why) {
+  expect(notice, findsNothing, reason: why);
+  expect(noticeTexts, findsNothing, reason: why);
+  for (final old in oldNotices) {
+    expect(old, findsNothing, reason: why);
+  }
+}
+
 final home = find.byType(HomeScreen);
 final deniedText = find.textContaining('not currently approved');
 final signIn = find.text('Continue with Google');
@@ -206,30 +216,15 @@ void main() {
   });
 
   group('offline start', () {
-    testWidgets('the check failing keeps the list and shows the notice at the '
-        'top of Home; coming back to the app asks again at once; the allow '
-        'removes the notice', (t) async {
+    testWidgets('the check failing keeps the stored list with no strip; '
+        'coming back to the app asks again at once', (t) async {
       final w = World();
       await t.pumpWidget(w.app());
       await turns(t);
       w.auth.last.fail();
       await turns(t);
 
-      expect(notice, findsOneWidget);
-      expect(
-        find.descendant(of: notice, matching: find.text(noticeText)),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: home, matching: notice),
-        findsOneWidget,
-        reason: 'the notice is not on Home',
-      );
-      expect(
-        t.getTopLeft(notice).dy,
-        lessThan(t.getTopLeft(row).dy),
-        reason: 'the notice is not above the list',
-      );
+      noStrip('check failed');
       expect(row, findsOneWidget);
       expect(w.auth.checks, hasLength(1));
 
@@ -245,141 +240,51 @@ void main() {
 
       w.auth.last.allow();
       await frames(t);
-      expect(notice, findsNothing);
+      noStrip('allowed');
       expect(row, findsOneWidget);
     });
   });
 
-  group('one offline notice, whichever cause', () {
-    ProviderContainer box(WidgetTester t) =>
-        ProviderScope.containerOf(t.element(home));
-
-    /// Exactly one strip, with its one text, at the top of Home above the
-    /// stored list, and no strip of the old kinds.
-    void oneNotice(WidgetTester t, String why) {
-      expect(notice, findsOneWidget, reason: why);
-      expect(noticeTexts, findsOneWidget, reason: '$why: the text twice');
-      expect(
-        find.descendant(of: notice, matching: noticeTexts),
-        findsOneWidget,
-      );
-      expect(find.descendant(of: home, matching: notice), findsOneWidget);
-      expect(t.getTopLeft(notice).dy, lessThan(t.getTopLeft(row).dy));
-      for (final old in oldNotices) {
-        expect(old, findsNothing, reason: '$why: an old strip is back');
-      }
-      expect(row, findsOneWidget, reason: '$why: the stored list went away');
-    }
-
-    void noNotice(String why) {
-      expect(notice, findsNothing, reason: why);
-      expect(noticeTexts, findsNothing, reason: why);
-      for (final old in oldNotices) {
-        expect(old, findsNothing, reason: why);
-      }
-    }
-
-    /// A World whose held list read answers offline when released (the
-    /// fake answers with what the server held when the read was made).
+  // The offline strip is gone (slice 4): whatever fails, Home keeps the
+  // stored list and shows no strip of any kind.
+  group('no offline strip, whichever cause; the stored list stays', () {
     World offlineList() => World()
       ..chat.conversationsResult = const Err(
         NetworkFailure('offline', retryable: true),
       );
 
-    Future<void> listFails(WidgetTester t, World w) async {
+    testWidgets('only the list read failing', (t) async {
+      final w = offlineList();
+      await t.pumpWidget(w.app());
+      await turns(t);
       w.chat.releaseList();
       await turns(t);
-    }
-
-    testWidgets('only the list read failing (the check still in flight): '
-        'one notice', (t) async {
-      final w = offlineList();
-      await t.pumpWidget(w.app());
-      await turns(t);
-      await listFails(t, w);
-
       expect(w.auth.checks.single.answered, isFalse, reason: 'fixture');
-      expect(box(t).read(conversationListStaleProvider), isTrue);
-      expect(box(t).read(sessionCheckFailedProvider), isFalse);
-      oneNotice(t, 'list stale only');
+      noStrip('list failed');
+      expect(row, findsOneWidget, reason: 'the stored list went away');
     });
 
-    testWidgets('only the session check failing (the list read still in '
-        'flight): one notice', (t) async {
-      final w = World();
-      await t.pumpWidget(w.app());
-      await turns(t);
-      w.auth.last.fail();
-      await turns(t);
-
-      expect(box(t).read(sessionCheckFailedProvider), isTrue);
-      expect(box(t).read(conversationListStaleProvider), isFalse);
-      oneNotice(t, 'session check only');
-    });
-
-    testWidgets('both failing: still one notice; it stays while either is '
-        'failing and goes once both have succeeded', (t) async {
-      final w = offlineList();
-      await t.pumpWidget(w.app());
-      await turns(t);
-      w.auth.last.fail();
-      await turns(t);
-      await listFails(t, w);
-      expect(box(t).read(sessionCheckFailedProvider), isTrue);
-      expect(box(t).read(conversationListStaleProvider), isTrue);
-      oneNotice(t, 'both');
-
-      // The server check comes back first; the list is still the saved one.
-      box(t).read(sessionControllerProvider.notifier).recheck();
-      await turns(t);
-      w.auth.last.allow();
-      await frames(t);
-      expect(box(t).read(sessionCheckFailedProvider), isFalse);
-      oneNotice(t, 'the list still stale');
-
-      // Then the list reads again.
-      w.chat.conversationsResult = const Ok([bob]);
-      unawaited(box(t).read(conversationListProvider.notifier).reloadQuietly());
-      await frames(t);
-      expect(box(t).read(conversationListStaleProvider), isFalse);
-      noNotice('both succeeded');
-      expect(row, findsOneWidget);
-    });
-
-    testWidgets('the list back first, the check still failing: the notice '
-        'stays until the check succeeds', (t) async {
-      final w = offlineList();
-      await t.pumpWidget(w.app());
-      await turns(t);
-      w.auth.last.fail();
-      await turns(t);
-      await listFails(t, w);
-      oneNotice(t, 'both');
-
-      w.chat.conversationsResult = const Ok([bob]);
-      unawaited(box(t).read(conversationListProvider.notifier).reloadQuietly());
-      await frames(t);
-      expect(box(t).read(conversationListStaleProvider), isFalse);
-      oneNotice(t, 'the check still failing');
-
-      box(t).read(sessionControllerProvider.notifier).recheck();
-      await turns(t);
-      w.auth.last.allow();
-      await frames(t);
-      noNotice('both succeeded');
-    });
-
-    testWidgets('control: the check and the list both succeed: no notice', (
+    testWidgets('both failing, then both back: the list stays throughout', (
       t,
     ) async {
-      final w = World();
+      final w = offlineList();
       await t.pumpWidget(w.app());
       await turns(t);
-      w.auth.last.allow();
+      w.auth.last.fail();
+      await turns(t);
       w.chat.releaseList();
+      await turns(t);
+      noStrip('both failed');
+      expect(row, findsOneWidget);
+
+      final box = ProviderScope.containerOf(t.element(home));
+      box.read(sessionControllerProvider.notifier).recheck();
+      await turns(t);
+      w.auth.last.allow();
+      w.chat.conversationsResult = const Ok([bob]);
+      unawaited(box.read(conversationListProvider.notifier).reloadQuietly());
       await frames(t);
-      expect(box(t).read(conversationListProvider).hasValue, isTrue);
-      noNotice('all fine');
+      noStrip('both back');
       expect(row, findsOneWidget);
     });
   });

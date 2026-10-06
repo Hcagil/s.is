@@ -27,6 +27,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
 
+import 'package:sis/l10n/app_localizations.dart';
+
 /// The message screen mounted exactly as `main.dart` wires it, over a real
 /// [SupabaseChatRepository] and a real [FileAttachmentCache] on a temporary
 /// directory.
@@ -201,6 +203,8 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           theme: sisTheme(Brightness.light),
           home: const MessageScreen(title: 'Walt'),
         ),

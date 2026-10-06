@@ -183,14 +183,11 @@ void main() {
     FileChatListSnapshotStore store() =>
         FileChatListSnapshotStore(root: () async => dir);
 
-    /// Home's one offline strip (0.30.17), with its one text; the list's
-    /// own strip of 0.30.16 is gone.
-    void expectOneOfflineNotice() {
-      expect(find.byKey(const ValueKey('offline-notice')), findsOneWidget);
-      expect(
-        find.text("Can't reach SIS. Showing your saved chats; trying again."),
-        findsOneWidget,
-      );
+    /// No offline strip of any past version (0.30.16, 0.30.17): slice 4
+    /// removed them; the stored list alone shows the state.
+    void expectNoOfflineStrip() {
+      expect(find.byKey(const ValueKey('offline-notice')), findsNothing);
+      expect(find.textContaining('Showing your saved chats'), findsNothing);
       expect(
         find.byKey(const ValueKey('chat-list-stale-notice')),
         findsNothing,
@@ -288,12 +285,7 @@ void main() {
         reason: 'the stored list before the server read settles',
       );
       final v = await settledList(t, c);
-      expect(
-        c.read(conversationListStaleProvider),
-        isTrue,
-        reason: 'the read failed',
-      );
-      expectOneOfflineNotice();
+      expectNoOfflineStrip();
 
       expect(v.hasValue, isTrue, reason: '$v');
       expect([for (final x in v.value!) x.id], ['stored-1'], reason: '$v');
@@ -308,9 +300,7 @@ void main() {
     });
 
     testWidgets('a captive portal (an HTML 502 for every request, through '
-        'the real repository): the stored list stays, with the notice', (
-      t,
-    ) async {
+        'the real repository): the stored list stays, no strip', (t) async {
       final portal = (await t.runAsync(
         () => HttpServer.bind(InternetAddress.loopbackIPv4, 0),
       ))!;
@@ -339,12 +329,11 @@ void main() {
 
       expect(v, isA<AsyncData<List<Conversation>>>(), reason: '$v');
       expect([for (final x in v.value!) x.id], ['stored-1']);
-      expect(c.read(conversationListStaleProvider), isTrue);
       expect(
         find.byKey(const ValueKey('conversation-stored-1')),
         findsOneWidget,
       );
-      expectOneOfflineNotice();
+      expectNoOfflineStrip();
       expect(find.textContaining('hotel'), findsNothing);
     });
 

@@ -50,7 +50,7 @@ void main() {
         expect(theme.colorScheme.primary, primary);
       });
 
-      test('sets text in Manrope', () {
+      test('sets text in the system font, not Manrope', () {
         final t = theme.textTheme;
         for (final style in [
           t.bodyMedium,
@@ -60,7 +60,9 @@ void main() {
           t.labelLarge,
           t.headlineSmall,
         ]) {
-          expect(style?.fontFamily, 'Manrope');
+          // No family of our own: the platform default, Roboto under test.
+          expect(style?.fontFamily, isNot('Manrope'));
+          expect(style?.fontFamily, 'Roboto');
         }
       });
 

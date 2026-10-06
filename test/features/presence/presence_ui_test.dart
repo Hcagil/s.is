@@ -17,6 +17,7 @@ import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
+import 'package:sis/l10n/app_localizations.dart';
 
 import '../../support/fakes.dart';
 
@@ -80,7 +81,12 @@ Future<ProviderContainer> pump(
   await t.pumpWidget(
     UncontrolledProviderScope(
       container: c,
-      child: MaterialApp(home: home),
+      // As production mounts it: every chat screen reads AppLocalizations.
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: home,
+      ),
     ),
   );
   await t.pumpAndSettle();

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../domain/group_event.dart';
 
 /// An admin-only line: "X left" / "X was removed" / "X was added". Read
@@ -20,11 +21,12 @@ class GroupEventLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subject = names[event.subjectId] ?? 'Someone';
+    final l = AppLocalizations.of(context);
+    final subject = names[event.subjectId] ?? l.commonSomeone;
     final text = switch (event.kind) {
-      GroupEventKind.left => '$subject left',
-      GroupEventKind.removed => '$subject was removed',
-      GroupEventKind.added => '$subject was added',
+      GroupEventKind.left => l.eventLeft(subject),
+      GroupEventKind.removed => l.eventRemoved(subject),
+      GroupEventKind.added => l.eventAdded(subject),
     };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),

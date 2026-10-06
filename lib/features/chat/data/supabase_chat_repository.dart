@@ -230,8 +230,7 @@ final class SupabaseChatRepository implements ChatRepository {
                 ? null
                 : Member(
                     userId: otherByConversation[id]!,
-                    displayName:
-                        nameByUser[otherByConversation[id]!] ?? 'Member',
+                    displayName: nameByUser[otherByConversation[id]!] ?? '',
                     avatarPath: avatarByUser[otherByConversation[id]!],
                   ),
             lastMessage: previewBy[id]?.body,
@@ -247,7 +246,7 @@ final class SupabaseChatRepository implements ChatRepository {
                     for (final e
                         in (slotByConversation[id] ?? const <String, int>{})
                             .entries)
-                      e.key: GroupVoice(nameByUser[e.key] ?? 'Member', e.value),
+                      e.key: GroupVoice(nameByUser[e.key] ?? '', e.value),
                   },
           ),
       ];
@@ -365,7 +364,7 @@ final class SupabaseChatRepository implements ChatRepository {
             member: Member(
               userId: row['user_id'] as String,
               displayName:
-                  byId[row['user_id']]?['display_name'] as String? ?? 'Member',
+                  byId[row['user_id']]?['display_name'] as String? ?? '',
               tag: byId[row['user_id']]?['tag'] as String?,
               avatarPath: byId[row['user_id']]?['avatar_path'] as String?,
             ),
@@ -883,6 +882,10 @@ final class SupabaseChatRepository implements ChatRepository {
               final String at => DateTime.parse(at),
               _ => null,
             },
+            deliveredAt: switch (r['delivered_at']) {
+              final String at => DateTime.parse(at),
+              _ => null,
+            },
           ),
       ]);
     } catch (e) {
@@ -923,6 +926,66 @@ final class SupabaseChatRepository implements ChatRepository {
       return Err(_asFailure(e));
     }
     return Ok(reads.stream);
+  }
+
+  @override
+  Future<Result<void>> markDelivered(
+    String conversationId, {
+    DateTime? upTo,
+  }) async {
+    try {
+      await _client.rpc(
+        'mark_delivered',
+        params: {
+          'conversation': conversationId,
+          'up_to': upTo?.toUtc().toIso8601String(),
+        },
+      );
+      return const Ok(null);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<Stream<ReadMark>>> deliveredUpdates(
+    String conversationId,
+  ) async {
+    // Sent by the database when any member's device receives messages; not
+    // gated on read sharing; clients cannot send on this topic.
+    final channel = _client.channel(
+      'delivered:$conversationId',
+      opts: const RealtimeChannelConfig(private: true),
+    );
+    final deliveries = StreamController<ReadMark>();
+    channel.onBroadcast(
+      event: 'delivered',
+      callback: (payload) {
+        // Sent by the database (realtime.send), so the fields sit inside the
+        // envelope's `payload`, unlike a client broadcast such as typing.
+        final body = payload['payload'];
+        if (body is! Map) return;
+        final who = body['user_id'];
+        final at = body['delivered_at'];
+        if (who is String && at is String && !deliveries.isClosed) {
+          deliveries.add(
+            ReadMark(
+              userId: who,
+              shares: false,
+              deliveredAt: DateTime.parse(at),
+            ),
+          );
+        }
+      },
+    );
+    deliveries.onCancel = () => leaveChannel(_client, channel);
+    try {
+      await joinChannel(channel);
+    } catch (e) {
+      leaveChannel(_client, channel, deliveries);
+      return Err(_asFailure(e));
+    }
+    return Ok(deliveries.stream);
   }
 
   @override

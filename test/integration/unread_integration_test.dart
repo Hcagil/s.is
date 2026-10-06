@@ -123,6 +123,17 @@ class _AccountAuth implements AuthRepository {
 /// Everything goes to [live] except markRead, which goes to a real
 /// repository on a dead host: the connection that fails is the real one.
 class _MarkReadDown implements ChatRepository {
+  // Slice 5a signatures only (delivery marks); no behaviour.
+  @override
+  Future<Result<void>> markDelivered(
+    String conversationId, {
+    DateTime? upTo,
+  }) async => const Ok(null);
+
+  @override
+  Future<Result<Stream<ReadMark>>> deliveredUpdates(
+    String conversationId,
+  ) async => const Ok(Stream<ReadMark>.empty());
   _MarkReadDown(this.live, this.dead);
   final ChatRepository live;
   final ChatRepository dead;

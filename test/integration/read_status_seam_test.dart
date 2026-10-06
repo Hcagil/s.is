@@ -409,11 +409,8 @@ void main() {
       expect(_markOf(c, theoId)?.shares, isTrue, reason: 'both share');
       final message = await sent(direct);
       expect(
-        isReadByAnyone(
-          c.read(readMarksProvider).requireValue,
-          message.createdAt,
-        ),
-        isFalse,
+        deliveryOf(message, c.read(readMarksProvider).requireValue),
+        isNot(Delivery.read),
         reason: 'fixture: theo has not read it yet',
       );
 
@@ -423,11 +420,8 @@ void main() {
         meanwhile: () => theo.markRead(direct),
       );
       expect(
-        isReadByAnyone(
-          c.read(readMarksProvider).requireValue,
-          message.createdAt,
-        ),
-        isTrue,
+        deliveryOf(message, c.read(readMarksProvider).requireValue),
+        Delivery.read,
       );
     }, timeout: const Timeout(Duration(minutes: 1)));
 
@@ -505,24 +499,24 @@ void main() {
       );
     }, timeout: const Timeout(Duration(minutes: 2)));
 
-    test(
-      'the other member hiding theirs makes my messages simply normal',
-      () async {
-        await share(theoClient, false);
-        final c = await opened(direct);
-        final message = await sent(direct);
+    test('the other member hiding theirs: his reading shows as two grey, never '
+        'blue', () async {
+      await share(theoClient, false);
+      final c = await opened(direct);
+      final message = await sent(direct);
 
-        expect(_markOf(c, theoId)?.shares, isFalse);
-        expect(
-          isReadByAnyone(
-            c.read(readMarksProvider).requireValue,
-            message.createdAt,
-          ),
-          isTrue,
-          reason: 'nothing shared: the message looks normal',
-        );
-      },
-    );
+      expect(_markOf(c, theoId)?.shares, isFalse);
+      Delivery now() =>
+          deliveryOf(message, c.read(readMarksProvider).requireValue);
+      expect(now(), Delivery.sent);
+      await eventually(
+        () => now() == Delivery.delivered,
+        'his read to arrive as a delivery',
+        meanwhile: () => theo.markRead(direct),
+      );
+      await Future<void>.delayed(const Duration(seconds: 2));
+      expect(now(), Delivery.delivered, reason: 'turned blue');
+    }, timeout: const Timeout(Duration(minutes: 1)));
 
     test(
       'read marks unreachable: an error state, the messages still load',

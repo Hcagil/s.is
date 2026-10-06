@@ -88,8 +88,13 @@ void main() {
           conv('c3', 10, unread: 1),
         ]);
       await loaded(chat);
-      // A repeat is harmless (the server's position only moves forward).
-      expect(marked(chat).toSet(), {'c1', 'c3'});
+      // Starting reads the list more than once (a catch-up read after the
+      // live subscription): once per unread conversation per read.
+      final reads = chat.calls.where((c) => c == 'conversations').length;
+      expect(reads, greaterThan(0));
+      expect(marked(chat)..sort(), [
+        for (final id in ['c1', 'c3']) ...List.filled(reads, id),
+      ], reason: 'exactly once per unread conversation per list read');
     },
   );
 
@@ -139,7 +144,10 @@ void main() {
       ..conversationsResult = Ok([conv('c1', 30, unread: 1)])
       ..holdMarkDelivered();
     final c = await loaded(chat).timeout(const Duration(seconds: 2));
-    expect(marked(chat).toSet(), {'c1'});
+    expect(
+      marked(chat),
+      List.filled(chat.calls.where((c) => c == 'conversations').length, 'c1'),
+    );
 
     chat.deliver(msg('c1', 40));
     await settle();

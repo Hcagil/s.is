@@ -380,4 +380,51 @@ void main() {
       shows(t, 'm1', Delivery.delivered);
     });
   });
+
+  testWidgets(
+    'a delivery that moves only message A rebuilds only A\'s bubble',
+    (t) async {
+      // A is older than B; Bob's device reports up to A: A turns two grey, B
+      // stays at one tick and its bubble is not built again.
+      final a = Message(
+        id: 'a',
+        conversationId: 'c1',
+        senderId: 'u1',
+        body: 'first',
+        createdAt: sentAt,
+      );
+      final b = Message(
+        id: 'b',
+        conversationId: 'c1',
+        senderId: 'u1',
+        body: 'second',
+        createdAt: after,
+      );
+      final chat = DeliveryChat()
+        ..messagesResult = Ok([a, b])
+        ..readMarksData['c1'] = [const ReadMark(userId: 'u2', shares: true)];
+      await pump(t, chat);
+      expect(tickOf(t, 'a'), Delivery.sent);
+      expect(tickOf(t, 'b'), Delivery.sent);
+      Widget bubbleOf(String id) =>
+          t.widget(find.byKey(ValueKey('message-$id')));
+      final bBefore = bubbleOf('b');
+      final aBefore = bubbleOf('a');
+
+      chat.deliverDelivery('c1', 'u2', sentAt);
+      await t.pumpAndSettle();
+      expect(tickOf(t, 'a'), Delivery.delivered);
+      expect(tickOf(t, 'b'), Delivery.sent);
+      expect(
+        identical(bubbleOf('a'), aBefore),
+        isFalse,
+        reason: 'control: A changed, so its bubble is built again',
+      );
+      expect(
+        identical(bubbleOf('b'), bBefore),
+        isTrue,
+        reason: "B's tick did not change, yet its bubble was rebuilt",
+      );
+    },
+  );
 }

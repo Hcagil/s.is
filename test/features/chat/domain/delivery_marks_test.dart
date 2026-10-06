@@ -193,9 +193,10 @@ void main() {
         Delivery.delivered,
       );
     });
-    test('deliveredTo and deliveredAt combine per member', () {
+    test('one member delivered, the other read: delivered (reading implies '
+        'delivery)', () {
       expect(
-        deliveryOf(msg(), [r('b', got: after), r('c')], deliveredTo: {'c'}),
+        deliveryOf(msg(), [r('b', got: after), r('c', read: after)]),
         Delivery.delivered,
       );
     });

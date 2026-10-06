@@ -215,4 +215,95 @@ void main() {
     await settle();
     expect(chat.canceledDeliveredSubscriptions, 1);
   });
+
+  test('a delivery join that hangs does not hold up the marks; once it '
+      'answers, deliveries arrive', () async {
+    final chat = DeliveryChat()
+      ..readMarksData['c1'] = [
+        ReadMark(userId: 'u2', shares: true, readAt: t0, deliveredAt: t0),
+      ]
+      ..holdDeliveredSubscription();
+    final c = await ready(chat);
+    await open(c, 'c1').timeout(
+      const Duration(seconds: 2),
+      onTimeout: () => fail('the marks waited for the delivery join'),
+    );
+    expect(of(c, 'u2'), (true, t0, t0));
+
+    chat.confirmDeliveredSubscription();
+    await settle();
+    chat.deliverDelivery('c1', 'u2', t1);
+    await settle();
+    expect(of(c, 'u2')?.$3, t1, reason: 'the late join was never listened to');
+  });
+
+  test('closed before the delivery join answers: the channel is left once '
+      'it does, nothing stays joined', () async {
+    final chat = DeliveryChat()
+      ..readMarksData['c1'] = const []
+      ..holdDeliveredSubscription();
+    final c = await ready(chat);
+    await open(c, 'c1').timeout(const Duration(seconds: 2));
+    c.read(openConversationProvider.notifier).close();
+    await settle();
+
+    chat.confirmDeliveredSubscription();
+    await settle();
+    expect(
+      chat.deliveredSubscriptions,
+      1,
+      reason: 'fixture: the join answered',
+    );
+    expect(
+      chat.joinedDeliveryChannels,
+      0,
+      reason:
+          'a join that answered after the close was never left '
+          '(cancelled: ${chat.canceledDeliveredSubscriptions}, marks state: '
+          '${c.read(readMarksProvider)})',
+    );
+  });
+
+  test('switched to another chat before the delivery join answers: the first '
+      "chat's deliveries never land in the second", () async {
+    final chat = DeliveryChat()
+      ..readMarksData['c1'] = [
+        ReadMark(userId: 'u2', shares: true, readAt: t0, deliveredAt: t0),
+      ]
+      ..readMarksData['c2'] = [
+        ReadMark(userId: 'u2', shares: true, readAt: t0, deliveredAt: t0),
+      ]
+      ..holdDeliveredSubscription();
+    final c = await ready(chat);
+    await open(c, 'c1').timeout(const Duration(seconds: 2));
+    await open(c, 'c2').timeout(const Duration(seconds: 2));
+    chat.confirmDeliveredSubscription();
+    await settle();
+
+    chat.deliverDelivery('c1', 'u2', t2);
+    await settle();
+    expect(
+      of(c, 'u2')?.$3,
+      t0,
+      reason: "u2's delivery in c1 moved his tick in c2",
+    );
+  });
+
+  test('the whole container disposed before the delivery join answers: '
+      'nothing stays joined', () async {
+    final chat = DeliveryChat()
+      ..readMarksData['c1'] = const []
+      ..holdDeliveredSubscription();
+    final c = await ready(chat);
+    await open(c, 'c1').timeout(const Duration(seconds: 2));
+    c.dispose();
+    chat.confirmDeliveredSubscription();
+    await settle();
+    expect(
+      chat.deliveredSubscriptions,
+      1,
+      reason: 'fixture: the join answered',
+    );
+    expect(chat.joinedDeliveryChannels, 0);
+  });
 }

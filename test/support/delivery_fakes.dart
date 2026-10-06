@@ -51,6 +51,14 @@ class DeliveryChat extends ChatFake {
   int canceledDeliveredSubscriptions = 0;
   Completer<void>? _subscribe;
 
+  /// Delivery channels joined and not left. Like the real repository, a
+  /// channel is left only when its stream's listener cancels: a stream
+  /// never listened to keeps its channel joined.
+  int get joinedDeliveryChannels =>
+      _sinks.values.fold(0, (n, sinks) => n + sinks.length);
+
+  /// deliveredUpdates (the join) stays unanswered until
+  /// [confirmDeliveredSubscription].
   void holdDeliveredSubscription() => _subscribe = Completer<void>();
   void confirmDeliveredSubscription() {
     _subscribe?.complete();

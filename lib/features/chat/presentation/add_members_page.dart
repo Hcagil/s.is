@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/controls.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
@@ -56,7 +55,6 @@ class AddMembersPage extends ConsumerStatefulWidget {
 class _AddMembersPageState extends ConsumerState<AddMembersPage> {
   final _search = TextEditingController();
   final _chosen = <Member>[];
-  bool _withHistory = false;
   bool _busy = false;
 
   @override
@@ -80,7 +78,9 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
     final result = await ref.read(groupControllerProvider).addMembers(
       widget.conversationId,
       [for (final m in _chosen) m.userId],
-      withHistory: _withHistory,
+      withHistory: ref
+          .read(groupSettingsProvider(widget.conversationId))
+          .newMembersSeeHistory,
     );
     if (!mounted) return;
     setState(() => _busy = false);
@@ -182,14 +182,6 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SisSwitchTile(
-                    key: const ValueKey('add-members-history'),
-                    title: l.addMembersOldTitle,
-                    subtitle: l.addMembersOldHint,
-                    value: _withHistory,
-                    onChanged: (v) => setState(() => _withHistory = v),
-                  ),
-                  const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(

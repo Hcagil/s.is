@@ -79,6 +79,10 @@ select av_as('fe'); select public.activate_session(); reset role;
 insert into public.conversations(id, title) values
   ('c9000000-0000-0000-0000-0000000000a1', 'g1'),
   ('c9000000-0000-0000-0000-0000000000b2', 'g2');
+-- g1 and g2 stand for groups from before the group settings (20261007120000):
+-- the migration left any member able to change the picture there.
+update public.conversations set members_can_set_avatar = true
+ where id in ('c9000000-0000-0000-0000-0000000000a1', 'c9000000-0000-0000-0000-0000000000b2');
 insert into public.conversation_members(conversation_id, user_id) values
   ('c9000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000a9001'),
   ('c9000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000a9002'),

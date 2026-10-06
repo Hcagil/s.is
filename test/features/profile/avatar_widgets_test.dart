@@ -5,8 +5,10 @@
 //    permission explainer) and "Remove" (avatar-remove, only when a picture
 //    is set). The picture is the gallery's 512 px square JPEG, a progress
 //    line shows while it uploads, and a SIS notice reports the outcome.
-//  - A group's page: the avatar (group-avatar) opens the same sheet for any
-//    member; a 1:1's person page offers nothing of the kind.
+//  - A group's page: the avatar (group-avatar) opens the same sheet for an
+//    admin, and for any member while the group lets members change the
+//    picture (profile_pages_test covers that switch); a 1:1's person page
+//    offers nothing of the kind.
 //  - Wherever the initials circle shows, the picture shows once downloaded;
 //    while it loads, when it cannot be read and when there is none, the
 //    initials show instead -- never a blank, never a spinner.
@@ -31,6 +33,7 @@ import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
+import 'package:sis/features/chat/domain/group_settings.dart';
 import 'package:sis/features/chat/domain/initials.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/crop_screen.dart';
@@ -94,6 +97,9 @@ class World {
           title: 'Club',
           lastMessage: 'yo',
           avatarPath: pictures ? clubPath : null,
+          // Members may change this group's picture (an admin switch since
+          // the group settings; a new group starts with it off).
+          settings: const GroupSettings(membersCanSetAvatar: true),
         ),
       ])
       ..membersResult = Ok([bob, cem])
@@ -707,7 +713,7 @@ void main() {
   });
 
   group('a group\'s picture', () {
-    testWidgets('any member sets it from the badge on the group page: the '
+    testWidgets('a member sets it from the badge (members may change it) on the group page: the '
         'cropper\'s square is sent for that group, and the page and the list '
         'show it', (t) async {
       final w = World();

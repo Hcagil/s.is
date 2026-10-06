@@ -3,7 +3,11 @@
 /// the server's own read policy already refuses the rows, so
 /// [ChatRepository.groupEvents] simply returns nothing for one; this type
 /// carries no visibility flag of its own.
-enum GroupEventKind { left, removed, added }
+///
+/// `picture` is the exception: every member sees it, and it is served by the
+/// group_picture_events function, not the admin-only table read. Its subject
+/// and actor are both whoever changed the picture.
+enum GroupEventKind { left, removed, added, picture }
 
 final class GroupEvent {
   const GroupEvent({

@@ -404,6 +404,24 @@ abstract class AppLocalizations {
   /// **'Delete group for everyone'**
   String get groupDeleteForAll;
 
+  /// Delete group confirm card title
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {name} for everyone?'**
+  String groupDeleteTitle(String name);
+
+  /// Delete group confirm card text
+  ///
+  /// In en, this message translates to:
+  /// **'All messages and photos in this group are gone for everyone. This cannot be undone.'**
+  String get groupDeleteBody;
+
+  /// Notice after the group was deleted by an admin
+  ///
+  /// In en, this message translates to:
+  /// **'Group deleted'**
+  String get groupDeletedNotice;
+
   /// Group info: leave button and confirm button
   ///
   /// In en, this message translates to:
@@ -1519,6 +1537,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{name} was removed'**
   String eventRemoved(String name);
+
+  /// Group event line
+  ///
+  /// In en, this message translates to:
+  /// **'{name} changed the group picture'**
+  String eventPictureChanged(String name);
 
   /// Group event line
   ///

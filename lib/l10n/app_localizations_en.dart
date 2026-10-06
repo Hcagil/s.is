@@ -164,6 +164,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get groupDeleteForAll => 'Delete group for everyone';
 
   @override
+  String groupDeleteTitle(String name) {
+    return 'Delete $name for everyone?';
+  }
+
+  @override
+  String get groupDeleteBody =>
+      'All messages and photos in this group are gone for everyone. This cannot be undone.';
+
+  @override
+  String get groupDeletedNotice => 'Group deleted';
+
+  @override
   String get groupLeave => 'Leave group';
 
   @override
@@ -778,6 +790,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String eventRemoved(String name) {
     return '$name was removed';
+  }
+
+  @override
+  String eventPictureChanged(String name) {
+    return '$name changed the group picture';
   }
 
   @override

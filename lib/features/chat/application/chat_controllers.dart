@@ -17,6 +17,8 @@ import '../domain/conversation.dart';
 import '../domain/contacts_repository.dart';
 import '../domain/external_picker.dart';
 import '../domain/gallery.dart';
+import '../domain/group_settings.dart';
+import '../domain/group_settings_repository.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
 import '../domain/picture_cropper.dart';
@@ -39,6 +41,9 @@ final chatRepositoryProvider = Provider<ChatRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 final reactionRepositoryProvider = Provider<ReactionRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+final groupSettingsRepositoryProvider = Provider<GroupSettingsRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 final linkOpenerProvider = Provider<LinkOpener>(

@@ -204,6 +204,9 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       // one the member has left or been removed from -- see
       // leftConversationGuardProvider's own doc for why this is silent.
       ref.listen(leftConversationGuardProvider, (_, _) {});
+      // Live updates of group settings, picture, members and deletion: the
+      // server nudges each member, this re-reads what changed.
+      ref.listen(groupChangesListenerProvider, (_, _) {});
       // Asks for the What's new notes due for this build once per start,
       // for whoever is signed in.
       ref.listen(releaseNotesProvider, (_, _) {});

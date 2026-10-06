@@ -22,6 +22,7 @@ import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/group_controller.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
+import 'package:sis/features/chat/domain/group_settings.dart';
 import 'package:sis/features/chat/domain/group_colors.dart';
 import 'package:sis/features/chat/domain/initials.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -37,6 +38,7 @@ import 'package:sis/features/profile/presentation/settings_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/group_settings_fakes.dart';
 import '../../support/l10n.dart';
 import '../../support/sis_ui.dart';
 
@@ -74,10 +76,21 @@ Message m(
 final lateUtc = DateTime.utc(2026, 9, 21, 20);
 
 class World {
-  World({String? self, this.extra = const []})
-    : chat = ChatFake(latency: const Duration(milliseconds: 2), self: self) {
+  World({
+    String? self,
+    this.extra = const [],
+    GroupSettings settings = const GroupSettings(),
+  }) : chat = ChatFake(latency: const Duration(milliseconds: 2), self: self) {
     chat
-      ..conversationsResult = const Ok([withBob, club])
+      ..conversationsResult = Ok([
+        withBob,
+        Conversation(
+          id: club.id,
+          title: club.title,
+          lastMessage: club.lastMessage,
+          settings: settings,
+        ),
+      ])
       ..membersResult = const Ok([bob, cem])
       ..roster['c1'] = [me, bob]
       ..roster['g1'] = [me, bob, cem]
@@ -124,6 +137,7 @@ class World {
   }
 
   final ChatFake chat;
+  final groups = GroupSettingsFake();
 
   /// Overrides added after the production ones.
   final List<Override> extra;
@@ -151,6 +165,7 @@ class World {
       linkOpenerProvider.overrideWithValue(opener),
       pushSourceProvider.overrideWithValue(PushSourceFake()),
       pushRegistryProvider.overrideWithValue(PushRegistryFake()),
+      groupSettingsRepositoryProvider.overrideWithValue(groups),
       ...extra,
     ],
     child: const SisApp(),
@@ -859,9 +874,13 @@ void main() {
     }
   });
 
-  group('greyed options', () {
-    World clubWith({required bool admin}) {
-      final w = World(self: 'u1');
+  // Update 2: the Group settings switches and delete-for-everyone.
+  group('group settings', () {
+    World clubWith({
+      required bool admin,
+      GroupSettings settings = const GroupSettings(),
+    }) {
+      final w = World(self: 'u1', settings: settings);
       w.chat.groupRosters['g1'] = [
         GroupMember(member: me, isAdmin: admin),
         GroupMember(member: bob, isAdmin: !admin, colorSlot: 1),
@@ -870,73 +889,168 @@ void main() {
       return w;
     }
 
-    /// The value of the switch under the grey row [key], Material or own.
-    bool on(WidgetTester t, String key) {
+    const keys = ['setting-pickswitch', 'setting-addsw', 'setting-histsw'];
+
+    /// (value, enabled) of the switch under row [key], Material or own,
+    /// wherever it is on the page.
+    (bool, bool) switchOf(WidgetTester t, String key) {
       final w = t.widget(
         find.descendant(
-          of: byKey(key),
+          of: find.byKey(ValueKey(key), skipOffstage: false),
           matching: find.byWidgetPredicate(
             (w) => w is Switch || w is SisSwitch,
+            skipOffstage: false,
           ),
+          matchRoot: true,
+          skipOffstage: false,
         ),
       );
-      return w is SisSwitch ? w.value : (w as Switch).value;
+      return w is SisSwitch
+          ? (w.value, w.onChanged != null)
+          : ((w as Switch).value, w.onChanged != null);
     }
 
-    Map<String, bool> switches(WidgetTester t) => {
-      for (final k in ['grey-pickswitch', 'grey-addsw', 'grey-histsw'])
-        k: on(t, k),
-    };
+    List<bool> values(WidgetTester t) => [
+      for (final k in keys) switchOf(t, k).$1,
+    ];
 
-    for (final admin in [false, true]) {
-      final who = admin ? 'an admin' : 'a member';
-      testWidgets('$who sees the values as today, the edit badge, and '
-          'tapping any of them changes nothing', (t) async {
-        final w = clubWith(admin: admin);
-        await clubPage(t, w);
-        expect(byKey('group-avatar-edit'), findsOneWidget);
-        await reveal(t, byKey('grey-pickswitch'));
-        const today = {
-          'grey-pickswitch': true,
-          'grey-addsw': false,
-          'grey-histsw': false,
-        };
-        expect(switches(t), today);
-        expect(
-          find.descendant(of: byKey('grey-p_who'), matching: find.byType(Text)),
-          findsOneWidget,
-          reason: 'grey-p_who is a title with no value',
+    // Not the defaults, so a value read from anywhere but the group shows.
+    const odd = GroupSettings(
+      membersCanSetAvatar: true,
+      membersCanAdd: false,
+      newMembersSeeHistory: false,
+    );
+
+    testWidgets('a member sees the group\'s values greyed; tapping them '
+        'changes nothing and asks the server nothing', (t) async {
+      final w = clubWith(admin: false, settings: odd);
+      await clubPage(t, w);
+      await reveal(t, byKey('setting-pickswitch'));
+      expect(values(t), [true, false, false]);
+      for (final k in keys) {
+        expect(switchOf(t, k).$2, isFalse, reason: '$k is not greyed');
+      }
+      for (final k in keys) {
+        await reveal(t, byKey(k));
+        await t.ensureVisible(byKey(k));
+        await t.pump();
+        await t.tap(byKey(k), warnIfMissed: false);
+        await settle(t);
+        await reveal(t, byKey('setting-pickswitch'));
+        expect(values(t), [true, false, false], reason: 'after tapping $k');
+      }
+      expect(w.groups.calls.where((c) => c.startsWith('settings')), isEmpty);
+      expect(byKey('delete-group'), findsNothing, reason: 'members only');
+    });
+
+    for (final can in [true, false]) {
+      testWidgets('a member gets the picture edit badge only when members '
+          'may change the picture ($can)', (t) async {
+        final w = clubWith(
+          admin: false,
+          settings: GroupSettings(membersCanSetAvatar: can),
         );
-        final grey = [
-          'grey-pickswitch',
-          'grey-addsw',
-          'grey-histsw',
-          'grey-p_who',
-          if (admin) 'grey-deladmin',
-        ];
-        if (!admin) {
-          await reveal(t, byKey('leave-group'));
-          expect(byKey('leave-group'), findsOneWidget);
-          expect(byKey('grey-deladmin'), findsNothing);
-        }
-        for (final k in grey) {
-          await reveal(t, byKey(k));
-          await t.ensureVisible(byKey(k));
-          await t.pump();
-          await t.tap(byKey(k), warnIfMissed: false);
-          await settle(t);
-          expect(find.byType(GroupScreen), findsOneWidget, reason: k);
-          expect(
-            ModalRoute.of(t.element(find.byType(GroupScreen)))!.isCurrent,
-            isTrue,
-            reason: '$k opened something',
-          );
-          expect(w.chat.groupWrites, isEmpty, reason: k);
-          await reveal(t, byKey('grey-pickswitch'));
-          expect(switches(t), today, reason: 'after tapping $k');
-        }
+        await clubPage(t, w);
+        expect(byKey('group-avatar-edit'), can ? findsOneWidget : findsNothing);
       });
     }
+
+    testWidgets('an admin always gets the picture edit badge', (t) async {
+      final w = clubWith(admin: true);
+      await clubPage(t, w);
+      expect(byKey('group-avatar-edit'), findsOneWidget);
+    });
+
+    for (final (i, k) in keys.indexed) {
+      testWidgets('an admin flips $k in the same frame and the server is '
+          'asked for that one switch only', (t) async {
+        final w = clubWith(admin: true, settings: odd);
+        await clubPage(t, w);
+        await reveal(t, byKey(k));
+        await t.ensureVisible(byKey(k));
+        await t.pump();
+        final before = values(t);
+        await t.tap(byKey(k));
+        await t.pump();
+        final after = [...before]..[i] = !before[i];
+        expect(values(t), after, reason: 'not flipped in the tap frame');
+        final sent = [for (var j = 0; j < 3; j++) j == i ? '${after[i]}' : '-'];
+        expect(w.groups.calls.where((c) => c.startsWith('settings')), [
+          'settings:g1:${sent.join(':')}',
+        ]);
+        await settle(t);
+        expect(values(t), after, reason: 'did not stay after the answer');
+      });
+    }
+
+    testWidgets('a refused flip goes back and says so', (t) async {
+      final w = clubWith(admin: true, settings: odd);
+      w.groups.setResult = const Err(DeniedFailure());
+      await clubPage(t, w);
+      await reveal(t, byKey('setting-addsw'));
+      await t.ensureVisible(byKey('setting-addsw'));
+      await t.pump();
+      await t.tap(byKey('setting-addsw'));
+      await t.pump();
+      expect(values(t), [true, true, false], reason: 'not optimistic');
+      await settle(t);
+      expect(values(t), [true, false, false], reason: 'not rolled back');
+      expect(notice, findsOneWidget, reason: 'the refusal is not said');
+      await drainNotice(t);
+    });
+
+    testWidgets('delete for everyone: the card names the group; cancel '
+        'deletes nothing', (t) async {
+      final w = clubWith(admin: true);
+      await clubPage(t, w);
+      await tapKey(t, 'delete-group');
+      expect(byKey('delete-card'), findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing, reason: 'a dialog');
+      expect(textOf(byKey('delete-card')), contains('Club'));
+      await tapKey(t, 'delete-cancel');
+      expect(byKey('delete-card'), findsNothing);
+      expect(find.byType(GroupScreen), findsOneWidget);
+      expect(w.groups.calls.where((c) => c.startsWith('delete')), isEmpty);
+    });
+
+    testWidgets('delete for everyone: confirm deletes through the real '
+        'controller, says "Group deleted", and the group leaves the page '
+        'and the list', (t) async {
+      final w = clubWith(admin: true);
+      await clubPage(t, w);
+      await tapKey(t, 'delete-group');
+      await t.tap(byKey('delete-confirm'));
+      await settle(t);
+      expect(w.groups.calls.where((c) => c.startsWith('delete')), [
+        'delete:g1',
+      ]);
+      expect(find.byType(GroupScreen), findsNothing, reason: 'not popped');
+      expect(find.byType(MessageScreen), findsNothing, reason: 'chat open');
+      expect(t.widgetList<SisNotice>(notice).map((n) => n.message), [
+        'Group deleted',
+      ]);
+      expect(byKey('conversation-g1'), findsNothing, reason: 'still listed');
+      await drainNotice(t);
+    });
+
+    testWidgets('a refused delete keeps the group and says so', (t) async {
+      final w = clubWith(admin: true);
+      w.groups.deleteResult = const Err(DeniedFailure());
+      await clubPage(t, w);
+      await tapKey(t, 'delete-group');
+      await t.tap(byKey('delete-confirm'));
+      await settle(t);
+      expect(w.groups.calls.where((c) => c.startsWith('delete')), [
+        'delete:g1',
+      ]);
+      expect(find.byType(GroupScreen), findsOneWidget, reason: 'popped');
+      expect(
+        t.widgetList<SisNotice>(notice).map((n) => n.message),
+        isNot(contains('Group deleted')),
+      );
+      expect(notice, findsOneWidget, reason: 'the refusal is not said');
+      await drainNotice(t);
+    });
   });
 
   group('rows', () {
@@ -996,7 +1110,10 @@ void main() {
       await clubPage(t, w);
       expect(t.getSize(find.byType(GroupScreen)).width, 360);
       for (final k in [
-        'grey-deladmin',
+        'setting-pickswitch',
+        'setting-addsw',
+        'setting-histsw',
+        'delete-group',
         'remove-member-u3',
         'leave-group',
         'mute-tile',

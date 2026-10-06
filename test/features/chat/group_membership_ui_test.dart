@@ -19,6 +19,7 @@ import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
+import 'package:sis/features/chat/domain/group_settings.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/chat/presentation/profile_pages.dart';
@@ -54,10 +55,15 @@ Message m(String id, String from, int minute, String body) => Message(
 );
 
 class World {
-  World({bool admin = true}) {
+  World({bool admin = true, GroupSettings settings = const GroupSettings()}) {
     chat
-      ..conversationsResult = const Ok([
-        Conversation(id: 'g1', title: 'Club', lastMessage: 'yo'),
+      ..conversationsResult = Ok([
+        Conversation(
+          id: 'g1',
+          title: 'Club',
+          lastMessage: 'yo',
+          settings: settings,
+        ),
       ])
       ..membersResult = const Ok([bob, cem, dee])
       ..reachable.addAll([bob, cem, dee, hol])
@@ -211,8 +217,11 @@ void main() {
     });
 
     testWidgets('an ordinary member sees the admin marked but no admin '
-        'action at all', (t) async {
-      final w = World(admin: false);
+        'action at all while members adding is off', (t) async {
+      final w = World(
+        admin: false,
+        settings: const GroupSettings(membersCanAdd: false),
+      );
       await clubMembers(t, w);
       expect(textOf(byKey('group-member-ub')), contains('Admin'));
       expect(byKey('add-members'), findsNothing);
@@ -221,6 +230,18 @@ void main() {
         expect(byKey('toggle-admin-$id'), findsNothing, reason: id);
       }
       expect(byKey('leave-group'), findsOneWidget, reason: 'anyone may leave');
+      await drain(t);
+    });
+
+    testWidgets('with members adding on, an ordinary member gets add, '
+        'still no remove or admin toggles', (t) async {
+      final w = World(admin: false);
+      await clubMembers(t, w);
+      expect(byKey('add-members'), findsOneWidget);
+      for (final id in ['u1', 'ub', 'u3', 'uh']) {
+        expect(byKey('remove-member-$id'), findsNothing, reason: id);
+        expect(byKey('toggle-admin-$id'), findsNothing, reason: id);
+      }
       await drain(t);
     });
 
@@ -272,37 +293,28 @@ void main() {
       await drain(t);
     });
 
-    testWidgets('adding: only people not already in, and the "Show old '
-        'messages?" choice reaches the server', (t) async {
-      final w = World();
-      await clubMembers(t, w);
-      await tapKey(t, 'add-members');
-      expect(find.text('Show old messages?'), findsOneWidget);
-      expect(byKey('add-member-ud'), findsOneWidget);
-      expect(byKey('add-member-ub'), findsNothing, reason: 'already in');
-      await tapKey(t, 'add-member-ud');
-      // The choice starts one way; flip it, and the call must say the other.
-      final choice = find.ancestor(
-        of: find.text('Show old messages?'),
-        matching: find.byType(SisSwitchTile),
-      );
-      expect(choice, findsOneWidget);
-      final before = t.widget<SisSwitchTile>(choice).value;
-      await t.tap(find.text('Show old messages?'));
-      await settle(t);
-      expect(t.widget<SisSwitchTile>(choice).value, !before);
-      await tapKey(t, 'add-members-confirm');
-      expect(w.chat.groupWrites, ['add:g1:ud:${!before}']);
-      // And the other way round, in a second add.
-      await tapKey(t, 'add-members');
-      expect(byKey('add-member-ud'), findsNothing, reason: 'dee is in now');
-      await drain(t);
-    });
+    for (final history in [true, false]) {
+      testWidgets('adding: only people not already in; no per-add history '
+          'question, the call carries the group switch ($history)', (t) async {
+        final w = World(settings: GroupSettings(newMembersSeeHistory: history));
+        await clubMembers(t, w);
+        await tapKey(t, 'add-members');
+        expect(find.text('Show old messages?'), findsNothing);
+        expect(byKey('add-member-ud'), findsOneWidget);
+        expect(byKey('add-member-ub'), findsNothing, reason: 'already in');
+        await tapKey(t, 'add-member-ud');
+        await tapKey(t, 'add-members-confirm');
+        expect(w.chat.groupWrites, ['add:g1:ud:$history']);
+        await tapKey(t, 'add-members');
+        expect(byKey('add-member-ud'), findsNothing, reason: 'dee is in now');
+        await drain(t);
+      });
+    }
   });
 
   // 0.30.10: adding members is a full page (add-members-page) with search,
-  // chips and "Add (N)"; it keeps the nobody-left message and the
-  // "Show old messages?" switch.
+  // chips and "Add (N)"; it keeps the nobody-left message. Since Update 2
+  // the group's "new members see history" switch decides, not a per-add one.
   group('the add members page (0.30.10)', () {
     const eve = Member(userId: 'ue', displayName: 'Eve Long', tag: 'eve');
 

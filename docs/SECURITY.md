@@ -398,7 +398,7 @@ signs a short-lived action token into the push and `notification-action`
   user id (UUID) is also in the push data now.
 - A request over 20000 bytes or a reply over 4000 characters is refused (400)
   before the database; every refused ticket is 403, a missing token 400.
-- Lock-screen Reply: decision pending (owner).
+- Lock-screen Reply: decided 2026-10-06 (owner). Reply requires the phone to be unlocked (Android 12+ and iOS); Mark as read works on a locked phone. On Android 11 and older the system cannot enforce it.
 
 ### Group name colour slot (finding L1)
 

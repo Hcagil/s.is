@@ -20,7 +20,7 @@ import UserNotifications
   /// The Reply and Mark as read buttons on a message push (the server sets aps.category to SIS_MESSAGE). The system draws APNs alerts itself, so the buttons are a notification category registered here; titles follow the phone language (tr or English).
   private func registerMessageActions() {
     let turkish = Locale.preferredLanguages.first?.hasPrefix("tr") ?? false
-    let reply = UNTextInputNotificationAction(identifier: AppDelegate.replyAction, title: turkish ? "Yanıtla" : "Reply", options: [], textInputButtonTitle: turkish ? "Gönder" : "Send", textInputPlaceholder: turkish ? "Mesaj" : "Message")
+    let reply = UNTextInputNotificationAction(identifier: AppDelegate.replyAction, title: turkish ? "Yanıtla" : "Reply", options: [.authenticationRequired], textInputButtonTitle: turkish ? "Gönder" : "Send", textInputPlaceholder: turkish ? "Mesaj" : "Message")
     let markRead = UNNotificationAction(identifier: AppDelegate.markReadAction, title: turkish ? "Okundu olarak işaretle" : "Mark as read", options: [])
     let category = UNNotificationCategory(identifier: AppDelegate.messageCategory, actions: [reply, markRead], intentIdentifiers: [], options: [])
     UNUserNotificationCenter.current().setNotificationCategories([category])

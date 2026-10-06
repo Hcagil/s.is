@@ -185,6 +185,16 @@ class NotificationActionTest {
     }
 
     @Test
+    fun `Reply requires an unlocked device, Mark as read does not`() {
+        arrives()
+        val n = posted()
+        assertNotNull(n)
+        val (markRead, reply) = n.actions!!.toList()
+        assertTrue("Reply must require unlock", reply.isAuthenticationRequired)
+        assertFalse("Mark as read must not require unlock", markRead.isAuthenticationRequired)
+    }
+
+    @Test
     fun `no ticket, an empty token, or a url that is not https get no buttons`() {
         for ((token, url) in listOf(null to URL, "" to URL, TOKEN to null, TOKEN to "http://project.example/x")) {
             manager.cancelAll()

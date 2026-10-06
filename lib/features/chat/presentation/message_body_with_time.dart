@@ -7,10 +7,8 @@ part of 'message_screen.dart';
 ///
 /// [body] and [time] are always built as two separate widgets carrying their
 /// original keys and exact text, never merged into one `Text`/`TextSpan`: a
-/// widget test finds each with `find.text()` -- except a still-sending
-/// bubble ([Message.sending]), whose time slot is an [Icon]
-/// (`Icons.schedule_rounded`) under the same `time-<id>` key, found with
-/// `find.byIcon`/`find.byKey` instead.
+/// widget test finds each with `find.text()`. The time keeps its `time-<id>`
+/// key; a sender's delivery tick sits after it under `tick-<id>`.
 class _BodyWithTime extends StatelessWidget {
   const _BodyWithTime({
     required this.message,
@@ -21,7 +19,11 @@ class _BodyWithTime extends StatelessWidget {
     required this.timeText,
     required this.timeStyle,
     this.highlightQuery,
+    this.delivery,
   });
+
+  /// Null: no tick (someone else's message).
+  final Delivery? delivery;
 
   final Message message;
   final TextStyle bodyStyle;
@@ -41,11 +43,6 @@ class _BodyWithTime extends StatelessWidget {
   final TextStyle timeStyle;
 
   static const _gap = 6.0;
-
-  /// The pending-send icon's size, in place of the clock time while
-  /// [Message.sending] -- close to [timeStyle]'s usual font size (11) so it
-  /// reads as about the same weight in the same corner.
-  static const _clockSize = 12.0;
 
   @override
   Widget build(BuildContext context) {
@@ -71,21 +68,16 @@ class _BodyWithTime extends StatelessWidget {
     for (final line in lines) {
       if (line.width > bodyWidth) bodyWidth = line.width;
     }
-    // Still sending: a small SIS icon takes the time's place -- never an
-    // emoji, which draws from the phone's own font -- sized directly
-    // rather than measured as text.
-    double timeWidth;
-    if (message.sending) {
-      timeWidth = _clockSize;
-    } else {
-      final timePainter = TextPainter(
-        text: TextSpan(text: timeText, style: defaultStyle.merge(timeStyle)),
-        textDirection: direction,
-        textScaler: scaler,
-      )..layout();
-      timeWidth = timePainter.width;
-      timePainter.dispose();
-    }
+    // The time, plus the delivery tick's gap and width when it has one.
+    final timePainter = TextPainter(
+      text: TextSpan(text: timeText, style: defaultStyle.merge(timeStyle)),
+      textDirection: direction,
+      textScaler: scaler,
+    )..layout();
+    final timeWidth =
+        timePainter.width +
+        (delivery == null ? 0.0 : _TimeTick.tickGap + _TimeTick.tickSize);
+    timePainter.dispose();
     bodyPainter.dispose();
 
     // ponytail: RTL always drops to the own-row layout below, never inline.
@@ -98,14 +90,12 @@ class _BodyWithTime extends StatelessWidget {
         direction != TextDirection.rtl &&
         lastLineWidth + _gap + timeWidth <= maxContentWidth;
 
-    final timeWidget = message.sending
-        ? Icon(
-            Icons.schedule_rounded,
-            key: ValueKey('time-${message.id}'),
-            size: _clockSize,
-            color: timeStyle.color,
-          )
-        : Text(timeText, key: ValueKey('time-${message.id}'), style: timeStyle);
+    final timeWidget = _TimeTick(
+      message: message,
+      timeText: timeText,
+      timeStyle: timeStyle,
+      delivery: delivery,
+    );
 
     if (!fits) {
       return Column(
@@ -169,6 +159,49 @@ class _BodyWithTime extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The time and, on your own message, its delivery tick: one row, tick last.
+class _TimeTick extends StatelessWidget {
+  const _TimeTick({
+    required this.message,
+    required this.timeText,
+    required this.timeStyle,
+    this.delivery,
+  });
+
+  final Message message;
+  final String timeText;
+  final TextStyle timeStyle;
+
+  /// Null on someone else's message: no tick.
+  final Delivery? delivery;
+
+  static const tickGap = 4.0;
+  static const tickSize = 14.0;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Flexible(
+        child: Text(
+          timeText,
+          key: ValueKey('time-${message.id}'),
+          style: timeStyle,
+        ),
+      ),
+      if (delivery != null) ...[
+        const SizedBox(width: tickGap),
+        DeliveryTick(
+          key: ValueKey('tick-${message.id}'),
+          delivery: delivery!,
+          color: timeStyle.color,
+          size: tickSize,
+        ),
+      ],
+    ],
+  );
 }
 
 enum _BodyTimeSlot { body, time }

@@ -5,9 +5,13 @@ part of 'message_screen.dart';
 /// The URL is short-lived, so it is resolved when the bubble is built rather
 /// than stored with the message.
 class _Attachment extends ConsumerWidget {
-  const _Attachment(this.message);
+  const _Attachment(this.message, {this.radius = 6});
 
   final Message message;
+
+  /// Corner radius of the picture; a photo with no bubble around it uses the
+  /// bubble radius.
+  final double radius;
 
   /// The open conversation's photos, oldest first, and this one's place.
   void _view(BuildContext context, WidgetRef ref, String path) {
@@ -72,7 +76,7 @@ class _Attachment extends ConsumerWidget {
       key: ValueKey('attachment-${path ?? message.id}'),
       onTap: path == null ? null : () => _view(context, ref, path),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(radius),
         child: ConstrainedBox(
           constraints: _bounds,
           child: switch ((message.localImage, path)) {

@@ -9,26 +9,18 @@ enum Delivery { pending, sent, delivered, read }
 /// One tick = sent. Two grey ticks = delivered to EVERY recipient (in a
 /// group, everyone). Two blue ticks = READ by every recipient. A recipient
 /// with read receipts off ([ReadMark.shares] false) never counts as read, so
-/// the message stays at its last non-read state. Recipients are the [marks]
-/// of everyone but the sender.
+/// the message stays at two grey ticks (assumption, see the slice 5 PR).
+/// Recipients are the [marks] of everyone but the sender.
 ///
-/// The server records no per-member delivery today (only
-/// conversation_members.last_read_at / shared_read_at), so callers pass the
-/// default empty [deliveredTo] and [Delivery.delivered] stays unreachable
-/// until it does.
-Delivery deliveryOf(
-  Message message,
-  List<ReadMark> marks, {
-  Set<String> deliveredTo = const {},
-}) {
-  if (message.sending) return Delivery.pending;
+/// Delivery comes from [ReadMark.deliveredAt] (the server records it per
+/// member, whether or not that member shares read status).
+Delivery deliveryOf(Message message, List<ReadMark> marks) {
+  if (message.isPending) return Delivery.pending;
   final recipients = marks.where((m) => m.userId != message.senderId).toList();
   if (recipients.isEmpty) return Delivery.sent;
   final sentAt = message.createdAt;
   if (recipients.every((m) => m.hasRead(sentAt))) return Delivery.read;
-  if (recipients.every(
-    (m) => deliveredTo.contains(m.userId) || m.hasRead(sentAt),
-  )) {
+  if (recipients.every((m) => m.hasDelivered(sentAt) || m.hasRead(sentAt))) {
     return Delivery.delivered;
   }
   return Delivery.sent;

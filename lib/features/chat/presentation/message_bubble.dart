@@ -5,7 +5,7 @@ class _Bubble extends StatelessWidget {
     this.message, {
     super.key,
     required this.mine,
-    required this.unread,
+    this.delivery,
     this.sender,
     this.senderLeft = false,
     this.senderSlot,
@@ -18,9 +18,9 @@ class _Bubble extends StatelessWidget {
   final Message message;
   final bool mine;
 
-  /// True for an own message no other member has read yet (or still
-  /// sending). Shown as a thin yellow edge, never as a dimmed bubble.
-  final bool unread;
+  /// The delivery tick of your own message (sending, sent, delivered,
+  /// read); null on someone else's message.
+  final Delivery? delivery;
 
   /// The message this one answers, when it is loaded here, and who wrote it.
   final Message? quoted;
@@ -42,13 +42,13 @@ class _Bubble extends StatelessWidget {
   final String? highlightQuery;
 
   /// This bubble is the search's current hit -- shown with a purple edge,
-  /// on either side, distinct from the amber "unread" edge (which stays on
-  /// a merely-unread bubble that is not the current hit).
+  /// on either side.
   final bool isCurrentHit;
 
   // The bubble's own outer cap and the two insets that eat into it: 12 px
   // padding, plus -- for a "mine" bubble, or the current search hit -- a
-  // 1.5 px border that is always laid out (even transparent, when read).
+  // 1.5 px border that is always laid out (transparent unless a search hit);
+  // taking it away shifts line wraps and the scroll geometry.
   // _BodyWithTime measures its fits-inline decision against [_contentWidth],
   // not a copy of these numbers, so the two cannot drift apart.
   static const _maxWidth = 320.0;
@@ -57,6 +57,15 @@ class _Bubble extends StatelessWidget {
 
   bool get _hasBorder => mine || isCurrentHit;
 
+  /// A photo and nothing else: no box around it; the time and tick sit on
+  /// the picture.
+  bool get _boxless =>
+      message.hasAttachment &&
+      message.body.isEmpty &&
+      message.replyTo == null &&
+      !message.forwarded &&
+      !message.isDeleted;
+
   double get _contentWidth =>
       _maxWidth - 2 * _hPad - (_hasBorder ? 2 * _borderWidth : 0);
 
@@ -64,7 +73,7 @@ class _Bubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final brand = SisBrand.of(context);
     // Square-ish corner on the sender's side marks whose bubble it is.
-    const r = Radius.circular(11);
+    final r = Radius.circular(brand.bubbleRadius);
     const tail = Radius.circular(4);
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -72,31 +81,29 @@ class _Bubble extends StatelessWidget {
         key: ValueKey('message-${message.id}'),
         constraints: const BoxConstraints(maxWidth: _maxWidth),
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: _hPad, vertical: 8),
-        decoration: BoxDecoration(
-          color: mine ? null : brand.theirs,
-          gradient: mine ? brand.gradient : null,
-          borderRadius: BorderRadius.only(
-            topLeft: r,
-            topRight: r,
-            bottomLeft: mine ? r : tail,
-            bottomRight: mine ? tail : r,
-          ),
-          border: _hasBorder
-              ? Border.all(
-                  width: _borderWidth,
-                  // The current hit is always the app's purple, distinct
-                  // from the amber "unread" edge -- even on a bubble that
-                  // is both unread and the current hit. A still-sending
-                  // text message shows a clock mark instead of this edge.
-                  color: isCurrentHit
-                      ? Theme.of(context).colorScheme.primary
-                      : (unread && !message.sending
-                            ? brand.unreadEdge
-                            : Colors.transparent),
-                )
-              : null,
-        ),
+        padding: _boxless
+            ? EdgeInsets.zero
+            : const EdgeInsets.symmetric(horizontal: _hPad, vertical: 8),
+        decoration: _boxless
+            ? null
+            : BoxDecoration(
+                color: mine ? null : brand.theirs,
+                gradient: mine ? brand.mineGradient : null,
+                borderRadius: BorderRadius.only(
+                  topLeft: r,
+                  topRight: r,
+                  bottomLeft: mine ? r : tail,
+                  bottomRight: mine ? tail : r,
+                ),
+                border: _hasBorder
+                    ? Border.all(
+                        width: _borderWidth,
+                        color: isCurrentHit
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.transparent,
+                      )
+                    : null,
+              ),
         // Without this, a non-stretched Column still hands each child a
         // *loose* constraint up to the Container's own maxWidth (320): any
         // child that fills the space it is offered -- Align without a
@@ -232,6 +239,7 @@ class _Bubble extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
+                      letterSpacing: SisTokens.nameLetterSpacing,
                       color: senderLeft
                           ? Theme.of(context).colorScheme.onSurfaceVariant
                           : senderSlot != null
@@ -240,7 +248,37 @@ class _Bubble extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (message.hasAttachment) _Attachment(message),
+              if (message.hasAttachment)
+                _boxless
+                    ? Stack(
+                        children: [
+                          _Attachment(message, radius: brand.bubbleRadius),
+                          Positioned(
+                            right: 8,
+                            bottom: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.45),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: _TimeTick(
+                                message: message,
+                                timeText: clockTime(message.createdAt),
+                                timeStyle: TextStyle(
+                                  fontSize: SisTokens.timeFontSize,
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
+                                delivery: delivery,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : _Attachment(message),
               // An image may be sent without a caption, so an empty body must
               // render nothing at all rather than an empty line. A deleted
               // message never shows a time, but (defensively) may still carry
@@ -261,12 +299,13 @@ class _Bubble extends StatelessWidget {
                       ? 'edited ${clockTime(message.createdAt)}'
                       : clockTime(message.createdAt),
                   timeStyle: TextStyle(
-                    fontSize: 11,
+                    fontSize: SisTokens.timeFontSize,
                     color: (mine ? Colors.white : brand.text).withValues(
-                      alpha: 0.6,
+                      alpha: SisTokens.timeOpacity,
                     ),
                   ),
                   highlightQuery: highlightQuery,
+                  delivery: delivery,
                 )
               else ...[
                 if (message.body.isNotEmpty)
@@ -287,22 +326,23 @@ class _Bubble extends StatelessWidget {
                           : Theme.of(context).colorScheme.primary,
                     ),
                   ),
-                if (!message.isDeleted)
+                if (!message.isDeleted && !_boxless)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Align(
                       alignment: Alignment.centerRight,
-                      child: Text(
-                        message.isEdited
+                      child: _TimeTick(
+                        message: message,
+                        timeText: message.isEdited
                             ? 'edited ${clockTime(message.createdAt)}'
                             : clockTime(message.createdAt),
-                        key: ValueKey('time-${message.id}'),
-                        style: TextStyle(
-                          fontSize: 11,
+                        timeStyle: TextStyle(
+                          fontSize: SisTokens.timeFontSize,
                           color: (mine ? Colors.white : brand.text).withValues(
-                            alpha: 0.6,
+                            alpha: SisTokens.timeOpacity,
                           ),
                         ),
+                        delivery: delivery,
                       ),
                     ),
                   ),

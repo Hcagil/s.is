@@ -150,6 +150,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       // A buffered message for a conversation the first read did not contain
       // means one was started during the load: read again rather than drop it.
       if (unknown) list = await _load();
+      _reportUnreadDelivered(list);
     } catch (e) {
       // A stored list already shown stays on every load error but a refusal
       // (DeniedFailure; the session controller handles a revoked member):
@@ -204,6 +205,13 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
         _scheduleSnapshotSave();
       }
       return;
+    }
+    final me = switch (ref.read(sessionControllerProvider).value) {
+      Allowed(:final member) => member.userId,
+      _ => null,
+    };
+    if (message.senderId != me) {
+      _reportDelivered(message.conversationId, message.createdAt);
     }
     final next = _withMessage(current, message);
     if (next == null) {
@@ -271,10 +279,32 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   }
 
   Future<List<Conversation>> _load() async {
-    return switch (await ref.read(chatRepositoryProvider).conversations()) {
+    final list = switch (await ref
+        .read(chatRepositoryProvider)
+        .conversations()) {
       Ok(:final value) => value,
       Err(:final failure) => throw failure,
     };
+    return list;
+  }
+
+  /// Unread here means received on this device: report it delivered, once per
+  /// conversation per load.
+  void _reportUnreadDelivered(List<Conversation> list) {
+    for (final c in list) {
+      if (c.unread > 0) _reportDelivered(c.id);
+    }
+  }
+
+  /// Tells the server this device has received [conversationId]'s messages
+  /// (up to [upTo]) so the sender's ticks reach two grey, even while the chat
+  /// is closed. Fire-and-forget: a failure only delays a tick.
+  void _reportDelivered(String conversationId, [DateTime? upTo]) {
+    unawaited(
+      ref
+          .read(chatRepositoryProvider)
+          .markDelivered(conversationId, upTo: upTo),
+    );
   }
 
   Future<void> refresh() async {
@@ -290,6 +320,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       state = AsyncData(shown);
       return;
     }
+    if (next case AsyncData(:final value)) _reportUnreadDelivered(value);
     state = next;
     _saveCurrentIfData();
   }
@@ -327,7 +358,10 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     final next = await AsyncValue.guard(_load);
     if (!ref.mounted) return;
     if (ref.read(currentUserIdProvider) != ownerId) return;
-    if (next is AsyncData<List<Conversation>>) state = next;
+    if (next is AsyncData<List<Conversation>>) {
+      _reportUnreadDelivered(next.value);
+      state = next;
+    }
     _saveCurrentIfData();
   }
 

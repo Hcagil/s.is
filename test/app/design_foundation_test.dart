@@ -487,7 +487,8 @@ void main() {
         await open(t);
         final mine = byKey('message-m2');
         final brand = SisBrand.of(t.element(mine));
-        expect(gradients(mine), contains(brand.gradient));
+        // The gradient darkened where needed so white text reads at 4.5:1.
+        expect(gradients(mine), contains(brand.mineGradient));
         expect(
           paintedColor(t, find.text('Yes! 10am at the market')),
           const Color(0xFFFFFFFF),

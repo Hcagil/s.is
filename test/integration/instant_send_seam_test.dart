@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/app/delivery_tick.dart';
 import 'package:sis/app/notice.dart';
 import 'package:sis/app/theme.dart';
 import 'package:sis/core/failure.dart';
@@ -19,6 +20,7 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/delivery.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -70,6 +72,17 @@ typedef _Send = Future<Result<Message>> Function({
 
 /// The real repository, passed through untouched except where noted.
 class _Relay implements ChatRepository {
+  // Slice 5a signatures only (delivery marks); no behaviour.
+  @override
+  Future<Result<void>> markDelivered(
+    String conversationId, {
+    DateTime? upTo,
+  }) async => const Ok(null);
+
+  @override
+  Future<Result<Stream<ReadMark>>> deliveredUpdates(
+    String conversationId,
+  ) async => const Ok(Stream<ReadMark>.empty());
   _Relay(this.real);
   final ChatRepository real;
 
@@ -296,7 +309,10 @@ void main() {
     });
   }
 
-  final clock = find.byIcon(Icons.schedule_rounded);
+  // The pending tick (Update 1 slice 5: the clock is a DeliveryTick state).
+  final clock = find.byWidgetPredicate(
+    (w) => w is DeliveryTick && w.delivery == Delivery.pending,
+  );
 
   String composerText(WidgetTester t) => t
       .widget<EditableText>(

@@ -145,6 +145,35 @@ Finder body(String id, String text) => inBubble(id, find.text(text));
 /// The time label of bubble [id].
 Finder time(String id) => inBubble(id, find.byKey(ValueKey('time-$id')));
 
+/// The delivery tick of bubble [id] (own messages only).
+Finder tick(String id) => inBubble(id, find.byKey(ValueKey('tick-$id')));
+
+/// The contract's tick geometry: the tick sits [tickGap] after the time and
+/// is [tickSize] wide; together they are the bubble's "stamp".
+const tickGap = 4.0;
+const tickSize = 14.0;
+
+/// The time and, on my own messages, the tick beside it: the footprint the
+/// layout places on the last line or on its own row.
+Rect stamp(WidgetTester tester, String id) {
+  final t = tester.getRect(time(id));
+  if (tick(id).evaluate().isEmpty) return t;
+  final k = tester.getRect(tick(id));
+  // After the time in reading order: to its right, or its left in RTL.
+  expect(
+    maxOf(k.left - t.right, t.left - k.right),
+    closeTo(tickGap, 0.5),
+    reason: 'the tick $k is not $tickGap beside the time $t',
+  );
+  expect(k.width, closeTo(tickSize, 0.5), reason: 'tick $k');
+  expect(
+    k.bottom <= t.bottom + 2 && k.top >= t.top - 4,
+    isTrue,
+    reason: 'the tick $k is not beside the time $t',
+  );
+  return t.expandToInclude(k);
+}
+
 /// The union of every rect [f] finds.
 Rect span(WidgetTester tester, Finder f) {
   final rects = [
@@ -191,7 +220,7 @@ class Measured {
       for (final k in byLine.keys.toList()..sort()) byLine[k]!.shift(origin),
     ];
     bodyRect = tester.getRect(body(id, text));
-    timeRect = tester.getRect(time(id));
+    timeRect = stamp(tester, id);
     bubbleRect = decorated(tester, id);
     // Padding each side, measured on the left where the body starts.
     pad = bodyRect.left - bubbleRect.left;
@@ -354,7 +383,11 @@ class Styles {
     plainTime = tester.renderObject<RenderParagraph>(time(plain)).text;
     editedTime = tester.renderObject<RenderParagraph>(time(edited)).text;
     column = m.column;
+    extra = m.timeWidth - tester.getRect(time(plain)).width;
   }
+
+  /// What the tick adds to the time's footprint: 0 on received messages.
+  late final double extra;
 
   late final TextStyle? body;
   late final InlineSpan plainTime;
@@ -393,7 +426,7 @@ class Styles {
     final words = pool * 4;
     for (final scale in scales) {
       for (final edited in [false, true]) {
-        final t = width(edited ? editedTime : plainTime, scale);
+        final t = width(edited ? editedTime : plainTime, scale) + extra;
         for (var a = 0; a < pool.length; a++) {
           for (var b = a + 1; b <= words.length; b++) {
             final text = words.substring(a, b);
@@ -655,6 +688,11 @@ void main() {
           );
           expect(timeText(tester, id), at);
           expect(
+            find.byKey(ValueKey('tick-$id')),
+            from == me.userId ? findsOneWidget : findsNothing,
+            reason: 'a tick on my own messages only',
+          );
+          expect(
             find.descendant(
               of: find.byKey(ValueKey('body-$id')),
               matching: find.byKey(ValueKey('time-$id')),
@@ -779,7 +817,7 @@ void main() {
         ], direction: TextDirection.rtl);
         for (final (id, text) in [('s', short), ('l', long)]) {
           final bodyRect = tester.getRect(body(id, text));
-          final t = tester.getRect(time(id));
+          final t = stamp(tester, id);
           final b = decorated(tester, id);
           expectInside(bodyRect, b, 'the body');
           expectInside(t, b, 'the time');

@@ -1,22 +1,27 @@
-// The sender's own bubble keeps full brightness and gets a thin yellow edge
-// until it is read; once read the edge is still there but transparent, so
-// the bubble never changes size. Others' bubbles have no edge. In a group,
-// one reader among those who share is enough. Judged the way it is drawn:
-// the border of the decorated bubble at `ValueKey('message-$id')`.
+// The sender's own bubble shows where it stands with a tick beside the time
+// (owner rule Q7), replacing the old yellow unread edge: one grey tick =
+// sent, two grey = delivered to EVERY recipient, two blue = read by EVERY
+// recipient (in a group, all of them). A member with read receipts off never
+// counts as read. Others' bubbles have no tick. The bubble keeps full
+// brightness and its size whatever the tick shows. Judged on the real
+// MessageScreen: the DeliveryTick at `ValueKey('tick-$id')`.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/app/delivery_tick.dart';
 import 'package:sis/app/theme.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/domain/delivery.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
+import '../../support/delivery_fakes.dart';
 import '../../support/fakes.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
@@ -75,50 +80,43 @@ Future<void> pump(
 
 const yellow = Color(0xFFFFD54F);
 
-/// The border drawn around message [id]'s bubble: the outermost decoration
-/// at or under `ValueKey('message-$id')`; null when it has none.
-Border? edge(WidgetTester t, String id) {
-  final bubble = find.byKey(ValueKey('message-$id'));
-  expect(bubble, findsOneWidget, reason: 'message $id is not on screen');
-  final box =
-      find
-              .descendant(
-                of: bubble,
-                matching: find.byType(DecoratedBox),
-                matchRoot: true,
-              )
-              .evaluate()
-              .first
-              .widget
-          as DecoratedBox;
-  return (box.decoration as BoxDecoration).border as Border?;
+/// What message [id]'s tick shows; null when it has none.
+Delivery? tickOf(WidgetTester t, String id) {
+  expect(
+    find.byKey(ValueKey('message-$id')),
+    findsOneWidget,
+    reason: 'message $id is not on screen',
+  );
+  final f = find.byKey(ValueKey('tick-$id'));
+  if (f.evaluate().isEmpty) return null;
+  return t.widget<DeliveryTick>(f).delivery;
 }
 
-List<BorderSide> sides(Border b) => [b.top, b.right, b.bottom, b.left];
-
-/// My bubble's edge is always 1.5 wide on every side -- yellow or not.
-void edgeWidth(WidgetTester t, String id) {
-  final b = edge(t, id);
-  expect(b, isNotNull, reason: 'my bubble $id has no border');
-  for (final s in sides(b!)) {
-    expect(s.width, 1.5, reason: 'edge width of $id');
+/// The old amber edge is gone: no border on [id]'s bubble is yellow.
+void noYellowEdge(WidgetTester t, String id) {
+  for (final e
+      in find
+          .descendant(
+            of: find.byKey(ValueKey('message-$id')),
+            matching: find.byType(DecoratedBox),
+            matchRoot: true,
+          )
+          .evaluate()) {
+    final d = (e.widget as DecoratedBox).decoration;
+    if (d is BoxDecoration && d.border is Border) {
+      final b = d.border! as Border;
+      for (final s in [b.top, b.right, b.bottom, b.left]) {
+        expect(s.color, isNot(yellow), reason: '$id still has the edge');
+      }
+    }
   }
 }
 
-/// Read, or nothing to show: the same 1.5 edge, transparent.
-void normal(WidgetTester t, String id) {
-  edgeWidth(t, id);
-  for (final s in sides(edge(t, id)!)) {
-    expect(s.color, Colors.transparent, reason: '$id should look read');
-  }
-}
-
-/// Unread: 1.5 wide, yellow on every side.
-void unread(WidgetTester t, String id) {
-  edgeWidth(t, id);
-  for (final s in sides(edge(t, id)!)) {
-    expect(s.color, yellow, reason: '$id should look unread');
-  }
+/// My message [id] shows [want], at full brightness, without the old edge.
+void shows(WidgetTester t, String id, Delivery want) {
+  expect(tickOf(t, id), want, reason: 'tick of $id');
+  expect(dimmed(t, id), isFalse, reason: '$id is dimmed');
+  noYellowEdge(t, id);
 }
 
 /// Drawn below full brightness: an opacity under 1 between the screen and
@@ -142,14 +140,24 @@ bool dimmed(WidgetTester t, String id) {
     return inside;
   }
 
+  final inTick = find
+      .descendant(
+        of: find.byKey(ValueKey('tick-$id')),
+        matching: find.byWidgetPredicate(fade),
+        matchRoot: true,
+      )
+      .evaluate()
+      .toSet();
   return [
     ...find
         .ancestor(of: bubble, matching: find.byWidgetPredicate(fade))
         .evaluate()
         .where(insideScreen),
+    // The tick's own fade is how a tick is drawn, not the bubble dimmed.
     ...find
         .descendant(of: bubble, matching: find.byWidgetPredicate(fade))
-        .evaluate(),
+        .evaluate()
+        .where((e) => !inTick.contains(e)),
   ].any((e) => of(e) < 1);
 }
 
@@ -157,105 +165,101 @@ Size sizeOf(WidgetTester t, String id) =>
     t.getSize(find.byKey(ValueKey('message-$id')));
 
 void main() {
-  test('the edge colour is the brand unread edge, the same in both themes', () {
-    expect(SisBrand.light.unreadEdge, yellow);
-    expect(SisBrand.dark.unreadEdge, yellow);
-  });
-
   group('1:1', () {
-    testWidgets('my message has the yellow edge until the other member has '
-        'read it, at full brightness', (t) async {
-      final chat = ChatFake()
+    testWidgets('stored, Bob has not received it: one tick', (t) async {
+      final chat = DeliveryChat()
         ..messagesResult = Ok([msg('m1')])
         ..readMarksData['c1'] = [
           ReadMark(userId: 'u2', shares: true, readAt: before),
         ];
       await pump(t, chat);
-      unread(t, 'm1');
-      expect(dimmed(t, 'm1'), isFalse, reason: 'unread is no longer grey');
+      shows(t, 'm1', Delivery.sent);
     });
 
-    testWidgets('never read at all: yellow edge', (t) async {
-      final chat = ChatFake()
-        ..messagesResult = Ok([msg('m1')])
-        ..readMarksData['c1'] = const [ReadMark(userId: 'u2', shares: true)];
-      await pump(t, chat);
-      unread(t, 'm1');
-    });
-
-    testWidgets('read: transparent edge, full brightness', (t) async {
-      final chat = ChatFake()
+    testWidgets('on the phone of Bob, not read: two grey', (t) async {
+      final chat = DeliveryChat()
         ..messagesResult = Ok([msg('m1')])
         ..readMarksData['c1'] = [
-          ReadMark(userId: 'u2', shares: true, readAt: after),
+          ReadMark(userId: 'u2', shares: true, deliveredAt: sentAt),
         ];
       await pump(t, chat);
-      normal(t, 'm1');
-      expect(dimmed(t, 'm1'), isFalse);
+      shows(t, 'm1', Delivery.delivered);
     });
 
-    testWidgets('the other member does not share (or I do not): normal', (
-      t,
-    ) async {
-      final chat = ChatFake()
+    testWidgets('read: two blue, full brightness', (t) async {
+      final chat = DeliveryChat()
         ..messagesResult = Ok([msg('m1')])
-        ..readMarksData['c1'] = const [ReadMark(userId: 'u2', shares: false)];
+        ..readMarksData['c1'] = [
+          ReadMark(
+            userId: 'u2',
+            shares: true,
+            readAt: after,
+            deliveredAt: after,
+          ),
+        ];
       await pump(t, chat);
-      normal(t, 'm1');
+      shows(t, 'm1', Delivery.read);
     });
 
-    testWidgets('their message has no edge at all', (t) async {
-      final chat = ChatFake()
-        ..messagesResult = Ok([msg('m1', from: 'u2'), msg('m2', from: 'u2')])
-        ..readMarksData['c1'] = const [ReadMark(userId: 'u2', shares: true)];
+    testWidgets('Bob has receipts off (or I do): delivered stays two grey', (
+      t,
+    ) async {
+      final chat = DeliveryChat()
+        ..messagesResult = Ok([msg('m1')])
+        ..readMarksData['c1'] = [
+          ReadMark(userId: 'u2', shares: false, deliveredAt: after),
+        ];
       await pump(t, chat);
-      expect(edge(t, 'm1'), isNull);
-      expect(edge(t, 'm2'), isNull);
+      shows(t, 'm1', Delivery.delivered);
+    });
+
+    testWidgets('their message has no tick', (t) async {
+      final chat = DeliveryChat()
+        ..messagesResult = Ok([msg('m1', from: 'u2'), msg('m2', from: 'u2')])
+        ..readMarksData['c1'] = [
+          ReadMark(userId: 'u2', shares: true, deliveredAt: after),
+        ];
+      await pump(t, chat);
+      expect(tickOf(t, 'm1'), isNull);
+      expect(tickOf(t, 'm2'), isNull);
       expect(dimmed(t, 'm1'), isFalse);
     });
 
-    testWidgets('read status that cannot be loaded: normal, messages shown', (
+    testWidgets('read marks that cannot be loaded: one tick, messages shown', (
       t,
     ) async {
-      final chat = ChatFake()
+      final chat = DeliveryChat()
         ..messagesResult = Ok([msg('m1')])
         ..readMarksResult = const Err(NetworkFailure('offline'));
       await pump(t, chat);
-      normal(t, 'm1');
+      shows(t, 'm1', Delivery.sent);
     });
 
-    testWidgets('the other member reading it clears the edge, live', (t) async {
-      final chat = ChatFake()
+    testWidgets('Bob receiving then reading it moves the tick, live, and the '
+        'bubble keeps its size', (t) async {
+      final chat = DeliveryChat()
         ..messagesResult = Ok([msg('m1')])
         ..readMarksData['c1'] = const [ReadMark(userId: 'u2', shares: true)];
       await pump(t, chat);
-      unread(t, 'm1');
+      shows(t, 'm1', Delivery.sent);
+      final size = sizeOf(t, 'm1');
+
+      chat.deliverDelivery('c1', 'u2', sentAt);
+      await t.pumpAndSettle();
+      shows(t, 'm1', Delivery.delivered);
+      expect(sizeOf(t, 'm1'), size);
 
       chat.deliverRead(
         'c1',
         ReadMark(userId: 'u2', shares: true, readAt: after),
       );
       await t.pumpAndSettle();
-      normal(t, 'm1');
+      shows(t, 'm1', Delivery.read);
+      expect(sizeOf(t, 'm1'), size);
     });
 
-    testWidgets('reading a message does not resize its bubble', (t) async {
-      final chat = ChatFake()
-        ..messagesResult = Ok([msg('m1')])
-        ..readMarksData['c1'] = const [ReadMark(userId: 'u2', shares: true)];
-      await pump(t, chat);
-      final unreadSize = sizeOf(t, 'm1');
-
-      chat.deliverRead(
-        'c1',
-        ReadMark(userId: 'u2', shares: true, readAt: after),
-      );
-      await t.pumpAndSettle();
-      expect(sizeOf(t, 'm1'), unreadSize);
-    });
-
-    testWidgets('an older message read, a newer one not', (t) async {
-      final chat = ChatFake()
+    testWidgets('an older message read, a newer one only delivered', (t) async {
+      final chat = DeliveryChat()
         ..messagesResult = Ok([
           Message(
             id: 'old',
@@ -267,116 +271,160 @@ void main() {
           msg('new'),
         ])
         ..readMarksData['c1'] = [
-          ReadMark(userId: 'u2', shares: true, readAt: before),
+          ReadMark(
+            userId: 'u2',
+            shares: true,
+            readAt: before,
+            deliveredAt: sentAt,
+          ),
         ];
       await pump(t, chat);
-      normal(t, 'old');
-      unread(t, 'new');
+      shows(t, 'old', Delivery.read);
+      shows(t, 'new', Delivery.delivered);
     });
   });
 
   group('dark theme', () {
-    testWidgets('unread: the same yellow edge; theirs: none', (t) async {
-      final chat = ChatFake()
+    testWidgets('mine: the tick; theirs: none', (t) async {
+      final chat = DeliveryChat()
         ..messagesResult = Ok([msg('m1'), msg('m2', from: 'u2')])
-        ..readMarksData['c1'] = const [ReadMark(userId: 'u2', shares: true)];
+        ..readMarksData['c1'] = [
+          ReadMark(userId: 'u2', shares: true, deliveredAt: after),
+        ];
       await pump(t, chat, brightness: Brightness.dark);
-      unread(t, 'm1');
-      expect(edge(t, 'm2'), isNull);
-    });
-
-    testWidgets('read: transparent, and the bubble keeps its size', (t) async {
-      final chat = ChatFake()
-        ..messagesResult = Ok([msg('m1')])
-        ..readMarksData['c1'] = const [ReadMark(userId: 'u2', shares: true)];
-      await pump(t, chat, brightness: Brightness.dark);
-      final unreadSize = sizeOf(t, 'm1');
-
-      chat.deliverRead(
-        'c1',
-        ReadMark(userId: 'u2', shares: true, readAt: after),
-      );
-      await t.pumpAndSettle();
-      normal(t, 'm1');
-      expect(sizeOf(t, 'm1'), unreadSize);
+      shows(t, 'm1', Delivery.delivered);
+      expect(tickOf(t, 'm2'), isNull);
     });
   });
 
   group('group', () {
-    Future<void> inGroup(WidgetTester t, List<ReadMark> marks) async {
-      final chat = ChatFake()
+    Future<DeliveryChat> inGroup(WidgetTester t, List<ReadMark> marks) async {
+      final chat = DeliveryChat()
         ..messagesResult = Ok([msg('m1', conversation: 'g1')])
         ..readMarksData['g1'] = marks;
       await pump(t, chat, id: 'g1', group: true);
+      return chat;
     }
 
-    testWidgets('no sharer has read it: yellow edge', (t) async {
+    testWidgets('read by one, not received by another: one tick', (t) async {
       await inGroup(t, [
-        ReadMark(userId: 'u2', shares: true, readAt: before),
+        ReadMark(userId: 'u2', shares: true, readAt: after, deliveredAt: after),
         const ReadMark(userId: 'u3', shares: true),
       ]);
-      unread(t, 'm1');
+      shows(t, 'm1', Delivery.sent);
     });
 
-    testWidgets('read by one sharing member, not another: read -- one '
-        'reader is enough', (t) async {
+    testWidgets('read by one, received by the other: two grey -- one reader '
+        'is no longer enough', (t) async {
       await inGroup(t, [
-        ReadMark(userId: 'u2', shares: true, readAt: after),
-        ReadMark(userId: 'u3', shares: true, readAt: before),
+        ReadMark(userId: 'u2', shares: true, readAt: after, deliveredAt: after),
+        ReadMark(
+          userId: 'u3',
+          shares: true,
+          readAt: before,
+          deliveredAt: after,
+        ),
       ]);
-      normal(t, 'm1');
+      shows(t, 'm1', Delivery.delivered);
     });
 
-    testWidgets('read by one of several sharers: read', (t) async {
+    testWidgets('read by every member: two blue', (t) async {
       await inGroup(t, [
-        ReadMark(userId: 'u2', shares: true, readAt: before),
-        const ReadMark(userId: 'u3', shares: true),
-        ReadMark(userId: 'u4', shares: true, readAt: after),
-        ReadMark(userId: 'u5', shares: true, readAt: before),
+        ReadMark(userId: 'u2', shares: true, readAt: after, deliveredAt: after),
+        ReadMark(userId: 'u3', shares: true, readAt: after, deliveredAt: after),
       ]);
-      normal(t, 'm1');
+      shows(t, 'm1', Delivery.read);
     });
 
-    testWidgets('read by every sharing member: read', (t) async {
+    testWidgets('everyone else read it, one member has receipts off: two '
+        'grey', (t) async {
       await inGroup(t, [
-        ReadMark(userId: 'u2', shares: true, readAt: after),
-        ReadMark(userId: 'u3', shares: true, readAt: after),
+        ReadMark(userId: 'u2', shares: true, readAt: after, deliveredAt: after),
+        ReadMark(userId: 'u3', shares: false, deliveredAt: after),
       ]);
-      normal(t, 'm1');
+      shows(t, 'm1', Delivery.delivered);
     });
 
-    testWidgets('a member who does not share is not a reader', (t) async {
-      await inGroup(t, [
-        ReadMark(userId: 'u2', shares: true, readAt: before),
-        const ReadMark(userId: 'u3', shares: false),
+    testWidgets('the last reader turns it blue, live; the first does not', (
+      t,
+    ) async {
+      final chat = await inGroup(t, [
+        ReadMark(userId: 'u2', shares: true, deliveredAt: after),
+        ReadMark(userId: 'u3', shares: true, deliveredAt: after),
       ]);
-      unread(t, 'm1');
-    });
-
-    testWidgets('nobody shares: normal', (t) async {
-      await inGroup(t, const [
-        ReadMark(userId: 'u2', shares: false),
-        ReadMark(userId: 'u3', shares: false),
-      ]);
-      normal(t, 'm1');
-    });
-
-    testWidgets('the first reader clears the edge, live', (t) async {
-      final chat = ChatFake()
-        ..messagesResult = Ok([msg('m1', conversation: 'g1')])
-        ..readMarksData['g1'] = const [
-          ReadMark(userId: 'u2', shares: true),
-          ReadMark(userId: 'u3', shares: true),
-        ];
-      await pump(t, chat, id: 'g1', group: true);
-      unread(t, 'm1');
+      shows(t, 'm1', Delivery.delivered);
 
       chat.deliverRead(
         'g1',
         ReadMark(userId: 'u3', shares: true, readAt: after),
       );
       await t.pumpAndSettle();
-      normal(t, 'm1');
+      shows(t, 'm1', Delivery.delivered);
+
+      chat.deliverRead(
+        'g1',
+        ReadMark(userId: 'u2', shares: true, readAt: after),
+      );
+      await t.pumpAndSettle();
+      shows(t, 'm1', Delivery.read);
+    });
+
+    testWidgets('the last delivery turns one tick into two, live', (t) async {
+      final chat = await inGroup(t, [
+        ReadMark(userId: 'u2', shares: true, deliveredAt: after),
+        const ReadMark(userId: 'u3', shares: true),
+      ]);
+      shows(t, 'm1', Delivery.sent);
+      chat.deliverDelivery('g1', 'u3', sentAt);
+      await t.pumpAndSettle();
+      shows(t, 'm1', Delivery.delivered);
     });
   });
+
+  testWidgets(
+    'a delivery that moves only message A rebuilds only A\'s bubble',
+    (t) async {
+      // A is older than B; Bob's device reports up to A: A turns two grey, B
+      // stays at one tick and its bubble is not built again.
+      final a = Message(
+        id: 'a',
+        conversationId: 'c1',
+        senderId: 'u1',
+        body: 'first',
+        createdAt: sentAt,
+      );
+      final b = Message(
+        id: 'b',
+        conversationId: 'c1',
+        senderId: 'u1',
+        body: 'second',
+        createdAt: after,
+      );
+      final chat = DeliveryChat()
+        ..messagesResult = Ok([a, b])
+        ..readMarksData['c1'] = [const ReadMark(userId: 'u2', shares: true)];
+      await pump(t, chat);
+      expect(tickOf(t, 'a'), Delivery.sent);
+      expect(tickOf(t, 'b'), Delivery.sent);
+      Widget bubbleOf(String id) =>
+          t.widget(find.byKey(ValueKey('message-$id')));
+      final bBefore = bubbleOf('b');
+      final aBefore = bubbleOf('a');
+
+      chat.deliverDelivery('c1', 'u2', sentAt);
+      await t.pumpAndSettle();
+      expect(tickOf(t, 'a'), Delivery.delivered);
+      expect(tickOf(t, 'b'), Delivery.sent);
+      expect(
+        identical(bubbleOf('a'), aBefore),
+        isFalse,
+        reason: 'control: A changed, so its bubble is built again',
+      );
+      expect(
+        identical(bubbleOf('b'), bBefore),
+        isTrue,
+        reason: "B's tick did not change, yet its bubble was rebuilt",
+      );
+    },
+  );
 }

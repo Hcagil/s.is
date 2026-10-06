@@ -49,7 +49,7 @@ void main() {
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -68,7 +68,7 @@ void main() {
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -87,7 +87,7 @@ void main() {
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -103,7 +103,7 @@ void main() {
         equals([
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -122,7 +122,7 @@ void main() {
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -138,7 +138,7 @@ void main() {
         equals([
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -154,7 +154,7 @@ void main() {
         equals([
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -171,7 +171,7 @@ void main() {
         equals([
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -241,7 +241,7 @@ void main() {
       );
       final actions = allowedMessageActions(msg, me: null, now: now);
       expect(actions, isNot(contains(MessageAction.edit)));
-      expect(actions, isNot(contains(MessageAction.delete)));
+      expect(actions, isNot(contains(MessageAction.deleteForEveryone)));
     });
 
     test('me == null: deleted message -> empty list', () {
@@ -269,7 +269,7 @@ void main() {
       );
       expect(
         allowedMessageActions(fresh, me: me, now: now),
-        contains(MessageAction.delete),
+        contains(MessageAction.deleteForEveryone),
       );
       expect(
         allowedMessageActions(fresh, me: me, now: now.toLocal()),
@@ -280,7 +280,7 @@ void main() {
         equals([
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -292,14 +292,14 @@ void main() {
       );
       expect(
         allowedMessageActions(theirs, me: me, now: now),
-        isNot(contains(MessageAction.delete)),
+        isNot(contains(MessageAction.deleteForEveryone)),
       );
       expect(
         allowedMessageActions(theirs, me: me, now: now, admin: true),
         equals([
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.delete,
+          MessageAction.deleteForEveryone,
         ]),
         reason: 'delete, but never edit on another\'s message',
       );

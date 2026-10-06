@@ -316,17 +316,20 @@ void main() {
       'both screens to load the seeded messages',
     );
 
-    // A deletes the recent message, through the real UI: a swipe, the
-    // action row, the confirm dialog.
-    await t.tap(
+    // A deletes the recent message, through the real UI: a long-press,
+    // the action card, the confirm card.
+    await t.longPress(
       within('a', find.byKey(ValueKey('message-${recentMessage.id}'))),
     );
     await until(
       t,
-      () => find.byKey(const ValueKey('menu-delete')).evaluate().isNotEmpty,
+      () => find
+          .byKey(const ValueKey('menu-delete-for-everyone'))
+          .evaluate()
+          .isNotEmpty,
       'the action row to open for the recent message',
     );
-    await t.tap(find.byKey(const ValueKey('menu-delete')));
+    await t.tap(find.byKey(const ValueKey('menu-delete-for-everyone')));
     await settle(t);
     await t.tap(find.byKey(const ValueKey('delete-confirm')));
     await settle(t);
@@ -371,13 +374,18 @@ void main() {
 
     // The backdated message: two hours old, still deletable, still a
     // placeholder.
-    await t.tap(within('a', find.byKey(ValueKey('message-${oldMessage.id}'))));
+    await t.longPress(
+      within('a', find.byKey(ValueKey('message-${oldMessage.id}'))),
+    );
     await until(
       t,
-      () => find.byKey(const ValueKey('menu-delete')).evaluate().isNotEmpty,
+      () => find
+          .byKey(const ValueKey('menu-delete-for-everyone'))
+          .evaluate()
+          .isNotEmpty,
       'the action row never opened for the second message',
     );
-    await t.tap(find.byKey(const ValueKey('menu-delete')));
+    await t.tap(find.byKey(const ValueKey('menu-delete-for-everyone')));
     await settle(t);
     expect(
       find.byKey(const ValueKey('delete-confirm')),

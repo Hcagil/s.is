@@ -381,7 +381,7 @@ void main() {
         'a',
         find.byKey(ValueKey('message-${quotedMessage.id}')),
       );
-      await t.tap(quotedFinder);
+      await t.longPress(quotedFinder);
       await until(
         t,
         () => find.byKey(const ValueKey('menu-reply')).evaluate().isNotEmpty,

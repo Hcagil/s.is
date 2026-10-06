@@ -166,7 +166,7 @@ void main() {
 
     final bubble = find.byKey(ValueKey('message-${original.id}'));
     await until(t, () => bubble.evaluate().isNotEmpty, 'the message');
-    await t.tap(bubble);
+    await t.longPress(bubble);
     await until(
       t,
       () => find.byKey(const ValueKey('menu-forward')).evaluate().isNotEmpty,

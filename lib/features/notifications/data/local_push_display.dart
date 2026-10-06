@@ -1,28 +1,25 @@
 import 'dart:convert';
-import 'dart:typed_data';
-import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform, visibleForTesting;
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/services.dart'
     show MethodChannel, MissingPluginException, PlatformException;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../domain/alert_settings.dart';
-import '../domain/notification_action.dart';
 import '../domain/notification_inbox.dart';
 import 'alert_channels.dart';
-import 'notification_avatars.dart';
 import 'push_receipt_log.dart';
 import 'shared_prefs_alert_store.dart';
 
-/// Shows pushes Telegram-style: one MessagingStyle notification per chat (a
-/// line per unread message, newest last) under one silent group summary.
-/// Runs in the app and in the background isolate a push wakes, so its state
-/// lives in shared preferences, not in memory, and a burst of pushes is
-/// coalesced (see [show]). Thin on purpose (ARCHITECTURE rule 4): the folding
-/// is notification_inbox.dart.
+/// The Dart side of the notification shade. On Android InstantPush.kt draws
+/// every chat notification (one MessagingStyle per chat under one silent
+/// group summary, with the unlock-protected buttons) and keeps the inbox in
+/// shared preferences; this class only removes what the member has dealt
+/// with (clear, clearAll, forUser), redraws the group summary after a clear,
+/// reports whether notifications are allowed and prunes unused channels.
+/// Thin on purpose (ARCHITECTURE rule 4): the folding is
+/// notification_inbox.dart.
 final class LocalPushDisplay {
   LocalPushDisplay._();
 
@@ -40,61 +37,30 @@ final class LocalPushDisplay {
   /// id.
   static const _iosChannel = MethodChannel('sis/notifications');
 
-  /// Between two posts to the plugin: Android sheds an app's notifications
-  /// past about 5 enqueues a second; 300 ms keeps it under 4. Only waited out
-  /// when a post follows another this closely (see [_pace]); a push on an idle
-  /// phone posts at once.
-  static const _enqueueGap = Duration(milliseconds: 300);
-
-  /// Shade idle time after which a flush may alert again.
-  static const _quiet = Duration(seconds: 8);
-
   // Per isolate (the app and the background handler each have their own).
   static Future<void> _lock = Future.value();
-  static int _stored = 0; // lines stored by this isolate
-  static int _postedThrough = 0; // highest _stored a finished flush covers
-  static DateTime? _lastFlushEnd;
-  static DateTime? _lastPostAt; // when this isolate last posted to the plugin
 
-  /// Conversations Android already alerted for, until a flush posts them
-  /// (per isolate).
-  static final Set<String> _nativeAlerted = {};
-
-  /// A fresh isolate, for tests.
-  @visibleForTesting
-  static void resetForTest() {
-    _lock = Future.value();
-    _stored = 0;
-    _postedThrough = 0;
-    _lastFlushEnd = null;
-    _lastPostAt = null;
-    _nativeAlerted.clear();
-  }
-
-  /// Must run before [show] in each isolate. [onTap] receives the tapped
+  /// Must run before [notificationsEnabled] and the taps in each isolate. [onTap] receives the tapped
   /// chat's conversation id (the payload), when the app is running.
-  static Future<void> init({
-    void Function(String conversationId)? onTap,
-    void Function(NotificationResponse response)? onAction,
-  }) => _plugin.initialize(
-    settings: const InitializationSettings(
-      android: AndroidInitializationSettings(
-        '@drawable/ic_launcher_monochrome',
-      ),
-      iOS: DarwinInitializationSettings(
-        requestAlertPermission: false,
-        requestBadgePermission: false,
-        requestSoundPermission: false,
-      ),
-    ),
-    onDidReceiveNotificationResponse: onTap == null
-        ? null
-        : (r) {
-            final id = r.payload;
-            if (id != null && id.isNotEmpty) onTap(id);
-          },
-    onDidReceiveBackgroundNotificationResponse: onAction,
-  );
+  static Future<void> init({void Function(String conversationId)? onTap}) =>
+      _plugin.initialize(
+        settings: const InitializationSettings(
+          android: AndroidInitializationSettings(
+            '@drawable/ic_launcher_monochrome',
+          ),
+          iOS: DarwinInitializationSettings(
+            requestAlertPermission: false,
+            requestBadgePermission: false,
+            requestSoundPermission: false,
+          ),
+        ),
+        onDidReceiveNotificationResponse: onTap == null
+            ? null
+            : (r) {
+                final id = r.payload;
+                if (id != null && id.isNotEmpty) onTap(id);
+              },
+      );
 
   /// The chat whose notification launched the app, or null.
   static Future<String?> launchConversation() async {
@@ -105,82 +71,8 @@ final class LocalPushDisplay {
         : null;
   }
 
-  /// One more message for [conversationId], as the server worded it. False
-  /// (nothing drawn or stored) when nobody owns the inbox on this phone.
-  ///
-  /// Pushes can wake this more than once at a time, so each call only STORES
-  /// its line, then posts the whole current state in one flush (posts are
-  /// paced by [_pace], so a backlog never trips Android's enqueue limit); a
-  /// call whose line an earlier flush already covered posts nothing. Returns
-  /// true once its line is inside a posted notification, false when nothing
-  /// was posted for it.
-  ///
-  /// [sender] and [chat] are the server's separate fields for a group message.
-  ///
-  /// [alreadyAlerted]: Android already drew this push itself and alerted
-  /// (InstantPush.kt); this post replaces that notification in place (same
-  /// id) without sound or heads-up again.
-  ///
-  /// [messageId]: the push's message id; a line the Android receiver already
-  /// stored for it is not stored twice.
-  static Future<bool> show({
-    required String conversationId,
-    required String title,
-    required String body,
-    String? sender,
-    String? chat,
-    String? messageId,
-    bool alreadyAlerted = false,
-    ActionTicket? ticket,
-  }) async {
-    final at = DateTime.now();
-    String? lineOwner; // who the line is stored for
-    final mine = await _locked<int?>(() async {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.reload();
-      lineOwner = prefs.getString(_ownerKey);
-      if (lineOwner == null) return null;
-      if (alreadyAlerted) _nativeAlerted.add(conversationId);
-      if (ticket != null) await _saveTicket(conversationId, ticket);
-      await _save(
-        addToInbox(
-          await _load(),
-          conversationId: conversationId,
-          title: title,
-          body: body,
-          at: at,
-          sender: sender,
-          chat: chat,
-          messageId: messageId,
-        ),
-      );
-      return ++_stored;
-    });
-    if (mine == null) return false;
-
-    var posted = false;
-    await _locked<void>(() async {
-      // A line stored for one member is never reported posted because of a
-      // flush that ran for another: after an owner change it stays unposted.
-      if (await currentOwner() != lineOwner) return;
-      if (_postedThrough >= mine) {
-        posted = true; // an earlier flush already covered this line
-        return;
-      }
-      final upTo = _stored;
-      // False when the flush stopped early (the owner changed mid-way): the
-      // line is then not in any posted notification and stays pending.
-      if (!await _flush(lineOwner!)) return;
-      _postedThrough = upTo;
-      _lastFlushEnd = DateTime.now();
-      posted = true;
-    });
-    return posted;
-  }
-
-  /// The owner [show] is currently keeping the shade for, or null. Lets a
-  /// caller decide a push is addressed to someone else before ever reaching
-  /// [show].
+  /// The owner the shade is currently kept for, or null. Lets a caller
+  /// decide a push is addressed to someone else.
   static Future<String?> currentOwner() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
@@ -235,7 +127,6 @@ final class LocalPushDisplay {
     // go up under the next member's account.
     await PushReceiptLog.clear();
     await prefs.remove(_keyFor(previousOwner));
-    await prefs.remove(_actionsKey);
     // The owner is stored BEFORE the shade is cleared: cancelAll can throw
     // (in release, R8 broke its Gson use), and the owner was then never
     // written, so every push was dropped as no_owner.
@@ -261,154 +152,6 @@ final class LocalPushDisplay {
           ?.areNotificationsEnabled() ??
       true;
 
-  static const _actionsKey = 'sis.push_actions';
-
-  /// The button credentials of the chat's newest push, or null.
-  static Future<ActionTicket?> ticketFor(String conversationId) async {
-    return (await _loadTickets())[conversationId];
-  }
-
-  static Future<Map<String, ActionTicket>> _loadTickets() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.reload();
-    final raw = prefs.getString(_actionsKey);
-    if (raw == null) return {};
-    try {
-      final json = jsonDecode(raw);
-      final map = <String, ActionTicket>{};
-      if (json is Map) {
-        for (final e in json.entries) {
-          final ticket = ActionTicket.fromJson(e.value);
-          if (ticket != null) map[e.key as String] = ticket;
-        }
-      }
-      return map;
-    } catch (_) {
-      return {};
-    }
-  }
-
-  static Future<void> _saveTickets(Map<String, ActionTicket> map) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _actionsKey,
-      jsonEncode({for (final e in map.entries) e.key: e.value.toJson()}),
-    );
-  }
-
-  static Future<void> _saveTicket(
-    String conversationId,
-    ActionTicket ticket,
-  ) async {
-    final map = await _loadTickets();
-    map[conversationId] = ticket;
-    await _saveTickets(map);
-  }
-
-  static Future<void> _dropTicket(String conversationId) async {
-    final map = await _loadTickets();
-    map.remove(conversationId);
-    await _saveTickets(map);
-  }
-
-  /// After a notification button ran with [result]. Mark as read, answered:
-  /// the chat's notification goes, as when the chat is opened. Reply, answered:
-  /// the same, then a short silent notification shows the sent line. A reply
-  /// that did not go through shows a "Not sent" line with the text and keeps
-  /// the unread messages.
-  static Future<void> afterAction(
-    NotificationAction action,
-    NotificationActionResult result,
-  ) => _locked<void>(() async {
-    final id = action.conversationId;
-    final chats = await _load();
-    final chat = chats.where((c) => c.conversationId == id).firstOrNull;
-    final done = result == NotificationActionResult.done;
-    if (action.kind == NotificationActionKind.reply && !done) {
-      // The reply box of a notification keeps spinning until it is replaced.
-      if (chat == null) {
-        await _plugin.cancel(id: _idFor(id));
-      } else {
-        await _showReplyLine(chat, action.text!, failed: true);
-      }
-      return;
-    }
-    if (!done) return;
-    final inbox = removeFromInbox(chats, id);
-    await _save(inbox);
-    await _plugin.cancel(id: _idFor(id));
-    await _showSummary(inbox);
-    await _clearDelivered(id);
-    await _dropTicket(id);
-    if (action.kind == NotificationActionKind.reply && chat != null) {
-      await _showReplyLine(chat, action.text!, failed: false);
-    }
-  });
-
-  static Future<void> _showReplyLine(
-    InboxChat chat,
-    String text, {
-    required bool failed,
-  }) {
-    final labels = notificationActionLabels(
-      PlatformDispatcher.instance.locale.languageCode,
-    );
-    return _plugin.show(
-      id: _idFor(chat.conversationId),
-      title: chat.title,
-      body: text,
-      payload: chat.conversationId,
-      notificationDetails: NotificationDetails(
-        android: AndroidNotificationDetails(
-          _summaryChannelId,
-          _summaryChannelName,
-          channelDescription: _channelDescription,
-          importance: Importance.low,
-          playSound: false,
-          enableVibration: false,
-          groupKey: _group,
-          silent: true,
-          onlyAlertOnce: true,
-          timeoutAfter: failed ? null : 8000,
-          styleInformation: MessagingStyleInformation(
-            const Person(name: 'You'),
-            conversationTitle: chat.group ? chat.title : null,
-            groupConversation: chat.group,
-            messages: [
-              Message(
-                failed ? '${labels.notSent}: $text' : text,
-                DateTime.now(),
-                const Person(name: 'You'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// The two buttons of a chat's notification, worded for the phone's language.
-  static List<AndroidNotificationAction> _actionButtons({required bool reply}) {
-    final labels = notificationActionLabels(
-      PlatformDispatcher.instance.locale.languageCode,
-    );
-    return [
-      AndroidNotificationAction(
-        markReadActionId,
-        labels.markRead,
-        cancelNotification: false,
-      ),
-      if (reply)
-        AndroidNotificationAction(
-          replyActionId,
-          labels.reply,
-          cancelNotification: false,
-          allowGeneratedReplies: true,
-          inputs: [AndroidNotificationActionInput(label: labels.replyHint)],
-        ),
-    ];
-  }
-
   static String _keyFor(String? owner) =>
       owner == null ? _prefsKey : '$_prefsKey.$owner';
 
@@ -427,144 +170,6 @@ final class LocalPushDisplay {
     _lock = run.then<void>((_) {}, onError: (Object _) {});
     return run;
   }
-
-  /// Posts everything not yet shown: each chat with unread lines, then the
-  /// summary, [_enqueueGap] apart. Runs inside [_locked]. Alerts (sound,
-  /// heads-up) only when the shade has been quiet for [_quiet], and then only
-  /// for the first chat Android had not already alerted for; every other
-  /// post is silent.
-  ///
-  /// The member can sign out or switch in the app's isolate while a flush is
-  /// posting: the owner is noted at load and re-read (fresh from disk) before
-  /// every post and before the save, which goes to that owner's key only.
-  ///
-  /// Returns false when it stopped early because the owner changed, true
-  /// otherwise (also when there was nothing to post). [expected] is the owner
-  /// the line being posted was stored for; any other owner stops it (false).
-  static Future<bool> _flush(String expected) async {
-    final owner = await currentOwner();
-    if (owner == null || owner != expected) return false;
-    final inbox = await _load(owner: owner);
-    final dirty = dirtyChats(inbox);
-    if (dirty.isEmpty) return true;
-    final last = _lastFlushEnd;
-    final loud = last == null || DateTime.now().difference(last) > _quiet;
-    final alertIndex = dirty.indexWhere(
-      (c) => !_nativeAlerted.contains(c.conversationId),
-    );
-    final defaults = await _alerts.loadDefaults();
-    final tickets = await _loadTickets();
-    // Written by InstantPush.kt on every push: false when this phone cannot keep Reply behind an unlock (Android 11 and older with a secure lock). Absent (iOS, tests): offered.
-    final reply =
-        (await SharedPreferences.getInstance()).getBool('sis.reply_offered') ??
-        true;
-    final chats = await _alerts.loadChats();
-    final pictures = await NotificationAvatars.forChats(owner, [
-      for (final c in dirty) c.conversationId,
-    ]);
-    for (var i = 0; i < dirty.length; i++) {
-      await _pace();
-      if (!await _still(owner)) return false;
-      await _showChat(
-        dirty[i],
-        alert: loud && i == alertIndex,
-        picture: pictures[dirty[i].conversationId],
-        actions: tickets.containsKey(dirty[i].conversationId),
-        reply: reply,
-        effective: resolveAlert(
-          defaults,
-          chats[dirty[i].conversationId] ?? const ChatAlert(),
-        ),
-      );
-    }
-    await _pace();
-    if (!await _still(owner)) return false;
-    await _showSummary(inbox);
-    if (!await _still(owner)) return false;
-    await _save(
-      markPosted(inbox, {for (final c in dirty) c.conversationId}),
-      owner: owner,
-    );
-    _nativeAlerted.removeAll([for (final c in dirty) c.conversationId]);
-    return true;
-  }
-
-  /// Waits only as long as it takes to leave [_enqueueGap] since this
-  /// isolate's last post, then counts as a post itself.
-  static Future<void> _pace() async {
-    final last = _lastPostAt;
-    if (last != null) {
-      final wait = _enqueueGap - DateTime.now().difference(last);
-      if (wait > Duration.zero) await Future<void>.delayed(wait);
-    }
-    _lastPostAt = DateTime.now();
-  }
-
-  static Future<bool> _still(String owner) async =>
-      await currentOwner() == owner;
-
-  /// The chat's notification: its whole current state (newest lines, oldest
-  /// first), so a later post can never lose an earlier message. [picture] is
-  /// the cached picture of the other person (1:1) or the group, or null; in a
-  /// 1:1 it is also the sender's icon.
-  static Future<void> _showChat(
-    InboxChat chat, {
-    required bool alert,
-    required EffectiveAlert effective,
-    required bool actions,
-    required bool reply,
-    Uint8List? picture,
-  }) => _plugin.show(
-    id: _idFor(chat.conversationId),
-    title: chat.title,
-    body: chat.group && chat.lines.last.sender.isNotEmpty
-        ? '${chat.lines.last.sender}: ${chat.lines.last.text}'
-        : chat.lines.last.text,
-    payload: chat.conversationId,
-    notificationDetails: NotificationDetails(
-      android: AndroidNotificationDetails(
-        alertChannelId(effective),
-        alertChannelName(effective),
-        channelDescription: _channelDescription,
-        playSound: effective.sound,
-        sound: effective.tone == null
-            ? null
-            : UriAndroidNotificationSound(effective.tone!),
-        enableVibration: effective.vibration,
-        importance: Importance.high,
-        priority: Priority.high,
-        groupKey: _group,
-        silent: !alert,
-        onlyAlertOnce: !alert,
-        actions: actions ? _actionButtons(reply: reply) : null,
-        number: chat.count,
-        largeIcon: picture == null ? null : ByteArrayAndroidBitmap(picture),
-        subText: chat.count > 1 ? '${chat.count} new messages' : null,
-        when: chat.lines.last.at == 0 ? null : chat.lines.last.at,
-        styleInformation: MessagingStyleInformation(
-          const Person(name: 'You'),
-          conversationTitle: chat.group ? chat.title : null,
-          groupConversation: chat.group,
-          messages: [
-            for (final l in chat.lines)
-              Message(
-                l.text,
-                DateTime.fromMillisecondsSinceEpoch(l.at),
-                lineSenderName(chat, l) == null
-                    ? null
-                    : Person(
-                        name: lineSenderName(chat, l),
-                        icon: picture == null || chat.group
-                            ? null
-                            : ByteArrayAndroidIcon(picture),
-                      ),
-              ),
-          ],
-        ),
-      ),
-      iOS: DarwinNotificationDetails(presentSound: effective.sound),
-    ),
-  );
 
   /// The silent group summary; no payload, so tapping it just opens the app
   /// on the chat list. Gone when nothing is waiting.

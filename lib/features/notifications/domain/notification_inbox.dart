@@ -79,15 +79,6 @@ final class InboxChat {
       posted: j['p'] as int? ?? n,
     );
   }
-
-  InboxChat withPosted(int posted) => InboxChat(
-    conversationId: conversationId,
-    title: title,
-    group: group,
-    lines: lines,
-    count: count,
-    posted: posted,
-  );
 }
 
 /// How many lines one chat's notification keeps: what Android's
@@ -164,21 +155,6 @@ List<InboxChat> removeFromInbox(List<InboxChat> inbox, String conversationId) =>
         if (c.conversationId != conversationId) c,
     ];
 
-/// The chats holding messages no posted notification shows yet.
-List<InboxChat> dirtyChats(List<InboxChat> inbox) => [
-  for (final c in inbox)
-    if (c.count != c.posted) c,
-];
-
-/// [inbox] with every listed chat recorded as fully posted.
-List<InboxChat> markPosted(
-  List<InboxChat> inbox,
-  Set<String> conversationIds,
-) => [
-  for (final c in inbox)
-    conversationIds.contains(c.conversationId) ? c.withPosted(c.count) : c,
-];
-
 /// The one-line summary over everything waiting: '1 new message',
 /// 'N new messages', with ' from K chats' when more than one chat is waiting.
 /// Empty inbox -> ''.
@@ -187,12 +163,4 @@ String inboxSummary(List<InboxChat> inbox) {
   final total = inbox.fold(0, (sum, c) => sum + c.count);
   final messages = total == 1 ? '1 new message' : '$total new messages';
   return inbox.length > 1 ? '$messages from ${inbox.length} chats' : messages;
-}
-
-/// The name of the person a line is shown as: the line's own sender, else the
-/// chat's title for a 1:1 (the other person), else null (a group line of
-/// unknown sender).
-String? lineSenderName(InboxChat chat, InboxLine line) {
-  if (line.sender.isNotEmpty) return line.sender;
-  return chat.group ? null : chat.title;
 }

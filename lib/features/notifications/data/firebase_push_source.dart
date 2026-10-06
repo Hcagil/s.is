@@ -5,23 +5,22 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
 
-import '../domain/notification_action.dart';
 import '../domain/push.dart';
 import 'local_push_display.dart';
 import 'push_receipt_log.dart';
 
 /// A push while the app is in the background or closed. Pushes carry data
 /// only (the chat, and the title and body the server worded for this
-/// member's preview setting), so the app shows them itself, grouped into one
-/// SIS notification. Registered in main; runs in its own isolate, which has
+/// member's preview setting). On Android InstantPush.kt (started by
+/// PushArrivalReceiver) draws them, grouped into one SIS notification with
+/// the unlock-protected buttons; this handler only keeps the receipt.
+/// Registered in main; runs in its own isolate, which has
 /// no Supabase session: what happens to each push is kept as a receipt
 /// (PushReceiptLog) and uploaded by the app on its next open.
 ///
 /// Every push that reaches here ends in exactly one terminal receipt: shown,
-/// `dropped:reason`, or error. `shown` means the push's line is stored and a
-/// posted notification includes it: pushes of one burst are coalesced
-/// (LocalPushDisplay.show), so a later push's post may be the one that shows
-/// an earlier line, and each still records its own `shown`.
+/// `dropped:reason`, or error. `shown` means the native receiver drew the
+/// push (its arrival note says so).
 @pragma('vm:entry-point')
 Future<void> onBackgroundPush(RemoteMessage message) async {
   try {
@@ -43,12 +42,11 @@ Future<void> onBackgroundPush(RemoteMessage message) async {
         '${arrival ?? 'native=?'}',
   );
   try {
-    // Android already drew and alerted for this push (InstantPush.kt): this
-    // post replaces it in place, quietly.
+    // InstantPush.kt drew this push, if it did, before this handler ran.
     await PushReceiptLog.add(
       await _deliver(
         message,
-        alreadyAlerted: arrival?.contains('fast=native') ?? false,
+        drawnNatively: arrival?.contains('fast=native') ?? false,
       ),
       messageId: messageId,
     );
@@ -58,10 +56,10 @@ Future<void> onBackgroundPush(RemoteMessage message) async {
   }
 }
 
-/// Shows the push; returns its terminal stage, `shown` or `dropped:reason`.
+/// Judges the push (nothing is drawn here); returns its terminal stage, `shown` or `dropped:reason`.
 Future<String> _deliver(
   RemoteMessage message, {
-  bool alreadyAlerted = false,
+  bool drawnNatively = false,
 }) async {
   // A notification block means Android already drew this one itself (an
   // older build, or this device's shows_itself was still false when it was
@@ -82,18 +80,7 @@ Future<String> _deliver(
   if (!await LocalPushDisplay.notificationsEnabled()) {
     return 'dropped:notifications_off';
   }
-  final sender = d['sender'], chat = d['chat'], messageId = d['message_id'];
-  final drawn = await LocalPushDisplay.show(
-    messageId: messageId is String ? messageId : null,
-    conversationId: id,
-    title: title,
-    body: body,
-    sender: sender is String && sender.isNotEmpty ? sender : null,
-    chat: chat is String && chat.isNotEmpty ? chat : null,
-    alreadyAlerted: alreadyAlerted,
-    ticket: ActionTicket.fromPush(d),
-  );
-  return drawn ? 'shown' : 'dropped:no_owner';
+  return drawnNatively ? 'shown' : 'dropped:not_drawn';
 }
 
 /// The device side of push; thin on purpose (ARCHITECTURE rule 4), verified

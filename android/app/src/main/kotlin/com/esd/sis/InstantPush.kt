@@ -8,6 +8,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.AudioAttributes
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
@@ -27,6 +30,101 @@ object InstantPush {
     const val CHANNEL_SUMMARY = "summary"
     const val SUMMARY_ID = 0
 
+    private const val ENQUEUE_GAP_MS = 300L
+    private const val QUIET_MS = 8000L
+
+    // Per process, as Dart kept them per isolate: when this process last posted, and when its last draw ended.
+    private var lastPostAt = 0L
+    private var lastDrawEnd = 0L
+
+    /** What one notification does once the chat's choices met the defaults (Dart's EffectiveAlert). [tone] null is the system default and is always null when [sound] is off. */
+    data class Alert(val sound: Boolean, val tone: String?, val vibration: Boolean)
+
+    /** Dart's resolveAlert: the chat's own choice over the defaults JSON ({"s","t","v"}), read from the same preferences. */
+    fun effectiveAlert(defaultsJson: String?, chatsJson: String?, conversationId: String): Alert {
+        val sound = alerts(defaultsJson, chatsJson, conversationId)
+        val tone = if (!sound) {
+            null
+        } else {
+            try {
+                JSONObject(defaultsJson ?: "{}").let { if (it.isNull("t")) null else it.getString("t") }
+            } catch (e: Exception) {
+                null
+            }
+        }
+        return Alert(sound, tone, vibrates(defaultsJson, chatsJson, conversationId))
+    }
+
+    /** Dart's FNV-1a over UTF-16 units as lower-case hex, so a custom tone maps to the channel id Dart always used. */
+    private fun fnv1a(s: String): String {
+        var h = 0x811c9dc5L
+        for (unit in s) {
+            h = ((h xor unit.code.toLong()) * 0x01000193L) and 0xffffffffL
+        }
+        return h.toString(16)
+    }
+
+    /** Dart's alertChannelId, e.g. msg-sys-v1, msg-off-v0, msg-1a2b3c4d-v1. */
+    fun alertChannelId(a: Alert): String {
+        val tone = when {
+            !a.sound -> "off"
+            a.tone == null -> "sys"
+            else -> fnv1a(a.tone)
+        }
+        return "msg-$tone-v${if (a.vibration) 1 else 0}"
+    }
+
+    /** Dart's alertChannelName: the channel's name in the phone's settings. */
+    fun alertChannelName(a: Alert): String =
+        "Messages" + (if (a.sound) (if (a.tone == null) "" else " (custom tone)") else " (silent)") + (if (a.vibration) "" else ", no vibration")
+
+    /** Creates the channel for [a] if it does not exist (an existing one, with the member's own settings, is left alone) and returns its id. Same settings the notifications plugin gave it: high importance, the tone or the default notification sound, notification audio usage. */
+    fun ensureAlertChannel(context: Context, a: Alert): String {
+        val id = alertChannelId(a)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(id, alertChannelName(a), NotificationManager.IMPORTANCE_HIGH)
+            channel.description = "New messages"
+            if (a.sound) {
+                val uri = if (a.tone == null) RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION) else Uri.parse(a.tone)
+                channel.setSound(uri, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build())
+            } else {
+                channel.setSound(null, null)
+            }
+            channel.enableVibration(a.vibration)
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+        }
+        return id
+    }
+
+    /** True when the shade has been quiet for [QUIET_MS], so this draw may make a sound; a burst alerts once. */
+    @Synchronized
+    fun isLoud(): Boolean = lastDrawEnd == 0L || System.currentTimeMillis() - lastDrawEnd > QUIET_MS
+
+    @Synchronized
+    private fun markDrawEnd() {
+        lastDrawEnd = System.currentTimeMillis()
+    }
+
+    /** Waits only as long as it takes to leave [ENQUEUE_GAP_MS] since this process's last post (Android sheds an app's notifications past about 5 enqueues a second), then counts as a post itself. */
+    @Synchronized
+    private fun pace() {
+        val wait = ENQUEUE_GAP_MS - (System.currentTimeMillis() - lastPostAt)
+        if (lastPostAt != 0L && wait > 0) {
+            try {
+                Thread.sleep(wait)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+        }
+        lastPostAt = System.currentTimeMillis()
+    }
+
+    /** For tests: forgets the pacing and quiet state of this process. */
+    fun resetPacing() {
+        lastPostAt = 0L
+        lastDrawEnd = 0L
+    }
+
     fun notificationId(conversationId: String): Int {
         var h = 0x811c9dc5L
         for (unit in conversationId) {
@@ -36,8 +134,9 @@ object InstantPush {
         return if (result == 0) 1 else result
     }
 
+    /** Whether the native side draws this push now. [originalPriority] is no longer consulted: high-priority pushes are drawn here too (the Dart handler no longer draws on Android); the parameter stays so callers keep compiling. */
     fun shouldPostNow(originalPriority: String?, hasNotificationBlock: Boolean, appInForeground: Boolean, owner: String?, targetUser: String?, notificationsEnabled: Boolean, hasFields: Boolean): Boolean {
-        return originalPriority != "high" && !hasNotificationBlock && !appInForeground && owner != null && (targetUser == null || targetUser == owner) && notificationsEnabled && hasFields
+        return !hasNotificationBlock && !appInForeground && owner != null && (targetUser == null || targetUser == owner) && notificationsEnabled && hasFields
     }
 
     private fun resolve(defaultsJson: String?, chatsJson: String?, conversationId: String, key: String): Boolean {
@@ -128,7 +227,9 @@ object InstantPush {
                     for (i in inboxChats.length() - 1 downTo 0) {
                         val c = inboxChats.getJSONObject(i)
                         val all = c.getJSONArray("l")
-                        s.addLine(c.optString("t") + ": " + all.getJSONObject(all.length() - 1).optString("x"))
+                        val last = all.getJSONObject(all.length() - 1)
+                        val who = last.optString("s")
+                        s.addLine(c.optString("t") + ": " + (if (c.optBoolean("g") && who.isNotEmpty()) "$who: " else "") + last.optString("x"))
                     }
                     s.setSummaryText(PushInbox.summary(inboxChats))
                 },
@@ -155,8 +256,6 @@ object InstantPush {
             val owner = prefs.getString("flutter.sis.push_inbox_owner", null)
 
             val keyguard = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-            // The Dart handler draws the notification again for most pushes (same id) and cannot ask the system itself, so it reads this answer from the shared preferences.
-            prefs.edit().putBoolean("flutter.sis.reply_offered", replyOffered(Build.VERSION.SDK_INT, keyguard.isDeviceSecure)).apply()
             val activities = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             val appInForeground = !keyguard.isKeyguardLocked &&
                 activities.runningAppProcesses?.any {
@@ -183,36 +282,16 @@ object InstantPush {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 manager.createNotificationChannel(
-                    NotificationChannel(CHANNEL_BOTH, "Messages (instant)", NotificationManager.IMPORTANCE_HIGH).apply {
-                        enableVibration(true)
-                    },
-                )
-                manager.createNotificationChannel(
-                    NotificationChannel(CHANNEL_SOUND, "Messages (instant, sound only)", NotificationManager.IMPORTANCE_HIGH).apply {
-                        enableVibration(false)
-                    },
-                )
-                manager.createNotificationChannel(
-                    NotificationChannel(CHANNEL_VIBRATE, "Messages (instant, vibration only)", NotificationManager.IMPORTANCE_HIGH).apply {
-                        enableVibration(true)
-                        setSound(null, null)
-                    },
-                )
-                manager.createNotificationChannel(
-                    NotificationChannel(CHANNEL_QUIET, "Messages (instant, silent)", NotificationManager.IMPORTANCE_LOW),
-                )
-                manager.createNotificationChannel(
                     NotificationChannel(CHANNEL_SUMMARY, "Summary", NotificationManager.IMPORTANCE_LOW),
                 )
             }
             val defaults = prefs.getString("flutter.sis.alert_defaults", null)
             val chats = prefs.getString("flutter.sis.alert_chats", null)
-            val channel = channelFor(
-                alerts(defaults, chats, conversationId),
-                vibrates(defaults, chats, conversationId),
-            )
+            val alert = effectiveAlert(defaults, chats, conversationId)
+            val channel = ensureAlertChannel(context, alert)
 
             val tap = tapIntent(context, id, conversationId) ?: return false
+            val loud = isLoud()
 
             val line = body(text, extras.getString("sender"), !chat.isNullOrEmpty())
             // The unread total the server computed for this member (see the push
@@ -261,7 +340,7 @@ object InstantPush {
             val notification = NotificationCompat.Builder(context, channel)
                 .setSmallIcon(R.drawable.ic_launcher_monochrome)
                 .setColor(ContextCompat.getColor(context, R.color.notification_accent))
-                .setContentTitle(title)
+                .setContentTitle(entry.optString("t"))
                 .setContentText(line)
                 .setStyle(style)
                 .setLargeIcon(avatar)
@@ -271,6 +350,8 @@ object InstantPush {
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setWhen(System.currentTimeMillis())
+                .apply { if (entry.optInt("n", 0) > 1) setSubText("${entry.optInt("n")} new messages") }
+                .apply { if (!loud) setSilent(true).setOnlyAlertOnce(true) }
                 .apply { if (badge > 0) setNumber(badge) }
                 .apply {
                     // The buttons need the action token the push carried; an older server sends none.
@@ -280,9 +361,12 @@ object InstantPush {
                 }
                 .build()
 
+            pace()
             NotificationManagerCompat.from(context).notify(id, notification)
 
+            pace()
             postSummary(context, inboxChats)
+            markDrawEnd()
             return true
         } catch (e: Exception) {
             android.util.Log.w("InstantPush", "draw failed: ${e.javaClass.simpleName}")

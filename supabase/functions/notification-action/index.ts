@@ -15,9 +15,9 @@
 // retry with the same id never sends twice.
 // Answers { ok: true } (200), or { error } with:
 //   400 bad_request   malformed request
-//   401 invalid_token forged, malformed or expired token, or wrong conversation
-//                     or action for it
-//   403 not_permitted no longer allowed (member left, device replaced, access off)
+//   403 not_permitted a refused ticket (forged, altered, expired or malformed
+//                     token, or wrong conversation or action for it), or no
+//                     longer allowed (member left, device replaced, access off)
 //   405 method        not a POST
 //   409 id_in_use     the reply id already belongs to a different message
 //   429 rate_limited  20 actions per member per minute
@@ -27,6 +27,11 @@ import { verifyActionToken } from '../_shared/action_token.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// A reply is at most 4000 characters (4 bytes each at worst) plus a token and
+// two ids; anything bigger is refused before it is read or reaches the database.
+const MAX_REQUEST_BYTES = 20000;
+const MAX_REPLY_CHARS = 4000;
+
 const reply = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), {
     status,
@@ -35,19 +40,29 @@ const reply = (status: number, body: Record<string, unknown>) =>
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return reply(405, { error: 'method' });
-  const q = await req.json().catch(() => null);
+  if (Number(req.headers.get('content-length') ?? 0) > MAX_REQUEST_BYTES) {
+    return reply(400, { error: 'bad_request' });
+  }
+  const text = await req.text().catch(() => '');
+  if (text.length > MAX_REQUEST_BYTES) return reply(400, { error: 'bad_request' });
+  let q: Record<string, unknown> | null = null;
+  try {
+    q = JSON.parse(text);
+  } catch { /* q stays null: bad_request below */ }
   const { token, conversation_id: conversation, action, id, body } = q ?? {};
   if (
+    typeof token !== 'string' ||
     typeof conversation !== 'string' || !UUID.test(conversation) ||
     (action !== 'mark_read' && action !== 'reply') ||
     (action === 'reply' &&
-      (typeof id !== 'string' || !UUID.test(id) || typeof body !== 'string'))
+      (typeof id !== 'string' || !UUID.test(id) || typeof body !== 'string' ||
+        [...body].length > MAX_REPLY_CHARS))
   ) return reply(400, { error: 'bad_request' });
 
   const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const claims = await verifyActionToken(token, key);
   if (!claims || claims.c.toLowerCase() !== conversation.toLowerCase() || !claims.a.includes(action)) {
-    return reply(401, { error: 'invalid_token' });
+    return reply(403, { error: 'not_permitted' });
   }
 
   const db = createClient(Deno.env.get('SUPABASE_URL')!, key);

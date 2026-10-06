@@ -391,6 +391,14 @@ signs a short-lived action token into the push and `notification-action`
   success without a second message; a different body under a used id is 409.
 - Rate limit: 20 actions per member per rolling minute (`P0429`, HTTP 429),
   kept in `app_private.notification_action_log` (RLS on, no policies).
+- Who can read the push data: the token travels in the push, so FCM and APNs
+  can read it, and so can any notification-listener app on the phone, which
+  can then fire the buttons for up to an hour (the token names one member, one
+  chat and one device, and dies when the device is replaced). The recipient's
+  user id (UUID) is also in the push data now.
+- A request over 20000 bytes or a reply over 4000 characters is refused (400)
+  before the database; every refused ticket is 403, a missing token 400.
+- Lock-screen Reply: decision pending (owner).
 
 ### Group name colour slot (finding L1)
 

@@ -157,13 +157,23 @@ async function send(id: string): Promise<void> {
 
   const results = await Promise.allSettled(
     targets.map(async (t) => {
-      const actionToken = await signActionToken({
-        u: t.user_id,
-        c: t.conversation_id,
-        d: await sha256Hex(t.token),
-        a: ['mark_read', 'reply'],
-        e: Math.floor(Date.now() / 1000) + ACTION_TTL_SECONDS,
-      }, actionKey);
+      // A token that cannot be made (missing or invalid key) costs the
+      // buttons only; the push itself still goes out.
+      let actionData: Record<string, string> = {};
+      try {
+        actionData = {
+          action_token: await signActionToken({
+            u: t.user_id,
+            c: t.conversation_id,
+            d: await sha256Hex(t.token),
+            a: ['mark_read', 'reply'],
+            e: Math.floor(Date.now() / 1000) + ACTION_TTL_SECONDS,
+          }, actionKey),
+          action_url: actionUrl,
+        };
+      } catch (e) {
+        console.error('action token not minted', (e as Error).message);
+      }
       // iOS shows nothing a data-only push carries (it throttles or drops
       // them) and this app draws no push of its own there, so an iPhone
       // always gets a regular notification, grouped per chat by the system
@@ -210,8 +220,7 @@ async function send(id: string): Promise<void> {
               title: t.title,
               body: t.body,
               ...(group ? { sender: t.sender!, chat: t.chat! } : {}),
-              action_token: actionToken,
-              action_url: actionUrl,
+              ...actionData,
               // Android has no remote badge: the app's own notification sets
               // it (Notification.setNumber) from this.
               ...(badge != null ? { badge: String(badge) } : {}),

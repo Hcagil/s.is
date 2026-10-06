@@ -33,6 +33,10 @@ revoke all on table app_private.notification_action_log from anon, authenticated
 -- with an unexpired token (the one-device rule). set_config(..., true) is
 -- transaction-local: each PostgREST call is its own transaction, so the
 -- identity never outlives this one call.
+--
+-- NEVER call this from a function a client role can execute with a user id the
+-- caller supplies: it would let any caller act as any member who has a push
+-- device. Only service-role-only functions (notification_action) may use it.
 create function app_private.act_as(p_user uuid, p_device text) returns void
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -50,6 +54,8 @@ begin
   perform set_config('request.jwt.claims',
     jsonb_build_object('sub', p_user, 'role', 'authenticated', 'session_id', sid)::text,
     true);
+  -- The older claim setting some functions still read.
+  perform set_config('request.jwt.claim.sub', p_user::text, true);
 end $$;
 revoke all on function app_private.act_as(uuid, text) from public, anon, authenticated;
 
@@ -79,7 +85,7 @@ declare
   n       int;
   result  text := 'done';
 begin
-  if p_action not in ('mark_read', 'reply') then
+  if p_action is null or p_action not in ('mark_read', 'reply') then
     raise exception 'invalid action' using errcode = '22023';
   end if;
   if p_action = 'reply'
@@ -92,6 +98,9 @@ begin
     raise exception 'not permitted' using errcode = '42501';
   end if;
 
+  -- One member's actions are counted one at a time (as messages_bot_rate), so
+  -- two parallel calls cannot both see 19 and pass.
+  perform pg_advisory_xact_lock(hashtextextended('notification_action:' || p_user::text, 0));
   delete from app_private.notification_action_log l
    where l.user_id = p_user and l.at < now() - interval '1 minute';
   select count(*) into n from app_private.notification_action_log l

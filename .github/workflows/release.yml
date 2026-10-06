@@ -129,7 +129,7 @@ jobs:
                 echo "PR #$pr" >&2
                 gh api "repos/${GITHUB_REPOSITORY}/pulls/$pr" --jq 'select(.author_association | IN("OWNER","MEMBER","COLLABORATOR")) | .body' </dev/null | tr -d '\r' | sed -n 's/^For users: *//p' || exit 1
               done | sed '/^[[:space:]]*$/d')
-          note=${note:0:4000}
+          note=${note:0:3980}
           echo "Note: $note"
           if [ -z "$note" ]; then echo "No user-facing change in $range"; exit 0; fi
           ver=$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)

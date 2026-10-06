@@ -22,7 +22,9 @@ void listenGroupGone(
       return;
     }
     if (!context.mounted) return;
-    showSisNotice(context, AppLocalizations.of(context).groupDeletedNotice);
+    if (ref.read(deletedGroupsProvider.notifier).claimNotice(conversationId)) {
+      showSisNotice(context, AppLocalizations.of(context).groupDeletedNotice);
+    }
     Navigator.of(context).popUntil((route) => route.isFirst);
   });
 }

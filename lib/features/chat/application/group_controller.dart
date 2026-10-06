@@ -82,9 +82,12 @@ final groupSettingsProvider = Provider.autoDispose
 /// a screen of such a group uses to leave itself (a chat merely missing from
 /// the list can also mean a session change, which other code handles).
 class DeletedGroups extends Notifier<Set<String>> {
+  final _noticed = <String>{};
+
   @override
   Set<String> build() {
     ref.watch(currentUserIdProvider);
+    _noticed.clear();
     return const {};
   }
 
@@ -92,6 +95,10 @@ class DeletedGroups extends Notifier<Set<String>> {
     if (state.contains(conversationId)) return;
     state = {...state, conversationId};
   }
+
+  /// True only the first time it is asked for [conversationId]: of the
+  /// several screens that hear a deletion, exactly one shows the notice.
+  bool claimNotice(String conversationId) => _noticed.add(conversationId);
 }
 
 final deletedGroupsProvider = NotifierProvider<DeletedGroups, Set<String>>(

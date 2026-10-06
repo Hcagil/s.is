@@ -298,9 +298,7 @@ object InstantPush {
             // payload): shown by launchers that print a number on the icon. No
             // permission involved.
             val badge = extras.getString("badge")?.toIntOrNull() ?: 0
-            // The inbox is the same one the Dart handler keeps: this push is stored there now, so the
-            // chat's notification lists every unread line even while the Dart handler is still deferred
-            // (a closed app), and a later Dart pass drops the line it finds already stored.
+            // This push is stored in the inbox now, so the chat's notification lists every unread line.
             val ownerId = owner ?: return false
             val inboxKey = "flutter.sis.push_inbox.$ownerId"
             val inbox = PushInbox.add(

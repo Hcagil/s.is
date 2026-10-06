@@ -50,11 +50,15 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
     // Delivery is a separate topic; a failed or slow join only costs the live
     // ticks, so the marks load without waiting for it. Events before the load
     // lands are buffered by _saw.
+    // Per-build flag: the provider rebuilds (it is not disposed) when the chat
+    // closes or another opens, so `ref.mounted` cannot tell a stale join.
+    var live = true;
+    ref.onDispose(() => live = false);
     unawaited(
       repo.deliveredUpdates(conversationId).then((delivered) {
         if (delivered case Ok(:final value)) {
           final sub = value.listen(_saw);
-          if (ref.mounted) {
+          if (live) {
             ref.onDispose(sub.cancel);
           } else {
             unawaited(sub.cancel());

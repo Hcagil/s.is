@@ -205,6 +205,13 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       }
       return;
     }
+    final me = switch (ref.read(sessionControllerProvider).value) {
+      Allowed(:final member) => member.userId,
+      _ => null,
+    };
+    if (message.senderId != me) {
+      _reportDelivered(message.conversationId, message.createdAt);
+    }
     final next = _withMessage(current, message);
     if (next == null) {
       reloadQuietly();
@@ -271,10 +278,28 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   }
 
   Future<List<Conversation>> _load() async {
-    return switch (await ref.read(chatRepositoryProvider).conversations()) {
+    final list = switch (await ref
+        .read(chatRepositoryProvider)
+        .conversations()) {
       Ok(:final value) => value,
       Err(:final failure) => throw failure,
     };
+    // Unread here means received on this device: report it delivered.
+    for (final c in list) {
+      if (c.unread > 0) _reportDelivered(c.id);
+    }
+    return list;
+  }
+
+  /// Tells the server this device has received [conversationId]'s messages
+  /// (up to [upTo]) so the sender's ticks reach two grey, even while the chat
+  /// is closed. Fire-and-forget: a failure only delays a tick.
+  void _reportDelivered(String conversationId, [DateTime? upTo]) {
+    unawaited(
+      ref
+          .read(chatRepositoryProvider)
+          .markDelivered(conversationId, upTo: upTo),
+    );
   }
 
   Future<void> refresh() async {

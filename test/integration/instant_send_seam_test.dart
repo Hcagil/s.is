@@ -70,6 +70,17 @@ typedef _Send = Future<Result<Message>> Function({
 
 /// The real repository, passed through untouched except where noted.
 class _Relay implements ChatRepository {
+  // Slice 5a signatures only (delivery marks); no behaviour.
+  @override
+  Future<Result<void>> markDelivered(
+    String conversationId, {
+    DateTime? upTo,
+  }) async => const Ok(null);
+
+  @override
+  Future<Result<Stream<ReadMark>>> deliveredUpdates(
+    String conversationId,
+  ) async => const Ok(Stream<ReadMark>.empty());
   _Relay(this.real);
   final ChatRepository real;
 

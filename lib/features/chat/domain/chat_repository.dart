@@ -208,6 +208,16 @@ abstract interface class ChatRepository {
   /// status, while the caller shares theirs. Resolves once subscribed.
   Future<Result<Stream<ReadMark>>> readUpdates(String conversationId);
 
+  /// Tells the server this device has received every message of
+  /// [conversationId] created up to [upTo] (null: everything so far), so the
+  /// senders' ticks reach two. A failure only delays a tick.
+  Future<Result<void>> markDelivered(String conversationId, {DateTime? upTo});
+
+  /// Deliveries as they happen in [conversationId]: each event is a
+  /// [ReadMark] with only [ReadMark.userId] and [ReadMark.deliveredAt] set
+  /// (shares false). Resolves once subscribed.
+  Future<Result<Stream<ReadMark>>> deliveredUpdates(String conversationId);
+
   /// Deletes [message] for everyone, and its photo: the caller's own, or any
   /// member's when the caller is a group admin, at any age. The server
   /// refuses (DeniedFailure) when the caller is neither, or it is already

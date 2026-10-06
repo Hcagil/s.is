@@ -108,6 +108,17 @@ class DesignUpdate implements UpdateRepository {
 }
 
 class DesignChat implements ChatRepository {
+  // Slice 5a signatures only (delivery marks); no behaviour.
+  @override
+  Future<Result<void>> markDelivered(
+    String conversationId, {
+    DateTime? upTo,
+  }) async => const Ok(null);
+
+  @override
+  Future<Result<Stream<ReadMark>>> deliveredUpdates(
+    String conversationId,
+  ) async => const Ok(Stream<ReadMark>.empty());
   DesignChat({
     this.list = const [],
     this.people = const [],

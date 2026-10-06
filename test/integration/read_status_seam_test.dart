@@ -112,6 +112,17 @@ class _AccountAuth implements AuthRepository {
 /// the same calls on a real repository at a dead host (the connection that
 /// fails is the real one), or by a slower real answer.
 class _Wired implements ChatRepository {
+  // Slice 5a signatures only (delivery marks); no behaviour.
+  @override
+  Future<Result<void>> markDelivered(
+    String conversationId, {
+    DateTime? upTo,
+  }) async => const Ok(null);
+
+  @override
+  Future<Result<Stream<ReadMark>>> deliveredUpdates(
+    String conversationId,
+  ) async => const Ok(Stream<ReadMark>.empty());
   _Wired(this.live, {this.marks, this.updates});
   final ChatRepository live;
   final ChatRepository? marks;

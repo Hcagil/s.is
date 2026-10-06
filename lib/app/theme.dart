@@ -242,6 +242,30 @@ class SisBrand extends ThemeExtension<SisBrand> {
   LinearGradient get fadingSeparator =>
       LinearGradient(colors: [line.withAlpha(0), line, line.withAlpha(0)]);
 
+  /// [c] darkened toward black until white text on it reaches [min]:1
+  /// (WCAG contrast); unchanged when it already does.
+  static Color forWhiteText(Color c, {double min = 4.5}) {
+    var out = c;
+    for (
+      var i = 0;
+      i < 30 && 1.05 / (out.computeLuminance() + 0.05) < min;
+      i++
+    ) {
+      out = Color.lerp(out, const Color(0xFF000000), .06)!;
+    }
+    return out;
+  }
+
+  /// [gradient] for your own message bubbles: both ends darkened just enough
+  /// that white message text reads at 4.5:1 or better in every theme and
+  /// brightness (a blend of two such colours is darker still, so the whole
+  /// bubble passes).
+  LinearGradient get mineGradient => LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [forWhiteText(brandDeep), forWhiteText(brand)],
+  );
+
   /// S3, the soft-edged unread pill.
   LinearGradient get unreadPillFade => LinearGradient(
     colors: [

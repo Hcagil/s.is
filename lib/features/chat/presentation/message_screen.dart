@@ -9,6 +9,7 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
+import '../../../app/delivery_tick.dart';
 import '../../../app/grey_option.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
@@ -25,6 +26,7 @@ import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
 import '../application/group_controller.dart';
 import '../domain/conversation.dart';
+import '../domain/delivery.dart';
 import '../domain/emoji.dart';
 import '../domain/group_member.dart';
 import '../domain/highlight.dart';
@@ -507,8 +509,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     };
     // Each sender's colour slot, from the group's roster (empty in a 1:1).
     final slotByUser = {for (final m in roster) m.member.userId: m.colorSlot};
-    // Read status, where it is shared: your own messages look a little grey
-    // until every sharing member has read them.
+    // Read and delivery marks: the ticks on your own messages.
     final marks = ref.watch(readMarksProvider).value ?? const <ReadMark>[];
     final timeline = ref.watch(chatTimelineProvider);
     final loadingOlder = ref.watch(olderLoadingProvider);
@@ -686,14 +687,9 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                     : value
                                           .where((m) => m.id == message.replyTo)
                                           .firstOrNull;
-                                final unread =
-                                    mine &&
-                                    !message.isDeleted &&
-                                    (message.isPending ||
-                                        !isReadByAnyone(
-                                          marks,
-                                          message.createdAt,
-                                        ));
+                                final delivery = mine && !message.isDeleted
+                                    ? deliveryOf(message, marks)
+                                    : null;
                                 final allowedActions = allowedMessageActions(
                                   message,
                                   me: me,
@@ -729,9 +725,9 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                       _openMessageMenu(message, mine: mine),
                                   child: _Bubble(
                                     message,
-                                    key: ValueKey('read-$unread-${message.id}'),
+                                    key: ValueKey('bubble-${message.id}'),
                                     mine: mine,
-                                    unread: unread,
+                                    delivery: delivery,
                                     sender:
                                         isGroup &&
                                             !mine &&

@@ -124,6 +124,17 @@ class _AccountAuth implements AuthRepository {
 /// The real repository; search and messagesAround can be pointed at a real
 /// repository on a dead host -- the phone going offline mid-way.
 class _Switch implements ChatRepository {
+  // Slice 5a signatures only (delivery marks); no behaviour.
+  @override
+  Future<Result<void>> markDelivered(
+    String conversationId, {
+    DateTime? upTo,
+  }) async => const Ok(null);
+
+  @override
+  Future<Result<Stream<ReadMark>>> deliveredUpdates(
+    String conversationId,
+  ) async => const Ok(Stream<ReadMark>.empty());
   _Switch(this.live, this.dead);
   final ChatRepository live;
   final ChatRepository dead;

@@ -214,6 +214,17 @@ class FakeUpdate implements UpdateRepository {
 }
 
 class FakeChat implements ChatRepository {
+  // Slice 5a signatures only (delivery marks); no behaviour.
+  @override
+  Future<Result<void>> markDelivered(
+    String conversationId, {
+    DateTime? upTo,
+  }) async => const Ok(null);
+
+  @override
+  Future<Result<Stream<ReadMark>>> deliveredUpdates(
+    String conversationId,
+  ) async => const Ok(Stream<ReadMark>.empty());
   FakeChat({this.list = const [], this.initial = const []});
 
   List<Conversation> list;
@@ -750,6 +761,17 @@ class FakeChat implements ChatRepository {
 /// Realtime delivers only to a live subscription, and every call is recorded
 /// in order so "subscribe before you read" can be checked.
 class ChatFake implements ChatRepository {
+  // Slice 5a signatures only (delivery marks); no behaviour.
+  @override
+  Future<Result<void>> markDelivered(
+    String conversationId, {
+    DateTime? upTo,
+  }) async => const Ok(null);
+
+  @override
+  Future<Result<Stream<ReadMark>>> deliveredUpdates(
+    String conversationId,
+  ) async => const Ok(Stream<ReadMark>.empty());
   ChatFake({this.latency = Duration.zero, this.self});
 
   /// Every call takes at least this long; nothing here is ever synchronous.

@@ -55,9 +55,15 @@ final class SupabaseGroupSettingsRepository implements GroupSettingsRepository {
       );
       if (paths is List && paths.isNotEmpty) {
         try {
-          await _client.storage
-              .from('attachments')
-              .remove(List<String>.from(paths));
+          final all = List<String>.from(paths);
+          final pictures = all.where((p) => p.startsWith('group/')).toList();
+          final files = all.where((p) => !p.startsWith('group/')).toList();
+          if (files.isNotEmpty) {
+            await _client.storage.from('attachments').remove(files);
+          }
+          if (pictures.isNotEmpty) {
+            await _client.storage.from('avatars').remove(pictures);
+          }
         } catch (e) {
           log(
             'deleteGroup: photo file removal failed: ${e.runtimeType}',

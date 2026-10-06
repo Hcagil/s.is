@@ -28,15 +28,16 @@ alter table public.conversations
 -- 2. Live nudge. A private per-user broadcast topic 'chats:<user id>': the
 -- server sends one event per member whenever a group's settings, picture or
 -- existence change, so the member's chat list re-reads at once. Content-free
--- (the conversation id and a word), never a message. Sent to every row of the
--- group, current or departed, because a departed member still lists it.
+-- (the conversation id and a word), never a message. Sent to the current
+-- members only; a deletion also reaches people who left, who still list it.
 create or replace function app_private.notify_group_changed(conversation uuid, what text)
 returns void language plpgsql security definer set search_path = '' as $$
 declare
   u uuid;
 begin
   for u in select distinct cm.user_id from public.conversation_members cm
-            where cm.conversation_id = conversation loop
+            where cm.conversation_id = conversation
+              and (cm.left_at is null or what = 'deleted') loop
     perform realtime.send(
       jsonb_build_object('conversation_id', conversation, 'what', what),
       'group_changed',
@@ -97,10 +98,13 @@ grant execute on function public.set_group_settings(uuid, boolean, boolean, bool
   to authenticated;
 
 -- 4. add_members: an admin always; any current member while the group allows
--- it. History: the admin's per-call with_history (old builds still send it)
--- can only NARROW what the group setting allows -- with the setting off, a
--- person added now never reads what came before, whatever the caller sends.
--- A leave-and-rejoin is a new row through here, so it gets the same window.
+-- it. History: when an ADMIN adds, the admin's per-call with_history decides
+-- (it wins over the group switch); when a non-admin member adds, the group's
+-- new_members_see_history switch decides and with_history is ignored. A
+-- non-admin may add only people they already share a chat with or have saved
+-- as a contact (never someone found only by tag search); an admin keeps the
+-- full can_reach. A leave-and-rejoin is a new row through here, so it gets
+-- the same window. The bot never adds anyone.
 create or replace function public.add_members(
   conversation uuid,
   members      uuid[],
@@ -108,13 +112,14 @@ create or replace function public.add_members(
 ) returns void language plpgsql security definer set search_path = '' as $$
 declare
   me      uuid := auth.uid();
+  adm     boolean;
   grp     text;
   see     boolean;
   from_ts timestamptz;
   m       uuid;
 begin
   perform pg_advisory_xact_lock(hashtextextended('group_admin:' || conversation::text, 0));
-  if not app_private.has_app_access() then
+  if not app_private.has_app_access() or app_private.is_bot(me) then
     raise exception 'not permitted' using errcode = '42501';
   end if;
   select c.title, c.new_members_see_history into grp, see
@@ -122,20 +127,25 @@ begin
   if grp is null then
     raise exception 'not permitted' using errcode = '42501';
   end if;
-  if not app_private.is_admin(conversation)
+  adm := app_private.is_admin(conversation);
+  if not adm
      and not (app_private.is_member(conversation)
               and (select c.members_can_add from public.conversations c
                     where c.id = conversation)) then
     raise exception 'not permitted' using errcode = '42501';
   end if;
-  from_ts := case when with_history and see then '-infinity'::timestamptz else now() end;
+  from_ts := case when (case when adm then coalesce(with_history, false) else see end)
+                  then '-infinity'::timestamptz else now() end;
 
   if exists (select 1 from unnest(coalesce(members, '{}'::uuid[])) as x where x is null) then
     raise exception 'not permitted' using errcode = '42501';
   end if;
   if exists (
     select 1 from unnest(coalesce(members, '{}'::uuid[])) as x
-     where x <> me and (not app_private.is_allowed(x) or not app_private.can_reach(x))
+     where x <> me and (not app_private.is_allowed(x)
+                        or not case when adm then app_private.can_reach(x)
+                                    else app_private.shares_conversation(x)
+                                         or app_private.is_contact(x) end)
   ) then
     raise exception 'not permitted' using errcode = '42501';
   end if;
@@ -179,14 +189,14 @@ returns table (id uuid, conversation_id uuid, actor_id uuid, created_at timestam
 language sql stable security definer set search_path = '' as $$
   select e.id, e.conversation_id, e.actor_id, e.created_at
     from public.group_events e
-    join public.conversation_members cm
-      on cm.conversation_id = e.conversation_id
-     and cm.user_id = auth.uid()
-     and e.created_at >= cm.history_from
-     and (cm.left_at is null or e.created_at <= cm.left_at)
    where e.conversation_id = conversation
      and e.kind = 'picture'
      and app_private.has_app_access()
+     and exists (select 1 from public.conversation_members cm
+                  where cm.conversation_id = e.conversation_id
+                    and cm.user_id = auth.uid()
+                    and e.created_at >= cm.history_from
+                    and (cm.left_at is null or e.created_at <= cm.left_at))
    order by e.created_at
 $$;
 revoke all on function public.group_picture_events(uuid) from public, anon;
@@ -241,9 +251,11 @@ end $$;
 
 -- 7. Delete a group for everyone: a current admin of a real group (never a
 -- 1:1 or the system chat). Messages, members, reactions and events go with
--- it (on delete cascade). Returns the photo paths so the app can remove the
--- files; each is recorded for the caller first, which is what lets the
--- storage delete policy accept them (the messages are gone by then).
+-- it (on delete cascade). Returns the photo paths and the group picture's
+-- path (group/<id>/...) so the app can remove the files; each is recorded for
+-- the caller first, which is what lets the storage delete policies accept them
+-- (the messages and the group are gone by then). The Debug group, which the
+-- SIS Bot account is bound to, can never be deleted.
 create function public.delete_group(conversation uuid)
 returns text[] language plpgsql security definer set search_path = '' as $$
 declare
@@ -254,21 +266,64 @@ begin
      or app_private.is_bot(auth.uid())
      or not app_private.is_admin(conversation)
      or not exists (select 1 from public.conversations c
-                     where c.id = conversation and c.title is not null and not c.system) then
+                     where c.id = conversation and c.title is not null and not c.system)
+     or exists (select 1 from app_private.bot_accounts b
+                 where b.debug_conversation = conversation) then
     raise exception 'not permitted' using errcode = '42501';
   end if;
   select coalesce(array_agg(m.attachment_path), '{}') into paths
     from public.messages m
    where m.conversation_id = conversation and m.attachment_path is not null;
+  select paths || c.avatar_path into paths
+    from public.conversations c
+   where c.id = conversation and c.avatar_path is not null;
   insert into app_private.deleted_attachments(path, user_id)
     select p, auth.uid() from unnest(paths) as p
-    on conflict do nothing;
+    on conflict (path) do update
+      set user_id = excluded.user_id, recorded_at = now();
   perform app_private.notify_group_changed(conversation, 'deleted');
   delete from public.conversations where id = conversation;
   return paths;
 end $$;
 revoke all on function public.delete_group(uuid) from public, anon;
 grant execute on function public.delete_group(uuid) to authenticated;
+
+-- 7b. Removing the picture file of a group that no longer exists. The avatar
+-- policies only let a current member touch group/<id>/..., and nobody is a
+-- member of a deleted group, so the deleter is allowed through the record
+-- delete_group made for them (same idea as may_remove_attachment): their own
+-- row, the object is older than the record, the group is gone, and the path
+-- is a group picture path (never a profile picture or a live group's).
+create or replace function app_private.may_remove_group_avatar(object_name text)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select (storage.foldername(object_name))[1] = 'group'
+     and app_private.avatar_path_owner(object_name) is not null
+     and not exists (select 1 from public.conversations c
+                      where c.id = app_private.avatar_path_owner(object_name))
+     and exists (select 1
+                   from app_private.deleted_attachments d
+                   join storage.objects o
+                     on o.bucket_id = 'avatars' and o.name = d.path
+                  where d.path = object_name
+                    and d.user_id = auth.uid()
+                    and o.created_at <= d.recorded_at)
+$$;
+revoke all on function app_private.may_remove_group_avatar(text) from public, anon;
+grant execute on function app_private.may_remove_group_avatar(text) to authenticated;
+
+drop policy avatars_read on storage.objects;
+create policy avatars_read on storage.objects for select to authenticated
+  using (bucket_id = 'avatars'
+         and (select app_private.has_app_access())
+         and (app_private.avatar_path_readable(name)
+              or app_private.may_remove_group_avatar(name)));
+
+drop policy avatars_remove on storage.objects;
+create policy avatars_remove on storage.objects for delete to authenticated
+  using (bucket_id = 'avatars'
+         and (select app_private.has_app_access())
+         and (app_private.avatar_path_writable(name)
+              or app_private.may_remove_group_avatar(name)));
 
 -- 8. Read marks: a person added without history must not learn from another
 -- member's read/delivered position when messages from before they joined

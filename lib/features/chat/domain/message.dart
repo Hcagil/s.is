@@ -234,9 +234,17 @@ bool isSearchable(String query) =>
     RegExp(r'[\p{L}\p{N}]', unicode: true).allMatches(query.trim()).length >= 3;
 
 /// One action a member may take on a message: reply, forward, edit their
-/// own text/caption, delete (for me, or for everyone: their own, or any
-/// member's for a group admin), copy the text (tap menu only).
-enum MessageAction { reply, forward, edit, delete, copy }
+/// own text/caption, delete for me / delete for everyone (two separate rows),
+/// copy the text (tap menu only), pin (shown greyed, not built yet).
+enum MessageAction {
+  reply,
+  forward,
+  edit,
+  deleteForMe,
+  deleteForEveryone,
+  copy,
+  pin,
+}
 
 /// The actions [me] may take on [message] at [now], in the order they are
 /// offered -- reply and forward need a stored message with something in
@@ -258,19 +266,21 @@ List<MessageAction> allowedMessageActions(
     if (canShare) MessageAction.reply,
     if (canShare) MessageAction.forward,
     if (canEdit) MessageAction.edit,
-    if (canDelete) MessageAction.delete,
+    if (canDelete) MessageAction.deleteForEveryone,
   ];
 }
 
-/// The actions the tap menu offers for [message], in order: reply, copy
-/// (text present, not deleted), forward, edit (own text within the
-/// edit window) and delete (any stored message: the dialog then offers
-/// delete for me, and delete for everyone only when
-/// [Message.canDeleteForEveryone] allows). Copy is never in the swipe row.
+/// The actions the long-press card offers for [message], in order: reply,
+/// copy (text present, not deleted), forward, edit (own text within the
+/// edit window), pin (greyed, no handler yet), delete for me (any stored
+/// message), delete for everyone (only when [Message.canDeleteForEveryone]
+/// allows, [admin] says the viewer is a group admin). Copy is never in the
+/// swipe row.
 List<MessageAction> menuMessageActions(
   Message message, {
   required String? me,
   required DateTime now,
+  bool admin = false,
 }) {
   final canShare = !message.isPending && !message.isDeleted;
   final canEdit = me != null && message.canEdit(me, now);
@@ -279,6 +289,9 @@ List<MessageAction> menuMessageActions(
     if (canShare && message.body.isNotEmpty) MessageAction.copy,
     if (canShare) MessageAction.forward,
     if (canEdit) MessageAction.edit,
-    if (!message.isPending) MessageAction.delete,
+    if (canShare) MessageAction.pin,
+    if (!message.isPending) MessageAction.deleteForMe,
+    if (me != null && message.canDeleteForEveryone(me, admin: admin))
+      MessageAction.deleteForEveryone,
   ];
 }

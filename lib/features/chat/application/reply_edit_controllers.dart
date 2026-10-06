@@ -33,3 +33,21 @@ class Editing extends Notifier<Message?> {
 
   void clear() => state = null;
 }
+
+/// The message the member tapped (its "Seen by" pill above and reactions bar below are showing), or null. Tapping the same message again clears it; cleared when another conversation opens.
+final tappedMessageProvider =
+    NotifierProvider.autoDispose<TappedMessage, String?>(TappedMessage.new);
+
+class TappedMessage extends Notifier<String?> {
+  @override
+  String? build() {
+    ref.watch(openConversationProvider);
+    return null;
+  }
+
+  /// Taps [messageId]: shows its extras, or hides them when it is already the tapped one.
+  void toggle(String messageId) =>
+      state = state == messageId ? null : messageId;
+
+  void clear() => state = null;
+}

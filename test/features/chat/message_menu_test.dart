@@ -1,13 +1,13 @@
-// The 0.30.8 message menu and keyboard rules, driven through the real
-// message screen. Written from the contract only:
-//  * a tap on a message opens the `message-menu` sheet (tiles `menu-<action>`),
-//    closes the keyboard (0.30.13: the swipe row is gone, left = reply);
+// The message card and keyboard rules, driven through the real message
+// screen. Written from the contract only:
+//  * a long-press on a message opens the `message-menu` card (rows
+//    `menu-<action>`, pin a grey `grey-pin` row) and closes the keyboard;
+//    a tap opens no card (Update 1 slice 7); left swipe = reply;
 //  * a tap on empty space only closes the keyboard; scrolling does not;
 //    send and the paperclip keep it open (0.30.10: the paperclip opens the
 //    photo grid with requestFocus false);
-//  * long-press opens nothing;
 //  * a photo, a link or a quote keeps its own tap;
-//  * the photo viewer's `viewer-menu` offers Reply, Forward and Delete only
+//  * the photo viewer's `viewer-menu` offers Reply, Forward and both deletes
 //    exists only when the viewer was given onMenu, and closes the viewer when
 //    onMenu says so.
 import 'package:flutter/material.dart';
@@ -141,32 +141,54 @@ List<String> menuTiles(WidgetTester tester) {
 }
 
 void main() {
-  group('a tap on a message', () {
-    testWidgets('opens the menu: your own fresh text, in order', (
+  group('a long-press on a message', () {
+    testWidgets('opens the card: your own fresh text, in order', (
       tester,
     ) async {
       await pump(tester, [msg('m1')]);
-      await tester.tap(message('m1'));
+      await tester.longPress(message('m1'));
       await tester.pumpAndSettle();
 
       expect(menu, findsOneWidget);
-      expect(menuTiles(tester), ['reply', 'copy', 'forward', 'edit', 'delete']);
+      expect(menuTiles(tester), [
+        'reply',
+        'copy',
+        'forward',
+        'edit',
+        'pin',
+        'delete-for-me',
+        'delete-for-everyone',
+      ]);
+      // Pin is designed but not built: a grey row that does nothing.
+      expect(find.byKey(const ValueKey('grey-pin')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('grey-pin')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('reply-bar')), findsNothing);
+      expect(find.byKey(const ValueKey('edit-bar')), findsNothing);
+      expect(find.byType(AlertDialog), findsNothing);
     });
 
     testWidgets('somebody else\'s text: no edit, delete (for me) stays', (
       tester,
     ) async {
       await pump(tester, [msg('m1', from: bob)]);
-      await tester.tap(message('m1'));
+      await tester.longPress(message('m1'));
       await tester.pumpAndSettle();
-      expect(menuTiles(tester), ['reply', 'copy', 'forward', 'delete']);
+      expect(menuTiles(tester), [
+        'reply',
+        'copy',
+        'forward',
+        'pin',
+        'delete-for-me',
+      ]);
     });
 
     testWidgets('closes the keyboard', (tester) async {
       await pump(tester, [msg('m1', from: bob)]);
       await raiseKeyboard(tester);
 
-      await tester.tap(message('m1'));
+      await tester.longPress(message('m1'));
       await tester.pumpAndSettle();
 
       expect(menu, findsOneWidget);
@@ -175,7 +197,7 @@ void main() {
 
     // 0.30.13: the swipe row is gone; a left swipe replies and opens no
     // card, and the tap that follows still opens it.
-    testWidgets('a left swipe opens no card; a tap after it does', (
+    testWidgets('a left swipe opens no card; a long-press after it does', (
       tester,
     ) async {
       await pump(tester, [
@@ -187,14 +209,14 @@ void main() {
       expect(menu, findsNothing);
       expect(find.byKey(const ValueKey('reply-bar')), findsOneWidget);
 
-      await tester.tap(message('m2'));
+      await tester.longPress(message('m2'));
       await tester.pumpAndSettle();
       expect(menu, findsOneWidget);
     });
 
     testWidgets('menu-reply starts a reply to that message', (tester) async {
       await pump(tester, [msg('m1', from: bob, body: 'lunch?')]);
-      await tester.tap(message('m1'));
+      await tester.longPress(message('m1'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-reply')));
       await tester.pumpAndSettle();
@@ -203,9 +225,9 @@ void main() {
       expect(find.byKey(const ValueKey('reply-bar')), findsOneWidget);
     });
 
-    testWidgets('long-press opens nothing', (tester) async {
+    testWidgets('a tap opens no card', (tester) async {
       await pump(tester, [msg('m1', from: bob)]);
-      await tester.longPress(message('m1'));
+      await tester.tap(message('m1'));
       await tester.pumpAndSettle();
       expect(menu, findsNothing);
       expect(find.byType(BottomSheet), findsNothing);
@@ -324,14 +346,19 @@ void main() {
       expect(find.byType(PhotoViewer), findsOneWidget);
     }
 
-    testWidgets('offers reply, forward and delete only', (tester) async {
+    testWidgets('offers reply, forward and both deletes only', (tester) async {
       await pump(tester, [msg('p1', body: 'caption', attachment: 'c1/1.png')]);
       await openViewer(tester);
       await tester.tap(find.byKey(const ValueKey('viewer-menu')));
       await tester.pumpAndSettle();
 
       expect(menu, findsOneWidget);
-      expect(menuTiles(tester), ['reply', 'forward', 'delete']);
+      expect(menuTiles(tester), [
+        'reply',
+        'forward',
+        'delete-for-me',
+        'delete-for-everyone',
+      ]);
     });
 
     testWidgets('reply closes the viewer and starts the reply', (tester) async {
@@ -427,8 +454,13 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('viewer-menu')));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      // Your own photo: the viewer offers the same three.
-      expect(menuTiles(tester), ['reply', 'forward', 'delete']);
+      // Your own photo: the viewer offers reply, forward and both deletes.
+      expect(menuTiles(tester), [
+        'reply',
+        'forward',
+        'delete-for-me',
+        'delete-for-everyone',
+      ]);
       return chat;
     }
 
@@ -463,7 +495,7 @@ void main() {
 
     testWidgets('delete for everyone deletes it', (tester) async {
       final chat = await openThenUnmount(tester);
-      await tester.tap(find.byKey(const ValueKey('menu-delete')));
+      await tester.tap(find.byKey(const ValueKey('menu-delete-for-everyone')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('delete-confirm')));
       await tester.pumpAndSettle();
@@ -498,11 +530,11 @@ void main() {
       );
     }
 
-    testWidgets('is on screen one frame plus 120 ms after the tap', (
+    testWidgets('is on screen one frame plus 120 ms after the long-press', (
       tester,
     ) async {
       await pump(tester, [msg('m1', from: bob)]);
-      await tester.tap(message('m1'));
+      await tester.longPress(message('m1'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
       expect(menu, findsOneWidget);
@@ -516,7 +548,7 @@ void main() {
 
     testWidgets('is no bottom sheet', (tester) async {
       await pump(tester, [msg('m1', from: bob)]);
-      await tester.tap(message('m1'));
+      await tester.longPress(message('m1'));
       await tester.pumpAndSettle();
       expect(menu, findsOneWidget);
       expect(find.byType(BottomSheet), findsNothing);
@@ -533,7 +565,7 @@ void main() {
       await pump(tester, [msg('m1', from: bob)]);
       final bubble = tester.getRect(message('m1'));
       expect(bubble.top, greaterThan(screen.height / 2), reason: 'low');
-      await tester.tap(message('m1'));
+      await tester.longPress(message('m1'));
       await tester.pumpAndSettle();
 
       final card = tester.getRect(menu);
@@ -553,7 +585,7 @@ void main() {
       tester.view.viewInsets = const FakeViewPadding(bottom: 300);
       await tester.pumpAndSettle();
 
-      await tester.tap(message('m1'));
+      await tester.longPress(message('m1'));
       await tester.pump();
       expect(keyboardUp(tester), isFalse, reason: 'precondition: unfocused');
       tester.view.viewInsets = FakeViewPadding.zero;
@@ -594,7 +626,7 @@ void main() {
       final (id, bubble) = top.first;
       expect(bubble.top, lessThan(200), reason: 'near the top');
 
-      await tester.tap(message('m$id'));
+      await tester.longPress(message('m$id'));
       await tester.pumpAndSettle();
       final card = tester.getRect(menu);
       expect(card.top, greaterThanOrEqualTo(bubble.bottom));
@@ -605,7 +637,7 @@ void main() {
     testWidgets('a tap outside: closed, nothing done', (tester) async {
       phone(tester);
       await pump(tester, [msg('m1', body: 'lunch?')]);
-      await tester.tap(message('m1'));
+      await tester.longPress(message('m1'));
       await tester.pumpAndSettle();
       final card = tester.getRect(menu);
       final spot = Offset(screen.width - 10, card.top - 10);
@@ -623,7 +655,7 @@ void main() {
 
     testWidgets('Back: only the card closes, nothing done', (tester) async {
       await pump(tester, [msg('m1', body: 'lunch?')]);
-      await tester.tap(message('m1'));
+      await tester.longPress(message('m1'));
       await tester.pumpAndSettle();
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
@@ -637,7 +669,7 @@ void main() {
       await pump(tester, [
         msg('p1', from: bob, body: 'caption', attachment: 'c1/1.png'),
       ]);
-      await tester.tap(find.byKey(const ValueKey('body-p1')));
+      await tester.longPress(find.byKey(const ValueKey('body-p1')));
       await tester.pumpAndSettle();
       expect(menu, findsOneWidget);
       expect(find.byType(PhotoViewer), findsNothing);
@@ -661,7 +693,7 @@ void main() {
         ),
       );
       await pump(tester, [msg('m1', from: bob, body: 'lunch at noon')]);
-      await tester.tap(message('m1'));
+      await tester.longPress(message('m1'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-copy')));
       await tester.pump();
@@ -677,7 +709,7 @@ void main() {
 
     testWidgets('forward opens the forward picker', (tester) async {
       await pump(tester, [msg('m1', from: bob)]);
-      await tester.tap(message('m1'));
+      await tester.longPress(message('m1'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-forward')));
       await tester.pumpAndSettle();
@@ -687,7 +719,7 @@ void main() {
 
     testWidgets('edit opens the edit bar with the text', (tester) async {
       await pump(tester, [msg('m1', body: 'typo hre')]);
-      await tester.tap(message('m1'));
+      await tester.longPress(message('m1'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-edit')));
       await tester.pumpAndSettle();

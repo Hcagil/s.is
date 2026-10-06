@@ -288,7 +288,7 @@ void main() {
         ..messagesResult = Ok([msg('m9', body: 'mine', from: me.userId)]);
       chat.history['c1'] = [msg('m9', body: 'mine', from: me.userId)];
       await pumpChat(t, chat);
-      await t.tap(byKey('message-m9'));
+      await t.longPress(byKey('message-m9'));
       await t.pumpAndSettle();
       await t.tap(byKey('menu-edit'));
       await t.pumpAndSettle();
@@ -443,7 +443,7 @@ void main() {
       double width = 411,
     }) async {
       await pumpChat(t, chat, width: width);
-      await t.tap(byKey('message-m1'));
+      await t.longPress(byKey('message-m1'));
       await t.pumpAndSettle();
       await t.tap(byKey('menu-forward'));
       await t.pumpAndSettle();

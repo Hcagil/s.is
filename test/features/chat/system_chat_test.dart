@@ -242,7 +242,7 @@ void main() {
       ];
       await openChat(t, w, 'c1');
 
-      await t.tap(byKey('message-m1'));
+      await t.longPress(byKey('message-m1'));
       await settle(t);
       await t.tap(byKey('menu-forward'));
       await settle(t);

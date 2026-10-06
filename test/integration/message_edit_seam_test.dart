@@ -170,7 +170,7 @@ void main() {
   }
 
   Future<void> edit(WidgetTester t, String id, String body) async {
-    await t.tap(within('a', find.byKey(ValueKey('message-$id'))));
+    await t.longPress(within('a', find.byKey(ValueKey('message-$id'))));
     await until(
       t,
       () => find.byKey(const ValueKey('menu-edit')).evaluate().isNotEmpty,

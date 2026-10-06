@@ -553,6 +553,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You\'re up to date'**
   String get whatsNewUpToDate;
+
+  /// Long-press card row: reply
+  ///
+  /// In en, this message translates to:
+  /// **'Reply'**
+  String get messageActionReply;
+
+  /// Long-press card row: copy the text
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get messageActionCopy;
+
+  /// Long-press card row: forward
+  ///
+  /// In en, this message translates to:
+  /// **'Forward'**
+  String get messageActionForward;
+
+  /// Long-press card row: edit an own message
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get messageActionEdit;
+
+  /// Long-press card row: pin (greyed, not built yet)
+  ///
+  /// In en, this message translates to:
+  /// **'Pin message'**
+  String get messageActionPin;
+
+  /// Long-press card row: hide on my devices only
+  ///
+  /// In en, this message translates to:
+  /// **'Delete for me'**
+  String get messageActionDeleteForMe;
+
+  /// Long-press card row: remove for everyone in the chat
+  ///
+  /// In en, this message translates to:
+  /// **'Delete for everyone'**
+  String get messageActionDeleteForEveryone;
+
+  /// Pill above a tapped own message: how many members have read it
+  ///
+  /// In en, this message translates to:
+  /// **'Seen by {count}'**
+  String messageSeenBy(int count);
+
+  /// Screen-reader label of the plus button on the reactions bar
+  ///
+  /// In en, this message translates to:
+  /// **'More reactions'**
+  String get messageMoreReactions;
+
+  /// Delete confirm card: title
+  ///
+  /// In en, this message translates to:
+  /// **'Delete message?'**
+  String get messageDeleteTitle;
+
+  /// Delete confirm card: body for Delete for me
+  ///
+  /// In en, this message translates to:
+  /// **'It is hidden on your devices only.'**
+  String get messageDeleteForMeBody;
+
+  /// Delete confirm card: body for Delete for everyone
+  ///
+  /// In en, this message translates to:
+  /// **'It is removed for everyone in this chat.'**
+  String get messageDeleteForEveryoneBody;
+
+  /// Delete confirm card: cancel
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get messageDeleteCancel;
 }
 
 class _AppLocalizationsDelegate

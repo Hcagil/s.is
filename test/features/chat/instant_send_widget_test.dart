@@ -144,7 +144,7 @@ Future<void> sendText(WidgetTester t, String text) async {
 }
 
 Future<void> reply(WidgetTester t, String id) async {
-  await t.tap(bubble(id));
+  await t.longPress(bubble(id));
   await t.pumpAndSettle();
   await t.tap(replyAction);
   await t.pumpAndSettle();
@@ -402,7 +402,7 @@ void main() {
       ..holdEdit();
     await pump(t, chat);
 
-    await t.tap(bubble('m1'));
+    await t.longPress(bubble('m1'));
     await t.pumpAndSettle();
     await t.tap(editAction);
     await t.pumpAndSettle();

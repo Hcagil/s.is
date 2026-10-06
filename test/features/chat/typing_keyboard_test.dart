@@ -167,7 +167,7 @@ void main() {
         ..history['c1'] = [s.msg('m1', body: 'mine', from: me.userId)];
       await s.pump(t, chat);
 
-      await t.tap(s.bubble('m1'));
+      await t.longPress(s.bubble('m1'));
       await t.pumpAndSettle();
       await t.tap(s.editAction);
       await t.pumpAndSettle();

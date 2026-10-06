@@ -338,7 +338,7 @@ void main() {
     testWidgets('with the message card open, a right drag does not leave '
         'the chat', (t) async {
       await openChat(t);
-      await t.tap(bubble('m1'));
+      await t.longPress(bubble('m1'));
       await settle(t);
       expect(find.byKey(const ValueKey('message-menu')), findsOneWidget);
       await stroke(

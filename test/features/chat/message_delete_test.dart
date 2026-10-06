@@ -1,5 +1,5 @@
-// Widget tests for deleting a message for everyone: the swipe action row,
-// the confirm dialog, and how a placeholder or a vanishing message renders.
+// Widget tests for deleting a message: the long-press card's delete for me
+// and delete for everyone rows, the `delete-card` confirm card, and how a placeholder or a vanishing message renders.
 // Written from the contract: what a member sees and what the repository is
 // asked to do -- never how the widgets are built.
 import 'package:flutter/material.dart';
@@ -76,43 +76,53 @@ Future<ProviderContainer> pump(
   return container;
 }
 
+/// Long-presses message [id]: the action card opens.
+Future<void> openCard(WidgetTester tester, String id) async {
+  await tester.longPress(find.byKey(ValueKey('message-$id')));
+  await tester.pumpAndSettle();
+  expect(find.byKey(const ValueKey('message-menu')), findsOneWidget);
+}
+
 void main() {
-  group('the delete sheet', () {
-    testWidgets('a tap on your own message, under 6h, opens it', (
+  group('delete from the long-press card', () {
+    testWidgets('your own message, under 6h: both deletes offered', (
       tester,
     ) async {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', from: me.userId)]);
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
-      await tester.pumpAndSettle();
+      await openCard(tester, 'm1');
 
-      expect(find.byKey(const ValueKey('menu-delete')), findsOneWidget);
+      expect(find.byKey(const ValueKey('menu-delete-for-me')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('menu-delete-for-everyone')),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('a tap on somebody else\'s message offers delete for me only', (
+    testWidgets('somebody else\'s message offers delete for me only', (
       tester,
     ) async {
       final chat = ChatFake()
         ..messagesResult = Ok([msg('m1', from: bob.userId)]);
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
-      await tester.pumpAndSettle();
+      await openCard(tester, 'm1');
 
       expect(
         find.byKey(const ValueKey('menu-reply')),
         findsOneWidget,
         reason: 'the card did open',
       );
-      await tester.tap(find.byKey(const ValueKey('menu-delete')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('delete-for-me')), findsOneWidget);
-      expect(find.byKey(const ValueKey('delete-confirm')), findsNothing);
+      expect(find.byKey(const ValueKey('menu-delete-for-me')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('menu-delete-for-everyone')),
+        findsNothing,
+      );
     });
 
-    testWidgets('a tap on your own message over 6h still offers delete', (
+    testWidgets('your own message over 6h still offers delete for everyone', (
       tester,
     ) async {
       final chat = ChatFake()
@@ -125,41 +135,45 @@ void main() {
         ]);
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
-      await tester.pumpAndSettle();
+      await openCard(tester, 'm1');
 
       expect(
         find.byKey(const ValueKey('menu-reply')),
         findsOneWidget,
-        reason: 'the row did open',
+        reason: 'the card did open',
       );
       expect(
-        find.byKey(const ValueKey('menu-delete')),
+        find.byKey(const ValueKey('menu-delete-for-everyone')),
         findsOneWidget,
         reason: 'since 0.30.8 the sender may delete at any age',
       );
     });
 
-    testWidgets('cancelling the confirm dialog does nothing', (tester) async {
-      final chat = ChatFake()
-        ..messagesResult = Ok([msg('m1', from: me.userId)]);
+    testWidgets('cancelling the confirm card does nothing', (tester) async {
+      final chat = ChatFake(self: me.userId)
+        ..history['c1'] = [msg('m1', from: me.userId)];
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('menu-delete')));
-      await tester.pumpAndSettle();
+      for (final row in ['delete-for-everyone', 'delete-for-me']) {
+        await openCard(tester, 'm1');
+        await tester.tap(find.byKey(ValueKey('menu-$row')));
+        await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('delete-confirm')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('delete-cancel')));
-      await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('delete-card')), findsOneWidget);
+        expect(find.byKey(const ValueKey('delete-confirm')), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('delete-cancel')));
+        await tester.pumpAndSettle();
 
-      expect(
-        chat.deleted,
-        isEmpty,
-        reason: 'cancelling must not call the repository',
-      );
-      expect(find.byKey(const ValueKey('message-m1')), findsOneWidget);
+        expect(find.byKey(const ValueKey('delete-card')), findsNothing);
+        expect(
+          chat.deleted,
+          isEmpty,
+          reason: '$row: cancelling must not call the repository',
+        );
+        expect(chat.hidden, isEmpty, reason: row);
+        expect(find.byKey(const ValueKey('message-m1')), findsOneWidget);
+        expect(find.text('hi'), findsOneWidget);
+      }
     });
 
     testWidgets('confirming calls the repository and updates the screen', (
@@ -170,14 +184,14 @@ void main() {
       final chat = ChatFake()..history['c1'] = [msg('m1', from: me.userId)];
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('menu-delete')));
+      await openCard(tester, 'm1');
+      await tester.tap(find.byKey(const ValueKey('menu-delete-for-everyone')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('delete-confirm')));
       await tester.pumpAndSettle();
 
       expect(chat.deleted, ['m1']);
+      expect(chat.hidden, isEmpty);
       expect(
         find.text('This message was deleted'),
         findsOneWidget,
@@ -196,9 +210,8 @@ void main() {
         );
       await pump(tester, chat);
 
-      await tester.tap(find.byKey(const ValueKey('message-m1')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('menu-delete')));
+      await openCard(tester, 'm1');
+      await tester.tap(find.byKey(const ValueKey('menu-delete-for-everyone')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('delete-confirm')));
       await tester.pumpAndSettle();
@@ -280,31 +293,27 @@ void main() {
     });
   });
 
-  group('the message menu delete (0.30.8)', () {
-    Future<void> openDelete(WidgetTester tester, String id) async {
-      await tester.tap(find.byKey(ValueKey('message-$id')));
+  group('delete for me and group admins (0.30.8)', () {
+    Future<void> confirm(WidgetTester tester, String id, String row) async {
+      await openCard(tester, id);
+      await tester.tap(find.byKey(ValueKey('menu-$row')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('message-menu')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('menu-delete')));
+      expect(find.byKey(const ValueKey('delete-card')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('delete-confirm')));
       await tester.pumpAndSettle();
     }
 
-    testWidgets('your own message: cancel, for me, and for everyone', (
+    testWidgets('your own message, delete for me: hidden here only', (
       tester,
     ) async {
       final chat = ChatFake(self: me.userId)
-        ..history['c1'] = [msg('m1', from: me.userId)];
+        ..history['c1'] = [msg('m1', from: me.userId, body: 'mine')];
       await pump(tester, chat);
-      await openDelete(tester, 'm1');
+      await confirm(tester, 'm1', 'delete-for-me');
 
-      expect(find.byKey(const ValueKey('delete-cancel')), findsOneWidget);
-      expect(find.byKey(const ValueKey('delete-for-me')), findsOneWidget);
-      expect(find.byKey(const ValueKey('delete-confirm')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('delete-cancel')));
-      await tester.pumpAndSettle();
+      expect(chat.hidden, ['m1']);
       expect(chat.deleted, isEmpty);
-      expect(chat.hidden, isEmpty);
-      expect(find.text('hi'), findsOneWidget);
+      expect(find.text('mine'), findsNothing);
     });
 
     testWidgets('somebody else\'s message: for me only, and it hides it', (
@@ -313,12 +322,7 @@ void main() {
       final chat = ChatFake(self: me.userId)
         ..history['c1'] = [msg('m1', from: bob.userId, body: 'from bob')];
       await pump(tester, chat);
-      await openDelete(tester, 'm1');
-
-      expect(find.byKey(const ValueKey('delete-cancel')), findsOneWidget);
-      expect(find.byKey(const ValueKey('delete-confirm')), findsNothing);
-      await tester.tap(find.byKey(const ValueKey('delete-for-me')));
-      await tester.pumpAndSettle();
+      await confirm(tester, 'm1', 'delete-for-me');
 
       expect(chat.hidden, ['m1']);
       expect(chat.deleted, isEmpty);
@@ -344,11 +348,7 @@ void main() {
           ),
         ];
       await pump(tester, chat, group: true);
-      await openDelete(tester, 'm1');
-
-      expect(find.byKey(const ValueKey('delete-confirm')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('delete-confirm')));
-      await tester.pumpAndSettle();
+      await confirm(tester, 'm1', 'delete-for-everyone');
 
       expect(chat.deleted, ['m1']);
       expect(find.text('from bob'), findsNothing);
@@ -365,10 +365,16 @@ void main() {
           ]
           ..history['c1'] = [msg('m1', from: bob.userId)];
         await pump(tester, chat, group: true);
-        await openDelete(tester, 'm1');
+        await openCard(tester, 'm1');
 
-        expect(find.byKey(const ValueKey('delete-for-me')), findsOneWidget);
-        expect(find.byKey(const ValueKey('delete-confirm')), findsNothing);
+        expect(
+          find.byKey(const ValueKey('menu-delete-for-me')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('menu-delete-for-everyone')),
+          findsNothing,
+        );
       },
     );
   });

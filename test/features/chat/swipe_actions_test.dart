@@ -3,12 +3,12 @@
 // phone-sized view), on Android and iOS:
 //  * swipe LEFT = reply, offered only when the message's actions include
 //    reply: the bubble follows the finger up to 96 px with a reply arrow;
-//    one selection haptic when the pull first reaches 64 px; released at
+//    one heavy-impact haptic when the pull first reaches 64 px; released at
 //    >= 64 px the reply target is set and the composer focused; under 64 px
 //    nothing; either way it springs back in 180 ms;
 //  * a RIGHT drag on a message is not the message's: it leaves the chat;
-//  * a tap opens the floating message card; long-press opens nothing
-//    (reserved for v0.42);
+//  * a tap opens the message (seen-by pill, reactions bar) and no card; a
+//    long-press opens the floating action card (Update 1 slice 7);
 //  * a screen reader still gets every action as a custom action;
 //  * vertical scroll never replies; reply and leave never trigger each other.
 // Written from the contract, never from how the widgets are built.
@@ -25,7 +25,7 @@ import '../../support/sis_ui.dart';
 /// The contract's numbers, in bubble travel (logical px).
 const threshold = 64.0;
 const clamp = 96.0;
-const click = 'HapticFeedbackType.selectionClick';
+const click = 'HapticFeedbackType.heavyImpact';
 
 double left(WidgetTester t, Finder f) => t.getTopLeft(f).dx;
 
@@ -295,23 +295,30 @@ void main() {
   });
 
   group('tap and long-press', () {
-    testWidgets('a tap opens the floating message card', (t) async {
-      await openChat(t);
+    testWidgets('a tap opens the message, no card, and moves nothing', (
+      t,
+    ) async {
+      final c = await openChat(t);
+      final start = left(t, bubble('m1'));
       await t.tap(bubble('m1'));
       await settle(t);
-      expect(menu, findsOneWidget);
-      expect(find.byKey(const ValueKey('menu-reply')), findsOneWidget);
-      expect(find.byKey(const ValueKey('menu-forward')), findsOneWidget);
+      expect(c.read(tappedMessageProvider), 'm1');
+      expect(menu, findsNothing);
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(left(t, bubble('m1')), start);
+      expect(c.read(replyingToProvider), isNull);
     }, variant: platforms);
 
-    testWidgets('long-press opens nothing and moves nothing', (t) async {
+    testWidgets('long-press opens the floating message card and moves '
+        'nothing', (t) async {
       final c = await openChat(t);
       final start = left(t, bubble('m1'));
       await t.longPress(bubble('m1'));
       await settle(t);
-      expect(menu, findsNothing);
+      expect(menu, findsOneWidget);
+      expect(find.byKey(const ValueKey('menu-reply')), findsOneWidget);
+      expect(find.byKey(const ValueKey('menu-forward')), findsOneWidget);
       expect(find.byType(BottomSheet), findsNothing);
-      expect(find.byType(Dialog), findsNothing);
       expect(left(t, bubble('m1')), start);
       expect(c.read(replyingToProvider), isNull);
     }, variant: platforms);

@@ -188,8 +188,8 @@ Future<void> sendText(WidgetTester t, String text) async {
   await t.pump();
 }
 
-Future<void> swipeAction(WidgetTester t, String id, String action) async {
-  await t.tap(bubble(id));
+Future<void> cardAction(WidgetTester t, String id, String action) async {
+  await t.longPress(bubble(id));
   await settle(t);
   await t.tap(byKey('menu-$action'));
   await settle(t);
@@ -301,7 +301,7 @@ void main() {
       final w = World();
       await start(t, w);
       await openChat(t, 'c1');
-      await swipeAction(t, 'm1', 'reply');
+      await cardAction(t, 'm1', 'reply');
       expect(replyBar, findsOneWidget);
       await type(t, 'on my way');
       await back(t);
@@ -322,7 +322,7 @@ void main() {
       final w = World();
       await start(t, w);
       await openChat(t, 'c1');
-      await swipeAction(t, 'm1', 'reply');
+      await cardAction(t, 'm1', 'reply');
       await type(t, 'on my way');
       await back(t);
       await openChat(t, 'c1');
@@ -337,7 +337,7 @@ void main() {
       final w = World();
       await start(t, w);
       await openChat(t, 'c1');
-      await swipeAction(t, 'm1', 'reply');
+      await cardAction(t, 'm1', 'reply');
       await back(t);
       await openChat(t, 'c1');
       expect(replyBar, findsOneWidget);
@@ -401,7 +401,7 @@ void main() {
       await start(t, w);
       await openChat(t, 'c1');
       await type(t, 'my draft');
-      await swipeAction(t, 'mine', 'edit');
+      await cardAction(t, 'mine', 'edit');
       expect(editBar, findsOneWidget);
       expect(composerText(t), 'see you at 5');
       await type(t, 'see you at 6');
@@ -424,7 +424,7 @@ void main() {
       final w = World();
       await start(t, w);
       await openChat(t, 'c1');
-      await swipeAction(t, 'mine', 'edit');
+      await cardAction(t, 'mine', 'edit');
       expect(editBar, findsOneWidget);
       await back(t);
 
@@ -439,7 +439,7 @@ void main() {
       await start(t, w);
       await openChat(t, 'c1');
       await type(t, 'my draft');
-      await swipeAction(t, 'mine', 'edit');
+      await cardAction(t, 'mine', 'edit');
       await t.tap(byKey('edit-cancel'));
       await settle(t);
       expect(editBar, findsNothing);

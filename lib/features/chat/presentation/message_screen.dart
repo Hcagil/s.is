@@ -15,6 +15,7 @@ import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../app/theme.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../appearance/presentation/chat_text_scale.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
@@ -42,12 +43,16 @@ import 'chat_search_bar.dart';
 import 'group_event_line.dart';
 import 'swipeable_message.dart';
 import 'message_actions.dart';
+import 'message_menu_card.dart';
 import 'person_avatar.dart';
 import 'photo_viewer.dart';
 import 'profile_pages.dart';
+import 'readers_card.dart';
 
 part 'message_bubble.dart';
 part 'reaction_chips.dart';
+part 'seen_by_pill.dart';
+part 'reactions_bar.dart';
 part 'message_body_with_time.dart';
 part 'message_attachment.dart';
 part 'message_composer.dart';
@@ -382,11 +387,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     return null;
   }
 
-  /// A tap on a message: closes the keyboard, then opens the action card
-  /// above the bubble (below it when there is no room).
-  /// Photo, link and quote taps are handled deeper in the bubble and win over
-  /// this.
-  Future<void> _openMessageMenu(Message message, {required bool mine}) async {
+  /// A long press on a message: closes the keyboard, then opens the action
+  /// card above the bubble (below it when there is no room), the pressed
+  /// bubble lit. Photo, link and quote taps are handled deeper in the bubble
+  /// and win over this.
+  Future<void> _openActionCard(Message message, {required bool mine}) async {
     FocusManager.instance.primaryFocus?.unfocus();
     // The bubble moves while the keyboard drops, so the card is placed after
     // it settles; capped at 30 frames.
@@ -407,13 +412,19 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       message,
       anchor: anchor,
       alignEnd: mine,
-      group:
-          widget.group ||
-          (ref.read(conversationListProvider).value ?? const <Conversation>[])
-              .any(
-                (c) => c.id == ref.read(openConversationProvider) && c.isGroup,
-              ),
     );
+  }
+
+  /// Sets or clears (null) the member's reaction on [messageId] and closes the
+  /// tap extras; a refusal shows a notice (this screen outlives the bar).
+  Future<void> _react(String messageId, String? emoji) async {
+    ref.read(tappedMessageProvider.notifier).clear();
+    final r = await ref
+        .read(reactionsProvider.notifier)
+        .react(messageId, emoji);
+    if (r case Err(:final failure) when mounted) {
+      showSisNotice(context, failure.message, isError: true);
+    }
   }
 
   /// The bubble's rectangle in global coordinates, or null when it is not on
@@ -520,6 +531,22 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     // chat, not one per bubble that scrolls into view. Each bubble's chips
     // select only their own message's list.
     ref.watch(reactionsProvider.select((_) => null));
+    // Who the "Seen by" pill and the readers card can name: the roster in a
+    // group, the other member in a 1:1.
+    final ReaderPeople people = {
+      for (final m in roster)
+        m.member.userId: (
+          name: m.member.displayName,
+          avatarPath: m.member.avatarPath,
+          slot: m.colorSlot,
+        ),
+      if (!isGroup && otherUserId != null)
+        otherUserId: (
+          name: listed?.other?.displayName ?? title ?? 'Member',
+          avatarPath: listed?.other?.avatarPath,
+          slot: null,
+        ),
+    };
     final timeline = ref.watch(chatTimelineProvider);
     final loadingOlder = ref.watch(olderLoadingProvider);
     final value = messages.value ?? const <Message>[];
@@ -710,25 +737,27 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                     ref,
                                     message,
                                     MessageAction.reply,
-                                    canDeleteForEveryone: true,
-                                    anchor: _bubbleRect(message.id),
-                                    alignEnd: mine,
-                                    group: isGroup,
                                   ),
-                                  onAction: (action) {
-                                    runMessageAction(
-                                      context,
-                                      ref,
-                                      message,
-                                      action,
-                                      canDeleteForEveryone: true,
-                                      anchor: _bubbleRect(message.id),
-                                      alignEnd: mine,
-                                      group: isGroup,
-                                    );
-                                  },
-                                  onTap: () =>
-                                      _openMessageMenu(message, mine: mine),
+                                  onAction: (action) => runMessageAction(
+                                    context,
+                                    ref,
+                                    message,
+                                    action,
+                                  ),
+                                  // A tap shows the "Seen by" pill and the reactions bar; a long press opens the action card. The system chat takes neither.
+                                  onTap: isSystem
+                                      ? null
+                                      : () => ref
+                                            .read(
+                                              tappedMessageProvider.notifier,
+                                            )
+                                            .toggle(message.id),
+                                  onLongPress: isSystem
+                                      ? null
+                                      : () => _openActionCard(
+                                          message,
+                                          mine: mine,
+                                        ),
                                   child: Consumer(
                                     builder: (context, ref, _) {
                                       // Per-row watch: only a bubble whose own tick changed rebuilds.
@@ -743,7 +772,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                               ),
                                             )
                                           : null;
-                                      return _Bubble(
+                                      final bubble = _Bubble(
                                         message,
                                         key: ValueKey('bubble-${message.id}'),
                                         mine: mine,
@@ -770,6 +799,36 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                         highlightQuery: searchQuery,
                                         isCurrentHit:
                                             message.id == currentHitId,
+                                      );
+                                      final tapped = ref.watch(
+                                        tappedMessageProvider.select(
+                                          (t) => t == message.id,
+                                        ),
+                                      );
+                                      final reactable =
+                                          !isSystem && message.canReact;
+                                      // Always a Column, so the bubble keeps its state when the extras come and go.
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          if (tapped &&
+                                              mine &&
+                                              !message.isDeleted)
+                                            _SeenByPill(
+                                              message: message,
+                                              people: people,
+                                            ),
+                                          bubble,
+                                          if (tapped && reactable)
+                                            _ReactionsBar(
+                                              messageId: message.id,
+                                              mine: mine,
+                                              onPick: (e) =>
+                                                  _react(message.id, e),
+                                            ),
+                                        ],
                                       );
                                     },
                                   ),

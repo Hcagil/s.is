@@ -243,4 +243,46 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get whatsNewUpToDate => 'Güncelsiniz';
+
+  @override
+  String get messageActionReply => 'Yanıtla';
+
+  @override
+  String get messageActionCopy => 'Kopyala';
+
+  @override
+  String get messageActionForward => 'İlet';
+
+  @override
+  String get messageActionEdit => 'Düzenle';
+
+  @override
+  String get messageActionPin => 'Mesajı sabitle';
+
+  @override
+  String get messageActionDeleteForMe => 'Benim için sil';
+
+  @override
+  String get messageActionDeleteForEveryone => 'Herkes için sil';
+
+  @override
+  String messageSeenBy(int count) {
+    return '$count kişi gördü';
+  }
+
+  @override
+  String get messageMoreReactions => 'Daha fazla tepki';
+
+  @override
+  String get messageDeleteTitle => 'Mesaj silinsin mi?';
+
+  @override
+  String get messageDeleteForMeBody => 'Yalnızca senin cihazlarında gizlenir.';
+
+  @override
+  String get messageDeleteForEveryoneBody =>
+      'Bu sohbetteki herkes için kaldırılır.';
+
+  @override
+  String get messageDeleteCancel => 'Vazgeç';
 }

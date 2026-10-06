@@ -398,7 +398,7 @@ signs a short-lived action token into the push and `notification-action`
   user id (UUID) is also in the push data now.
 - A request over 20000 bytes or a reply over 4000 characters is refused (400)
   before the database; every refused ticket is 403, a missing token 400.
-- Lock-screen Reply: decided 2026-10-06 (owner). Reply requires the phone to be unlocked (Android 12+ and iOS); Mark as read works on a locked phone. On Android 11 and older the system cannot enforce it.
+- Lock-screen Reply: decided 2026-10-06 (owner). Reply requires an unlocked phone on Android 12+ (the system enforces it, `setAuthenticationRequired`) and iOS. On Android 11 and older (API below 31) the system cannot enforce it, so a notification drawn natively (`InstantPush`) omits Reply whenever the phone has a secure lock (`KeyguardManager.isDeviceSecure`), locked or not; the check is made when the notification is drawn, so a lock set afterwards applies from the next one. Mark as read stays on every version. Limit: on those versions a phone with a PIN, pattern or password loses Reply in the shade too, because the app cannot tell when the phone locks (the screen-off and user-present broadcasts cannot be declared in the manifest, and a lock-screen-only version of the notification does not hold when the user shows all content on the lock screen). A notification drawn by the Dart side (`flutter_local_notifications`) is not covered by this rule.
 
 ### Group name colour slot (finding L1)
 

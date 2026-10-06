@@ -14,7 +14,7 @@
 #   - only PRs whose author is OWNER, MEMBER or COLLABORATOR count (anyone else
 #     could edit a merged PR's body and have it sent to every member as SIS);
 #   - the joined note is cut to 3980 characters, then a non-empty note gets a
-#     first line "Version <x.y.z>" from pubspec.yaml (room under the 4000-char
+#     first line "Version $VERSION" (scope's version name) (room under the 4000-char
 #     release_notes check and TestFlight limit); an empty note gets no prefix;
 #   - a failing `gh api` pull read fails the run block, and the step is
 #     continue-on-error so that failure never blocks the release;
@@ -51,6 +51,8 @@ grep -q 'supabase db query' "$tmp/step.sh" || { echo "FAIL: step not found in $w
 note_keys=$(awk '/- name: Store the What.s new note for this build/ { f = 1; next } f && /^ *run: \|/ { exit } f' "$workflow")
 grep -q '^ *continue-on-error: true *$' <<<"$note_keys" \
   || { echo "FAIL: the note step must be continue-on-error: a gh/db hiccup must not block the release"; exit 1; }
+grep -q '^ *VERSION: \${{ needs\.scope\.outputs\.name }} *$' <<<"$note_keys" \
+  || { echo "FAIL: the note step must get VERSION: \${{ needs.scope.outputs.name }} (the version line)"; exit 1; }
 grep -q '^ *id: note *$' <<<"$note_keys" || { echo "FAIL: the note step must be id: note (publish reads steps.note.outputs.b64)"; exit 1; }
 # publish's outputs map hands the note on.
 grep -q '^      note_b64: \${{ steps\.note\.outputs\.b64 }}$' <<<"$(awk '$0 == "  publish:" { j = 1; next } j && /^  [A-Za-z0-9_-]+:/ { exit } j && /^    outputs:$/ { o = 1; next }
@@ -138,8 +140,6 @@ g commit -q --allow-empty -m 'chore: tidy (#11)'
 g commit -q --allow-empty -m 'docs: no pull request here'
 g commit -q --allow-empty -m 'fix: faster start (#12)'
 head_sha=$(g rev-parse HEAD)
-# The step reads the version from pubspec.yaml in its working directory.
-printf 'name: sis\nversion: 1.2.3+45\n' > "$repo/pubspec.yaml"
 V='Version 1.2.3'
 
 printf 'For users: Old news.\n' > "$tmp/prs/9"
@@ -155,7 +155,7 @@ run_step() {
   (cd "$repo" && PATH="$tmp/bin:$PATH" STUB_PREV_TAG="$1" STUB_PRS="$tmp/prs" GITHUB_OUTPUT="$tmp/ghout" \
     STUB_CALLS="$tmp/calls" STUB_API="$tmp/api" STUB_REJECTS="$tmp/rejects" \
     STUB_REPO=owner/repo GITHUB_REPOSITORY=owner/repo \
-    SHA="$head_sha" BUILD=179 GH_TOKEN=x \
+    SHA="$head_sha" BUILD=179 VERSION=1.2.3 GH_TOKEN=x \
     bash -e "$tmp/step.sh") > "$tmp/out" 2>&1 || rc=$?
   # A call the real gh would refuse fails the test even where the step's
   # `|| exit 1`, a pipeline or continue-on-error would hide it.

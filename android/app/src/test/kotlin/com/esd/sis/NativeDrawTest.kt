@@ -264,6 +264,32 @@ class NativeDrawTest {
     }
 
     @Test
+    fun `above the pace cap a burst is drawn without the gap, still in arrival order`() {
+        assertEquals(15, PushArrivalReceiver.PACE_CAP)
+        val n = PushArrivalReceiver.PACE_CAP + 3
+        val chats = (1..n).map { "cap-$it" }
+        // All queued before the first is drawn: depths 1..18 at arrival.
+        chats.forEachIndexed { i, c -> broadcast(push(chat = c, title = "Chat $i")) }
+
+        val seen = linkedMapOf<String, Long>()
+        waitFor("all $n drawn") {
+            val now = System.nanoTime()
+            for (c in chats) if (c !in seen && posted(c) != null) seen[c] = now
+            seen.size == chats.size
+        }
+
+        assertEquals("arrival order", chats, seen.keys.toList())
+        val gaps = seen.values.toList().zipWithNext { a, b -> (b - a) / 1_000_000 }
+        // gaps[i] is draw i+2 after draw i+1: draws 2..15 keep the gap, 16..18 do not.
+        for (i in 0 until PushArrivalReceiver.PACE_CAP - 1) {
+            assertTrue("draw ${i + 2} came ${gaps[i]} ms after the one before: $gaps", gaps[i] >= 280)
+        }
+        for (i in PushArrivalReceiver.PACE_CAP - 1 until gaps.size) {
+            assertTrue("draw ${i + 2} above the cap waited ${gaps[i]} ms: $gaps", gaps[i] < 150)
+        }
+    }
+
+    @Test
     fun `show with postSummaryNow false leaves the summary to a later push`() {
         val p = push(chat = "x").extras!!
         assertTrue(InstantPush.show(app, p, false))

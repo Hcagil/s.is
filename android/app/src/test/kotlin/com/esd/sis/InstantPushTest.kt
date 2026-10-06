@@ -23,7 +23,6 @@ class InstantPushTest {
 
     /** A push the native side must draw: data-only, ours, backgrounded, allowed. */
     private fun decide(
-        originalPriority: String? = null,
         hasNotificationBlock: Boolean = false,
         appInForeground: Boolean = false,
         owner: String? = "member-a",
@@ -35,14 +34,9 @@ class InstantPushTest {
         notificationsEnabled, hasFields,
     )
 
+    /** Priority is not an input any more: any priority is drawn (PushArrivalReceiverTest). */
     @Test
-    fun `missing priority is drawn at once`() = assertTrue(decide(originalPriority = null))
-
-    @Test
-    fun `normal priority is drawn at once`() = assertTrue(decide(originalPriority = "normal"))
-
-    @Test
-    fun `high priority is drawn too`() = assertTrue(decide(originalPriority = "high"))
+    fun `a push passing every gate is drawn at once`() = assertTrue(decide())
 
     @Test
     fun `a push with a notification block is not ours`() =
@@ -72,16 +66,14 @@ class InstantPushTest {
     fun `missing title, body or conversation draws nothing`() = assertFalse(decide(hasFields = false))
 
     @Test
-    fun `each gate alone blocks a push of either priority`() {
+    fun `each gate alone blocks a push`() {
         // Every other gate passes, so a red here names the one gate that was ignored.
-        for (p in listOf("normal", "high")) {
-            assertTrue(p, decide(originalPriority = p))
-            assertFalse(p, decide(originalPriority = p, hasNotificationBlock = true))
-            assertFalse(p, decide(originalPriority = p, appInForeground = true))
-            assertFalse(p, decide(originalPriority = p, notificationsEnabled = false))
-            assertFalse(p, decide(originalPriority = p, targetUser = "member-b"))
-            assertFalse(p, decide(originalPriority = p, hasFields = false))
-        }
+        assertTrue(decide())
+        assertFalse(decide(hasNotificationBlock = true))
+        assertFalse(decide(appInForeground = true))
+        assertFalse(decide(notificationsEnabled = false))
+        assertFalse(decide(targetUser = "member-b"))
+        assertFalse(decide(hasFields = false))
     }
 
     // ---- Reply: offered on API 31+ (behind an unlock), or with no secure lock ----

@@ -3,6 +3,7 @@ package com.esd.sis
 import android.Manifest
 import android.app.ActivityManager
 import android.app.Application
+import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
@@ -11,6 +12,10 @@ import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import androidx.test.core.app.ApplicationProvider
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -264,6 +269,84 @@ class NotificationActionTest {
             posted()?.let { n -> lines(n).any { it.contains("Not sent") } } == true
         }
         assertNotNull(PushInbox.find(PushInbox.parse(prefs.getString(key, null)), chat))
+    }
+
+    // ---- L1: below API 31 a Reply is refused while the phone is locked ----
+
+    /**
+     * A loopback port that counts the connections made to it. It speaks no TLS, so a post to it
+     * fails after connecting -- the count is what shows whether anything was sent.
+     */
+    private class CountingServer : AutoCloseable {
+        private val socket = ServerSocket(0, 50, InetAddress.getLoopbackAddress())
+        val connections = AtomicInteger()
+        val url = "https://127.0.0.1:${socket.localPort}/notification-action"
+
+        init {
+            thread(isDaemon = true) {
+                while (!socket.isClosed) {
+                    runCatching { socket.accept().use { connections.incrementAndGet() } }
+                }
+            }
+        }
+
+        override fun close() = socket.close()
+    }
+
+    private fun locked(on: Boolean) =
+        shadowOf(app.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).setIsDeviceLocked(on)
+
+    private fun tapMarkRead(url: String) {
+        app.sendBroadcast(NotificationActionReceiver.intentFor(app, chat, TOKEN, url, false))
+        ShadowLooper.idleMainLooper()
+    }
+
+    private fun notSent() = posted()?.let { n -> lines(n).any { it.contains("Not sent") } } == true
+
+    @Test
+    @Config(sdk = [30])
+    fun `API 30 locked - a Reply sends nothing and says Not sent`() {
+        arrives()
+        locked(true)
+        CountingServer().use { server ->
+            tapReply(server.url, "typed on the lock screen")
+            waitFor("a Not sent line") { notSent() }
+            Thread.sleep(500) // a request would have connected by now
+            assertEquals("connections made", 0, server.connections.get())
+        }
+    }
+
+    @Test
+    @Config(sdk = [30])
+    fun `API 30 locked - Mark as read still goes out`() {
+        arrives()
+        locked(true)
+        CountingServer().use { server ->
+            tapMarkRead(server.url)
+            waitFor("a connection") { server.connections.get() > 0 }
+        }
+    }
+
+    @Test
+    @Config(sdk = [30])
+    fun `API 30 unlocked - a Reply goes out`() {
+        arrives()
+        locked(false)
+        CountingServer().use { server ->
+            tapReply(server.url, "on my way")
+            waitFor("a connection") { server.connections.get() > 0 }
+        }
+    }
+
+    @Test
+    @Config(sdk = [31])
+    fun `API 31 locked - a Reply goes out, the unlock was Android's to ask for`() {
+        arrives()
+        locked(true)
+        CountingServer().use { server ->
+            tapReply(server.url, "on my way")
+            waitFor("a connection") { server.connections.get() > 0 }
+        }
     }
 
     // ---- PushInbox.remove ----

@@ -297,6 +297,37 @@ void main() {
       );
     });
 
+    // L2: the Dart action code is gone; the list it kept on disk goes too.
+    const actionsKey = 'flutter.sis.push_actions';
+
+    test('removes the stale push_actions list and nothing else', () async {
+      const store = SharedPrefsAlertStore();
+      await store.saveChat('c1', const ChatAlert(vibration: AlertChoice.off));
+      disk.values[actionsKey] = '[{"c":"c1","t":"v1.old.sig"}]';
+      disk.values['flutter.sis.push_inbox_owner'] = 'member-a';
+      newIsolate();
+
+      await LocalPushDisplay.pruneChannels();
+
+      expect(disk.values.containsKey(actionsKey), isFalse, reason: '$disk');
+      expect(disk.values['flutter.sis.push_inbox_owner'], 'member-a');
+      expect(disk.values.containsKey(_chatsKey), isTrue);
+    });
+
+    test('never throws when removing the stale list fails', () async {
+      disk.values[actionsKey] = '[]';
+      newIsolate();
+      await SharedPreferences.getInstance();
+      messenger.setMockMethodCallHandler(_prefsChannel, (call) async {
+        if (call.method == 'remove' || call.method.startsWith('clear')) {
+          throw PlatformException(code: 'boom', message: 'remove failed');
+        }
+        return disk.handle(call);
+      });
+
+      await expectLater(LocalPushDisplay.pruneChannels(), completes);
+    });
+
     test('never throws when deleting fails', () async {
       existingChannels(['messages', 'msg-off-v0']);
       deleteThrows = PlatformException(code: 'boom', message: 'delete failed');

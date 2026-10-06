@@ -162,9 +162,9 @@ double kept(Color before, Color after) {
   return v(after) / v(before);
 }
 
-/// Opens a card off [opening] and checks the spot [inside] it is lit: the
-/// dim leaves it clearly brighter than the screen's edge on the same row,
-/// which is dimmed. Returns once the card is open.
+/// Opens a card off [opening] and checks the spot [inside] it (the anchor)
+/// stays at full brightness while the screen's edge on the same row drops to
+/// about 27%: one dim, with a hole over the anchor. Returns once open.
 Future<void> expectLitWhile(
   WidgetTester t,
   Offset inside,
@@ -177,11 +177,15 @@ Future<void> expectLitWhile(
   await t.pumpAndSettle();
   final edgeKept = kept(edgeBefore, await pixel(t, edge));
   final insideKept = kept(insideBefore, await pixel(t, inside));
-  expect(edgeKept, lessThan(0.8), reason: 'the rest of the screen is dimmed');
+  expect(
+    edgeKept,
+    closeTo(0.27, 0.05),
+    reason: 'the rest of the screen is at about 27% brightness',
+  );
   expect(
     insideKept,
-    greaterThan(edgeKept + 0.15),
-    reason: 'lit: dimmed far less than the rest ($insideKept vs $edgeKept)',
+    closeTo(1.0, 0.05),
+    reason: 'the anchor is at full brightness, not dimmed',
   );
 }
 

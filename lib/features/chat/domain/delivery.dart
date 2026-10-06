@@ -13,24 +13,14 @@ enum Delivery { pending, sent, delivered, read }
 /// Recipients are the [marks] of everyone but the sender.
 ///
 /// Delivery comes from [ReadMark.deliveredAt] (the server records it per
-/// member, whether or not that member shares read status); [deliveredTo] adds
-/// user ids known delivered some other way.
-Delivery deliveryOf(
-  Message message,
-  List<ReadMark> marks, {
-  Set<String> deliveredTo = const {},
-}) {
+/// member, whether or not that member shares read status).
+Delivery deliveryOf(Message message, List<ReadMark> marks) {
   if (message.isPending) return Delivery.pending;
   final recipients = marks.where((m) => m.userId != message.senderId).toList();
   if (recipients.isEmpty) return Delivery.sent;
   final sentAt = message.createdAt;
   if (recipients.every((m) => m.hasRead(sentAt))) return Delivery.read;
-  if (recipients.every(
-    (m) =>
-        deliveredTo.contains(m.userId) ||
-        m.hasDelivered(sentAt) ||
-        m.hasRead(sentAt),
-  )) {
+  if (recipients.every((m) => m.hasDelivered(sentAt) || m.hasRead(sentAt))) {
     return Delivery.delivered;
   }
   return Delivery.sent;

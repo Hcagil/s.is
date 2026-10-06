@@ -47,12 +47,21 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
       final sub = value.listen(_saw);
       ref.onDispose(sub.cancel);
     }
-    // Delivery is a separate topic; a failed join only costs the live ticks.
-    final delivered = await repo.deliveredUpdates(conversationId);
-    if (delivered case Ok(:final value)) {
-      final sub = value.listen(_saw);
-      ref.onDispose(sub.cancel);
-    }
+    // Delivery is a separate topic; a failed or slow join only costs the live
+    // ticks, so the marks load without waiting for it. Events before the load
+    // lands are buffered by _saw.
+    unawaited(
+      repo.deliveredUpdates(conversationId).then((delivered) {
+        if (delivered case Ok(:final value)) {
+          final sub = value.listen(_saw);
+          if (ref.mounted) {
+            ref.onDispose(sub.cancel);
+          } else {
+            unawaited(sub.cancel());
+          }
+        }
+      }),
+    );
     final loaded = switch (await repo.readMarks(conversationId)) {
       Ok(:final value) => value,
       Err(:final failure) => throw failure,
@@ -69,6 +78,9 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
     state = AsyncData(_merged(current, mark));
   }
 
+  static DateTime? _later(DateTime? a, DateTime? b) =>
+      a == null ? b : (b == null || !b.isAfter(a) ? a : b);
+
   /// [marks] with [mark] applied: only a later read or delivery moves a
   /// member's marks.
   static List<ReadMark> _merged(List<ReadMark> marks, ReadMark mark) => [
@@ -76,17 +88,8 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
       if (m.userId == mark.userId)
         m.copyWith(
           shares: mark.readAt != null ? true : m.shares,
-          readAt:
-              mark.readAt != null &&
-                  (m.readAt == null || mark.readAt!.isAfter(m.readAt!))
-              ? mark.readAt
-              : m.readAt,
-          deliveredAt:
-              mark.deliveredAt != null &&
-                  (m.deliveredAt == null ||
-                      mark.deliveredAt!.isAfter(m.deliveredAt!))
-              ? mark.deliveredAt
-              : m.deliveredAt,
+          readAt: _later(m.readAt, mark.readAt),
+          deliveredAt: _later(m.deliveredAt, mark.deliveredAt),
         )
       else
         m,

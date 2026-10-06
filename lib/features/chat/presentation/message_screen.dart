@@ -509,8 +509,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     };
     // Each sender's colour slot, from the group's roster (empty in a 1:1).
     final slotByUser = {for (final m in roster) m.member.userId: m.colorSlot};
-    // Read and delivery marks: the ticks on your own messages.
-    final marks = ref.watch(readMarksProvider).value ?? const <ReadMark>[];
+    // Keeps the read and delivery marks loaded and live for the whole chat
+    // (an auto-dispose provider the rows would otherwise only start when one
+    // of your own messages is on screen). The select never changes, so this
+    // screen does not rebuild on a tick: each of your bubbles watches its own.
+    ref.watch(readMarksProvider.select((_) => null));
     final timeline = ref.watch(chatTimelineProvider);
     final loadingOlder = ref.watch(olderLoadingProvider);
     final value = messages.value ?? const <Message>[];
@@ -687,9 +690,6 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                     : value
                                           .where((m) => m.id == message.replyTo)
                                           .firstOrNull;
-                                final delivery = mine && !message.isDeleted
-                                    ? deliveryOf(message, marks)
-                                    : null;
                                 final allowedActions = allowedMessageActions(
                                   message,
                                   me: me,
@@ -723,29 +723,49 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                   },
                                   onTap: () =>
                                       _openMessageMenu(message, mine: mine),
-                                  child: _Bubble(
-                                    message,
-                                    key: ValueKey('bubble-${message.id}'),
-                                    mine: mine,
-                                    delivery: delivery,
-                                    sender:
-                                        isGroup &&
-                                            !mine &&
-                                            startsRun(value, index)
-                                        ? (names[message.senderId] ?? 'Member')
-                                        : null,
-                                    senderLeft: departedSenderIds.contains(
-                                      message.senderId,
-                                    ),
-                                    senderSlot: slotByUser[message.senderId],
-                                    quoted: quoted,
-                                    quotedName: quoted == null
-                                        ? null
-                                        : quoted.senderId == me
-                                        ? 'You'
-                                        : (names[quoted.senderId] ?? 'Member'),
-                                    highlightQuery: searchQuery,
-                                    isCurrentHit: message.id == currentHitId,
+                                  child: Consumer(
+                                    builder: (context, ref, _) {
+                                      // Per-row watch: only a bubble whose own tick changed rebuilds.
+                                      final delivery =
+                                          mine && !message.isDeleted
+                                          ? ref.watch(
+                                              readMarksProvider.select(
+                                                (a) => deliveryOf(
+                                                  message,
+                                                  a.value ?? const <ReadMark>[],
+                                                ),
+                                              ),
+                                            )
+                                          : null;
+                                      return _Bubble(
+                                        message,
+                                        key: ValueKey('bubble-${message.id}'),
+                                        mine: mine,
+                                        delivery: delivery,
+                                        sender:
+                                            isGroup &&
+                                                !mine &&
+                                                startsRun(value, index)
+                                            ? (names[message.senderId] ??
+                                                  'Member')
+                                            : null,
+                                        senderLeft: departedSenderIds.contains(
+                                          message.senderId,
+                                        ),
+                                        senderSlot:
+                                            slotByUser[message.senderId],
+                                        quoted: quoted,
+                                        quotedName: quoted == null
+                                            ? null
+                                            : quoted.senderId == me
+                                            ? 'You'
+                                            : (names[quoted.senderId] ??
+                                                  'Member'),
+                                        highlightQuery: searchQuery,
+                                        isCurrentHit:
+                                            message.id == currentHitId,
+                                      );
+                                    },
                                   ),
                                 );
                                 return message.deletion ==

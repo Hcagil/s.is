@@ -218,12 +218,11 @@ class SisBrand extends ThemeExtension<SisBrand> {
     required this.glow,
     required this.glowDeep,
     required this.danger,
-    required this.unreadEdge,
     required this.prism,
   });
 
   final Color background, surface, surfaceHigh, text, muted, line;
-  final Color brand, brandDeep, theirs, glow, glowDeep, danger, unreadEdge;
+  final Color brand, brandDeep, theirs, glow, glowDeep, danger;
 
   /// Corner radius of a chat bubble (slice 5 uses it).
   final double bubbleRadius = 16;
@@ -242,13 +241,16 @@ class SisBrand extends ThemeExtension<SisBrand> {
   LinearGradient get fadingSeparator =>
       LinearGradient(colors: [line.withAlpha(0), line, line.withAlpha(0)]);
 
+  /// White's luminance (1.0) plus the 0.05 WCAG offset.
+  static const _whiteContrastBase = 1.05;
+
   /// [c] darkened toward black until white text on it reaches [min]:1
   /// (WCAG contrast); unchanged when it already does.
   static Color forWhiteText(Color c, {double min = 4.5}) {
     var out = c;
     for (
       var i = 0;
-      i < 30 && 1.05 / (out.computeLuminance() + 0.05) < min;
+      i < 30 && _whiteContrastBase / (out.computeLuminance() + 0.05) < min;
       i++
     ) {
       out = Color.lerp(out, const Color(0xFF000000), .06)!;
@@ -288,7 +290,6 @@ class SisBrand extends ThemeExtension<SisBrand> {
     glow: Color(0x295B4CF0),
     glowDeep: Color(0x1A2F3FD1),
     danger: Color(0xFFD23F57),
-    unreadEdge: Color(0xFFFFD54F),
     prism: LinearGradient(
       colors: [Color(0xFF2E36D9), Color(0xFF6D35E8), Color(0xFFB23FD0)],
       stops: [0, .55, 1],
@@ -308,7 +309,6 @@ class SisBrand extends ThemeExtension<SisBrand> {
     glow: Color(0x3D7B6BFF),
     glowDeep: Color(0x293D4BE8),
     danger: Color(0xFFFF7B8E),
-    unreadEdge: Color(0xFFFFD54F),
     prism: LinearGradient(
       colors: [Color(0xFF4450FF), Color(0xFF8B5CFF), Color(0xFFC45BE6)],
       stops: [0, .55, 1],
@@ -332,7 +332,6 @@ class SisBrand extends ThemeExtension<SisBrand> {
     Color? glow,
     Color? glowDeep,
     Color? danger,
-    Color? unreadEdge,
     LinearGradient? prism,
   }) => SisBrand(
     background: background ?? this.background,
@@ -347,7 +346,6 @@ class SisBrand extends ThemeExtension<SisBrand> {
     glow: glow ?? this.glow,
     glowDeep: glowDeep ?? this.glowDeep,
     danger: danger ?? this.danger,
-    unreadEdge: unreadEdge ?? this.unreadEdge,
     prism: prism ?? this.prism,
   );
 

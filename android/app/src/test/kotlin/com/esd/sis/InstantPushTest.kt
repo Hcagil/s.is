@@ -8,8 +8,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * InstantPush's decision logic, from the 0.30.7 contract (docs/DECISIONS.md, "Android draws a
- * not-high-priority push itself, at once"), not from the code.
+ * InstantPush's decision logic, from the Update 1 contract (the native side is the only drawer on
+ * Android, for a push of any priority), not from the code.
  *
  * The ids, group key and alert vectors are shared with the Dart side through
  * test/fixtures/instant_push_vectors.json (instant_push_parity_test.dart checks the same file
@@ -21,9 +21,8 @@ class InstantPushTest {
 
     // ---- the decision: draw now, or leave it to Dart ----
 
-    /** A push the native side must draw: data-only, ours, backgrounded, allowed, not high. */
+    /** A push the native side must draw: data-only, ours, backgrounded, allowed. */
     private fun decide(
-        originalPriority: String? = null,
         hasNotificationBlock: Boolean = false,
         appInForeground: Boolean = false,
         owner: String? = "member-a",
@@ -31,18 +30,13 @@ class InstantPushTest {
         notificationsEnabled: Boolean = true,
         hasFields: Boolean = true,
     ) = InstantPush.shouldPostNow(
-        originalPriority, hasNotificationBlock, appInForeground, owner, targetUser,
+        hasNotificationBlock, appInForeground, owner, targetUser,
         notificationsEnabled, hasFields,
     )
 
+    /** Priority is not an input any more: any priority is drawn (PushArrivalReceiverTest). */
     @Test
-    fun `missing priority is drawn at once`() = assertTrue(decide(originalPriority = null))
-
-    @Test
-    fun `normal priority is drawn at once`() = assertTrue(decide(originalPriority = "normal"))
-
-    @Test
-    fun `high priority is left to Dart`() = assertFalse(decide(originalPriority = "high"))
+    fun `a push passing every gate is drawn at once`() = assertTrue(decide())
 
     @Test
     fun `a push with a notification block is not ours`() =
@@ -72,14 +66,32 @@ class InstantPushTest {
     fun `missing title, body or conversation draws nothing`() = assertFalse(decide(hasFields = false))
 
     @Test
-    fun `each gate alone blocks a normal-priority push`() {
+    fun `each gate alone blocks a push`() {
         // Every other gate passes, so a red here names the one gate that was ignored.
-        assertTrue(decide(originalPriority = "normal"))
-        assertFalse(decide(originalPriority = "normal", hasNotificationBlock = true))
-        assertFalse(decide(originalPriority = "normal", appInForeground = true))
-        assertFalse(decide(originalPriority = "normal", notificationsEnabled = false))
-        assertFalse(decide(originalPriority = "normal", targetUser = "member-b"))
-        assertFalse(decide(originalPriority = "normal", hasFields = false))
+        assertTrue(decide())
+        assertFalse(decide(hasNotificationBlock = true))
+        assertFalse(decide(appInForeground = true))
+        assertFalse(decide(notificationsEnabled = false))
+        assertFalse(decide(targetUser = "member-b"))
+        assertFalse(decide(hasFields = false))
+    }
+
+    // ---- Reply: offered on API 31+ (behind an unlock), or with no secure lock ----
+
+    @Test
+    fun `reply is offered on API 31 and later whatever the lock`() {
+        for (sdk in listOf(31, 33, 34, 35)) {
+            assertTrue("$sdk secure", InstantPush.replyOffered(sdk, true))
+            assertTrue("$sdk open", InstantPush.replyOffered(sdk, false))
+        }
+    }
+
+    @Test
+    fun `reply is withheld on API 30 and older only behind a secure lock`() {
+        for (sdk in listOf(26, 29, 30)) {
+            assertFalse("$sdk secure", InstantPush.replyOffered(sdk, true))
+            assertTrue("$sdk open", InstantPush.replyOffered(sdk, false))
+        }
     }
 
     // ---- the id: the Dart side's, so Dart replaces it in place ----

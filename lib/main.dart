@@ -38,7 +38,6 @@ import 'features/notifications/data/channel_tone_picker.dart';
 import 'features/notifications/data/deferred_push_source.dart';
 import 'features/notifications/data/firebase_push_source.dart';
 import 'features/notifications/data/local_push_display.dart';
-import 'features/notifications/data/notification_action_background.dart';
 import 'features/notifications/data/platform_app_badge.dart';
 import 'features/notifications/data/shared_prefs_alert_store.dart';
 import 'features/notifications/data/shared_prefs_notification_explainer_store.dart';
@@ -216,10 +215,7 @@ Future<void> _setUpPush(Completer<PushSource> ready) async {
     // ios/Runner/GoogleService-Info.plist (iOS), bundled at build time.
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(onBackgroundPush);
-    await LocalPushDisplay.init(
-      onTap: FirebasePushSource.tapped,
-      onAction: onNotificationAction,
-    );
+    await LocalPushDisplay.init(onTap: FirebasePushSource.tapped);
     ready.complete(FirebasePushSource(FirebaseMessaging.instance));
     // Drops the pre-0.26 'messages' channel and any combination now unused.
     await LocalPushDisplay.pruneChannels();

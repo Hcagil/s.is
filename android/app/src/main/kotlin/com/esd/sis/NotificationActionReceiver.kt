@@ -1,8 +1,10 @@
 package com.esd.sis
 
+import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -14,7 +16,7 @@ import org.json.JSONObject
 /**
  * The "Mark as read" and "Reply" buttons of a notification the native InstantPush drew (a closed app,
  * where no Dart runs). Sends the tapped button to the notification-action function with the action
- * token the push carried, then updates the notification. The Dart twin is onNotificationAction.
+ * token the push carried, then updates the notification.
  */
 class NotificationActionReceiver : BroadcastReceiver() {
     companion object {
@@ -49,6 +51,14 @@ class NotificationActionReceiver : BroadcastReceiver() {
         } else null
 
         if (reply && (text.isNullOrEmpty() || text.length > MAX_REPLY)) return
+
+        // Below API 31 the system cannot hold a Reply behind the unlock; a notification drawn by an older build (or before a lock was set) still has the button. Refused while the phone is locked: nothing is sent, the chat shows the "not sent" line.
+        if (reply && Build.VERSION.SDK_INT < Build.VERSION_CODES.S &&
+            (context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isDeviceLocked
+        ) {
+            afterAction(context, conversationId, true, text, false)
+            return
+        }
 
         val pending = goAsync()
         Thread {

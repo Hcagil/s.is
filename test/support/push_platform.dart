@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:firebase_messaging_platform_interface/firebase_messaging_platform_interface.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/features/notifications/domain/notification_inbox.dart';
 
 /// The notification shade: every posted notification by id.
 class Shade {
@@ -329,5 +330,111 @@ class DeviceMessaging extends FirebaseMessagingPlatform {
     prompts++;
     status = answer;
     return _settings(status);
+  }
+}
+
+/// Android's native receiver (PushArrivalReceiver + InstantPush.kt), which
+/// cannot run in a Dart test. Since Update 1 it is the only thing that draws
+/// a chat notification on Android; the Dart handler only records receipts.
+/// Reproduced from its contract, and held to the Kotlin code by the shared
+/// vectors (test/fixtures/instant_push_vectors.json for the ids and group
+/// key, push_inbox_vectors.json for the stored inbox and summary):
+///
+/// - a push without a UUID message_id is not drawn and leaves no note;
+/// - otherwise the arrival note "ms,?,?,q" is written at once and settled to
+///   ",n" (drawn) or no suffix (not drawn), unless Dart took it already;
+/// - drawn only when: no notification block, an inbox owner, addressed to
+///   the owner (or to nobody), notifications on, title/body/conversation;
+/// - a drawn push adds its line to `flutter.sis.push_inbox.<owner>` and
+///   leaves the chat's notification (FNV id, payload = conversation) and the
+///   group summary (id 0) in the shade.
+class NativeReceiver {
+  NativeReceiver(this.shade, this.disk);
+
+  final Shade shade;
+  final DiskPrefs disk;
+
+  /// Notifications switched off in Android settings.
+  bool notificationsOn = true;
+
+  static const groupKey = 'sis.messages';
+  static final _uuid = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    caseSensitive: false,
+  );
+
+  /// 32-bit FNV-1a of the UTF-8 conversation id, top bit cleared.
+  static int notificationId(String conversationId) {
+    var h = 0x811c9dc5;
+    for (final b in utf8.encode(conversationId)) {
+      h = ((h ^ b) * 0x01000193) & 0xffffffff;
+    }
+    return h & 0x7fffffff;
+  }
+
+  /// FCM delivers [data] (plus a notification block when [notification]).
+  /// Returns whether it was drawn.
+  bool receive(Map<String, Object?> data, {bool notification = false}) {
+    final id = data['message_id'];
+    if (id is! String || !_uuid.hasMatch(id)) return false;
+    final key = 'flutter.sis.push_arrival.$id';
+    final head = '${DateTime.now().millisecondsSinceEpoch},?,?';
+    disk.values[key] = '$head,q';
+    final drawn = !notification && _draw(data);
+    if (disk.values.containsKey(key)) {
+      disk.values[key] = drawn ? '$head,n' : head;
+    }
+    return drawn;
+  }
+
+  bool _draw(Map<String, Object?> data) {
+    // Bundle.getString: anything that is not a string reads as absent.
+    String? str(String k) => switch (data[k]) {
+      final String v => v,
+      _ => null,
+    };
+    final owner = disk.values['flutter.sis.push_inbox_owner'] as String?;
+    final to = str('user_id');
+    final c = str('conversation_id');
+    final title = str('title');
+    final body = str('body');
+    if (owner == null || (to != null && to != owner)) return false;
+    if (!notificationsOn || c == null || title == null || body == null) {
+      return false;
+    }
+    final key = 'flutter.sis.push_inbox.$owner';
+    final raw = disk.values[key] as String?;
+    final inbox = addToInbox(
+      [
+        if (raw != null)
+          for (final j in jsonDecode(raw) as List)
+            InboxChat.fromJson(Map<String, Object?>.from(j as Map)),
+      ],
+      conversationId: c,
+      title: title,
+      body: body,
+      sender: str('sender'),
+      chat: str('chat'),
+      messageId: str('message_id'),
+      at: DateTime.now(),
+    );
+    disk.values[key] = jsonEncode([for (final x in inbox) x.toJson()]);
+    final chat = inbox.singleWhere((x) => x.conversationId == c);
+    final nid = notificationId(c);
+    shade.posted[nid] = {
+      'id': nid,
+      'title': chat.title,
+      'body': [for (final l in chat.lines) l.text].join('\n'),
+      'payload': c,
+      'platformSpecifics': {'groupKey': groupKey},
+    };
+    shade.posted[0] = {
+      'id': 0,
+      'title': 'SIS',
+      'body': inboxSummary(inbox),
+      'payload': null,
+      'platformSpecifics': {'groupKey': groupKey, 'setAsGroupSummary': true},
+    };
+    return true;
   }
 }

@@ -20,6 +20,8 @@ import '../domain/gallery.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
 import '../domain/picture_cropper.dart';
+import '../domain/reaction.dart';
+import '../domain/reaction_repository.dart';
 import '../domain/read_marks.dart';
 import 'chat_drafts.dart';
 
@@ -29,10 +31,14 @@ part 'contacts_controller.dart';
 part 'messages_controller.dart';
 part 'reply_edit_controllers.dart';
 part 'read_marks_controller.dart';
+part 'reactions_controller.dart';
 part 'chat_search_controller.dart';
 part 'chat_list_search_controller.dart';
 
 final chatRepositoryProvider = Provider<ChatRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+final reactionRepositoryProvider = Provider<ReactionRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 final linkOpenerProvider = Provider<LinkOpener>(

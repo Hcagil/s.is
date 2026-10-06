@@ -26,6 +26,7 @@ import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import 'fakes.dart';
+import 'reaction_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -88,6 +89,7 @@ Future<ProviderContainer> pumpLauncher(
   void Function(BuildContext context, WidgetRef ref) launch, {
   List<Message>? messages,
   ChatFake? chat,
+  ReactionFake? reactions,
   bool tap = true,
 }) async {
   phoneView(tester);
@@ -105,6 +107,9 @@ Future<ProviderContainer> pumpLauncher(
     ProviderContainer.test(
       overrides: [
         chatRepositoryProvider.overrideWithValue(repo),
+        reactionRepositoryProvider.overrideWithValue(
+          reactions ?? ReactionFake(),
+        ),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
         sessionControllerProvider.overrideWith(SignedInForTests.new),
@@ -151,11 +156,13 @@ final composer = find.byKey(const ValueKey('composer-field'));
 Future<ProviderContainer> openChat(
   WidgetTester tester, {
   List<Message>? messages,
+  ReactionFake? reactions,
 }) async {
   final c = await pumpLauncher(
     tester,
     (context, ref) => openConversation(context, ref, 'c1', title: 'Bob'),
     messages: messages,
+    reactions: reactions,
   );
   expect(find.byType(MessageScreen), findsOneWidget, reason: 'never opened');
   return c;

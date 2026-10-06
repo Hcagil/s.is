@@ -16,7 +16,6 @@ const double _replySwipeMax = 96.0;
 /// The icon shown on [action]'s box, reused by the swipe row and (as a
 /// screen-reader custom action) by each swipeable bubble.
 IconData swipeActionIcon(MessageAction action) => switch (action) {
-  MessageAction.readBy => Icons.done_all,
   MessageAction.reply => Icons.reply,
   MessageAction.forward => Icons.shortcut,
   MessageAction.edit => Icons.edit_outlined,
@@ -26,7 +25,6 @@ IconData swipeActionIcon(MessageAction action) => switch (action) {
 
 /// The short label on [action]'s box.
 String swipeActionLabel(MessageAction action) => switch (action) {
-  MessageAction.readBy => 'Read by',
   MessageAction.reply => 'Reply',
   MessageAction.forward => 'Forward',
   MessageAction.edit => 'Edit',
@@ -43,7 +41,6 @@ String swipeActionSemanticLabel(MessageAction action) =>
 
 /// The `action-<id>` suffix [action]'s box (and any test) is keyed by.
 String swipeActionKeyId(MessageAction action) => switch (action) {
-  MessageAction.readBy => 'read-by',
   MessageAction.reply => 'reply',
   MessageAction.forward => 'forward',
   MessageAction.edit => 'edit',

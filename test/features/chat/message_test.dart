@@ -224,7 +224,6 @@ void main() {
   group('menuMessageActions', () {
     final now = DateTime.utc(2026, 9, 24, 12, 0);
     const order = [
-      MessageAction.readBy,
       MessageAction.reply,
       MessageAction.copy,
       MessageAction.forward,
@@ -260,19 +259,16 @@ void main() {
       expect(
         actions.every(order.contains),
         isTrue,
-        reason: 'only read-by, reply, copy, forward, edit, delete: $actions',
+        reason: 'only reply, copy, forward, edit, delete: $actions',
       );
       final idx = actions.map(order.indexOf).toList();
       expect(idx, [...idx]..sort(), reason: 'in menu order: $actions');
     }
 
-    test(
-      'own fresh text: read-by, reply, copy, forward, edit, delete -- in order',
-      () {
-        final a = menu(msg());
-        expect(a, order);
-      },
-    );
+    test('own fresh text: reply, copy, forward, edit, delete -- in order', () {
+      final a = menu(msg());
+      expect(a, order);
+    });
 
     test('copy only for a non-empty body', () {
       final photo = msg(body: '', attachmentPath: 'c1/1.png');
@@ -340,30 +336,22 @@ void main() {
       );
     });
 
-    test('read-by first on your own stored message, photo or text', () {
-      expect(menu(msg()).first, MessageAction.readBy);
-      expect(
-        menu(msg(body: '', attachmentPath: 'c1/1.png')).first,
-        MessageAction.readBy,
-      );
-      expect(
-        menu(msg(age: const Duration(hours: 7))).first,
-        MessageAction.readBy,
-        reason: 'no time limit on read-by',
-      );
+    test('canReact: a stored, undeleted message, anyone\'s, any age', () {
+      expect(msg().canReact, isTrue);
+      expect(msg(sender: 'other').canReact, isTrue);
+      expect(msg(body: '', attachmentPath: 'c1/1.png').canReact, isTrue);
+      expect(msg(age: const Duration(days: 30)).canReact, isTrue);
     });
 
-    test('never read-by on somebody else\'s, a pending or a deleted message, '
-        'or with nobody signed in', () {
+    test('canReact: never on a pending or a deleted message', () {
       for (final m in [
-        msg(sender: 'other'),
         msg(sending: true),
         msg(localImage: Uint8List(0)),
         msg(deletion: MessageDeletion.placeholder),
+        msg(sender: 'other', deletion: MessageDeletion.placeholder),
       ]) {
-        expect(menu(m), isNot(contains(MessageAction.readBy)), reason: '$m');
+        expect(m.canReact, isFalse, reason: '$m');
       }
-      expect(menu(msg(), me: null), isNot(contains(MessageAction.readBy)));
     });
   });
 

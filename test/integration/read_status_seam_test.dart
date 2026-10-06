@@ -29,7 +29,6 @@ import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/presence/data/supabase_presence_repository.dart';
-import 'package:sis/features/presence/domain/last_seen.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
@@ -40,7 +39,6 @@ import '../support/session_claim.dart';
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
 import '../support/reach.dart';
-import '../support/sis_ui.dart';
 
 /// Read status on its seams, wired as main.dart wires it: the REAL
 /// [ReadMarksController] over the real chat and profile repositories, the
@@ -689,15 +687,8 @@ void main() {
     }, timeout: const Timeout(Duration(minutes: 2)));
 
     testWidgets('group: blue only once EVERY member has read it, two grey '
-        'once it reached every member; "Read by" names every reader, with '
-        'when', (t) async {
+        'once it reached every member; both are its readers', (t) async {
       try {
-        final names = {
-          for (final m in (await t.runAsync(
-            () => sana.conversationMembers(club),
-          ) as Ok<List<Member>>).value)
-            m.userId: m.displayName,
-        };
         final message = await openWithMine(t, club);
         await until(
           t,
@@ -745,45 +736,19 @@ void main() {
           'two blue once every member has read it',
         );
 
-        // Through the screen-reader action: the tap card offers no
-        // "Read by" in 0.30.13 (read_by_sheet_test pins that defect).
-        final semantics = t.ensureSemantics();
-        invokeAction(actionsNode(t, bubble(message.id))!, 'Read by');
-        await t.pumpAndSettle();
-        semantics.dispose();
-        // 0.30.10: an own card, keyed `readers`; each reader's row shows
-        // the read time as lastSeenLabel without its "last seen " prefix.
-        final card = find.byKey(const ValueKey('readers'));
-        expect(card, findsOneWidget);
-        expect(
-          find.descendant(
-            of: card,
-            matching: find.byKey(const ValueKey('readers-title')),
-          ),
-          findsOneWidget,
+        // The readers, as the slice-7 readers card will list them: both,
+        // from the live marks the screen holds (the old "Read by" sheet left
+        // the action set with reactions).
+        final readers = readersOf(
+          container.read(readMarksProvider).value!,
+          message.createdAt,
         );
-        final now = DateTime.now();
-        for (final id in [theoId, wrenId]) {
-          final row = find.descendant(
-            of: card,
-            matching: find.byKey(ValueKey('reader-$id')),
-          );
-          expect(row, findsOneWidget, reason: 'reader $id has a row');
-          expect(
-            find.descendant(of: row, matching: find.text(names[id]!)),
-            findsOneWidget,
-            reason: 'reader $id is named',
-          );
-          final at = _markOf(container, id)!.readAt!;
-          final when = lastSeenLabel(at, now).replaceFirst('last seen ', '');
-          expect(when.startsWith('last seen'), isFalse);
-          expect(
-            find.descendant(of: row, matching: find.text(when)),
-            findsOneWidget,
-            reason: 'reader $id shows when: "$when"',
-          );
-        }
-        expect(find.text('Nobody yet'), findsNothing);
+        expect(readers.map((m) => m.userId).toSet(), {theoId, wrenId});
+        expect(
+          readers.first.readAt!.isAfter(readers.last.readAt!),
+          isFalse,
+          reason: 'earliest reader first',
+        );
       } finally {
         await shutDown(t);
       }

@@ -9,8 +9,10 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { ACTION_TTL_SECONDS, sha256Hex, signActionToken } from '../_shared/action_token.ts';
 
-// What each recipient may see is decided in SQL, by their own preview
-// setting (app_private.push_targets_for_message); this only delivers it.
+// Who is told, and what each recipient may see, is decided in SQL
+// (app_private.push_targets_for_message): their own preview setting, mutes,
+// and archived chats (a recipient who archived the conversation is simply not
+// returned); this only delivers it.
 type Target = {
   user_id: string;
   token: string;
@@ -23,8 +25,9 @@ type Target = {
   // setting: sender is null for 'none'; chat is null for a 1:1 and for 'none'.
   sender: string | null;
   chat: string | null;
-  // The recipient's unread total (muted chats and people left out), counting
-  // this message: the app-icon badge. Absent from an old schema.
+  // The recipient's unread total (muted and archived chats and muted people
+  // left out), counting this message: the app-icon badge. Absent from an old
+  // schema.
   badge?: number;
 };
 

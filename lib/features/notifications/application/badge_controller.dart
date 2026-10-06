@@ -18,8 +18,8 @@ final class _NoBadge implements AppBadge {
   Future<void> set(int count) async {}
 }
 
-/// Keeps the app-icon number equal to the server's unread total (muted chats
-/// and people left out), for whoever is signed in; a signed-out phone shows
+/// Keeps the app-icon number equal to the server's unread total (muted and archived
+/// chats and muted people left out), for whoever is signed in; a signed-out phone shows
 /// none.
 ///
 /// Off the user path: the read is debounced and nothing waits on it. It runs
@@ -62,7 +62,7 @@ final badgeSyncProvider = Provider<void Function()>((ref) {
 
   ref.listen(
     conversationListProvider.select(
-      (l) => l.value?.fold<int>(0, (a, c) => a + c.unread),
+      (l) => l.value?.fold<int>(0, (a, c) => c.archived ? a : a + c.unread),
     ),
     (_, _) => schedule(),
     fireImmediately: true,

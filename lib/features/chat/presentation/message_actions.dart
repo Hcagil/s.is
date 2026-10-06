@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/notice.dart';
-import '../../../app/sheen.dart';
+import '../../../app/theme.dart';
 import '../../../core/failure.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/application/session_controller.dart';
@@ -104,7 +104,7 @@ Future<bool?> _confirmDelete(
                     : l.messageDeleteForMeBody,
               ),
               const SizedBox(height: 16),
-              Sheen(
+              _Sheen(
                 child: FilledButton(
                   key: const ValueKey('delete-confirm'),
                   style: FilledButton.styleFrom(
@@ -130,6 +130,32 @@ Future<bool?> _confirmDelete(
         );
       },
     ),
+  );
+}
+
+/// A faint white sheen over the top of [child] (the delete confirmation
+/// button), without touching its hit testing.
+class _Sheen extends StatelessWidget {
+  const _Sheen({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    position: DecorationPosition.foreground,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(20),
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.white.withValues(alpha: SisTokens.sheenOpacity),
+          Colors.white.withValues(alpha: 0),
+        ],
+        stops: const [0, 0.5],
+      ),
+    ),
+    child: child,
   );
 }
 

@@ -90,6 +90,7 @@ Future<T?> showFloatingCard<T>(
 }) => showGeneralDialog<T>(
   context: context,
   barrierLabel: 'Close menu',
+  barrierColor: Colors.transparent,
   transitionDuration: const Duration(milliseconds: 120),
   transitionBuilder: (_, animation, _, child) => FadeTransition(
     opacity: animation,
@@ -214,7 +215,8 @@ class _DimPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final dim = Paint()..color = Colors.black.withValues(alpha: 0.45);
+    // 0.725 keeps the old look (transparent barrier, so one dim instead of 50% barrier + 45% here = 27% brightness).
+    final dim = Paint()..color = Colors.black.withValues(alpha: 0.725);
     final hole = this.hole;
     if (hole == null) {
       canvas.drawRect(Offset.zero & size, dim);

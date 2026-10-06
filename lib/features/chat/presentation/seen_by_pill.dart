@@ -20,6 +20,7 @@ class _SeenByPill extends ConsumerWidget {
     if (readers.isEmpty) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     final l = AppLocalizations.of(context);
+    final shown = math.min(readers.length, 3);
     return Align(
       alignment: Alignment.centerRight,
       child: Padding(
@@ -60,17 +61,11 @@ class _SeenByPill extends ConsumerWidget {
                   children: [
                     // avatar stack: first three readers overlapping by 8 px
                     SizedBox(
-                      width:
-                          22 +
-                          14 * ((readers.length < 3 ? readers.length : 3) - 1),
+                      width: 22 + 14 * (shown - 1),
                       height: 22,
                       child: Stack(
                         children: [
-                          for (
-                            int i = 0;
-                            i < (readers.length < 3 ? readers.length : 3);
-                            i++
-                          )
+                          for (int i = 0; i < shown; i++)
                             Positioned(
                               left: 14.0 * i,
                               child: PersonAvatar(

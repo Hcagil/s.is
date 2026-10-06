@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
+import '../../auth/domain/session_state.dart';
 import '../domain/conversation.dart';
 import '../domain/group_event.dart';
 import '../domain/group_member.dart';
+import '../domain/group_settings.dart';
+import '../domain/group_settings_repository.dart';
 import '../domain/message.dart';
 import '../domain/timeline.dart';
 import 'chat_controllers.dart';
@@ -44,6 +49,70 @@ final groupEventsProvider = FutureProvider.autoDispose
       );
     }, retry: _never);
 
+/// "X changed the group picture" for a group: every member may read these
+/// (inside their own readable window; the server decides), unlike
+/// [groupEventsProvider]. An error here means no such lines, nothing more --
+/// [chatTimelineProvider] reads it as empty.
+final groupPictureEventsProvider = FutureProvider.autoDispose
+    .family<List<GroupEvent>, String>((ref, conversationId) {
+      ref.watch(currentUserIdProvider);
+      return _value(
+        ref.read(groupSettingsRepositoryProvider).pictureEvents(conversationId),
+      );
+    }, retry: _never);
+
+/// A group's switches as the chat list last read them (the defaults for a
+/// group the list does not hold). Watching this is what makes a screen follow
+/// an admin's change, mine (optimistic) or someone else's (live).
+final groupSettingsProvider = Provider.autoDispose
+    .family<GroupSettings, String>(
+      (ref, conversationId) => ref.watch(
+        conversationListProvider.select(
+          (s) =>
+              (s.value ?? const <Conversation>[])
+                  .where((c) => c.id == conversationId)
+                  .firstOrNull
+                  ?.settings ??
+              const GroupSettings(),
+        ),
+      ),
+    );
+
+/// Groups an admin deleted while this account was signed in -- the one signal
+/// a screen of such a group uses to leave itself (a chat merely missing from
+/// the list can also mean a session change, which other code handles).
+class DeletedGroups extends Notifier<Set<String>> {
+  @override
+  Set<String> build() {
+    ref.watch(currentUserIdProvider);
+    return const {};
+  }
+
+  void add(String conversationId) {
+    if (state.contains(conversationId)) return;
+    state = {...state, conversationId};
+  }
+}
+
+final deletedGroupsProvider = NotifierProvider<DeletedGroups, Set<String>>(
+  DeletedGroups.new,
+);
+
+/// Whether the signed-in member is a current admin of the group (false until
+/// the roster is known). Only a hint for what to show: the server decides.
+final amGroupAdminProvider = Provider.autoDispose.family<bool, String>((
+  ref,
+  conversationId,
+) {
+  final me = switch (ref.watch(sessionControllerProvider).value) {
+    Allowed(:final member) => member.userId,
+    _ => null,
+  };
+  final roster = ref.watch(groupRosterProvider(conversationId)).value;
+  return roster?.any((m) => m.member.userId == me && !m.hasLeft && m.isAdmin) ??
+      false;
+});
+
 /// The open conversation's messages merged with its group events, in order
 /// -- what the message screen actually draws (see [buildTimeline]). Events
 /// are asked for only when the open conversation is a group; a 1:1 never
@@ -64,7 +133,10 @@ final chatTimelineProvider = Provider.autoDispose<List<TimelineEntry>>((ref) {
   final events =
       ref.watch(groupEventsProvider(conversationId)).value ??
       const <GroupEvent>[];
-  return buildTimeline(messages, events);
+  final pictures =
+      ref.watch(groupPictureEventsProvider(conversationId)).value ??
+      const <GroupEvent>[];
+  return buildTimeline(messages, [...events, ...pictures]);
 });
 
 final groupControllerProvider = Provider<GroupController>(GroupController.new);
@@ -156,9 +228,70 @@ class GroupController {
     return dropped;
   }
 
+  /// Changes the group's switches. The new values show at once; when the
+  /// server refuses (not an admin, or offline) only the switches this call
+  /// changed go back to what they were and the failure is returned, so the
+  /// screen can say why. Admin-only on the server.
+  Future<Result<void>> setSettings(
+    String conversationId, {
+    bool? membersCanSetAvatar,
+    bool? membersCanAdd,
+    bool? newMembersSeeHistory,
+  }) async {
+    final list = ref.read(conversationListProvider.notifier);
+    final before = list.settingsOf(conversationId);
+    if (before == null) return const Err(DeniedFailure());
+    list.applySettings(
+      conversationId,
+      before.copyWith(
+        membersCanSetAvatar: membersCanSetAvatar,
+        membersCanAdd: membersCanAdd,
+        newMembersSeeHistory: newMembersSeeHistory,
+      ),
+    );
+    final result = await ref
+        .read(groupSettingsRepositoryProvider)
+        .setSettings(
+          conversationId,
+          membersCanSetAvatar: membersCanSetAvatar,
+          membersCanAdd: membersCanAdd,
+          newMembersSeeHistory: newMembersSeeHistory,
+        );
+    if (result is Err && ref.mounted) {
+      list.applySettings(
+        conversationId,
+        (list.settingsOf(conversationId) ?? before).copyWith(
+          membersCanSetAvatar: membersCanSetAvatar == null
+              ? null
+              : before.membersCanSetAvatar,
+          membersCanAdd: membersCanAdd == null ? null : before.membersCanAdd,
+          newMembersSeeHistory: newMembersSeeHistory == null
+              ? null
+              : before.newMembersSeeHistory,
+        ),
+      );
+    }
+    return result;
+  }
+
+  /// Deletes [conversationId] for everyone, admin-only. On success anything
+  /// queued for it and its draft are dropped, and the list is re-read (the
+  /// group is gone from it).
+  Future<Result<void>> deleteGroup(String conversationId) async {
+    final result = await ref
+        .read(groupSettingsRepositoryProvider)
+        .deleteGroup(conversationId);
+    if (result is Err) return result;
+    ref.read(deletedGroupsProvider.notifier).add(conversationId);
+    _dropQueueAndDraft(conversationId);
+    await ref.read(conversationListProvider.notifier).reloadQuietly();
+    return result;
+  }
+
   void _invalidateGroup(String conversationId) {
     ref.invalidate(groupRosterProvider(conversationId));
     ref.invalidate(groupEventsProvider(conversationId));
+    ref.invalidate(groupPictureEventsProvider(conversationId));
   }
 }
 
@@ -186,4 +319,39 @@ final leftConversationGuardProvider = Provider<void>((ref) {
       }
     }
   }, fireImmediately: true);
+});
+
+/// Keeps every member's chat list and open group page current when an admin
+/// changes a group's settings or picture, adds people, or deletes the group:
+/// the server nudges each member (a private per-user Realtime topic) and this
+/// re-reads what changed. Read once, for its side effect, from SisApp, like
+/// [leftConversationGuardProvider].
+final groupChangesListenerProvider = Provider<void>((ref) {
+  ref.watch(currentUserIdProvider);
+  var alive = true;
+  StreamSubscription<GroupChange>? sub;
+  ref.onDispose(() {
+    alive = false;
+    unawaited(sub?.cancel());
+  });
+  unawaited(
+    ref.read(groupSettingsRepositoryProvider).groupChanges().then((opened) {
+      if (opened is! Ok<Stream<GroupChange>>) return;
+      if (!alive) {
+        unawaited(opened.value.listen((_) {}).cancel());
+        return;
+      }
+      sub = opened.value.listen((change) {
+        if (!ref.mounted) return;
+        final id = change.conversationId;
+        if (change.what == 'deleted') {
+          ref.read(deletedGroupsProvider.notifier).add(id);
+        }
+        ref.invalidate(groupRosterProvider(id));
+        ref.invalidate(groupEventsProvider(id));
+        ref.invalidate(groupPictureEventsProvider(id));
+        unawaited(ref.read(conversationListProvider.notifier).reloadQuietly());
+      }, onError: (Object _) {});
+    }),
+  );
 });

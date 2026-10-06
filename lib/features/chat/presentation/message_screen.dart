@@ -41,6 +41,7 @@ import 'attachment_preview_page.dart';
 import 'attachment_sheet.dart';
 import 'chat_search_bar.dart';
 import 'group_event_line.dart';
+import 'group_gone_guard.dart';
 import 'swipeable_message.dart';
 import 'message_actions.dart';
 import 'member_name.dart';
@@ -492,6 +493,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       chatSearchProvider.select((s) => s.current?.id),
     );
     final conversationId = ref.watch(openConversationProvider);
+    listenGroupGone(context, ref, conversationId);
     // Not given by the caller (a tapped notification opens this screen before
     // the list is known): taken from the list as soon as it has the chat.
     final listed = ref.watch(

@@ -119,6 +119,65 @@ class _MembersTab extends ConsumerWidget {
     }
   }
 
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final box = context.findRenderObject() as RenderBox;
+    final anchor = box.localToGlobal(Offset.zero) & box.size;
+    final confirmed = await showFloatingCard<bool>(
+      context,
+      anchor: anchor,
+      highlightAnchor: false,
+      cardKey: const ValueKey('delete-card'),
+      child: Builder(
+        builder: (card) {
+          final l = AppLocalizations.of(card);
+          final scheme = Theme.of(card).colorScheme;
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  l.groupDeleteTitle(title),
+                  style: Theme.of(card).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(l.groupDeleteBody),
+                const SizedBox(height: 16),
+                FilledButton(
+                  key: const ValueKey('delete-confirm'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: scheme.error,
+                    foregroundColor: scheme.onError,
+                  ),
+                  onPressed: () => Navigator.of(card).pop(true),
+                  child: Text(l.groupDeleteForAll),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  key: const ValueKey('delete-cancel'),
+                  onPressed: () => Navigator.of(card).pop(false),
+                  child: Text(l.groupLeaveCancel),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final result = await ref
+        .read(groupControllerProvider)
+        .deleteGroup(conversationId);
+    if (!context.mounted) return;
+    switch (result) {
+      case Ok():
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      case Err(:final failure):
+        showSisNotice(context, failure.message, isError: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final me = switch (ref.watch(sessionControllerProvider).value) {
@@ -127,6 +186,9 @@ class _MembersTab extends ConsumerWidget {
     };
     final online = ref.watch(onlineMembersProvider);
     final l = AppLocalizations.of(context);
+    final membersCanAdd = ref
+        .watch(groupSettingsProvider(conversationId))
+        .membersCanAdd;
     return _Async(
       ref.watch(groupRosterProvider(conversationId)),
       empty: l.membersEmpty,
@@ -144,7 +206,8 @@ class _MembersTab extends ConsumerWidget {
             false;
         return ListView(
           children: [
-            if (amAdmin)
+            if (amAdmin ||
+                (membersCanAdd && current.any((m) => m.member.userId == me)))
               SisSettingsRow(
                 key: const ValueKey('add-members'),
                 icon: Icons.person_add_alt_1_outlined,
@@ -252,12 +315,11 @@ class _MembersTab extends ConsumerWidget {
               child: Column(
                 children: [
                   if (amAdmin)
-                    GreyOption(
-                      name: 'deladmin',
-                      label: AppLocalizations.of(context).groupDeleteForAll,
-                      child: SizedBox(
+                    Builder(
+                      builder: (button) => SizedBox(
                         width: double.infinity,
                         child: FilledButton(
+                          key: const ValueKey('delete-group'),
                           style: FilledButton.styleFrom(
                             backgroundColor: Theme.of(context)
                                 .colorScheme
@@ -266,7 +328,7 @@ class _MembersTab extends ConsumerWidget {
                                 .colorScheme
                                 .onError,
                           ),
-                          onPressed: () {},
+                          onPressed: () => _delete(button, ref),
                           child: Text(
                             AppLocalizations.of(context).groupDeleteForAll,
                           ),

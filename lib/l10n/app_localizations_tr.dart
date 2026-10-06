@@ -165,6 +165,18 @@ class AppLocalizationsTr extends AppLocalizations {
   String get groupDeleteForAll => 'Grubu herkes için sil';
 
   @override
+  String groupDeleteTitle(String name) {
+    return '$name herkes için silinsin mi?';
+  }
+
+  @override
+  String get groupDeleteBody =>
+      'Bu gruptaki tüm mesajlar ve fotoğraflar herkes için silinir. Geri alınamaz.';
+
+  @override
+  String get groupDeletedNotice => 'Grup silindi';
+
+  @override
   String get groupLeave => 'Gruptan ayrıl';
 
   @override
@@ -781,6 +793,11 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String eventRemoved(String name) {
     return '$name çıkarıldı';
+  }
+
+  @override
+  String eventPictureChanged(String name) {
+    return '$name grup resmini değiştirdi';
   }
 
   @override

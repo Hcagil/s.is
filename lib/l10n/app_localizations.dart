@@ -374,19 +374,19 @@ abstract class AppLocalizations {
   /// **'Group settings'**
   String get groupSettingsTitle;
 
-  /// Group info: greyed setting
+  /// Group info: setting switch
   ///
   /// In en, this message translates to:
   /// **'Members can change the group picture'**
   String get groupPickSwitch;
 
-  /// Group info: greyed setting
+  /// Group info: setting switch
   ///
   /// In en, this message translates to:
   /// **'Members can add people'**
   String get groupAddSwitch;
 
-  /// Group info: greyed setting
+  /// Group info: setting switch
   ///
   /// In en, this message translates to:
   /// **'New members see earlier messages'**
@@ -398,11 +398,29 @@ abstract class AppLocalizations {
   /// **'Who may pin messages'**
   String get groupPinWho;
 
-  /// Group info: greyed admin button
+  /// Group info: admin button
   ///
   /// In en, this message translates to:
   /// **'Delete group for everyone'**
   String get groupDeleteForAll;
+
+  /// Delete group confirm card title
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {name} for everyone?'**
+  String groupDeleteTitle(String name);
+
+  /// Delete group confirm card text
+  ///
+  /// In en, this message translates to:
+  /// **'All messages and photos in this group are gone for everyone. This cannot be undone.'**
+  String get groupDeleteBody;
+
+  /// Notice after an admin deleted the group
+  ///
+  /// In en, this message translates to:
+  /// **'Group deleted'**
+  String get groupDeletedNotice;
 
   /// Group info: leave button and confirm button
   ///
@@ -1519,6 +1537,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{name} was removed'**
   String eventRemoved(String name);
+
+  /// Group event line
+  ///
+  /// In en, this message translates to:
+  /// **'{name} changed the group picture'**
+  String eventPictureChanged(String name);
 
   /// Group event line
   ///

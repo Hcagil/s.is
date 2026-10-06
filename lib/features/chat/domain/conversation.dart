@@ -1,5 +1,6 @@
 import '../../auth/domain/member.dart';
 import 'group_colors.dart';
+import 'group_settings.dart';
 import 'message.dart';
 
 /// A conversation as the conversation list needs it.
@@ -21,6 +22,7 @@ final class Conversation {
     this.hasLeft = false,
     this.isSystem = false,
     this.senders = const {},
+    this.settings = const GroupSettings(),
   });
 
   final String id;
@@ -56,6 +58,9 @@ final class Conversation {
   /// list can name and colour the sender of the preview. Empty for a 1:1.
   final Map<String, GroupVoice> senders;
 
+  /// A group's admin-controlled switches; meaningless for a 1:1.
+  final GroupSettings settings;
+
   /// The same conversation with a newer message as its preview; [unread]
   /// grows by one when [counts] (a message from someone else, arriving while
   /// this conversation is not open).
@@ -72,6 +77,7 @@ final class Conversation {
         hasLeft: hasLeft,
         isSystem: isSystem,
         senders: senders,
+        settings: settings,
       );
 
   /// The same conversation with nothing unread.
@@ -86,6 +92,23 @@ final class Conversation {
     hasLeft: hasLeft,
     isSystem: isSystem,
     senders: senders,
+    settings: settings,
+  );
+
+  /// The same conversation with [next] as its settings.
+  Conversation withSettings(GroupSettings next) => Conversation(
+    id: id,
+    title: title,
+    other: other,
+    lastMessage: lastMessage,
+    lastMessageAt: lastMessageAt,
+    lastSenderId: lastSenderId,
+    unread: unread,
+    avatarPath: avatarPath,
+    hasLeft: hasLeft,
+    isSystem: isSystem,
+    senders: senders,
+    settings: next,
   );
 
   /// For the on-disk chat list snapshot only.
@@ -101,6 +124,7 @@ final class Conversation {
     'hasLeft': hasLeft,
     'isSystem': isSystem,
     'senders': {for (final e in senders.entries) e.key: e.value.toJson()},
+    'settings': settings.toJson(),
   };
 
   static Conversation fromJson(Map<String, Object?> json) => Conversation(
@@ -125,6 +149,9 @@ final class Conversation {
               .entries)
         e.key: GroupVoice.fromJson(e.value! as Map<String, Object?>),
     },
+    settings: json['settings'] == null
+        ? const GroupSettings()
+        : GroupSettings.fromJson(json['settings'] as Map<String, Object?>),
   );
 
   bool get isGroup => title != null;

@@ -16,6 +16,7 @@ import '../domain/conversation.dart';
 import '../domain/group_colors.dart';
 import '../domain/group_event.dart';
 import '../domain/group_member.dart';
+import '../domain/group_settings.dart';
 import '../domain/message.dart';
 import '../domain/read_marks.dart';
 
@@ -110,7 +111,10 @@ final class SupabaseChatRepository implements ChatRepository {
         // caller's own conversations, same as the membership rows.
         _client
             .from('conversations')
-            .select('id, title, avatar_path, system')
+            .select(
+              'id, title, avatar_path, system, members_can_set_avatar, '
+              'members_can_add, new_members_see_history',
+            )
             .retriedOnce(),
       ]);
       final memberRows = firstStage[0];
@@ -126,6 +130,14 @@ final class SupabaseChatRepository implements ChatRepository {
       final systemById = {
         for (final row in conversationRows)
           row['id'] as String: row['system'] == true,
+      };
+      final settingsById = {
+        for (final row in conversationRows)
+          row['id'] as String: GroupSettings(
+            membersCanSetAvatar: row['members_can_set_avatar'] == true,
+            membersCanAdd: row['members_can_add'] == true,
+            newMembersSeeHistory: row['new_members_see_history'] != false,
+          ),
       };
 
       final otherByConversation = <String, String>{};
@@ -240,6 +252,7 @@ final class SupabaseChatRepository implements ChatRepository {
             avatarPath: avatarPathById[id],
             hasLeft: myLeftAtByConversation[id] != null,
             isSystem: systemById[id] ?? false,
+            settings: settingsById[id] ?? const GroupSettings(),
             senders: titleById[id] == null
                 ? const {}
                 : {

@@ -27,6 +27,7 @@ class GroupEventLine extends StatelessWidget {
       GroupEventKind.left => l.eventLeft(subject),
       GroupEventKind.removed => l.eventRemoved(subject),
       GroupEventKind.added => l.eventAdded(subject),
+      GroupEventKind.picture => l.eventPictureChanged(subject),
     };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),

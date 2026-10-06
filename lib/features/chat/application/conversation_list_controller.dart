@@ -441,4 +441,25 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     }
     return result;
   }
+
+  /// [conversationId]'s settings as the list shows them now, or null when it
+  /// is not listed.
+  GroupSettings? settingsOf(String conversationId) =>
+      (state.value ?? const <Conversation>[])
+          .where((c) => c.id == conversationId)
+          .firstOrNull
+          ?.settings;
+
+  /// Shows [next] as [conversationId]'s settings at once, without a server
+  /// call: a switch flips the same frame. The list is re-read from the
+  /// server by the usual refreshes.
+  void applySettings(String conversationId, GroupSettings next) {
+    final list = state.value;
+    if (list == null) return;
+    state = AsyncData([
+      for (final c in list)
+        if (c.id == conversationId) c.withSettings(next) else c,
+    ]);
+    _scheduleSnapshotSave();
+  }
 }

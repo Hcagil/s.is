@@ -1845,3 +1845,25 @@ Dart and Kotlin through `test/fixtures/alert_channel_vectors.json`.
   Dart twin for iOS (`_showSummary`); the two carry "keep in sync" comments.
 - Owner decision 2026-10-06: Reply needs unlock on every phone, and both
   parts ship before Update 1 (0.31.0).
+
+## 2026-10-06 — Big updates collect on an integration branch
+
+**Context.** The owner chose to ship the approved full design as a few large
+updates instead of many small releases. Merging each slice into `main` would
+release every slice on its own, because a push to `main` publishes.
+
+**Decision.** A big update collects on one integration branch,
+`feat/update-<n>`. Each slice is still a short-lived topic branch, gated and
+squash-merged by PR into the integration branch, with the same checks as
+`main`. When the update is complete, the integration branch is merged into
+`main` in one PR, which releases it. Fixes that cannot wait still go to
+`main` directly as usual, and `main` is merged into the integration branch
+afterwards.
+
+**Consequences.**
+- `main` stays releasable and receives one release per big update.
+- The integration branch lives only for the duration of one update and is
+  deleted after it is merged.
+- User-facing text: the developer-only "Setup required" screen (shown when a
+  build is missing its configuration) stays in English; every screen a user
+  can reach is localised.

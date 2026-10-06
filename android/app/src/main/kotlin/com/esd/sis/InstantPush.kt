@@ -155,6 +155,8 @@ object InstantPush {
             val owner = prefs.getString("flutter.sis.push_inbox_owner", null)
 
             val keyguard = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            // The Dart handler draws the notification again for most pushes (same id) and cannot ask the system itself, so it reads this answer from the shared preferences.
+            prefs.edit().putBoolean("flutter.sis.reply_offered", replyOffered(Build.VERSION.SDK_INT, keyguard.isDeviceSecure)).apply()
             val activities = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             val appInForeground = !keyguard.isKeyguardLocked &&
                 activities.runningAppProcesses?.any {

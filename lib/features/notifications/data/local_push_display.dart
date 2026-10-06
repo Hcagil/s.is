@@ -388,7 +388,7 @@ final class LocalPushDisplay {
   }
 
   /// The two buttons of a chat's notification, worded for the phone's language.
-  static List<AndroidNotificationAction> _actionButtons() {
+  static List<AndroidNotificationAction> _actionButtons({required bool reply}) {
     final labels = notificationActionLabels(
       PlatformDispatcher.instance.locale.languageCode,
     );
@@ -398,13 +398,14 @@ final class LocalPushDisplay {
         labels.markRead,
         cancelNotification: false,
       ),
-      AndroidNotificationAction(
-        replyActionId,
-        labels.reply,
-        cancelNotification: false,
-        allowGeneratedReplies: true,
-        inputs: [AndroidNotificationActionInput(label: labels.replyHint)],
-      ),
+      if (reply)
+        AndroidNotificationAction(
+          replyActionId,
+          labels.reply,
+          cancelNotification: false,
+          allowGeneratedReplies: true,
+          inputs: [AndroidNotificationActionInput(label: labels.replyHint)],
+        ),
     ];
   }
 
@@ -453,6 +454,10 @@ final class LocalPushDisplay {
     );
     final defaults = await _alerts.loadDefaults();
     final tickets = await _loadTickets();
+    // Written by InstantPush.kt on every push: false when this phone cannot keep Reply behind an unlock (Android 11 and older with a secure lock). Absent (iOS, tests): offered.
+    final reply =
+        (await SharedPreferences.getInstance()).getBool('sis.reply_offered') ??
+        true;
     final chats = await _alerts.loadChats();
     final pictures = await NotificationAvatars.forChats(owner, [
       for (final c in dirty) c.conversationId,
@@ -465,6 +470,7 @@ final class LocalPushDisplay {
         alert: loud && i == alertIndex,
         picture: pictures[dirty[i].conversationId],
         actions: tickets.containsKey(dirty[i].conversationId),
+        reply: reply,
         effective: resolveAlert(
           defaults,
           chats[dirty[i].conversationId] ?? const ChatAlert(),
@@ -506,6 +512,7 @@ final class LocalPushDisplay {
     required bool alert,
     required EffectiveAlert effective,
     required bool actions,
+    required bool reply,
     Uint8List? picture,
   }) => _plugin.show(
     id: _idFor(chat.conversationId),
@@ -529,7 +536,7 @@ final class LocalPushDisplay {
         groupKey: _group,
         silent: !alert,
         onlyAlertOnce: !alert,
-        actions: actions ? _actionButtons() : null,
+        actions: actions ? _actionButtons(reply: reply) : null,
         number: chat.count,
         largeIcon: picture == null ? null : ByteArrayAndroidBitmap(picture),
         subText: chat.count > 1 ? '${chat.count} new messages' : null,

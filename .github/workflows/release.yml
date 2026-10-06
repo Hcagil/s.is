@@ -135,13 +135,16 @@ jobs:
           b64=$(printf '%s' "$note" | base64 -w0)
           echo "b64=$b64" >> "$GITHUB_OUTPUT"
           supabase db query --linked "insert into public.release_notes(build, note) values ($BUILD, convert_from(decode('$b64', 'base64'), 'utf8')) on conflict (build) do nothing"
-      # The push sender. Deployed before the trigger learns its URL, so the
+      # The push sender, and notification-action, the endpoint its notification
+      # buttons call (the push carries a signed token instead of a session).
+      # Deployed before the trigger learns its URL, so the
       # trigger never calls a function that is not there yet. No JWT: the
       # database trigger holds none; push_targets() makes a forged call
       # harmless (docs/DECISIONS.md, 2026-09-24).
       - name: Deploy the push sender
         run: |
           supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" FCM_SERVICE_ACCOUNT="$FCM_SERVICE_ACCOUNT"
+          supabase functions deploy notification-action --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
           supabase functions deploy notify-on-message --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
           supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/notify-on-message', 'notify_on_message_url') where not exists (select 1 from vault.secrets where name = 'notify_on_message_url')"
         env:

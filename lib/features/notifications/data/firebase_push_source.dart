@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
 
+import '../domain/notification_action.dart';
 import '../domain/push.dart';
 import 'local_push_display.dart';
 import 'push_receipt_log.dart';
@@ -90,6 +91,7 @@ Future<String> _deliver(
     sender: sender is String && sender.isNotEmpty ? sender : null,
     chat: chat is String && chat.isNotEmpty ? chat : null,
     alreadyAlerted: alreadyAlerted,
+    ticket: ActionTicket.fromPush(d),
   );
   return drawn ? 'shown' : 'dropped:no_owner';
 }

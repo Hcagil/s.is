@@ -59,6 +59,10 @@
                 <action android:name="com.google.android.c2dm.intent.RECEIVE" />
             </intent-filter>
         </receiver>
+        <!-- The Mark as read and Reply buttons of a notification drawn by InstantPush (no Dart runs). Not exported: only SIS's own PendingIntents reach it. -->
+        <receiver
+            android:name=".NotificationActionReceiver"
+            android:exported="false" />
         <!-- Camera photos (v0.30.8): the camera app writes into SIS's cache
              through this provider; SIS asks for no CAMERA permission. -->
         <provider

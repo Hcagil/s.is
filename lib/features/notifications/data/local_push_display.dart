@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, visibleForTesting;
@@ -9,6 +10,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/alert_settings.dart';
+import '../domain/notification_action.dart';
 import '../domain/notification_inbox.dart';
 import 'alert_channels.dart';
 import 'notification_avatars.dart';
@@ -71,25 +73,28 @@ final class LocalPushDisplay {
 
   /// Must run before [show] in each isolate. [onTap] receives the tapped
   /// chat's conversation id (the payload), when the app is running.
-  static Future<void> init({void Function(String conversationId)? onTap}) =>
-      _plugin.initialize(
-        settings: const InitializationSettings(
-          android: AndroidInitializationSettings(
-            '@drawable/ic_launcher_monochrome',
-          ),
-          iOS: DarwinInitializationSettings(
-            requestAlertPermission: false,
-            requestBadgePermission: false,
-            requestSoundPermission: false,
-          ),
-        ),
-        onDidReceiveNotificationResponse: onTap == null
-            ? null
-            : (r) {
-                final id = r.payload;
-                if (id != null && id.isNotEmpty) onTap(id);
-              },
-      );
+  static Future<void> init({
+    void Function(String conversationId)? onTap,
+    void Function(NotificationResponse response)? onAction,
+  }) => _plugin.initialize(
+    settings: const InitializationSettings(
+      android: AndroidInitializationSettings(
+        '@drawable/ic_launcher_monochrome',
+      ),
+      iOS: DarwinInitializationSettings(
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
+      ),
+    ),
+    onDidReceiveNotificationResponse: onTap == null
+        ? null
+        : (r) {
+            final id = r.payload;
+            if (id != null && id.isNotEmpty) onTap(id);
+          },
+    onDidReceiveBackgroundNotificationResponse: onAction,
+  );
 
   /// The chat whose notification launched the app, or null.
   static Future<String?> launchConversation() async {
@@ -126,6 +131,7 @@ final class LocalPushDisplay {
     String? chat,
     String? messageId,
     bool alreadyAlerted = false,
+    ActionTicket? ticket,
   }) async {
     final at = DateTime.now();
     String? lineOwner; // who the line is stored for
@@ -135,6 +141,7 @@ final class LocalPushDisplay {
       lineOwner = prefs.getString(_ownerKey);
       if (lineOwner == null) return null;
       if (alreadyAlerted) _nativeAlerted.add(conversationId);
+      if (ticket != null) await _saveTicket(conversationId, ticket);
       await _save(
         addToInbox(
           await _load(),
@@ -228,6 +235,7 @@ final class LocalPushDisplay {
     // go up under the next member's account.
     await PushReceiptLog.clear();
     await prefs.remove(_keyFor(previousOwner));
+    await prefs.remove(_actionsKey);
     // The owner is stored BEFORE the shade is cleared: cancelAll can throw
     // (in release, R8 broke its Gson use), and the owner was then never
     // written, so every push was dropped as no_owner.
@@ -252,6 +260,153 @@ final class LocalPushDisplay {
           >()
           ?.areNotificationsEnabled() ??
       true;
+
+  static const _actionsKey = 'sis.push_actions';
+
+  /// The button credentials of the chat's newest push, or null.
+  static Future<ActionTicket?> ticketFor(String conversationId) async {
+    return (await _loadTickets())[conversationId];
+  }
+
+  static Future<Map<String, ActionTicket>> _loadTickets() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final raw = prefs.getString(_actionsKey);
+    if (raw == null) return {};
+    try {
+      final json = jsonDecode(raw);
+      final map = <String, ActionTicket>{};
+      if (json is Map) {
+        for (final e in json.entries) {
+          final ticket = ActionTicket.fromJson(e.value);
+          if (ticket != null) map[e.key as String] = ticket;
+        }
+      }
+      return map;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<void> _saveTickets(Map<String, ActionTicket> map) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _actionsKey,
+      jsonEncode({for (final e in map.entries) e.key: e.value.toJson()}),
+    );
+  }
+
+  static Future<void> _saveTicket(
+    String conversationId,
+    ActionTicket ticket,
+  ) async {
+    final map = await _loadTickets();
+    map[conversationId] = ticket;
+    await _saveTickets(map);
+  }
+
+  static Future<void> _dropTicket(String conversationId) async {
+    final map = await _loadTickets();
+    map.remove(conversationId);
+    await _saveTickets(map);
+  }
+
+  /// After a notification button ran with [result]. Mark as read, answered:
+  /// the chat's notification goes, as when the chat is opened. Reply, answered:
+  /// the same, then a short silent notification shows the sent line. A reply
+  /// that did not go through shows a "Not sent" line with the text and keeps
+  /// the unread messages.
+  static Future<void> afterAction(
+    NotificationAction action,
+    NotificationActionResult result,
+  ) => _locked<void>(() async {
+    final id = action.conversationId;
+    final chats = await _load();
+    final chat = chats.where((c) => c.conversationId == id).firstOrNull;
+    final done = result == NotificationActionResult.done;
+    if (action.kind == NotificationActionKind.reply && !done) {
+      // The reply box of a notification keeps spinning until it is replaced.
+      if (chat == null) {
+        await _plugin.cancel(id: _idFor(id));
+      } else {
+        await _showReplyLine(chat, action.text!, failed: true);
+      }
+      return;
+    }
+    if (!done) return;
+    final inbox = removeFromInbox(chats, id);
+    await _save(inbox);
+    await _plugin.cancel(id: _idFor(id));
+    await _showSummary(inbox);
+    await _clearDelivered(id);
+    await _dropTicket(id);
+    if (action.kind == NotificationActionKind.reply && chat != null) {
+      await _showReplyLine(chat, action.text!, failed: false);
+    }
+  });
+
+  static Future<void> _showReplyLine(
+    InboxChat chat,
+    String text, {
+    required bool failed,
+  }) {
+    final labels = notificationActionLabels(
+      PlatformDispatcher.instance.locale.languageCode,
+    );
+    return _plugin.show(
+      id: _idFor(chat.conversationId),
+      title: chat.title,
+      body: text,
+      payload: chat.conversationId,
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          _summaryChannelId,
+          _summaryChannelName,
+          channelDescription: _channelDescription,
+          importance: Importance.low,
+          playSound: false,
+          enableVibration: false,
+          groupKey: _group,
+          silent: true,
+          onlyAlertOnce: true,
+          timeoutAfter: failed ? null : 8000,
+          styleInformation: MessagingStyleInformation(
+            const Person(name: 'You'),
+            conversationTitle: chat.group ? chat.title : null,
+            groupConversation: chat.group,
+            messages: [
+              Message(
+                failed ? '${labels.notSent}: $text' : text,
+                DateTime.now(),
+                const Person(name: 'You'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The two buttons of a chat's notification, worded for the phone's language.
+  static List<AndroidNotificationAction> _actionButtons() {
+    final labels = notificationActionLabels(
+      PlatformDispatcher.instance.locale.languageCode,
+    );
+    return [
+      AndroidNotificationAction(
+        markReadActionId,
+        labels.markRead,
+        cancelNotification: false,
+      ),
+      AndroidNotificationAction(
+        replyActionId,
+        labels.reply,
+        cancelNotification: false,
+        allowGeneratedReplies: true,
+        inputs: [AndroidNotificationActionInput(label: labels.replyHint)],
+      ),
+    ];
+  }
 
   static String _keyFor(String? owner) =>
       owner == null ? _prefsKey : '$_prefsKey.$owner';
@@ -297,6 +452,7 @@ final class LocalPushDisplay {
       (c) => !_nativeAlerted.contains(c.conversationId),
     );
     final defaults = await _alerts.loadDefaults();
+    final tickets = await _loadTickets();
     final chats = await _alerts.loadChats();
     final pictures = await NotificationAvatars.forChats(owner, [
       for (final c in dirty) c.conversationId,
@@ -308,6 +464,7 @@ final class LocalPushDisplay {
         dirty[i],
         alert: loud && i == alertIndex,
         picture: pictures[dirty[i].conversationId],
+        actions: tickets.containsKey(dirty[i].conversationId),
         effective: resolveAlert(
           defaults,
           chats[dirty[i].conversationId] ?? const ChatAlert(),
@@ -348,6 +505,7 @@ final class LocalPushDisplay {
     InboxChat chat, {
     required bool alert,
     required EffectiveAlert effective,
+    required bool actions,
     Uint8List? picture,
   }) => _plugin.show(
     id: _idFor(chat.conversationId),
@@ -371,6 +529,7 @@ final class LocalPushDisplay {
         groupKey: _group,
         silent: !alert,
         onlyAlertOnce: !alert,
+        actions: actions ? _actionButtons() : null,
         number: chat.count,
         largeIcon: picture == null ? null : ByteArrayAndroidBitmap(picture),
         subText: chat.count > 1 ? '${chat.count} new messages' : null,

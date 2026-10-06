@@ -23,10 +23,7 @@ import org.json.JSONObject
 
 object InstantPush {
     const val GROUP = "sis.messages"
-    const val CHANNEL_BOTH = "sis-instant"
-    const val CHANNEL_SOUND = "sis-instant-sound"
-    const val CHANNEL_VIBRATE = "sis-instant-vibrate"
-    const val CHANNEL_QUIET = "sis-instant-quiet"
+    private val LEGACY_CHANNELS = listOf("sis-instant", "sis-instant-sound", "sis-instant-vibrate", "sis-instant-quiet")
     const val CHANNEL_SUMMARY = "summary"
     const val SUMMARY_ID = 0
 
@@ -75,7 +72,7 @@ object InstantPush {
         return "msg-$tone-v${if (a.vibration) 1 else 0}"
     }
 
-    /** Dart's alertChannelName: the channel's name in the phone's settings. */
+    /** The channel's name in the phone's settings. */
     fun alertChannelName(a: Alert): String =
         "Messages" + (if (a.sound) (if (a.tone == null) "" else " (custom tone)") else " (silent)") + (if (a.vibration) "" else ", no vibration")
 
@@ -135,8 +132,8 @@ object InstantPush {
         return if (result == 0) 1 else result
     }
 
-    /** Whether the native side draws this push now. [originalPriority] is no longer consulted: high-priority pushes are drawn here too (the Dart handler no longer draws on Android); the parameter stays so callers keep compiling. */
-    fun shouldPostNow(originalPriority: String?, hasNotificationBlock: Boolean, appInForeground: Boolean, owner: String?, targetUser: String?, notificationsEnabled: Boolean, hasFields: Boolean): Boolean {
+    /** Whether the native side draws this push now: high-priority pushes are drawn here too (the Dart handler no longer draws on Android). */
+    fun shouldPostNow(hasNotificationBlock: Boolean, appInForeground: Boolean, owner: String?, targetUser: String?, notificationsEnabled: Boolean, hasFields: Boolean): Boolean {
         return !hasNotificationBlock && !appInForeground && owner != null && (targetUser == null || targetUser == owner) && notificationsEnabled && hasFields
     }
 
@@ -168,12 +165,6 @@ object InstantPush {
     fun vibrates(defaultsJson: String?, chatsJson: String?, conversationId: String): Boolean =
         resolve(defaultsJson, chatsJson, conversationId, "v")
 
-    fun channelFor(sound: Boolean, vibration: Boolean): String = when {
-        sound && vibration -> CHANNEL_BOTH
-        sound -> CHANNEL_SOUND
-        vibration -> CHANNEL_VIBRATE
-        else -> CHANNEL_QUIET
-    }
 
     /** The cached picture of the chat (1:1: the other person, group: its own), or null. Read from the
      * chat list snapshot (support dir) and the attachment cache (cache dir) the Dart side keeps. */
@@ -212,7 +203,7 @@ object InstantPush {
         builder.addAction(NotificationCompat.Action.Builder(0, context.getString(R.string.action_reply), reply).setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).setShowsUserInterface(false).setAuthenticationRequired(true).addRemoteInput(androidx.core.app.RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY).setLabel(context.getString(R.string.action_reply_hint)).build()).build())
     }
 
-    /** One silent group summary over every waiting chat (the Dart side posts the same, id 0); removed when no chat is left. */
+    /** One silent group summary over every waiting chat (the Dart side posts the same, id 0); removed when no chat is left. Keep in sync with Dart _showSummary in local_push_display.dart. */
     fun postSummary(context: Context, inboxChats: org.json.JSONArray) {
         if (inboxChats.length() == 0) {
             NotificationManagerCompat.from(context).cancel(SUMMARY_ID)
@@ -244,8 +235,8 @@ object InstantPush {
         NotificationManagerCompat.from(context).notify(SUMMARY_ID, summary)
     }
 
-    /** [postSummaryNow] false when more pushes are queued behind this one: the last of them posts the group summary, which depends only on the stored inbox. */
-    fun show(context: Context, extras: Bundle, postSummaryNow: Boolean = true): Boolean {
+    /** [postSummaryNow] false when more pushes are queued behind this one: the last of them posts the group summary, which depends only on the stored inbox. [paced] false skips the pacing sleeps (a big queued burst must not outlast the receiver's time limit). */
+    fun show(context: Context, extras: Bundle, postSummaryNow: Boolean = true, paced: Boolean = true): Boolean {
         try {
             val conversationId = extras.getString("conversation_id")
             val title = extras.getString("title")
@@ -266,7 +257,6 @@ object InstantPush {
                 } == true
 
             if (!shouldPostNow(
-                    extras.getString("google.original_priority"),
                     hasNotificationBlock,
                     appInForeground,
                     owner,
@@ -288,7 +278,7 @@ object InstantPush {
                 )
                 if (!legacyChannelsDeleted) {
                     // Builds before the per-chat tone channels left these four in the phone's settings.
-                    listOf(CHANNEL_BOTH, CHANNEL_SOUND, CHANNEL_VIBRATE, CHANNEL_QUIET).forEach { manager.deleteNotificationChannel(it) }
+                    LEGACY_CHANNELS.forEach { manager.deleteNotificationChannel(it) }
                     legacyChannelsDeleted = true
                 }
             }
@@ -367,11 +357,11 @@ object InstantPush {
                 }
                 .build()
 
-            pace()
+            if (paced) pace()
             NotificationManagerCompat.from(context).notify(id, notification)
 
             if (postSummaryNow) {
-                pace()
+                if (paced) pace()
                 postSummary(context, inboxChats)
             }
             markDrawEnd()

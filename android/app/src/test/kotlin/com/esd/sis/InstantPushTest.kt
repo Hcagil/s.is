@@ -31,7 +31,7 @@ class InstantPushTest {
         notificationsEnabled: Boolean = true,
         hasFields: Boolean = true,
     ) = InstantPush.shouldPostNow(
-        originalPriority, hasNotificationBlock, appInForeground, owner, targetUser,
+        hasNotificationBlock, appInForeground, owner, targetUser,
         notificationsEnabled, hasFields,
     )
 

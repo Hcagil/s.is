@@ -162,12 +162,6 @@ String alertChannelId(EffectiveAlert a) {
   return '$alertChannelPrefix$tone-v${a.vibration ? 1 : 0}';
 }
 
-/// The channel's name in the phone's system settings.
-String alertChannelName(EffectiveAlert a) =>
-    'Messages'
-    '${a.sound ? (a.tone == null ? '' : ' (custom tone)') : ' (silent)'}'
-    '${a.vibration ? '' : ', no vibration'}';
-
 /// The channels still needed: the defaults' and every chat's own.
 Set<String> usedAlertChannelIds(
   AlertDefaults d,

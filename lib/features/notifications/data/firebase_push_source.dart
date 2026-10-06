@@ -76,7 +76,6 @@ Future<String> _deliver(
   if (targetUser is String && targetUser != owner) {
     return 'dropped:owner_mismatch';
   }
-  await LocalPushDisplay.init();
   if (!await LocalPushDisplay.notificationsEnabled()) {
     return 'dropped:notifications_off';
   }

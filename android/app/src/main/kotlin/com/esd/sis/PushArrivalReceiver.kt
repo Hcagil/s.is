@@ -27,6 +27,9 @@ class PushArrivalReceiver : BroadcastReceiver() {
         // One thread keeps the draws in arrival order and the pacing gap between them (InstantPush.pace sleeps, which the main thread must never do); [queued] counts pushes accepted and not yet drawn.
         private val executor = Executors.newSingleThreadExecutor()
         private val queued = AtomicInteger(0)
+
+        // ponytail: past 15 queued pushes the 300 ms pacing sleep is skipped, so a burst cannot hold goAsync past the ~10 s receiver limit; raise only if the limit is measured higher.
+        const val PACE_CAP = 15
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -43,11 +46,11 @@ class PushArrivalReceiver : BroadcastReceiver() {
             val head = "${System.currentTimeMillis()},$delivered,$original"
             // Noted at once with ",q" (queued to be drawn) so the Dart handler, which may start before a paced draw ends, still counts the push as drawn here; the draw then settles it.
             prefs.edit().putString(key, "$head,q").apply()
-            queued.incrementAndGet()
+            val depth = queued.incrementAndGet()
             val pending = goAsync() // null when called directly (unit tests): draw inline
             val work = Runnable {
                 try {
-                    val drawn = InstantPush.show(context, extras, postSummaryNow = queued.get() <= 1)
+                    val drawn = InstantPush.show(context, extras, postSummaryNow = queued.get() <= 1, paced = depth <= PACE_CAP)
                     if (prefs.contains(key)) prefs.edit().putString(key, if (drawn) "$head,n" else head).apply()
                 } catch (e: Exception) {
                     // A measurement must never break push delivery.
@@ -56,7 +59,17 @@ class PushArrivalReceiver : BroadcastReceiver() {
                     pending?.finish()
                 }
             }
-            if (pending == null) work.run() else executor.execute(work)
+            if (pending == null) {
+                work.run()
+            } else {
+                try {
+                    executor.execute(work)
+                } catch (e: Exception) {
+                    // A rejected task never runs its finally: settle the count and release the receiver here.
+                    queued.decrementAndGet()
+                    pending.finish()
+                }
+            }
             housekeeping(prefs)
         } catch (e: Exception) {
             // A measurement must never break push delivery.

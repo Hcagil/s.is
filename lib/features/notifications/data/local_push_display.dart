@@ -160,7 +160,15 @@ final class LocalPushDisplay {
   /// combination is a channel of its own, created when first drawn). Never
   /// throws: this is housekeeping, and runs at app start and on every change
   /// of a setting.
-  static Future<void> pruneChannels() => pruneAlertChannels(_alerts);
+  static Future<void> pruneChannels() async {
+    await pruneAlertChannels(_alerts);
+    // The pre-0.31 push-actions preference is no longer read: removed once the app starts.
+    try {
+      await (await SharedPreferences.getInstance()).remove('sis.push_actions');
+    } catch (e) {
+      await PushReceiptLog.add('error', error: e, label: 'pruneChannels');
+    }
+  }
 
   /// Every pass over the stored inbox in this isolate runs one at a time, so
   /// concurrent pushes never overwrite each other's line. A failing [f] must
@@ -172,7 +180,8 @@ final class LocalPushDisplay {
   }
 
   /// The silent group summary; no payload, so tapping it just opens the app
-  /// on the chat list. Gone when nothing is waiting.
+  /// on the chat list. Gone when nothing is waiting. Keep in sync with
+  /// InstantPush.postSummary (InstantPush.kt), which posts the same summary.
   static Future<void> _showSummary(List<InboxChat> inbox) async {
     if (inbox.isEmpty) {
       await _plugin.cancel(id: _summaryId);

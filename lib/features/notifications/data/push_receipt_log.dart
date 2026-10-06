@@ -134,7 +134,7 @@ final class PushReceiptLog {
   /// What the Android side noted when [messageId]'s push reached the phone
   /// (PushArrivalReceiver.kt), as `native=ms prio=delivered/original`, plus
   /// ` fast=native` when that side already drew the push itself
-  /// (InstantPush.kt), or null when nothing was noted (iPhone, an older build, or already
+  /// (InstantPush.kt; also while a paced draw is still queued), or null when nothing was noted (iPhone, an older build, or already
   /// taken). Removes the note. Never throws.
   static Future<String?> takeArrival(String? messageId) async {
     if (messageId == null) return null;
@@ -147,7 +147,8 @@ final class PushReceiptLog {
       await prefs.remove(key);
       final p = raw.split(',');
       final ms = int.tryParse(p[0]);
-      final fast = p.length == 4 && p[3] == 'n';
+      // 'n': the native receiver drew the push; 'q': it queued the push to be drawn (paced) and has not finished yet.
+      final fast = p.length == 4 && (p[3] == 'n' || p[3] == 'q');
       if ((p.length != 3 && !fast) ||
           ms == null ||
           ms <= 0 ||

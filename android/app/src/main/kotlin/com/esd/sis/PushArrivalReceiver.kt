@@ -3,6 +3,9 @@ package com.esd.sis
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Records when a push reached the process, and draws it at once with [InstantPush], the only
@@ -11,13 +14,19 @@ import android.content.Intent
  * only writes the push receipt (so a Reply button is always the unlock-protected native action).
  * The Dart handler (onBackgroundPush) reads and removes the value to put native arrival time,
  * FCM delivered/original priority and whether this receiver drew the push into the push
- * receipt.
+ * receipt. The note is written at once as queued (",q") and settled after the draw (",n" drawn,
+ * none otherwise); the draw itself runs on one background thread under goAsync, in arrival
+ * order, because InstantPush paces its posts by sleeping.
  */
 class PushArrivalReceiver : BroadcastReceiver() {
     companion object {
         // Doze has held the Dart job 10-50 min; a note removed before the job runs makes Dart alert a
         // second time, so an unread note is kept a day.
         private const val STALE_AFTER_MS = 24L * 60 * 60 * 1000
+
+        // One thread keeps the draws in arrival order and the pacing gap between them (InstantPush.pace sleeps, which the main thread must never do); [queued] counts pushes accepted and not yet drawn.
+        private val executor = Executors.newSingleThreadExecutor()
+        private val queued = AtomicInteger(0)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -29,12 +38,35 @@ class PushArrivalReceiver : BroadcastReceiver() {
             val delivered = extras.getString("google.delivered_priority") ?: "?"
             val original = extras.getString("google.original_priority") ?: "?"
 
-            val drawn = InstantPush.show(context, extras)
-
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val key = "flutter.sis.push_arrival.$id"
+            val head = "${System.currentTimeMillis()},$delivered,$original"
+            // Noted at once with ",q" (queued to be drawn) so the Dart handler, which may start before a paced draw ends, still counts the push as drawn here; the draw then settles it.
+            prefs.edit().putString(key, "$head,q").apply()
+            queued.incrementAndGet()
+            val pending = goAsync() // null when called directly (unit tests): draw inline
+            val work = Runnable {
+                try {
+                    val drawn = InstantPush.show(context, extras, postSummaryNow = queued.get() <= 1)
+                    if (prefs.contains(key)) prefs.edit().putString(key, if (drawn) "$head,n" else head).apply()
+                } catch (e: Exception) {
+                    // A measurement must never break push delivery.
+                } finally {
+                    queued.decrementAndGet()
+                    pending?.finish()
+                }
+            }
+            if (pending == null) work.run() else executor.execute(work)
+            housekeeping(prefs)
+        } catch (e: Exception) {
+            // A measurement must never break push delivery.
+        }
+    }
+
+    private fun housekeeping(prefs: SharedPreferences) {
+        try {
             val now = System.currentTimeMillis()
             val editor = prefs.edit()
-            editor.putString("flutter.sis.push_arrival.$id", "$now,$delivered,$original" + if (drawn) ",n" else "")
 
             // Housekeeping: a value the Dart handler never read goes after a day.
             for (key in prefs.all.keys) {

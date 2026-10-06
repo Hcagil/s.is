@@ -36,6 +36,7 @@ object InstantPush {
     // Per process, as Dart kept them per isolate: when this process last posted, and when its last draw ended.
     private var lastPostAt = 0L
     private var lastDrawEnd = 0L
+    @Volatile private var legacyChannelsDeleted = false
 
     /** What one notification does once the chat's choices met the defaults (Dart's EffectiveAlert). [tone] null is the system default and is always null when [sound] is off. */
     data class Alert(val sound: Boolean, val tone: String?, val vibration: Boolean)
@@ -243,7 +244,8 @@ object InstantPush {
         NotificationManagerCompat.from(context).notify(SUMMARY_ID, summary)
     }
 
-    fun show(context: Context, extras: Bundle): Boolean {
+    /** [postSummaryNow] false when more pushes are queued behind this one: the last of them posts the group summary, which depends only on the stored inbox. */
+    fun show(context: Context, extras: Bundle, postSummaryNow: Boolean = true): Boolean {
         try {
             val conversationId = extras.getString("conversation_id")
             val title = extras.getString("title")
@@ -284,6 +286,11 @@ object InstantPush {
                 manager.createNotificationChannel(
                     NotificationChannel(CHANNEL_SUMMARY, "Summary", NotificationManager.IMPORTANCE_LOW),
                 )
+                if (!legacyChannelsDeleted) {
+                    // Builds before the per-chat tone channels left these four in the phone's settings.
+                    listOf(CHANNEL_BOTH, CHANNEL_SOUND, CHANNEL_VIBRATE, CHANNEL_QUIET).forEach { manager.deleteNotificationChannel(it) }
+                    legacyChannelsDeleted = true
+                }
             }
             val defaults = prefs.getString("flutter.sis.alert_defaults", null)
             val chats = prefs.getString("flutter.sis.alert_chats", null)
@@ -291,7 +298,8 @@ object InstantPush {
             val channel = ensureAlertChannel(context, alert)
 
             val tap = tapIntent(context, id, conversationId) ?: return false
-            val loud = isLoud()
+            // As before the native takeover: a high-priority push (once drawn by Dart) alerts only when the shade has been quiet; any other push always alerted.
+            val loud = extras.getString("google.original_priority") != "high" || isLoud()
 
             val line = body(text, extras.getString("sender"), !chat.isNullOrEmpty())
             // The unread total the server computed for this member (see the push
@@ -362,8 +370,10 @@ object InstantPush {
             pace()
             NotificationManagerCompat.from(context).notify(id, notification)
 
-            pace()
-            postSummary(context, inboxChats)
+            if (postSummaryNow) {
+                pace()
+                postSummary(context, inboxChats)
+            }
             markDrawEnd()
             return true
         } catch (e: Exception) {

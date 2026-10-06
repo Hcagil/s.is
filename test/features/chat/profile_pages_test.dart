@@ -137,7 +137,16 @@ class World {
   }
 
   final ChatFake chat;
-  final groups = GroupSettingsFake();
+  late final groups = GroupSettingsFake(
+    onDeleted: (id) {
+      if (chat.conversationsResult case Ok(:final value)) {
+        chat.conversationsResult = Ok([
+          for (final c in value)
+            if (c.id != id) c,
+        ]);
+      }
+    },
+  );
 
   /// Overrides added after the production ones.
   final List<Override> extra;

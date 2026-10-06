@@ -12,7 +12,12 @@ class GroupSettingsFake implements GroupSettingsRepository {
   GroupSettingsFake({
     this.latency = const Duration(milliseconds: 5),
     this.subscribeDelay = const Duration(milliseconds: 20),
+    this.onDeleted,
   });
+
+  /// Called with the id after a delete the server accepted, so the world can
+  /// drop the group from other fakes (a real server stops listing it).
+  final void Function(String conversationId)? onDeleted;
 
   final Duration latency;
   final Duration subscribeDelay;
@@ -60,7 +65,9 @@ class GroupSettingsFake implements GroupSettingsRepository {
   Future<Result<void>> deleteGroup(String conversationId) async {
     calls.add('delete:$conversationId');
     await Future<void>.delayed(latency);
-    return deleteResult;
+    final result = deleteResult;
+    if (result is Ok) onDeleted?.call(conversationId);
+    return result;
   }
 
   @override

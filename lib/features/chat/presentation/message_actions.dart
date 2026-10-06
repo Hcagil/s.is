@@ -43,7 +43,9 @@ Future<bool> runMessageAction(
       return false;
     case MessageAction.copy:
       await Clipboard.setData(ClipboardData(text: message.body));
-      if (context.mounted) showSisNotice(context, 'Copied');
+      if (context.mounted) {
+        showSisNotice(context, AppLocalizations.of(context).messageCopied);
+      }
       return false;
     case MessageAction.pin:
       return false;

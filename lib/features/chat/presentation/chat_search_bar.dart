@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
 import '../application/chat_controllers.dart';
 import '../domain/message.dart';
 
@@ -75,8 +76,8 @@ class _ChatSearchBarState extends ConsumerState<ChatSearchBar> {
             key: const ValueKey('chat-search-field'),
             controller: _controller,
             autofocus: true,
-            decoration: const InputDecoration(
-              hintText: 'Search in this chat',
+            decoration: InputDecoration(
+              hintText: AppLocalizations.of(context).searchInChat,
               border: InputBorder.none,
             ),
             onChanged: (text) => unawaited(_search(text)),
@@ -87,7 +88,9 @@ class _ChatSearchBarState extends ConsumerState<ChatSearchBar> {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(
               state.hits.isEmpty
-                  ? (state.serverAnswered ? 'No results' : '')
+                  ? (state.serverAnswered
+                        ? AppLocalizations.of(context).searchNoResults
+                        : '')
                   : '${state.index + 1}/${state.hits.length}${state.serverAnswered ? '' : '+'}',
               key: const ValueKey('chat-search-count'),
             ),

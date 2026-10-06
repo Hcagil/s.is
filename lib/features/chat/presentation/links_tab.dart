@@ -11,9 +11,10 @@ class _LinksTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    const empty = 'No links shared yet';
+    final l = AppLocalizations.of(context);
+    final empty = l.linksEmpty;
     final id = conversationId;
-    if (id == null) return const _Empty(empty);
+    if (id == null) return _Empty(empty);
     final me = switch (ref.watch(sessionControllerProvider).value) {
       Allowed(:final member) => member.userId,
       _ => null,
@@ -30,7 +31,7 @@ class _LinksTab extends ConsumerWidget {
               title: Text(entry.link.host),
               subtitle: Text(
                 '${entry.link}\n'
-                '${entry.message.senderId == me ? 'You' : names[entry.message.senderId] ?? 'Member'}'
+                '${entry.message.senderId == me ? l.commonYou : names[entry.message.senderId] ?? l.commonMember}'
                 ' · ${previewTime(entry.message.createdAt, DateTime.now())}',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -43,7 +44,7 @@ class _LinksTab extends ConsumerWidget {
                 if (!opened && context.mounted) {
                   showSisNotice(
                     context,
-                    'Could not open ${entry.link.host}',
+                    l.linkOpenFailed(entry.link.host),
                     isError: true,
                   );
                 }

@@ -19,12 +19,13 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
-import 'package:sis/features/presence/domain/last_seen.dart';
+import 'package:sis/features/presence/presentation/last_seen_text.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/presentation/settings_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
+import '../../support/l10n.dart';
 import '../../support/sis_ui.dart';
 import '../../support/fakes.dart';
 
@@ -125,12 +126,12 @@ void main() {
       expect(status(t), longAgoLabel);
     });
 
-    testWidgets('the label is lastSeenLabel of that time and now', (t) async {
+    testWidgets('the label is lastSeenText of that time and now', (t) async {
       final at = DateTime.now().subtract(const Duration(minutes: 10));
       final w = World()..presence.lastSeen['u2'] = at;
       await pumpApp(t, w);
       await open(t, 'c1');
-      expect(status(t), lastSeenLabel(at, DateTime.now()));
+      expect(status(t), lastSeenText(l10nEn, at, DateTime.now()));
       expect(status(t), 'last seen 10 min ago');
     });
 

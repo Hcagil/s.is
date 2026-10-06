@@ -30,13 +30,14 @@ import 'package:sis/features/chat/presentation/photo_viewer.dart';
 import 'package:sis/features/chat/presentation/profile_pages.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
-import 'package:sis/features/presence/domain/last_seen.dart';
+import 'package:sis/features/presence/presentation/last_seen_text.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/presentation/settings_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/l10n.dart';
 import '../../support/sis_ui.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
@@ -382,7 +383,7 @@ void main() {
       await bobFromChat(t, w);
       expect(
         textOf(byKey('person-status')).trim(),
-        lastSeenLabel(at, DateTime.now()),
+        lastSeenText(l10nEn, at, DateTime.now()),
       );
     });
 
@@ -1009,6 +1010,45 @@ void main() {
         await tapKey(t, tab);
       }
       expect(t.takeException(), isNull);
+    });
+  });
+
+  // Slice 12: the data layer returns '' for a member whose profile name is
+  // unknown (as the contract says SupabaseChatRepository does). Every place
+  // that names them must show the localised "Member", never a blank and
+  // never the domain's own wording.
+  group('an unknown name', () {
+    const nameless = Member(userId: 'u9', displayName: '');
+    const withNameless = Conversation(
+      id: 'c9',
+      other: nameless,
+      lastMessage: 'who?',
+    );
+
+    World unknown() => World()
+      ..chat.conversationsResult = const Ok([withBob, club, withNameless])
+      ..chat.roster['c9'] = [me, nameless]
+      ..chat.roster['g1'] = [me, bob, nameless];
+
+    testWidgets('the chat list row says "Member"', (t) async {
+      await pumpApp(t, unknown());
+      expect(textOf(byKey('conversation-c9')), contains(l10nEn.commonMember));
+    });
+
+    testWidgets('the open 1:1 header says "Member"', (t) async {
+      await pumpApp(t, unknown());
+      await openChat(t, 'c9');
+      expect(
+        textOf(byKey('conversation-title')),
+        contains(l10nEn.commonMember),
+      );
+    });
+
+    testWidgets('the group roster row says "Member"', (t) async {
+      await clubPage(t, unknown());
+      await tapKey(t, 'tab-members');
+      await reveal(t, byKey('group-member-u9'));
+      expect(textOf(byKey('group-member-u9')), contains(l10nEn.commonMember));
     });
   });
 }

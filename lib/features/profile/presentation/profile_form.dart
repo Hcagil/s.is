@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
 import '../application/profile_controller.dart';
 import '../domain/own_profile.dart';
 
@@ -72,19 +73,19 @@ class _ProfileFormState extends ConsumerState<ProfileForm> {
       _setTag(_TagState.invalid, problem);
       return;
     }
-    _setTag(_TagState.checking, 'Checking…');
+    _setTag(_TagState.checking, AppLocalizations.of(context).tagChecking);
     final ticket = _check;
     _debounce = Timer(const Duration(milliseconds: 400), () async {
       final result = await ref.read(ownProfileProvider.notifier).checkTag(tag);
       if (!mounted || ticket != _check) return;
       switch (result) {
         case Ok(value: true):
-          _setTag(_TagState.free, '@$tag is available');
+          _setTag(_TagState.free, AppLocalizations.of(context).tagFree(tag));
         case Ok(value: false):
-          _setTag(_TagState.taken, '@$tag is taken');
+          _setTag(_TagState.taken, AppLocalizations.of(context).tagTaken(tag));
         case Err():
           // Could not check: let the save decide rather than block the form.
-          _setTag(_TagState.unknown, 'Could not check availability');
+          _setTag(_TagState.unknown, AppLocalizations.of(context).tagUnknown);
       }
     });
   }
@@ -131,8 +132,8 @@ class _ProfileFormState extends ConsumerState<ProfileForm> {
           maxLength: maxDisplayNameLength,
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
-            labelText: 'Display name',
-            helperText: 'Shown to other members. Need not be unique.',
+            labelText: AppLocalizations.of(context).profileDisplayName,
+            helperText: AppLocalizations.of(context).profileDisplayNameHint,
             errorText: nameProblem,
             counterText: '',
           ),
@@ -145,10 +146,10 @@ class _ProfileFormState extends ConsumerState<ProfileForm> {
           autocorrect: false,
           onChanged: _onTagChanged,
           decoration: InputDecoration(
-            labelText: 'Tag',
+            labelText: AppLocalizations.of(context).profileTag,
             prefixText: '@',
             helperText:
-                _tagMessage ?? 'Unique. Letters, digits and _; 3 to 20.',
+                _tagMessage ?? AppLocalizations.of(context).profileTagHint,
             errorText: tagIsBad ? _tagMessage : null,
             counterText: '',
           ),

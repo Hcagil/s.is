@@ -29,14 +29,14 @@ class SignInScreen extends ConsumerWidget {
                 const SisWordmark(size: 88),
                 const SizedBox(height: 8),
                 Text(
-                  'Stay in sync',
+                  AppLocalizations.of(context).appTagline,
                   style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Private messages for the people on your list.',
+                  AppLocalizations.of(context).signInBody,
                   style: theme.textTheme.bodyLarge?.copyWith(color: muted),
                 ),
                 if (reason != null) ...[
@@ -79,9 +79,9 @@ class SignInScreen extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        const Flexible(
+                        Flexible(
                           child: Text(
-                            'Continue with Google',
+                            AppLocalizations.of(context).signInGoogle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -117,7 +117,7 @@ class SignInScreen extends ConsumerWidget {
                 ],
                 const SizedBox(height: 12),
                 Text(
-                  'Only invited Google accounts can sign in.',
+                  AppLocalizations.of(context).signInInvitedOnly,
                   style: theme.textTheme.bodySmall?.copyWith(color: muted),
                 ),
               ],

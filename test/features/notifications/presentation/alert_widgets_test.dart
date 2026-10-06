@@ -24,6 +24,7 @@ import 'package:sis/features/notifications/presentation/notification_pages.dart'
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../../support/fakes.dart';
+import '../../../support/l10n.dart';
 
 Finder byKey(String key) => find.byKey(ValueKey(key));
 
@@ -373,7 +374,7 @@ void main() {
         await t.pumpWidget(
           ProviderScope(
             overrides: pageOverrides(ChatFake()),
-            child: const MaterialApp(home: NotificationsScreen()),
+            child: localizedApp(home: NotificationsScreen()),
           ),
         );
         await t.pumpAndSettle();

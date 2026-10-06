@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../app/swipe_back.dart';
 import '../../../app/theme.dart';
+import '../../../l10n/app_localizations.dart';
 import '../domain/attachment.dart';
 import '../domain/message.dart';
 
@@ -92,7 +93,7 @@ class _AttachmentPreviewPageState extends State<AttachmentPreviewPage> {
             IconButton(
               key: const ValueKey('preview-remove'),
               icon: const Icon(Icons.delete_outline_rounded),
-              tooltip: 'Remove this photo',
+              tooltip: AppLocalizations.of(context).previewRemovePhoto,
               onPressed: _removeCurrent,
             ),
         ],
@@ -168,15 +169,15 @@ class _AttachmentPreviewPageState extends State<AttachmentPreviewPage> {
                       inputFormatters: [
                         LengthLimitingTextInputFormatter(maxMessageLength),
                       ],
-                      decoration: const InputDecoration(
-                        hintText: 'Add a caption',
+                      decoration: InputDecoration(
+                        hintText: AppLocalizations.of(context).pickerAddCaption,
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Semantics(
                     button: true,
-                    label: 'Send',
+                    label: AppLocalizations.of(context).commonSend,
                     child: InkWell(
                       key: const ValueKey('preview-send'),
                       customBorder: const CircleBorder(),

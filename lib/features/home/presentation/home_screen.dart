@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../../chat/application/chat_controllers.dart';
 import '../../chat/domain/conversation.dart';
 import '../../chat/presentation/conversation_list.dart';
+import '../../chat/presentation/member_name.dart';
 import '../../chat/presentation/message_screen.dart';
 import '../../notifications/application/push_controller.dart';
 import '../../presence/application/presence_controllers.dart';
@@ -49,7 +51,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         actions: [
           IconButton(
             key: const ValueKey('home-settings'),
-            tooltip: 'Settings',
+            tooltip: AppLocalizations.of(context).commonSettings,
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
@@ -99,7 +101,9 @@ Future<void> _openFromNotification(
     context,
     ref,
     id,
-    title: match?.label,
+    title: match == null
+        ? null
+        : conversationLabel(AppLocalizations.of(context), match),
     otherUserId: match?.other?.userId,
     group: match?.isGroup ?? false,
   );

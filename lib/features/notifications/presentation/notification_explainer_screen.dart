@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
+import '../../../l10n/app_localizations.dart';
 import '../application/push_controller.dart';
 
 /// Shown once, right after onboarding: why SIS is about to ask for
@@ -22,7 +23,7 @@ class NotificationExplainerScreen extends ConsumerWidget {
               const SisLogo(size: 56),
               const SizedBox(height: 24),
               Text(
-                'SIS will tell you about new messages',
+                AppLocalizations.of(context).notifExplainerTitle,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
@@ -32,7 +33,7 @@ class NotificationExplainerScreen extends ConsumerWidget {
                 onPressed: () => ref
                     .read(notificationExplainerProvider.notifier)
                     .continueAndAskPermission(),
-                child: const Text('Continue'),
+                child: Text(AppLocalizations.of(context).commonContinue),
               ),
             ],
           ),

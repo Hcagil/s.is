@@ -12,6 +12,7 @@ import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
 import '../domain/conversation.dart';
 import '../domain/highlight.dart';
+import 'member_name.dart';
 import 'message_screen.dart';
 import 'new_chat_page.dart';
 import 'new_group_page.dart';
@@ -27,6 +28,7 @@ class ConversationList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     final conversations = ref.watch(conversationListProvider);
     final searchQuery = ref.watch(
       chatListSearchProvider.select((s) => s.query),
@@ -85,14 +87,14 @@ class ConversationList extends ConsumerWidget {
             heroTag: 'new-group',
             onPressed: () => _startGroup(context, ref),
             icon: const Icon(Icons.groups_outlined),
-            label: const Text('New group'),
+            label: Text(l.commonNewGroup),
           ),
           FloatingActionButton.extended(
             key: const ValueKey('new-chat'),
             heroTag: 'new-chat',
             onPressed: () => _startChat(context, ref),
             icon: const Icon(Icons.edit_outlined),
-            label: const Text('New chat'),
+            label: Text(l.pickerNewChat),
           ),
         ],
       ),
@@ -154,6 +156,7 @@ class _ConversationTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     // Whose messages are "mine" comes from the session, as on the message
     // screen.
     final me = switch (ref.watch(sessionControllerProvider).value) {
@@ -196,7 +199,7 @@ class _ConversationTile extends ConsumerWidget {
         key: ValueKey('conversation-${conversation.id}'),
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
         leading: PersonAvatar(
-          label: conversation.label,
+          label: conversationLabel(l, conversation),
           // A person keeps one tint everywhere; a group has its own.
           seed: conversation.other?.userId ?? conversation.id,
           online:
@@ -208,7 +211,7 @@ class _ConversationTile extends ConsumerWidget {
           avatarPath: conversation.avatarPath ?? conversation.other?.avatarPath,
         ),
         title: Text(
-          conversation.label,
+          conversationLabel(l, conversation),
           key: left ? ValueKey('left-${conversation.id}') : null,
           style: TextStyle(
             fontWeight: unread ? FontWeight.w800 : FontWeight.w700,
@@ -216,13 +219,13 @@ class _ConversationTile extends ConsumerWidget {
           ),
         ),
         subtitle: conversation.lastMessage == null
-            ? const Text('No messages yet')
+            ? Text(l.listNoMessages)
             : voice != null
             ? Text.rich(
                 TextSpan(
                   children: [
                     TextSpan(
-                      text: voice.name,
+                      text: nameOrMember(l, voice.name),
                       style: TextStyle(
                         color: groupColor(context, voice.slot),
                         fontWeight: FontWeight.w600,
@@ -239,7 +242,7 @@ class _ConversationTile extends ConsumerWidget {
             : Text(
                 conversation.lastSenderId != null &&
                         conversation.lastSenderId == me
-                    ? 'You: ${conversation.lastMessage}'
+                    ? l.listYouPrefix(conversation.lastMessage!)
                     : conversation.lastMessage!,
                 key: ValueKey('preview-${conversation.id}'),
                 maxLines: 1,
@@ -323,7 +326,7 @@ class _ConversationTile extends ConsumerWidget {
           context,
           ref,
           conversation.id,
-          title: conversation.label,
+          title: conversationLabel(l, conversation),
           otherUserId: conversation.other?.userId,
           group: conversation.isGroup,
         ),
@@ -380,11 +383,11 @@ class _Empty extends StatelessWidget {
   const _Empty();
 
   @override
-  Widget build(BuildContext context) => const Center(
+  Widget build(BuildContext context) => Center(
     child: Padding(
-      padding: EdgeInsets.all(32),
+      padding: const EdgeInsets.all(32),
       child: Text(
-        'No conversations yet.\nStart one with New chat.',
+        AppLocalizations.of(context).listEmpty,
         textAlign: TextAlign.center,
       ),
     ),
@@ -406,7 +409,10 @@ class _Failed extends StatelessWidget {
         children: [
           Text(reason, textAlign: TextAlign.center),
           const SizedBox(height: 16),
-          OutlinedButton(onPressed: onRetry, child: const Text('Try again')),
+          OutlinedButton(
+            onPressed: onRetry,
+            child: Text(AppLocalizations.of(context).commonTryAgain),
+          ),
         ],
       ),
     ),
@@ -434,6 +440,7 @@ class _ListSearchFieldState extends ConsumerState<_ListSearchField> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       child: TextField(
@@ -444,7 +451,7 @@ class _ListSearchFieldState extends ConsumerState<_ListSearchField> {
           setState(() {}); // only to show/hide the clear button below
         },
         decoration: InputDecoration(
-          hintText: 'Search messages',
+          hintText: l.listSearchHint,
           prefixIcon: const Icon(Icons.search),
           suffixIcon: _controller.text.isEmpty
               ? null
@@ -475,13 +482,14 @@ class _SearchResults extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     final state = ref.watch(chatListSearchProvider);
     final conversations = {
       for (final c in ref.watch(conversationListProvider).value ?? const [])
         c.id: c,
     };
     if (state.results.isEmpty) {
-      return const Center(child: Text('No messages found'));
+      return Center(child: Text(l.listNoResults));
     }
     return ListView.separated(
       itemCount: state.results.length,
@@ -489,7 +497,9 @@ class _SearchResults extends ConsumerWidget {
       itemBuilder: (context, i) {
         final message = state.results[i];
         final conversation = conversations[message.conversationId];
-        final label = conversation?.label ?? 'Conversation';
+        final label = conversation == null
+            ? l.listConversation
+            : conversationLabel(l, conversation);
         final seed =
             conversation?.other?.userId ??
             conversation?.id ??
@@ -524,7 +534,9 @@ class _SearchResults extends ConsumerWidget {
             context,
             ref,
             message.conversationId,
-            title: conversation?.label,
+            title: conversation == null
+                ? null
+                : conversationLabel(l, conversation),
             otherUserId: conversation?.other?.userId,
             group: conversation?.isGroup ?? false,
             searchQuery: state.query,

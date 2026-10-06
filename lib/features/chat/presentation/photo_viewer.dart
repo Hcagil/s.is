@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/loading.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
 import '../application/chat_controllers.dart';
 
 /// Opens [paths] full-screen at [index]: swipe between them, pinch to zoom.
@@ -119,7 +120,8 @@ class _PhotoViewerState extends ConsumerState<PhotoViewer>
         elevation: 0,
         scrolledUnderElevation: 0,
         title: Text(
-          '${_index + 1} of ${widget.paths.length}',
+          AppLocalizations.of(context)
+              .viewerCounter(_index + 1, widget.paths.length),
           key: const ValueKey('viewer-position'),
           style: const TextStyle(color: Colors.white, fontSize: 16),
         ),
@@ -128,7 +130,7 @@ class _PhotoViewerState extends ConsumerState<PhotoViewer>
             IconButton(
               key: const ValueKey('viewer-menu'),
               icon: const Icon(Icons.more_horiz),
-              tooltip: 'More',
+              tooltip: AppLocalizations.of(context).viewerMore,
               onPressed: () async {
                 final nav = Navigator.of(context);
                 final close = await widget.onMenu!(
@@ -210,8 +212,10 @@ class _PhotoState extends ConsumerState<_Photo> {
             value,
             key: ValueKey('viewer-image-$path'),
             fit: BoxFit.contain,
-            errorBuilder: (_, _, _) =>
-                const Text('Image unavailable', style: white),
+            errorBuilder: (_, _, _) => Text(
+              AppLocalizations.of(context).commonImageUnavailable,
+              style: white,
+            ),
           ),
         ),
       ),

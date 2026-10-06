@@ -43,7 +43,11 @@ class _LinkedTextState extends ConsumerState<_LinkedText> {
   Future<void> _open(Uri link) async {
     final opened = await ref.read(linkOpenerProvider).open(link);
     if (!opened && mounted) {
-      showSisNotice(context, 'Could not open ${link.host}', isError: true);
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).linkOpenFailed(link.host),
+        isError: true,
+      );
     }
   }
 

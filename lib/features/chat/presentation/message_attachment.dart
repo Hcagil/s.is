@@ -104,14 +104,18 @@ class _Attachment extends ConsumerWidget {
                   key: const ValueKey('attachment-image'),
                   cacheWidth: 560,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, _, _) =>
-                      _failed(context, 'Image unavailable'),
+                  errorBuilder: (context, _, _) => _failed(
+                    context,
+                    AppLocalizations.of(context).commonImageUnavailable,
+                  ),
                 ),
               ),
               AsyncError(:final error) => sized(
                 _failed(
                   context,
-                  error is Failure ? error.message : 'Image unavailable',
+                  error is Failure
+                      ? error.message
+                      : AppLocalizations.of(context).commonImageUnavailable,
                 ),
               ),
               // The preview that came with the message, blurred, until the

@@ -21,7 +21,7 @@ import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../../notifications/application/push_controller.dart';
 import '../../presence/application/presence_controllers.dart';
-import '../../presence/domain/last_seen.dart';
+import '../../presence/presentation/last_seen_text.dart';
 import '../../update/presentation/whats_new_card.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
@@ -43,6 +43,7 @@ import 'chat_search_bar.dart';
 import 'group_event_line.dart';
 import 'swipeable_message.dart';
 import 'message_actions.dart';
+import 'member_name.dart';
 import 'message_menu_card.dart';
 import 'person_avatar.dart';
 import 'photo_viewer.dart';
@@ -127,24 +128,24 @@ Future<void> openConversation(
 /// "typing…" beats "online", which beats "last seen". In a 1:1 chat the
 /// header already names the person, so it says just "typing…"; in a group,
 /// who is typing by name.
-String? _status(WidgetRef ref, String? other) {
+String? _status(WidgetRef ref, AppLocalizations l, String? other) {
   final typing = ref.watch(typingProvider);
   if (typing.isNotEmpty) {
-    if (other != null) return 'typing…';
-    if (typing.length > 1) return '${typing.length} people are typing…';
+    if (other != null) return l.statusTyping;
+    if (typing.length > 1) return l.statusPeopleTyping(typing.length);
     final names = {
       for (final m in ref.watch(yourPeopleProvider).value ?? const [])
         m.userId: m,
     };
     final who = names[typing.first]?.displayName;
-    return who == null ? 'typing…' : '$who is typing…';
+    return who == null ? l.statusTyping : l.statusWhoTyping(who);
   }
   if (other != null && ref.watch(onlineMembersProvider).contains(other)) {
-    return 'online';
+    return l.statusOnline;
   }
   if (other != null) {
     final at = ref.watch(lastSeenProvider(other)).value;
-    if (at != null) return lastSeenLabel(at, DateTime.now());
+    if (at != null) return lastSeenText(l, at, DateTime.now());
   }
   return null;
 }
@@ -500,11 +501,15 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
             .firstOrNull,
       ),
     );
-    final title = widget.title ?? listed?.label;
+    final title =
+        widget.title ??
+        (listed == null
+            ? null
+            : conversationLabel(AppLocalizations.of(context), listed));
     final isGroup = widget.group || (listed?.isGroup ?? false);
     final isSystem = listed?.isSystem ?? false;
     final otherUserId = widget.otherUserId ?? listed?.other?.userId;
-    final status = _status(ref, otherUserId);
+    final status = _status(ref, AppLocalizations.of(context), otherUserId);
     // The group's own roster names every sender, current or departed --
     // yourPeopleProvider would miss someone no longer reachable, and would
     // also pull in people reachable only through some OTHER shared chat.
@@ -514,7 +519,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
               const <GroupMember>[]
         : const <GroupMember>[];
     final names = {
-      for (final m in roster) m.member.userId: m.member.displayName,
+      for (final m in roster)
+        m.member.userId: nameOrMember(
+          AppLocalizations.of(context),
+          m.member.displayName,
+        ),
     };
     final departedSenderIds = {
       for (final m in roster)
@@ -536,13 +545,19 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     final ReaderPeople people = {
       for (final m in roster)
         m.member.userId: (
-          name: m.member.displayName,
+          name: nameOrMember(
+            AppLocalizations.of(context),
+            m.member.displayName,
+          ),
           avatarPath: m.member.avatarPath,
           slot: m.colorSlot,
         ),
       if (!isGroup && otherUserId != null)
         otherUserId: (
-          name: listed?.other?.displayName ?? title ?? 'Member',
+          name: nameOrMember(
+            AppLocalizations.of(context),
+            listed?.other?.displayName ?? title ?? '',
+          ),
           avatarPath: listed?.other?.avatarPath,
           slot: null,
         ),
@@ -577,7 +592,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                   final page = system
                       ? SystemChatScreen(conversationId: id)
                       : isGroup
-                      ? GroupScreen(conversationId: id, title: title ?? 'Group')
+                      ? GroupScreen(
+                          conversationId: id,
+                          title:
+                              title ?? AppLocalizations.of(context).commonGroup,
+                        )
                       : otherUserId == null
                       ? null
                       // Already in this chat: no Message button on their page.
@@ -601,7 +620,9 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                     child: Row(
                       children: [
                         PersonAvatar(
-                          label: title ?? 'Conversation',
+                          label:
+                              title ??
+                              AppLocalizations.of(context).commonConversation,
                           seed:
                               otherUserId ??
                               conversationId ??
@@ -616,7 +637,9 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                title ?? 'Conversation',
+                                title ??
+                                    AppLocalizations.of(context)
+                                        .commonConversation,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -667,8 +690,10 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                       fit: StackFit.expand,
                       children: [
                         switch (messages) {
-                          AsyncData() when timeline.isEmpty => const Center(
-                            child: Text('No messages yet. Say something.'),
+                          AsyncData() when timeline.isEmpty => Center(
+                            child: Text(
+                              AppLocalizations.of(context).messageEmpty,
+                            ),
                           ),
                           _
                               when messages is! AsyncError &&
@@ -782,7 +807,8 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                                 !mine &&
                                                 startsRun(value, index)
                                             ? (names[message.senderId] ??
-                                                  'Member')
+                                                  AppLocalizations.of(context)
+                                                      .commonMember)
                                             : null,
                                         senderLeft: departedSenderIds.contains(
                                           message.senderId,
@@ -793,9 +819,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                         quotedName: quoted == null
                                             ? null
                                             : quoted.senderId == me
-                                            ? 'You'
+                                            ? AppLocalizations.of(context)
+                                                  .commonYou
                                             : (names[quoted.senderId] ??
-                                                  'Member'),
+                                                  AppLocalizations.of(context)
+                                                      .commonMember),
                                         highlightQuery: searchQuery,
                                         isCurrentHit:
                                             message.id == currentHitId,

@@ -36,6 +36,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
         });
     if (!mounted) return;
     setState(() => _busy = false);
+    final l = AppLocalizations.of(context);
     switch (result) {
       case Err(:final failure):
         showSisNotice(context, failure.message, isError: true);
@@ -43,8 +44,8 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
         showSisNotice(
           context,
           choice is AvatarRemoved
-              ? 'Group picture removed'
-              : 'Group picture updated',
+              ? l.groupPictureRemoved
+              : l.groupPictureUpdated,
         );
     }
   }
@@ -56,7 +57,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
     final members = ref.watch(conversationMembersProvider(conversationId));
     final names = {
       for (final m in members.value ?? const <Member>[])
-        m.userId: m.displayName,
+        m.userId: nameOrMember(AppLocalizations.of(context), m.displayName),
     };
     // Current members only -- a departed member still has a row (was_member
     // keeps their history readable), but does not belong in "N members".
@@ -120,7 +121,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                   ),
                   if (currentCount case final count?)
                     Text(
-                      count == 1 ? '1 member' : '$count members',
+                      AppLocalizations.of(context).groupMemberCount(count),
                       key: const ValueKey('group-count'),
                       style: TextStyle(
                         color: theme.colorScheme.onSurfaceVariant,
@@ -130,11 +131,20 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                   ChatAlertTiles(conversationId: conversationId),
                   const _GroupSettings(),
                   const SizedBox(height: 12),
-                  const TabBar(
+                  TabBar(
                     tabs: [
-                      Tab(key: ValueKey('tab-members'), text: 'Members'),
-                      Tab(key: ValueKey('tab-media'), text: 'Media'),
-                      Tab(key: ValueKey('tab-links'), text: 'Links'),
+                      Tab(
+                        key: const ValueKey('tab-members'),
+                        text: AppLocalizations.of(context).groupTabMembers,
+                      ),
+                      Tab(
+                        key: const ValueKey('tab-media'),
+                        text: AppLocalizations.of(context).groupTabMedia,
+                      ),
+                      Tab(
+                        key: const ValueKey('tab-links'),
+                        text: AppLocalizations.of(context).groupTabLinks,
+                      ),
                     ],
                   ),
                 ],

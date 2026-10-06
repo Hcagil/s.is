@@ -5,6 +5,7 @@ import '../../../app/controls.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
 import '../application/group_controller.dart';
@@ -85,7 +86,7 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
     setState(() => _busy = false);
     switch (result) {
       case Ok():
-        showSisNotice(context, 'Added to the group');
+        showSisNotice(context, AppLocalizations.of(context).addMembersDone);
         Navigator.of(context).pop();
       case Err(:final failure):
         showSisNotice(context, failure.message, isError: true);
@@ -94,6 +95,7 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final choices = ref
         .watch(yourPeopleProvider)
@@ -111,7 +113,7 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Add members'),
+            Text(l.commonAddMembers),
             Text(
               widget.groupTitle,
               maxLines: 1,
@@ -127,7 +129,7 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
           PickerSearchField(
             fieldKey: const ValueKey('add-members-search'),
             controller: _search,
-            hint: 'Search your people',
+            hint: l.commonSearchPeople,
             onChanged: (_) => setState(() {}),
           ),
           PickedChips(
@@ -147,13 +149,12 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            'Nobody left to add',
+                            l.addMembersNoneTitle,
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Everyone in your people list is already in '
-                            'this group.',
+                            l.addMembersNoneBody,
                             textAlign: TextAlign.center,
                             style: TextStyle(color: scheme.onSurfaceVariant),
                           ),
@@ -172,7 +173,7 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
                             onTap: () => _toggle(m),
                           ),
                       if (!choices.any((m) => matchesPerson(m, _search.text)))
-                        const ListTile(title: Text('Nobody found')),
+                        ListTile(title: Text(l.commonNobodyFound)),
                     ],
                   ),
           ),
@@ -183,8 +184,8 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
                 children: [
                   SisSwitchTile(
                     key: const ValueKey('add-members-history'),
-                    title: 'Show old messages?',
-                    subtitle: 'Off shows only messages sent from now on.',
+                    title: l.addMembersOldTitle,
+                    subtitle: l.addMembersOldHint,
                     value: _withHistory,
                     onChanged: (v) => setState(() => _withHistory = v),
                   ),
@@ -196,10 +197,10 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
                       onPressed: _chosen.isEmpty || _busy ? null : _add,
                       child: Text(
                         _busy
-                            ? 'Adding…'
+                            ? l.addMembersAdding
                             : _chosen.isEmpty
-                            ? 'Add'
-                            : 'Add (${_chosen.length})',
+                            ? l.addMembersAdd
+                            : l.addMembersAddCount(_chosen.length),
                       ),
                     ),
                   ),

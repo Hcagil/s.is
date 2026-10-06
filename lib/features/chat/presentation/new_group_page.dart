@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/loading.dart';
 import '../../../core/failure.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
 import 'picker_widgets.dart';
@@ -49,13 +50,14 @@ class _NewGroupPageState extends ConsumerState<NewGroupPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final members = ref.watch(yourPeopleProvider);
     final ready = _title.text.trim().isNotEmpty && _chosen.isNotEmpty;
     final header = Theme.of(context).textTheme.labelMedium
         ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant);
     return Scaffold(
       key: const ValueKey('new-group-page'),
-      appBar: AppBar(title: const Text('New group')),
+      appBar: AppBar(title: Text(l.commonNewGroup)),
       body: Column(
         children: [
           Padding(
@@ -66,8 +68,8 @@ class _NewGroupPageState extends ConsumerState<NewGroupPage> {
               textCapitalization: TextCapitalization.words,
               maxLength: 80,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                labelText: 'Group name',
+              decoration: InputDecoration(
+                labelText: l.newGroupName,
                 counterText: '',
               ),
             ),
@@ -75,7 +77,7 @@ class _NewGroupPageState extends ConsumerState<NewGroupPage> {
           PickerSearchField(
             fieldKey: const ValueKey('group-search'),
             controller: _search,
-            hint: 'Search your people',
+            hint: l.commonSearchPeople,
             onChanged: (_) => setState(() {}),
           ),
           PickedChips(
@@ -85,14 +87,14 @@ class _NewGroupPageState extends ConsumerState<NewGroupPage> {
           ),
           Expanded(
             child: switch (members) {
-              AsyncData(:final value) when value.isEmpty => const ListTile(
-                title: Text('Nobody else has signed in yet'),
+              AsyncData(:final value) when value.isEmpty => ListTile(
+                title: Text(l.newGroupNobody),
               ),
               AsyncData(:final value) => ListView(
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                    child: Text('Your people', style: header),
+                    child: Text(l.commonYourPeople, style: header),
                   ),
                   for (final m in value)
                     if (matchesPerson(m, _search.text))
@@ -103,7 +105,7 @@ class _NewGroupPageState extends ConsumerState<NewGroupPage> {
                         onTap: () => _toggle(m),
                       ),
                   if (!value.any((m) => matchesPerson(m, _search.text)))
-                    const ListTile(title: Text('Nobody found')),
+                    ListTile(title: Text(l.commonNobodyFound)),
                 ],
               ),
               AsyncError(:final error) => ListTile(
@@ -123,7 +125,7 @@ class _NewGroupPageState extends ConsumerState<NewGroupPage> {
                         members: List<Member>.of(_chosen),
                       ))
                     : null,
-                child: const Text('Create group'),
+                child: Text(l.newGroupCreate),
               ),
             ),
           ),

@@ -40,6 +40,7 @@ import 'package:sis/features/profile/presentation/settings_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../support/fakes.dart';
+import '../support/l10n.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -197,7 +198,7 @@ void main() {
             chatRepositoryProvider.overrideWithValue(FakeChat()),
             conversationListProvider.overrideWith(_ThrowingList.new),
           ],
-          child: const MaterialApp(home: ConversationList()),
+          child: localizedApp(home: ConversationList()),
         ),
       );
       await t.pumpAndSettle();

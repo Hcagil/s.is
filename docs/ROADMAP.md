@@ -46,6 +46,7 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.30.3 | backing out of the crop returns to the same place in the photo grid |
 | v0.30.4 | notifications: bursts arrive at once and show more lines per chat; the sender's picture on Android; iPhone clears a chat's notifications once it is read |
 | v0.30.5 | iPhone: the read mark always reaches the sender |
+| v0.31.0 | **Update 1** — one combined release of the approved full design: appearance and text size, the new chat list, tap and long-press on messages (reactions, Seen by), group info, notifications drawn by the phone (bursts, sender pictures, Reply only when unlocked), the SIS Bot, and every screen in Turkish. Later rows move up by one patch number |
 | v0.31 | Sign in with Apple on iPhone (a hidden Apple email is refused; the same email is one account) |
 | v0.32 | "What's new" v2: sent to everyone when an update is available, with an "Update now" button; a redesigned SIS chat |
 | v0.33 | group chats show the sender's picture beside the last bubble of a run |

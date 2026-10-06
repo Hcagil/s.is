@@ -147,7 +147,11 @@ class _CropScreenState extends ConsumerState<CropScreen> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (result == null) {
-      showSisNotice(context, 'That photo could not be used.', isError: true);
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).cropUnusable,
+        isError: true,
+      );
       return;
     }
     Navigator.of(context).pop(result);
@@ -182,8 +186,8 @@ class _CropScreenState extends ConsumerState<CropScreen> {
           Expanded(
             child: Center(
               child: _failed
-                  ? const Text(
-                      'That photo could not be opened.',
+                  ? Text(
+                      AppLocalizations.of(context).photoOpenFailed,
                       style: TextStyle(color: Colors.white70),
                     )
                   : image == null

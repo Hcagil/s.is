@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/failure.dart';
+import '../core/startup_failure.dart';
 import '../features/appearance/application/appearance_controller.dart';
 import '../features/appearance/domain/appearance_settings.dart';
 import '../features/auth/domain/member.dart';
@@ -29,7 +30,7 @@ import 'route_stack.dart';
 import 'theme.dart';
 
 /// Set by main() when bootstrap itself fails; the gate shows the reason.
-final startupErrorProvider = Provider<String?>((_) => null);
+final startupErrorProvider = Provider<StartupFailure?>((_) => null);
 
 /// Root widget: theme plus the session gate.
 class SisApp extends ConsumerWidget {

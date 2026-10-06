@@ -95,7 +95,7 @@ class _WithProfile extends ConsumerWidget {
                   OutlinedButton(
                     onPressed: () =>
                         ref.read(ownProfileProvider.notifier).retry(),
-                    child: const Text('Try again'),
+                    child: Text(AppLocalizations.of(context).commonTryAgain),
                   ),
                 ],
               ),
@@ -130,7 +130,7 @@ class SettingsScreen extends ConsumerWidget {
       onTap: () => _open(context, page),
     );
     return _WithProfile(
-      title: 'Settings',
+      title: AppLocalizations.of(context).commonSettings,
       builder: (context, profile) => ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
@@ -158,25 +158,25 @@ class SettingsScreen extends ConsumerWidget {
           row(
             'settings-privacy',
             Icons.lock_outline_rounded,
-            'Privacy',
+            l.settingsPrivacy,
             const PrivacyScreen(),
           ),
           row(
             'settings-notifications',
             Icons.notifications_outlined,
-            'Notifications',
+            l.commonNotifications,
             const NotificationsScreen(),
           ),
           row(
             'settings-account',
             Icons.account_circle_outlined,
-            'Account',
+            l.settingsAccount,
             const AccountScreen(),
           ),
           row(
             'settings-about',
             Icons.info_outline_rounded,
-            'About',
+            l.settingsAbout,
             const AboutScreen(),
           ),
           row(
@@ -247,18 +247,19 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       case Err(:final failure):
         showSisNotice(context, failure.message, isError: true);
       case Ok():
+        final l = AppLocalizations.of(context);
         showSisNotice(
           context,
           choice is AvatarRemoved
-              ? 'Profile picture removed'
-              : 'Profile picture updated',
+              ? l.settingsPictureRemoved
+              : l.settingsPictureUpdated,
         );
     }
   }
 
   @override
   Widget build(BuildContext context) => _WithProfile(
-    title: 'Profile',
+    title: AppLocalizations.of(context).settingsProfile,
     builder: (context, profile) => ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -298,13 +299,16 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
           // stored rather than what was typed.
           key: ValueKey('${profile.displayName}|${profile.tag}'),
           profile: profile,
-          submitLabel: 'Save',
+          submitLabel: AppLocalizations.of(context).commonSave,
           onSubmit: (name, tag) async {
             final result = await ref
                 .read(ownProfileProvider.notifier)
                 .save(displayName: name, tag: tag);
             if (result is Ok && context.mounted) {
-              showSisNotice(context, 'Saved');
+              showSisNotice(
+                context,
+                AppLocalizations.of(context).settingsSaved,
+              );
             }
             return result;
           },
@@ -320,71 +324,72 @@ class PrivacyScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => _WithProfile(
-    title: 'Privacy',
-    builder: (context, profile) => ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      children: [
-        SisSwitchTile(
-          key: const ValueKey('share-presence'),
-          title: 'Show when I am online',
-          value: profile.sharePresence,
-          onChanged: (on) => _setSharing(context, ref, presence: on),
-        ),
-        SisSwitchTile(
-          key: const ValueKey('share-typing'),
-          title: 'Show when I am typing',
-          value: profile.shareTyping,
-          onChanged: (on) => _setSharing(context, ref, typing: on),
-        ),
-        SisSwitchTile(
-          key: const ValueKey('share-last-seen'),
-          title: 'Show my last seen',
-          subtitle: "While this is off, you can't see anyone else's either.",
-          value: profile.shareLastSeen,
-          onChanged: (on) => _setSharing(context, ref, lastSeen: on),
-        ),
-        SisSwitchTile(
-          key: const ValueKey('share-read-status'),
-          title: 'Show when I have read messages',
-          subtitle: "While this is off, you can't see when others read yours.",
-          value: profile.shareReadStatus,
-          onChanged: (on) => _setSharing(context, ref, readStatus: on),
-        ),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'Profile picture visibility',
-            style: Theme.of(context).textTheme.titleSmall
-                ?.copyWith(color: Theme.of(context).colorScheme.primary),
+    title: AppLocalizations.of(context).settingsPrivacy,
+    builder: (context, profile) {
+      final l = AppLocalizations.of(context);
+      return ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        children: [
+          SisSwitchTile(
+            key: const ValueKey('share-presence'),
+            title: l.settingsShowOnline,
+            value: profile.sharePresence,
+            onChanged: (on) => _setSharing(context, ref, presence: on),
           ),
-        ),
-        const SizedBox(height: 4),
-        Column(
-          children: [
-            for (final v in AvatarVisibility.values)
-              SisChoiceCard<AvatarVisibility>(
-                key: ValueKey('avatar-visibility-${v.name}'),
-                value: v,
-                groupValue: profile.avatarVisibility,
-                onChanged: (v) => _setAvatarVisibility(context, ref, v),
-                title: switch (v) {
-                  AvatarVisibility.everyone => 'Everyone',
-                  AvatarVisibility.contacts => 'My contacts',
-                  AvatarVisibility.nobody => 'Nobody',
-                },
-                subtitle: switch (v) {
-                  AvatarVisibility.everyone =>
-                    'Anyone who can see your profile',
-                  AvatarVisibility.contacts => 'Only people you have saved',
-                  AvatarVisibility.nobody =>
-                    "Only you -- others see your initials",
-                },
-              ),
-          ],
-        ),
-      ],
-    ),
+          SisSwitchTile(
+            key: const ValueKey('share-typing'),
+            title: l.settingsShowTyping,
+            value: profile.shareTyping,
+            onChanged: (on) => _setSharing(context, ref, typing: on),
+          ),
+          SisSwitchTile(
+            key: const ValueKey('share-last-seen'),
+            title: l.settingsShowLastSeen,
+            subtitle: l.settingsShowLastSeenHint,
+            value: profile.shareLastSeen,
+            onChanged: (on) => _setSharing(context, ref, lastSeen: on),
+          ),
+          SisSwitchTile(
+            key: const ValueKey('share-read-status'),
+            title: l.settingsShowRead,
+            subtitle: l.settingsShowReadHint,
+            value: profile.shareReadStatus,
+            onChanged: (on) => _setSharing(context, ref, readStatus: on),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              l.settingsAvatarVisibility,
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.primary),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Column(
+            children: [
+              for (final v in AvatarVisibility.values)
+                SisChoiceCard<AvatarVisibility>(
+                  key: ValueKey('avatar-visibility-${v.name}'),
+                  value: v,
+                  groupValue: profile.avatarVisibility,
+                  onChanged: (v) => _setAvatarVisibility(context, ref, v),
+                  title: switch (v) {
+                    AvatarVisibility.everyone => l.settingsAvatarEveryone,
+                    AvatarVisibility.contacts => l.settingsAvatarContacts,
+                    AvatarVisibility.nobody => l.settingsAvatarNobody,
+                  },
+                  subtitle: switch (v) {
+                    AvatarVisibility.everyone => l.settingsAvatarEveryoneHint,
+                    AvatarVisibility.contacts => l.settingsAvatarContactsHint,
+                    AvatarVisibility.nobody => l.settingsAvatarNobodyHint,
+                  },
+                ),
+            ],
+          ),
+        ],
+      );
+    },
   );
 }
 
@@ -394,21 +399,22 @@ class AccountScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     final email = switch (ref.watch(sessionControllerProvider).value) {
       Allowed(:final member) => member.email,
       _ => null,
     };
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     return Scaffold(
-      appBar: AppBar(title: const Text('Account')),
+      appBar: AppBar(title: Text(l.settingsAccount)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Text('Signed in with Google as', style: TextStyle(color: muted)),
+            Text(l.settingsSignedInAs, style: TextStyle(color: muted)),
             const SizedBox(height: 4),
             Text(
-              email ?? 'Unknown account',
+              email ?? l.settingsUnknownAccount,
               key: const ValueKey('account-email'),
               style: Theme.of(context).textTheme.titleMedium,
             ),
@@ -434,7 +440,7 @@ class AccountScreen extends ConsumerWidget {
                 // any other the session can end on.
                 await session.signOut();
               },
-              child: const Text('Sign out'),
+              child: Text(l.settingsSignOut),
             ),
           ],
         ),
@@ -449,12 +455,13 @@ class AboutScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     final version = ref.watch(installedVersionProvider).value;
     final label = version == null
         ? ''
-        : 'Version ${version.name} (${version.build})';
+        : l.settingsVersion(version.name, version.build);
     return Scaffold(
-      appBar: AppBar(title: const Text('About')),
+      appBar: AppBar(title: Text(l.settingsAbout)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
@@ -467,10 +474,7 @@ class AboutScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 12),
-            Text(
-              'Stay in sync',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text(l.appTagline, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
               label,
@@ -484,7 +488,7 @@ class AboutScreen extends ConsumerWidget {
               key: const ValueKey('about-licences'),
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.description_outlined),
-              title: const Text('Open-source licences'),
+              title: Text(l.settingsLicences),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(

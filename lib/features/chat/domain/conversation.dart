@@ -129,7 +129,7 @@ final class Conversation {
 
   bool get isGroup => title != null;
 
-  /// What the list shows: the group's title, or who you are talking to.
-  String get label =>
-      isSystem ? 'SIS' : (title ?? other?.displayName ?? 'Conversation');
+  /// The group's title, or who you are talking to. Empty when the partner's
+  /// name is unknown; presentation localises that via conversationLabel.
+  String get label => isSystem ? 'SIS' : title ?? other?.displayName ?? '';
 }

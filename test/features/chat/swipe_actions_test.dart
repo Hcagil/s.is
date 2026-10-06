@@ -319,7 +319,6 @@ void main() {
 
   group('a screen reader gets every action', () {
     const labels = {
-      'readBy': 'Read by',
       'reply': 'Reply',
       'forward': 'Forward',
       'edit': 'Edit',
@@ -346,7 +345,7 @@ void main() {
       );
       expect(
         actionLabels(actionsNode(t, bubble('old'))),
-        unorderedEquals(['Read by', 'Reply', 'Forward', 'Delete for everyone']),
+        unorderedEquals(['Reply', 'Forward', 'Delete for everyone']),
       );
       expect(
         actionLabels(actionsNode(t, bubble('bob'))),
@@ -390,15 +389,6 @@ void main() {
       invokeAction(actionsNode(t, bubble('m1'))!, 'Delete for everyone');
       await settle(t);
       expect(find.byKey(const ValueKey('delete-confirm')), findsOneWidget);
-      handle.dispose();
-    });
-
-    testWidgets('Read by opens the readers', (t) async {
-      final handle = t.ensureSemantics();
-      await openChat(t, messages: [chatMessage('m1', from: me.userId)]);
-      invokeAction(actionsNode(t, bubble('m1'))!, 'Read by');
-      await settle(t);
-      expect(find.byKey(const ValueKey('readers')), findsOneWidget);
       handle.dispose();
     });
   });

@@ -1811,3 +1811,37 @@ unchanged.
   typed failures or reason codes, never sentences.
 - iOS offers Turkish only once `CFBundleLocalizations` lists `tr` (and `tr` is
   in `knownRegions`); that change ships with the Update 1 release.
+
+## 2026-10-06 — Android chat notifications are drawn natively only; Reply needs an unlocked phone
+
+**Context.** A Reply from a lock-screen notification must not send without
+the phone being unlocked. Android 12 (API 31) can require that with
+`setAuthenticationRequired(true)`, but only on notifications drawn natively;
+the Dart notification plugin cannot set it. Android 11 and older has no such
+flag at all. Chat notifications were drawn by two paths (native
+`InstantPush` and Dart `LocalPushDisplay`), so the rule could not be held on
+both.
+
+**Decision.** `InstantPush` (Kotlin) is the only drawer of Android chat
+notifications. Dart keeps setup, taps, clearing and channel pruning, but no
+longer posts chat notifications on Android.
+- API 31 and above: Reply is shown and requires unlock.
+- API 30 and below with a secure lock (PIN, pattern, password): no Reply
+  button; Mark as read stays. A Reply that still arrives while the phone is
+  locked (an older notification) is refused with the "not sent" line.
+- API 30 and below without a secure lock: Reply stays, as nothing could be
+  unlocked.
+- iOS: the Reply action is `.authenticationRequired`.
+
+Arrival pacing moves native with the drawer: pushes are drawn in order on one
+background thread, at least 300 ms apart up to 15 queued, then without a gap,
+so a burst never holds the receiver past Android's limit. The old
+`sis-instant*` channels are deleted once; the `msg-*` channels, and the
+owner's per-chat settings on them, are kept. The channel-id hash is shared by
+Dart and Kotlin through `test/fixtures/alert_channel_vectors.json`.
+
+**Consequences.**
+- Notification layout changes are made in Kotlin. The group summary has a
+  Dart twin for iOS (`_showSummary`); the two carry "keep in sync" comments.
+- Owner decision 2026-10-06: Reply needs unlock on every phone, and both
+  parts ship before Update 1 (0.31.0).

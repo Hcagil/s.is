@@ -445,6 +445,24 @@ void main() {
       expect(fake.listeners('c2'), 1);
     });
 
+    test('a join confirmed before a load that answers after a switch: no '
+        're-fetch of the old chat', () async {
+      final c1 = Completer<Result<List<Reaction>>>();
+      final fake = ReactionFake()..seed('c2', [r('m9', 'u3', '😂')]);
+      fake.onLoad = (cid, n) =>
+          cid == 'c1' ? c1.future : Future.value(fake.snapshot(cid));
+      final c = await ready(fake);
+      open(c, 'c1');
+      await until(() => fake.listeners('c1') == 1, 'the c1 join');
+      await loaded(c, fake, 'c2');
+      c1.complete(Ok([r('m1', 'u2', '👍')]));
+      await turns();
+      expect(fake.loadsOf('c1'), 1);
+      expect(shape(c), {
+        'm9': {('u3', '😂')},
+      });
+    });
+
     test('a load answering after a switch is dropped', () async {
       final c1 = Completer<Result<List<Reaction>>>();
       final fake = ReactionFake()..seed('c2', [r('m9', 'u3', '😂')]);

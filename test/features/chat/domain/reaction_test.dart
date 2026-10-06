@@ -374,6 +374,16 @@ void main() {
       });
     });
 
+    test('reactionChips: equal counts keep first-appearance order, not '
+        'string order either way', () {
+      final chips = reactionChips(const [
+        Reaction(messageId: 'm1', userId: 'u1', emoji: '😂'),
+        Reaction(messageId: 'm1', userId: 'u2', emoji: '❤️'),
+        Reaction(messageId: 'm1', userId: 'u3', emoji: '👍'),
+      ], null);
+      expect(chips.map((c) => c.emoji), ['😂', '❤️', '👍']);
+    });
+
     test('applyReaction: removing a reaction nobody had changes nothing', () {
       final map = <String, List<Reaction>>{};
       final next = applyReaction(

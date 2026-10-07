@@ -309,5 +309,18 @@
   "updateNow": "Şimdi güncelle",
   "licencesCount": "{count} lisans",
   "commonConversation": "Sohbet",
-  "statusStartBootstrap": "SIS başlatılamadı. Tekrar dene."
+  "statusStartBootstrap": "SIS başlatılamadı. Tekrar dene.",
+  "appearanceRename": "Yeniden adlandır",
+  "appearanceDuplicate": "Çoğalt",
+  "appearanceDelete": "Sil",
+  "appearanceCancel": "Vazgeç",
+  "appearanceRenameTitle": "Temayı yeniden adlandır",
+  "appearanceThemeName": "Tema adı",
+  "appearanceThemeMenu": "Tema seçenekleri",
+  "appearanceCopyName": "{name} kopyası",
+  "wallpaperColour": "Renk",
+  "wallpaperGradient": "Gradyan",
+  "wallpaperPicture": "Resim",
+  "wallpaperChoosePhoto": "Fotoğraf seç",
+  "wallpaperPickFailed": "Bu fotoğraf kullanılamadı. Başka birini dene."
 }

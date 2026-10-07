@@ -1054,4 +1054,46 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get statusStartBootstrap => 'SIS could not start. Please try again.';
+
+  @override
+  String get appearanceRename => 'Rename';
+
+  @override
+  String get appearanceDuplicate => 'Duplicate';
+
+  @override
+  String get appearanceDelete => 'Delete';
+
+  @override
+  String get appearanceCancel => 'Cancel';
+
+  @override
+  String get appearanceRenameTitle => 'Rename theme';
+
+  @override
+  String get appearanceThemeName => 'Theme name';
+
+  @override
+  String get appearanceThemeMenu => 'Theme options';
+
+  @override
+  String appearanceCopyName(String name) {
+    return '$name copy';
+  }
+
+  @override
+  String get wallpaperColour => 'Colour';
+
+  @override
+  String get wallpaperGradient => 'Gradient';
+
+  @override
+  String get wallpaperPicture => 'Picture';
+
+  @override
+  String get wallpaperChoosePhoto => 'Choose photo';
+
+  @override
+  String get wallpaperPickFailed =>
+      'That photo could not be used. Try another.';
 }

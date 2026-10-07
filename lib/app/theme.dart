@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../features/appearance/domain/appearance_settings.dart';
+import '../features/appearance/domain/custom_theme.dart';
 import 'swipe_back.dart';
 
 /// The Nocturne design: ink violet, the system font (Manrope stays bundled
@@ -8,12 +9,14 @@ import 'swipe_back.dart';
 /// Values are the design tokens in docs/DESIGN.md §10; change them there first.
 ///
 /// [theme] picks one of the six palettes; [systemFont] false uses Manrope.
+/// [brand] replaces the palette (a custom theme).
 ThemeData sisTheme(
   Brightness brightness, {
   AppThemeId theme = AppThemeId.violet,
   bool systemFont = true,
+  SisBrand? brand,
 }) {
-  final t = sisBrandFor(theme, brightness);
+  final t = brand ?? sisBrandFor(theme, brightness);
   // null: the phone's own font; off, SIS's bundled Manrope.
   final family = systemFont ? null : 'Manrope';
   final scheme = ColorScheme(
@@ -219,10 +222,14 @@ class SisBrand extends ThemeExtension<SisBrand> {
     required this.glowDeep,
     required this.danger,
     required this.prism,
+    this.mine,
   });
 
   final Color background, surface, surfaceHigh, text, muted, line;
   final Color brand, brandDeep, theirs, glow, glowDeep, danger;
+
+  /// My bubble colour of a custom theme; null: the brand colours' gradient.
+  final Color? mine;
 
   /// Corner radius of a chat bubble (slice 5 uses it).
   final double bubbleRadius = 16;
@@ -265,7 +272,9 @@ class SisBrand extends ThemeExtension<SisBrand> {
   LinearGradient get mineGradient => LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [forWhiteText(brandDeep), forWhiteText(brand)],
+    colors: mine == null
+        ? [forWhiteText(brandDeep), forWhiteText(brand)]
+        : [forWhiteText(mine!), forWhiteText(mine!)],
   );
 
   /// S3, the soft-edged unread pill.
@@ -333,6 +342,7 @@ class SisBrand extends ThemeExtension<SisBrand> {
     Color? glowDeep,
     Color? danger,
     LinearGradient? prism,
+    Color? mine,
   }) => SisBrand(
     background: background ?? this.background,
     surface: surface ?? this.surface,
@@ -347,6 +357,7 @@ class SisBrand extends ThemeExtension<SisBrand> {
     glowDeep: glowDeep ?? this.glowDeep,
     danger: danger ?? this.danger,
     prism: prism ?? this.prism,
+    mine: mine ?? this.mine,
   );
 
   @override
@@ -503,6 +514,23 @@ SisBrand sisBrandFor(AppThemeId id, Brightness brightness) {
     theirs: dark ? c(high) : c(surface),
     glow: Color(brand | (dark ? 0x3D000000 : 0x29000000)),
     glowDeep: Color(deep | (dark ? 0x29000000 : 0x1A000000)),
+  );
+}
+
+/// The brand colours of a custom theme in [brightness]: the Violet surfaces of
+/// that brightness with the theme's accent, bubbles and a deeper accent.
+SisBrand sisBrandForCustom(CustomTheme custom, Brightness brightness) {
+  final dark = brightness == Brightness.dark;
+  final base = dark ? SisBrand.dark : SisBrand.light;
+  final brand = Color(custom.accent);
+  final deep = Color.lerp(brand, const Color(0xFF000000), .25)!;
+  return base.copyWith(
+    brand: brand,
+    brandDeep: deep,
+    theirs: Color(custom.theirs),
+    mine: Color(custom.mine),
+    glow: brand.withAlpha(dark ? 0x3D : 0x29),
+    glowDeep: deep.withAlpha(dark ? 0x29 : 0x1A),
   );
 }
 

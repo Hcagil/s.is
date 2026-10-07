@@ -1044,4 +1044,46 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get statusStartBootstrap => 'SIS başlatılamadı. Tekrar dene.';
+
+  @override
+  String get appearanceRename => 'Yeniden adlandır';
+
+  @override
+  String get appearanceDuplicate => 'Çoğalt';
+
+  @override
+  String get appearanceDelete => 'Sil';
+
+  @override
+  String get appearanceCancel => 'Vazgeç';
+
+  @override
+  String get appearanceRenameTitle => 'Temayı yeniden adlandır';
+
+  @override
+  String get appearanceThemeName => 'Tema adı';
+
+  @override
+  String get appearanceThemeMenu => 'Tema seçenekleri';
+
+  @override
+  String appearanceCopyName(String name) {
+    return '$name kopyası';
+  }
+
+  @override
+  String get wallpaperColour => 'Renk';
+
+  @override
+  String get wallpaperGradient => 'Gradyan';
+
+  @override
+  String get wallpaperPicture => 'Resim';
+
+  @override
+  String get wallpaperChoosePhoto => 'Fotoğraf seç';
+
+  @override
+  String get wallpaperPickFailed =>
+      'Bu fotoğraf kullanılamadı. Başka birini dene.';
 }

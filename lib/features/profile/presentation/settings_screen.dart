@@ -184,7 +184,7 @@ class SettingsScreen extends ConsumerWidget {
             Icons.palette_outlined,
             l.settingsAppearance,
             const AppearancePage(),
-            value: themeLabel(l, look.themeId),
+            value: look.activeCustomTheme?.name ?? themeLabel(l, look.themeId),
           ),
           row(
             'settings-text-size',

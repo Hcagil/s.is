@@ -59,6 +59,30 @@ Future<bool> runMessageAction(
         showSisNotice(context, failure.message, isError: true);
       }
       return false;
+    case MessageAction.retractVote:
+      final retracted = await ref
+          .read(pollsProvider.notifier)
+          .retract(message.id);
+      if (retracted case Err(:final failure) when context.mounted) {
+        showSisNotice(
+          context,
+          _pollFailureText(context, failure),
+          isError: true,
+        );
+      }
+      return false;
+    case MessageAction.stopPoll:
+      final stop = await _confirmStopPoll(context);
+      if (stop != true || !context.mounted) return false;
+      final stopped = await ref.read(pollsProvider.notifier).close(message.id);
+      if (stopped case Err(:final failure) when context.mounted) {
+        showSisNotice(
+          context,
+          _pollFailureText(context, failure),
+          isError: true,
+        );
+      }
+      return false;
     case MessageAction.deleteForMe:
     case MessageAction.deleteForEveryone:
       break;
@@ -145,6 +169,65 @@ Future<bool?> _confirmDelete(
   );
 }
 
+String _pollFailureText(BuildContext context, Failure failure) =>
+    failure is PollClosedFailure
+    ? AppLocalizations.of(context).pollClosedNotice
+    : failure.message;
+
+/// The floating confirmation for stopping a poll: true to go ahead.
+Future<bool?> _confirmStopPoll(BuildContext context) {
+  final anchor = Rect.fromCenter(
+    center: MediaQuery.sizeOf(context).center(Offset.zero),
+    width: 0,
+    height: 0,
+  );
+  return showFloatingCard<bool>(
+    context,
+    anchor: anchor,
+    highlightAnchor: false,
+    cardKey: const ValueKey('stop-poll-card'),
+    child: Builder(
+      builder: (card) {
+        final l = AppLocalizations.of(card);
+        final scheme = Theme.of(card).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l.pollStopTitle,
+                style: Theme.of(card).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(l.pollStopBody),
+              const SizedBox(height: 16),
+              _Sheen(
+                child: FilledButton(
+                  key: const ValueKey('stop-poll-confirm'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: scheme.error,
+                    foregroundColor: scheme.onError,
+                  ),
+                  onPressed: () => Navigator.of(card).pop(true),
+                  child: Text(l.pollStopConfirm),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                key: const ValueKey('stop-poll-cancel'),
+                onPressed: () => Navigator.of(card).pop(false),
+                child: Text(l.pollStopCancel),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
+
 /// A faint white sheen over the top of [child] (the delete confirmation
 /// button), without touching its hit testing.
 class _Sheen extends StatelessWidget {
@@ -201,6 +284,7 @@ Future<bool> showMessageMenu(
           .read(conversationListProvider.notifier)
           .pinnedMessageOf(message.conversationId) ==
       message.id;
+  final poll = ref.read(pollsProvider).value?[message.id];
   final actions = [
     for (final a in menuMessageActions(
       message,
@@ -209,6 +293,9 @@ Future<bool> showMessageMenu(
       admin: admin,
       canPin: canPin,
       pinned: pinned,
+      canRetract: poll != null && poll.voted && !poll.closed,
+      canStop:
+          poll != null && !poll.closed && me != null && message.senderId == me,
     ))
       if (!photoViewer ||
           a == MessageAction.reply ||

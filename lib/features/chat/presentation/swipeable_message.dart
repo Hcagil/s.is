@@ -26,6 +26,8 @@ IconData swipeActionIcon(MessageAction action) => switch (action) {
   MessageAction.copy => Icons.copy_outlined,
   MessageAction.pin => Icons.push_pin_outlined,
   MessageAction.unpin => Icons.push_pin,
+  MessageAction.retractVote => Icons.undo,
+  MessageAction.stopPoll => Icons.stop_circle_outlined,
 };
 
 /// The short label on [action]'s box.
@@ -39,6 +41,8 @@ String swipeActionLabel(AppLocalizations l, MessageAction action) =>
       MessageAction.copy => l.messageActionCopy,
       MessageAction.pin => l.messageActionPin,
       MessageAction.unpin => l.messageActionUnpin,
+      MessageAction.retractVote => l.messageActionRetractVote,
+      MessageAction.stopPoll => l.messageActionStopPoll,
     };
 
 /// The fuller wording a screen reader announces for [action], as a custom
@@ -56,6 +60,8 @@ String swipeActionKeyId(MessageAction action) => switch (action) {
   MessageAction.copy => 'copy',
   MessageAction.pin => 'pin',
   MessageAction.unpin => 'unpin',
+  MessageAction.retractVote => 'retract-vote',
+  MessageAction.stopPoll => 'stop-poll',
 };
 
 /// Wraps a message bubble so it can be dragged LEFT to reply (offered only when

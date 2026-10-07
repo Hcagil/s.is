@@ -146,8 +146,10 @@ class _ComposerState extends ConsumerState<_Composer>
     final box = _attachKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) return;
     final anchor = box.localToGlobal(Offset.zero) & box.size;
-    final photo = await showAttachMenu(context, anchor: anchor);
-    if (!photo || !mounted) return;
+    final choice = await showAttachMenu(context, anchor: anchor);
+    if (!mounted) return;
+    if (choice == 'poll') return _sendPoll();
+    if (choice != 'photo') return;
     final picked = await showAttachmentSheet(context);
     if (picked.images.isEmpty || !mounted) return;
     final reviewed = await showAttachmentPreview(
@@ -174,6 +176,20 @@ class _ComposerState extends ConsumerState<_Composer>
         }
       case Err(:final failure):
         showSisNotice(context, failure.message, isError: true);
+    }
+  }
+
+  /// Opens the new-poll page and sends what it returns; backing out sends
+  /// nothing.
+  Future<void> _sendPoll() async {
+    final draft = await Navigator.of(context).push<PollDraft>(
+      MaterialPageRoute(builder: (_) => const PollCreatePage()),
+    );
+    if (draft == null || !mounted) return;
+    final result = await ref.read(messagesProvider.notifier).sendPoll(draft);
+    if (!mounted) return;
+    if (result case Err(:final failure)) {
+      showSisNotice(context, failure.message, isError: true);
     }
   }
 

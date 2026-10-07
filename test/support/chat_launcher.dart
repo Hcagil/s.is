@@ -26,6 +26,7 @@ import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import 'fakes.dart';
+import 'poll_fakes.dart';
 import 'reaction_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
@@ -90,6 +91,8 @@ Future<ProviderContainer> pumpLauncher(
   List<Message>? messages,
   ChatFake? chat,
   ReactionFake? reactions,
+  PollFake? polls,
+  Locale? locale,
   bool tap = true,
 }) async {
   phoneView(tester);
@@ -110,6 +113,7 @@ Future<ProviderContainer> pumpLauncher(
         reactionRepositoryProvider.overrideWithValue(
           reactions ?? ReactionFake(),
         ),
+        pollRepositoryProvider.overrideWithValue(polls ?? PollFake()),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
         sessionControllerProvider.overrideWith(SignedInForTests.new),
@@ -125,6 +129,7 @@ Future<ProviderContainer> pumpLauncher(
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
+        locale: locale,
         theme: sisTheme(Brightness.light),
         home: Consumer(
           builder: (context, ref, _) => Scaffold(
@@ -157,12 +162,16 @@ Future<ProviderContainer> openChat(
   WidgetTester tester, {
   List<Message>? messages,
   ReactionFake? reactions,
+  PollFake? polls,
+  Locale? locale,
 }) async {
   final c = await pumpLauncher(
     tester,
     (context, ref) => openConversation(context, ref, 'c1', title: 'Bob'),
     messages: messages,
     reactions: reactions,
+    polls: polls,
+    locale: locale,
   );
   expect(find.byType(MessageScreen), findsOneWidget, reason: 'never opened');
   return c;

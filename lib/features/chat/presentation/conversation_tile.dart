@@ -6,6 +6,7 @@ import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../domain/message.dart';
+import '../domain/poll.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_selection_controller.dart';
@@ -17,6 +18,12 @@ import '../../../l10n/app_localizations.dart';
 import '../../notifications/application/notification_settings_controller.dart';
 import '../../notifications/domain/notification_settings.dart';
 import 'chat_row_actions.dart';
+
+/// The stored preview, with the poll prefix in the app language.
+String _preview(AppLocalizations l, String text) =>
+    text.startsWith(pollPreviewPrefix)
+    ? l.pollPreviewLine(text.substring(pollPreviewPrefix.length))
+    : text;
 
 class ConversationTile extends ConsumerWidget {
   const ConversationTile(
@@ -128,7 +135,9 @@ class ConversationTile extends ConsumerWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    TextSpan(text: ': ${conversation.lastMessage}'),
+                    TextSpan(
+                      text: ': ${_preview(l, conversation.lastMessage!)}',
+                    ),
                   ],
                 ),
                 key: ValueKey('preview-${conversation.id}'),
@@ -139,8 +148,8 @@ class ConversationTile extends ConsumerWidget {
             : Text(
                 conversation.lastSenderId != null &&
                         conversation.lastSenderId == me
-                    ? l.listYouPrefix(conversation.lastMessage!)
-                    : conversation.lastMessage!,
+                    ? l.listYouPrefix(_preview(l, conversation.lastMessage!))
+                    : _preview(l, conversation.lastMessage!),
                 key: ValueKey('preview-${conversation.id}'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

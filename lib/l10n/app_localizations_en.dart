@@ -1268,4 +1268,121 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatsDeletedUndo => 'Chats deleted.';
+
+  @override
+  String get pollNewTitle => 'New poll';
+
+  @override
+  String get pollQuestionLabel => 'Question';
+
+  @override
+  String get pollQuestionHint => 'Ask a question';
+
+  @override
+  String get pollOptionsLabel => 'Options';
+
+  @override
+  String get pollOptionHint => 'Option';
+
+  @override
+  String get pollAddOption => 'Add option';
+
+  @override
+  String get pollOptionsMax => 'You have added the maximum number of options.';
+
+  @override
+  String get pollMultipleTitle => 'Allow several answers';
+
+  @override
+  String get pollAnonymousTitle => 'Anonymous votes';
+
+  @override
+  String get pollAnonymousSubtitle => 'Nobody sees who voted for what';
+
+  @override
+  String get pollSend => 'Send poll';
+
+  @override
+  String get pollDiscardTitle => 'Discard poll?';
+
+  @override
+  String get pollDiscardBody => 'Are you sure you want to discard this poll?';
+
+  @override
+  String get pollDiscardConfirm => 'Discard';
+
+  @override
+  String get pollDiscardCancel => 'Cancel';
+
+  @override
+  String get pollTypeAnonymous => 'Anonymous poll';
+
+  @override
+  String get pollTypePublic => 'Poll';
+
+  @override
+  String get pollTypeClosed => 'Final results';
+
+  @override
+  String pollVotes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count votes',
+      one: '1 vote',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pollNoVotes => 'No votes';
+
+  @override
+  String get pollVoteButton => 'Vote';
+
+  @override
+  String pollViewVotes(int count) {
+    return 'View votes ($count)';
+  }
+
+  @override
+  String get pollResultsTitle => 'Poll results';
+
+  @override
+  String pollOptionVoters(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count votes',
+      one: '1 vote',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get messageActionRetractVote => 'Retract vote';
+
+  @override
+  String get messageActionStopPoll => 'Stop poll';
+
+  @override
+  String get pollStopTitle => 'Stop poll?';
+
+  @override
+  String get pollStopBody =>
+      'If you stop this poll now, nobody will be able to vote in it anymore. This action cannot be undone.';
+
+  @override
+  String get pollStopConfirm => 'Stop';
+
+  @override
+  String get pollStopCancel => 'Cancel';
+
+  @override
+  String get pollClosedNotice => 'This poll is closed.';
+
+  @override
+  String pollPreviewLine(String question) {
+    return '📊 Poll: $question';
+  }
 }

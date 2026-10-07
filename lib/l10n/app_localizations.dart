@@ -2335,6 +2335,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Chats deleted.'**
   String get chatsDeletedUndo;
+
+  /// Title of the create-poll screen
+  ///
+  /// In en, this message translates to:
+  /// **'New poll'**
+  String get pollNewTitle;
+
+  /// Section label above the poll question field
+  ///
+  /// In en, this message translates to:
+  /// **'Question'**
+  String get pollQuestionLabel;
+
+  /// Hint inside the poll question field
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a question'**
+  String get pollQuestionHint;
+
+  /// Section label above the poll options
+  ///
+  /// In en, this message translates to:
+  /// **'Options'**
+  String get pollOptionsLabel;
+
+  /// Hint inside an empty poll option field
+  ///
+  /// In en, this message translates to:
+  /// **'Option'**
+  String get pollOptionHint;
+
+  /// Row that adds another poll option
+  ///
+  /// In en, this message translates to:
+  /// **'Add option'**
+  String get pollAddOption;
+
+  /// Shown when the poll has the maximum number of options
+  ///
+  /// In en, this message translates to:
+  /// **'You have added the maximum number of options.'**
+  String get pollOptionsMax;
+
+  /// Switch: members may pick more than one option
+  ///
+  /// In en, this message translates to:
+  /// **'Allow several answers'**
+  String get pollMultipleTitle;
+
+  /// Switch: votes are anonymous
+  ///
+  /// In en, this message translates to:
+  /// **'Anonymous votes'**
+  String get pollAnonymousTitle;
+
+  /// Subtitle of the anonymous votes switch
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody sees who voted for what'**
+  String get pollAnonymousSubtitle;
+
+  /// Button that sends the new poll
+  ///
+  /// In en, this message translates to:
+  /// **'Send poll'**
+  String get pollSend;
+
+  /// Title of the leave-create-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Discard poll?'**
+  String get pollDiscardTitle;
+
+  /// Body of the leave-create-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to discard this poll?'**
+  String get pollDiscardBody;
+
+  /// Confirm button of the leave-create-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get pollDiscardConfirm;
+
+  /// Cancel button of the leave-create-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get pollDiscardCancel;
+
+  /// Subtitle of an anonymous poll bubble
+  ///
+  /// In en, this message translates to:
+  /// **'Anonymous poll'**
+  String get pollTypeAnonymous;
+
+  /// Subtitle of a public poll bubble
+  ///
+  /// In en, this message translates to:
+  /// **'Poll'**
+  String get pollTypePublic;
+
+  /// Subtitle of a closed poll bubble
+  ///
+  /// In en, this message translates to:
+  /// **'Final results'**
+  String get pollTypeClosed;
+
+  /// Vote count in a poll bubble footer
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 vote} other{{count} votes}}'**
+  String pollVotes(int count);
+
+  /// Footer of a poll bubble nobody voted in
+  ///
+  /// In en, this message translates to:
+  /// **'No votes'**
+  String get pollNoVotes;
+
+  /// Button that submits the chosen options of a several-answers poll
+  ///
+  /// In en, this message translates to:
+  /// **'Vote'**
+  String get pollVoteButton;
+
+  /// Button that opens who voted for what
+  ///
+  /// In en, this message translates to:
+  /// **'View votes ({count})'**
+  String pollViewVotes(int count);
+
+  /// Title of the voters list
+  ///
+  /// In en, this message translates to:
+  /// **'Poll results'**
+  String get pollResultsTitle;
+
+  /// Votes of one option in the voters list
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 vote} other{{count} votes}}'**
+  String pollOptionVoters(int count);
+
+  /// Message menu: take your vote back
+  ///
+  /// In en, this message translates to:
+  /// **'Retract vote'**
+  String get messageActionRetractVote;
+
+  /// Message menu: close your own poll
+  ///
+  /// In en, this message translates to:
+  /// **'Stop poll'**
+  String get messageActionStopPoll;
+
+  /// Title of the stop-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Stop poll?'**
+  String get pollStopTitle;
+
+  /// Body of the stop-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'If you stop this poll now, nobody will be able to vote in it anymore. This action cannot be undone.'**
+  String get pollStopBody;
+
+  /// Confirm button of the stop-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get pollStopConfirm;
+
+  /// Cancel button of the stop-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get pollStopCancel;
+
+  /// Notice when voting in a poll that was just closed
+  ///
+  /// In en, this message translates to:
+  /// **'This poll is closed.'**
+  String get pollClosedNotice;
+
+  /// Chat list preview of a poll message
+  ///
+  /// In en, this message translates to:
+  /// **'📊 Poll: {question}'**
+  String pollPreviewLine(String question);
 }
 
 class _AppLocalizationsDelegate

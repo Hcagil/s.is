@@ -40,7 +40,7 @@ import '../support/reach.dart';
 /// records when each request started and finished.
 ///
 /// The unit tests prove the order of calls against fakes. Only this proves
-/// that `conversations()` really sends its six reads as two groups, that
+/// that `conversations()` really sends its seven reads as two groups, that
 /// running them together returns what running them one by one returns, and
 /// that with a slow connection opening the app costs the longer of the
 /// profile and the list, not both added up.
@@ -346,7 +346,7 @@ void main() {
       expect(answered, isNot(asked), reason: 'the answers were not reordered');
     });
 
-    test('sends its six reads as two groups: members, conversations and archives, then names, previews and unread counts', () async {
+    test('sends its seven reads as two groups: members, conversations, archives and pins, then names, previews and unread counts', () async {
       const delay = Duration(milliseconds: 300);
       wire.delay = delay;
       final clock = Stopwatch()..start();
@@ -357,17 +357,19 @@ void main() {
       final reqs = wire.rest;
       expect([for (final r in reqs) r.table]..sort(), [
         'chat_archives',
+        'chat_pins',
         'conversation_members',
         'conversation_previews',
         'conversations',
         'profiles_public',
         'unread_counts',
-      ], reason: 'not the same six reads');
+      ], reason: 'not the same seven reads');
       _Req one(String t) => reqs.singleWhere((r) => r.table == t);
       final first = [
         one('conversation_members'),
         one('conversations'),
         one('chat_archives'),
+        one('chat_pins'),
       ];
       final second = [
         one('profiles_public'),
@@ -399,7 +401,7 @@ void main() {
           );
         }
       }
-      expect(wire.maxInFlight, 3);
+      expect(wire.maxInFlight, 4);
       expect(took, greaterThanOrEqualTo(delay * 2));
       expect(
         took,
@@ -414,6 +416,7 @@ void main() {
       expect(list, isEmpty);
       expect([for (final r in finnWire.rest) r.table]..sort(), [
         'chat_archives',
+        'chat_pins',
         'conversation_members',
         'conversations',
       ]);

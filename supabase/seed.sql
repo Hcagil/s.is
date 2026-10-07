@@ -159,7 +159,12 @@
 --                  test/integration/signup_gate_test.dart
 --     (the sign-up hook admits gate-invited and refuses the bot address on
 --      its reserved domain although it is allowlisted)
+--   pina/pinb      test/integration/pins_seam_test.dart
+--     (pina pins the pina-pinb chat and a message in it through the UI;
+--      the rows are read back from the database, and pinb sees the pin)
 insert into app_private.allowlist(email) values
+  ('pina@integration.test'),
+  ('pinb@integration.test'),
   ('ann@integration.test'),
   ('bob@integration.test'),
   ('carol@integration.test'),

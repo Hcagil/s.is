@@ -425,26 +425,20 @@ void main() {
       await ui.drainNotice(t);
     });
 
-    testWidgets('the grey pin is inert, disabled to semantics, with no '
-        '"soon" text', (t) async {
-      final notif = await pumpList(t);
-      final sem = t.ensureSemantics();
+    testWidgets('the menu offers "Pin chat", no grey pin', (t) async {
+      await pumpList(t);
       await t.longPress(byKey('conversation-c2'));
       await t.pumpAndSettle();
-      expect(byKey('grey-pin'), findsOneWidget);
+      expect(byKey('chat-menu-pin'), findsOneWidget);
       expect(
-        t.getSemantics(byKey('grey-pin')),
-        isSemantics(hasEnabledState: true, isEnabled: false),
+        find.descendant(
+          of: byKey('chat-menu-pin'),
+          matching: find.text('Pin chat'),
+        ),
+        findsOneWidget,
       );
+      expect(byKey('grey-pin'), findsNothing);
       expect(find.textContaining('soon'), findsNothing);
-      expect(find.textContaining('yakında'), findsNothing);
-
-      await t.tap(byKey('grey-pin'), warnIfMissed: false);
-      await t.pumpAndSettle();
-      expect(byKey('chat-menu'), findsOneWidget, reason: 'the pin acted');
-      expect(notif.muteCalls, isEmpty);
-      expect(notif.unmuteCalls, isEmpty);
-      sem.dispose();
     });
   });
 

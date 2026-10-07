@@ -59,8 +59,8 @@ List<Conversation> list({
     final other = id == 'c1'
         ? bob
         : id == 'c2'
-            ? cem
-            : bob;
+        ? cem
+        : bob;
     return Conversation(
       id: id,
       other: other,
@@ -97,9 +97,7 @@ Future<NotificationSettingsFake> pumpList(
           ),
           updateRepositoryProvider.overrideWithValue(FakeUpdate()),
           chatRepositoryProvider.overrideWithValue(
-            chat ??
-                (ChatFake()
-                  ..conversationsResult = Ok(list())),
+            chat ?? (ChatFake()..conversationsResult = Ok(list())),
           ),
           presenceRepositoryProvider.overrideWithValue(PresenceFake()),
           profileRepositoryProvider.overrideWithValue(
@@ -161,7 +159,10 @@ Future<void> openArchived(WidgetTester t) async {
 
 void main() {
   testWidgets('pinned chats appear first', (WidgetTester t) async {
-    await pumpList(t, chat: ChatFake()..conversationsResult = Ok(list(pinned: {'c2'})));
+    await pumpList(
+      t,
+      chat: ChatFake()..conversationsResult = Ok(list(pinned: {'c2'})),
+    );
     final header0 = byKey('list-header-0');
     final header1 = byKey('list-header-2');
     final c2 = byKey('conversation-c2');
@@ -188,7 +189,10 @@ void main() {
     await t.tap(byKey('chat-menu-pin'));
     await t.pump(const Duration(milliseconds: 300));
     expect(find.byKey(const ValueKey('pinned-c2')), findsOneWidget);
-    expect(t.getTopLeft(byKey('conversation-c2')).dy, lessThan(t.getTopLeft(byKey('conversation-c1')).dy));
+    expect(
+      t.getTopLeft(byKey('conversation-c2')).dy,
+      lessThan(t.getTopLeft(byKey('conversation-c1')).dy),
+    );
     expect(pins.calls, equals(['chat:c2:true']));
     pins.hold!.complete();
     await t.pumpAndSettle();
@@ -209,7 +213,10 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byKey(const ValueKey('pinned-c2')), findsNothing);
     expect(pins.calls, equals(['chat:c2:false']));
-    expect(t.getTopLeft(byKey('conversation-c1')).dy, lessThan(t.getTopLeft(byKey('conversation-c2')).dy));
+    expect(
+      t.getTopLeft(byKey('conversation-c1')).dy,
+      lessThan(t.getTopLeft(byKey('conversation-c2')).dy),
+    );
   });
 
   testWidgets('6th pin shows notice and does not pin', (WidgetTester t) async {
@@ -221,10 +228,12 @@ void main() {
     await pumpList(
       t,
       chat: ChatFake()
-          ..conversationsResult = Ok(list(
-        ids: ['p1', 'p2', 'p3', 'p4', 'p5', 'c6'],
-        pinned: {'p1', 'p2', 'p3', 'p4', 'p5'},
-      )),
+        ..conversationsResult = Ok(
+          list(
+            ids: ['p1', 'p2', 'p3', 'p4', 'p5', 'c6'],
+            pinned: {'p1', 'p2', 'p3', 'p4', 'p5'},
+          ),
+        ),
       pins: pins,
     );
     await t.longPress(byKey('conversation-c6'));
@@ -239,7 +248,9 @@ void main() {
     await ui.drainNotice(t);
   });
 
-  testWidgets('server limit failure shows notice and reverts', (WidgetTester t) async {
+  testWidgets('server limit failure shows notice and reverts', (
+    WidgetTester t,
+  ) async {
     final pins = ChatPinFake();
     pins.writeResult = const Err(PinLimitFailure());
     await pumpList(t, pins: pins);
@@ -253,7 +264,9 @@ void main() {
     await ui.drainNotice(t);
   });
 
-  testWidgets('denied failure shows notice and reverts', (WidgetTester t) async {
+  testWidgets('denied failure shows notice and reverts', (
+    WidgetTester t,
+  ) async {
     final pins = ChatPinFake();
     pins.writeResult = const Err(DeniedFailure());
     await pumpList(t, pins: pins);
@@ -281,7 +294,8 @@ void main() {
 
   testWidgets('failed archive keeps pin', (WidgetTester t) async {
     final pins = ChatPinFake(pinned: {'c1'});
-    final archive = ChatArchiveFake()..result = const Err(NetworkFailure('offline'));
+    final archive = ChatArchiveFake()
+      ..result = const Err(NetworkFailure('offline'));
     await pumpList(
       t,
       chat: ChatFake()..conversationsResult = Ok(list(pinned: {'c1'})),
@@ -292,14 +306,66 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byKey(const ValueKey('conversation-c1')), findsOneWidget);
     expect(find.byKey(const ValueKey('pinned-c1')), findsOneWidget);
-    expect(t.getTopLeft(byKey('list-header-0')).dy, lessThan(t.getTopLeft(byKey('conversation-c1')).dy));
+    expect(
+      t.getTopLeft(byKey('list-header-0')).dy,
+      lessThan(t.getTopLeft(byKey('conversation-c1')).dy),
+    );
+    await ui.drainNotice(t);
+  });
+
+  testWidgets('archiving a pinned chat frees its pin slot', (
+    WidgetTester t,
+  ) async {
+    t.view.physicalSize = const Size(1080, 2400);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
+    final pins = ChatPinFake(pinned: {'p1', 'p2', 'p3', 'p4', 'p5'});
+    await pumpList(
+      t,
+      chat: ChatFake()
+        ..conversationsResult = Ok(
+          list(
+            ids: ['p1', 'p2', 'p3', 'p4', 'p5', 'c6'],
+            pinned: {'p1', 'p2', 'p3', 'p4', 'p5'},
+          ),
+        ),
+      pins: pins,
+      archive: ChatArchiveFake(),
+    );
+    await commit(t, 'p1');
+    await t.pumpAndSettle();
+    // The server's chat_archives_unpin trigger dropped p1's pin.
+    pins.pinned.remove('p1');
+    await t.longPress(byKey('conversation-c6'));
+    await t.pumpAndSettle();
+    await t.tap(byKey('chat-menu-pin'));
+    await t.pumpAndSettle();
+    expect(find.text('You can pin up to 5 chats.'), findsNothing);
+    expect(pins.calls, contains('chat:c6:true'));
+    expect(byKey('pinned-c6'), findsOneWidget);
+  });
+
+  testWidgets('the server pin limit in Turkish', (WidgetTester t) async {
+    t.platformDispatcher.localesTestValue = [const Locale('tr')];
+    addTearDown(t.platformDispatcher.clearLocalesTestValue);
+    final pins = ChatPinFake()..writeResult = const Err(PinLimitFailure());
+    await pumpList(t, pins: pins);
+    await t.longPress(byKey('conversation-c1'));
+    await t.pumpAndSettle();
+    await t.tap(byKey('chat-menu-pin'));
+    await t.pumpAndSettle();
+    expect(find.text('En fazla 5 sohbet sabitleyebilirsin.'), findsOneWidget);
+    expect(byKey('pinned-c1'), findsNothing);
     await ui.drainNotice(t);
   });
 
   testWidgets('Turkish labels', (WidgetTester t) async {
     t.platformDispatcher.localesTestValue = [const Locale('tr')];
     addTearDown(t.platformDispatcher.clearLocalesTestValue);
-    await pumpList(t, chat: ChatFake()..conversationsResult = Ok(list(pinned: {'c2'})));
+    await pumpList(
+      t,
+      chat: ChatFake()..conversationsResult = Ok(list(pinned: {'c2'})),
+    );
     expect(headerText(t, 'list-header-0'), 'sabitlenenler');
     expect(headerText(t, 'list-header-2'), 'sohbetler');
     await t.longPress(byKey('conversation-c1'));

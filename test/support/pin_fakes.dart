@@ -48,10 +48,7 @@ class ChatPinFake implements ChatPinRepository {
   }
 
   @override
-  Future<Result<void>> setChatPinned(
-    String conversationId,
-    bool pinned,
-  ) async {
+  Future<Result<void>> setChatPinned(String conversationId, bool pinned) async {
     calls.add('chat:$conversationId:$pinned');
     await _wait();
     final forced = writeResult;

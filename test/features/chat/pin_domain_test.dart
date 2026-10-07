@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
@@ -10,34 +8,43 @@ import 'package:sis/features/chat/domain/group_event.dart';
 
 /// Helper to create a conversation used in several tests.
 Conversation _conv({bool archived = false}) => Conversation(
-      id: 'c-1',
-      title: 'Chat',
-      other: const Member(userId: 'u-d', displayName: 'Deniz'),
-      lastMessage: 'Hello',
-      lastMessageAt: DateTime.utc(2026, 10, 7, 9),
-      lastSenderId: 'u-d',
-      unread: 5,
-      archived: archived,
-    );
+  id: 'c-1',
+  title: 'Chat',
+  other: const Member(userId: 'u-d', displayName: 'Deniz'),
+  lastMessage: 'Hello',
+  lastMessageAt: DateTime.utc(2026, 10, 7, 9),
+  lastSenderId: 'u-d',
+  unread: 5,
+  archived: archived,
+);
 
 void main() {
   final now = DateTime.utc(2026, 9, 24, 12);
 
   group('menuMessageActions pin/unpin behaviour', () {
-    test('someone else fresh text: pin present, unpin absent, correct order', () {
-      final msg = Message(
-        id: '1',
-        conversationId: 'c1',
-        senderId: 'user2',
-        body: 'Hi',
-        createdAt: now,
-      );
-      final actions = menuMessageActions(msg, me: 'user1', now: now);
-      expect(actions, contains(MessageAction.pin));
-      expect(actions, isNot(contains(MessageAction.unpin)));
-      expect(actions.indexOf(MessageAction.forward), lessThan(actions.indexOf(MessageAction.pin)));
-      expect(actions.indexOf(MessageAction.pin), lessThan(actions.indexOf(MessageAction.deleteForMe)));
-    });
+    test(
+      'someone else fresh text: pin present, unpin absent, correct order',
+      () {
+        final msg = Message(
+          id: '1',
+          conversationId: 'c1',
+          senderId: 'user2',
+          body: 'Hi',
+          createdAt: now,
+        );
+        final actions = menuMessageActions(msg, me: 'user1', now: now);
+        expect(actions, contains(MessageAction.pin));
+        expect(actions, isNot(contains(MessageAction.unpin)));
+        expect(
+          actions.indexOf(MessageAction.forward),
+          lessThan(actions.indexOf(MessageAction.pin)),
+        );
+        expect(
+          actions.indexOf(MessageAction.pin),
+          lessThan(actions.indexOf(MessageAction.deleteForMe)),
+        );
+      },
+    );
 
     test('own fresh text: pin after edit, before deleteForMe', () {
       final msg = Message(
@@ -49,8 +56,14 @@ void main() {
       );
       final actions = menuMessageActions(msg, me: 'user1', now: now);
       expect(actions, contains(MessageAction.pin));
-      expect(actions.indexOf(MessageAction.edit), lessThan(actions.indexOf(MessageAction.pin)));
-      expect(actions.indexOf(MessageAction.pin), lessThan(actions.indexOf(MessageAction.deleteForMe)));
+      expect(
+        actions.indexOf(MessageAction.edit),
+        lessThan(actions.indexOf(MessageAction.pin)),
+      );
+      expect(
+        actions.indexOf(MessageAction.pin),
+        lessThan(actions.indexOf(MessageAction.deleteForMe)),
+      );
     });
 
     test('pinned message: unpin present, pin absent, correct order', () {
@@ -61,12 +74,22 @@ void main() {
         body: 'Hi',
         createdAt: now,
       );
-      final actions = menuMessageActions(msg,
-          me: 'user1', now: now, pinned: true);
+      final actions = menuMessageActions(
+        msg,
+        me: 'user1',
+        now: now,
+        pinned: true,
+      );
       expect(actions, contains(MessageAction.unpin));
       expect(actions, isNot(contains(MessageAction.pin)));
-      expect(actions.indexOf(MessageAction.forward), lessThan(actions.indexOf(MessageAction.unpin)));
-      expect(actions.indexOf(MessageAction.unpin), lessThan(actions.indexOf(MessageAction.deleteForMe)));
+      expect(
+        actions.indexOf(MessageAction.forward),
+        lessThan(actions.indexOf(MessageAction.unpin)),
+      );
+      expect(
+        actions.indexOf(MessageAction.unpin),
+        lessThan(actions.indexOf(MessageAction.deleteForMe)),
+      );
     });
 
     test('canPin false: neither pin nor unpin', () {
@@ -77,8 +100,12 @@ void main() {
         body: 'Hi',
         createdAt: now,
       );
-      final actions = menuMessageActions(msg,
-          me: 'user1', now: now, canPin: false);
+      final actions = menuMessageActions(
+        msg,
+        me: 'user1',
+        now: now,
+        canPin: false,
+      );
       expect(actions, isNot(contains(MessageAction.pin)));
       expect(actions, isNot(contains(MessageAction.unpin)));
     });
@@ -92,8 +119,12 @@ void main() {
         createdAt: now,
         deletion: MessageDeletion.placeholder,
       );
-      final actions = menuMessageActions(msg,
-          me: 'user1', now: now, canPin: true);
+      final actions = menuMessageActions(
+        msg,
+        me: 'user1',
+        now: now,
+        canPin: true,
+      );
       expect(actions, isNot(contains(MessageAction.pin)));
       expect(actions, isNot(contains(MessageAction.unpin)));
     });
@@ -107,8 +138,12 @@ void main() {
         createdAt: now,
         sending: true,
       );
-      final actions = menuMessageActions(msg,
-          me: 'user1', now: now, canPin: true);
+      final actions = menuMessageActions(
+        msg,
+        me: 'user1',
+        now: now,
+        canPin: true,
+      );
       expect(actions, isNot(contains(MessageAction.pin)));
       expect(actions, isNot(contains(MessageAction.unpin)));
     });
@@ -148,9 +183,7 @@ void main() {
 
   group('Conversation JSON round‑trip with pinned fields', () {
     test('pinned conversation survives JSON encode/decode', () {
-      final conv = _conv()
-          .withPinned(true)
-          .withPinnedMessage('m9');
+      final conv = _conv().withPinned(true).withPinnedMessage('m9');
       final json = conv.toJson();
       final roundTrip = Conversation.fromJson(json);
       expect(roundTrip.pinned, isTrue);

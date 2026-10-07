@@ -40,7 +40,6 @@ const greyTiles = [
   'grey-att_tvoice',
   'grey-att_tloc',
   'grey-att_tcon',
-  'grey-att_tpoll',
 ];
 
 Message msg(String id, {String body = 'hi', String from = 'u2'}) => Message(
@@ -200,9 +199,9 @@ void main() {
   });
 
   group('showAttachMenu', () {
-    Future<List<bool>> mount(WidgetTester t) async {
+    Future<List<String?>> mount(WidgetTester t) async {
       phone(t);
-      final results = <bool>[];
+      final results = <String?>[];
       await t.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -232,18 +231,26 @@ void main() {
       return results;
     }
 
-    testWidgets('Photo answers true', (t) async {
+    testWidgets('Photo answers photo', (t) async {
       final results = await mount(t);
       await t.tap(byKey('attach-photo'));
       await t.pumpAndSettle();
-      expect(results, [true]);
+      expect(results, ['photo']);
     });
 
-    testWidgets('backing out answers false', (t) async {
+    testWidgets('Poll is live and answers poll', (t) async {
+      final results = await mount(t);
+      expect(byKey('grey-att_tpoll'), findsNothing);
+      await t.tap(byKey('attach-poll'));
+      await t.pumpAndSettle();
+      expect(results, ['poll']);
+    });
+
+    testWidgets('backing out answers null', (t) async {
       final results = await mount(t);
       await t.binding.handlePopRoute();
       await t.pumpAndSettle();
-      expect(results, [false]);
+      expect(results, [null]);
     });
 
     testWidgets('a grey tile answers nothing and leaves the card', (t) async {

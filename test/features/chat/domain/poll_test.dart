@@ -215,7 +215,7 @@ void main() {
     });
 
     test('original unchanged', () {
-      final updated = basePoll.withMyVotes({'1'});
+      basePoll.withMyVotes({'1'});
       expect(basePoll.voters, equals(0));
       expect(basePoll.options[0].votes, equals(0));
     });

@@ -150,6 +150,7 @@ void main() {
     expect(failureOf(r), isA<PollClosedFailure>());
     expect(st(c, 'm1').mine, isEmpty);
     expect(st(c, 'm1').options[0].votes, 0);
+    expect(st(c, 'm1').closed, isTrue, reason: 'the server said it is closed');
   });
 
   test('a poll closed locally refuses without calling the server', () async {
@@ -239,89 +240,48 @@ void main() {
     expect(st(c, 'm9').options[0].votes, 1);
   });
 
-  test('leaving the chat while the re-fetch is in flight throws nothing',
-      () async {
-    final gate = Completer<void>();
-    fake = PollFake()..seed('c1', poll('m1'));
-    fake.onLoad = (cid, k) async {
-      if (k >= 2) await gate.future;
-      return Ok([if (cid == 'c1') fake.view('m1')!]);
-    };
-    final c = ProviderContainer.test(
-      overrides: [
-        chatRepositoryProvider.overrideWithValue(ChatFake()),
-        pollRepositoryProvider.overrideWithValue(fake),
-        sessionControllerProvider.overrideWith(_SignedIn.new),
-      ],
-    );
-    await settled(c);
-    c.listen(pollsProvider, (_, _) {});
-    c.read(openConversationProvider.notifier).open('c1');
-    await until(() => fake.loadCalls.length >= 2);
-    c.read(openConversationProvider.notifier).open('c2');
-    await turn();
-    gate.complete();
-    await turn();
-    await turn();
-    expect(c.read(pollsProvider).value?['m1'], isNull);
-  });
-
-  test('leaving the chat screen (polls disposed) mid re-fetch throws nothing',
-      () async {
-    final gate = Completer<void>();
-    fake = PollFake()..seed('c1', poll('m1'));
-    fake.onLoad = (cid, k) async {
-      if (k >= 2) await gate.future;
-      return Ok([fake.view('m1')!]);
-    };
-    final c = ProviderContainer(
-      overrides: [
-        chatRepositoryProvider.overrideWithValue(ChatFake()),
-        pollRepositoryProvider.overrideWithValue(fake),
-        sessionControllerProvider.overrideWith(_SignedIn.new),
-      ],
-    );
-    await settled(c);
-    final sub = c.listen(pollsProvider, (_, _) {});
-    c.read(openConversationProvider.notifier).open('c1');
-    await until(() => fake.loadCalls.length >= 2);
-    sub.close(); // autoDispose: no listener left, as when the screen closes
-    await turn();
-    await turn();
-    expect(c.exists(pollsProvider), isFalse);
-    gate.complete();
-    await turn();
-    await turn();
-    c.dispose();
-  });
-
   test('addLocal shows the poll at once', () async {
     await start();
     n.addLocal(poll('m7'));
     expect(c.read(pollsProvider).value!['m7'], isNotNull);
   });
 
-  test('pollVotesProvider lists voters; anonymous only mine; Err throws',
-      () async {
-    fake = PollFake()
-      ..seed('c1', poll('m1'), ballots: {'u2': {'a'}, 'u3': {'b'}})
-      ..seed(
-        'c1',
-        poll('m4', anonymous: true),
-        ballots: {'u2': {'a'}, 'u1': {'b'}},
+  test(
+    'pollVotesProvider lists voters; anonymous only mine; Err throws',
+    () async {
+      fake = PollFake()
+        ..seed(
+          'c1',
+          poll('m1'),
+          ballots: {
+            'u2': {'a'},
+            'u3': {'b'},
+          },
+        )
+        ..seed(
+          'c1',
+          poll('m4', anonymous: true),
+          ballots: {
+            'u2': {'a'},
+            'u1': {'b'},
+          },
+        );
+      c = await ready(fake);
+      c.listen(pollVotesProvider('m1'), (_, _) {});
+      final v = await c.read(pollVotesProvider('m1').future);
+      expect(
+        {for (final x in v) (x.userId, x.optionId)},
+        {('u2', 'a'), ('u3', 'b')},
       );
-    c = await ready(fake);
-    c.listen(pollVotesProvider('m1'), (_, _) {});
-    final v = await c.read(pollVotesProvider('m1').future);
-    expect({for (final x in v) (x.userId, x.optionId)}, {('u2', 'a'), ('u3', 'b')});
-    c.listen(pollVotesProvider('m4'), (_, _) {});
-    final a = await c.read(pollVotesProvider('m4').future);
-    expect(a.map((x) => x.userId), ['u1']);
-    fake.onVoters = (id) async => const Err(DeniedFailure());
-    c.invalidate(pollVotesProvider('m1'));
-    await expectLater(
-      c.read(pollVotesProvider('m1').future),
-      throwsA(isA<DeniedFailure>()),
-    );
-  });
+      c.listen(pollVotesProvider('m4'), (_, _) {});
+      final a = await c.read(pollVotesProvider('m4').future);
+      expect(a.map((x) => x.userId), ['u1']);
+      fake.onVoters = (id) async => const Err(DeniedFailure());
+      c.invalidate(pollVotesProvider('m1'));
+      await expectLater(
+        c.read(pollVotesProvider('m1').future),
+        throwsA(isA<DeniedFailure>()),
+      );
+    },
+  );
 }

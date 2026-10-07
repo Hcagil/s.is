@@ -116,7 +116,7 @@ class PollFake implements PollRepository {
   /// When set, answers createPoll instead of the server rules.
   Future<Result<void>> Function(String cid, String mid, PollDraft d)? onCreate;
 
-  /// Option ids the server gives a created poll: '<messageId>-o<i>'.
+  /// Option ids the server gives a created poll: `messageId-o<i>`.
   @override
   Future<Result<void>> createPoll(
     String conversationId,

@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/notice.dart';
+import '../../../app/settings_row.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/appearance_controller.dart';
 import '../domain/appearance_settings.dart';
 import '../domain/wallpaper.dart';
 import '../domain/wallpaper_photos.dart';
+import '../../chat/presentation/message_menu_card.dart';
 import 'chat_preview.dart';
 
 /// Page for selecting the wallpaper and related settings.
@@ -63,6 +65,7 @@ class WallpaperPage extends ConsumerWidget {
                   ],
                 ),
               ),
+              const _ResetBlock(),
             ],
           ),
         ),
@@ -413,6 +416,97 @@ class _ChoosePhotoChip extends StatelessWidget {
           ),
           textAlign: TextAlign.center,
           maxLines: 2,
+        ),
+      ),
+    );
+  }
+}
+
+/// The "Reset Chat Backgrounds" row and its info line.
+class _ResetBlock extends ConsumerWidget {
+  const _ResetBlock();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
+    final notifier = ref.read(appearanceProvider.notifier);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Builder(
+          builder: (rowContext) => SisSettingsRow(
+            key: const ValueKey('wallpaper-reset'),
+            icon: Icons.restart_alt_rounded,
+            title: l.wallpaperReset,
+            onTap: () async {
+              final box = rowContext.findRenderObject() as RenderBox;
+              final anchor = box.localToGlobal(Offset.zero) & box.size;
+              final ok = await showFloatingCard<bool>(
+                rowContext,
+                anchor: anchor,
+                highlightAnchor: false,
+                cardKey: const ValueKey('wallpaper-reset-card'),
+                child: const _ResetCardBody(),
+              );
+              if (ok == true) await notifier.resetWallpaper();
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Text(
+            l.wallpaperResetInfo,
+            style: TextStyle(color: SisBrand.of(context).muted, fontSize: 12.5),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ResetCardBody extends StatelessWidget {
+  const _ResetCardBody();
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return SizedBox(
+      width: 280,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l.wallpaperResetTitle,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            Text(l.wallpaperResetConfirm),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  key: const ValueKey('wallpaper-reset-cancel'),
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(l.appearanceCancel),
+                ),
+                TextButton(
+                  key: const ValueKey('wallpaper-reset-confirm'),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(
+                    l.wallpaperResetAction,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

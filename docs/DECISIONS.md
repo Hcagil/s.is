@@ -1867,3 +1867,39 @@ afterwards.
 - User-facing text: the developer-only "Setup required" screen (shown when a
   build is missing its configuration) stays in English; every screen a user
   can reach is localised.
+
+## 2026-10-07 — Custom themes and chat wallpaper live on the phone
+
+**Context.** The owner approved custom themes and a chat wallpaper in the full
+design. Update 2, slice 4 builds them.
+
+**Decision.**
+- One theme object, `SisBrand`, built by `sisTheme` from `sisBrandFor`
+  (built-in) or `sisBrandForCustom` (custom), is the only source of colour.
+  Widgets read `SisBrand`; nothing hard-codes theme colours.
+- Custom themes (id, name, mode Automatic/Light/Dark, accent, my-bubble
+  colour, their-bubble colour) and the chat wallpaper (none, colour,
+  gradient or picture; dim 0 to 0.8; blur 0 to 12) are stored on the phone
+  only, in the existing shared_preferences appearance store under
+  `sis.appearance.custom_themes`, `sis.appearance.custom_theme_id` and
+  `sis.appearance.wallpaper`. No server, no migration. A picked picture is
+  copied into the app's own folder and its path is stored. The settings are
+  read before `runApp`, so the first frame is already right.
+- Effective wallpaper: the member's own non-none wallpaper wins; otherwise a
+  custom theme shows none; otherwise a built-in theme shows its own
+  wallpaper from the approved mock, in dark brightness only (light shows
+  none, so text stays readable). There is one global wallpaper, behind the
+  message list in every chat. "Reset Chat Backgrounds" sets the wallpaper to
+  none and deletes the picture file.
+- A custom theme with mode Light or Dark overrides the phone; Automatic
+  follows it.
+- The theme editor ("+ New theme") is designed but not built: it waits for
+  the owner to approve its mockup. Until then it is greyed out and custom
+  themes come from Duplicate (long-press a built-in tile, or the dots card
+  on a custom theme). Custom accent colours are not yet contrast-checked
+  against white text; the editor must restrict them.
+
+**Consequences.**
+- Themes and wallpaper are not backed up or shared between phones; the
+  Appearance page says so.
+- The editor needs no storage change.

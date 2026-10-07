@@ -1096,4 +1096,21 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get wallpaperPickFailed =>
       'That photo could not be used. Try another.';
+
+  @override
+  String get wallpaperReset => 'Reset Chat Backgrounds';
+
+  @override
+  String get wallpaperResetInfo =>
+      'Remove all uploaded chat backgrounds and restore the pre-installed ones.';
+
+  @override
+  String get wallpaperResetTitle => 'Reset chat backgrounds';
+
+  @override
+  String get wallpaperResetConfirm =>
+      'Are you sure you want to reset all chat backgrounds?';
+
+  @override
+  String get wallpaperResetAction => 'Reset';
 }

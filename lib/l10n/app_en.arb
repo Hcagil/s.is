@@ -854,5 +854,15 @@
   "wallpaperChoosePhoto": "Choose photo",
   "@wallpaperChoosePhoto": {"description": "Button to pick a wallpaper photo"},
   "wallpaperPickFailed": "That photo could not be used. Try another.",
-  "@wallpaperPickFailed": {"description": "Shown when the chosen wallpaper photo could not be read"}
+  "@wallpaperPickFailed": {"description": "Shown when the chosen wallpaper photo could not be read"},
+  "wallpaperReset": "Reset Chat Backgrounds",
+  "@wallpaperReset": {"description": "Row at the bottom of the wallpaper page; opens the confirm card"},
+  "wallpaperResetInfo": "Remove all uploaded chat backgrounds and restore the pre-installed ones.",
+  "@wallpaperResetInfo": {"description": "Info line under the reset row"},
+  "wallpaperResetTitle": "Reset chat backgrounds",
+  "@wallpaperResetTitle": {"description": "Title of the reset confirm card"},
+  "wallpaperResetConfirm": "Are you sure you want to reset all chat backgrounds?",
+  "@wallpaperResetConfirm": {"description": "Question on the reset confirm card"},
+  "wallpaperResetAction": "Reset",
+  "@wallpaperResetAction": {"description": "Confirm button of the reset card"}
 }

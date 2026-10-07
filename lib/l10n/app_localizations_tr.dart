@@ -1086,4 +1086,21 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get wallpaperPickFailed =>
       'Bu fotoğraf kullanılamadı. Başka birini dene.';
+
+  @override
+  String get wallpaperReset => 'Sohbet Arka Planlarını Sıfırla';
+
+  @override
+  String get wallpaperResetInfo =>
+      'Yüklenen tüm sohbet arka planlarını kaldır ve önceden yüklenmiş olanları geri getir.';
+
+  @override
+  String get wallpaperResetTitle => 'Sohbet arka planlarını sıfırla';
+
+  @override
+  String get wallpaperResetConfirm =>
+      'Tüm sohbet arka planlarını sıfırlamak istediğine emin misin?';
+
+  @override
+  String get wallpaperResetAction => 'Sıfırla';
 }

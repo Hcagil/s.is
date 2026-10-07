@@ -132,6 +132,14 @@ class AppearanceController extends Notifier<AppearanceSettings> {
   Future<void> setWallpaper(Wallpaper wallpaper) =>
       _update(state.copyWith(wallpaper: wallpaper));
 
+  /// Removes the wallpaper (the theme's own applies again) and deletes the
+  /// picked picture file.
+  Future<void> resetWallpaper() async {
+    final old = state.wallpaper.picturePath;
+    await _update(state.copyWith(wallpaper: Wallpaper.none));
+    if (old != null) await ref.read(wallpaperPhotosProvider).delete(old);
+  }
+
   /// Sets how much the picture wallpaper is darkened (0 to 0.8).
   Future<void> setWallpaperDim(double dim) => _update(
     state.copyWith(

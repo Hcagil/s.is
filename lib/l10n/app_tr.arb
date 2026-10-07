@@ -322,5 +322,10 @@
   "wallpaperGradient": "Gradyan",
   "wallpaperPicture": "Resim",
   "wallpaperChoosePhoto": "Fotoğraf seç",
-  "wallpaperPickFailed": "Bu fotoğraf kullanılamadı. Başka birini dene."
+  "wallpaperPickFailed": "Bu fotoğraf kullanılamadı. Başka birini dene.",
+  "wallpaperReset": "Sohbet Arka Planlarını Sıfırla",
+  "wallpaperResetInfo": "Yüklenen tüm sohbet arka planlarını kaldır ve önceden yüklenmiş olanları geri getir.",
+  "wallpaperResetTitle": "Sohbet arka planlarını sıfırla",
+  "wallpaperResetConfirm": "Tüm sohbet arka planlarını sıfırlamak istediğine emin misin?",
+  "wallpaperResetAction": "Sıfırla"
 }

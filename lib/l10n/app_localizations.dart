@@ -2035,6 +2035,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That photo could not be used. Try another.'**
   String get wallpaperPickFailed;
+
+  /// Row at the bottom of the wallpaper page; opens the confirm card
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Chat Backgrounds'**
+  String get wallpaperReset;
+
+  /// Info line under the reset row
+  ///
+  /// In en, this message translates to:
+  /// **'Remove all uploaded chat backgrounds and restore the pre-installed ones.'**
+  String get wallpaperResetInfo;
+
+  /// Title of the reset confirm card
+  ///
+  /// In en, this message translates to:
+  /// **'Reset chat backgrounds'**
+  String get wallpaperResetTitle;
+
+  /// Question on the reset confirm card
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to reset all chat backgrounds?'**
+  String get wallpaperResetConfirm;
+
+  /// Confirm button of the reset card
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get wallpaperResetAction;
 }
 
 class _AppLocalizationsDelegate

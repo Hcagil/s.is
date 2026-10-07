@@ -209,6 +209,7 @@ void main() {
     await t.ensureVisible(k('poll-question'));
     await t.pumpAndSettle();
     await t.enterText(k('poll-question'), 'Q');
+    await t.pump(); // a real Back comes at least a frame after typing
     await t.binding.handlePopRoute();
     await t.pumpAndSettle();
     expect(k('poll-discard-confirm'), findsOneWidget);
@@ -230,6 +231,7 @@ void main() {
     await t.ensureVisible(k('poll-option-0'));
     await t.pumpAndSettle();
     await t.enterText(k('poll-option-0'), 'x');
+    await t.pump(); // a real Back comes at least a frame after typing
     await t.binding.handlePopRoute();
     await t.pumpAndSettle();
     expect(k('poll-discard-confirm'), findsOneWidget);

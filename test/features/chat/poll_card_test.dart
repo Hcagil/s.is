@@ -222,6 +222,7 @@ void main() {
     await t.tap(k('poll-option-a'));
     await t.pumpAndSettle();
     expect(find.text('This poll is closed.'), findsOneWidget);
+    await t.pump(const Duration(seconds: 2)); // the notice times out
     expect(k('poll-mine-a'), findsNothing);
   });
 
@@ -407,5 +408,42 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('multiple choice after voting: a tap changes the vote', (
+    WidgetTester t,
+  ) async {
+    final fake = PollFake()
+      ..seed(
+        'c1',
+        lunch(multiple: true),
+        ballots: {
+          'u1': {'a'},
+          'u3': {'b'},
+        },
+      );
+    await show(t, fake);
+    expect(k('poll-mine-a'), findsOneWidget);
+    await t.tap(k('poll-option-b'));
+    await t.pumpAndSettle();
+    expect(fake.voteCalls.last.$2, {'a', 'b'});
+    expect(k('poll-mine-b'), findsOneWidget);
+    await t.tap(k('poll-option-a'));
+    await t.pumpAndSettle();
+    expect(fake.voteCalls.last.$2, {'b'});
+    expect(k('poll-mine-a'), findsNothing);
+    expect(fake.voteCalls.length, 2);
+  });
+
+  testWidgets('a vote refused as closed says so in Turkish', (
+    WidgetTester t,
+  ) async {
+    final fake = PollFake()..seed('c1', lunch(), ballots: {});
+    fake.onVote = (id, set) async => const Err(PollClosedFailure());
+    await show(t, fake, locale: const Locale('tr'));
+    await t.tap(k('poll-option-a'));
+    await t.pumpAndSettle();
+    expect(find.text('Bu anket kapandı.'), findsOneWidget);
+    await t.pump(const Duration(seconds: 2));
   });
 }

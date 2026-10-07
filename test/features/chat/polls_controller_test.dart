@@ -284,4 +284,94 @@ void main() {
       );
     },
   );
+
+  test('sendPoll shows a pending poll at once, then stores it', () async {
+    final draft = PollDraft(
+      question: 'Lunch?',
+      options: ['Pizza', 'Soup'],
+      multiple: false,
+      anonymous: false,
+    );
+    fake = PollFake()..seed('c1', poll('m1'));
+    final gate = Completer<void>();
+    fake.onCreate = (String cid, String mid, PollDraft d) async {
+      await gate.future;
+      return const Ok(null);
+    };
+    c = await ready(fake);
+    c.listen(messagesProvider, (_, _) {});
+    await until(() => c.read(messagesProvider).hasValue);
+    final f = c.read(messagesProvider.notifier).sendPoll(draft);
+    await until(() => fake.createCalls.isNotEmpty);
+    final id = fake.createCalls.single.$2;
+    expect(fake.createCalls.single.$1, 'c1');
+    expect(fake.createCalls.single.$3.question, 'Lunch?');
+    await until(
+      () => c.read(messagesProvider).requireValue.any((m) => m.id == id),
+    );
+    final msg = c
+        .read(messagesProvider)
+        .requireValue
+        .firstWhere((m) => m.id == id);
+    expect(msg.poll, isTrue);
+    expect(msg.sending, isTrue);
+    expect(msg.body, 'Lunch?');
+    final polls = c.read(pollsProvider).value!;
+    final shown = polls[id]!;
+    expect(
+      shown.options.map((o) => o.text).toList(),
+      equals(['Pizza', 'Soup']),
+    );
+    gate.complete();
+    final result = await f;
+    expect(result, isA<Ok<void>>());
+    final msgAfter = c
+        .read(messagesProvider)
+        .requireValue
+        .firstWhere((m) => m.id == id);
+    expect(msgAfter.sending, isFalse);
+  });
+
+  test(
+    'a refused sendPoll takes the bubble away and returns the failure',
+    () async {
+      final draft = PollDraft(
+        question: 'Lunch?',
+        options: ['Pizza', 'Soup'],
+        multiple: false,
+        anonymous: false,
+      );
+      fake = PollFake()..seed('c1', poll('m1'));
+      final gate = Completer<void>();
+      fake.onCreate = (String cid, String mid, PollDraft d) async {
+        await gate.future;
+        return const Err(DeniedFailure());
+      };
+      c = await ready(fake);
+      c.listen(messagesProvider, (_, _) {});
+    await until(() => c.read(messagesProvider).hasValue);
+      final f = c.read(messagesProvider.notifier).sendPoll(draft);
+      await until(() => fake.createCalls.isNotEmpty);
+      final id = fake.createCalls.single.$2;
+      expect(fake.createCalls.single.$1, 'c1');
+      expect(fake.createCalls.single.$3.question, 'Lunch?');
+      await until(
+        () => c.read(messagesProvider).requireValue.any((m) => m.id == id),
+      );
+      final msg = c
+          .read(messagesProvider)
+          .requireValue
+          .firstWhere((m) => m.id == id);
+      expect(msg.poll, isTrue);
+      expect(msg.sending, isTrue);
+      expect(msg.body, 'Lunch?');
+      gate.complete();
+      final result = await f;
+      expect(result, isA<Err<void>>());
+      expect(
+        c.read(messagesProvider).requireValue.any((m) => m.id == id),
+        isFalse,
+      );
+    },
+  );
 }

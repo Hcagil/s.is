@@ -76,10 +76,12 @@ grant select on public.polls, public.poll_options to authenticated;
 grant select (option_id, user_id, message_id, conversation_id, created_at)
   on public.poll_votes to authenticated;
 
--- May the caller see the poll of [message]? It must exist, be undeleted, in a
--- conversation the caller is a CURRENT member of, and readable to them
--- (history window, "delete for me"). SECURITY DEFINER so the policies need no
--- access to the tables they consult.
+-- May the caller see the poll of [message]? It must exist, be undeleted and be
+-- readable to them by the same rule as the message itself (message_readable:
+-- history window, so a member who has left still sees what was sent while they
+-- were in; "delete for me"). Current membership is NOT required to read; only
+-- creating, voting and closing require it. SECURITY DEFINER so the policies
+-- need no access to the tables they consult.
 create function app_private.poll_readable(message uuid) returns boolean
 language sql stable security definer set search_path = '' as $$
   select exists (
@@ -87,7 +89,6 @@ language sql stable security definer set search_path = '' as $$
      where m.id = message
        and m.poll
        and m.deleted is null
-       and app_private.is_member(m.conversation_id)
        and app_private.message_readable(m)
   )
 $$;

@@ -1189,4 +1189,72 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get wallpaperResetAction => 'Sıfırla';
+
+  @override
+  String get chatSelPin => 'Sabitle';
+
+  @override
+  String get chatSelMarkRead => 'Okundu olarak işaretle';
+
+  @override
+  String get chatDeleteAction => 'Sil';
+
+  @override
+  String get chatDeleteCancel => 'İptal et';
+
+  @override
+  String get chatDeleteUndo => 'Geri Al';
+
+  @override
+  String get chatDeleteChat => 'Sohbeti Sil';
+
+  @override
+  String chatDeleteSure(String name) {
+    return '**$name** ile olan sohbet kalıcı olarak silinsin mi?';
+  }
+
+  @override
+  String chatDeleteAlso(String name) {
+    return '$name için de sil';
+  }
+
+  @override
+  String get chatDeletedUndo => 'Sohbet silindi.';
+
+  @override
+  String get chatLeaveGroupTitle => 'Gruptan Ayrıl';
+
+  @override
+  String chatDeleteLeaveSure(String name) {
+    return '**$name** grubunu silmek ve gruptan ayrılmak istediğinizden emin misiniz?';
+  }
+
+  @override
+  String get chatDeleteGroupForAll => 'Grubu tüm üyeler için sil';
+
+  @override
+  String get chatGroupLeftUndo => 'Gruptan ayrıldınız.';
+
+  @override
+  String get chatGroupDeletedUndo => 'Grup silindi';
+
+  @override
+  String chatDeleteFewTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sohbet sil',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatDeleteFewSure =>
+      'Bu sohbetleri silmek istediğinizden emin misiniz?';
+
+  @override
+  String get chatDeleteBothSides => 'Mümkünse her iki taraftan da silin';
+
+  @override
+  String get chatsDeletedUndo => 'Sohbetler silindi.';
 }

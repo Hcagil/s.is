@@ -198,15 +198,27 @@ void main() {
     await t.runAsync(() => cleo.removeAllChannels());
   }
 
+  /// Long-press selects the row; the selection bar's mute opens the card
+  /// with the mute lengths (an unmuted chat).
   Future<void> openMuteOptions(WidgetTester t) async {
     await t.longPress(row());
     await frames(t);
+    await t.tap(byKey('selection-mute'));
+    await frames(t);
     expect(byKey('chat-menu'), findsOneWidget);
-    if (byKey('chat-mute-off').evaluate().isEmpty &&
-        byKey('chat-mute-oneHour').evaluate().isEmpty) {
+    if (byKey('chat-mute-oneHour').evaluate().isEmpty) {
       await t.tap(byKey('chat-menu-mute'));
       await frames(t);
     }
+  }
+
+  /// On a muted chat the selection bar's mute is "Unmute" and acts at once.
+  Future<void> unmuteFromBar(WidgetTester t) async {
+    await t.longPress(row());
+    await frames(t);
+    expect(find.byTooltip('Unmute'), findsOneWidget);
+    await t.tap(byKey('selection-mute'));
+    await frames(t);
   }
 
   Future<List<Mute>> serverMutes() async => _ok(
@@ -241,8 +253,7 @@ void main() {
       await mount(t);
       expect(bell(), findsOneWidget, reason: 'the bell did not survive');
 
-      await openMuteOptions(t);
-      await t.tap(byKey('chat-mute-off'));
+      await unmuteFromBar(t);
       await until(t, () => bell().evaluate().isEmpty, 'the bell gone');
       final after = await t.runAsync(serverMutes);
       expect(

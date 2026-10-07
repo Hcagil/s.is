@@ -105,7 +105,7 @@ final class SupabaseChatRepository implements ChatRepository {
         // side's row.
         _client
             .from('conversation_members')
-            .select('conversation_id, user_id, left_at, color_slot')
+            .select('conversation_id, user_id, left_at, color_slot, role')
             .retriedOnce(),
         // Titles distinguish a group from a 1:1; RLS scopes this to the
         // caller's own conversations, same as the membership rows.
@@ -122,6 +122,8 @@ final class SupabaseChatRepository implements ChatRepository {
         _client.from('chat_archives').select('conversation_id').retriedOnce(),
         // The chats this member pinned (own rows only, same scoping).
         _client.from('chat_pins').select('conversation_id').retriedOnce(),
+        // The chats this member deleted for themselves (own rows only). A hidden chat with nothing readable left is not listed.
+        _client.from('chat_hides').select('conversation_id').retriedOnce(),
       ]);
       final memberRows = firstStage[0];
       final conversationRows = firstStage[1];
@@ -130,6 +132,10 @@ final class SupabaseChatRepository implements ChatRepository {
       };
       final pinnedIds = {
         for (final row in firstStage[3]) row['conversation_id'] as String,
+      };
+
+      final hiddenIds = {
+        for (final row in firstStage[4]) row['conversation_id'] as String,
       };
       final titleById = {
         for (final row in conversationRows)
@@ -168,6 +174,9 @@ final class SupabaseChatRepository implements ChatRepository {
       // (left_at null) always wins over a past one, and among only-past
       // rows the most recent left_at wins.
       final myLeftAtByConversation = <String, DateTime?>{};
+
+      // Groups where the caller is a CURRENT admin (their current row has role 'admin').
+      final adminOf = <String>{};
       for (final row in memberRows) {
         final userId = row['user_id'] as String;
         final conversationId = row['conversation_id'] as String;
@@ -182,6 +191,9 @@ final class SupabaseChatRepository implements ChatRepository {
             ? null
             : DateTime.parse(row['left_at'] as String);
         final known = myLeftAtByConversation[conversationId];
+        if (leftAt == null && row['role'] == 'admin') {
+          adminOf.add(conversationId);
+        }
         final knownIsCurrent =
             myLeftAtByConversation.containsKey(conversationId) && known == null;
         if (knownIsCurrent) continue; // a current row already wins outright
@@ -273,6 +285,7 @@ final class SupabaseChatRepository implements ChatRepository {
             archived: archivedIds.contains(id),
             pinned: pinnedIds.contains(id),
             pinnedMessageId: pinnedMessageById[id],
+            isAdmin: adminOf.contains(id),
             senders: titleById[id] == null
                 ? const {}
                 : {
@@ -283,6 +296,11 @@ final class SupabaseChatRepository implements ChatRepository {
                   },
           ),
       ];
+      // A chat the member deleted for themselves stays off the list until
+      // something readable arrives in it again.
+      conversations.removeWhere(
+        (c) => hiddenIds.contains(c.id) && c.lastMessageAt == null,
+      );
       // Conversations with no messages yet sort last.
       conversations.sort((a, b) {
         final at = a.lastMessageAt, bt = b.lastMessageAt;

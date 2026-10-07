@@ -19,6 +19,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/archive_fakes.dart';
+import '../../support/chat_delete_fakes.dart';
 import '../../support/fakes.dart';
 import '../../support/pin_fakes.dart';
 import '../../support/sis_ui.dart' as ui;
@@ -120,6 +121,7 @@ Future<NotificationSettingsFake> pumpList(
             NotificationExplainerStoreFake(shown: true),
           ),
           chatPinRepositoryProvider.overrideWithValue(pins ?? ChatPinFake()),
+          chatDeleteRepositoryProvider.overrideWithValue(ChatDeleteFake()),
         ],
         child: const SisApp(),
       ),
@@ -185,8 +187,8 @@ void main() {
     await pumpList(t, pins: pins);
     await t.longPress(byKey('conversation-c2'));
     await t.pumpAndSettle();
-    expect(find.text('Pin chat'), findsOneWidget);
-    await t.tap(byKey('chat-menu-pin'));
+    expect(find.byTooltip('Pin'), findsOneWidget);
+    await t.tap(byKey('selection-pin'));
     await t.pump(const Duration(milliseconds: 300));
     expect(find.byKey(const ValueKey('pinned-c2')), findsOneWidget);
     expect(
@@ -208,8 +210,8 @@ void main() {
     );
     await t.longPress(byKey('conversation-c2'));
     await t.pumpAndSettle();
-    expect(find.text('Unpin chat'), findsOneWidget);
-    await t.tap(byKey('chat-menu-pin'));
+    expect(find.byTooltip('Unpin chat'), findsOneWidget);
+    await t.tap(byKey('selection-pin'));
     await t.pumpAndSettle();
     expect(find.byKey(const ValueKey('pinned-c2')), findsNothing);
     expect(pins.calls, equals(['chat:c2:false']));
@@ -238,8 +240,8 @@ void main() {
     );
     await t.longPress(byKey('conversation-c6'));
     await t.pumpAndSettle();
-    expect(find.text('Pin chat'), findsOneWidget);
-    await t.tap(byKey('chat-menu-pin'));
+    expect(find.byTooltip('Pin'), findsOneWidget);
+    await t.tap(byKey('selection-pin'));
     await t.pump();
     await t.pump(const Duration(milliseconds: 100));
     expect(find.text('You can pin up to 5 chats.'), findsOneWidget);
@@ -256,8 +258,8 @@ void main() {
     await pumpList(t, pins: pins);
     await t.longPress(byKey('conversation-c1'));
     await t.pumpAndSettle();
-    expect(find.text('Pin chat'), findsOneWidget);
-    await t.tap(byKey('chat-menu-pin'));
+    expect(find.byTooltip('Pin'), findsOneWidget);
+    await t.tap(byKey('selection-pin'));
     await t.pumpAndSettle();
     expect(find.byKey(const ValueKey('pinned-c1')), findsNothing);
     expect(find.text('You can pin up to 5 chats.'), findsOneWidget);
@@ -272,8 +274,8 @@ void main() {
     await pumpList(t, pins: pins);
     await t.longPress(byKey('conversation-c1'));
     await t.pumpAndSettle();
-    expect(find.text('Pin chat'), findsOneWidget);
-    await t.tap(byKey('chat-menu-pin'));
+    expect(find.byTooltip('Pin'), findsOneWidget);
+    await t.tap(byKey('selection-pin'));
     await t.pumpAndSettle();
     expect(find.byKey(const ValueKey('pinned-c1')), findsNothing);
     expect(ui.notice, findsOneWidget);
@@ -289,7 +291,10 @@ void main() {
     await openArchived(t);
     await t.longPress(byKey('conversation-c1'));
     await t.pumpAndSettle();
+    // The Archived screen keeps its own menu; it does not select.
+    expect(byKey('chat-menu'), findsOneWidget);
     expect(find.byKey(const ValueKey('chat-menu-pin')), findsNothing);
+    expect(byKey('selection-pin'), findsNothing);
   });
 
   testWidgets('failed archive keeps pin', (WidgetTester t) async {
@@ -338,7 +343,7 @@ void main() {
     pins.pinned.remove('p1');
     await t.longPress(byKey('conversation-c6'));
     await t.pumpAndSettle();
-    await t.tap(byKey('chat-menu-pin'));
+    await t.tap(byKey('selection-pin'));
     await t.pumpAndSettle();
     expect(find.text('You can pin up to 5 chats.'), findsNothing);
     expect(pins.calls, contains('chat:c6:true'));
@@ -352,7 +357,7 @@ void main() {
     await pumpList(t, pins: pins);
     await t.longPress(byKey('conversation-c1'));
     await t.pumpAndSettle();
-    await t.tap(byKey('chat-menu-pin'));
+    await t.tap(byKey('selection-pin'));
     await t.pumpAndSettle();
     expect(find.text('En fazla 5 sohbet sabitleyebilirsin.'), findsOneWidget);
     expect(byKey('pinned-c1'), findsNothing);
@@ -370,6 +375,6 @@ void main() {
     expect(headerText(t, 'list-header-2'), 'sohbetler');
     await t.longPress(byKey('conversation-c1'));
     await t.pumpAndSettle();
-    expect(find.text('Sohbeti sabitle'), findsOneWidget);
+    expect(find.byTooltip('Sabitle'), findsOneWidget);
   });
 }

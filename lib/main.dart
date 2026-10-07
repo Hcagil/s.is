@@ -29,6 +29,7 @@ import 'features/chat/data/file_chat_list_snapshot_store.dart';
 import 'features/chat/data/native_picture_cropper.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
 import 'features/chat/data/supabase_chat_archive_repository.dart';
+import 'features/chat/data/supabase_chat_delete_repository.dart';
 import 'features/chat/data/supabase_chat_pin_repository.dart';
 import 'features/chat/data/supabase_group_settings_repository.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
@@ -152,6 +153,9 @@ Future<void> main() async {
           ),
           chatPinRepositoryProvider.overrideWithValue(
             SupabaseChatPinRepository(client),
+          ),
+          chatDeleteRepositoryProvider.overrideWithValue(
+            SupabaseChatDeleteRepository(client),
           ),
           reactionRepositoryProvider.overrideWithValue(
             SupabaseReactionRepository(client),

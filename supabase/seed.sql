@@ -162,7 +162,13 @@
 --   pina/pinb      test/integration/pins_seam_test.dart
 --     (pina pins the pina-pinb chat and a message in it through the UI;
 --      the rows are read back from the database, and pinb sees the pin)
+--   dc-ash/dc-bea/dc-cyd test/integration/delete_chat_seam_test.dart
+--     (each deletes a 1:1 or a group through the controller; the others
+--      check what is left for them on the server)
 insert into app_private.allowlist(email) values
+  ('dc-ash@integration.test'),
+  ('dc-bea@integration.test'),
+  ('dc-cyd@integration.test'),
   ('pina@integration.test'),
   ('pinb@integration.test'),
   ('ann@integration.test'),

@@ -8,8 +8,11 @@ import '../../../core/startup_marks.dart';
 import '../application/archive_providers.dart';
 import 'archive_reveal_list.dart';
 import 'archived_chats_page.dart';
+import 'chat_undo_bar.dart';
 import '../domain/message.dart';
 import '../application/chat_controllers.dart';
+import '../application/chat_delete_controller.dart';
+import '../application/chat_selection_controller.dart';
 import '../domain/conversation.dart';
 import '../domain/highlight.dart';
 import 'member_name.dart';
@@ -42,6 +45,15 @@ class ConversationList extends ConsumerWidget {
     ) {
       if (next != null) showSisNotice(context, next.message, isError: true);
     });
+    // A delete the server refused (the rows are already back): say why, once.
+    ref.listen(chatDeleteProvider.select((s) => s.failure), (previous, next) {
+      if (next == null) return;
+      showSisNotice(context, next.message, isError: true);
+      ref.read(chatDeleteProvider.notifier).consumeFailure();
+    });
+    final selecting = ref.watch(
+      chatSelectionProvider.select((s) => s.isNotEmpty),
+    );
     // Debug timing only (label, never data): first build that has rows.
     if (conversations.value?.isNotEmpty ?? false) {
       StartupMarks.mark('list-rows');
@@ -73,28 +85,31 @@ class ConversationList extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        alignment: WrapAlignment.end,
-        crossAxisAlignment: WrapCrossAlignment.end,
-        children: [
-          FloatingActionButton.extended(
-            key: const ValueKey('new-group'),
-            heroTag: 'new-group',
-            onPressed: () => _startGroup(context, ref),
-            icon: const Icon(Icons.groups_outlined),
-            label: Text(l.commonNewGroup),
-          ),
-          FloatingActionButton.extended(
-            key: const ValueKey('new-chat'),
-            heroTag: 'new-chat',
-            onPressed: () => _startChat(context, ref),
-            icon: const Icon(Icons.edit_outlined),
-            label: Text(l.pickerNewChat),
-          ),
-        ],
-      ),
+      bottomSheet: const ChatUndoBar(),
+      floatingActionButton: selecting
+          ? null
+          : Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.end,
+              children: [
+                FloatingActionButton.extended(
+                  key: const ValueKey('new-group'),
+                  heroTag: 'new-group',
+                  onPressed: () => _startGroup(context, ref),
+                  icon: const Icon(Icons.groups_outlined),
+                  label: Text(l.commonNewGroup),
+                ),
+                FloatingActionButton.extended(
+                  key: const ValueKey('new-chat'),
+                  heroTag: 'new-chat',
+                  onPressed: () => _startChat(context, ref),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: Text(l.pickerNewChat),
+                ),
+              ],
+            ),
     );
   }
 }

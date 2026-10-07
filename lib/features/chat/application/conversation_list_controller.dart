@@ -450,6 +450,30 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
           .firstOrNull
           ?.settings;
 
+  /// Archives or unarchives [conversationId] for the signed-in member. The
+  /// list changes at once (the swipe never waits on the network); a refusal
+  /// puts the chat back and returns the [Err]. An archived chat stays
+  /// archived when new messages arrive: [Conversation.withPreview] keeps the
+  /// flag.
+  Future<Result<void>> setArchived(String conversationId, bool archived) async {
+    void mark(bool value) {
+      final list = state.value;
+      if (list == null) return;
+      state = AsyncData([
+        for (final c in list)
+          if (c.id == conversationId) c.withArchived(value) else c,
+      ]);
+      _scheduleSnapshotSave();
+    }
+
+    mark(archived);
+    final result = await ref
+        .read(chatArchiveRepositoryProvider)
+        .setArchived(conversationId, archived);
+    if (result is Err && ref.mounted) mark(!archived);
+    return result;
+  }
+
   /// Shows [next] as [conversationId]'s settings at once, without a server
   /// call: a switch flips the same frame. The list is re-read from the
   /// server by the usual refreshes.

@@ -128,6 +128,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatArchive => 'Archive';
 
   @override
+  String get chatUnarchive => 'Unarchive';
+
+  @override
+  String get archivedChatsTitle => 'Archived chats';
+
+  @override
+  String archivedChatsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count chats',
+      one: '1 chat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get archivedChatsHint =>
+      'Archived chats stay archived when a new message arrives. No sound, no push, no badge.';
+
+  @override
+  String get archivedChatsEmpty => 'No archived chats';
+
+  @override
   String get chatMutedLabel => 'Muted';
 
   @override

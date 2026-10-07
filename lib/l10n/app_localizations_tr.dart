@@ -129,6 +129,24 @@ class AppLocalizationsTr extends AppLocalizations {
   String get chatArchive => 'Arşivle';
 
   @override
+  String get chatUnarchive => 'Arşivden çıkar';
+
+  @override
+  String get archivedChatsTitle => 'Arşivlenen sohbetler';
+
+  @override
+  String archivedChatsCount(int count) {
+    return '$count sohbet';
+  }
+
+  @override
+  String get archivedChatsHint =>
+      'Yeni mesaj gelse de arşivlenen sohbetler arşivde kalır. Ses, bildirim ve rozet yok.';
+
+  @override
+  String get archivedChatsEmpty => 'Arşivlenmiş sohbet yok';
+
+  @override
   String get chatMutedLabel => 'Sessiz';
 
   @override

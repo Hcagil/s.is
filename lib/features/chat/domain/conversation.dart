@@ -23,6 +23,7 @@ final class Conversation {
     this.isSystem = false,
     this.senders = const {},
     this.settings = const GroupSettings(),
+    this.archived = false,
   });
 
   final String id;
@@ -61,6 +62,9 @@ final class Conversation {
   /// A group's admin-controlled switches; meaningless for a 1:1.
   final GroupSettings settings;
 
+  /// True when the signed-in member archived this chat (per member; server-side, so it follows them across devices). Archived chats leave the main list and stay archived when new messages arrive.
+  final bool archived;
+
   /// The same conversation with a newer message as its preview; [unread]
   /// grows by one when [counts] (a message from someone else, arriving while
   /// this conversation is not open).
@@ -78,6 +82,7 @@ final class Conversation {
         isSystem: isSystem,
         senders: senders,
         settings: settings,
+        archived: archived,
       );
 
   /// The same conversation with nothing unread.
@@ -93,6 +98,7 @@ final class Conversation {
     isSystem: isSystem,
     senders: senders,
     settings: settings,
+    archived: archived,
   );
 
   /// The same conversation with [next] as its settings.
@@ -109,6 +115,24 @@ final class Conversation {
     isSystem: isSystem,
     senders: senders,
     settings: next,
+    archived: archived,
+  );
+
+  /// The same conversation, archived or not.
+  Conversation withArchived(bool value) => Conversation(
+    id: id,
+    title: title,
+    other: other,
+    lastMessage: lastMessage,
+    lastMessageAt: lastMessageAt,
+    lastSenderId: lastSenderId,
+    unread: unread,
+    avatarPath: avatarPath,
+    hasLeft: hasLeft,
+    isSystem: isSystem,
+    senders: senders,
+    settings: settings,
+    archived: value,
   );
 
   /// For the on-disk chat list snapshot only.
@@ -125,6 +149,9 @@ final class Conversation {
     'isSystem': isSystem,
     'senders': {for (final e in senders.entries) e.key: e.value.toJson()},
     'settings': settings.toJson(),
+    // Written only when true: the saved list the native side reads keeps its
+    // old shape for every un-archived chat.
+    if (archived) 'archived': true,
   };
 
   static Conversation fromJson(Map<String, Object?> json) => Conversation(
@@ -152,6 +179,7 @@ final class Conversation {
     settings: json['settings'] == null
         ? const GroupSettings()
         : GroupSettings.fromJson(json['settings'] as Map<String, Object?>),
+    archived: json['archived'] as bool? ?? false,
   );
 
   bool get isGroup => title != null;

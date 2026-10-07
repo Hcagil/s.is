@@ -11,6 +11,7 @@ import '../../auth/domain/session_state.dart';
 import '../../notifications/application/push_controller.dart';
 import '../../profile/application/profile_controller.dart';
 import '../domain/attachment.dart';
+import '../domain/chat_archive_repository.dart';
 import '../domain/chat_list_snapshot_store.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
@@ -44,6 +45,9 @@ final reactionRepositoryProvider = Provider<ReactionRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 final groupSettingsRepositoryProvider = Provider<GroupSettingsRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+final chatArchiveRepositoryProvider = Provider<ChatArchiveRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 final linkOpenerProvider = Provider<LinkOpener>(

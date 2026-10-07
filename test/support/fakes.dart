@@ -846,6 +846,8 @@ class ChatFake implements ChatRepository {
             hasLeft: c.hasLeft,
             isSystem: c.isSystem,
             senders: c.senders,
+            // Archive state is the server's, untouched by a new message.
+            archived: c.archived,
           ),
     ];
     rows.sort((a, b) {

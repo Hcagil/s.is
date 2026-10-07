@@ -1,14 +1,16 @@
 // The chat list rows of Update 1 slice 4, mounted as production mounts them
 // (SisApp, the real controllers) with fakes only at the repositories:
 // the muted bell and unread badge, the long-press chat menu and its mute
-// lengths, the inert grey pin, the archive swipe that archives nothing, and
-// the back swipe that leaves the list still.
+// lengths, the inert grey pin, the archive swipe that archives past its
+// commit line and springs back before it, and the back swipe that leaves the
+// list still.
 //
 // Written from the contract (keys, MuteLength, mutesProvider), not the code.
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/sis_app.dart';
@@ -27,6 +29,7 @@ import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
+import '../../support/archive_fakes.dart';
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart' as ui;
 
@@ -74,6 +77,7 @@ Future<NotificationSettingsFake> pumpList(
   WidgetTester t, {
   List<Mute> mutes = const [],
   ChatFake? chat,
+  ChatArchiveFake? archive,
   int unread = 0,
 }) async {
   // A save is not instant: the bell must follow the saved mute, not a guess.
@@ -107,6 +111,9 @@ Future<NotificationSettingsFake> pumpList(
             ),
           ),
           notificationSettingsRepositoryProvider.overrideWithValue(notif),
+          chatArchiveRepositoryProvider.overrideWithValue(
+            archive ?? ChatArchiveFake(),
+          ),
           pushSourceProvider.overrideWithValue(PushSourceFake()),
           pushRegistryProvider.overrideWithValue(PushRegistryFake()),
           notificationExplainerStoreProvider.overrideWithValue(
@@ -442,52 +449,157 @@ void main() {
   });
 
   group('the archive swipe', () {
-    testWidgets('a left drag moves the row at most 96 px and shows the '
-        'archive pill; release springs back and archives nothing', (t) async {
-      final chat = ChatFake()..conversationsResult = Ok(chats());
-      final notif = await pumpList(t, chat: chat);
-      final callsBefore = [...notif.calls];
-      final x0 = t.getTopLeft(byKey('conversation-c1')).dx;
-      expect(byKey('archive-pill-c1'), findsNothing);
+    testWidgets(
+      'a left drag moves the row at most 120 px and shows the archive pill',
+      (t) async {
+        await pumpList(t);
+        final x0 = t.getTopLeft(byKey('conversation-c1')).dx;
+        expect(byKey('archive-pill-c1'), findsNothing);
 
+        final g = await t.startGesture(t.getCenter(byKey('archive-swipe-c1')));
+        // 30 steps of -10 px = -300 px, should cap at -120 px
+        for (var i = 0; i < 30; i++) {
+          await g.moveBy(const Offset(-10, 0));
+          await t.pump(const Duration(milliseconds: 16));
+        }
+        expect(t.getTopLeft(byKey('conversation-c1')).dx, equals(x0 - 120));
+        expect(byKey('archive-pill-c1'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: byKey('archive-pill-c1'),
+            matching: find.text('Archive'),
+          ),
+          findsOneWidget,
+        );
+
+        await g.up();
+        await t.pumpAndSettle();
+      },
+    );
+
+    testWidgets('dragging from 0 to 100 px triggers exactly one heavy haptic', (
+      t,
+    ) async {
+      final haptics = <String?>[];
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'HapticFeedback.vibrate') {
+            haptics.add(call.arguments as String?);
+          }
+          return null;
+        },
+      );
+
+      await pumpList(t);
       final g = await t.startGesture(t.getCenter(byKey('archive-swipe-c1')));
       for (var i = 0; i < 10; i++) {
-        await g.moveBy(const Offset(-30, 0));
+        await g.moveBy(const Offset(-10, 0));
         await t.pump(const Duration(milliseconds: 16));
       }
-      expect(t.getTopLeft(byKey('conversation-c1')).dx, x0 - 96);
-      expect(byKey('archive-pill-c1'), findsOneWidget);
-      expect(
-        find.descendant(
-          of: byKey('grey-archive'),
-          matching: byKey('archive-pill-c1'),
-        ),
-        findsOneWidget,
-        reason: 'the pill is not inside grey-archive',
-      );
-      expect(t.getTopLeft(byKey('conversation-c2')).dx, x0, reason: 'c2');
+      expect(haptics, equals(['HapticFeedbackType.heavyImpact']));
 
       await g.up();
       await t.pumpAndSettle();
-      expect(t.getTopLeft(byKey('conversation-c1')).dx, x0);
-      expect(byKey('archive-pill-c1'), findsNothing);
-      expect(byKey('conversation-c1'), findsOneWidget, reason: 'archived');
-      expect(notif.calls, callsBefore);
+
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
     });
 
-    testWidgets('a cancelled drag springs back too', (t) async {
+    testWidgets('dragging from 0 to 50 px triggers no haptic', (t) async {
+      final haptics = <String?>[];
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'HapticFeedback.vibrate') {
+            haptics.add(call.arguments as String?);
+          }
+          return null;
+        },
+      );
+
       await pumpList(t);
+      final g = await t.startGesture(t.getCenter(byKey('archive-swipe-c1')));
+      for (var i = 0; i < 5; i++) {
+        await g.moveBy(const Offset(-10, 0));
+        await t.pump(const Duration(milliseconds: 16));
+      }
+      expect(haptics, isEmpty);
+
+      await g.up();
+      await t.pumpAndSettle();
+
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
+    });
+
+    testWidgets('release past 70 commits archives', (t) async {
+      final archive = ChatArchiveFake();
+      await pumpList(t, archive: archive);
+
+      final g = await t.startGesture(t.getCenter(byKey('archive-swipe-c1')));
+      for (var i = 0; i < 10; i++) {
+        await g.moveBy(const Offset(-10, 0));
+        await t.pump(const Duration(milliseconds: 16));
+      }
+      await g.up();
+      await t.pumpAndSettle();
+
+      expect(
+        archive.calls.map((e) => (e.key, e.value)).toList(),
+        equals([('c1', true)]),
+      );
+      expect(byKey('conversation-c1'), findsNothing);
+      expect(byKey('conversation-c2'), findsOneWidget);
+    });
+
+    testWidgets('release before 70 springs back over 220 ms', (t) async {
+      final archive = ChatArchiveFake();
+      await pumpList(t, archive: archive);
       final x0 = t.getTopLeft(byKey('conversation-c1')).dx;
+
+      final g = await t.startGesture(t.getCenter(byKey('archive-swipe-c1')));
+      await g.moveBy(const Offset(-50, 0));
+      await t.pump(const Duration(milliseconds: 16));
+      await g.up();
+      // The spring starts on the first frame after the release.
+      await t.pump();
+
+      await t.pump(const Duration(milliseconds: 100));
+      expect(t.getTopLeft(byKey('conversation-c1')).dx, lessThan(x0));
+
+      await t.pump(const Duration(milliseconds: 130));
+      expect(t.getTopLeft(byKey('conversation-c1')).dx, equals(x0));
+
+      expect(archive.calls, isEmpty);
+      expect(byKey('archive-pill-c1'), findsNothing);
+      expect(byKey('conversation-c1'), findsOneWidget);
+    });
+
+    testWidgets('a cancelled drag springs back and archives nothing', (
+      t,
+    ) async {
+      final archive = ChatArchiveFake();
+      await pumpList(t, archive: archive);
+      final x0 = t.getTopLeft(byKey('conversation-c1')).dx;
+
       final g = await t.startGesture(t.getCenter(byKey('archive-swipe-c1')));
       await g.moveBy(const Offset(-20, 0));
       await t.pump(const Duration(milliseconds: 16));
       await g.moveBy(const Offset(-40, 0));
       await t.pump(const Duration(milliseconds: 16));
       expect(t.getTopLeft(byKey('conversation-c1')).dx, lessThan(x0));
+
       await g.cancel();
       await t.pumpAndSettle();
-      expect(t.getTopLeft(byKey('conversation-c1')).dx, x0);
+
+      expect(t.getTopLeft(byKey('conversation-c1')).dx, equals(x0));
       expect(byKey('archive-pill-c1'), findsNothing);
+      expect(archive.calls, isEmpty);
     });
 
     testWidgets('a right drag shows no pill and does not push the row right', (
@@ -505,6 +617,37 @@ void main() {
       await g.up();
       await t.pumpAndSettle();
     });
+
+    testWidgets(
+      'a left drag carried back past its start never pushes the row right',
+      (t) async {
+        await pumpList(t);
+        final double x0 = t.getTopLeft(byKey('conversation-c1')).dx;
+        final g = await t.startGesture(t.getCenter(byKey('archive-swipe-c1')));
+        await g.moveBy(const Offset(-20, 0));
+        await t.pump(const Duration(milliseconds: 16));
+        await g.moveBy(const Offset(-40, 0));
+        await t.pump(const Duration(milliseconds: 16));
+        expect(
+          t.getTopLeft(byKey('conversation-c1')).dx,
+          lessThan(x0),
+          reason: 'the drag started',
+        );
+        for (var i = 0; i <= 7; i++) {
+          await g.moveBy(const Offset(30, 0));
+          await t.pump(const Duration(milliseconds: 16));
+          expect(
+            t.getTopLeft(byKey('conversation-c1')).dx,
+            lessThanOrEqualTo(x0),
+            reason: 'pushed right at step $i',
+          );
+        }
+        expect(byKey('archive-pill-c1'), findsNothing);
+        await g.up();
+        await t.pumpAndSettle();
+        expect(t.getTopLeft(byKey('conversation-c1')).dx, equals(x0));
+      },
+    );
   });
 
   group('back swipe from a chat', () {

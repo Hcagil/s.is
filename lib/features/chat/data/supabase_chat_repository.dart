@@ -116,9 +116,15 @@ final class SupabaseChatRepository implements ChatRepository {
               'members_can_add, new_members_see_history',
             )
             .retriedOnce(),
+        // The chats this member archived (row-level security scopes it to
+        // their own rows).
+        _client.from('chat_archives').select('conversation_id').retriedOnce(),
       ]);
       final memberRows = firstStage[0];
       final conversationRows = firstStage[1];
+      final archivedIds = {
+        for (final row in firstStage[2]) row['conversation_id'] as String,
+      };
       final titleById = {
         for (final row in conversationRows)
           row['id'] as String: row['title'] as String?,
@@ -253,6 +259,7 @@ final class SupabaseChatRepository implements ChatRepository {
             hasLeft: myLeftAtByConversation[id] != null,
             isSystem: systemById[id] ?? false,
             settings: settingsById[id] ?? const GroupSettings(),
+            archived: archivedIds.contains(id),
             senders: titleById[id] == null
                 ? const {}
                 : {

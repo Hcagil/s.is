@@ -154,7 +154,28 @@
   },
   "chatArchive": "Archive",
   "@chatArchive": {
-    "description": "Pill revealed by swiping a chat row (greyed, not built yet)"
+    "description": "Pill revealed by swiping a chat row in the chat list"
+  },
+  "chatUnarchive": "Unarchive",
+  "@chatUnarchive": {
+    "description": "Pill revealed by swiping a chat row on the Archived screen"
+  },
+  "archivedChatsTitle": "Archived chats",
+  "@archivedChatsTitle": {
+    "description": "Row above the chat list (pull down to reveal) and title of the Archived screen"
+  },
+  "archivedChatsCount": "{count, plural, =1{1 chat} other{{count} chats}}",
+  "@archivedChatsCount": {
+    "description": "Subtitle of the Archived screen: how many chats are archived",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "archivedChatsHint": "Archived chats stay archived when a new message arrives. No sound, no push, no badge.",
+  "@archivedChatsHint": {
+    "description": "Note at the top of the Archived screen"
+  },
+  "archivedChatsEmpty": "No archived chats",
+  "@archivedChatsEmpty": {
+    "description": "Archived screen with nothing in it"
   },
   "chatMutedLabel": "Muted",
   "@chatMutedLabel": {

@@ -326,11 +326,41 @@ abstract class AppLocalizations {
   /// **'Pin chat'**
   String get chatMenuPin;
 
-  /// Pill revealed by swiping a chat row (greyed, not built yet)
+  /// Pill revealed by swiping a chat row in the chat list
   ///
   /// In en, this message translates to:
   /// **'Archive'**
   String get chatArchive;
+
+  /// Pill revealed by swiping a chat row on the Archived screen
+  ///
+  /// In en, this message translates to:
+  /// **'Unarchive'**
+  String get chatUnarchive;
+
+  /// Row above the chat list (pull down to reveal) and title of the Archived screen
+  ///
+  /// In en, this message translates to:
+  /// **'Archived chats'**
+  String get archivedChatsTitle;
+
+  /// Subtitle of the Archived screen: how many chats are archived
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 chat} other{{count} chats}}'**
+  String archivedChatsCount(int count);
+
+  /// Note at the top of the Archived screen
+  ///
+  /// In en, this message translates to:
+  /// **'Archived chats stay archived when a new message arrives. No sound, no push, no badge.'**
+  String get archivedChatsHint;
+
+  /// Archived screen with nothing in it
+  ///
+  /// In en, this message translates to:
+  /// **'No archived chats'**
+  String get archivedChatsEmpty;
 
   /// Screen-reader label of the bell on a muted chat row
   ///

@@ -6,6 +6,7 @@ import '../core/failure.dart';
 import '../core/startup_failure.dart';
 import '../features/appearance/application/appearance_controller.dart';
 import '../features/appearance/domain/appearance_settings.dart';
+import '../features/appearance/domain/custom_theme.dart';
 import '../features/auth/domain/member.dart';
 import '../features/auth/application/session_controller.dart';
 import '../features/auth/domain/session_state.dart';
@@ -39,6 +40,7 @@ class SisApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final look = ref.watch(appearanceProvider);
+    final custom = look.activeCustomTheme;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'SIS',
@@ -55,16 +57,27 @@ class SisApp extends ConsumerWidget {
         AppLanguage.en => const Locale('en'),
         AppLanguage.tr => const Locale('tr'),
       },
-      themeMode: ThemeMode.system,
+      // A custom theme can fix light or dark; everything else follows the phone.
+      themeMode: switch (custom?.mode) {
+        CustomThemeMode.light => ThemeMode.light,
+        CustomThemeMode.dark => ThemeMode.dark,
+        _ => ThemeMode.system,
+      },
       theme: sisTheme(
         Brightness.light,
         theme: look.themeId,
         systemFont: look.systemFont,
+        brand: custom == null
+            ? null
+            : sisBrandForCustom(custom, Brightness.light),
       ),
       darkTheme: sisTheme(
         Brightness.dark,
         theme: look.themeId,
         systemFont: look.systemFont,
+        brand: custom == null
+            ? null
+            : sisBrandForCustom(custom, Brightness.dark),
       ),
       navigatorObservers: [ref.read(routeStackProvider)],
       builder: (context, child) => MediaQuery(

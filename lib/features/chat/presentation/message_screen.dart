@@ -17,6 +17,7 @@ import '../../../app/theme.dart';
 import '../../../core/failure.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../appearance/presentation/chat_text_scale.dart';
+import '../../appearance/presentation/chat_wallpaper.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../../notifications/application/push_controller.dart';
@@ -708,6 +709,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
+                        const Positioned.fill(child: ChatWallpaper()),
                         switch (messages) {
                           AsyncData() when timeline.isEmpty => Center(
                             child: Text(

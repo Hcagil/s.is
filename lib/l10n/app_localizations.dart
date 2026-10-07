@@ -2017,6 +2017,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'SIS could not start. Please try again.'**
   String get statusStartBootstrap;
+
+  /// Menu card row on a custom theme
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get appearanceRename;
+
+  /// Menu card row on a theme
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate'**
+  String get appearanceDuplicate;
+
+  /// Menu card row on a custom theme
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get appearanceDelete;
+
+  /// Cancel button of the rename card
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get appearanceCancel;
+
+  /// Title of the rename card
+  ///
+  /// In en, this message translates to:
+  /// **'Rename theme'**
+  String get appearanceRenameTitle;
+
+  /// Hint of the theme name field
+  ///
+  /// In en, this message translates to:
+  /// **'Theme name'**
+  String get appearanceThemeName;
+
+  /// Screen-reader label of the dots button on a custom theme
+  ///
+  /// In en, this message translates to:
+  /// **'Theme options'**
+  String get appearanceThemeMenu;
+
+  /// Name given to a duplicated theme
+  ///
+  /// In en, this message translates to:
+  /// **'{name} copy'**
+  String appearanceCopyName(String name);
+
+  /// Wallpaper tab
+  ///
+  /// In en, this message translates to:
+  /// **'Colour'**
+  String get wallpaperColour;
+
+  /// Wallpaper tab
+  ///
+  /// In en, this message translates to:
+  /// **'Gradient'**
+  String get wallpaperGradient;
+
+  /// Wallpaper tab
+  ///
+  /// In en, this message translates to:
+  /// **'Picture'**
+  String get wallpaperPicture;
+
+  /// Button to pick a wallpaper photo
+  ///
+  /// In en, this message translates to:
+  /// **'Choose photo'**
+  String get wallpaperChoosePhoto;
+
+  /// Shown when the chosen wallpaper photo could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'That photo could not be used. Try another.'**
+  String get wallpaperPickFailed;
+
+  /// Row at the bottom of the wallpaper page; opens the confirm card
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Chat Backgrounds'**
+  String get wallpaperReset;
+
+  /// Info line under the reset row
+  ///
+  /// In en, this message translates to:
+  /// **'Remove all uploaded chat backgrounds and restore the pre-installed ones.'**
+  String get wallpaperResetInfo;
+
+  /// Title of the reset confirm card
+  ///
+  /// In en, this message translates to:
+  /// **'Reset chat backgrounds'**
+  String get wallpaperResetTitle;
+
+  /// Question on the reset confirm card
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to reset all chat backgrounds?'**
+  String get wallpaperResetConfirm;
+
+  /// Confirm button of the reset card
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get wallpaperResetAction;
 }
 
 class _AppLocalizationsDelegate

@@ -365,8 +365,6 @@ void main() {
   group('grey options', () {
     const where = {
       'grey-custom': 'settings-appearance',
-      'grey-wallpaper': 'settings-appearance',
-      'grey-dimblur': 'settings-appearance',
       'grey-att_auto': null, // on the settings page itself
     };
 

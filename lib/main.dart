@@ -16,6 +16,7 @@ import 'core/runtime_config.dart';
 import 'core/startup_failure.dart';
 import 'core/startup_marks.dart';
 import 'features/appearance/application/appearance_controller.dart';
+import 'features/appearance/data/picker_wallpaper_photos.dart';
 import 'features/appearance/data/shared_prefs_appearance_store.dart';
 import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/file_last_session_store.dart';
@@ -106,6 +107,9 @@ Future<void> main() async {
   final appearanceOverrides = [
     appearanceStoreProvider.overrideWithValue(appearanceStore),
     initialAppearanceProvider.overrideWithValue(await appearanceStore.load()),
+    wallpaperPhotosProvider.overrideWithValue(
+      const PickerWallpaperPhotos(ExternalPickerChannel()),
+    ),
   ];
   if (!config.isComplete) {
     runApp(

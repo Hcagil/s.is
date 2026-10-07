@@ -64,7 +64,7 @@ class ConversationTile extends ConsumerWidget {
             conversation.lastSenderId != me
         ? conversation.senders[conversation.lastSenderId]
         : null;
-    final pinned = conversation.pinned && !inArchive;
+    final pinned = conversation.pinned;
     final previewStyle = unread
         ? TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w600)
         : left
@@ -77,7 +77,7 @@ class ConversationTile extends ConsumerWidget {
       child: ListTile(
         key: ValueKey('conversation-${conversation.id}'),
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-        tileColor: pinned ? scheme.primary.withValues(alpha: 0.06) : null,
+        tileColor: pinned ? scheme.primary.withValues(alpha: 0.07) : null,
         leading: PersonAvatar(
           label: conversationLabel(l, conversation),
           // A person keeps one tint everywhere; a group has its own.
@@ -250,6 +250,7 @@ class ConversationTile extends ConsumerWidget {
       anchor: anchor,
       muted: muted,
       pinned: conversation.pinned,
+      canPin: !inArchive,
     );
     if (choice == null || !context.mounted) return;
     if (choice == 'pin' || choice == 'unpin') {

@@ -60,6 +60,13 @@ begin
                 and p.conversation_id = new.conversation_id) then
     return new;
   end if;
+  -- An archived chat is never pinned (archiving unpins), so no pin is ever
+  -- hidden in the Archived screen while it counts toward the 5.
+  if exists (select 1 from public.chat_archives a
+              where a.user_id = new.user_id
+                and a.conversation_id = new.conversation_id) then
+    raise exception 'archived chat' using errcode = '42501';
+  end if;
   if (select count(*) from public.chat_pins p where p.user_id = new.user_id) >= 5 then
     raise exception 'pin limit' using errcode = '54000';
   end if;
@@ -68,6 +75,18 @@ end $$;
 revoke all on function app_private.enforce_pin_limit() from public, anon, authenticated;
 create trigger chat_pins_limit before insert on public.chat_pins
   for each row execute function app_private.enforce_pin_limit();
+
+-- Archiving a chat unpins it (like Telegram). Unarchiving does not pin again.
+create function app_private.unpin_on_archive() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  delete from public.chat_pins p
+   where p.user_id = new.user_id and p.conversation_id = new.conversation_id;
+  return new;
+end $$;
+revoke all on function app_private.unpin_on_archive() from public, anon, authenticated;
+create trigger chat_archives_unpin after insert on public.chat_archives
+  for each row execute function app_private.unpin_on_archive();
 
 -- 2. Pinned message and who may pin. Existing groups and every new group
 -- start with "all members" (the owner's default).

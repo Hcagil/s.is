@@ -159,12 +159,14 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
       child: Text(
-        text,
+        text.toUpperCase(),
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
           color: scheme.onSurfaceVariant,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
+          fontSize: 11.5,
+          letterSpacing: 0.7,
         ),
       ),
     );

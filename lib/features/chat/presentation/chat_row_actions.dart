@@ -16,18 +16,24 @@ Future<String?> showChatMenuCard(
   required Rect anchor,
   required bool muted,
   required bool pinned,
+  bool canPin = true,
 }) => showFloatingCard<String>(
   context,
   anchor: anchor,
   cardKey: const ValueKey('chat-menu'),
-  child: _ChatMenuBody(muted: muted, pinned: pinned),
+  child: _ChatMenuBody(muted: muted, pinned: pinned, canPin: canPin),
 );
 
 class _ChatMenuBody extends StatefulWidget {
-  const _ChatMenuBody({required this.muted, required this.pinned});
+  const _ChatMenuBody({
+    required this.muted,
+    required this.pinned,
+    required this.canPin,
+  });
 
   final bool muted;
   final bool pinned;
+  final bool canPin;
 
   @override
   State<_ChatMenuBody> createState() => _ChatMenuBodyState();
@@ -80,26 +86,29 @@ class _ChatMenuBodyState extends State<_ChatMenuBody> {
               onTap: () => Navigator.of(context).pop(m.name),
             ),
         ],
-        InkWell(
-          key: const ValueKey('chat-menu-pin'),
-          onTap: () =>
-              Navigator.of(context).pop(widget.pinned ? 'unpin' : 'pin'),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Icon(
-                  widget.pinned ? Icons.push_pin : Icons.push_pin_outlined,
-                  size: 22,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(widget.pinned ? l.chatMenuUnpin : l.chatMenuPin),
-                ),
-              ],
+        if (widget.canPin)
+          InkWell(
+            key: const ValueKey('chat-menu-pin'),
+            onTap: () =>
+                Navigator.of(context).pop(widget.pinned ? 'unpin' : 'pin'),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(
+                    widget.pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      widget.pinned ? l.chatMenuUnpin : l.chatMenuPin,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
       ],
     );
   }

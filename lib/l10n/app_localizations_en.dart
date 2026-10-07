@@ -1199,4 +1199,73 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get wallpaperResetAction => 'Reset';
+
+  @override
+  String get chatSelPin => 'Pin';
+
+  @override
+  String get chatSelMarkRead => 'Mark as read';
+
+  @override
+  String get chatDeleteAction => 'Delete';
+
+  @override
+  String get chatDeleteCancel => 'Cancel';
+
+  @override
+  String get chatDeleteUndo => 'Undo';
+
+  @override
+  String get chatDeleteChat => 'Delete Chat';
+
+  @override
+  String chatDeleteSure(String name) {
+    return 'Are you sure you want to delete the chat with **$name**?';
+  }
+
+  @override
+  String chatDeleteAlso(String name) {
+    return 'Also delete for $name';
+  }
+
+  @override
+  String get chatDeletedUndo => 'Chat deleted';
+
+  @override
+  String get chatLeaveGroupTitle => 'Leave Group';
+
+  @override
+  String chatDeleteLeaveSure(String name) {
+    return 'Are you sure you want to delete and leave the group **$name**?';
+  }
+
+  @override
+  String get chatDeleteGroupForAll => 'Delete the group for all members';
+
+  @override
+  String get chatGroupLeftUndo => 'You left the group.';
+
+  @override
+  String get chatGroupDeletedUndo => 'Group deleted.';
+
+  @override
+  String chatDeleteFewTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Delete $count chats',
+      one: 'Delete 1 chat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatDeleteFewSure =>
+      'Are you sure you want to delete selected chats?';
+
+  @override
+  String get chatDeleteBothSides => 'Delete for both sides where possible';
+
+  @override
+  String get chatsDeletedUndo => 'Chats deleted.';
 }

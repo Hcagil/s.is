@@ -12,6 +12,7 @@ import '../../notifications/application/push_controller.dart';
 import '../../profile/application/profile_controller.dart';
 import '../domain/attachment.dart';
 import '../domain/chat_archive_repository.dart';
+import '../domain/chat_delete_repository.dart';
 import '../domain/chat_list_snapshot_store.dart';
 import '../domain/chat_pin_repository.dart';
 import '../domain/chat_repository.dart';
@@ -53,6 +54,10 @@ final chatArchiveRepositoryProvider = Provider<ChatArchiveRepository>(
 );
 
 final chatPinRepositoryProvider = Provider<ChatPinRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+final chatDeleteRepositoryProvider = Provider<ChatDeleteRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 final linkOpenerProvider = Provider<LinkOpener>(

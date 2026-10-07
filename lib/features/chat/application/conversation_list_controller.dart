@@ -33,6 +33,8 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     ref.watch(currentUserIdProvider);
     final ownerId = ref.read(currentUserIdProvider);
     final gen = ++_gen;
+    _hidden
+        .clear(); // a new build is a new owner: nothing of theirs stays hidden
     ref.onDispose(() => unawaited(_live?.cancel()));
     // Riverpod 3 ALWAYS carries a previous value into a new AsyncLoading (or
     // a later AsyncError) via copyWithPrevious -- including one assigned
@@ -285,7 +287,12 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       Ok(:final value) => value,
       Err(:final failure) => throw failure,
     };
-    return list;
+    // A chat the member just deleted (undo still possible, or the delete is
+    // on its way to the server) stays off the list until [forget].
+    return [
+      for (final c in list)
+        if (!_hidden.contains(c.id)) c,
+    ];
   }
 
   /// Unread here means received on this device: report it delivered, once per
@@ -397,6 +404,48 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     _snapshotDebounce?.cancel();
     _snapshotDebounce = Timer(const Duration(seconds: 2), _saveCurrentIfData);
   }
+
+  /// Chats taken off the list for a delete that can still be undone, or that
+  /// is on its way to the server. Kept out of every re-read until [forget].
+  final _hidden = <String>{};
+
+  /// Takes [ids] off the list in this frame. Nothing reaches the server.
+  void hideLocally(Iterable<String> ids) {
+    _hidden.addAll(ids);
+    final list = state.value;
+    if (list == null) return;
+    state = AsyncData([
+      for (final c in list)
+        if (!_hidden.contains(c.id)) c,
+    ]);
+    _scheduleSnapshotSave();
+  }
+
+  /// Undo: puts [chats] back on the list, newest message first.
+  void restoreLocally(List<Conversation> chats) {
+    _hidden.removeAll([for (final c in chats) c.id]);
+    final list = state.value;
+    if (list == null) return;
+    final next = [
+      ...list,
+      for (final c in chats)
+        if (!list.any((x) => x.id == c.id)) c,
+    ];
+    // Conversations with no messages yet sort last.
+    next.sort((a, b) {
+      final at = a.lastMessageAt, bt = b.lastMessageAt;
+      if (at == null && bt == null) return 0;
+      if (at == null) return 1;
+      if (bt == null) return -1;
+      return bt.compareTo(at);
+    });
+    state = AsyncData(next);
+    _scheduleSnapshotSave();
+  }
+
+  /// Stops keeping [ids] off the list: their delete reached the server (or
+  /// failed), so the next read tells the truth.
+  void forget(Iterable<String> ids) => _hidden.removeAll(ids);
 
   /// Opens the 1:1 conversation with [otherUserId], creating it if needed.
   Future<Result<String>> startWith(String otherUserId) async {

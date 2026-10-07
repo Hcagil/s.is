@@ -2227,6 +2227,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reset'**
   String get wallpaperResetAction;
+
+  /// Tooltip of the pin button in the selection bar
+  ///
+  /// In en, this message translates to:
+  /// **'Pin'**
+  String get chatSelPin;
+
+  /// Selection bar menu: mark the selected chats read
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as read'**
+  String get chatSelMarkRead;
+
+  /// Delete button of the selection bar and of the many-chats dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get chatDeleteAction;
+
+  /// Cancel button of the delete-chat dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get chatDeleteCancel;
+
+  /// Button of the undo bar after deleting chats
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get chatDeleteUndo;
+
+  /// Title and button of the delete dialog for one chat or group
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Chat'**
+  String get chatDeleteChat;
+
+  /// Delete dialog for one person; the name between ** is shown bold
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete the chat with **{name}**?'**
+  String chatDeleteSure(String name);
+
+  /// Checkbox: delete the chat for the other person too
+  ///
+  /// In en, this message translates to:
+  /// **'Also delete for {name}'**
+  String chatDeleteAlso(String name);
+
+  /// Undo bar after deleting one chat
+  ///
+  /// In en, this message translates to:
+  /// **'Chat deleted'**
+  String get chatDeletedUndo;
+
+  /// Title of the delete dialog for a group
+  ///
+  /// In en, this message translates to:
+  /// **'Leave Group'**
+  String get chatLeaveGroupTitle;
+
+  /// Delete dialog for a group; the name between ** is shown bold
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete and leave the group **{name}**?'**
+  String chatDeleteLeaveSure(String name);
+
+  /// Checkbox shown to a group admin
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the group for all members'**
+  String get chatDeleteGroupForAll;
+
+  /// Undo bar after deleting a group the member only leaves
+  ///
+  /// In en, this message translates to:
+  /// **'You left the group.'**
+  String get chatGroupLeftUndo;
+
+  /// Undo bar after an admin deletes a group for everyone
+  ///
+  /// In en, this message translates to:
+  /// **'Group deleted.'**
+  String get chatGroupDeletedUndo;
+
+  /// Title of the delete dialog for several chats
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Delete 1 chat} other{Delete {count} chats}}'**
+  String chatDeleteFewTitle(int count);
+
+  /// Body of the delete dialog for several chats
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete selected chats?'**
+  String get chatDeleteFewSure;
+
+  /// Checkbox of the several-chats delete dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete for both sides where possible'**
+  String get chatDeleteBothSides;
+
+  /// Undo bar after deleting several chats
+  ///
+  /// In en, this message translates to:
+  /// **'Chats deleted.'**
+  String get chatsDeletedUndo;
 }
 
 class _AppLocalizationsDelegate

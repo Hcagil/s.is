@@ -26,6 +26,7 @@ final class Conversation {
     this.archived = false,
     this.pinned = false,
     this.pinnedMessageId,
+    this.isAdmin = false,
   });
 
   final String id;
@@ -73,6 +74,9 @@ final class Conversation {
   /// The id of the one message pinned in this chat (shared by everyone in it), or null.
   final String? pinnedMessageId;
 
+  /// True when the signed-in member is a current admin of this group (false for a 1:1). Only a hint for what to offer; the server decides.
+  final bool isAdmin;
+
   /// The same conversation with a newer message as its preview; [unread]
   /// grows by one when [counts] (a message from someone else, arriving while
   /// this conversation is not open).
@@ -93,6 +97,7 @@ final class Conversation {
         archived: archived,
         pinned: pinned,
         pinnedMessageId: pinnedMessageId,
+        isAdmin: isAdmin,
       );
 
   /// The same conversation with nothing unread.
@@ -111,6 +116,7 @@ final class Conversation {
     archived: archived,
     pinned: pinned,
     pinnedMessageId: pinnedMessageId,
+    isAdmin: isAdmin,
   );
 
   /// The same conversation with [next] as its settings.
@@ -130,6 +136,7 @@ final class Conversation {
     archived: archived,
     pinned: pinned,
     pinnedMessageId: pinnedMessageId,
+    isAdmin: isAdmin,
   );
 
   /// The same conversation, archived or not.
@@ -149,6 +156,7 @@ final class Conversation {
     archived: value,
     pinned: pinned,
     pinnedMessageId: pinnedMessageId,
+    isAdmin: isAdmin,
   );
 
   /// The same conversation, pinned or not.
@@ -168,6 +176,7 @@ final class Conversation {
     archived: archived,
     pinned: value,
     pinnedMessageId: pinnedMessageId,
+    isAdmin: isAdmin,
   );
 
   /// The same conversation with [messageId] as its pinned message (null: none).
@@ -187,6 +196,7 @@ final class Conversation {
     archived: archived,
     pinned: pinned,
     pinnedMessageId: messageId,
+    isAdmin: isAdmin,
   );
 
   /// For the on-disk chat list snapshot only.
@@ -208,6 +218,7 @@ final class Conversation {
     if (archived) 'archived': true,
     if (pinned) 'pinned': true,
     if (pinnedMessageId != null) 'pinnedMessageId': pinnedMessageId,
+    if (isAdmin) 'isAdmin': true,
   };
 
   static Conversation fromJson(Map<String, Object?> json) => Conversation(
@@ -238,6 +249,7 @@ final class Conversation {
     archived: json['archived'] as bool? ?? false,
     pinned: json['pinned'] as bool? ?? false,
     pinnedMessageId: json['pinnedMessageId'] as String?,
+    isAdmin: json['isAdmin'] as bool? ?? false,
   );
 
   bool get isGroup => title != null;

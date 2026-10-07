@@ -8,6 +8,7 @@ import '../../auth/domain/session_state.dart';
 import '../domain/message.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
+import '../application/chat_selection_controller.dart';
 import '../domain/conversation.dart';
 import 'member_name.dart';
 import 'message_screen.dart';
@@ -65,6 +66,14 @@ class ConversationTile extends ConsumerWidget {
         ? conversation.senders[conversation.lastSenderId]
         : null;
     final pinned = conversation.pinned;
+    final selected = ref.watch(
+      chatSelectionProvider.select((s) => s.contains(conversation.id)),
+    );
+    final selecting = ref.watch(
+      chatSelectionProvider.select((s) => s.isNotEmpty),
+    );
+    void toggle() =>
+        ref.read(chatSelectionProvider.notifier).toggle(conversation.id);
     final previewStyle = unread
         ? TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w600)
         : left
@@ -77,18 +86,26 @@ class ConversationTile extends ConsumerWidget {
       child: ListTile(
         key: ValueKey('conversation-${conversation.id}'),
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-        tileColor: pinned ? scheme.primary.withValues(alpha: 0.07) : null,
-        leading: PersonAvatar(
-          label: conversationLabel(l, conversation),
-          // A person keeps one tint everywhere; a group has its own.
-          seed: conversation.other?.userId ?? conversation.id,
-          online:
-              conversation.other != null &&
-              ref
-                  .watch(onlineMembersProvider)
-                  .contains(conversation.other!.userId),
-          dotKey: ValueKey('online-${conversation.id}'),
-          avatarPath: conversation.avatarPath ?? conversation.other?.avatarPath,
+        tileColor: selected
+            ? scheme.primary.withValues(alpha: 0.18)
+            : pinned
+            ? scheme.primary.withValues(alpha: 0.07)
+            : null,
+        leading: _CheckBadge(
+          selected: selected,
+          child: PersonAvatar(
+            label: conversationLabel(l, conversation),
+            // A person keeps one tint everywhere; a group has its own.
+            seed: conversation.other?.userId ?? conversation.id,
+            online:
+                conversation.other != null &&
+                ref
+                    .watch(onlineMembersProvider)
+                    .contains(conversation.other!.userId),
+            dotKey: ValueKey('online-${conversation.id}'),
+            avatarPath:
+                conversation.avatarPath ?? conversation.other?.avatarPath,
+          ),
         ),
         title: Text(
           conversationLabel(l, conversation),
@@ -211,15 +228,17 @@ class ConversationTile extends ConsumerWidget {
                   ],
                 ],
               ),
-        onLongPress: () => _openMenu(context, ref, muted),
-        onTap: () => openConversation(
-          context,
-          ref,
-          conversation.id,
-          title: conversationLabel(l, conversation),
-          otherUserId: conversation.other?.userId,
-          group: conversation.isGroup,
-        ),
+        onLongPress: inArchive ? () => _openMenu(context, ref, muted) : toggle,
+        onTap: () => selecting
+            ? toggle()
+            : openConversation(
+                context,
+                ref,
+                conversation.id,
+                title: conversationLabel(l, conversation),
+                otherUserId: conversation.other?.userId,
+                group: conversation.isGroup,
+              ),
       ),
     );
   }
@@ -279,6 +298,45 @@ class ConversationTile extends ConsumerWidget {
     if (result case Err(:final failure) when context.mounted) {
       showSisNotice(context, failure.message, isError: true);
     }
+  }
+}
+
+/// The avatar, with a check badge at its bottom right while its row is
+/// selected.
+class _CheckBadge extends StatelessWidget {
+  const _CheckBadge({required this.selected, required this.child});
+
+  final bool selected;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!selected) return child;
+    final scheme = Theme.of(context).colorScheme;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        child,
+        Positioned(
+          right: -2,
+          bottom: -2,
+          child: Container(
+            key: const ValueKey('selected-check'),
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: scheme.primary,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                width: 2,
+              ),
+            ),
+            child: Icon(Icons.check, size: 12, color: scheme.onPrimary),
+          ),
+        ),
+      ],
+    );
   }
 }
 

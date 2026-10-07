@@ -7,7 +7,9 @@ import '../../../app/brand.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../../chat/application/chat_controllers.dart';
+import '../../chat/application/chat_selection_controller.dart';
 import '../../chat/domain/conversation.dart';
+import '../../chat/presentation/chat_selection_bar.dart';
 import '../../chat/presentation/conversation_list.dart';
 import '../../chat/presentation/member_name.dart';
 import '../../chat/presentation/message_screen.dart';
@@ -45,27 +47,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const SisBrandRow(),
-        actions: [
-          IconButton(
-            key: const ValueKey('home-settings'),
-            tooltip: AppLocalizations.of(context).commonSettings,
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+    final selecting = ref.watch(
+      chatSelectionProvider.select((s) => s.isNotEmpty),
+    );
+    return PopScope(
+      canPop: !selecting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) ref.read(chatSelectionProvider.notifier).clear();
+      },
+      child: Scaffold(
+        appBar: selecting
+            ? const ChatSelectionBar()
+            : AppBar(
+                title: const SisBrandRow(),
+                actions: [
+                  IconButton(
+                    key: const ValueKey('home-settings'),
+                    tooltip: AppLocalizations.of(context).commonSettings,
+                    icon: const Icon(Icons.settings_outlined),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const SettingsScreen(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+        body: _ReportsLastSeen(
+          child: SafeArea(
+            child: Column(
+              children: const [
+                UpdateBanner(),
+                Expanded(child: ConversationList()),
+              ],
             ),
-          ),
-        ],
-      ),
-      body: _ReportsLastSeen(
-        child: SafeArea(
-          child: Column(
-            children: const [
-              UpdateBanner(),
-              Expanded(child: ConversationList()),
-            ],
           ),
         ),
       ),

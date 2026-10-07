@@ -227,17 +227,20 @@ void main() {
       ('a 1:1, ticked', [d1], true, ['deleteDirect:d1']),
       ('a 1:1, unticked', [d1], false, ['hide:d1']),
       ('the one admin group, ticked', [admin], true, ['delete:ga']),
-      ('the one admin group, unticked', [admin], false, [
-        'hide:ga',
-        'leave:ga',
-      ]),
+      (
+        'the one admin group, unticked',
+        [admin],
+        false,
+        ['hide:ga', 'leave:ga'],
+      ),
       ('a group, not admin', [g1], true, ['hide:g1', 'leave:g1']),
       ('a group already left', [left], false, ['hide:gl']),
-      ('two chats with an admin group, ticked', [d1, admin], true, [
-        'deleteDirect:d1',
-        'hide:ga',
-        'leave:ga',
-      ]),
+      (
+        'two chats with an admin group, ticked',
+        [d1, admin],
+        true,
+        ['deleteDirect:d1', 'hide:ga', 'leave:ga'],
+      ),
     ]) {
       testWidgets('at 0 s $name commits ${expected.join(', ')}', (t) async {
         final w = await start(t, [d1, g1, admin, left]);

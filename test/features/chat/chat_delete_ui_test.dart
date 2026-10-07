@@ -17,6 +17,7 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
+
 import '../../support/archive_fakes.dart';
 import '../../support/chat_delete_fakes.dart';
 import '../../support/fakes.dart';
@@ -38,15 +39,15 @@ Finder byKey(String key) => find.byKey(ValueKey(key));
 List<Conversation> rows() {
   final now = DateTime.now().toUtc();
   Conversation at(int i, Conversation c) => Conversation(
-        id: c.id,
-        title: c.title,
-        other: c.other,
-        isAdmin: c.isAdmin,
-        isSystem: c.isSystem,
-        lastMessage: 'hi ${c.id}',
-        lastMessageAt: now.subtract(Duration(minutes: i + 1)),
-        lastSenderId: c.other?.userId,
-      );
+    id: c.id,
+    title: c.title,
+    other: c.other,
+    isAdmin: c.isAdmin,
+    isSystem: c.isSystem,
+    lastMessage: 'hi ${c.id}',
+    lastMessageAt: now.subtract(Duration(minutes: i + 1)),
+    lastSenderId: c.other?.userId,
+  );
   return [
     at(0, const Conversation(id: 'c1', other: bob)),
     at(1, const Conversation(id: 'c2', other: cem)),
@@ -155,17 +156,21 @@ Future<void> runOut(WidgetTester t) async {
   await t.pumpAndSettle();
 }
 
-String count(WidgetTester t) => t
-    .widget<Text>(find.descendant(
-        of: byKey('selection-count'),
-        matching: find.byType(Text),
-        matchRoot: true))
-    .data ??
+String count(WidgetTester t) =>
+    t
+        .widget<Text>(
+          find.descendant(
+            of: byKey('selection-count'),
+            matching: find.byType(Text),
+            matchRoot: true,
+          ),
+        )
+        .data ??
     '';
 
 Finder rich(String s) => find.byWidgetPredicate(
-      (w) => w is RichText && w.text.toPlainText().contains(s),
-    );
+  (w) => w is RichText && w.text.toPlainText().contains(s),
+);
 
 bool boldShown(WidgetTester t, String s) {
   for (final r in t.widgetList<RichText>(find.byType(RichText))) {
@@ -173,8 +178,8 @@ bool boldShown(WidgetTester t, String s) {
     r.text.visitChildren((span) {
       if (span is TextSpan &&
           (span.text ?? '').contains(s) &&
-          (span.style?.fontWeight ?? FontWeight.normal).index >=
-              FontWeight.w600.index) {
+          (span.style?.fontWeight ?? FontWeight.normal).value >=
+              FontWeight.w600.value) {
         found = true;
       }
       return !found;
@@ -185,13 +190,19 @@ bool boldShown(WidgetTester t, String s) {
 }
 
 List<String> order(WidgetTester t) {
-  final ids = ['c1', 'c2', 'g1', 'g2', 's']
-      .where((id) => byKey('conversation-$id').evaluate().isNotEmpty)
-      .toList();
-  ids.sort((a, b) => t
-      .getTopLeft(byKey('conversation-$a'))
-      .dy
-      .compareTo(t.getTopLeft(byKey('conversation-$b')).dy));
+  final ids = [
+    'c1',
+    'c2',
+    'g1',
+    'g2',
+    's',
+  ].where((id) => byKey('conversation-$id').evaluate().isNotEmpty).toList();
+  ids.sort(
+    (a, b) => t
+        .getTopLeft(byKey('conversation-$a'))
+        .dy
+        .compareTo(t.getTopLeft(byKey('conversation-$b')).dy),
+  );
   return ids;
 }
 
@@ -203,7 +214,9 @@ Future<void> loadAppFonts() async {
   final manrope = FontLoader('Manrope');
   for (final w in [400, 500, 600, 700, 800]) {
     manrope.addFont(
-      File('assets/fonts/Manrope-$w.ttf').readAsBytes().then(ByteData.sublistView),
+      File('assets/fonts/Manrope-$w.ttf')
+          .readAsBytes()
+          .then(ByteData.sublistView),
     );
   }
   await manrope.load();
@@ -392,9 +405,9 @@ void main() {
     await openDelete(t, ['c1']);
     await confirm(t);
     expect(
-        find.descendant(
-            of: byKey('chat-undo-bar'), matching: find.text('5')),
-        findsOneWidget);
+      find.descendant(of: byKey('chat-undo-bar'), matching: find.text('5')),
+      findsOneWidget,
+    );
     for (var n in [4, 3, 2, 1]) {
       await t.pump(const Duration(seconds: 1));
       expect(
@@ -437,7 +450,7 @@ void main() {
   });
 
   testWidgets('16. Turkish A + D flow', (t) async {
-    final w = await pumpList(t, tr: true);
+    await pumpList(t, tr: true);
     await openDelete(t, ['c1', 'c2']);
     expect(find.text('2 sohbet sil'), findsOneWidget);
     expect(find.text('Mümkünse her iki taraftan da silin'), findsOneWidget);

@@ -7,7 +7,7 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'fakes.dart';
 
 /// [ChatDeleteRepository] as the server behaves: each call takes [latency],
-/// is recorded in [calls] ('hide:<id>' / 'deleteDirect:<id>') the moment it
+/// is recorded in [calls] (`hide:<id>` / `deleteDirect:<id>`) the moment it
 /// is made, and on success removes the row from [chat]'s conversation list,
 /// so the next list read no longer returns it -- and on a refusal the row
 /// is still there for the reload to bring back.

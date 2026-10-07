@@ -778,6 +778,55 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     return result;
   }
 
+  /// Sends the phone contact [contact] to the open conversation: shown at once
+  /// as a pending bubble, then the server stores it under the same client-made
+  /// id, so a retried send is harmless and the Realtime echo of the stored row
+  /// replaces the bubble in place. Returns the server's answer; a failed send
+  /// takes the bubble away.
+  Future<Result<void>> sendContact(SharedContact contact) async {
+    final conversationId = ref.read(openConversationProvider);
+    if (conversationId == null || !contact.isSendable) {
+      return const Err(DeniedFailure());
+    }
+    final id = randomMessageId();
+    final pending = Message(
+      id: id,
+      conversationId: conversationId,
+      senderId: _me ?? '',
+      body: contact.body,
+      createdAt: DateTime.now(),
+      contact: true,
+      sending: true,
+    );
+    returnToLive(); // no-op unless jumped; see _onQueueChanged
+    _append(pending);
+    final result = await ref
+        .read(contactShareRepositoryProvider)
+        .send(conversationId, id, contact);
+    if (!ref.mounted) return result;
+    if (result is Ok) {
+      _replace(
+        Message(
+          id: id,
+          conversationId: conversationId,
+          senderId: pending.senderId,
+          body: contact.body,
+          createdAt: pending.createdAt,
+          contact: true,
+        ),
+      );
+    } else {
+      final current = state.value;
+      if (current != null) {
+        state = AsyncData([
+          for (final m in current)
+            if (m.id != id) m,
+        ]);
+      }
+    }
+    return result;
+  }
+
   /// Sends the poll [draft] to the open conversation: shown at once as a
   /// pending bubble (the poll on it, votes closed until it is stored), then the
   /// server stores it under the same client-made id, so a retried send is

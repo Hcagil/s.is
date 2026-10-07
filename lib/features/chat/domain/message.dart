@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../../../core/date_label.dart';
 import 'poll.dart';
+import 'shared_contact.dart';
 
 /// The longest body the database will accept, per the check constraint on
 /// `public.messages.body`.
@@ -38,9 +39,12 @@ bool isSendableBody(String body) {
 
 /// The one-line preview of a message in the conversation list. An image sent
 /// without a caption has an empty body, which would read as "no messages".
-/// A poll shows [pollPreview] of its question.
+/// A poll shows [pollPreview] of its question, a contact [contactPreview]
+/// of its name.
 String previewText(Message message) => message.poll
     ? pollPreview(message.body)
+    : message.contact
+    ? contactPreview(message.body)
     : message.body.isNotEmpty
     ? message.body
     : (message.hasAttachment ? 'Photo' : '');
@@ -71,6 +75,7 @@ final class Message {
     this.replyTo,
     this.forwarded = false,
     this.poll = false,
+    this.contact = false,
     this.sending = false,
   });
 
@@ -100,6 +105,10 @@ final class Message {
 
   /// A poll: [body] is its question; options and votes live in the poll tables.
   final bool poll;
+
+  /// A shared phone contact: [body] is the name, a line break, the number
+  /// (see SharedContact). Its body never changes.
+  final bool contact;
 
   /// True for a text-only message shown at once, before the server has
   /// answered -- like [localImage] but with nothing to display in the
@@ -138,6 +147,7 @@ final class Message {
       deletion == null &&
       !forwarded &&
       !poll &&
+      !contact &&
       now.difference(createdAt) < deleteForEveryoneWindow;
 
   /// Still on its way to the server: a photo shown from the phone before
@@ -185,6 +195,7 @@ final class Message {
     replyTo: replyTo,
     forwarded: forwarded,
     poll: poll,
+    contact: contact,
     sending: sending,
   );
 
@@ -205,6 +216,7 @@ final class Message {
     replyTo: replyTo,
     forwarded: forwarded,
     poll: poll,
+    contact: contact,
     sending: sending,
   );
 
@@ -279,7 +291,7 @@ List<MessageAction> allowedMessageActions(
   final canShare = !message.isPending && !message.isDeleted;
   return [
     if (canShare) MessageAction.reply,
-    if (canShare && !message.poll) MessageAction.forward,
+    if (canShare && !message.poll && !message.contact) MessageAction.forward,
     if (canEdit) MessageAction.edit,
     if (canDelete) MessageAction.deleteForEveryone,
   ];
@@ -312,7 +324,7 @@ List<MessageAction> menuMessageActions(
     if (canShare && canStop) MessageAction.stopPoll,
     if (canShare && !message.poll && message.body.isNotEmpty)
       MessageAction.copy,
-    if (canShare && !message.poll) MessageAction.forward,
+    if (canShare && !message.poll && !message.contact) MessageAction.forward,
     if (canEdit) MessageAction.edit,
     if (canShare && canPin) pinned ? MessageAction.unpin : MessageAction.pin,
     if (!message.isPending) MessageAction.deleteForMe,

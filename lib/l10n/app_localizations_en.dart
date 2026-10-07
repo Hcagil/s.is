@@ -1385,4 +1385,38 @@ class AppLocalizationsEn extends AppLocalizations {
   String pollPreviewLine(String question) {
     return '📊 Poll: $question';
   }
+
+  @override
+  String get contactPickerTitle => 'Send a contact';
+
+  @override
+  String get contactSearchHint => 'Search your contacts';
+
+  @override
+  String get contactSend => 'Send contact';
+
+  @override
+  String get contactAccessTitle => 'Allow access to your contacts';
+
+  @override
+  String get contactAccessBody =>
+      'SIS asks for your contacts only when you open this list. Nothing is uploaded until you send a contact.';
+
+  @override
+  String get contactAllowAccess => 'Allow access';
+
+  @override
+  String get contactEmpty => 'No contacts with a phone number';
+
+  @override
+  String get contactNoMatch => 'No contact matches your search';
+
+  @override
+  String contactPreviewLine(String name) {
+    return '👤 Contact: $name';
+  }
+
+  @override
+  String get contactPermNote =>
+      'Contacts permission is asked only when you open this list';
 }

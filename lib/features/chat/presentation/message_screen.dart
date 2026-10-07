@@ -42,6 +42,8 @@ import '../domain/read_marks.dart';
 import 'attachment_preview_page.dart';
 import 'attachment_sheet.dart';
 import 'chat_search_bar.dart';
+import 'contact_card.dart';
+import 'contact_picker_page.dart';
 import 'group_event_line.dart';
 import 'group_gone_guard.dart';
 import 'swipeable_message.dart';

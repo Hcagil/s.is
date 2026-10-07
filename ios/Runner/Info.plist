@@ -69,6 +69,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Allow camera access to take a photo and send it in the chat. The photo is only uploaded when you send it.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Allow access so you can pick a contact to send in the chat. Nothing leaves your phone until you send it.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Allow access so your photos load right here in the chat. Nothing is uploaded until you send it. You can allow just a few photos.</string>
 	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>

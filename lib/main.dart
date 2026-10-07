@@ -26,6 +26,7 @@ import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/data/external_picker_channel.dart';
 import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/file_chat_list_snapshot_store.dart';
+import 'features/chat/data/flutter_phone_book.dart';
 import 'features/chat/data/native_picture_cropper.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
 import 'features/chat/data/supabase_chat_archive_repository.dart';
@@ -36,6 +37,7 @@ import 'features/chat/data/supabase_chat_repository.dart';
 import 'features/chat/data/supabase_poll_repository.dart';
 import 'features/chat/data/supabase_reaction_repository.dart';
 import 'features/chat/data/supabase_contacts_repository.dart';
+import 'features/chat/data/supabase_contact_share_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
 import 'features/notifications/application/alert_controller.dart';
 import 'features/notifications/application/badge_controller.dart';
@@ -167,6 +169,10 @@ Future<void> main() async {
           contactsRepositoryProvider.overrideWithValue(
             SupabaseContactsRepository(client),
           ),
+          contactShareRepositoryProvider.overrideWithValue(
+            SupabaseContactShareRepository(client),
+          ),
+          phoneBookProvider.overrideWithValue(const FlutterPhoneBook()),
           attachmentCacheProvider.overrideWithValue(attachmentCache),
           chatListSnapshotStoreProvider.overrideWithValue(
             FileChatListSnapshotStore(),

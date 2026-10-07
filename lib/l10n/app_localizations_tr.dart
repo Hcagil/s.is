@@ -1362,4 +1362,38 @@ class AppLocalizationsTr extends AppLocalizations {
   String pollPreviewLine(String question) {
     return '📊 Anket: $question';
   }
+
+  @override
+  String get contactPickerTitle => 'Kişi gönder';
+
+  @override
+  String get contactSearchHint => 'Kişilerinde ara';
+
+  @override
+  String get contactSend => 'Kişiyi gönder';
+
+  @override
+  String get contactAccessTitle => 'Kişilerine erişime izin ver';
+
+  @override
+  String get contactAccessBody =>
+      'SIS kişilerini yalnızca bu listeyi açtığında ister. Bir kişi göndermeden hiçbir şey yüklenmez.';
+
+  @override
+  String get contactAllowAccess => 'Erişime izin ver';
+
+  @override
+  String get contactEmpty => 'Telefon numarası olan kişi yok';
+
+  @override
+  String get contactNoMatch => 'Aramana uyan kişi yok';
+
+  @override
+  String contactPreviewLine(String name) {
+    return '👤 Kişi: $name';
+  }
+
+  @override
+  String get contactPermNote =>
+      'Kişiler izni yalnızca bu listeyi açtığında istenir.';
 }

@@ -11,6 +11,7 @@ import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_selection_controller.dart';
 import '../domain/conversation.dart';
+import '../domain/shared_contact.dart';
 import 'member_name.dart';
 import 'message_screen.dart';
 import 'person_avatar.dart';
@@ -19,10 +20,12 @@ import '../../notifications/application/notification_settings_controller.dart';
 import '../../notifications/domain/notification_settings.dart';
 import 'chat_row_actions.dart';
 
-/// The stored preview, with the poll prefix in the app language.
+/// The stored preview, with the poll or contact prefix in the app language.
 String _preview(AppLocalizations l, String text) =>
     text.startsWith(pollPreviewPrefix)
     ? l.pollPreviewLine(text.substring(pollPreviewPrefix.length))
+    : text.startsWith(contactPreviewPrefix)
+    ? l.contactPreviewLine(text.substring(contactPreviewPrefix.length))
     : text;
 
 class ConversationTile extends ConsumerWidget {

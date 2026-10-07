@@ -1,6 +1,6 @@
 // The chat list rows of Update 1 slice 4, mounted as production mounts them
 // (SisApp, the real controllers) with fakes only at the repositories:
-// the muted bell and unread badge, the long-press chat menu and its mute
+// the muted bell and unread badge, long-press selection, the mute menu from the selection bar and its mute
 // lengths, the inert grey pin, the archive swipe that archives past its
 // commit line and springs back before it, and the back swipe that leaves the
 // list still.
@@ -30,6 +30,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/archive_fakes.dart';
+import '../../support/chat_delete_fakes.dart';
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart' as ui;
 
@@ -119,6 +120,7 @@ Future<NotificationSettingsFake> pumpList(
           notificationExplainerStoreProvider.overrideWithValue(
             NotificationExplainerStoreFake(shown: true),
           ),
+          chatDeleteRepositoryProvider.overrideWithValue(ChatDeleteFake()),
         ],
         child: const SisApp(),
       ),
@@ -198,11 +200,18 @@ int shift((int, int, int) a, (int, int, int) b) =>
 Color onSurfaceVariant(WidgetTester t) =>
     Theme.of(t.element(byKey('conversation-c1'))).colorScheme.onSurfaceVariant;
 
-/// Long-press a row and, if the mute lengths sit one step deeper, open them.
-Future<void> openMuteOptions(WidgetTester t, String id) async {
+/// Long-press selects the row; the bar's mute button opens the mute menu.
+Future<void> openMuteMenu(WidgetTester t, String id) async {
   await t.longPress(byKey('conversation-$id'));
   await t.pumpAndSettle();
+  await t.tap(byKey('selection-mute'));
+  await t.pumpAndSettle();
   expect(byKey('chat-menu'), findsOneWidget);
+}
+
+/// [openMuteMenu] and, if the mute lengths sit one step deeper, open them.
+Future<void> openMuteOptions(WidgetTester t, String id) async {
+  await openMuteMenu(t, id);
   if (byKey('chat-mute-off').evaluate().isEmpty &&
       byKey('chat-mute-oneHour').evaluate().isEmpty) {
     await t.tap(byKey('chat-menu-mute'));
@@ -321,9 +330,9 @@ void main() {
     });
   });
 
-  group('the long-press chat menu', () {
-    testWidgets('long-press opens the menu and lights the row; closing it '
-        'puts the row back', (t) async {
+  group('the selection bar chat actions', () {
+    testWidgets('long-press selects and lights the row; back puts the row '
+        'back', (t) async {
       await pumpList(t);
       final row = byKey('conversation-c2');
       final other = byKey('conversation-c1');
@@ -332,29 +341,26 @@ void main() {
 
       await t.longPress(row);
       await t.pumpAndSettle();
-      expect(byKey('chat-menu'), findsOneWidget);
-      // Lit = it stands out from the rest of the list: whatever the menu
-      // does to the screen (a dim, a scrim), the pressed row changes less
-      // than another row does.
+      expect(byKey('selection-count'), findsOneWidget);
+      // Lit = the selected row changes more than an unselected one.
       final rowShift = shift(before, await drawn(t, row));
       final otherShift = shift(otherBefore, await drawn(t, other));
       expect(
         rowShift,
-        lessThan(otherShift),
+        greaterThan(otherShift),
         reason: 'the row is not lit: row $rowShift, other $otherShift',
       );
 
-      await t.tapAt(const Offset(5, 5));
+      await t.tap(byKey('selection-back'));
       await t.pumpAndSettle();
-      expect(byKey('chat-menu'), findsNothing);
-      expect(await drawn(t, row), before, reason: 'still lit after closing');
+      expect(byKey('selection-count'), findsNothing);
+      expect(await drawn(t, row), before, reason: 'still lit after back');
     });
 
     testWidgets('Mute expands to the five lengths, no Always and no Unmute; '
         'picking one mutes the conversation and the bell appears', (t) async {
       final notif = await pumpList(t);
-      await t.longPress(byKey('conversation-c2'));
-      await t.pumpAndSettle();
+      await openMuteMenu(t, 'c2');
       expect(byKey('chat-mute-off'), findsNothing, reason: 'not muted');
       await t.tap(byKey('chat-menu-mute'));
       await t.pumpAndSettle();
@@ -393,15 +399,23 @@ void main() {
       });
     }
 
-    testWidgets('a muted chat offers Unmute; it unmutes the conversation and '
-        'the bell goes', (t) async {
+    testWidgets('on a muted chat the bar offers Unmute; it unmutes the '
+        'conversation and the bell goes', (t) async {
       final notif = await pumpList(
         t,
         mutes: [convMute('c1', left: const Duration(hours: 2))],
       );
-      await openMuteOptions(t, 'c1');
-      expect(byKey('chat-mute-off'), findsOneWidget);
-      await t.tap(byKey('chat-mute-off'));
+      await t.longPress(byKey('conversation-c1'));
+      await t.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: byKey('selection-mute'),
+          matching: find.byTooltip('Unmute'),
+          matchRoot: true,
+        ),
+        findsOneWidget,
+      );
+      await t.tap(byKey('selection-mute'));
       await t.pumpAndSettle();
       expect(notif.unmuteCalls, [(MuteKind.conversation, 'c1')]);
       expect(notif.muteCalls, isEmpty);
@@ -416,8 +430,9 @@ void main() {
         mutes: [convMute('c1', left: const Duration(hours: 2))],
       );
       notif.unmuteResult = const Err(NetworkFailure('offline'));
-      await openMuteOptions(t, 'c1');
-      await t.tap(byKey('chat-mute-off'));
+      await t.longPress(byKey('conversation-c1'));
+      await t.pumpAndSettle();
+      await t.tap(byKey('selection-mute'));
       await t.pump();
       await t.pump(const Duration(milliseconds: 100));
       expect(ui.notice, findsOneWidget, reason: 'the failure was swallowed');
@@ -425,15 +440,16 @@ void main() {
       await ui.drainNotice(t);
     });
 
-    testWidgets('the menu offers "Pin chat", no grey pin', (t) async {
+    testWidgets('the bar offers Pin, no grey pin', (t) async {
       await pumpList(t);
       await t.longPress(byKey('conversation-c2'));
       await t.pumpAndSettle();
-      expect(byKey('chat-menu-pin'), findsOneWidget);
+      expect(byKey('selection-pin'), findsOneWidget);
       expect(
         find.descendant(
-          of: byKey('chat-menu-pin'),
-          matching: find.text('Pin chat'),
+          of: byKey('selection-pin'),
+          matching: find.byTooltip('Pin'),
+          matchRoot: true,
         ),
         findsOneWidget,
       );

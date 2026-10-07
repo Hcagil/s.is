@@ -1113,7 +1113,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get appearanceNameEmpty => 'Ad boş olamaz';
 
   @override
-  String get appearanceThemePlaceholder => 'Benim tema';
+  String get appearanceThemePlaceholder => 'Ad';
 
   @override
   String get themeTabAccent => 'Vurgu Rengi';
@@ -1135,7 +1135,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get themeLowContrast =>
-      'Vurgu okumak zor olabilir. Daha koyu bir ton seçin.';
+      'Bu vurgu rengi zor okunabilir. Daha koyu bir ton seçin.';
 
   @override
   String get themeModeLabel => 'Görünüm modu';

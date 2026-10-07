@@ -283,7 +283,28 @@ class _Bubble extends StatelessWidget {
               // render nothing at all rather than an empty line. A deleted
               // message never shows a time, but (defensively) may still carry
               // a body, so the two conditions stay independent below.
-              if (message.body.isNotEmpty && !message.isDeleted)
+              if (message.poll && !message.isDeleted)
+                SizedBox(
+                  width: _contentWidth,
+                  child: PollCard(
+                    message: message,
+                    ink: mine ? brand.onMine : brand.onTheirs,
+                    accent: mine
+                        ? brand.onMine
+                        : Theme.of(context).colorScheme.primary,
+                    time: _TimeTick(
+                      message: message,
+                      timeText: clockTime(message.createdAt),
+                      timeStyle: TextStyle(
+                        fontSize: SisTokens.timeFontSize,
+                        color: (mine ? brand.onMine : brand.onTheirs)
+                            .withValues(alpha: SisTokens.timeOpacity),
+                      ),
+                      delivery: delivery,
+                    ),
+                  ),
+                )
+              else if (message.body.isNotEmpty && !message.isDeleted)
                 _BodyWithTime(
                   message: message,
                   bodyStyle: TextStyle(

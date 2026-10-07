@@ -39,19 +39,16 @@ Future<({List<PickedImage> images, int dropped})> showAttachmentSheet(
   return result ?? (images: const <PickedImage>[], dropped: 0);
 }
 
-/// Opens the attach card above [anchor] (the paperclip's global rect). True when Photo was tapped; false when closed without choosing. Only Photo is live, the other tiles are greyed.
-Future<bool> showAttachMenu(
-  BuildContext context, {
-  required Rect anchor,
-}) async {
-  final chosen = await showFloatingCard<String>(
-    context,
-    anchor: anchor,
-    cardKey: const ValueKey('attach-menu'),
-    child: const _AttachMenu(),
-  );
-  return chosen == 'photo';
-}
+/// Opens the attach card above [anchor] (the paperclip's global rect). The
+/// result is 'photo' or 'poll' for the tile tapped, null when closed without
+/// choosing. Photo and Poll are live, the other tiles are greyed.
+Future<String?> showAttachMenu(BuildContext context, {required Rect anchor}) =>
+    showFloatingCard<String>(
+      context,
+      anchor: anchor,
+      cardKey: const ValueKey('attach-menu'),
+      child: const _AttachMenu(),
+    );
 
 class _AttachMenu extends StatelessWidget {
   const _AttachMenu();
@@ -121,8 +118,10 @@ class _AttachMenu extends StatelessWidget {
               label: l.attachContact,
             ),
           ),
-          GreyOption(
-            name: 'att_tpoll',
+          InkWell(
+            key: const ValueKey('attach-poll'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).pop('poll'),
             child: _attachTile(
               context,
               slot: 6,

@@ -136,15 +136,16 @@ class _PollCardState extends ConsumerState<PollCard> {
                             padding: const EdgeInsets.only(top: 4),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(3),
-                              child: LinearProgressIndicator(
+                              child: Container(
                                 key: ValueKey('poll-bar-${o.id}'),
-                                value: poll.voters <= 0
-                                    ? 0.0
-                                    : (o.votes / poll.voters).clamp(0.0, 1.0),
-                                minHeight: 5,
-                                color: widget.accent,
-                                backgroundColor: widget.ink.withValues(
-                                  alpha: 0.15,
+                                height: 5,
+                                alignment: Alignment.centerLeft,
+                                color: widget.ink.withValues(alpha: 0.15),
+                                child: FractionallySizedBox(
+                                  widthFactor: poll.voters <= 0
+                                      ? 0.0
+                                      : (o.votes / poll.voters).clamp(0.0, 1.0),
+                                  child: ColoredBox(color: widget.accent),
                                 ),
                               ),
                             ),

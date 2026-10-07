@@ -97,6 +97,46 @@ void main() {
     await t.pumpWidget(const SizedBox());
   });
 
+  testWidgets(
+    'a saved custom theme with a chat colour paints it on the first frame',
+    (WidgetTester t) async {
+      const sea = CustomTheme(
+        id: 's1',
+        name: 'Sea',
+        mode: CustomThemeMode.light,
+        accent: 0xFF38B6FF,
+        mine: 0xFFFFFFFF,
+        theirs: 0xFFFFFFFF,
+        background: 0xFF102A43,
+      );
+      const saved = AppearanceSettings(
+        themeId: AppThemeId.ocean,
+        customThemes: [sea],
+        customThemeId: 's1',
+      );
+      await firstFrameAfterStart(t, saved);
+      final theme = Theme.of(appContext(t));
+      expect(theme.brightness, Brightness.light);
+      expect(
+        theme.colorScheme.primary,
+        sisBrandForCustom(sea, Brightness.light).brand,
+      );
+      expect(
+        theme.extension<SisBrand>()!.chatBackground,
+        const Color(0xFF102A43),
+      );
+      final provider = ProviderScope.containerOf(t.element(find.byType(SisApp)))
+          .read(appearanceProvider);
+      expect(provider, equals(saved));
+      expect(
+        provider.effectiveWallpaper(dark: false).kind,
+        WallpaperKind.colour,
+      );
+      expect(provider.effectiveWallpaper(dark: false).colours, [0xFF102A43]);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
+
   testWidgets('a stored id with no theme falls back to the built-in', (
     WidgetTester t,
   ) async {

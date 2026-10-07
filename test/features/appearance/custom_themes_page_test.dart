@@ -263,7 +263,9 @@ void main() {
       expect(copy.name, equals('Okyanus kopyası'));
     });
 
-    testWidgets('grey‑custom is disabled', (t) async {
+    testWidgets('new theme row opens the name card and changes nothing yet', (
+      t,
+    ) async {
       await pumpApp(
         t,
         initial: AppearanceSettings(
@@ -272,11 +274,9 @@ void main() {
         ),
       );
       await openAppearance(t);
-      await reveal(t, byKey('appearance-no-export'));
-      await reveal(t, byKey('grey-custom'));
       final before = look(t);
-      await t.tap(byKey('grey-custom'), warnIfMissed: false);
-      await t.pumpAndSettle();
+      await tapKey(t, 'appearance-new-theme');
+      expect(byKey('new-theme-card'), findsOneWidget);
       expect(look(t), equals(before));
     });
 

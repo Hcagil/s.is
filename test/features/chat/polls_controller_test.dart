@@ -349,7 +349,7 @@ void main() {
       };
       c = await ready(fake);
       c.listen(messagesProvider, (_, _) {});
-    await until(() => c.read(messagesProvider).hasValue);
+      await until(() => c.read(messagesProvider).hasValue);
       final f = c.read(messagesProvider.notifier).sendPoll(draft);
       await until(() => fake.createCalls.isNotEmpty);
       final id = fake.createCalls.single.$2;

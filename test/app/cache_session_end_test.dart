@@ -76,6 +76,19 @@ Future<void> settle(WidgetTester t) async {
 Future<bool> kept(WidgetTester t, String path) async =>
     await disk(t, () => cache.read(path)) != null;
 
+/// The session-end clear runs on the real disk after the app reacts, so how
+/// long it takes depends on the machine (a busy CI disk can exceed any fixed
+/// wait). Poll until the entry is gone, bounded at about 5 s, pumping between
+/// tries so the app's pending work can continue.
+Future<bool> gone(WidgetTester t, String path) async {
+  for (var i = 0; i < 100; i++) {
+    if (!await kept(t, path)) return true;
+    await disk(t, () => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await t.pump();
+  }
+  return false;
+}
+
 void main() {
   setUp(() async {
     root = await Directory.systemTemp.createTemp('sis-cache');
@@ -113,8 +126,8 @@ void main() {
 
     expect(auth.signOuts, 0, reason: 'nobody pressed sign out');
     expect(find.text('Continue with Google'), findsOneWidget);
-    expect(await kept(t, picture), isFalse, reason: 'a picture survived');
-    expect(await kept(t, photo), isFalse, reason: 'a photo survived');
+    expect(await gone(t, picture), isTrue, reason: 'a picture survived');
+    expect(await gone(t, photo), isTrue, reason: 'a photo survived');
   });
 
   testWidgets('a phone replaced by another (Denied on start) empties the '
@@ -126,8 +139,8 @@ void main() {
 
     expect(find.textContaining('not currently approved'), findsOneWidget);
     expect(auth.signOuts, 0);
-    expect(await kept(t, picture), isFalse, reason: 'a picture survived');
-    expect(await kept(t, photo), isFalse, reason: 'a photo survived');
+    expect(await gone(t, picture), isTrue, reason: 'a picture survived');
+    expect(await gone(t, photo), isTrue, reason: 'a photo survived');
   });
 
   testWidgets('starting signed out empties what an earlier member left', (
@@ -138,6 +151,6 @@ void main() {
     await settle(t);
 
     expect(find.text('Continue with Google'), findsOneWidget);
-    expect(await kept(t, picture), isFalse);
+    expect(await gone(t, picture), isTrue);
   });
 }

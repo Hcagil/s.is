@@ -84,8 +84,8 @@ class _NewThemeFormState extends State<_NewThemeForm> {
                 ),
               ),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              alignment: WrapAlignment.end,
               children: [
                 TextButton(
                   key: const ValueKey('new-theme-cancel'),

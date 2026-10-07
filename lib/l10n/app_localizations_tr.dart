@@ -1131,7 +1131,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get themePickBackground => 'Arka plan rengini seçin';
 
   @override
-  String get themePickMine => 'Benim mesaj balonu rengini seçin';
+  String get themePickMine => 'Mesaj balonumun rengini seçin';
 
   @override
   String get themeLowContrast =>

@@ -1114,6 +1114,60 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get appearanceCreateTheme => 'Create a new theme';
+
+  @override
+  String get appearanceCreate => 'Create';
+
+  @override
+  String get appearanceNameEmpty => 'Name cannot be empty';
+
+  @override
+  String get appearanceThemePlaceholder => 'My theme';
+
+  @override
+  String get themeTabAccent => 'Accent Color';
+
+  @override
+  String get themeTabBackground => 'Background';
+
+  @override
+  String get themeTabMyMessages => 'My Messages';
+
+  @override
+  String get themePickAccent => 'Pick an accent color';
+
+  @override
+  String get themePickBackground => 'Pick background color';
+
+  @override
+  String get themePickMine => 'Pick my message bubble color';
+
+  @override
+  String get themeLowContrast =>
+      'Accent may be hard to read. Consider a darker shade.';
+
+  @override
+  String get themeModeLabel => 'Appearance mode';
+
+  @override
+  String get themeModeLight => 'Light';
+
+  @override
+  String get themeModeDark => 'Dark';
+
+  @override
+  String get themeModeAuto => 'Auto';
+
+  @override
+  String get themeReset => 'Reset to default';
+
+  @override
+  String themeSwatch(String hex) {
+    return 'Colour $hex';
+  }
+
+  @override
   String get wallpaperColour => 'Colour';
 
   @override

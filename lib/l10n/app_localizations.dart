@@ -2066,6 +2066,108 @@ abstract class AppLocalizations {
   /// **'{name} copy'**
   String appearanceCopyName(String name);
 
+  /// Title of the new theme card
+  ///
+  /// In en, this message translates to:
+  /// **'Create a new theme'**
+  String get appearanceCreateTheme;
+
+  /// Create button of the new theme card
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get appearanceCreate;
+
+  /// Shown when the new theme name is empty
+  ///
+  /// In en, this message translates to:
+  /// **'Name cannot be empty'**
+  String get appearanceNameEmpty;
+
+  /// Hint of the new theme name field
+  ///
+  /// In en, this message translates to:
+  /// **'My theme'**
+  String get appearanceThemePlaceholder;
+
+  /// Theme editor tab
+  ///
+  /// In en, this message translates to:
+  /// **'Accent Color'**
+  String get themeTabAccent;
+
+  /// Theme editor tab
+  ///
+  /// In en, this message translates to:
+  /// **'Background'**
+  String get themeTabBackground;
+
+  /// Theme editor tab
+  ///
+  /// In en, this message translates to:
+  /// **'My Messages'**
+  String get themeTabMyMessages;
+
+  /// Theme editor accent tab label
+  ///
+  /// In en, this message translates to:
+  /// **'Pick an accent color'**
+  String get themePickAccent;
+
+  /// Theme editor background tab label
+  ///
+  /// In en, this message translates to:
+  /// **'Pick background color'**
+  String get themePickBackground;
+
+  /// Theme editor my messages tab label
+  ///
+  /// In en, this message translates to:
+  /// **'Pick my message bubble color'**
+  String get themePickMine;
+
+  /// Theme editor warning
+  ///
+  /// In en, this message translates to:
+  /// **'Accent may be hard to read. Consider a darker shade.'**
+  String get themeLowContrast;
+
+  /// Theme editor mode switch label
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance mode'**
+  String get themeModeLabel;
+
+  /// Theme editor mode
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get themeModeLight;
+
+  /// Theme editor mode
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get themeModeDark;
+
+  /// Theme editor mode, follows the phone
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get themeModeAuto;
+
+  /// Theme editor reset button
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to default'**
+  String get themeReset;
+
+  /// Screen-reader label of a colour swatch
+  ///
+  /// In en, this message translates to:
+  /// **'Colour {hex}'**
+  String themeSwatch(String hex);
+
   /// Wallpaper tab
   ///
   /// In en, this message translates to:

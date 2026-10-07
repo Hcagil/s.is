@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../features/appearance/domain/appearance_settings.dart';
+import '../features/appearance/domain/contrast.dart';
 import '../features/appearance/domain/custom_theme.dart';
 import 'swipe_back.dart';
 
@@ -223,6 +224,7 @@ class SisBrand extends ThemeExtension<SisBrand> {
     required this.danger,
     required this.prism,
     this.mine,
+    this.chatBackground,
   });
 
   final Color background, surface, surfaceHigh, text, muted, line;
@@ -230,6 +232,28 @@ class SisBrand extends ThemeExtension<SisBrand> {
 
   /// My bubble colour of a custom theme; null: the brand colours' gradient.
   final Color? mine;
+
+  /// Chat-area colour of a custom theme; null: the theme's own.
+  final Color? chatBackground;
+
+  /// Text on my bubble: white (the built-in look) while it reads at 4.5:1,
+  /// else black or white, whichever reads better.
+  Color get onMine => mine == null
+      ? const Color(0xFFFFFFFF)
+      : Color(readableOnWhitePreferred(mine!.toARGB32()));
+
+  /// Text on the other person's bubble: [text] while it reads at 4.5:1, else
+  /// black or white, whichever reads better.
+  Color get onTheirs =>
+      Color(readableOn(theirs.toARGB32(), preferred: text.toARGB32()));
+
+  /// Text drawn straight on the chat colour of a custom theme; null: use the
+  /// usual text colour.
+  Color? get onChat => chatBackground == null
+      ? null
+      : Color(
+          readableOn(chatBackground!.toARGB32(), preferred: text.toARGB32()),
+        );
 
   /// Corner radius of a chat bubble (slice 5 uses it).
   final double bubbleRadius = 16;
@@ -268,13 +292,14 @@ class SisBrand extends ThemeExtension<SisBrand> {
   /// [gradient] for your own message bubbles: both ends darkened just enough
   /// that white message text reads at 4.5:1 or better in every theme and
   /// brightness (a blend of two such colours is darker still, so the whole
-  /// bubble passes).
+  /// bubble passes). A custom bubble colour is used as chosen; [onMine] picks
+  /// the text colour for it.
   LinearGradient get mineGradient => LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: mine == null
         ? [forWhiteText(brandDeep), forWhiteText(brand)]
-        : [forWhiteText(mine!), forWhiteText(mine!)],
+        : [mine!, mine!],
   );
 
   /// S3, the soft-edged unread pill.
@@ -343,6 +368,7 @@ class SisBrand extends ThemeExtension<SisBrand> {
     Color? danger,
     LinearGradient? prism,
     Color? mine,
+    Color? chatBackground,
   }) => SisBrand(
     background: background ?? this.background,
     surface: surface ?? this.surface,
@@ -358,6 +384,7 @@ class SisBrand extends ThemeExtension<SisBrand> {
     danger: danger ?? this.danger,
     prism: prism ?? this.prism,
     mine: mine ?? this.mine,
+    chatBackground: chatBackground ?? this.chatBackground,
   );
 
   @override
@@ -519,7 +546,13 @@ SisBrand sisBrandFor(AppThemeId id, Brightness brightness) {
 
 /// The brand colours of a custom theme in [brightness]: the Violet surfaces of
 /// that brightness with the theme's accent, bubbles and a deeper accent.
-SisBrand sisBrandForCustom(CustomTheme custom, Brightness brightness) {
+/// The chat colour is left out when the member has their own wallpaper (it
+/// wins).
+SisBrand sisBrandForCustom(
+  CustomTheme custom,
+  Brightness brightness, {
+  bool wallpaperSet = false,
+}) {
   final dark = brightness == Brightness.dark;
   final base = dark ? SisBrand.dark : SisBrand.light;
   final brand = Color(custom.accent);
@@ -529,6 +562,9 @@ SisBrand sisBrandForCustom(CustomTheme custom, Brightness brightness) {
     brandDeep: deep,
     theirs: Color(custom.theirs),
     mine: Color(custom.mine),
+    chatBackground: custom.background == null || wallpaperSet
+        ? null
+        : Color(custom.background!),
     glow: brand.withAlpha(dark ? 0x3D : 0x29),
     glowDeep: deep.withAlpha(dark ? 0x29 : 0x1A),
   );

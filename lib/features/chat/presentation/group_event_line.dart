@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../domain/group_event.dart';
 
@@ -36,8 +37,11 @@ class GroupEventLine extends StatelessWidget {
       child: Center(
         child: Text(
           text,
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color:
+                SisBrand.of(context).onChat ??
+                Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );

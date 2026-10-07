@@ -11,6 +11,7 @@ final class CustomTheme {
     required this.accent,
     required this.mine,
     required this.theirs,
+    this.background,
   });
 
   /// Unique on this phone.
@@ -27,6 +28,9 @@ final class CustomTheme {
   /// Other people's bubble.
   final int theirs;
 
+  /// Chat-area colour behind the messages; null: the mode's default.
+  final int? background;
+
   CustomTheme copyWith({
     String? id,
     String? name,
@@ -34,6 +38,7 @@ final class CustomTheme {
     int? accent,
     int? mine,
     int? theirs,
+    int? background,
   }) {
     return CustomTheme(
       id: id ?? this.id,
@@ -42,6 +47,7 @@ final class CustomTheme {
       accent: accent ?? this.accent,
       mine: mine ?? this.mine,
       theirs: theirs ?? this.theirs,
+      background: background ?? this.background,
     );
   }
 
@@ -52,6 +58,7 @@ final class CustomTheme {
     'accent': accent,
     'mine': mine,
     'theirs': theirs,
+    'background': ?background,
   };
 
   /// Null for anything that is not a complete, valid theme. Never throws.
@@ -63,6 +70,7 @@ final class CustomTheme {
     final accent = json['accent'];
     final mine = json['mine'];
     final theirs = json['theirs'];
+    final background = json['background'];
     if (id is! String || id.isEmpty) return null;
     if (name is! String || name.isEmpty) return null;
     if (mode is! String) return null;
@@ -76,6 +84,7 @@ final class CustomTheme {
       accent: accent,
       mine: mine,
       theirs: theirs,
+      background: background is int ? background : null,
     );
   }
 
@@ -87,8 +96,10 @@ final class CustomTheme {
       other.mode == mode &&
       other.accent == accent &&
       other.mine == mine &&
-      other.theirs == theirs;
+      other.theirs == theirs &&
+      other.background == background;
 
   @override
-  int get hashCode => Object.hash(id, name, mode, accent, mine, theirs);
+  int get hashCode =>
+      Object.hash(id, name, mode, accent, mine, theirs, background);
 }

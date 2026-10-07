@@ -364,7 +364,6 @@ void main() {
 
   group('grey options', () {
     const where = {
-      'grey-custom': 'settings-appearance',
       'grey-att_auto': null, // on the settings page itself
     };
 
@@ -427,6 +426,26 @@ void main() {
           semantics.dispose();
         });
       }
+    }
+
+    for (final lang in [AppLanguage.en, AppLanguage.tr]) {
+      testWidgets(
+        'new theme row (${lang.name}): enabled, opens the name card',
+        (t) async {
+          final semantics = t.ensureSemantics();
+          await pumpApp(t, initial: AppearanceSettings(language: lang));
+          await openSettings(t);
+          await tapKey(t, 'settings-appearance');
+          final f = byKey('appearance-new-theme');
+          await reveal(t, f);
+          expect(f, findsOneWidget);
+          expect(t.getSemantics(f), isSemantics(hasTapAction: true));
+          await t.tap(f);
+          await t.pumpAndSettle();
+          expect(byKey('new-theme-card'), findsOneWidget);
+          semantics.dispose();
+        },
+      );
     }
   });
 

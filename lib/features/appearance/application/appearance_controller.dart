@@ -61,6 +61,7 @@ class AppearanceController extends Notifier<AppearanceSettings> {
     required int accent,
     required int mine,
     required int theirs,
+    int? background,
   }) async {
     final id = _freshId();
     final theme = CustomTheme(
@@ -70,6 +71,7 @@ class AppearanceController extends Notifier<AppearanceSettings> {
       accent: accent,
       mine: mine,
       theirs: theirs,
+      background: background,
     );
     await _update(
       state.copyWith(

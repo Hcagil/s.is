@@ -714,6 +714,9 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                           AsyncData() when timeline.isEmpty => Center(
                             child: Text(
                               AppLocalizations.of(context).messageEmpty,
+                              style: TextStyle(
+                                color: SisBrand.of(context).onChat,
+                              ),
                             ),
                           ),
                           _

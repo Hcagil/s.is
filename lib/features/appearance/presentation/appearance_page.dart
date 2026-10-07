@@ -3,7 +3,6 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/grey_option.dart';
 import '../../../app/settings_row.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
@@ -13,6 +12,8 @@ import '../domain/custom_theme.dart';
 import 'appearance_labels.dart';
 import 'chat_preview.dart';
 import 'custom_theme_actions.dart';
+import 'new_theme_card.dart';
+import 'theme_editor_page.dart';
 import 'wallpaper_page.dart';
 
 class AppearancePage extends ConsumerWidget {
@@ -70,12 +71,12 @@ class AppearancePage extends ConsumerWidget {
             ),
             for (final c in look.customThemes)
               _CustomThemeRow(theme: c, selected: look.customThemeId == c.id),
-            GreyOption(
-              name: 'custom',
-              label: l.appearanceNewTheme,
-              child: SisSettingsRow(
+            Builder(
+              builder: (rowContext) => SisSettingsRow(
+                key: const ValueKey('appearance-new-theme'),
                 icon: Icons.add_rounded,
                 title: l.appearanceNewTheme,
+                onTap: () => _newTheme(rowContext),
               ),
             ),
             SisSettingsRow(
@@ -99,6 +100,17 @@ class AppearancePage extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Asks for a name, then opens the editor for the new theme.
+Future<void> _newTheme(BuildContext context) async {
+  final box = context.findRenderObject() as RenderBox;
+  final anchor = box.localToGlobal(Offset.zero) & box.size;
+  final name = await showNewThemeCard(context, anchor);
+  if (name == null || !context.mounted) return;
+  await Navigator.of(
+    context,
+  ).push(MaterialPageRoute<void>(builder: (_) => ThemeEditorPage(name: name)));
 }
 
 class _ThemeTile extends ConsumerWidget {

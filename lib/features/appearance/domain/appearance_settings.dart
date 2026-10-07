@@ -81,11 +81,19 @@ final class AppearanceSettings {
     return null;
   }
 
-  /// What the chat paints: the member's own wallpaper wins; otherwise a
-  /// built-in theme's own (dark mode only), and a custom theme has none.
+  /// What the chat paints: the member's own wallpaper wins; otherwise a custom
+  /// theme's chat colour (none when it has no colour), else a built-in theme's
+  /// own (dark mode only).
   Wallpaper effectiveWallpaper({required bool dark}) {
     if (wallpaper.kind != WallpaperKind.none) return wallpaper;
-    if (activeCustomTheme != null || !dark) return Wallpaper.none;
+    final custom = activeCustomTheme;
+    if (custom != null) {
+      final bg = custom.background;
+      return bg == null
+          ? Wallpaper.none
+          : Wallpaper(kind: WallpaperKind.colour, colours: [bg]);
+    }
+    if (!dark) return Wallpaper.none;
     return builtInWallpaper(themeId);
   }
 

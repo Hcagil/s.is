@@ -7,6 +7,7 @@ import '../core/startup_failure.dart';
 import '../features/appearance/application/appearance_controller.dart';
 import '../features/appearance/domain/appearance_settings.dart';
 import '../features/appearance/domain/custom_theme.dart';
+import '../features/appearance/domain/wallpaper.dart';
 import '../features/auth/domain/member.dart';
 import '../features/auth/application/session_controller.dart';
 import '../features/auth/domain/session_state.dart';
@@ -69,7 +70,11 @@ class SisApp extends ConsumerWidget {
         systemFont: look.systemFont,
         brand: custom == null
             ? null
-            : sisBrandForCustom(custom, Brightness.light),
+            : sisBrandForCustom(
+                custom,
+                Brightness.light,
+                wallpaperSet: look.wallpaper.kind != WallpaperKind.none,
+              ),
       ),
       darkTheme: sisTheme(
         Brightness.dark,
@@ -77,7 +82,11 @@ class SisApp extends ConsumerWidget {
         systemFont: look.systemFont,
         brand: custom == null
             ? null
-            : sisBrandForCustom(custom, Brightness.dark),
+            : sisBrandForCustom(
+                custom,
+                Brightness.dark,
+                wallpaperSet: look.wallpaper.kind != WallpaperKind.none,
+              ),
       ),
       navigatorObservers: [ref.read(routeStackProvider)],
       builder: (context, child) => MediaQuery(

@@ -126,7 +126,7 @@ class _Bubble extends StatelessWidget {
                       Icons.block,
                       size: 16,
                       color: mine
-                          ? Colors.white70
+                          ? brand.onMine.withValues(alpha: 0.7)
                           : brand.text.withValues(alpha: 0.6),
                     ),
                     const SizedBox(width: 6),
@@ -141,7 +141,7 @@ class _Bubble extends StatelessWidget {
                           fontSize: 14,
                           fontStyle: FontStyle.italic,
                           color: mine
-                              ? Colors.white70
+                              ? brand.onMine.withValues(alpha: 0.7)
                               : brand.text.withValues(alpha: 0.6),
                         ),
                       ),
@@ -159,7 +159,7 @@ class _Bubble extends StatelessWidget {
                         Icons.shortcut,
                         size: 14,
                         color: mine
-                            ? Colors.white70
+                            ? brand.onMine.withValues(alpha: 0.7)
                             : brand.text.withValues(alpha: 0.6),
                       ),
                       const SizedBox(width: 4),
@@ -172,7 +172,7 @@ class _Bubble extends StatelessWidget {
                             fontSize: 12,
                             fontStyle: FontStyle.italic,
                             color: mine
-                                ? Colors.white70
+                                ? brand.onMine.withValues(alpha: 0.7)
                                 : brand.text.withValues(alpha: 0.6),
                           ),
                         ),
@@ -189,14 +189,14 @@ class _Bubble extends StatelessWidget {
                     margin: const EdgeInsets.only(bottom: 6),
                     padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
                     decoration: BoxDecoration(
-                      color: (mine ? Colors.white : brand.text).withValues(
+                      color: (mine ? brand.onMine : brand.onTheirs).withValues(
                         alpha: 0.12,
                       ),
                       borderRadius: BorderRadius.circular(6),
                       border: Border(
                         left: BorderSide(
                           color: mine
-                              ? Colors.white
+                              ? brand.onMine
                               : Theme.of(context).colorScheme.primary,
                           width: 3,
                         ),
@@ -213,7 +213,7 @@ class _Bubble extends StatelessWidget {
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                               color: mine
-                                  ? Colors.white
+                                  ? brand.onMine
                                   : Theme.of(context).colorScheme.primary,
                             ),
                           ),
@@ -223,7 +223,7 @@ class _Bubble extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 13,
-                            color: mine ? Colors.white : brand.text,
+                            color: mine ? brand.onMine : brand.onTheirs,
                           ),
                         ),
                       ],
@@ -288,10 +288,10 @@ class _Bubble extends StatelessWidget {
                   message: message,
                   bodyStyle: TextStyle(
                     fontSize: isBigEmoji(message.body) ? 40 : 15,
-                    color: mine ? Colors.white : brand.text,
+                    color: mine ? brand.onMine : brand.onTheirs,
                   ),
                   linkColor: mine
-                      ? Colors.white
+                      ? brand.onMine
                       : Theme.of(context).colorScheme.primary,
                   maxContentWidth: _contentWidth,
                   topPadding: message.hasAttachment ? 8 : 0,
@@ -301,7 +301,7 @@ class _Bubble extends StatelessWidget {
                       : clockTime(message.createdAt),
                   timeStyle: TextStyle(
                     fontSize: SisTokens.timeFontSize,
-                    color: (mine ? Colors.white : brand.text).withValues(
+                    color: (mine ? brand.onMine : brand.onTheirs).withValues(
                       alpha: SisTokens.timeOpacity,
                     ),
                   ),
@@ -319,11 +319,11 @@ class _Bubble extends StatelessWidget {
                       key: ValueKey('body-${message.id}'),
                       style: TextStyle(
                         fontSize: 15,
-                        color: mine ? Colors.white : brand.text,
+                        color: mine ? brand.onMine : brand.onTheirs,
                       ),
                       highlightQuery: highlightQuery,
                       linkColor: mine
-                          ? Colors.white
+                          ? brand.onMine
                           : Theme.of(context).colorScheme.primary,
                     ),
                   ),
@@ -340,9 +340,8 @@ class _Bubble extends StatelessWidget {
                             : clockTime(message.createdAt),
                         timeStyle: TextStyle(
                           fontSize: SisTokens.timeFontSize,
-                          color: (mine ? Colors.white : brand.text).withValues(
-                            alpha: SisTokens.timeOpacity,
-                          ),
+                          color: (mine ? brand.onMine : brand.onTheirs)
+                              .withValues(alpha: SisTokens.timeOpacity),
                         ),
                         delivery: delivery,
                       ),

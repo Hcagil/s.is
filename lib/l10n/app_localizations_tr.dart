@@ -1104,6 +1104,60 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String get appearanceCreateTheme => 'Yeni tema oluştur';
+
+  @override
+  String get appearanceCreate => 'Oluştur';
+
+  @override
+  String get appearanceNameEmpty => 'Ad boş olamaz';
+
+  @override
+  String get appearanceThemePlaceholder => 'Ad';
+
+  @override
+  String get themeTabAccent => 'Vurgu Rengi';
+
+  @override
+  String get themeTabBackground => 'Arka Plan';
+
+  @override
+  String get themeTabMyMessages => 'Mesajlarım';
+
+  @override
+  String get themePickAccent => 'Bir vurgu rengi seçin';
+
+  @override
+  String get themePickBackground => 'Arka plan rengini seçin';
+
+  @override
+  String get themePickMine => 'Mesaj balonumun rengini seçin';
+
+  @override
+  String get themeLowContrast =>
+      'Bu vurgu rengi zor okunabilir. Daha koyu bir ton seçin.';
+
+  @override
+  String get themeModeLabel => 'Görünüm modu';
+
+  @override
+  String get themeModeLight => 'Açık';
+
+  @override
+  String get themeModeDark => 'Koyu';
+
+  @override
+  String get themeModeAuto => 'Otomatik';
+
+  @override
+  String get themeReset => 'Varsayılana sıfırla';
+
+  @override
+  String themeSwatch(String hex) {
+    return 'Renk $hex';
+  }
+
+  @override
   String get wallpaperColour => 'Renk';
 
   @override

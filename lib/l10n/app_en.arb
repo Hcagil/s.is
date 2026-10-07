@@ -150,7 +150,7 @@
   },
   "chatMenuPin": "Pin chat",
   "@chatMenuPin": {
-    "description": "Long-press card: pin row (greyed, not built yet)"
+    "description": "Long-press card: pin row"
   },
   "chatArchive": "Archive",
   "@chatArchive": {
@@ -361,7 +361,52 @@
   },
   "messageActionPin": "Pin message",
   "@messageActionPin": {
-    "description": "Long-press card row: pin (greyed, not built yet)"
+    "description": "Long-press card row: pin"
+  },
+  "messageActionUnpin": "Unpin message",
+  "@messageActionUnpin": {
+    "description": "Long-press card row: unpin"
+  },
+  "chatMenuUnpin": "Unpin chat",
+  "@chatMenuUnpin": {
+    "description": "Long-press card: unpin row"
+  },
+  "chatPinLimit": "You can pin up to 5 chats.",
+  "@chatPinLimit": {
+    "description": "Notice when a sixth chat is pinned"
+  },
+  "eventPinned": "{name} pinned a message",
+  "@eventPinned": {
+    "description": "Chat line when someone pins a message",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pinnedBarTitle": "Pinned message",
+  "@pinnedBarTitle": {
+    "description": "Bar under the chat header"
+  },
+  "pinnedBarPhoto": "Photo",
+  "@pinnedBarPhoto": {
+    "description": "Pinned bar text when the message is only a photo"
+  },
+  "groupPinAll": "All members",
+  "@groupPinAll": {
+    "description": "Who may pin messages: value"
+  },
+  "groupPinAdmins": "Admins only",
+  "@groupPinAdmins": {
+    "description": "Who may pin messages: value"
+  },
+  "listPinnedHeader": "Pinned",
+  "@listPinnedHeader": {
+    "description": "Chat list section header"
+  },
+  "listChatsHeader": "Chats",
+  "@listChatsHeader": {
+    "description": "Chat list section header"
   },
   "messageActionDeleteForMe": "Delete for me",
   "@messageActionDeleteForMe": {

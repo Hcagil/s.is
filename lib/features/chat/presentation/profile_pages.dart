@@ -19,6 +19,7 @@ import '../../presence/application/presence_controllers.dart';
 import '../../presence/presentation/last_seen_text.dart';
 import '../application/chat_controllers.dart';
 import '../application/group_controller.dart';
+import '../application/pin_controller.dart';
 import '../domain/group_member.dart';
 import '../domain/message.dart';
 import 'add_members_page.dart';

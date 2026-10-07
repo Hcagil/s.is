@@ -7,7 +7,11 @@
 /// `picture` is the exception: every member sees it, and it is served by the
 /// group_picture_events function, not the admin-only table read. Its subject
 /// and actor are both whoever changed the picture.
-enum GroupEventKind { left, removed, added, picture }
+///
+/// `pinned` is served to every member of any chat (a 1:1 too) by the
+/// pin_events function; its subject and actor are both whoever pinned the
+/// message.
+enum GroupEventKind { left, removed, added, picture, pinned }
 
 final class GroupEvent {
   const GroupEvent({

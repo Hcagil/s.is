@@ -474,6 +474,56 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     return result;
   }
 
+  /// Pins or unpins [conversationId] for the signed-in member. The list
+  /// changes at once (a tap never waits on the network); the sixth pin is
+  /// refused before anything changes, with [PinLimitFailure], and a refusal
+  /// from the server puts the chat back and returns the [Err].
+  Future<Result<void>> setPinned(String conversationId, bool pinned) async {
+    final current = state.value;
+    if (pinned &&
+        current != null &&
+        !current.any((c) => c.id == conversationId && c.pinned) &&
+        current.where((c) => c.pinned).length >= maxPinnedChats) {
+      return const Err(PinLimitFailure());
+    }
+
+    void mark(bool value) {
+      final list = state.value;
+      if (list == null) return;
+      state = AsyncData([
+        for (final c in list)
+          if (c.id == conversationId) c.withPinned(value) else c,
+      ]);
+      _scheduleSnapshotSave();
+    }
+
+    mark(pinned);
+    final result = await ref
+        .read(chatPinRepositoryProvider)
+        .setChatPinned(conversationId, pinned);
+    if (result is Err && ref.mounted) mark(!pinned);
+    return result;
+  }
+
+  /// Shows [messageId] (null: none) as [conversationId]'s pinned message at
+  /// once, without a server call; the usual refreshes re-read the list.
+  void applyPinnedMessage(String conversationId, String? messageId) {
+    final list = state.value;
+    if (list == null) return;
+    state = AsyncData([
+      for (final c in list)
+        if (c.id == conversationId) c.withPinnedMessage(messageId) else c,
+    ]);
+    _scheduleSnapshotSave();
+  }
+
+  /// [conversationId]'s pinned message id as the list shows it now, or null.
+  String? pinnedMessageOf(String conversationId) =>
+      (state.value ?? const <Conversation>[])
+          .where((c) => c.id == conversationId)
+          .firstOrNull
+          ?.pinnedMessageId;
+
   /// Shows [next] as [conversationId]'s settings at once, without a server
   /// call: a switch flips the same frame. The list is re-read from the
   /// server by the usual refreshes.

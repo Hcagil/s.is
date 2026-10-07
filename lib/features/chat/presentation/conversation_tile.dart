@@ -64,6 +64,7 @@ class ConversationTile extends ConsumerWidget {
             conversation.lastSenderId != me
         ? conversation.senders[conversation.lastSenderId]
         : null;
+    final pinned = conversation.pinned && !inArchive;
     final previewStyle = unread
         ? TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w600)
         : left
@@ -76,6 +77,7 @@ class ConversationTile extends ConsumerWidget {
       child: ListTile(
         key: ValueKey('conversation-${conversation.id}'),
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+        tileColor: pinned ? scheme.primary.withValues(alpha: 0.06) : null,
         leading: PersonAvatar(
           label: conversationLabel(l, conversation),
           // A person keeps one tint everywhere; a group has its own.
@@ -127,7 +129,8 @@ class ConversationTile extends ConsumerWidget {
                 overflow: TextOverflow.ellipsis,
                 style: previewStyle,
               ),
-        trailing: conversation.lastMessageAt == null && !muted && !showPill
+        trailing:
+            conversation.lastMessageAt == null && !muted && !showPill && !pinned
             ? null
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -142,12 +145,21 @@ class ConversationTile extends ConsumerWidget {
                         fontWeight: unread ? FontWeight.w700 : null,
                       ),
                     ),
-                  if (muted || showPill) ...[
+                  if (muted || showPill || pinned) ...[
                     if (conversation.lastMessageAt != null)
                       const SizedBox(height: 4),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (pinned)
+                          Icon(
+                            Icons.push_pin,
+                            key: ValueKey('pinned-${conversation.id}'),
+                            size: 14,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        if (pinned && (muted || showPill))
+                          const SizedBox(width: 4),
                         if (muted)
                           Icon(
                             Icons.notifications_off_outlined,
@@ -237,8 +249,24 @@ class ConversationTile extends ConsumerWidget {
       context,
       anchor: anchor,
       muted: muted,
+      pinned: conversation.pinned,
     );
     if (choice == null || !context.mounted) return;
+    if (choice == 'pin' || choice == 'unpin') {
+      final result = await ref
+          .read(conversationListProvider.notifier)
+          .setPinned(conversation.id, choice == 'pin');
+      if (result case Err(:final failure) when context.mounted) {
+        showSisNotice(
+          context,
+          failure is PinLimitFailure
+              ? AppLocalizations.of(context).chatPinLimit
+              : failure.message,
+          isError: true,
+        );
+      }
+      return;
+    }
     final notifier = ref.read(mutesProvider.notifier);
     final result = choice == 'off'
         ? await notifier.unmute(MuteKind.conversation, conversation.id)

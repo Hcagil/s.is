@@ -113,17 +113,23 @@ final class SupabaseChatRepository implements ChatRepository {
             .from('conversations')
             .select(
               'id, title, avatar_path, system, members_can_set_avatar, '
-              'members_can_add, new_members_see_history',
+              'members_can_add, new_members_see_history, '
+              'members_can_pin, pinned_message_id',
             )
             .retriedOnce(),
         // The chats this member archived (row-level security scopes it to
         // their own rows).
         _client.from('chat_archives').select('conversation_id').retriedOnce(),
+        // The chats this member pinned (own rows only, same scoping).
+        _client.from('chat_pins').select('conversation_id').retriedOnce(),
       ]);
       final memberRows = firstStage[0];
       final conversationRows = firstStage[1];
       final archivedIds = {
         for (final row in firstStage[2]) row['conversation_id'] as String,
+      };
+      final pinnedIds = {
+        for (final row in firstStage[3]) row['conversation_id'] as String,
       };
       final titleById = {
         for (final row in conversationRows)
@@ -132,6 +138,10 @@ final class SupabaseChatRepository implements ChatRepository {
       final avatarPathById = {
         for (final row in conversationRows)
           row['id'] as String: row['avatar_path'] as String?,
+      };
+      final pinnedMessageById = {
+        for (final row in conversationRows)
+          row['id'] as String: row['pinned_message_id'] as String?,
       };
       final systemById = {
         for (final row in conversationRows)
@@ -143,6 +153,7 @@ final class SupabaseChatRepository implements ChatRepository {
             membersCanSetAvatar: row['members_can_set_avatar'] == true,
             membersCanAdd: row['members_can_add'] == true,
             newMembersSeeHistory: row['new_members_see_history'] != false,
+            membersCanPin: row['members_can_pin'] != false,
           ),
       };
 
@@ -260,6 +271,8 @@ final class SupabaseChatRepository implements ChatRepository {
             isSystem: systemById[id] ?? false,
             settings: settingsById[id] ?? const GroupSettings(),
             archived: archivedIds.contains(id),
+            pinned: pinnedIds.contains(id),
+            pinnedMessageId: pinnedMessageById[id],
             senders: titleById[id] == null
                 ? const {}
                 : {

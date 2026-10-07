@@ -24,6 +24,14 @@ final class DeniedFailure extends Failure {
   String get message => 'Not allowed';
 }
 
+/// Pinning a sixth chat; the screen shows its own translated line.
+final class PinLimitFailure extends Failure {
+  const PinLimitFailure();
+
+  @override
+  String get message => 'You can pin up to 5 chats.';
+}
+
 final class ProviderFailure extends Failure {
   const ProviderFailure(this.message, {this.userCanceled = false});
 

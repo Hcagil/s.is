@@ -294,6 +294,38 @@ class AppLocalizationsEn extends AppLocalizations {
   String get messageActionPin => 'Pin message';
 
   @override
+  String get messageActionUnpin => 'Unpin message';
+
+  @override
+  String get chatMenuUnpin => 'Unpin chat';
+
+  @override
+  String get chatPinLimit => 'You can pin up to 5 chats.';
+
+  @override
+  String eventPinned(String name) {
+    return '$name pinned a message';
+  }
+
+  @override
+  String get pinnedBarTitle => 'Pinned message';
+
+  @override
+  String get pinnedBarPhoto => 'Photo';
+
+  @override
+  String get groupPinAll => 'All members';
+
+  @override
+  String get groupPinAdmins => 'Admins only';
+
+  @override
+  String get listPinnedHeader => 'Pinned';
+
+  @override
+  String get listChatsHeader => 'Chats';
+
+  @override
   String get messageActionDeleteForMe => 'Delete for me';
 
   @override

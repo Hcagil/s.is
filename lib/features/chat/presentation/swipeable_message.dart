@@ -25,6 +25,7 @@ IconData swipeActionIcon(MessageAction action) => switch (action) {
   MessageAction.deleteForEveryone => Icons.delete_forever_outlined,
   MessageAction.copy => Icons.copy_outlined,
   MessageAction.pin => Icons.push_pin_outlined,
+  MessageAction.unpin => Icons.push_pin,
 };
 
 /// The short label on [action]'s box.
@@ -37,6 +38,7 @@ String swipeActionLabel(AppLocalizations l, MessageAction action) =>
       MessageAction.deleteForEveryone => l.messageActionDeleteForEveryone,
       MessageAction.copy => l.messageActionCopy,
       MessageAction.pin => l.messageActionPin,
+      MessageAction.unpin => l.messageActionUnpin,
     };
 
 /// The fuller wording a screen reader announces for [action], as a custom
@@ -53,6 +55,7 @@ String swipeActionKeyId(MessageAction action) => switch (action) {
   MessageAction.deleteForEveryone => 'delete-for-everyone',
   MessageAction.copy => 'copy',
   MessageAction.pin => 'pin',
+  MessageAction.unpin => 'unpin',
 };
 
 /// Wraps a message bubble so it can be dragged LEFT to reply (offered only when

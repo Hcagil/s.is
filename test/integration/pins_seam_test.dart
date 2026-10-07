@@ -14,6 +14,7 @@ import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/data/supabase_chat_archive_repository.dart';
 import 'package:sis/features/chat/data/supabase_chat_pin_repository.dart';
+import 'package:sis/features/chat/data/supabase_chat_delete_repository.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -288,6 +289,9 @@ void main() {
       chatPinRepositoryProvider.overrideWithValue(
         SupabaseChatPinRepository(pina),
       ),
+      chatDeleteRepositoryProvider.overrideWithValue(
+        SupabaseChatDeleteRepository(pina),
+      ),
     ],
     child: const SisApp(),
   );
@@ -300,9 +304,10 @@ void main() {
     final row = byKey('conversation-$direct');
     await until(t, () async => row.evaluate().isNotEmpty, 'the chat row');
 
+    // Long-press selects the row; the selection bar pins it.
     await t.longPress(row);
     await t.pumpAndSettle();
-    await t.tap(byKey('chat-menu-pin'));
+    await t.tap(byKey('selection-pin'));
     await t.pumpAndSettle();
     await until(
       t,
@@ -316,6 +321,12 @@ void main() {
     expect(list.firstWhere((c) => c.id == direct).pinned, isTrue);
     expect(byKey('pinned-$direct'), findsOneWidget);
 
+    // Pinning ends the selection here (the real reload rebuilds the list);
+    // leave it if it is still on, so the tap below opens the chat.
+    if (byKey('selection-back').evaluate().isNotEmpty) {
+      await t.tap(byKey('selection-back'));
+      await t.pumpAndSettle();
+    }
     await t.tap(row);
     final bubble = byKey('message-${msg.id}');
     await until(t, () async => bubble.evaluate().isNotEmpty, 'the message');

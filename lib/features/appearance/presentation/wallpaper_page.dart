@@ -486,8 +486,8 @@ class _ResetCardBody extends StatelessWidget {
             const SizedBox(height: 12),
             Text(l.wallpaperResetConfirm),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              alignment: WrapAlignment.end,
               children: [
                 TextButton(
                   key: const ValueKey('wallpaper-reset-cancel'),

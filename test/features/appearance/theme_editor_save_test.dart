@@ -126,7 +126,7 @@ void main() {
       await t.tap(byKey('swatch-accent-9AA3B2'));
       await t.pump();
       expect(
-        find.text('Vurgu okumak zor olabilir. Daha koyu bir ton seçin.'),
+        find.text('Bu vurgu rengi zor okunabilir. Daha koyu bir ton seçin.'),
         findsOneWidget,
       );
     });

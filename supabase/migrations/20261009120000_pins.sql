@@ -54,6 +54,11 @@ create policy chat_pins_delete on public.chat_pins
 create function app_private.enforce_pin_limit() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
+  -- Runs before RLS: refuse another member's user_id first, so the errors
+  -- below never reveal their pin count or archive state.
+  if new.user_id is distinct from auth.uid() then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
   perform pg_advisory_xact_lock(hashtextextended('chat_pins:' || new.user_id::text, 0));
   if exists (select 1 from public.chat_pins p
               where p.user_id = new.user_id

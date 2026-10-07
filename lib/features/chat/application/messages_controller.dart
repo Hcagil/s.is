@@ -778,6 +778,73 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     return result;
   }
 
+  /// Sends the poll [draft] to the open conversation: shown at once as a
+  /// pending bubble (the poll on it, votes closed until it is stored), then the
+  /// server stores it under the same client-made id, so a retried send is
+  /// harmless and the Realtime echo of the stored row replaces the bubble in
+  /// place. Returns the server's answer; a failed send takes the bubble away.
+  Future<Result<void>> sendPoll(PollDraft draft) async {
+    final conversationId = ref.read(openConversationProvider);
+    if (conversationId == null) return const Err(DeniedFailure());
+    final id = randomMessageId();
+    final question = draft.question.trim();
+    final options = cleanPollOptions(draft.options);
+    final pending = Message(
+      id: id,
+      conversationId: conversationId,
+      senderId: _me ?? '',
+      body: question,
+      createdAt: DateTime.now(),
+      poll: true,
+      sending: true,
+    );
+    returnToLive(); // no-op unless jumped; see _onQueueChanged
+    ref
+        .read(pollsProvider.notifier)
+        .addLocal(
+          Poll(
+            messageId: id,
+            question: question,
+            options: [
+              for (var i = 0; i < options.length; i++)
+                PollOption(id: 'local-$id-$i', text: options[i], votes: 0),
+            ],
+            multiple: draft.multiple,
+            anonymous: draft.anonymous,
+            closed: false,
+            voters: 0,
+          ),
+        );
+    _append(pending);
+    final result = await ref
+        .read(pollRepositoryProvider)
+        .createPoll(conversationId, id, draft);
+    if (!ref.mounted) return result;
+    if (result is Ok) {
+      // Stored: no longer pending. The real option ids come with a reload.
+      _replace(
+        Message(
+          id: id,
+          conversationId: conversationId,
+          senderId: pending.senderId,
+          body: question,
+          createdAt: pending.createdAt,
+          poll: true,
+        ),
+      );
+      unawaited(ref.read(pollsProvider.notifier).ensure(id, force: true));
+    } else {
+      final current = state.value;
+      if (current != null) {
+        state = AsyncData([
+          for (final m in current)
+            if (m.id != id) m,
+        ]);
+      }
+    }
+    return result;
+  }
+
   /// Sends [images] to the open conversation, one message per photo, in
   /// order -- [body] as the caption of the first only, the rest with none.
   /// Stops at the first [Err] and returns it; otherwise returns [Ok(null)]

@@ -32,6 +32,14 @@ final class PinLimitFailure extends Failure {
   String get message => 'You can pin up to 5 chats.';
 }
 
+/// Voting in a poll that has been closed; the screen shows its own translated line.
+final class PollClosedFailure extends Failure {
+  const PollClosedFailure();
+
+  @override
+  String get message => 'This poll is closed.';
+}
+
 final class ProviderFailure extends Failure {
   const ProviderFailure(this.message, {this.userCanceled = false});
 

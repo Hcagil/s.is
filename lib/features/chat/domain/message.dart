@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../../../core/date_label.dart';
+import 'poll.dart';
 
 /// The longest body the database will accept, per the check constraint on
 /// `public.messages.body`.
@@ -37,7 +38,10 @@ bool isSendableBody(String body) {
 
 /// The one-line preview of a message in the conversation list. An image sent
 /// without a caption has an empty body, which would read as "no messages".
-String previewText(Message message) => message.body.isNotEmpty
+/// A poll shows [pollPreview] of its question.
+String previewText(Message message) => message.poll
+    ? pollPreview(message.body)
+    : message.body.isNotEmpty
     ? message.body
     : (message.hasAttachment ? 'Photo' : '');
 
@@ -66,6 +70,7 @@ final class Message {
     this.editedAt,
     this.replyTo,
     this.forwarded = false,
+    this.poll = false,
     this.sending = false,
   });
 
@@ -92,6 +97,9 @@ final class Message {
 
   /// A copy of a message from another conversation.
   final bool forwarded;
+
+  /// A poll: [body] is its question; options and votes live in the poll tables.
+  final bool poll;
 
   /// True for a text-only message shown at once, before the server has
   /// answered -- like [localImage] but with nothing to display in the
@@ -129,6 +137,7 @@ final class Message {
       !isPending &&
       deletion == null &&
       !forwarded &&
+      !poll &&
       now.difference(createdAt) < deleteForEveryoneWindow;
 
   /// Still on its way to the server: a photo shown from the phone before
@@ -175,6 +184,7 @@ final class Message {
     editedAt: editedAt,
     replyTo: replyTo,
     forwarded: forwarded,
+    poll: poll,
     sending: sending,
   );
 
@@ -194,6 +204,7 @@ final class Message {
     editedAt: editedAt,
     replyTo: replyTo,
     forwarded: forwarded,
+    poll: poll,
     sending: sending,
   );
 
@@ -235,7 +246,8 @@ bool isSearchable(String query) =>
 
 /// One action a member may take on a message: reply, forward, edit their
 /// own text/caption, delete for me / delete for everyone (two separate rows),
-/// copy the text (tap menu only), pin (shown greyed, not built yet).
+/// copy the text (tap menu only), pin (shown greyed, not built yet); retract
+/// your vote / stop your own poll (polls only).
 enum MessageAction {
   reply,
   forward,
@@ -245,6 +257,8 @@ enum MessageAction {
   copy,
   pin,
   unpin,
+  retractVote,
+  stopPoll,
 }
 
 /// The actions [me] may take on [message] at [now], in the order they are
@@ -265,7 +279,7 @@ List<MessageAction> allowedMessageActions(
   final canShare = !message.isPending && !message.isDeleted;
   return [
     if (canShare) MessageAction.reply,
-    if (canShare) MessageAction.forward,
+    if (canShare && !message.poll) MessageAction.forward,
     if (canEdit) MessageAction.edit,
     if (canDelete) MessageAction.deleteForEveryone,
   ];
@@ -277,7 +291,9 @@ List<MessageAction> allowedMessageActions(
 /// message is the chat's pinned one), delete for me (any stored
 /// message), delete for everyone (only when [Message.canDeleteForEveryone]
 /// allows, [admin] says the viewer is a group admin). Copy is never in the
-/// swipe row.
+/// swipe row. [canRetract] / [canStop] come from the poll's state (you voted
+/// and it is open / it is your own open poll) and put retract vote / stop poll
+/// right after reply.
 List<MessageAction> menuMessageActions(
   Message message, {
   required String? me,
@@ -285,13 +301,18 @@ List<MessageAction> menuMessageActions(
   bool admin = false,
   bool canPin = true,
   bool pinned = false,
+  bool canRetract = false,
+  bool canStop = false,
 }) {
   final canShare = !message.isPending && !message.isDeleted;
   final canEdit = me != null && message.canEdit(me, now);
   return [
     if (canShare) MessageAction.reply,
-    if (canShare && message.body.isNotEmpty) MessageAction.copy,
-    if (canShare) MessageAction.forward,
+    if (canShare && canRetract) MessageAction.retractVote,
+    if (canShare && canStop) MessageAction.stopPoll,
+    if (canShare && !message.poll && message.body.isNotEmpty)
+      MessageAction.copy,
+    if (canShare && !message.poll) MessageAction.forward,
     if (canEdit) MessageAction.edit,
     if (canShare && canPin) pinned ? MessageAction.unpin : MessageAction.pin,
     if (!message.isPending) MessageAction.deleteForMe,

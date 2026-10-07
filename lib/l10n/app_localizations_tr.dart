@@ -1257,4 +1257,109 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get chatsDeletedUndo => 'Sohbetler silindi.';
+
+  @override
+  String get pollNewTitle => 'Yeni Anket';
+
+  @override
+  String get pollQuestionLabel => 'Soru';
+
+  @override
+  String get pollQuestionHint => 'Bir soru sor';
+
+  @override
+  String get pollOptionsLabel => 'Seçenekler';
+
+  @override
+  String get pollOptionHint => 'Seçenek';
+
+  @override
+  String get pollAddOption => 'Bir seçenek ekle…';
+
+  @override
+  String get pollOptionsMax => 'En yüksek sayıda seçenek eklediniz.';
+
+  @override
+  String get pollMultipleTitle => 'Birden Fazla Cevap';
+
+  @override
+  String get pollAnonymousTitle => 'Anonim Oylama';
+
+  @override
+  String get pollAnonymousSubtitle => 'Kimin neye oy verdiğini kimse görmez';
+
+  @override
+  String get pollSend => 'Anketi gönder';
+
+  @override
+  String get pollDiscardTitle => 'Anket silinsin mi?';
+
+  @override
+  String get pollDiscardBody => 'Bu anketi silmek istediğinizden emin misiniz?';
+
+  @override
+  String get pollDiscardConfirm => 'Sil';
+
+  @override
+  String get pollDiscardCancel => 'İptal et';
+
+  @override
+  String get pollTypeAnonymous => 'Anonim Anket';
+
+  @override
+  String get pollTypePublic => 'Anket';
+
+  @override
+  String get pollTypeClosed => 'Kesin Sonuçlar';
+
+  @override
+  String pollVotes(int count) {
+    return '$count oy';
+  }
+
+  @override
+  String get pollNoVotes => 'Oy yok';
+
+  @override
+  String get pollVoteButton => 'Oy';
+
+  @override
+  String pollViewVotes(int count) {
+    return 'Oyları Görüntüle ($count)';
+  }
+
+  @override
+  String get pollResultsTitle => 'Anket Sonuçları';
+
+  @override
+  String pollOptionVoters(int count) {
+    return '$count oy';
+  }
+
+  @override
+  String get messageActionRetractVote => 'Oyu Geri Al';
+
+  @override
+  String get messageActionStopPoll => 'Anketi Durdur';
+
+  @override
+  String get pollStopTitle => 'Anket durdurulsun mu?';
+
+  @override
+  String get pollStopBody =>
+      'Bu anketi şimdi durdurursanız, artık kimse oy kullanamayacak. Bu işlem geri alınamaz.';
+
+  @override
+  String get pollStopConfirm => 'Durdur';
+
+  @override
+  String get pollStopCancel => 'İptal et';
+
+  @override
+  String get pollClosedNotice => 'Bu anket kapandı.';
+
+  @override
+  String pollPreviewLine(String question) {
+    return '📊 Anket: $question';
+  }
 }

@@ -18,6 +18,7 @@ import '../domain/group_event.dart';
 import '../domain/group_member.dart';
 import '../domain/group_settings.dart';
 import '../domain/message.dart';
+import '../domain/poll.dart';
 import '../domain/read_marks.dart';
 
 /// [ChatRepository] backed by Supabase Postgres and Realtime.
@@ -226,7 +227,7 @@ final class SupabaseChatRepository implements ChatRepository {
         _client
             .from('conversation_previews')
             .select(
-              'conversation_id, body, created_at, attachment_path, sender_id, deleted',
+              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll',
             )
             .retriedOnce(),
         // Only conversations with something unread come back.
@@ -250,6 +251,8 @@ final class SupabaseChatRepository implements ChatRepository {
             // would read as "no messages" while hiding a real one.
             body: row['deleted'] != null
                 ? 'This message was deleted'
+                : row['poll'] == true
+                ? pollPreview(row['body'] as String)
                 : (row['body'] as String).isNotEmpty
                 ? row['body'] as String
                 : (row['attachment_path'] == null ? '' : 'Photo'),
@@ -316,13 +319,13 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll';
 
   /// The columns of a page read (open chat): no photo preview -- those arrive
   /// separately, see [attachmentPreviews], so the first paint never waits on
   /// them.
   static const _pageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -1207,6 +1210,7 @@ final class SupabaseChatRepository implements ChatRepository {
     attachmentPreview: _preview(row['attachment_preview']),
     replyTo: row['reply_to'] as String?,
     forwarded: row['forwarded'] as bool? ?? false,
+    poll: row['poll'] as bool? ?? false,
     editedAt: switch (row['edited_at']) {
       final String at => DateTime.parse(at).toLocal(),
       _ => null,

@@ -139,13 +139,25 @@ class _PollCardState extends ConsumerState<PollCard> {
                               child: Container(
                                 key: ValueKey('poll-bar-${o.id}'),
                                 height: 5,
-                                alignment: Alignment.centerLeft,
                                 color: widget.ink.withValues(alpha: 0.15),
-                                child: FractionallySizedBox(
-                                  widthFactor: poll.voters <= 0
-                                      ? 0.0
-                                      : (o.votes / poll.voters).clamp(0.0, 1.0),
-                                  child: ColoredBox(color: widget.accent),
+                                // Only positioned children: a Stack reports
+                                // no intrinsic width, and a 0 widthFactor
+                                // under IntrinsicWidth would be NaN.
+                                child: Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: FractionallySizedBox(
+                                        alignment: Alignment.centerLeft,
+                                        widthFactor: poll.voters <= 0
+                                            ? 0.0
+                                            : (o.votes / poll.voters).clamp(
+                                                0.0,
+                                                1.0,
+                                              ),
+                                        child: ColoredBox(color: widget.accent),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),

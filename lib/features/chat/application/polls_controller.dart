@@ -75,12 +75,13 @@ class PollsController extends AsyncNotifier<PollsByMessage> {
     } catch (_) {
       return; // the load failed; nothing to reconcile
     }
-    if (generation != _generation) return;
+    if (!ref.mounted || generation != _generation) return;
     final fetched = await ref
         .read(pollRepositoryProvider)
         .polls(conversationId);
+    if (!ref.mounted || generation != _generation) return;
     final current = state.value;
-    if (generation != _generation || current == null) return;
+    if (current == null) return;
     if (fetched case Ok(:final value)) {
       state = AsyncData({...current, for (final p in value) p.messageId: p});
     }

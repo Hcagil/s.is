@@ -77,7 +77,8 @@ class _PollCreatePageState extends State<PollCreatePage> {
     ),
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     margin: const EdgeInsets.only(bottom: 12),
-    child: child,
+    // The ListTile of the switches paints its ink on the nearest Material.
+    child: Material(type: MaterialType.transparency, child: child),
   );
 
   @override

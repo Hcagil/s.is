@@ -25,6 +25,7 @@ import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
+import 'contact_fakes.dart';
 import 'fakes.dart';
 import 'poll_fakes.dart';
 import 'reaction_fakes.dart';
@@ -92,6 +93,8 @@ Future<ProviderContainer> pumpLauncher(
   ChatFake? chat,
   ReactionFake? reactions,
   PollFake? polls,
+  FakePhoneBook? phoneBook,
+  FakeContactShare? contacts,
   Locale? locale,
   bool tap = true,
 }) async {
@@ -119,6 +122,10 @@ Future<ProviderContainer> pumpLauncher(
         sessionControllerProvider.overrideWith(SignedInForTests.new),
         pushSourceProvider.overrideWithValue(PushSourceFake()),
         pushRegistryProvider.overrideWithValue(PushRegistryFake()),
+        phoneBookProvider.overrideWithValue(phoneBook ?? FakePhoneBook()),
+        contactShareRepositoryProvider.overrideWithValue(
+          contacts ?? FakeContactShare(),
+        ),
       ],
     ),
   );
@@ -163,6 +170,8 @@ Future<ProviderContainer> openChat(
   List<Message>? messages,
   ReactionFake? reactions,
   PollFake? polls,
+  FakePhoneBook? phoneBook,
+  FakeContactShare? contacts,
   Locale? locale,
 }) async {
   final c = await pumpLauncher(
@@ -171,6 +180,8 @@ Future<ProviderContainer> openChat(
     messages: messages,
     reactions: reactions,
     polls: polls,
+    phoneBook: phoneBook,
+    contacts: contacts,
     locale: locale,
   );
   expect(find.byType(MessageScreen), findsOneWidget, reason: 'never opened');

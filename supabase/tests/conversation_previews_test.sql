@@ -125,14 +125,15 @@ select has_column('public', 'conversation_previews', 'deleted',
                   'conversation_previews exposes deleted, for a placeholder row');
 -- Appended, not inserted: `create or replace view` cannot reorder columns, so
 -- a migration that put it anywhere else would not apply to an existing view.
--- Later columns append after it in turn (poll, 20261011120000_polls).
+-- Later columns append after it in turn (poll, 20261011120000_polls; then
+-- contact, 20261012120000_contact_messages).
 select is((select array_agg(attname::text order by attnum) from (
              select attname, attnum from pg_attribute
               where attrelid = 'public.conversation_previews'::regclass
                 and attnum > 0 and not attisdropped
               order by attnum desc limit 2) last_two),
-          array['deleted', 'poll'],
-          'deleted was appended, and poll after it is now the last column');
+          array['poll', 'contact'],
+          'poll was appended, and contact after it is now the last column');
 
 select * from finish();
 rollback;

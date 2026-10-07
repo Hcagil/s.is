@@ -304,6 +304,25 @@ class _Bubble extends StatelessWidget {
                     ),
                   ),
                 )
+              else if (message.contact && !message.isDeleted)
+                ContactCard(
+                  message: message,
+                  ink: mine ? brand.onMine : brand.onTheirs,
+                  accent: mine
+                      ? brand.onMine
+                      : Theme.of(context).colorScheme.primary,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: (mine ? brand.onMine : brand.onTheirs).withValues(
+                        alpha: SisTokens.timeOpacity,
+                      ),
+                    ),
+                    delivery: delivery,
+                  ),
+                )
               else if (message.body.isNotEmpty && !message.isDeleted)
                 _BodyWithTime(
                   message: message,

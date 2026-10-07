@@ -109,8 +109,10 @@ class _AttachMenu extends StatelessWidget {
               label: l.attachLocation,
             ),
           ),
-          GreyOption(
-            name: 'att_tcon',
+          InkWell(
+            key: const ValueKey('attach-contact'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).pop('contact'),
             child: _attachTile(
               context,
               slot: 5,

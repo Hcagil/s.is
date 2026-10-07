@@ -137,6 +137,19 @@ class _ComposerState extends ConsumerState<_Composer>
     }
   }
 
+  /// Picks one phone contact and sends it as a contact card. Backing out of
+  /// the picker sends nothing; a refused send shows its reason.
+  Future<void> _sendContact() async {
+    final picked = await showContactPicker(context);
+    if (picked == null || !mounted) return;
+    final result = await ref
+        .read(messagesProvider.notifier)
+        .sendContact(picked);
+    if (result case Err(:final failure) when mounted) {
+      showSisNotice(context, failure.message, isError: true);
+    }
+  }
+
   /// Picks one or more images (the paperclip's photo grid: recent photos,
   /// the camera tile, or "Gallery"), previews them with a caption box, and
   /// sends them -- the caption goes with the first one, the rest with none,
@@ -149,6 +162,7 @@ class _ComposerState extends ConsumerState<_Composer>
     final choice = await showAttachMenu(context, anchor: anchor);
     if (!mounted) return;
     if (choice == 'poll') return _sendPoll();
+    if (choice == 'contact') return _sendContact();
     if (choice != 'photo') return;
     final picked = await showAttachmentSheet(context);
     if (picked.images.isEmpty || !mounted) return;

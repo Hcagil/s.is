@@ -17,6 +17,7 @@ import '../domain/chat_list_snapshot_store.dart';
 import '../domain/chat_pin_repository.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
+import '../domain/contact_share_repository.dart';
 import '../domain/contacts_repository.dart';
 import '../domain/external_picker.dart';
 import '../domain/gallery.dart';
@@ -24,12 +25,14 @@ import '../domain/group_settings.dart';
 import '../domain/group_settings_repository.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
+import '../domain/phone_book.dart';
 import '../domain/picture_cropper.dart';
 import '../domain/poll.dart';
 import '../domain/poll_repository.dart';
 import '../domain/reaction.dart';
 import '../domain/reaction_repository.dart';
 import '../domain/read_marks.dart';
+import '../domain/shared_contact.dart';
 import 'chat_drafts.dart';
 
 part 'open_conversation.dart';
@@ -40,6 +43,7 @@ part 'reply_edit_controllers.dart';
 part 'read_marks_controller.dart';
 part 'reactions_controller.dart';
 part 'polls_controller.dart';
+part 'phone_book_controller.dart';
 part 'chat_search_controller.dart';
 part 'chat_list_search_controller.dart';
 
@@ -86,6 +90,16 @@ final attachmentUrlProvider = FutureProvider.autoDispose.family<Uri, String>((
 
 /// The phone's own photo library, for the attachment sheet's grid.
 final galleryProvider = Provider<Gallery>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// The phone's own contacts, for the Send a contact picker.
+final phoneBookProvider = Provider<PhoneBook>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Sends a contact as a message.
+final contactShareRepositoryProvider = Provider<ContactShareRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 

@@ -1043,5 +1043,50 @@
   "pollClosedNotice": "This poll is closed.",
   "@pollClosedNotice": {"description": "Notice when voting in a poll that was just closed"},
   "pollPreviewLine": "📊 Poll: {question}",
-  "@pollPreviewLine": {"description": "Chat list preview of a poll message", "placeholders": {"question": {"type": "String"}}}
+  "@pollPreviewLine": {"description": "Chat list preview of a poll message", "placeholders": {"question": {"type": "String"}}},
+  "contactPickerTitle": "Send a contact",
+  "@contactPickerTitle": {
+    "description": "Title of the send-a-contact page"
+  },
+  "contactSearchHint": "Search your contacts",
+  "@contactSearchHint": {
+    "description": "Search field hint on the send-a-contact page"
+  },
+  "contactSend": "Send contact",
+  "@contactSend": {
+    "description": "Button that sends the picked phone contact"
+  },
+  "contactAccessTitle": "Allow access to your contacts",
+  "@contactAccessTitle": {
+    "description": "Title shown when contacts permission is missing"
+  },
+  "contactAccessBody": "SIS asks for your contacts only when you open this list. Nothing is uploaded until you send a contact.",
+  "@contactAccessBody": {
+    "description": "Body shown when contacts permission is missing"
+  },
+  "contactAllowAccess": "Allow access",
+  "@contactAllowAccess": {
+    "description": "Button that asks for contacts permission"
+  },
+  "contactEmpty": "No contacts with a phone number",
+  "@contactEmpty": {
+    "description": "Empty state of the contacts list"
+  },
+  "contactNoMatch": "No contact matches your search",
+  "@contactNoMatch": {
+    "description": "Empty search result on the contacts list"
+  },
+  "contactPreviewLine": "👤 Contact: {name}",
+  "@contactPreviewLine": {
+    "description": "Chat list preview of a contact message",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "contactPermNote": "Contacts permission is asked only when you open this list",
+  "@contactPermNote": {
+    "description": "Note under the Send contact button: when the contacts permission is asked"
+  }
 }

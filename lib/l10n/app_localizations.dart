@@ -2527,6 +2527,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'📊 Poll: {question}'**
   String pollPreviewLine(String question);
+
+  /// Title of the send-a-contact page
+  ///
+  /// In en, this message translates to:
+  /// **'Send a contact'**
+  String get contactPickerTitle;
+
+  /// Search field hint on the send-a-contact page
+  ///
+  /// In en, this message translates to:
+  /// **'Search your contacts'**
+  String get contactSearchHint;
+
+  /// Button that sends the picked phone contact
+  ///
+  /// In en, this message translates to:
+  /// **'Send contact'**
+  String get contactSend;
+
+  /// Title shown when contacts permission is missing
+  ///
+  /// In en, this message translates to:
+  /// **'Allow access to your contacts'**
+  String get contactAccessTitle;
+
+  /// Body shown when contacts permission is missing
+  ///
+  /// In en, this message translates to:
+  /// **'SIS asks for your contacts only when you open this list. Nothing is uploaded until you send a contact.'**
+  String get contactAccessBody;
+
+  /// Button that asks for contacts permission
+  ///
+  /// In en, this message translates to:
+  /// **'Allow access'**
+  String get contactAllowAccess;
+
+  /// Empty state of the contacts list
+  ///
+  /// In en, this message translates to:
+  /// **'No contacts with a phone number'**
+  String get contactEmpty;
+
+  /// Empty search result on the contacts list
+  ///
+  /// In en, this message translates to:
+  /// **'No contact matches your search'**
+  String get contactNoMatch;
+
+  /// Chat list preview of a contact message
+  ///
+  /// In en, this message translates to:
+  /// **'👤 Contact: {name}'**
+  String contactPreviewLine(String name);
+
+  /// Note under the Send contact button: when the contacts permission is asked
+  ///
+  /// In en, this message translates to:
+  /// **'Contacts permission is asked only when you open this list'**
+  String get contactPermNote;
 }
 
 class _AppLocalizationsDelegate

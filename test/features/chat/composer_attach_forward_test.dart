@@ -39,7 +39,6 @@ const greyTiles = [
   'grey-att_tfile',
   'grey-att_tvoice',
   'grey-att_tloc',
-  'grey-att_tcon',
 ];
 
 Message msg(String id, {String body = 'hi', String from = 'u2'}) => Message(
@@ -139,12 +138,14 @@ bool fieldFocused(WidgetTester t) => t
 void main() {
   group('the attach card', () {
     testWidgets('the paperclip opens the card, not the grid; it holds Photo '
-        'and the six grey tiles', (t) async {
+        'Poll, Contact and the four grey tiles', (t) async {
       await pumpChat(t, world());
       await t.tap(byKey('composer-attach'));
       await t.pumpAndSettle();
       expect(byKey('attach-menu'), findsOneWidget);
       expect(byKey('attach-photo'), findsOneWidget);
+      expect(byKey('attach-poll'), findsOneWidget);
+      expect(byKey('attach-contact'), findsOneWidget);
       for (final k in greyTiles) {
         expect(byKey(k), findsOneWidget, reason: k);
       }
@@ -244,6 +245,14 @@ void main() {
       await t.tap(byKey('attach-poll'));
       await t.pumpAndSettle();
       expect(results, ['poll']);
+    });
+
+    testWidgets('Contact is live and answers contact', (t) async {
+      final results = await mount(t);
+      expect(byKey('grey-att_tcon'), findsNothing);
+      await t.tap(byKey('attach-contact'));
+      await t.pumpAndSettle();
+      expect(results, ['contact']);
     });
 
     testWidgets('backing out answers null', (t) async {

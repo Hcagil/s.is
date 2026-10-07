@@ -436,5 +436,15 @@
   "pollClosedNotice": "Bu anket kapandı.",
   "@pollClosedNotice": {"description": "Notice when voting in a poll that was just closed"},
   "pollPreviewLine": "📊 Anket: {question}",
-  "@pollPreviewLine": {"description": "Chat list preview of a poll message", "placeholders": {"question": {"type": "String"}}}
+  "@pollPreviewLine": {"description": "Chat list preview of a poll message", "placeholders": {"question": {"type": "String"}}},
+  "contactPickerTitle": "Kişi gönder",
+  "contactSearchHint": "Kişilerinde ara",
+  "contactSend": "Kişiyi gönder",
+  "contactAccessTitle": "Kişilerine erişime izin ver",
+  "contactAccessBody": "SIS kişilerini yalnızca bu listeyi açtığında ister. Bir kişi göndermeden hiçbir şey yüklenmez.",
+  "contactAllowAccess": "Erişime izin ver",
+  "contactEmpty": "Telefon numarası olan kişi yok",
+  "contactNoMatch": "Aramana uyan kişi yok",
+  "contactPreviewLine": "👤 Kişi: {name}",
+  "contactPermNote": "Kişiler izni yalnızca bu listeyi açtığında istenir."
 }

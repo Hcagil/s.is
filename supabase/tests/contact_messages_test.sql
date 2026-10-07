@@ -1,5 +1,5 @@
 begin;
-select plan(39);
+select plan(45);
 
 -- Contact messages: public.send_contact and the messages.contact flag
 -- (20261012120000_contact_messages.sql).
@@ -85,6 +85,7 @@ end $$;
 select as_('01');
 insert into ids values ('G', group_c('Contacts', array[u('02'), u('04')]));
 insert into ids values ('TXT', msg(g('G'), 'plain text'));
+insert into ids values ('G2', group_c('Other', array[u('02')]));
 reset role;
 
 -- the bot: a member of G (its Debug chat), so only the bot gate refuses it
@@ -106,7 +107,8 @@ insert into ids select 'SYS', id from public.conversations
 insert into ids values
   ('C1', 'cc1a0000-0000-0000-0000-000000000001'),  -- ann's contact
   ('C2', 'cc1a0000-0000-0000-0000-000000000002'),  -- for delete
-  ('CX', 'cc1a0000-0000-0000-0000-000000000003');  -- spare id for refusals
+  ('CX', 'cc1a0000-0000-0000-0000-000000000003'),  -- spare id for refusals
+  ('CT', 'cc1a0000-0000-0000-0000-000000000004');  -- trimmed input
 
 create function sc(c uuid, id uuid, n text, p text) returns text language sql as $$
   select try(format($q$select public.send_contact(%L, %L, %L, %L)$q$, c, id, n, p))
@@ -157,7 +159,11 @@ select is(sc(g('G'), g('CX'), 'Ann', '12'), '22023', 'a 2-character number');
 select is(sc(g('G'), g('CX'), 'Ann', repeat('1', 33)), '22023', 'a 33-character number');
 select is(sc(g('G'), g('CX'), E'Ann\nLee', '123'), '22023', 'a line break in the name');
 select is(sc(g('G'), g('CX'), 'Ann', E'12\t3'), '22023', 'a tab in the number');
+select is(sc(g('G'), g('CX'), '   ', '123'), '22023', 'a name of only spaces (empty after trimming)');
+select is(sc(g('G'), null, 'Ann', '123'), '22023', 'no message id');
 select is(rows_of(g('CX')), 0::bigint, 'no bad input stored a row');
+select is(sc(g('G'), g('CT'), '  Ann  ', ' 123 '), 'ok', 'padded name and number are accepted');
+select is((select body from public.messages where id = g('CT')), E'Ann\n123', 'and stored trimmed');
 select is(sc(g('G'), g('CX'), repeat('a', 80), repeat('1', 32)), 'ok', 'the limits themselves pass (80, 32)');
 select is(sc(g('G'), gen_random_uuid(), 'A', '123'), 'ok', 'a 1-character name and 3-character number pass');
 
@@ -170,6 +176,10 @@ select is(sc(g('G'), g('C1'), 'Ann Lee', '+90 555'), '23505', 'another member re
 select is(sc(g('G'), g('TXT'), 'Ann Lee', '+90 555'), '23505', 'an id of an existing text message is a conflict');
 reset role;
 select is((select contact from public.messages where id = g('TXT')), false, 'the text message stays text');
+select as_('01');
+select is(sc(g('G'), g('TXT'), 'Ann Lee', '+90 555'), '23505', 'the sender reusing her own text message id is a conflict');
+select is(sc(g('G2'), g('C1'), 'Ann Lee', '+90 555'), '23505', 'the same sender and id in another conversation is a conflict');
+reset role;
 
 -- 5 frozen body, delete for everyone, direct insert --------------------------
 select as_('01');

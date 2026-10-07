@@ -102,9 +102,9 @@ void main() {
   String stamp() => '${DateTime.now().microsecondsSinceEpoch}';
 
   setUpAll(() async {
-    sanaClient = await _signedIn('sana@integration.test');
-    theoClient = await _signedIn('theo@integration.test');
-    umaClient = await _signedIn('uma@integration.test');
+    sanaClient = await _signedIn('ct-sana@integration.test');
+    theoClient = await _signedIn('ct-theo@integration.test');
+    umaClient = await _signedIn('ct-uma@integration.test');
     sanaId = sanaClient.auth.currentUser!.id;
     theoId = theoClient.auth.currentUser!.id;
     final sanaChat = SupabaseChatRepository(sanaClient);

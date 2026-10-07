@@ -165,7 +165,13 @@
 --   dc-ash/dc-bea/dc-cyd test/integration/delete_chat_seam_test.dart
 --     (each deletes a 1:1 or a group through the controller; the others
 --      check what is left for them on the server)
+--   ct-sana/ct-theo/ct-uma test/integration/contact_share_seam_test.dart
+--     (sana sends a contact through the controller and theo reads it back;
+--      uma is not a member and is refused)
 insert into app_private.allowlist(email) values
+  ('ct-sana@integration.test'),
+  ('ct-theo@integration.test'),
+  ('ct-uma@integration.test'),
   ('dc-ash@integration.test'),
   ('dc-bea@integration.test'),
   ('dc-cyd@integration.test'),

@@ -94,13 +94,18 @@ class _ArchiveRevealListState extends State<ArchiveRevealList> {
     }
     final p = _controller.position.pixels;
     if (p > 0 && p < archiveRowHeight) {
-      unawaited(
-        _controller.animateTo(
-          p < archiveRowHeight / 2 ? 0 : archiveRowHeight,
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-        ),
-      );
+      // Deferred: the position is still mid-`beginActivity` while this fires,
+      // and an animation started now is overwritten by the idle activity.
+      scheduleMicrotask(() {
+        if (!mounted || !_controller.hasClients) return;
+        unawaited(
+          _controller.animateTo(
+            p < archiveRowHeight / 2 ? 0 : archiveRowHeight,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+          ),
+        );
+      });
     }
     return false;
   }

@@ -1271,14 +1271,20 @@ abstract class AppLocalizations {
   /// Switch on the add members page
   ///
   /// In en, this message translates to:
-  /// **'Show old messages?'**
+  /// **'Show earlier messages'**
   String get addMembersOldTitle;
 
   /// Explains the old messages switch
   ///
   /// In en, this message translates to:
-  /// **'Off shows only messages sent from now on.'**
+  /// **'New member sees history'**
   String get addMembersOldHint;
+
+  /// Note on the add members page for a non-admin: the group switch decides about history
+  ///
+  /// In en, this message translates to:
+  /// **'Group admin sets whether new members see earlier messages'**
+  String get addMembersAdminDecides;
 
   /// Label of the add button while it works
   ///

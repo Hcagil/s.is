@@ -174,7 +174,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
   }
 }
 
-/// The group's three switches. An admin flips them (the new value shows at
+/// The group's switches. An admin flips them (the new value shows at
 /// once, and goes back with a plain line if the server refuses); everyone
 /// else sees the real values greyed.
 class _GroupSettings extends ConsumerWidget {
@@ -222,16 +222,64 @@ class _GroupSettings extends ConsumerWidget {
           amAdmin: amAdmin,
           onChanged: (v) => _set(context, ref, newMembersSeeHistory: v),
         ),
-        GreyOption(
-          name: 'p_who',
-          label: l.groupPinWho,
-          child: SisSettingsRow(
-            icon: Icons.push_pin_outlined,
-            title: l.groupPinWho,
-          ),
+        Builder(
+          builder: (rowContext) {
+            final row = SisSettingsRow(
+              key: const ValueKey('setting-membersCanPin'),
+              icon: Icons.push_pin_outlined,
+              title: l.groupPinWho,
+              value: s.membersCanPin ? l.groupPinAll : l.groupPinAdmins,
+              onTap: amAdmin
+                  ? () => _pickPinWho(rowContext, ref, s.membersCanPin)
+                  : null,
+            );
+            return amAdmin
+                ? row
+                : GreyOption(name: 'p_who', label: l.groupPinWho, child: row);
+          },
         ),
       ],
     );
+  }
+
+  /// An admin picks who may pin messages: a small card under the row with
+  /// the two choices. The new value shows at once; a refusal puts it back
+  /// with a plain line.
+  Future<void> _pickPinWho(
+    BuildContext context,
+    WidgetRef ref,
+    bool current,
+  ) async {
+    final box = context.findRenderObject() as RenderBox;
+    final anchor = box.localToGlobal(Offset.zero) & box.size;
+    final l = AppLocalizations.of(context);
+    final all = await showMenuCard<bool>(
+      context,
+      anchor: anchor,
+      cardKey: const ValueKey('pin-who-card'),
+      actions: [
+        MenuCardAction(
+          value: true,
+          keyId: 'pin-all',
+          icon: current ? Icons.check : Icons.group_outlined,
+          label: l.groupPinAll,
+        ),
+        MenuCardAction(
+          value: false,
+          keyId: 'pin-admins',
+          icon: current ? Icons.admin_panel_settings_outlined : Icons.check,
+          label: l.groupPinAdmins,
+        ),
+      ],
+    );
+    if (all == null || all == current || !context.mounted) return;
+    final result = await ref
+        .read(pinControllerProvider)
+        .setMembersCanPin(conversationId, all);
+    if (!context.mounted) return;
+    if (result case Err(:final failure)) {
+      showSisNotice(context, failure.message, isError: true);
+    }
   }
 
   Future<void> _set(

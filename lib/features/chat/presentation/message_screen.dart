@@ -48,6 +48,7 @@ import 'member_name.dart';
 import 'message_menu_card.dart';
 import 'person_avatar.dart';
 import 'photo_viewer.dart';
+import 'pinned_bar.dart';
 import 'profile_pages.dart';
 import 'readers_card.dart';
 
@@ -520,12 +521,23 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
         ? ref.watch(groupRosterProvider(conversationId)).value ??
               const <GroupMember>[]
         : const <GroupMember>[];
+    final myMember = switch (ref.watch(sessionControllerProvider).value) {
+      Allowed(:final member) => member,
+      _ => null,
+    };
     final names = {
       for (final m in roster)
         m.member.userId: nameOrMember(
           AppLocalizations.of(context),
           m.member.displayName,
         ),
+      // A 1:1 has no roster: name the two people for "X pinned a message".
+      if (!isGroup && myMember != null)
+        myMember.userId: nameOrMember(
+          AppLocalizations.of(context),
+          myMember.displayName,
+        ),
+      if (!isGroup && otherUserId != null && title != null) otherUserId: title,
     };
     final departedSenderIds = {
       for (final m in roster)
@@ -683,6 +695,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
           bottom: !_isIos(context),
           child: Column(
             children: [
+              if (conversationId != null)
+                PinnedBar(
+                  conversationId: conversationId,
+                  onTap: (m) => unawaited(_goToHit(m)),
+                ),
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,

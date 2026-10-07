@@ -24,6 +24,8 @@ final class Conversation {
     this.senders = const {},
     this.settings = const GroupSettings(),
     this.archived = false,
+    this.pinned = false,
+    this.pinnedMessageId,
   });
 
   final String id;
@@ -65,6 +67,12 @@ final class Conversation {
   /// True when the signed-in member archived this chat (per member; server-side, so it follows them across devices). Archived chats leave the main list and stay archived when new messages arrive.
   final bool archived;
 
+  /// True when the signed-in member pinned this chat (per member; server-side). Pinned chats sit at the top of the list, up to 5.
+  final bool pinned;
+
+  /// The id of the one message pinned in this chat (shared by everyone in it), or null.
+  final String? pinnedMessageId;
+
   /// The same conversation with a newer message as its preview; [unread]
   /// grows by one when [counts] (a message from someone else, arriving while
   /// this conversation is not open).
@@ -83,6 +91,8 @@ final class Conversation {
         senders: senders,
         settings: settings,
         archived: archived,
+        pinned: pinned,
+        pinnedMessageId: pinnedMessageId,
       );
 
   /// The same conversation with nothing unread.
@@ -99,6 +109,8 @@ final class Conversation {
     senders: senders,
     settings: settings,
     archived: archived,
+    pinned: pinned,
+    pinnedMessageId: pinnedMessageId,
   );
 
   /// The same conversation with [next] as its settings.
@@ -116,6 +128,8 @@ final class Conversation {
     senders: senders,
     settings: next,
     archived: archived,
+    pinned: pinned,
+    pinnedMessageId: pinnedMessageId,
   );
 
   /// The same conversation, archived or not.
@@ -133,6 +147,46 @@ final class Conversation {
     senders: senders,
     settings: settings,
     archived: value,
+    pinned: pinned,
+    pinnedMessageId: pinnedMessageId,
+  );
+
+  /// The same conversation, pinned or not.
+  Conversation withPinned(bool value) => Conversation(
+    id: id,
+    title: title,
+    other: other,
+    lastMessage: lastMessage,
+    lastMessageAt: lastMessageAt,
+    lastSenderId: lastSenderId,
+    unread: unread,
+    avatarPath: avatarPath,
+    hasLeft: hasLeft,
+    isSystem: isSystem,
+    senders: senders,
+    settings: settings,
+    archived: archived,
+    pinned: value,
+    pinnedMessageId: pinnedMessageId,
+  );
+
+  /// The same conversation with [messageId] as its pinned message (null: none).
+  Conversation withPinnedMessage(String? messageId) => Conversation(
+    id: id,
+    title: title,
+    other: other,
+    lastMessage: lastMessage,
+    lastMessageAt: lastMessageAt,
+    lastSenderId: lastSenderId,
+    unread: unread,
+    avatarPath: avatarPath,
+    hasLeft: hasLeft,
+    isSystem: isSystem,
+    senders: senders,
+    settings: settings,
+    archived: archived,
+    pinned: pinned,
+    pinnedMessageId: messageId,
   );
 
   /// For the on-disk chat list snapshot only.
@@ -152,6 +206,8 @@ final class Conversation {
     // Written only when true: the saved list the native side reads keeps its
     // old shape for every un-archived chat.
     if (archived) 'archived': true,
+    if (pinned) 'pinned': true,
+    if (pinnedMessageId != null) 'pinnedMessageId': pinnedMessageId,
   };
 
   static Conversation fromJson(Map<String, Object?> json) => Conversation(
@@ -180,6 +236,8 @@ final class Conversation {
         ? const GroupSettings()
         : GroupSettings.fromJson(json['settings'] as Map<String, Object?>),
     archived: json['archived'] as bool? ?? false,
+    pinned: json['pinned'] as bool? ?? false,
+    pinnedMessageId: json['pinnedMessageId'] as String?,
   );
 
   bool get isGroup => title != null;

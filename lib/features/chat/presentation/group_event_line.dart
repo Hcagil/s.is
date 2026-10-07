@@ -4,7 +4,7 @@ import '../../../l10n/app_localizations.dart';
 import '../domain/group_event.dart';
 
 /// A group line: "X left" / "X was removed" / "X was added" (admins only) or
-/// "X changed the group picture" (everyone). Read
+/// "X changed the group picture" or "X pinned a message" (everyone). Read
 /// from group_events (chatTimelineProvider), which the server already
 /// scopes to a current admin -- nothing here decides visibility itself.
 ///
@@ -29,6 +29,7 @@ class GroupEventLine extends StatelessWidget {
       GroupEventKind.removed => l.eventRemoved(subject),
       GroupEventKind.added => l.eventAdded(subject),
       GroupEventKind.picture => l.eventPictureChanged(subject),
+      GroupEventKind.pinned => l.eventPinned(subject),
     };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),

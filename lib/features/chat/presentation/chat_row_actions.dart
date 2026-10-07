@@ -3,7 +3,6 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/directed_drag.dart';
-import '../../../app/grey_option.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../notifications/domain/notification_settings.dart';
@@ -11,22 +10,30 @@ import '../../notifications/presentation/notification_pages.dart';
 import 'message_menu_card.dart';
 
 /// Shows a chat menu card at [anchor] and returns the selected mute length,
-/// or 'off' to unmute, or null if cancelled.
+/// or 'off' to unmute, 'pin' / 'unpin', or null if cancelled.
 Future<String?> showChatMenuCard(
   BuildContext context, {
   required Rect anchor,
   required bool muted,
+  required bool pinned,
+  bool canPin = true,
 }) => showFloatingCard<String>(
   context,
   anchor: anchor,
   cardKey: const ValueKey('chat-menu'),
-  child: _ChatMenuBody(muted: muted),
+  child: _ChatMenuBody(muted: muted, pinned: pinned, canPin: canPin),
 );
 
 class _ChatMenuBody extends StatefulWidget {
-  const _ChatMenuBody({required this.muted});
+  const _ChatMenuBody({
+    required this.muted,
+    required this.pinned,
+    required this.canPin,
+  });
 
   final bool muted;
+  final bool pinned;
+  final bool canPin;
 
   @override
   State<_ChatMenuBody> createState() => _ChatMenuBodyState();
@@ -79,19 +86,29 @@ class _ChatMenuBodyState extends State<_ChatMenuBody> {
               onTap: () => Navigator.of(context).pop(m.name),
             ),
         ],
-        GreyOption(
-          name: 'pin',
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                const Icon(Icons.push_pin_outlined, size: 22),
-                const SizedBox(width: 14),
-                Expanded(child: Text(l.chatMenuPin)),
-              ],
+        if (widget.canPin)
+          InkWell(
+            key: const ValueKey('chat-menu-pin'),
+            onTap: () =>
+                Navigator.of(context).pop(widget.pinned ? 'unpin' : 'pin'),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(
+                    widget.pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      widget.pinned ? l.chatMenuUnpin : l.chatMenuPin,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
       ],
     );
   }

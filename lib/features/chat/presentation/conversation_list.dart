@@ -57,6 +57,7 @@ class ConversationList extends ConsumerWidget {
                     AsyncData(:final value) when value.isEmpty =>
                       const _Empty(),
                     AsyncData(:final value) => _visibleList(
+                      context,
                       ref,
                       value,
                       hasArchived,
@@ -100,18 +101,76 @@ class ConversationList extends ConsumerWidget {
 
 /// The un-archived chats; the "Archived chats" row hides above them while
 /// anything is archived (when every chat is archived, the row shows alone).
-Widget _visibleList(WidgetRef ref, List<Conversation> all, bool hasArchived) {
+Widget _visibleList(
+  BuildContext context,
+  WidgetRef ref,
+  List<Conversation> all,
+  bool hasArchived,
+) {
+  final l = AppLocalizations.of(context);
   final shown = [
     for (final c in all)
       if (!c.archived) c,
   ];
+  final pinned = [
+    for (final c in shown)
+      if (c.pinned) c,
+  ];
+  final rest = [
+    for (final c in shown)
+      if (!c.pinned) c,
+  ];
+  // A row is a Conversation, or a String section header (only while
+  // something is pinned).
+  final rows = <Object>[
+    if (pinned.isNotEmpty) ...[
+      l.listPinnedHeader,
+      ...pinned,
+      if (rest.isNotEmpty) l.listChatsHeader,
+    ],
+    ...rest,
+  ];
   return ArchiveRevealList(
     header: hasArchived ? const ArchivedChatsRow() : null,
-    itemCount: shown.length,
-    separatorBuilder: (_, _) => const FadeDivider(),
-    itemBuilder: (context, i) => ConversationTile(shown[i]),
+    itemCount: rows.length,
+    separatorBuilder: (_, i) => rows[i] is String || rows[i + 1] is String
+        ? const SizedBox.shrink()
+        : const FadeDivider(),
+    itemBuilder: (context, i) => switch (rows[i]) {
+      final String text => _SectionHeader(
+        text,
+        key: ValueKey('list-header-$i'),
+      ),
+      final Conversation c => ConversationTile(c),
+      _ => const SizedBox.shrink(),
+    },
     onRefresh: () => ref.read(conversationListProvider.notifier).refresh(),
   );
+}
+
+/// "Pinned" / "Chats" above a group of rows, shown only while a chat is
+/// pinned.
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+      child: Text(
+        text.toUpperCase(),
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: scheme.onSurfaceVariant,
+          fontWeight: FontWeight.w800,
+          fontSize: 11.5,
+          letterSpacing: 0.7,
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> _startChat(BuildContext context, WidgetRef ref) async {

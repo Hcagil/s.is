@@ -290,6 +290,38 @@ class AppLocalizationsTr extends AppLocalizations {
   String get messageActionPin => 'Mesajı sabitle';
 
   @override
+  String get messageActionUnpin => 'Mesajın sabitlemesini kaldır';
+
+  @override
+  String get chatMenuUnpin => 'Sohbeti sabitlemeyi kaldır';
+
+  @override
+  String get chatPinLimit => 'En fazla 5 sohbet sabitleyebilirsin.';
+
+  @override
+  String eventPinned(String name) {
+    return '$name bir mesajı sabitledi';
+  }
+
+  @override
+  String get pinnedBarTitle => 'Sabitlenmiş mesaj';
+
+  @override
+  String get pinnedBarPhoto => 'Fotoğraf';
+
+  @override
+  String get groupPinAll => 'Tüm üyeler';
+
+  @override
+  String get groupPinAdmins => 'Yalnızca yöneticiler';
+
+  @override
+  String get listPinnedHeader => 'Sabitlenenler';
+
+  @override
+  String get listChatsHeader => 'Sohbetler';
+
+  @override
   String get messageActionDeleteForMe => 'Benim için sil';
 
   @override

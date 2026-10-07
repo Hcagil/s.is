@@ -61,6 +61,18 @@ final groupPictureEventsProvider = FutureProvider.autoDispose
       );
     }, retry: _never);
 
+/// "X pinned a message" lines for any chat (a group or a 1:1): every member
+/// may read these (inside their own readable window; the server decides). An
+/// error here means no such lines, nothing more -- [chatTimelineProvider]
+/// reads it as empty.
+final pinEventsProvider = FutureProvider.autoDispose
+    .family<List<GroupEvent>, String>((ref, conversationId) {
+      ref.watch(currentUserIdProvider);
+      return _value(
+        ref.read(chatPinRepositoryProvider).pinEvents(conversationId),
+      );
+    }, retry: _never);
+
 /// A group's switches as the chat list last read them (the defaults for a
 /// group the list does not hold). Watching this is what makes a screen follow
 /// an admin's change, mine (optimistic) or someone else's (live).
@@ -124,7 +136,8 @@ final amGroupAdminProvider = Provider.autoDispose.family<bool, String>((
 /// -- what the message screen actually draws (see [buildTimeline]). Events
 /// are asked for only when the open conversation is a group; a 1:1 never
 /// has any, and skipping the call there saves a request that would only
-/// ever come back empty.
+/// ever come back empty. Pin lines are read for a 1:1 too; the other events
+/// only for a group.
 final chatTimelineProvider = Provider.autoDispose<List<TimelineEntry>>((ref) {
   final conversationId = ref.watch(openConversationProvider);
   if (conversationId == null) return const [];
@@ -136,14 +149,17 @@ final chatTimelineProvider = Provider.autoDispose<List<TimelineEntry>>((ref) {
       ),
     ),
   );
-  if (!isGroup) return [for (final m in messages) MessageEntry(m)];
+  final pins =
+      ref.watch(pinEventsProvider(conversationId)).value ??
+      const <GroupEvent>[];
+  if (!isGroup) return buildTimeline(messages, pins);
   final events =
       ref.watch(groupEventsProvider(conversationId)).value ??
       const <GroupEvent>[];
   final pictures =
       ref.watch(groupPictureEventsProvider(conversationId)).value ??
       const <GroupEvent>[];
-  return buildTimeline(messages, [...events, ...pictures]);
+  return buildTimeline(messages, [...events, ...pictures, ...pins]);
 });
 
 final groupControllerProvider = Provider<GroupController>(GroupController.new);
@@ -299,6 +315,7 @@ class GroupController {
     ref.invalidate(groupRosterProvider(conversationId));
     ref.invalidate(groupEventsProvider(conversationId));
     ref.invalidate(groupPictureEventsProvider(conversationId));
+    ref.invalidate(pinEventsProvider(conversationId));
   }
 }
 
@@ -357,6 +374,7 @@ final groupChangesListenerProvider = Provider<void>((ref) {
         ref.invalidate(groupRosterProvider(id));
         ref.invalidate(groupEventsProvider(id));
         ref.invalidate(groupPictureEventsProvider(id));
+        ref.invalidate(pinEventsProvider(id));
         unawaited(ref.read(conversationListProvider.notifier).reloadQuietly());
       }, onError: (Object _) {});
     }),

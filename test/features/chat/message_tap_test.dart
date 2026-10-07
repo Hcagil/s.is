@@ -549,9 +549,10 @@ void main() {
         expect(card, findsOneWidget);
         expect(rows(t), expected);
         expect(
-          find.byKey(const ValueKey('grey-pin')),
+          find.byKey(const ValueKey('menu-pin')),
           expected.contains('pin') ? findsOneWidget : findsNothing,
         );
+        expect(find.byKey(const ValueKey('grey-pin')), findsNothing);
       });
     }
 

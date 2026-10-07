@@ -320,7 +320,7 @@ abstract class AppLocalizations {
   /// **'Unmute'**
   String get chatMenuUnmute;
 
-  /// Long-press card: pin row (greyed, not built yet)
+  /// Long-press card: pin row
   ///
   /// In en, this message translates to:
   /// **'Pin chat'**
@@ -626,11 +626,71 @@ abstract class AppLocalizations {
   /// **'Edit'**
   String get messageActionEdit;
 
-  /// Long-press card row: pin (greyed, not built yet)
+  /// Long-press card row: pin
   ///
   /// In en, this message translates to:
   /// **'Pin message'**
   String get messageActionPin;
+
+  /// Long-press card row: unpin
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin message'**
+  String get messageActionUnpin;
+
+  /// Long-press card: unpin row
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin chat'**
+  String get chatMenuUnpin;
+
+  /// Notice when a sixth chat is pinned
+  ///
+  /// In en, this message translates to:
+  /// **'You can pin up to 5 chats.'**
+  String get chatPinLimit;
+
+  /// Chat line when someone pins a message
+  ///
+  /// In en, this message translates to:
+  /// **'{name} pinned a message'**
+  String eventPinned(String name);
+
+  /// Bar under the chat header
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned message'**
+  String get pinnedBarTitle;
+
+  /// Pinned bar text when the message is only a photo
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get pinnedBarPhoto;
+
+  /// Who may pin messages: value
+  ///
+  /// In en, this message translates to:
+  /// **'All members'**
+  String get groupPinAll;
+
+  /// Who may pin messages: value
+  ///
+  /// In en, this message translates to:
+  /// **'Admins only'**
+  String get groupPinAdmins;
+
+  /// Chat list section header
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get listPinnedHeader;
+
+  /// Chat list section header
+  ///
+  /// In en, this message translates to:
+  /// **'Chats'**
+  String get listChatsHeader;
 
   /// Long-press card row: hide on my devices only
   ///

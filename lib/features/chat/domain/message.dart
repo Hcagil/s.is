@@ -244,6 +244,7 @@ enum MessageAction {
   deleteForEveryone,
   copy,
   pin,
+  unpin,
 }
 
 /// The actions [me] may take on [message] at [now], in the order they are
@@ -272,7 +273,8 @@ List<MessageAction> allowedMessageActions(
 
 /// The actions the long-press card offers for [message], in order: reply,
 /// copy (text present, not deleted), forward, edit (own text within the
-/// edit window), pin (greyed, no handler yet), delete for me (any stored
+/// edit window), pin or unpin (when [canPin]; unpin when [pinned] says this
+/// message is the chat's pinned one), delete for me (any stored
 /// message), delete for everyone (only when [Message.canDeleteForEveryone]
 /// allows, [admin] says the viewer is a group admin). Copy is never in the
 /// swipe row.
@@ -281,6 +283,8 @@ List<MessageAction> menuMessageActions(
   required String? me,
   required DateTime now,
   bool admin = false,
+  bool canPin = true,
+  bool pinned = false,
 }) {
   final canShare = !message.isPending && !message.isDeleted;
   final canEdit = me != null && message.canEdit(me, now);
@@ -289,7 +293,7 @@ List<MessageAction> menuMessageActions(
     if (canShare && message.body.isNotEmpty) MessageAction.copy,
     if (canShare) MessageAction.forward,
     if (canEdit) MessageAction.edit,
-    if (canShare) MessageAction.pin,
+    if (canShare && canPin) pinned ? MessageAction.unpin : MessageAction.pin,
     if (!message.isPending) MessageAction.deleteForMe,
     if (me != null && message.canDeleteForEveryone(me, admin: admin))
       MessageAction.deleteForEveryone,

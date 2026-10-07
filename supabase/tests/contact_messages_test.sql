@@ -1,5 +1,5 @@
 begin;
-select plan(38);
+select plan(39);
 
 -- Contact messages: public.send_contact and the messages.contact flag
 -- (20261012120000_contact_messages.sql).
@@ -17,6 +17,7 @@ select plan(38);
 -- Each negative fixture fails ONE gate; ann's valid call is the control.
 --   ann  member of G, sends              bob  member of G
 --   cat  never a member of G             bot  the SIS bot, a member of G
+--   dan  member of G, session revoked (no app access)
 --   SYS  ann's system chat (she is its member; only the system rule refuses)
 
 -- fixtures -------------------------------------------------------------------
@@ -140,6 +141,11 @@ select is(sc(g('G'), g('CX'), 'Ann', '123'), '42501', 'the bot is refused, thoug
 reset role;
 select as_('01');
 select is(sc(g('SYS'), g('CX'), 'Ann', '123'), '42501', 'nobody sends into the system chat');
+reset role;
+-- dan: a member of G whose session was revoked -- has_app_access() only.
+delete from auth.sessions where id = 'cc100000-0000-0000-0000-000000000004';
+select as_('04');
+select is(sc(g('G'), g('CX'), 'Ann', '123'), '42501', 'a member without app access is refused');
 reset role;
 select is(rows_of(g('CX')), 0::bigint, 'no refused call stored a row');
 

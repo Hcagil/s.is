@@ -69,7 +69,7 @@ Failure _failure(Result<void> r) => (r as Err<void>).failure;
 
 void main() {
   late SupabaseClient priyaClient, quinlanClient, remyClient;
-  late String priyaId, quinlanId, remyId;
+  late String priyaId, quinlanId;
   late String club;
 
   Future<ProviderContainer> opened(SupabaseClient client, String id) async {
@@ -117,7 +117,6 @@ void main() {
     remyClient = await _signedIn('remy@integration.test');
     priyaId = priyaClient.auth.currentUser!.id;
     quinlanId = quinlanClient.auth.currentUser!.id;
-    remyId = remyClient.auth.currentUser!.id;
     final priyaChat = SupabaseChatRepository(priyaClient);
     final title = 'polls seam ${DateTime.now().microsecondsSinceEpoch}';
     var r = await priyaChat.startGroupConversation(

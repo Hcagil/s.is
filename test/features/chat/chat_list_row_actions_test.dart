@@ -617,6 +617,37 @@ void main() {
       await g.up();
       await t.pumpAndSettle();
     });
+
+    testWidgets(
+      'a left drag carried back past its start never pushes the row right',
+      (t) async {
+        await pumpList(t);
+        final double x0 = t.getTopLeft(byKey('conversation-c1')).dx;
+        final g = await t.startGesture(t.getCenter(byKey('archive-swipe-c1')));
+        await g.moveBy(const Offset(-20, 0));
+        await t.pump(const Duration(milliseconds: 16));
+        await g.moveBy(const Offset(-40, 0));
+        await t.pump(const Duration(milliseconds: 16));
+        expect(
+          t.getTopLeft(byKey('conversation-c1')).dx,
+          lessThan(x0),
+          reason: 'the drag started',
+        );
+        for (var i = 0; i <= 7; i++) {
+          await g.moveBy(const Offset(30, 0));
+          await t.pump(const Duration(milliseconds: 16));
+          expect(
+            t.getTopLeft(byKey('conversation-c1')).dx,
+            lessThanOrEqualTo(x0),
+            reason: 'pushed right at step $i',
+          );
+        }
+        expect(byKey('archive-pill-c1'), findsNothing);
+        await g.up();
+        await t.pumpAndSettle();
+        expect(t.getTopLeft(byKey('conversation-c1')).dx, equals(x0));
+      },
+    );
   });
 
   group('back swipe from a chat', () {

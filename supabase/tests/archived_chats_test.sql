@@ -11,7 +11,7 @@
 -- another user_id targets a chat that user IS in; a non-member insert uses
 -- ana's own user_id.
 begin;
-select plan(33);
+select plan(35);
 
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
   ('00000000-0000-0000-0000-0000000ac001', 'ac-ana@example.com', now(), '{"full_name":"Ana"}'),
@@ -157,6 +157,14 @@ reset role;
 create temp table _g as select targets('G', 'ac group msg') as user_id;
 select ok(u(1) not in (select user_id from _g), 'no push to ana in archived G');
 select ok(u(3) in (select user_id from _g), 'cem, who did not archive G, still gets it');
+
+-- search covers archived chats: D1 and G are both archived for ana here.
+select test_as(1);
+select ok(exists(select 1 from public.search_messages('ac two') s where s.conversation_id = c('D1')),
+          'search finds a message in archived D1');
+select ok(exists(select 1 from public.search_messages('ac group msg') s where s.conversation_id = c('G')),
+          'search finds a message in archived G');
+reset role;
 
 -- 6 unarchive restores both ---------------------------------------------------
 select test_as(1);

@@ -10,6 +10,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 
 // MessagesController and Realtime rows written before the reader joined:
 // - a live row older than the oldest shown stored row is ignored (loadOlder
@@ -94,6 +95,7 @@ void main() {
     chat.history['c1'] = _history('c1', 120);
     c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         sessionControllerProvider.overrideWith(_SignedIn.new),

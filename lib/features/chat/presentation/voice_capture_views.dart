@@ -164,7 +164,9 @@ class VoicePillView extends StatelessWidget {
         ),
         child: OverflowBox(
           alignment: Alignment.center,
+          minWidth: 36,
           maxWidth: 36,
+          minHeight: 36,
           maxHeight: 36,
           child: VoiceLockIcon(
             closed: closed,

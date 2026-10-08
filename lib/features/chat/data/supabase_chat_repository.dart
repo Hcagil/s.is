@@ -16,6 +16,7 @@ import '../domain/conversation.dart';
 import '../domain/group_colors.dart';
 import '../domain/group_event.dart';
 import '../domain/group_member.dart';
+import '../domain/file_attachment.dart';
 import '../domain/group_settings.dart';
 import '../domain/message.dart';
 import '../domain/poll.dart';
@@ -228,7 +229,7 @@ final class SupabaseChatRepository implements ChatRepository {
         _client
             .from('conversation_previews')
             .select(
-              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact',
+              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name',
             )
             .retriedOnce(),
         // Only conversations with something unread come back.
@@ -256,6 +257,8 @@ final class SupabaseChatRepository implements ChatRepository {
                 ? pollPreview(row['body'] as String)
                 : row['contact'] == true
                 ? contactPreview(row['body'] as String)
+                : row['attachment_name'] != null
+                ? filePreview(row['attachment_name'] as String)
                 : (row['body'] as String).isNotEmpty
                 ? row['body'] as String
                 : (row['attachment_path'] == null ? '' : 'Photo'),
@@ -322,13 +325,13 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size';
 
   /// The columns of a page read (open chat): no photo preview -- those arrive
   /// separately, see [attachmentPreviews], so the first paint never waits on
   /// them.
   static const _pageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -548,6 +551,7 @@ final class SupabaseChatRepository implements ChatRepository {
           .select(_messageColumns)
           .eq('conversation_id', conversationId)
           .not('attachment_path', 'is', null)
+          .filter('attachment_name', 'is', null)
           // Newest first with a cap: what is lost is the oldest.
           .order('created_at', ascending: false)
           .limit(_historyLimit)
@@ -1073,6 +1077,11 @@ final class SupabaseChatRepository implements ChatRepository {
           if (message.attachmentPreview case final preview?)
             'attachment_preview': base64Encode(preview),
           'forwarded': true,
+          if (message.file case final file?) ...{
+            'attachment_name': file.name,
+            'attachment_mime': file.mime,
+            'attachment_size': file.size,
+          },
         });
       }
       return const Ok(null);
@@ -1215,6 +1224,14 @@ final class SupabaseChatRepository implements ChatRepository {
     forwarded: row['forwarded'] as bool? ?? false,
     poll: row['poll'] as bool? ?? false,
     contact: row['contact'] as bool? ?? false,
+    file: switch (row['attachment_name']) {
+      final String name => AttachedFile(
+        name: stripHiddenChars(name),
+        mime: row['attachment_mime'] as String? ?? 'application/octet-stream',
+        size: (row['attachment_size'] as num?)?.toInt() ?? 0,
+      ),
+      _ => null,
+    },
     editedAt: switch (row['edited_at']) {
       final String at => DateTime.parse(at).toLocal(),
       _ => null,

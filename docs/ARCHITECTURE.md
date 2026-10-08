@@ -29,7 +29,8 @@ lib/
                           flutter_secure_storage, flutter_local_notifications,
                           firebase_messaging, firebase_core,
                           shared_preferences, web_socket_channel,
-                          path_provider, photo_manager, flutter_contacts, url_launcher, http
+                          path_provider, photo_manager, flutter_contacts, url_launcher, http,
+                          connectivity_plus, file_picker, open_filex
     application/          Riverpod Notifiers: state machines; import domain only
     presentation/         widgets: watch state, call notifiers, render
 ```

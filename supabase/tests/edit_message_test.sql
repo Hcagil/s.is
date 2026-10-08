@@ -152,8 +152,9 @@ select set_eq(
      where table_schema = 'public' and table_name = 'messages'
        and grantee = 'authenticated' and privilege_type = 'INSERT'$$,
   $$values ('id'),('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
-           ('reply_to'),('forwarded')$$,
-  'authenticated inserts exactly these eight columns (id since 20260928170000) -- never edited_at');
+           ('reply_to'),('forwarded'),('attachment_name'),('attachment_mime'),('attachment_size')$$,
+  'authenticated inserts exactly these eleven columns (id since 20260928170000, '
+  'the three file columns since 20261013120000) -- never edited_at');
 select test_as('00000000-0000-0000-0000-0000000ed001', 'ed000000-0000-0000-0000-0000000ed001');
 select throws_ok(format($$update public.messages set body = 'sneaky', edited_at = now() where id = %L$$,
                         (select txt from _m)),

@@ -2,8 +2,11 @@ package com.esd.sis
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -18,6 +21,7 @@ import java.util.concurrent.Executors
 
 private const val CHANNEL = "sis/external_picker"
 private const val TONE_CHANNEL = "sis/tone_picker"
+private const val NETWORK_CHANNEL = "sis/network"
 private const val REQUEST_TONE = 9103
 private const val REQUEST_ATTACHMENTS = 9101
 private const val REQUEST_PICTURE = 9102
@@ -69,6 +73,21 @@ class MainActivity : FlutterActivity() {
                 }
                 pickTone((call.arguments as? Map<*, *>)?.get("current") as? String, result)
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NETWORK_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "isRoaming") result.success(isRoaming()) else result.notImplemented()
+            }
+    }
+
+    // True when the active network is cellular and the carrier marks it as
+    // roaming (connectivity_plus cannot tell). Needs only ACCESS_NETWORK_STATE,
+    // which the connectivity_plus plugin's manifest already declares.
+    private fun isRoaming(): Boolean {
+        val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+        val network = manager.activeNetwork ?: return false
+        val caps = manager.getNetworkCapabilities(network) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) &&
+            !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING)
     }
 
     // The phone's own notification-sound chooser. A null uri in the reply

@@ -171,6 +171,8 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
     final body = widget.message.body.trim();
     final preview = body.isNotEmpty
         ? body
+        : widget.message.file != null
+        ? widget.message.file!.name
         : widget.message.hasAttachment
         ? l.attachPhoto
         : l.commonMessage;

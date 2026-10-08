@@ -150,6 +150,29 @@ class _ComposerState extends ConsumerState<_Composer>
     }
   }
 
+  /// Opens the phone's file chooser (several files allowed) and queues each
+  /// picked file like a message: the pending bubble shows at once and the
+  /// file sends by itself, waiting offline. Files over 50 MB are skipped with
+  /// one notice. Backing out sends nothing.
+  Future<void> _sendFiles() async {
+    final id = _conversationId;
+    if (id == null) return;
+    final pick = await ref.read(deviceFilesProvider).pick();
+    if (!mounted) return;
+    final queue = ref.read(sendQueueProvider.notifier);
+    // Only the first file answers the reply target; enqueueFile spends it.
+    for (final file in pick.files) {
+      queue.enqueueFile(id, file, replyTo: ref.read(replyingToProvider));
+    }
+    if (pick.tooBig > 0) {
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).fileTooBig(pick.tooBig),
+        isError: true,
+      );
+    }
+  }
+
   /// Picks one or more images (the paperclip's photo grid: recent photos,
   /// the camera tile, or "Gallery"), previews them with a caption box, and
   /// sends them -- the caption goes with the first one, the rest with none,
@@ -163,6 +186,7 @@ class _ComposerState extends ConsumerState<_Composer>
     if (!mounted) return;
     if (choice == 'poll') return _sendPoll();
     if (choice == 'contact') return _sendContact();
+    if (choice == 'file') return _sendFiles();
     if (choice != 'photo') return;
     final picked = await showAttachmentSheet(context);
     if (picked.images.isEmpty || !mounted) return;
@@ -567,6 +591,7 @@ String quoteText(AppLocalizations l, Message? message) => switch (message) {
   null => l.quoteOriginal,
   Message(isDeleted: true) => l.quoteDeleted,
   Message(:final body) when body.isNotEmpty => body,
+  Message(:final file?) => file.name,
   Message(hasAttachment: true) => l.quotePhoto,
   _ => l.commonMessage,
 };

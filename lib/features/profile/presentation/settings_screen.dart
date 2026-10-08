@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
 import '../../../app/controls.dart';
-import '../../../app/grey_option.dart';
 import '../../../app/licences_page.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
@@ -17,6 +16,7 @@ import '../../appearance/presentation/language_page.dart';
 import '../../appearance/presentation/text_size_page.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
+import '../../autodownload/presentation/auto_download_page.dart';
 import '../../chat/presentation/avatar_card.dart';
 import '../../chat/presentation/person_avatar.dart';
 import '../../chat/presentation/photo_viewer.dart';
@@ -200,13 +200,11 @@ class SettingsScreen extends ConsumerWidget {
             const LanguagePage(),
             value: languageLabel(l, look.language),
           ),
-          GreyOption(
-            name: 'att_auto',
-            label: l.settingsAutoDownload,
-            child: SisSettingsRow(
-              icon: Icons.download_outlined,
-              title: l.settingsAutoDownload,
-            ),
+          row(
+            'settings-auto-download',
+            Icons.download_outlined,
+            l.settingsAutoDownload,
+            const AutoDownloadPage(),
           ),
         ],
       ),

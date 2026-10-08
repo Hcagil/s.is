@@ -65,12 +65,12 @@ grant select on _fx to authenticated;
 -- door it does not guard.
 select is((select public from storage.buckets where id = 'attachments'), false,
           'the attachments bucket is private');
-select is((select file_size_limit from storage.buckets where id = 'attachments'), 10485760::bigint,
-          'the attachments bucket caps an object at 10 MB');
+select is((select file_size_limit from storage.buckets where id = 'attachments'), 52428800::bigint,
+          'the attachments bucket caps an object at 50 MiB (20261013120000_file_messages.sql)');
 select set_eq(
   $$select unnest(allowed_mime_types) from storage.buckets where id = 'attachments'$$,
-  $$values ('image/jpeg'),('image/png'),('image/webp'),('image/gif')$$,
-  'the attachments bucket accepts only the four image types');
+  $$values ('image/jpeg'),('image/png'),('image/webp'),('image/gif'),('application/octet-stream')$$,
+  'the attachments bucket accepts the four image types and application/octet-stream (every non-photo file)');
 
 -- 2 is_member_of_path is total ---------------------------------------------
 -- A storage key is attacker-supplied text. If this raises on nonsense, the
@@ -242,7 +242,7 @@ select set_eq(
      where table_schema = 'public' and table_name = 'messages'
        and grantee = 'authenticated' and privilege_type = 'INSERT'$$,
   $$values ('id'),('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
-           ('reply_to'),('forwarded')$$,
+           ('reply_to'),('forwarded'),('attachment_name'),('attachment_mime'),('attachment_size')$$,
   'authenticated may insert exactly id, conversation_id, sender_id, body, attachment_path, '
   'attachment_preview, reply_to, forwarded (20260928170000_message_client_id.sql)');
 

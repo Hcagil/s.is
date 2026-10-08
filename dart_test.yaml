@@ -22,3 +22,8 @@ tags:
   # only test/tool/sis_bot_tool_test.sh provides; it runs the probe itself.
   sis_bot_probe:
     skip: "run by test/tool/sis_bot_tool_test.sh"
+  # Reads the device log through the VM service (test/data/failures_log_mask_test.dart).
+  # The ordinary run has no VM service. Run explicitly:
+  #   flutter test --enable-vmservice --run-skipped --tags vmservice
+  vmservice:
+    skip: "needs --enable-vmservice; run explicitly"

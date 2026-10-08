@@ -1,5 +1,5 @@
 begin;
-select plan(69);
+select plan(68);
 
 -- Location messages: public.send_location and messages.location_lat/lng
 -- (20261015120000_location_messages.sql). Written from the contract, not from

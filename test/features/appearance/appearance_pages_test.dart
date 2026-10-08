@@ -363,9 +363,9 @@ void main() {
   });
 
   group('grey options', () {
-    const where = {
-      'grey-att_auto': null, // on the settings page itself
-    };
+    // grey key -> settings row that opens its page (null: the settings page
+    // itself). Empty now that Media auto-download is live; kept for the next.
+    const where = <String, String?>{};
 
     for (final MapEntry(key: grey, value: page) in where.entries) {
       for (final lang in [AppLanguage.en, AppLanguage.tr]) {

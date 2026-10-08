@@ -38,9 +38,9 @@ final class AutoDownloadSettings {
     final wifi = kindsFor(NetworkKind.wifi);
     final roaming = kindsFor(NetworkKind.roaming);
 
-    // Sets are compared by length: Dart's Set == is identity, and the sets
-    // only ever hold MediaKind values.
-    bool isAll(Set<MediaKind> s) => s.length == MediaKind.values.length;
+    // Set == is identity in Dart, so compare the members.
+    bool isAll(Set<MediaKind> s) =>
+        s.length == MediaKind.values.length && s.containsAll(MediaKind.values);
     if (mobile.isEmpty && wifi.isEmpty && roaming.isEmpty) {
       return AutoDownloadPreset.disabled;
     }

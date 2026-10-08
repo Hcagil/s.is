@@ -41,6 +41,8 @@ inside `chat`.
 
 ### Layer rules (mechanically checked)
 
+A provider whose type is a widget lives in `presentation/`.
+
 1. `presentation/` never imports `supabase_flutter`, `google_sign_in`,
    `in_app_update`, or any `data/` file.
 2. `application/` imports only `domain/` and `core/` (plus `riverpod`); no

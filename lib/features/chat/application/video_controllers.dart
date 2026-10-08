@@ -15,14 +15,6 @@ final videoSharerProvider = Provider<VideoSharer>(
   (_) => throw UnimplementedError('override in main'),
 );
 
-/// Builds the on-screen video for a playback. A plugin widget cannot live in
-/// presentation and application may not import Flutter, so the value is a
-/// function returning the widget as an [Object]; main overrides it with the
-/// data layer's video widget and the player page casts it back.
-final videoSurfaceProvider = Provider<Object Function(VideoPlayback)>(
-  (_) => throw UnimplementedError('override in main'),
-);
-
 /// Where waiting sends are kept so they survive the app being killed.
 final sendQueueStoreProvider = Provider<SendQueueStore>(
   (_) => throw UnimplementedError('override in main'),

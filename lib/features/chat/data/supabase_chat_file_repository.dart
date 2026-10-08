@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
 import '../../../data/failures.dart';
+import '../../../data/postgrest_retry.dart';
 import '../domain/file_attachment.dart';
 import '../domain/file_repository.dart';
 import '../domain/message.dart';
@@ -65,7 +66,8 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
             .from('messages')
             .select('created_at')
             .eq('id', file.id)
-            .single();
+            .single()
+            .retriedOnce();
         createdAt = DateTime.parse(row['created_at'] as String).toLocal();
       }
 

@@ -204,11 +204,9 @@ class _Attachment extends ConsumerWidget {
           SizedBox.expand(
             child: Padding(
               padding: const EdgeInsets.all(3),
-              child: CircularProgressIndicator(
+              child: SisProgressRing(
                 value: spinning ? null : 0.75,
-                strokeWidth: 3,
                 color: Colors.white,
-                backgroundColor: Colors.transparent,
               ),
             ),
           ),

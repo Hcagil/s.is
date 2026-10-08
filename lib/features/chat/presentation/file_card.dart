@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../autodownload/application/auto_download_controller.dart';
@@ -67,13 +68,11 @@ class FileCard extends ConsumerWidget {
               alignment: Alignment.center,
               children: [
                 SizedBox.expand(
-                  child: CircularProgressIndicator(
+                  child: SisProgressRing(
                     value: downloading
                         ? (progress == 0 ? null : progress)
                         : 0.75,
-                    strokeWidth: 3,
                     color: accent,
-                    backgroundColor: Colors.transparent,
                   ),
                 ),
                 Icon(Icons.arrow_downward_rounded, size: 20, color: accent),

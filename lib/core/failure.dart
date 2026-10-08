@@ -64,6 +64,24 @@ final class VideoCancelledFailure extends Failure {
   String get message => 'Cancelled.';
 }
 
+/// Location permission was refused; the screen shows its own translated line. [forever] is true when only the phone settings can change it.
+final class LocationDeniedFailure extends Failure {
+  const LocationDeniedFailure({this.forever = false});
+
+  final bool forever;
+
+  @override
+  String get message => 'Location is turned off for SIS.';
+}
+
+/// Location is switched off on the phone or no position arrived in time; the screen shows its own translated line.
+final class LocationUnavailableFailure extends Failure {
+  const LocationUnavailableFailure();
+
+  @override
+  String get message => 'Could not find where you are.';
+}
+
 final class ProviderFailure extends Failure {
   const ProviderFailure(this.message, {this.userCanceled = false});
 

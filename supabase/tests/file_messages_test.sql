@@ -145,8 +145,8 @@ reset role;
 -- 3 conversation_previews ----------------------------------------------------------
 select is((select attname::text from pg_attribute
             where attrelid = 'public.conversation_previews'::regclass and attnum > 0 and not attisdropped
-            order by attnum desc limit 1 offset 1),
-          'attachment_name', 'conversation_previews keeps attachment_name just before the video duration');
+            order by attnum desc limit 1 offset 2),
+          'attachment_name', 'conversation_previews keeps attachment_name just before the video duration and the location');
 -- one transaction shares one now(): age the earlier rows so the next is newest
 update public.messages set created_at = now() - interval '1 minute' where conversation_id = g('G');
 select as_('01');

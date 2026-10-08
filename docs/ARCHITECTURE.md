@@ -31,7 +31,9 @@ lib/
                           shared_preferences, web_socket_channel,
                           path_provider, photo_manager, flutter_contacts, url_launcher, http,
                           connectivity_plus, file_picker, open_filex,
-                          light_compressor_v2, video_player, share_plus
+                          light_compressor_v2, video_player, share_plus,
+                          google_maps_flutter, flutter_map, latlong2,
+                          geolocator
     application/          Riverpod Notifiers: state machines; import domain only
     presentation/         widgets: watch state, call notifiers, render
 ```

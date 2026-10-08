@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
     <!-- Send a contact: the phone contacts list, asked for only when the picker opens. Saving a contact opens the phone's own add-contact screen, which needs no permission. -->
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
+    <!-- Send a location: foreground only, asked for when the member opens the location picker. No background location. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <!-- Nothing but photos: drop what the photo library plugin would add. -->
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove"/>
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove"/>
@@ -22,6 +25,14 @@
         android:allowBackup="false"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules">
+        <!-- Google Maps key, filled from MAPS_API_KEY_ANDROID at build time (empty = OpenStreetMap fallback). -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${MAPS_API_KEY}"/>
+        <!-- geolocator declares a background location service; SIS reads the position in the foreground only, so it is removed from the merged manifest. -->
+        <service
+            android:name="com.baseflow.geolocator.GeolocatorLocationService"
+            tools:node="remove"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

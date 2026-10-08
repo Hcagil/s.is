@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -12,6 +14,15 @@ val releaseSigningValues = mapOf(
     "ANDROID_UPLOAD_KEY_PASSWORD" to System.getenv("ANDROID_UPLOAD_KEY_PASSWORD"),
 )
 val missingReleaseSigningValues = releaseSigningValues.filterValues { it.isNullOrBlank() }.keys
+
+// Google Maps key for the manifest: env (CI), else the git-ignored .private/maps.properties, else empty. An empty key never fails a build; the app then falls back to OpenStreetMap.
+val mapsApiKey: String =
+    System.getenv("MAPS_API_KEY_ANDROID")?.takeIf { it.isNotBlank() }
+        ?: rootProject.file("../.private/maps.properties").takeIf { it.exists() }?.let { file ->
+            Properties().apply { file.inputStream().use { load(it) } }
+                .getProperty("MAPS_API_KEY_ANDROID")?.trim()
+        }
+        ?: ""
 val releaseBuildRequested = gradle.startParameter.taskNames.any {
     it.contains("release", ignoreCase = true)
 }
@@ -49,6 +60,7 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     signingConfigs {

@@ -1,9 +1,10 @@
 import 'dart:convert';
 
 import 'file_attachment.dart';
+import 'shared_location.dart';
 import 'video.dart';
 
-/// One queued send, as saved: a text, a file, or a video not yet shrunk.
+/// One queued send, as saved: a text, a file, a video not yet shrunk, or a place.
 final class QueuedRecord {
   /// Creates a queued record with the given properties.
   const QueuedRecord({
@@ -14,6 +15,7 @@ final class QueuedRecord {
     this.replyTo,
     this.file,
     this.video,
+    this.location,
   });
 
   /// The ID of the message that will be sent (also file.id / video.id).
@@ -36,6 +38,9 @@ final class QueuedRecord {
 
   /// A video still to be shrunk, or null.
   final VideoSource? video;
+
+  /// A place to send, or null.
+  final SharedLocation? location;
 }
 
 /// Encodes a list of queued records into a JSON string.
@@ -81,6 +86,15 @@ String encodeQueue(List<QueuedRecord> records) {
       };
       map['video'] = videoMap;
     }
+    final loc = record.location;
+    if (loc != null) {
+      map['location'] = <String, Object?>{
+        'lat': loc.lat,
+        'lng': loc.lng,
+        'name': loc.name,
+        'address': loc.address,
+      };
+    }
     json.add(map);
   }
   return jsonEncode(json);
@@ -106,6 +120,7 @@ List<QueuedRecord> decodeQueue(String? json) {
         final replyTo = item['replyTo'] as String?;
         PickedFile? file;
         VideoSource? video;
+        SharedLocation? location;
         if (item.containsKey('file')) {
           final f = item['file'] as Map<String, dynamic>;
           file = PickedFile(
@@ -130,6 +145,15 @@ List<QueuedRecord> decodeQueue(String? json) {
             thumbPath: v['thumbPath'] as String,
           );
         }
+        if (item.containsKey('location')) {
+          final l = item['location'] as Map<String, dynamic>;
+          location = SharedLocation(
+            lat: (l['lat'] as num).toDouble(),
+            lng: (l['lng'] as num).toDouble(),
+            name: l['name'] as String,
+            address: l['address'] as String? ?? '',
+          );
+        }
         result.add(
           QueuedRecord(
             id: id,
@@ -139,6 +163,7 @@ List<QueuedRecord> decodeQueue(String? json) {
             replyTo: replyTo,
             file: file,
             video: video,
+            location: location,
           ),
         );
       } catch (_) {

@@ -89,14 +89,17 @@ jobs:
           ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
           ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
           ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          # Optional: empty means the app uses OpenStreetMap; the build never fails on it.
+          MAPS_API_KEY_ANDROID: ${{ secrets.MAPS_API_KEY_ANDROID }}
         run: |
           docker compose run --rm -T \
-            -e ANDROID_UPLOAD_KEYSTORE -e ANDROID_UPLOAD_KEY_ALIAS -e ANDROID_UPLOAD_STORE_PASSWORD -e ANDROID_UPLOAD_KEY_PASSWORD \
+            -e ANDROID_UPLOAD_KEYSTORE -e ANDROID_UPLOAD_KEY_ALIAS -e ANDROID_UPLOAD_STORE_PASSWORD -e ANDROID_UPLOAD_KEY_PASSWORD -e MAPS_API_KEY_ANDROID \
             flutter flutter build appbundle --release \
               --build-number=${{ needs.scope.outputs.code }} --build-name=${{ needs.scope.outputs.name }} \
               --dart-define=SUPABASE_URL=${{ vars.SUPABASE_URL }} \
               --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ vars.SUPABASE_PUBLISHABLE_KEY }} \
-              --dart-define=GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }}
+              --dart-define=GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }} \
+              --dart-define=MAPS_API_KEY="$MAPS_API_KEY_ANDROID"
       - name: Install Supabase CLI
         uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
         with: { version: 2.117.0 }

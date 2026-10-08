@@ -1,4 +1,5 @@
 import Flutter
+import GoogleMaps
 import UIKit
 import UserNotifications
 
@@ -9,6 +10,10 @@ import UserNotifications
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     excludeSupportFromBackup()
+    // Google Maps starts only with a key; with none, Dart uses OpenStreetMap and never builds a GoogleMap.
+    if let mapsKey = Bundle.main.object(forInfoDictionaryKey: "MapsApiKey") as? String, !mapsKey.isEmpty, !mapsKey.hasPrefix("$(") {
+      GMSServices.provideAPIKey(mapsKey)
+    }
     registerMessageActions()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }

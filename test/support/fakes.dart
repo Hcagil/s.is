@@ -3757,6 +3757,7 @@ Message withoutPreview(Message m) => Message(
   poll: m.poll,
   contact: m.contact,
   file: m.file,
+  location: m.location,
   sending: m.sending,
 );
 

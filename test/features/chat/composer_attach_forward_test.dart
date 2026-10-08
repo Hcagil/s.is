@@ -35,7 +35,7 @@ const dana = Member(userId: 'u4', displayName: 'Dana');
 
 Finder byKey(String k) => find.byKey(ValueKey(k));
 
-const greyTiles = ['grey-att_tvoice', 'grey-att_tloc'];
+const greyTiles = ['grey-att_tvoice'];
 
 Message msg(String id, {String body = 'hi', String from = 'u2'}) => Message(
   id: id,
@@ -135,7 +135,7 @@ bool fieldFocused(WidgetTester t) => t
 void main() {
   group('the attach card', () {
     testWidgets('the paperclip opens the card, not the grid; it holds Photo '
-        'Poll, Contact, File and the three grey tiles', (t) async {
+        'Poll, Contact, File, Location and the grey tiles', (t) async {
       await pumpChat(t, world());
       await t.tap(byKey('composer-attach'));
       await t.pumpAndSettle();
@@ -145,6 +145,8 @@ void main() {
       expect(byKey('attach-contact'), findsOneWidget);
       expect(byKey('attach-file'), findsOneWidget);
       expect(byKey('grey-att_tfile'), findsNothing);
+      expect(byKey('attach-location'), findsOneWidget);
+      expect(byKey('grey-att_tloc'), findsNothing);
       for (final k in greyTiles) {
         expect(byKey(k), findsOneWidget, reason: k);
       }
@@ -268,6 +270,14 @@ void main() {
       await t.tap(byKey('attach-video'));
       await t.pumpAndSettle();
       expect(results, ['video']);
+    });
+
+    testWidgets('Location is live and answers location', (t) async {
+      final results = await mount(t);
+      expect(byKey('grey-att_tloc'), findsNothing);
+      await t.tap(byKey('attach-location'));
+      await t.pumpAndSettle();
+      expect(results, ['location']);
     });
 
     testWidgets('backing out answers null', (t) async {

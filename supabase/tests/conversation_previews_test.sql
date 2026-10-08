@@ -133,9 +133,9 @@ select is((select array_agg(attname::text order by attnum) from (
              select attname, attnum from pg_attribute
               where attrelid = 'public.conversation_previews'::regclass
                 and attnum > 0 and not attisdropped
-              order by attnum desc limit 4) last_four),
-          array['poll', 'contact', 'attachment_name', 'attachment_duration_ms'],
-          'poll was appended, then contact, attachment_name, and attachment_duration_ms is now the last column');
+              order by attnum desc limit 5) last_five),
+          array['poll', 'contact', 'attachment_name', 'attachment_duration_ms', 'location_lat'],
+          'poll was appended, then contact, attachment_name, attachment_duration_ms, and location_lat is now the last column');
 
 select * from finish();
 rollback;

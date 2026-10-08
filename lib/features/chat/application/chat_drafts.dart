@@ -8,6 +8,7 @@ import '../../auth/domain/session_state.dart';
 import '../domain/file_attachment.dart';
 import '../domain/message.dart';
 import '../domain/send_queue_store.dart';
+import '../domain/shared_location.dart';
 import '../domain/video.dart';
 import 'chat_controllers.dart';
 
@@ -122,8 +123,9 @@ class DraftsController extends Notifier<Map<String, Draft>> {
 /// reply target exactly as typed (for [SendQueueController._drain] to retry or
 /// hand back to the draft). A file send carries the picked [file] and an empty
 /// body; a video send carries the [video] still to be shrunk, which the drain
-/// replaces by the shrunk [file]. A send brought back after the app was killed
-/// has no [replyTo] message, only the id inside [message].
+/// replaces by the shrunk [file]; a location send carries the [location] and
+/// an empty body. A send brought back after the app was killed has no
+/// [replyTo] message, only the id inside [message].
 class _QueuedSend {
   _QueuedSend({
     required this.message,
@@ -131,6 +133,7 @@ class _QueuedSend {
     required this.replyTo,
     this.file,
     this.video,
+    this.location,
   });
 
   final Message message;
@@ -138,6 +141,7 @@ class _QueuedSend {
   final Message? replyTo;
   PickedFile? file;
   VideoSource? video;
+  final SharedLocation? location;
 }
 
 /// Pending text bubbles per conversation, oldest first -- for
@@ -275,6 +279,35 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     return message;
   }
 
+  /// Queues the place [location] for [conversationId] like [enqueueFile] and
+  /// returns the pending bubble at once. The typed draft text stays; a place
+  /// is never a reply.
+  Message enqueueLocation(String conversationId, SharedLocation location) {
+    final message = Message(
+      id: randomMessageId(),
+      conversationId: conversationId,
+      senderId: _me ?? '',
+      body: location.body,
+      createdAt: DateTime.now(),
+      sending: true,
+      location: location,
+    );
+    _queues
+        .putIfAbsent(conversationId, () => [])
+        .add(
+          _QueuedSend(
+            message: message,
+            body: '',
+            replyTo: null,
+            location: location,
+          ),
+        );
+    _publish(conversationId);
+    _persist();
+    unawaited(_drain(conversationId));
+    return message;
+  }
+
   void _publish(String conversationId) {
     final items = _queues[conversationId];
     final next = {...state};
@@ -361,6 +394,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
             replyTo: i.message.replyTo,
             file: i.file,
             video: i.video,
+            location: i.location,
           ),
     ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     unawaited(ref.read(sendQueueStoreProvider).save(me, records));
@@ -386,16 +420,18 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
                 id: r.id,
                 conversationId: r.conversationId,
                 senderId: userId,
-                body: r.body.trim(),
+                body: r.location?.body ?? r.body.trim(),
                 createdAt: r.createdAt,
                 sending: true,
                 replyTo: r.replyTo,
+                location: r.location,
                 file: r.file?.attached ?? r.video?.attached,
               ),
               body: r.body,
               replyTo: null,
               file: r.file,
               video: r.video,
+              location: r.location,
             ),
           );
     }
@@ -488,7 +524,10 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
       if (isVideo) {
         progress.set(item.message.id, const VideoProgress(VideoStage.sending));
       }
-      final result = file != null
+      final location = item.location;
+      final Result<Message> result = location != null
+          ? await _sendLocation(conversationId, item.message, location)
+          : file != null
           ? await ref
                 .read(chatFileRepositoryProvider)
                 .send(
@@ -580,6 +619,23 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
           stopped.map((s) => s.replyTo).whereType<Message>().firstOrNull,
           failure,
         );
+  }
+
+  /// Stores the place through the location repository; on success the stored
+  /// copy of the pending bubble stands in for the server row (the live feed
+  /// replaces it by id).
+  Future<Result<Message>> _sendLocation(
+    String conversationId,
+    Message pending,
+    SharedLocation location,
+  ) async {
+    final sent = await ref
+        .read(locationShareRepositoryProvider)
+        .send(conversationId, pending.id, location);
+    return switch (sent) {
+      Ok() => Ok(pending.stored()),
+      Err(:final failure) => Err(failure),
+    };
   }
 
   // ponytail: a fixed delay ladder capped at 5s (owner: 30s left a message

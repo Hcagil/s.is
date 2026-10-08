@@ -69,6 +69,10 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Allow camera access to take a photo and send it in the chat. The photo is only uploaded when you send it.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Allow access so you can share where you are in a chat. Your location is only read when you choose to send it.</string>
+	<key>MapsApiKey</key>
+	<string>$(MAPS_API_KEY_IOS)</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Allow access so you can pick a contact to send in the chat. Nothing leaves your phone until you send it.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

@@ -5,6 +5,7 @@ import '../../../core/date_label.dart';
 import 'file_attachment.dart';
 import 'poll.dart';
 import 'shared_contact.dart';
+import 'shared_location.dart';
 import 'video.dart';
 
 /// The longest body the database will accept, per the check constraint on
@@ -42,9 +43,12 @@ bool isSendableBody(String body) {
 /// The one-line preview of a message in the conversation list. An image sent
 /// without a caption has an empty body, which would read as "no messages".
 /// A poll shows [pollPreview] of its question, a contact [contactPreview]
-/// of its name, a file [filePreview] of its name.
+/// of its name, a file [filePreview] of its name, a location
+/// [locationPreviewText].
 String previewText(Message message) => message.poll
     ? pollPreview(message.body)
+    : message.location != null
+    ? locationPreviewText
     : message.contact
     ? contactPreview(message.body)
     : message.file != null
@@ -80,6 +84,7 @@ final class Message {
     this.forwarded = false,
     this.poll = false,
     this.contact = false,
+    this.location,
     this.file,
     this.sending = false,
   });
@@ -114,6 +119,10 @@ final class Message {
   /// A shared phone contact: [body] is the name, a line break, the number
   /// (see SharedContact). Its body never changes.
   final bool contact;
+
+  /// A shared place (see SharedLocation): [body] is its name and address; the
+  /// coordinates are in the location columns. Its body never changes.
+  final SharedLocation? location;
 
   /// The file this message carries (name, type, size), or null. A file
   /// message has an empty body; while it uploads it has [sending] set and no
@@ -158,6 +167,7 @@ final class Message {
       !forwarded &&
       !poll &&
       !contact &&
+      location == null &&
       file == null &&
       now.difference(createdAt) < deleteForEveryoneWindow;
 
@@ -207,6 +217,7 @@ final class Message {
     forwarded: forwarded,
     poll: poll,
     contact: contact,
+    location: location,
     file: file,
     sending: sending,
   );
@@ -229,12 +240,35 @@ final class Message {
     forwarded: forwarded,
     poll: poll,
     contact: contact,
+    location: location,
     file: file,
     sending: sending,
   );
 
   /// Whether [userId] wrote this message; decides which side it is drawn on.
   bool isFrom(String userId) => senderId == userId;
+
+  /// A copy that is no longer pending: what the send queue shows once the
+  /// server stored it.
+  Message stored() => Message(
+    id: id,
+    conversationId: conversationId,
+    senderId: senderId,
+    body: body,
+    createdAt: createdAt,
+    attachmentPath: attachmentPath,
+    attachmentPreview: attachmentPreview,
+    localImage: localImage,
+    deletion: deletion,
+    deletedBy: deletedBy,
+    editedAt: editedAt,
+    replyTo: replyTo,
+    forwarded: forwarded,
+    poll: poll,
+    contact: contact,
+    location: location,
+    file: file,
+  );
 }
 
 /// Whether [messages] (oldest first) at [index] starts a run: the first
@@ -304,7 +338,11 @@ List<MessageAction> allowedMessageActions(
   final canShare = !message.isPending && !message.isDeleted;
   return [
     if (canShare) MessageAction.reply,
-    if (canShare && !message.poll && !message.contact) MessageAction.forward,
+    if (canShare &&
+        !message.poll &&
+        !message.contact &&
+        message.location == null)
+      MessageAction.forward,
     if (canEdit) MessageAction.edit,
     if (canDelete) MessageAction.deleteForEveryone,
   ];
@@ -337,7 +375,11 @@ List<MessageAction> menuMessageActions(
     if (canShare && canStop) MessageAction.stopPoll,
     if (canShare && !message.poll && message.body.isNotEmpty)
       MessageAction.copy,
-    if (canShare && !message.poll && !message.contact) MessageAction.forward,
+    if (canShare &&
+        !message.poll &&
+        !message.contact &&
+        message.location == null)
+      MessageAction.forward,
     if (canEdit) MessageAction.edit,
     if (canShare && canPin) pinned ? MessageAction.unpin : MessageAction.pin,
     if (!message.isPending) MessageAction.deleteForMe,

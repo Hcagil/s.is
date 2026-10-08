@@ -1,2 +1,5 @@
 /* Fotoğraf kitaplığı izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
 "NSPhotoLibraryUsageDescription" = "Fotoğrafların ve videoların sohbette burada yüklensin diye erişime izin ver. Sen gönderene kadar hiçbir şey gönderilmez. Yalnızca birkaçına izin verebilirsin.";
+
+/* Konum izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
+"NSLocationWhenInUseUsageDescription" = "Bulunduğun yeri sohbette paylaşabilmen için erişime izin ver. Konumun yalnızca sen göndermeyi seçtiğinde okunur.";

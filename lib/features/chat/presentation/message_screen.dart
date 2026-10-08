@@ -46,6 +46,8 @@ import 'chat_search_bar.dart';
 import 'contact_card.dart';
 import 'contact_picker_page.dart';
 import 'file_card.dart';
+import 'location_card.dart';
+import 'location_share_page.dart';
 import 'group_event_line.dart';
 import 'group_gone_guard.dart';
 import 'swipeable_message.dart';

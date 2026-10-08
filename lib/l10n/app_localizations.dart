@@ -548,6 +548,108 @@ abstract class AppLocalizations {
   /// **'Location'**
   String get attachLocation;
 
+  /// Title of the share-location page
+  ///
+  /// In en, this message translates to:
+  /// **'Share location'**
+  String get locationShareTitle;
+
+  /// Row on the share-location page: send where the phone is now
+  ///
+  /// In en, this message translates to:
+  /// **'Share current location'**
+  String get locationShareCurrent;
+
+  /// Small line under the share-current-location row
+  ///
+  /// In en, this message translates to:
+  /// **'Sends where you are now'**
+  String get locationShareCurrentSub;
+
+  /// Small line under the share-current-location row once a position is known
+  ///
+  /// In en, this message translates to:
+  /// **'Accurate to about {meters} m'**
+  String locationShareAccuracy(int meters);
+
+  /// Row on the share-location page and title of the pick page
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a place'**
+  String get locationPickTitle;
+
+  /// Small line under the pick-a-place row
+  ///
+  /// In en, this message translates to:
+  /// **'Move the pin on the map'**
+  String get locationPickSub;
+
+  /// Note under the share-location card
+  ///
+  /// In en, this message translates to:
+  /// **'Location permission is asked only when you tap Share'**
+  String get locationPermNote;
+
+  /// Hint of the place search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search a place'**
+  String get locationSearchHint;
+
+  /// Button on the pick page
+  ///
+  /// In en, this message translates to:
+  /// **'Send this place'**
+  String get locationSendThis;
+
+  /// Shown when the location permission is refused
+  ///
+  /// In en, this message translates to:
+  /// **'Location is turned off for SIS. Turn it on in the phone settings, or pick a place on the map.'**
+  String get locationDenied;
+
+  /// Shown when no position could be found
+  ///
+  /// In en, this message translates to:
+  /// **'Could not find your position. Check that location is on.'**
+  String get locationUnavailable;
+
+  /// Chat list preview of a location message
+  ///
+  /// In en, this message translates to:
+  /// **'📍 Location'**
+  String get locationPreviewLine;
+
+  /// Title of the confirmation before the maps app opens
+  ///
+  /// In en, this message translates to:
+  /// **'Open in Maps?'**
+  String get locationOpenTitle;
+
+  /// Confirm button of the open-in-maps card
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get locationOpen;
+
+  /// Cancel button of the open-in-maps card
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get locationCancel;
+
+  /// Notice when the maps app could not be opened
+  ///
+  /// In en, this message translates to:
+  /// **'No maps app could open this place.'**
+  String get locationOpenFailed;
+
+  /// Shown under the place search when nothing matches
+  ///
+  /// In en, this message translates to:
+  /// **'No places found'**
+  String get locationNoResults;
+
   /// Attach card tile under the composer
   ///
   /// In en, this message translates to:

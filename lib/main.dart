@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/sis_app.dart';
@@ -31,6 +32,8 @@ import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/file_chat_list_snapshot_store.dart';
 import 'features/chat/data/flutter_device_files.dart';
 import 'features/chat/data/flutter_device_videos.dart';
+import 'features/chat/data/geolocator_device_location.dart';
+import 'features/chat/data/maps_backend.dart';
 import 'features/chat/data/flutter_phone_book.dart';
 import 'features/chat/data/native_picture_cropper.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
@@ -43,12 +46,15 @@ import 'features/chat/data/supabase_chat_file_repository.dart';
 import 'features/chat/data/supabase_chat_pin_repository.dart';
 import 'features/chat/data/supabase_group_settings_repository.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
+import 'features/chat/data/supabase_location_share_repository.dart';
+import 'features/chat/data/url_launcher_maps_opener.dart';
 import 'features/chat/data/supabase_poll_repository.dart';
 import 'features/chat/data/supabase_reaction_repository.dart';
 import 'features/chat/data/supabase_contacts_repository.dart';
 import 'features/chat/data/supabase_contact_share_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
 import 'features/chat/data/video_player_playback.dart';
+import 'features/chat/presentation/map_providers.dart';
 import 'features/chat/presentation/video_player_page.dart';
 import 'features/notifications/application/alert_controller.dart';
 import 'features/notifications/application/badge_controller.dart';
@@ -158,6 +164,12 @@ Future<void> main() async {
     // A failed setup is logged by _setUpPush and surfaces in each waiting call.
     pushReady.future.ignore();
     final client = Supabase.instance.client;
+    final maps = MapsBackend(
+      apiKey: config.mapsApiKey,
+      client: http.Client(),
+      languageCode:
+          WidgetsBinding.instance.platformDispatcher.locale.languageCode,
+    );
     final attachmentCache = FileAttachmentCache();
     final deviceFiles = FlutterDeviceFiles();
     StartupMarks.mark('run-app');
@@ -211,6 +223,16 @@ Future<void> main() async {
             const SharedPrefsSendQueueStore(),
           ),
           videoSurfaceProvider.overrideWithValue(videoSurface),
+          locationShareRepositoryProvider.overrideWithValue(
+            SupabaseLocationShareRepository(client),
+          ),
+          deviceLocationProvider.overrideWithValue(
+            const GeolocatorDeviceLocation(),
+          ),
+          placeSearchProvider.overrideWithValue(maps.placeSearch),
+          mapsOpenerProvider.overrideWithValue(const UrlLauncherMapsOpener()),
+          mapViewProvider.overrideWithValue(maps.mapView),
+          mapPreviewProvider.overrideWithValue(maps.mapPreview),
           attachmentCacheProvider.overrideWithValue(attachmentCache),
           chatListSnapshotStoreProvider.overrideWithValue(
             FileChatListSnapshotStore(),

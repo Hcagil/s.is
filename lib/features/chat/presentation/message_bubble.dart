@@ -68,6 +68,14 @@ class _Bubble extends StatelessWidget {
       !message.forwarded &&
       !message.isDeleted;
 
+  /// A location card draws its own box, so the bubble around it is dropped
+  /// (unless it carries a reply or a forward note).
+  bool get _locationCard =>
+      message.location != null &&
+      message.replyTo == null &&
+      !message.forwarded &&
+      !message.isDeleted;
+
   double get _contentWidth =>
       _maxWidth - 2 * _hPad - (_hasBorder ? 2 * _borderWidth : 0);
 
@@ -83,10 +91,10 @@ class _Bubble extends StatelessWidget {
         key: ValueKey('message-${message.id}'),
         constraints: const BoxConstraints(maxWidth: _maxWidth),
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        padding: _boxless
+        padding: _boxless || _locationCard
             ? EdgeInsets.zero
             : const EdgeInsets.symmetric(horizontal: _hPad, vertical: 8),
-        decoration: _boxless
+        decoration: _boxless || _locationCard
             ? null
             : BoxDecoration(
                 color: mine ? null : brand.theirs,
@@ -234,7 +242,12 @@ class _Bubble extends StatelessWidget {
                 ),
               if (sender != null)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
+                  padding: EdgeInsets.fromLTRB(
+                    _locationCard ? _hPad : 0,
+                    0,
+                    0,
+                    2,
+                  ),
                   child: Text(
                     sender!,
                     key: ValueKey('sender-${message.id}'),
@@ -304,6 +317,19 @@ class _Bubble extends StatelessWidget {
                       ),
                       delivery: delivery,
                     ),
+                  ),
+                )
+              else if (message.location != null && !message.isDeleted)
+                LocationCard(
+                  message: message,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: brand.muted,
+                    ),
+                    delivery: delivery,
                   ),
                 )
               else if (message.contact && !message.isDeleted)

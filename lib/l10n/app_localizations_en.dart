@@ -250,6 +250,62 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachLocation => 'Location';
 
   @override
+  String get locationShareTitle => 'Share location';
+
+  @override
+  String get locationShareCurrent => 'Share current location';
+
+  @override
+  String get locationShareCurrentSub => 'Sends where you are now';
+
+  @override
+  String locationShareAccuracy(int meters) {
+    return 'Accurate to about $meters m';
+  }
+
+  @override
+  String get locationPickTitle => 'Pick a place';
+
+  @override
+  String get locationPickSub => 'Move the pin on the map';
+
+  @override
+  String get locationPermNote =>
+      'Location permission is asked only when you tap Share';
+
+  @override
+  String get locationSearchHint => 'Search a place';
+
+  @override
+  String get locationSendThis => 'Send this place';
+
+  @override
+  String get locationDenied =>
+      'Location is turned off for SIS. Turn it on in the phone settings, or pick a place on the map.';
+
+  @override
+  String get locationUnavailable =>
+      'Could not find your position. Check that location is on.';
+
+  @override
+  String get locationPreviewLine => '📍 Location';
+
+  @override
+  String get locationOpenTitle => 'Open in Maps?';
+
+  @override
+  String get locationOpen => 'Open';
+
+  @override
+  String get locationCancel => 'Cancel';
+
+  @override
+  String get locationOpenFailed => 'No maps app could open this place.';
+
+  @override
+  String get locationNoResults => 'No places found';
+
+  @override
   String get attachContact => 'Contact';
 
   @override

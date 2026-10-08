@@ -105,8 +105,10 @@ class _AttachMenu extends StatelessWidget {
               label: l.attachVoice,
             ),
           ),
-          GreyOption(
-            name: 'att_tloc',
+          InkWell(
+            key: const ValueKey('attach-location'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).pop('location'),
             child: _attachTile(
               context,
               slot: 4,

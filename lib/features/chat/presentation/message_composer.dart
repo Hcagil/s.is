@@ -154,6 +154,17 @@ class _ComposerState extends ConsumerState<_Composer>
     }
   }
 
+  /// Opens the Share location page; the place it returns is queued like a
+  /// message, so the card shows at once and goes out by itself, waiting
+  /// offline. Backing out sends nothing.
+  Future<void> _sendLocation() async {
+    final id = _conversationId;
+    if (id == null) return;
+    final place = await showLocationShare(context);
+    if (place == null || !mounted) return;
+    ref.read(sendQueueProvider.notifier).enqueueLocation(id, place);
+  }
+
   /// Opens the phone's file chooser (several files allowed) and queues each
   /// picked file like a message: the pending bubble shows at once and the
   /// file sends by itself, waiting offline. Files over 50 MB are skipped with
@@ -254,6 +265,7 @@ class _ComposerState extends ConsumerState<_Composer>
     if (!mounted) return;
     if (choice == 'poll') return _sendPoll();
     if (choice == 'contact') return _sendContact();
+    if (choice == 'location') return _sendLocation();
     if (choice == 'file') return _sendFiles();
     if (choice == 'video') return _sendVideos();
     if (choice != 'photo') return;

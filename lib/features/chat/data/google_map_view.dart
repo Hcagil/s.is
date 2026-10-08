@@ -66,7 +66,12 @@ class _GoogleMapViewState extends State<GoogleMapView> {
     super.didUpdateWidget(oldWidget);
     final target = widget.spec.target;
     final controller = _controller;
-    if (target != oldWidget.spec.target && controller != null) {
+    // The member's own drag ends with the page telling us the new centre; the
+    // camera is already there, so there is nothing to animate (and no idle).
+    final here =
+        (target.lat - _center.lat).abs() < 1e-5 &&
+        (target.lng - _center.lng).abs() < 1e-5;
+    if (target != oldWidget.spec.target && controller != null && !here) {
       _programTarget = target;
       unawaited(
         controller.animateCamera(

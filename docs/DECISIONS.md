@@ -1958,3 +1958,30 @@ covers the need, and a declaration that is pending blocks all publishing.
   members see no change.
 - The grid and the permission flow on a real iPhone can only be checked on a
   device (no integration test), like the photo gallery.
+
+## 2026-10-08 — Maps for locations: Google Maps on the free tier, with an OpenStreetMap fallback
+
+**Context.** Sending a location needs a map, a place search and a card
+preview. Nominatim (OpenStreetMap's search) forbids app autocomplete, so it
+cannot power the search box.
+
+**Decision.**
+- Google Maps Platform on its free tier: `google_maps_flutter` for the map,
+  Places API (New) over REST for search, the Maps Static API for the card
+  preview (cached on the phone), the Geocoding API for the address.
+- Keys are restricted per platform (Android package + signing SHA-1, iOS
+  bundle id) and each API has a per-day request cap, so a leaked key cannot
+  run up a bill.
+- Keys stay out of git: CI secrets `MAPS_API_KEY_ANDROID` / `MAPS_API_KEY_IOS`,
+  locally `.private/maps.properties` and `ios/Flutter/Secrets.xcconfig`
+  (both git-ignored). The Dart side reads `--dart-define=MAPS_API_KEY`.
+- Everything sits behind a swappable layer (`MapsBackend` in `data/`). With no
+  key the app builds and runs on `flutter_map` with OpenStreetMap tiles, with
+  no search and no street address.
+- Location is foreground only (`ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`,
+  `NSLocationWhenInUseUsageDescription`), asked for when the picker opens.
+
+**Consequences.** A location message stores latitude, longitude, name and
+address. Opening the card asks first, then hands the point to the phone's maps
+app. Tile and image requests to third parties carry the phone's IP, as any
+map does.

@@ -79,6 +79,11 @@ jobs:
         run: |
           test -n "$GOOGLE_SERVICE_INFO_PLIST" || { echo 'GOOGLE_SERVICE_INFO_PLIST secret is empty' >&2; exit 1; }
           printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" > ios/Runner/GoogleService-Info.plist
+      # Optional Google Maps key for the iOS build; empty means OpenStreetMap and never fails the build.
+      - name: Restore Maps key
+        env:
+          MAPS_API_KEY_IOS: ${{ secrets.MAPS_API_KEY_IOS }}
+        run: printf 'MAPS_API_KEY_IOS=%s\n' "$MAPS_API_KEY_IOS" > ios/Flutter/Secrets.xcconfig
       - name: Resolve dependencies
         run: flutter pub get
       # Not `flutter build ipa`: it cannot pass the API key flags, and without
@@ -92,12 +97,14 @@ jobs:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
           GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
+          MAPS_API_KEY_IOS: ${{ secrets.MAPS_API_KEY_IOS }}
         run: |
           flutter build ios --config-only --release --no-codesign \
             --build-number="$BUILD_NUMBER" --build-name="$BUILD_NAME" \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY" \
-            --dart-define=GOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID"
+            --dart-define=GOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" \
+            --dart-define=MAPS_API_KEY="$MAPS_API_KEY_IOS"
       # Only ever printed as a path. altool finds the key through API_PRIVATE_KEYS_DIR.
       - name: Write the App Store Connect key
         env:

@@ -246,6 +246,62 @@ class AppLocalizationsTr extends AppLocalizations {
   String get attachLocation => 'Konum';
 
   @override
+  String get locationShareTitle => 'Konumu paylaş';
+
+  @override
+  String get locationShareCurrent => 'Şu anki konumu paylaş';
+
+  @override
+  String get locationShareCurrentSub => 'Şu an bulunduğun yeri gönderir';
+
+  @override
+  String locationShareAccuracy(int meters) {
+    return 'Yaklaşık $meters m doğrulukla';
+  }
+
+  @override
+  String get locationPickTitle => 'Yer seç';
+
+  @override
+  String get locationPickSub => 'Haritada iğneyi oynat';
+
+  @override
+  String get locationPermNote =>
+      'Konum izni yalnızca Paylaş\'a dokunduğunda istenir';
+
+  @override
+  String get locationSearchHint => 'Yer ara';
+
+  @override
+  String get locationSendThis => 'Bu yeri gönder';
+
+  @override
+  String get locationDenied =>
+      'SIS için konum kapalı. Telefon ayarlarından açabilir veya haritadan yer seçebilirsin.';
+
+  @override
+  String get locationUnavailable =>
+      'Konumun bulunamadı. Konumun açık olduğundan emin ol.';
+
+  @override
+  String get locationPreviewLine => '📍 Konum';
+
+  @override
+  String get locationOpenTitle => 'Haritalar\'da açılsın mı?';
+
+  @override
+  String get locationOpen => 'Aç';
+
+  @override
+  String get locationCancel => 'İptal et';
+
+  @override
+  String get locationOpenFailed => 'Hiçbir harita uygulaması bu yeri açamadı.';
+
+  @override
+  String get locationNoResults => 'Yer bulunamadı';
+
+  @override
   String get attachContact => 'Kişi';
 
   @override

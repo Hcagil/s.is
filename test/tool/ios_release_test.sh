@@ -308,7 +308,7 @@ done
   || fail "ios-ipa must call asc_signing.py only to fetch \"sis ci distribution\": $(grep -n 'asc_signing' "$ipa_wf")"
 # Step order, exactly the contract's; the gates on validate, upload and cleanup.
 mapfile -t steps < <(sed -n 's/^      - name: //p' "$ipa_wf")
-want_steps=("Check out source" "Install Flutter" "Restore Firebase config" "Resolve dependencies"
+want_steps=("Check out source" "Install Flutter" "Restore Firebase config" "Restore Maps key" "Resolve dependencies"
   "Configure the Xcode build" "Write the App Store Connect key" "Archive (signed)"
   "Sign the archive with its entitlements" "Import the signing certificate"
   "Export for App Store Connect"
@@ -419,7 +419,7 @@ run() {
 }
 fresh() {
   rm -rf "$tmp/job" "$tmp/rt" "$tmp/home"
-  mkdir -p "$tmp/job/ios/Runner" "$tmp/job/tool" "$tmp/rt" "$tmp/home"
+  mkdir -p "$tmp/job/ios/Runner" "$tmp/job/ios/Flutter" "$tmp/job/tool" "$tmp/rt" "$tmp/home"
   cp ios/Runner/Runner.entitlements "$tmp/job/ios/Runner/"
   ln -s "$stubs" "$tmp/job/tool/asc_signing.py"
   : > "$tmp/github_env"; : > "$tmp/github_output"; : > "$tmp/calls"; : > "$tmp/all-out"
@@ -474,6 +474,10 @@ run "Restore Firebase config" GOOGLE_SERVICE_INFO_PLIST="$plist" || fail "Fireba
 [ "$(cat "$tmp/job/ios/Runner/GoogleService-Info.plist")" = "$plist" ] || fail "GoogleService-Info.plist is not the secret"
 fresh
 if run "Restore Firebase config" GOOGLE_SERVICE_INFO_PLIST=; then fail "an empty GOOGLE_SERVICE_INFO_PLIST did not fail"; fi
+# The Maps key is optional: it lands in ios/Flutter/Secrets.xcconfig, which the Xcode build includes; empty still builds.
+run "Restore Maps key" MAPS_API_KEY_IOS=mk-123 || fail "Maps key step failed"
+[ "$(cat "$tmp/job/ios/Flutter/Secrets.xcconfig")" = "MAPS_API_KEY_IOS=mk-123" ] || fail "the Maps key did not reach Secrets.xcconfig"
+run "Restore Maps key" MAPS_API_KEY_IOS= || fail "an empty Maps key failed the build"
 [ ! -e "$tmp/job/ios/Runner/GoogleService-Info.plist" ] || fail "an empty plist was written"
 
 # 7 the key: 700/600 under umask 022, exact content, never printed, path in GITHUB_ENV.

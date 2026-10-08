@@ -1,0 +1,2 @@
+/* Fotoğraf kitaplığı izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
+"NSPhotoLibraryUsageDescription" = "Fotoğrafların ve videoların sohbette burada yüklensin diye erişime izin ver. Sen göndermeden hiçbir şey yüklenmez. Yalnızca birkaçına izin verebilirsin.";

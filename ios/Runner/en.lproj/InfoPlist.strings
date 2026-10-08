@@ -1,0 +1,2 @@
+/* The photo library prompt (iPhone asks once, then Settings). */
+"NSPhotoLibraryUsageDescription" = "Allow access so your photos and videos load right here in the chat. Nothing is uploaded until you send it. You can allow just a few.";

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/domain/video.dart';
 
@@ -314,5 +317,161 @@ void main() {
         await noticeGone(t);
       },
     );
+  });
+
+  group('chat screen gone', () {
+    testWidgets('grid enabled, close after send', (WidgetTester t) async {
+      final g = VideoGalleryFake(videos: galleryVideos(3));
+      final videos = DeviceVideosFake();
+
+      final container = await pumpVideoChat(
+        t,
+        world(),
+        videos: videos,
+        asRoute: true,
+        extra: [
+          videoGalleryProvider.overrideWithValue(g),
+          videoGridEnabledProvider.overrideWithValue(true),
+        ],
+      );
+
+      await t.tap(byKey('composer-attach'));
+      await frames(t);
+      await t.tap(byKey('attach-video'));
+      await frames(t);
+
+      await t.tap(byKey('video-grid-v0'));
+      await frames(t);
+      await t.tap(byKey('video-send'));
+      await frames(t);
+
+      await closeChat(t);
+
+      // The grid's send completes after the chat screen is gone.
+      g.prepares.single.answer.complete(
+        VideoPick(videos: [videoSource('a'), videoSource('b')]),
+      );
+      await frames(t);
+
+      expect(videos.discarded, unorderedEquals(['a', 'b']));
+      expect(videos.picks, 0);
+      expect(
+        container.read(sendQueueProvider).values.expand((m) => m),
+        isEmpty,
+      );
+    });
+
+    testWidgets('grid enabled, close before denied screen tap', (
+      WidgetTester t,
+    ) async {
+      final g = VideoGalleryFake(access: GalleryAccess.denied);
+      final videos = DeviceVideosFake(
+        pickResult: VideoPick(videos: [videoSource('a')]),
+      );
+
+      final container = await pumpVideoChat(
+        t,
+        world(),
+        videos: videos,
+        asRoute: true,
+        extra: [
+          videoGalleryProvider.overrideWithValue(g),
+          videoGridEnabledProvider.overrideWithValue(true),
+        ],
+      );
+
+      await t.tap(byKey('composer-attach'));
+      await frames(t);
+      await t.tap(byKey('attach-video'));
+      await frames(t);
+
+      await closeChat(t);
+
+      await t.tap(byKey('video-phone-picker'));
+      await frames(t);
+
+      expect(videos.discarded, isEmpty);
+      expect(videos.picks, 0);
+      expect(
+        container.read(sendQueueProvider).values.expand((m) => m),
+        isEmpty,
+      );
+    });
+
+    testWidgets('grid disabled, close after chooser, device pick completes', (
+      WidgetTester t,
+    ) async {
+      final g = VideoGalleryFake();
+      final videos = DeviceVideosFake()..heldPick = Completer<VideoPick>();
+
+      final container = await pumpVideoChat(
+        t,
+        world(),
+        videos: videos,
+        asRoute: true,
+        extra: [
+          videoGalleryProvider.overrideWithValue(g),
+          videoGridEnabledProvider.overrideWithValue(false),
+        ],
+      );
+
+      await t.tap(byKey('composer-attach'));
+      await frames(t);
+      await t.tap(byKey('attach-video'));
+      await frames(t);
+
+      await closeChat(t);
+
+      videos.heldPick!.complete(
+        VideoPick(videos: [videoSource('a'), videoSource('b')]),
+      );
+      await frames(t);
+
+      expect(videos.picks, 1);
+      expect(videos.discarded, unorderedEquals(['a', 'b']));
+      expect(
+        container.read(sendQueueProvider).values.expand((m) => m),
+        isEmpty,
+      );
+      expect(byKey('video-tile-a'), findsNothing);
+    });
+
+    testWidgets('grid disabled, close after review page, send', (
+      WidgetTester t,
+    ) async {
+      final g = VideoGalleryFake();
+      final videos = DeviceVideosFake(
+        pickResult: VideoPick(videos: [videoSource('a'), videoSource('b')]),
+      );
+
+      final container = await pumpVideoChat(
+        t,
+        world(),
+        videos: videos,
+        asRoute: true,
+        extra: [
+          videoGalleryProvider.overrideWithValue(g),
+          videoGridEnabledProvider.overrideWithValue(false),
+        ],
+      );
+
+      await t.tap(byKey('composer-attach'));
+      await frames(t);
+      await t.tap(byKey('attach-video'));
+      await frames(t);
+
+      expect(byKey('video-tile-a'), findsOneWidget);
+
+      await closeChat(t);
+
+      await t.tap(byKey('video-send'));
+      await frames(t);
+
+      expect(videos.discarded, unorderedEquals(['a', 'b']));
+      expect(
+        container.read(sendQueueProvider).values.expand((m) => m),
+        isEmpty,
+      );
+    });
   });
 }

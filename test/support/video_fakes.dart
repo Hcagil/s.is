@@ -58,6 +58,10 @@ class DeviceVideosFake implements DeviceVideos {
   DeviceVideosFake({this.pickResult = const VideoPick()});
 
   VideoPick pickResult;
+
+  /// When set, pick() answers only once the test completes it (the phone's
+  /// chooser is still open).
+  Completer<VideoPick>? heldPick;
   int picks = 0;
   int cancels = 0;
   final compressions = <CompressAsk>[];
@@ -67,6 +71,8 @@ class DeviceVideosFake implements DeviceVideos {
   Future<VideoPick> pick() async {
     picks++;
     await Future<void>.delayed(const Duration(milliseconds: 2));
+    final held = heldPick;
+    if (held != null) return held.future;
     return pickResult;
   }
 

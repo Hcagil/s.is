@@ -3756,6 +3756,7 @@ Message withoutPreview(Message m) => Message(
   forwarded: m.forwarded,
   poll: m.poll,
   contact: m.contact,
+  file: m.file,
   sending: m.sending,
 );
 

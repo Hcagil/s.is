@@ -297,93 +297,111 @@ void main() {
   });
 
   group('the composer', () {
-    testWidgets('empty: sticker, mic and dictation; no send', (t) async {
+    testWidgets('empty: sticker and the voice button; no send', (t) async {
       await pumpChat(t, world());
       expect(byKey('grey-c_btn'), findsOneWidget);
-      expect(byKey('grey-v_rec'), findsOneWidget);
-      expect(byKey('grey-v_dict'), findsOneWidget);
+      expect(byKey('composer-voice'), findsOneWidget);
+      expect(byKey('voice-mode-voice'), findsOneWidget);
       expect(byKey('composer-send'), findsNothing);
     });
 
-    testWidgets('typing swaps the mic for send and hides dictation; '
-        'clearing brings them back', (t) async {
-      await pumpChat(t, world());
-      await t.enterText(byKey('composer-field'), 'hello');
-      await t.pump();
-      expect(byKey('composer-send'), findsOneWidget);
-      expect(byKey('grey-v_rec'), findsNothing);
-      expect(byKey('grey-v_dict'), findsNothing);
-      expect(byKey('grey-c_btn'), findsOneWidget);
+    testWidgets(
+      'typing swaps the voice button for send; clearing brings it back',
+      (t) async {
+        await pumpChat(t, world());
+        await t.enterText(byKey('composer-field'), 'hello');
+        await t.pump();
+        expect(byKey('composer-send'), findsOneWidget);
+        expect(byKey('composer-voice'), findsNothing);
+        expect(byKey('voice-mode-voice'), findsNothing);
+        expect(byKey('voice-mode-dictation'), findsNothing);
+        expect(byKey('grey-c_btn'), findsOneWidget);
 
-      await t.enterText(byKey('composer-field'), '');
-      await t.pump();
-      expect(byKey('composer-send'), findsNothing);
-      expect(byKey('grey-v_rec'), findsOneWidget);
-      expect(byKey('grey-v_dict'), findsOneWidget);
-      expect(byKey('grey-c_btn'), findsOneWidget);
-    });
+        await t.enterText(byKey('composer-field'), '');
+        await t.pump();
+        expect(byKey('composer-send'), findsNothing);
+        expect(byKey('composer-voice'), findsOneWidget);
+        expect(byKey('voice-mode-voice'), findsOneWidget);
+        expect(byKey('voice-mode-dictation'), findsNothing);
+        expect(byKey('grey-c_btn'), findsOneWidget);
+      },
+    );
 
-    testWidgets('editing: send shows, no mic and no dictation, even with the '
-        'field emptied', (t) async {
-      final chat = world()
-        ..messagesResult = Ok([msg('m9', body: 'mine', from: me.userId)]);
-      chat.history['c1'] = [msg('m9', body: 'mine', from: me.userId)];
-      await pumpChat(t, chat);
-      await t.longPress(byKey('message-m9'));
-      await t.pumpAndSettle();
-      await t.tap(byKey('menu-edit'));
-      await t.pumpAndSettle();
-      expect(byKey('edit-bar'), findsOneWidget, reason: 'edit did not open');
-      expect(byKey('composer-send'), findsOneWidget);
-      expect(byKey('grey-v_dict'), findsNothing);
-
-      await t.enterText(byKey('composer-field'), '');
-      await t.pump();
-      expect(byKey('composer-send'), findsOneWidget);
-      expect(byKey('grey-v_rec'), findsNothing);
-      expect(byKey('grey-v_dict'), findsNothing);
-      expect(byKey('grey-c_btn'), findsOneWidget);
-    });
-
-    testWidgets('type, tap send: it goes out in that frame', (t) async {
-      final chat = world();
-      await pumpChat(t, chat);
-      await t.enterText(byKey('composer-field'), 'right now');
-      await t.pump();
-      await t.tap(byKey('composer-send'));
-      await t.pump();
-      expect(chat.sent.map((s) => s.body), ['right now']);
-      expect(find.text('right now'), findsOneWidget, reason: 'no bubble yet');
-      expect(fieldText(t), isEmpty);
-    });
-
-    testWidgets('grey taps do nothing; the field next to them still takes '
-        'taps and focus', (t) async {
-      final chat = world();
-      await pumpChat(t, chat);
-      expect(fieldFocused(t), isFalse, reason: 'precondition');
-      for (final k in ['grey-c_btn', 'grey-v_rec', 'grey-v_dict']) {
-        await t.tap(byKey(k));
+    testWidgets(
+      'editing: send shows, no voice button, even with the field emptied',
+      (t) async {
+        final chat = world()
+          ..messagesResult = Ok([msg('m9', body: 'mine', from: me.userId)]);
+        chat.history['c1'] = [msg('m9', body: 'mine', from: me.userId)];
+        await pumpChat(t, chat);
+        await t.longPress(byKey('message-m9'));
         await t.pumpAndSettle();
-        expect(find.byType(MessageScreen), findsOneWidget, reason: k);
-        expect(byKey('attach-menu'), findsNothing, reason: k);
-        expect(fieldText(t), isEmpty, reason: k);
-      }
-      expect(chat.sent, isEmpty);
+        await t.tap(byKey('menu-edit'));
+        await t.pumpAndSettle();
+        expect(byKey('edit-bar'), findsOneWidget, reason: 'edit did not open');
+        expect(byKey('composer-send'), findsOneWidget);
+        expect(byKey('composer-voice'), findsNothing);
+        expect(byKey('voice-mode-voice'), findsNothing);
+        expect(byKey('voice-mode-dictation'), findsNothing);
+        expect(byKey('grey-c_btn'), findsOneWidget);
 
-      final field = t.getRect(byKey('composer-field'));
-      for (final at in [
-        field.centerLeft + const Offset(3, 0),
-        field.centerRight - const Offset(3, 0),
-      ]) {
-        FocusManager.instance.primaryFocus?.unfocus();
+        await t.enterText(byKey('composer-field'), '');
+        await t.pump();
+        expect(byKey('composer-send'), findsOneWidget);
+        expect(byKey('composer-voice'), findsNothing);
+        expect(byKey('voice-mode-voice'), findsNothing);
+        expect(byKey('voice-mode-dictation'), findsNothing);
+        expect(byKey('grey-c_btn'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'the sticker tap does nothing and a voice-button tap only switches the mode; the field still takes taps and focus',
+      (t) async {
+        final chat = world();
+        await pumpChat(t, chat);
+        expect(fieldFocused(t), isFalse, reason: 'precondition');
+        for (final k in ['grey-c_btn']) {
+          await t.tap(byKey(k));
+          await t.pumpAndSettle();
+          expect(find.byType(MessageScreen), findsOneWidget, reason: k);
+          expect(byKey('attach-menu'), findsNothing, reason: k);
+          expect(fieldText(t), isEmpty, reason: k);
+        }
+        expect(chat.sent, isEmpty);
+
+        // Tap the voice button to switch to dictation mode
+        await t.tap(byKey('composer-voice'));
         await t.pumpAndSettle();
-        expect(fieldFocused(t), isFalse);
-        await t.tapAt(at);
+        expect(
+          byKey('voice-mode-dictation'),
+          findsOneWidget,
+          reason: 'a tap switches the mode',
+        );
+        expect(fieldText(t), isEmpty);
+        // Tap again to switch back to voice mode
+        await t.tap(byKey('composer-voice'));
         await t.pumpAndSettle();
-        expect(fieldFocused(t), isTrue, reason: 'a tap at $at missed');
-      }
-    });
+        expect(
+          byKey('voice-mode-voice'),
+          findsOneWidget,
+          reason: 'a second tap switches back',
+        );
+
+        final field = t.getRect(byKey('composer-field'));
+        for (final at in [
+          field.centerLeft + const Offset(3, 0),
+          field.centerRight - const Offset(3, 0),
+        ]) {
+          FocusManager.instance.primaryFocus?.unfocus();
+          await t.pumpAndSettle();
+          expect(fieldFocused(t), isFalse);
+          await t.tapAt(at);
+          await t.pumpAndSettle();
+          expect(fieldFocused(t), isTrue, reason: 'a tap at $at missed');
+        }
+      },
+    );
   });
 
   group('sign-in', () {

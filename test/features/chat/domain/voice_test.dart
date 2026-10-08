@@ -109,9 +109,18 @@ void main() {
 
   group('decodeWaveform', () {
     test('null -> empty list', () => expect(decodeWaveform(null), isEmpty));
-    test('empty string -> empty list', () => expect(decodeWaveform(''), isEmpty));
-    test('uppercase "ABC" -> empty list', () => expect(decodeWaveform('ABC'), isEmpty));
-    test('lowercase "xyz" -> empty list', () => expect(decodeWaveform('xyz'), isEmpty));
+    test(
+      'empty string -> empty list',
+      () => expect(decodeWaveform(''), isEmpty),
+    );
+    test(
+      'uppercase "ABC" -> empty list',
+      () => expect(decodeWaveform('ABC'), isEmpty),
+    );
+    test(
+      'lowercase "xyz" -> empty list',
+      () => expect(decodeWaveform('xyz'), isEmpty),
+    );
     test('decode of "0f" -> [0.0, 1.0]', () {
       final decoded = decodeWaveform('0f');
       expect(decoded, equals([0.0, 1.0]));
@@ -134,8 +143,14 @@ void main() {
   group('cleanTranscript', () {
     test('null -> null', () => expect(cleanTranscript(null), isNull));
     test('empty string -> null', () => expect(cleanTranscript(''), isNull));
-    test('whitespace only -> null', () => expect(cleanTranscript('   \n '), isNull));
-    test('trimmed content', () => expect(cleanTranscript('  hi  '), equals('hi')));
+    test(
+      'whitespace only -> null',
+      () => expect(cleanTranscript('   \n '), isNull),
+    );
+    test(
+      'trimmed content',
+      () => expect(cleanTranscript('  hi  '), equals('hi')),
+    );
     test('long transcript trimmed to 10000', () {
       final long = 'a' * (maxTranscriptChars + 1);
       final cleaned = cleanTranscript(long);
@@ -143,7 +158,7 @@ void main() {
       expect(cleaned!.length, equals(maxTranscriptChars));
     });
     test('trimmed long transcript', () {
-      final long = '  ' + 'a' * maxTranscriptChars + '  ';
+      final long = '  ${'a' * maxTranscriptChars}  ';
       final cleaned = cleanTranscript(long);
       expect(cleaned, isNotNull);
       expect(cleaned!.length, equals(maxTranscriptChars));

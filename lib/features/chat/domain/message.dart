@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../../../core/date_label.dart';
+import 'file_attachment.dart';
 import 'poll.dart';
 import 'shared_contact.dart';
 
@@ -40,11 +41,13 @@ bool isSendableBody(String body) {
 /// The one-line preview of a message in the conversation list. An image sent
 /// without a caption has an empty body, which would read as "no messages".
 /// A poll shows [pollPreview] of its question, a contact [contactPreview]
-/// of its name.
+/// of its name, a file [filePreview] of its name.
 String previewText(Message message) => message.poll
     ? pollPreview(message.body)
     : message.contact
     ? contactPreview(message.body)
+    : message.file != null
+    ? filePreview(message.file!.name)
     : message.body.isNotEmpty
     ? message.body
     : (message.hasAttachment ? 'Photo' : '');
@@ -76,6 +79,7 @@ final class Message {
     this.forwarded = false,
     this.poll = false,
     this.contact = false,
+    this.file,
     this.sending = false,
   });
 
@@ -109,6 +113,11 @@ final class Message {
   /// A shared phone contact: [body] is the name, a line break, the number
   /// (see SharedContact). Its body never changes.
   final bool contact;
+
+  /// The file this message carries (name, type, size), or null. A file
+  /// message has an empty body; while it uploads it has [sending] set and no
+  /// [attachmentPath] yet.
+  final AttachedFile? file;
 
   /// True for a text-only message shown at once, before the server has
   /// answered -- like [localImage] but with nothing to display in the
@@ -148,6 +157,7 @@ final class Message {
       !forwarded &&
       !poll &&
       !contact &&
+      file == null &&
       now.difference(createdAt) < deleteForEveryoneWindow;
 
   /// Still on its way to the server: a photo shown from the phone before
@@ -196,6 +206,7 @@ final class Message {
     forwarded: forwarded,
     poll: poll,
     contact: contact,
+    file: file,
     sending: sending,
   );
 
@@ -217,6 +228,7 @@ final class Message {
     forwarded: forwarded,
     poll: poll,
     contact: contact,
+    file: file,
     sending: sending,
   );
 

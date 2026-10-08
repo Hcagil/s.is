@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
+import '../domain/file_attachment.dart';
 import '../domain/message.dart';
 import 'chat_controllers.dart';
 
@@ -24,7 +25,7 @@ final class Draft {
   /// though the rest of the draft (text, reply target) lives on.
   final Failure? failure;
 
-  bool get isEmpty => text.isEmpty && replyTo == null;
+  bool get isEmpty => text.isEmpty && replyTo == null && failure == null;
 }
 
 /// Every conversation's draft, keyed by id. Kept only while the app runs
@@ -83,7 +84,11 @@ class DraftsController extends Notifier<Map<String, Draft>> {
   ) {
     final current = draftFor(conversationId);
     final prepend = bodies.join('\n');
-    final text = current.text.isEmpty ? prepend : '$prepend\n${current.text}';
+    final text = prepend.isEmpty
+        ? current.text
+        : current.text.isEmpty
+        ? prepend
+        : '$prepend\n${current.text}';
     _apply(
       conversationId,
       Draft(text: text, replyTo: current.replyTo ?? replyTo, failure: failure),
@@ -113,17 +118,20 @@ class DraftsController extends Notifier<Map<String, Draft>> {
 
 /// One text send not yet stored: the pending bubble shown for it, the body
 /// and reply target exactly as typed (for [SendQueueController._drain] to
-/// retry or hand back to the draft).
+/// retry or hand back to the draft). A file send carries the picked [file]
+/// and an empty body.
 class _QueuedSend {
   _QueuedSend({
     required this.message,
     required this.body,
     required this.replyTo,
+    this.file,
   });
 
   final Message message;
   final String body;
   final Message? replyTo;
+  final PickedFile? file;
 }
 
 /// Pending text bubbles per conversation, oldest first -- for
@@ -224,6 +232,36 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     return true;
   }
 
+  /// Queues [file] for [conversationId] like [enqueue] and returns the pending
+  /// bubble at once (id = the file's own id). Unlike [enqueue] the typed draft
+  /// text stays: only the reply target is spent.
+  Message enqueueFile(
+    String conversationId,
+    PickedFile file, {
+    Message? replyTo,
+  }) {
+    final message = Message(
+      id: file.id,
+      conversationId: conversationId,
+      senderId: _me ?? '',
+      body: '',
+      createdAt: DateTime.now(),
+      sending: true,
+      replyTo: replyTo?.id,
+      file: file.attached,
+    );
+    _queues
+        .putIfAbsent(conversationId, () => [])
+        .add(
+          _QueuedSend(message: message, body: '', replyTo: replyTo, file: file),
+        );
+    _publish(conversationId);
+    ref.read(replyingToProvider.notifier).clear();
+    ref.read(draftsProvider.notifier).setReply(conversationId, null);
+    unawaited(_drain(conversationId));
+    return message;
+  }
+
   void _publish(String conversationId) {
     final items = _queues[conversationId];
     final next = {...state};
@@ -279,14 +317,19 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
       final items = _queues[conversationId];
       if (items == null || items.isEmpty) break;
       final item = items.first;
-      final result = await ref
-          .read(chatRepositoryProvider)
-          .send(
-            id: item.message.id,
-            conversationId: conversationId,
-            body: item.body,
-            replyTo: item.replyTo?.id,
-          );
+      final file = item.file;
+      final result = file != null
+          ? await ref
+                .read(chatFileRepositoryProvider)
+                .send(conversationId, file, replyTo: item.replyTo?.id)
+          : await ref
+                .read(chatRepositoryProvider)
+                .send(
+                  id: item.message.id,
+                  conversationId: conversationId,
+                  body: item.body,
+                  replyTo: item.replyTo?.id,
+                );
       if (!ref.mounted) return;
       switch (result) {
         case Ok(:final value):
@@ -320,7 +363,10 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
               .read(draftsProvider.notifier)
               .restoreFailure(
                 conversationId,
-                [for (final s in stopped) s.body],
+                [
+                  for (final s in stopped)
+                    if (s.body.isNotEmpty) s.body,
+                ],
                 stopped.map((s) => s.replyTo).whereType<Message>().firstOrNull,
                 failure,
               );

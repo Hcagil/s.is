@@ -222,6 +222,8 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       // Same reach again, for the stored chat list: chatListSnapshotOwnerProvider
       // erases it on any path a session can end on, not only sign-out.
       ref.listen(chatListSnapshotOwnerProvider, (_, _) {});
+      // And the files kept from file messages.
+      ref.listen(deviceFilesOwnerProvider, (_, _) {});
       // Drops a conversation's queue and draft the moment it is found to be
       // one the member has left or been removed from -- see
       // leftConversationGuardProvider's own doc for why this is silent.

@@ -45,9 +45,13 @@ final class SupabaseChatDeleteRepository implements ChatDeleteRepository {
       );
       if (paths is List && paths.isNotEmpty) {
         try {
-          await _client.storage
-              .from('attachments')
-              .remove(List<String>.from(paths));
+          final files = List<String>.from(paths);
+          // A video's thumbnail sits next to it as `<path>.t`; removing a
+          // name that does not exist is harmless.
+          await _client.storage.from('attachments').remove([
+            ...files,
+            for (final p in files) '$p.t',
+          ]);
         } catch (e) {
           log(
             'deleteDirectChat: photo file removal failed: ${e.runtimeType}',

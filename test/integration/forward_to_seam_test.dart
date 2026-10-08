@@ -18,6 +18,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
 import '../support/service_key.dart';
+import '../support/video_fakes.dart';
 
 /// 0.30.10 forward page: `MessagesController.forwardTo` over the real
 /// repository and database, wired as main.dart wires the chat repository.
@@ -122,6 +123,7 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(reid),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),

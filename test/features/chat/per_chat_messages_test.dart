@@ -34,6 +34,8 @@ import '../../support/fakes.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../../support/video_fakes.dart';
+
 const maya = Member(userId: 'u1', displayName: 'Maya');
 final _t0 = DateTime.utc(2026, 10, 1, 12);
 
@@ -109,6 +111,7 @@ void main() {
 
   ProviderContainer make() => ProviderContainer.test(
     overrides: [
+      ...videoOverrides(),
       chatRepositoryProvider.overrideWithValue(chat),
       pushSourceProvider.overrideWithValue(PushSourceFake()),
       sessionControllerProvider.overrideWith(_In.new),
@@ -304,6 +307,7 @@ void main() {
       final container = await settled(
         ProviderContainer.test(
           overrides: [
+            ...videoOverrides(),
             chatRepositoryProvider.overrideWithValue(chat),
             presenceRepositoryProvider.overrideWithValue(PresenceFake()),
             sessionControllerProvider.overrideWith(_In.new),
@@ -362,6 +366,7 @@ void main() {
       final container = await settled(
         ProviderContainer.test(
           overrides: [
+            ...videoOverrides(),
             chatRepositoryProvider.overrideWithValue(chat),
             presenceRepositoryProvider.overrideWithValue(PresenceFake()),
             sessionControllerProvider.overrideWith(_In.new),

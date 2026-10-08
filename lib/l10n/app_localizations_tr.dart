@@ -1467,4 +1467,72 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get filePhotoTapToDownload => 'Fotoğrafı indirmek için dokun';
+
+  @override
+  String get videoReviewTitle => 'Videolar';
+
+  @override
+  String videoSendCount(int count) {
+    return 'Gönder ($count)';
+  }
+
+  @override
+  String videoCompressing(int percent) {
+    return 'Sıkıştırılıyor %$percent';
+  }
+
+  @override
+  String videoSending(int percent) {
+    return 'Gönderiliyor %$percent';
+  }
+
+  @override
+  String get videoWaitingNetwork => 'Ağ bekleniyor';
+
+  @override
+  String get videoWaiting => 'Bekleniyor…';
+
+  @override
+  String get videoCancelSend => 'İptal';
+
+  @override
+  String videoTooLong(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count video 5 dakikadan uzun olduğu için eklenmedi.',
+      one: '1 video 5 dakikadan uzun olduğu için eklenmedi.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get videoTooBig => 'Bu video gönderilemeyecek kadar büyük.';
+
+  @override
+  String get videoFailed => 'Bu video hazırlanamadı.';
+
+  @override
+  String get videoShare => 'Paylaş';
+
+  @override
+  String get videoClose => 'Kapat';
+
+  @override
+  String get videoMute => 'Sesi kapat';
+
+  @override
+  String get videoUnmute => 'Sesi aç';
+
+  @override
+  String get videoPlay => 'Oynat';
+
+  @override
+  String get videoPause => 'Duraklat';
+
+  @override
+  String get videoCannotPlay => 'Bu video oynatılamıyor.';
+
+  @override
+  String get videoSelectLabel => 'Videoyu seç';
 }

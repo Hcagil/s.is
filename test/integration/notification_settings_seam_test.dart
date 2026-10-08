@@ -26,6 +26,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
+import '../support/video_fakes.dart';
 
 /// NotificationsScreen and MuteTile wired exactly as `main.dart` wires them,
 /// over a real [SupabaseNotificationSettingsRepository], driven through the
@@ -143,6 +144,7 @@ void main() {
   group('NotificationsScreen', () {
     Widget app() => ProviderScope(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(
           const RuntimeConfig(
             supabaseUrl: _url,
@@ -259,6 +261,7 @@ void main() {
   group('MuteTile', () {
     Widget app() => ProviderScope(
       overrides: [
+        ...videoOverrides(),
         notificationSettingsRepositoryProvider.overrideWithValue(
           SupabaseNotificationSettingsRepository(cleoClient!),
         ),

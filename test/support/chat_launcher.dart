@@ -29,6 +29,7 @@ import 'contact_fakes.dart';
 import 'fakes.dart';
 import 'poll_fakes.dart';
 import 'reaction_fakes.dart';
+import 'video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -112,6 +113,7 @@ Future<ProviderContainer> pumpLauncher(
   final container = await settled(
     ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(repo),
         reactionRepositoryProvider.overrideWithValue(
           reactions ?? ReactionFake(),

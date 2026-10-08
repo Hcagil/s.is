@@ -9,7 +9,7 @@ select plan(33);
 --   U+202A-U+202E, U+2066-U+2069), a type/subtype MIME, and a size of
 --   1..52428800 bytes. The messages_file_guard trigger nulls the file columns
 --   when a message is deleted for everyone and refuses a caption edit on a
---   file message (42501). conversation_previews ends with attachment_name. The
+--   file message (42501). conversation_previews carries attachment_name. The
 --   push body of a file message is the paperclip and the name. Storage stays
 --   members-only by path.
 --
@@ -145,8 +145,8 @@ reset role;
 -- 3 conversation_previews ----------------------------------------------------------
 select is((select attname::text from pg_attribute
             where attrelid = 'public.conversation_previews'::regclass and attnum > 0 and not attisdropped
-            order by attnum desc limit 1),
-          'attachment_name', 'conversation_previews ends with attachment_name');
+            order by attnum desc limit 1 offset 1),
+          'attachment_name', 'conversation_previews keeps attachment_name just before the video duration');
 -- one transaction shares one now(): age the earlier rows so the next is newest
 update public.messages set created_at = now() - interval '1 minute' where conversation_id = g('G');
 select as_('01');

@@ -12,6 +12,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Scrolling back down to the newest message (0.30.16) against the real
 /// local stack, MessagesController over SupabaseChatRepository and real
@@ -152,6 +153,7 @@ void main() {
   ProviderContainer open(SupabaseClient reader) {
     final c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(
           SupabaseChatRepository(reader),
         ),

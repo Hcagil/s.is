@@ -57,11 +57,12 @@ class _Bubble extends StatelessWidget {
 
   bool get _hasBorder => mine || isCurrentHit;
 
-  /// A photo and nothing else: no box around it; the time and tick sit on
-  /// the picture.
+  bool get _isVideo => message.file?.isVideo ?? false;
+
+  /// A photo or video and nothing else: no box around it; the time and tick
+  /// sit on the picture.
   bool get _boxless =>
-      message.file == null &&
-      message.hasAttachment &&
+      (message.file == null ? message.hasAttachment : _isVideo) &&
       message.body.isEmpty &&
       message.replyTo == null &&
       !message.forwarded &&
@@ -320,6 +321,25 @@ class _Bubble extends StatelessWidget {
                       color: (mine ? brand.onMine : brand.onTheirs).withValues(
                         alpha: SisTokens.timeOpacity,
                       ),
+                    ),
+                    delivery: delivery,
+                  ),
+                )
+              else if (_isVideo && !message.isDeleted)
+                VideoCard(
+                  message: message,
+                  radius: brand.bubbleRadius,
+                  boxless: _boxless,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: _boxless
+                          ? Colors.white.withValues(alpha: 0.9)
+                          : (mine ? brand.onMine : brand.onTheirs).withValues(
+                              alpha: SisTokens.timeOpacity,
+                            ),
                     ),
                     delivery: delivery,
                   ),

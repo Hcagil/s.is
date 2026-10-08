@@ -34,6 +34,8 @@ import 'package:sis/features/profile/domain/profile_repository.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 import 'package:sis/features/update/domain/update_repository.dart';
 
+import 'video_fakes.dart';
+
 import 'fakes.dart'
     show
         AttachmentCacheFake,
@@ -457,6 +459,7 @@ Widget designApp({
   List<Override> extra = const [],
 }) => ProviderScope(
   overrides: [
+    ...videoOverrides(),
     ...extra,
     runtimeConfigProvider.overrideWithValue(
       const RuntimeConfig(

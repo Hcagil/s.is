@@ -24,6 +24,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Two accounts, one after the other, on ONE client — one phone.
 ///
@@ -180,6 +181,7 @@ void main() {
     auth = PasswordAuth(phone!);
     c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(
           const RuntimeConfig(
             supabaseUrl: _url,

@@ -21,6 +21,7 @@ import 'package:sis/features/chat/domain/message.dart';
 
 import '../../support/fakes.dart';
 import '../../support/held_send_chat.dart';
+import '../../support/video_fakes.dart';
 
 Message row(String id, {String conv = 'c1', String from = 'u2'}) => Message(
   id: id,
@@ -43,6 +44,7 @@ Future<ProviderContainer> open(HeldSendChat chat, String id) async {
   final c = await settled(
     ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
         sessionControllerProvider.overrideWith(_SignedIn.new),
       ],

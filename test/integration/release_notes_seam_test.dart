@@ -27,6 +27,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/dead_host.dart';
 import '../support/fakes.dart';
 import '../support/service_key.dart';
+import '../support/video_fakes.dart';
 
 /// The What's new connection as main.dart mounts it: SisApp, the real
 /// SupabaseReleaseNotesDelivery over a signed-in client, the real chat
@@ -171,6 +172,7 @@ void main() {
   /// unless a test takes the network away from this one connection).
   Widget app({SupabaseClient? deliveryClient}) => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(
         const RuntimeConfig(
           supabaseUrl: _url,

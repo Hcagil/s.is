@@ -40,6 +40,30 @@ final class PollClosedFailure extends Failure {
   String get message => 'This poll is closed.';
 }
 
+/// A video still over the 50 MiB limit after it was shrunk; the screen shows its own translated line.
+final class VideoTooBigFailure extends Failure {
+  const VideoTooBigFailure();
+
+  @override
+  String get message => 'This video is too large to send.';
+}
+
+/// Shrinking the video failed; the screen shows its own translated line.
+final class VideoFailedFailure extends Failure {
+  const VideoFailedFailure();
+
+  @override
+  String get message => 'This video could not be prepared.';
+}
+
+/// The member cancelled the shrinking; never shown.
+final class VideoCancelledFailure extends Failure {
+  const VideoCancelledFailure();
+
+  @override
+  String get message => 'Cancelled.';
+}
+
 final class ProviderFailure extends Failure {
   const ProviderFailure(this.message, {this.userCanceled = false});
 

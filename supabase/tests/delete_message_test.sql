@@ -244,9 +244,10 @@ select set_eq(
      where table_schema = 'public' and table_name = 'messages'
        and grantee = 'authenticated' and privilege_type = 'INSERT'$$,
   $$values ('id'),('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
-           ('reply_to'),('forwarded'),('attachment_name'),('attachment_mime'),('attachment_size')$$,
-  'authenticated may still insert only these eleven columns -- never deleted or deleted_at '
-  '(reply_to and forwarded since 20260924150000; the three file columns since 20261013120000)');
+           ('reply_to'),('forwarded'),('attachment_name'),('attachment_mime'),('attachment_size'),
+           ('attachment_duration_ms')$$,
+  'authenticated may still insert only these twelve columns -- never deleted or deleted_at '
+  '(reply_to and forwarded since 20260924150000; the three file columns since 20261013120000; the duration since 20261014120000)');
 select is((select count(*) from information_schema.column_privileges
             where table_schema = 'public' and table_name = 'messages'
               and grantee = 'authenticated' and privilege_type = 'UPDATE'), 0::bigint,

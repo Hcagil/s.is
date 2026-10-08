@@ -50,6 +50,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import '../../support/fakes.dart';
 import '../../support/gallery_paging.dart' hide steps;
 import '../../support/sis_ui.dart';
+import '../../support/video_fakes.dart';
 
 // Three real, distinct 4x4 PNGs: whose picture is shown is part of the check.
 final red = base64Decode(
@@ -154,6 +155,7 @@ class World {
 
   Widget app() => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(config),
       authRepositoryProvider.overrideWithValue(
         FakeAuth(

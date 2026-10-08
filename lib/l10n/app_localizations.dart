@@ -2707,6 +2707,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tap to download the photo'**
   String get filePhotoTapToDownload;
+
+  /// Title of the page that lists the picked videos before sending
+  ///
+  /// In en, this message translates to:
+  /// **'Videos'**
+  String get videoReviewTitle;
+
+  /// Button sending the picked videos
+  ///
+  /// In en, this message translates to:
+  /// **'Send ({count})'**
+  String videoSendCount(int count);
+
+  /// Label on a video bubble while it is being shrunk
+  ///
+  /// In en, this message translates to:
+  /// **'Compressing {percent}%'**
+  String videoCompressing(int percent);
+
+  /// Label on a video bubble while it uploads
+  ///
+  /// In en, this message translates to:
+  /// **'Sending {percent}%'**
+  String videoSending(int percent);
+
+  /// Label on a video bubble that is waiting for the connection
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for network'**
+  String get videoWaitingNetwork;
+
+  /// Label on a video bubble queued behind another send
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting…'**
+  String get videoWaiting;
+
+  /// Accessibility label of the x that stops shrinking a video
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get videoCancelSend;
+
+  /// Notice after picking videos over the limit
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 video is over 5 minutes and was not added.} other{{count} videos are over 5 minutes and were not added.}}'**
+  String videoTooLong(int count);
+
+  /// Notice when a shrunk video is still over the size limit
+  ///
+  /// In en, this message translates to:
+  /// **'This video is too large to send.'**
+  String get videoTooBig;
+
+  /// Notice when shrinking a video failed
+  ///
+  /// In en, this message translates to:
+  /// **'This video could not be prepared.'**
+  String get videoFailed;
+
+  /// Button in the video player that opens the share sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get videoShare;
+
+  /// Accessibility label of the player's close button
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get videoClose;
+
+  /// Accessibility label of the player's sound button when sound is on
+  ///
+  /// In en, this message translates to:
+  /// **'Mute'**
+  String get videoMute;
+
+  /// Accessibility label of the player's sound button when muted
+  ///
+  /// In en, this message translates to:
+  /// **'Unmute'**
+  String get videoUnmute;
+
+  /// Accessibility label of the play button
+  ///
+  /// In en, this message translates to:
+  /// **'Play'**
+  String get videoPlay;
+
+  /// Accessibility label of the pause button
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get videoPause;
+
+  /// Notice when the player cannot open a video
+  ///
+  /// In en, this message translates to:
+  /// **'This video cannot be played.'**
+  String get videoCannotPlay;
+
+  /// Accessibility label of a video tile on the review page
+  ///
+  /// In en, this message translates to:
+  /// **'Select video'**
+  String get videoSelectLabel;
 }
 
 class _AppLocalizationsDelegate

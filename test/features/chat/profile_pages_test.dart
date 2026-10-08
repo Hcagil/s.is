@@ -41,6 +41,7 @@ import '../../support/fakes.dart';
 import '../../support/group_settings_fakes.dart';
 import '../../support/l10n.dart';
 import '../../support/sis_ui.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
 const bob = Member(userId: 'ub', displayName: 'Bob Stone', tag: 'bobby');
@@ -163,6 +164,7 @@ class World {
 
   Widget app() => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(config),
       authRepositoryProvider.overrideWithValue(
         FakeAuth(session: true, member: me),

@@ -21,6 +21,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// The live conversation list against the real stack: the REAL
 /// [ConversationListController] on the REAL [SupabaseChatRepository], with
@@ -229,7 +230,10 @@ class _RealtimeDown implements ChatRepository {
 /// is overridden, with the real repository.
 ProviderContainer _containerFor(ChatRepository repository) =>
     ProviderContainer.test(
-      overrides: [chatRepositoryProvider.overrideWithValue(repository)],
+      overrides: [
+        ...videoOverrides(),
+        chatRepositoryProvider.overrideWithValue(repository),
+      ],
     );
 
 /// Loads the list and keeps the controller (and its subscription) alive.

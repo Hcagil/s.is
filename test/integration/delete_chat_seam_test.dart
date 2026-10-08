@@ -32,6 +32,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/dead_host.dart';
 import '../support/reach.dart';
 import '../support/service_key.dart';
+import '../support/video_fakes.dart';
 
 const _url = String.fromEnvironment(
   'SUPABASE_TEST_URL',
@@ -87,6 +88,7 @@ class _App {
     final me = client.auth.currentUser!.id;
     container = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         sessionControllerProvider.overrideWith(
           () => _SignedIn(Member(userId: me, displayName: me)),
         ),

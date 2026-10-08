@@ -224,6 +224,11 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       ref.listen(chatListSnapshotOwnerProvider, (_, _) {});
       // And the files kept from file messages.
       ref.listen(deviceFilesOwnerProvider, (_, _) {});
+      // The saved send queue is forgotten the same way, and listening to the
+      // queue itself brings back the sends that were waiting when the app
+      // was killed.
+      ref.listen(sendQueueOwnerProvider, (_, _) {});
+      ref.listen(sendQueueProvider, (_, _) {});
       // Drops a conversation's queue and draft the moment it is found to be
       // one the member has left or been removed from -- see
       // leftConversationGuardProvider's own doc for why this is silent.

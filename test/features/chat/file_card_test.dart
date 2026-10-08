@@ -20,6 +20,7 @@ import 'package:sis/l10n/app_localizations.dart';
 
 import '../../support/fakes.dart';
 import '../../support/file_fakes.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -64,6 +65,7 @@ Future<ProviderContainer> pumpChat(
   final container = await settled(
     ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),

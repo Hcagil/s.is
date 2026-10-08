@@ -36,6 +36,7 @@ import '../support/session_claim.dart';
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Unread counts through the real stack: [SupabaseChatRepository.markRead]
 /// and `conversations().unread` against the real RPCs, and the seam the
@@ -267,6 +268,7 @@ List<Override> _production(
   String name, {
   ChatRepository? chat,
 }) => [
+  ...videoOverrides(),
   runtimeConfigProvider.overrideWithValue(
     const RuntimeConfig(
       supabaseUrl: _url,

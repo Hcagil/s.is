@@ -31,6 +31,7 @@ import 'package:sis/l10n/app_localizations.dart';
 
 import '../../../support/fakes.dart';
 import '../../../support/sis_ui.dart';
+import '../../../support/video_fakes.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -51,6 +52,7 @@ Future<void> pumpApp(
   await t.pumpWidget(
     ProviderScope(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(config),
         authRepositoryProvider.overrideWithValue(
           FakeAuth(session: true, member: me),
@@ -238,6 +240,7 @@ void main() {
   group('NotificationsScreen: load failure', () {
     Widget alone(NotificationSettingsFake fake) => ProviderScope(
       overrides: [
+        ...videoOverrides(),
         notificationSettingsRepositoryProvider.overrideWithValue(fake),
         chatRepositoryProvider.overrideWithValue(ChatFake()),
       ],
@@ -445,6 +448,7 @@ void main() {
       await t.pumpWidget(
         ProviderScope(
           overrides: [
+            ...videoOverrides(),
             notificationSettingsRepositoryProvider.overrideWithValue(fake),
           ],
           child: MaterialApp(

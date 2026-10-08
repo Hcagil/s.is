@@ -26,6 +26,7 @@ import 'package:sis/l10n/app_localizations.dart';
 
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -34,7 +35,7 @@ const dana = Member(userId: 'u4', displayName: 'Dana');
 
 Finder byKey(String k) => find.byKey(ValueKey(k));
 
-const greyTiles = ['grey-att_tvideo', 'grey-att_tvoice', 'grey-att_tloc'];
+const greyTiles = ['grey-att_tvoice', 'grey-att_tloc'];
 
 Message msg(String id, {String body = 'hi', String from = 'u2'}) => Message(
   id: id,
@@ -74,6 +75,7 @@ Future<ProviderContainer> pumpChat(
   final container = await settled(
     ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
@@ -260,6 +262,14 @@ void main() {
       expect(results, ['contact']);
     });
 
+    testWidgets('Video is live and answers video', (t) async {
+      final results = await mount(t);
+      expect(byKey('grey-att_tvideo'), findsNothing);
+      await t.tap(byKey('attach-video'));
+      await t.pumpAndSettle();
+      expect(results, ['video']);
+    });
+
     testWidgets('backing out answers null', (t) async {
       final results = await mount(t);
       await t.binding.handlePopRoute();
@@ -269,7 +279,7 @@ void main() {
 
     testWidgets('a grey tile answers nothing and leaves the card', (t) async {
       final results = await mount(t);
-      await t.tap(byKey('grey-att_tvideo'));
+      await t.tap(byKey('grey-att_tvoice'));
       await t.pumpAndSettle();
       expect(results, isEmpty);
       expect(byKey('attach-menu'), findsOneWidget);
@@ -427,6 +437,7 @@ void main() {
     final container = await settled(
       ProviderContainer.test(
         overrides: [
+          ...videoOverrides(),
           chatRepositoryProvider.overrideWithValue(world()),
           presenceRepositoryProvider.overrideWithValue(PresenceFake()),
           sessionControllerProvider.overrideWith(_SignedIn.new),

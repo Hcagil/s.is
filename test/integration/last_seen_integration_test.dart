@@ -19,6 +19,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/dead_host.dart';
 import '../support/reach.dart';
 import '../support/service_key.dart';
+import '../support/video_fakes.dart';
 
 /// Last seen against the real stack: [SupabasePresenceRepository]'s two RPCs,
 /// [SupabaseProfileRepository]'s share_last_seen column, and the REAL
@@ -129,6 +130,7 @@ class Account {
   ProviderContainer container() {
     final c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         presenceRepositoryProvider.overrideWithValue(presence),
         profileRepositoryProvider.overrideWithValue(profile),
         chatRepositoryProvider.overrideWithValue(
@@ -503,6 +505,7 @@ void main() {
       extra.add(dead);
       final c = ProviderContainer.test(
         overrides: [
+          ...videoOverrides(),
           presenceRepositoryProvider.overrideWithValue(
             SupabasePresenceRepository(dead),
           ),

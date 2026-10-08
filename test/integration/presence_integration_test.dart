@@ -19,6 +19,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/reach.dart';
 import '../support/service_key.dart';
+import '../support/video_fakes.dart';
 
 /// Online status and typing against the real stack: the REAL controllers on
 /// the REAL [SupabasePresenceRepository], over real private Realtime channels
@@ -172,6 +173,7 @@ class Account {
   ProviderContainer container({PresenceRepository? presence}) {
     final c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         presenceRepositoryProvider.overrideWithValue(
           presence ?? SupabasePresenceRepository(client),
         ),

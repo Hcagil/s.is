@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/reach.dart';
 import '../support/service_key.dart';
+import '../support/video_fakes.dart';
 
 /// Group sender colours (0.30.7) through the real repository and the real
 /// list controller: the server's color_slot (assigned by its trigger) and the
@@ -126,7 +127,10 @@ void main() {
   });
 
   ProviderContainer container() => ProviderContainer.test(
-    overrides: [chatRepositoryProvider.overrideWithValue(gwen)],
+    overrides: [
+      ...videoOverrides(),
+      chatRepositoryProvider.overrideWithValue(gwen),
+    ],
   );
 
   test('a group: senders carry the server slots and profile names, the same '

@@ -34,6 +34,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/session_claim.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Setting a picture through the crop screen, on the real stack: the whole
 /// app as main.dart mounts it, with only the platform pieces faked where
@@ -250,6 +251,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(
             const RuntimeConfig(
               supabaseUrl: _url,

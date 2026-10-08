@@ -40,8 +40,9 @@ Future<({List<PickedImage> images, int dropped})> showAttachmentSheet(
 }
 
 /// Opens the attach card above [anchor] (the paperclip's global rect). The
-/// result is 'photo', 'file', 'contact' or 'poll' for the tile tapped, null
-/// when closed without choosing. Those four are live, the others are greyed.
+/// result is 'photo', 'video', 'file', 'contact' or 'poll' for the tile
+/// tapped, null when closed without choosing. Those five are live, the others
+/// are greyed.
 Future<String?> showAttachMenu(BuildContext context, {required Rect anchor}) =>
     showFloatingCard<String>(
       context,
@@ -73,8 +74,10 @@ class _AttachMenu extends StatelessWidget {
               label: l.attachPhoto,
             ),
           ),
-          GreyOption(
-            name: 'att_tvideo',
+          InkWell(
+            key: const ValueKey('attach-video'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).pop('video'),
             child: _attachTile(
               context,
               slot: 1,

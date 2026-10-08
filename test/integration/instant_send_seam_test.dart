@@ -35,6 +35,8 @@ import '../support/reach.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../support/video_fakes.dart';
+
 /// A text message shown the moment it is sent (2026-09-28), on the sender's
 /// own MessageScreen over the real [SupabaseChatRepository]: the server's
 /// row and its real Realtime echo must end as exactly one bubble, whichever
@@ -325,6 +327,7 @@ void main() {
   Future<ProviderContainer> mount(WidgetTester t, _Relay relay) async {
     final c = ProviderContainer(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(relay),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),

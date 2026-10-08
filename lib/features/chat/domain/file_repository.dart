@@ -4,11 +4,12 @@ import 'message.dart';
 
 /// The boundary for sending and downloading files. A repository never throws.
 abstract interface class ChatFileRepository {
-  /// Uploads [file] and stores the file message (id = file.id; a client-made id so a retry after a lost answer is harmless: if the object or the message already exists from an earlier attempt of the same send, that is success). Returns the stored message. DeniedFailure when the caller may not post there. A repository never throws.
+  /// Uploads [file] and stores the file message (id = file.id; a client-made id so a retry after a lost answer is harmless: if the object or the message already exists from an earlier attempt of the same send, that is success). Returns the stored message. DeniedFailure when the caller may not post there. When [file] has a thumbPath, that small jpeg is uploaded next to the video as `<path>.t` first. [onProgress] reports the upload from 0 to 1 (the video's bytes). A repository never throws.
   Future<Result<Message>> send(
     String conversationId,
     PickedFile file, {
     String? replyTo,
+    void Function(double fraction)? onProgress,
   });
 
   /// Downloads the stored object [attachmentPath] to the phone file

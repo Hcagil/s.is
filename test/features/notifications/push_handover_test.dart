@@ -53,6 +53,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import '../../support/fakes.dart';
 import '../../support/l10n.dart';
 import '../../support/push_platform.dart';
+import '../../support/video_fakes.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -239,6 +240,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(config),
           authRepositoryProvider.overrideWithValue(auth),
           updateRepositoryProvider.overrideWithValue(FakeUpdate()),
@@ -764,6 +766,7 @@ void main() {
       await t.pumpWidget(
         ProviderScope(
           overrides: [
+            ...videoOverrides(),
             runtimeConfigProvider.overrideWithValue(config),
             authRepositoryProvider.overrideWithValue(auth),
             updateRepositoryProvider.overrideWithValue(FakeUpdate()),
@@ -885,6 +888,7 @@ void main() {
       await t.pumpWidget(
         ProviderScope(
           overrides: [
+            ...videoOverrides(),
             pushSourceProvider.overrideWith((_) {
               thrown++;
               throw UnimplementedError('override in main');
@@ -909,6 +913,7 @@ void main() {
         await t.pumpWidget(
           ProviderScope(
             overrides: [
+              ...videoOverrides(),
               startupErrorProvider.overrideWithValue(StartupFailure.bootstrap),
               if (withConfig) runtimeConfigProvider.overrideWithValue(config),
             ],
@@ -939,6 +944,7 @@ void main() {
       await t.pumpWidget(
         ProviderScope(
           overrides: [
+            ...videoOverrides(),
             runtimeConfigProvider.overrideWith((_) => current),
             authRepositoryProvider.overrideWithValue(auth),
             updateRepositoryProvider.overrideWithValue(FakeUpdate()),

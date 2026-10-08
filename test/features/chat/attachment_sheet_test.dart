@@ -28,6 +28,8 @@ import '../../support/gallery_paging.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../../support/video_fakes.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 
 class _SignedIn extends SessionController {
@@ -40,6 +42,7 @@ GalleryPhoto photo(String id) => GalleryPhoto(id);
 Future<ProviderContainer> _scope(ChatFake chat, Gallery gallery) => settled(
   ProviderContainer.test(
     overrides: [
+      ...videoOverrides(),
       chatRepositoryProvider.overrideWithValue(chat),
       presenceRepositoryProvider.overrideWithValue(PresenceFake()),
       galleryProvider.overrideWithValue(gallery),

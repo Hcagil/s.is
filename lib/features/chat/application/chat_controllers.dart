@@ -35,13 +35,16 @@ import '../domain/poll_repository.dart';
 import '../domain/reaction.dart';
 import '../domain/reaction_repository.dart';
 import '../domain/read_marks.dart';
+import '../domain/send_queue_store.dart';
 import '../domain/shared_contact.dart';
+import '../domain/video.dart';
 import 'chat_drafts.dart';
 
 part 'open_conversation.dart';
 part 'conversation_list_controller.dart';
 part 'contacts_controller.dart';
 part 'file_controllers.dart';
+part 'video_controllers.dart';
 part 'messages_controller.dart';
 part 'reply_edit_controllers.dart';
 part 'read_marks_controller.dart';

@@ -5,6 +5,7 @@ import '../../../core/date_label.dart';
 import 'file_attachment.dart';
 import 'poll.dart';
 import 'shared_contact.dart';
+import 'video.dart';
 
 /// The longest body the database will accept, per the check constraint on
 /// `public.messages.body`.
@@ -47,7 +48,7 @@ String previewText(Message message) => message.poll
     : message.contact
     ? contactPreview(message.body)
     : message.file != null
-    ? filePreview(message.file!.name)
+    ? (message.file!.isVideo ? videoPreview : filePreview(message.file!.name))
     : message.body.isNotEmpty
     ? message.body
     : (message.hasAttachment ? 'Photo' : '');

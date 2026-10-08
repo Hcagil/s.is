@@ -36,6 +36,7 @@ Message fileMessage(
   String name = 'Cabin booking.pdf',
   String mime = 'application/pdf',
   int size = 2516582,
+  int? durationMs,
   DateTime? createdAt,
 }) => Message(
   id: id,
@@ -44,15 +45,21 @@ Message fileMessage(
   body: '',
   createdAt: createdAt ?? DateTime.now(),
   attachmentPath: '$conversationId/$id/$name',
-  file: AttachedFile(name: name, mime: mime, size: size),
+  file: AttachedFile(
+    name: name,
+    mime: mime,
+    size: size,
+    durationMs: durationMs,
+  ),
 );
 
 /// One send asked of the server, waiting for the test's answer.
 class FileSendAsk {
-  FileSendAsk(this.conversationId, this.file, this.replyTo);
+  FileSendAsk(this.conversationId, this.file, this.replyTo, [this.onProgress]);
   final String conversationId;
   final PickedFile file;
   final String? replyTo;
+  final void Function(double fraction)? onProgress;
   final answer = Completer<Result<Message>>();
 }
 
@@ -89,8 +96,9 @@ class FileRepoFake implements ChatFileRepository {
     String conversationId,
     PickedFile file, {
     String? replyTo,
+    void Function(double fraction)? onProgress,
   }) {
-    final ask = FileSendAsk(conversationId, file, replyTo);
+    final ask = FileSendAsk(conversationId, file, replyTo, onProgress);
     sends.add(ask);
     return ask.answer.future;
   }
@@ -107,10 +115,14 @@ class FileRepoFake implements ChatFileRepository {
           name: a.file.name,
           mime: a.file.mime,
           size: a.file.size,
+          durationMs: a.file.durationMs,
         ),
       ),
     );
   }
+
+  /// Reports upload progress [f] of send [i], as the real upload does.
+  void sendProgress(int i, double f) => sends[i].onProgress?.call(f);
 
   void sendFail(int i, Failure f) => sends[i].answer.complete(Err(f));
 

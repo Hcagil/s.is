@@ -30,9 +30,12 @@ import 'features/chat/data/external_picker_channel.dart';
 import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/file_chat_list_snapshot_store.dart';
 import 'features/chat/data/flutter_device_files.dart';
+import 'features/chat/data/flutter_device_videos.dart';
 import 'features/chat/data/flutter_phone_book.dart';
 import 'features/chat/data/native_picture_cropper.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
+import 'features/chat/data/share_plus_video_sharer.dart';
+import 'features/chat/data/shared_prefs_send_queue_store.dart';
 import 'features/chat/data/supabase_chat_archive_repository.dart';
 import 'features/chat/data/supabase_chat_delete_repository.dart';
 import 'features/chat/data/supabase_chat_file_repository.dart';
@@ -44,6 +47,8 @@ import 'features/chat/data/supabase_reaction_repository.dart';
 import 'features/chat/data/supabase_contacts_repository.dart';
 import 'features/chat/data/supabase_contact_share_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
+import 'features/chat/data/video_player_playback.dart';
+import 'features/chat/presentation/video_player_page.dart';
 import 'features/notifications/application/alert_controller.dart';
 import 'features/notifications/application/badge_controller.dart';
 import 'features/notifications/application/notification_settings_controller.dart';
@@ -153,6 +158,7 @@ Future<void> main() async {
     pushReady.future.ignore();
     final client = Supabase.instance.client;
     final attachmentCache = FileAttachmentCache();
+    final deviceFiles = FlutterDeviceFiles();
     StartupMarks.mark('run-app');
     runApp(
       ProviderScope(
@@ -192,7 +198,18 @@ Future<void> main() async {
           chatFileRepositoryProvider.overrideWithValue(
             SupabaseChatFileRepository(client),
           ),
-          deviceFilesProvider.overrideWithValue(FlutterDeviceFiles()),
+          deviceFilesProvider.overrideWithValue(deviceFiles),
+          deviceVideosProvider.overrideWithValue(
+            FlutterDeviceVideos(deviceFiles),
+          ),
+          videoPlaybackFactoryProvider.overrideWithValue(
+            const VideoPlayerPlaybackFactory(),
+          ),
+          videoSharerProvider.overrideWithValue(const SharePlusVideoSharer()),
+          sendQueueStoreProvider.overrideWithValue(
+            const SharedPrefsSendQueueStore(),
+          ),
+          videoSurfaceProvider.overrideWithValue(videoSurface),
           attachmentCacheProvider.overrideWithValue(attachmentCache),
           chatListSnapshotStoreProvider.overrideWithValue(
             FileChatListSnapshotStore(),

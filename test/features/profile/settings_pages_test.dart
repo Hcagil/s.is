@@ -36,6 +36,7 @@ import '../../support/chat_launcher.dart'
     show phoneView, platforms, screenHeight, screenWidth, stroke;
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
+import '../../support/video_fakes.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -63,6 +64,7 @@ List<Override> overrides({
   PushRegistryFake? push,
   AttachmentCacheFake? photos,
 }) => [
+  ...videoOverrides(),
   runtimeConfigProvider.overrideWithValue(config),
   authRepositoryProvider.overrideWithValue(
     auth ?? FakeAuth(session: true, member: mayaAccount),

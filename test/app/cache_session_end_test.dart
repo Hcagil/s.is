@@ -26,6 +26,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../support/fakes.dart';
+import '../support/video_fakes.dart';
 
 const ava = Member(userId: 'u1', displayName: 'Ava');
 const picture = 'profile/ub/1.jpg';
@@ -36,6 +37,7 @@ late FileAttachmentCache cache;
 
 Widget app(FakeAuth auth) => ProviderScope(
   overrides: [
+    ...videoOverrides(),
     runtimeConfigProvider.overrideWithValue(
       const RuntimeConfig(
         supabaseUrl: 'https://x.supabase.co',

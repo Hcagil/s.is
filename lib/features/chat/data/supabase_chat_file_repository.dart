@@ -143,6 +143,9 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
         StorageException(:final statusCode)
             when statusCode == '401' || statusCode == '403' =>
           const DeniedFailure(),
+        StorageException(:final statusCode)
+            when statusCode == '400' || statusCode == '404' =>
+          const NetworkFailure('This file is not available.'),
         _ => readableFailure(e),
       });
     } finally {

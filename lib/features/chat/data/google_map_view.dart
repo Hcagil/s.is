@@ -39,17 +39,8 @@ class _GoogleMapViewState extends State<GoogleMapView> {
       onCameraMove: (p) =>
           _center = GeoPoint(p.target.latitude, p.target.longitude),
       onCameraIdle: _onIdle,
-      markers: {
-        if (me != null)
-          Marker(
-            markerId: const MarkerId('me'),
-            position: LatLng(me.lat, me.lng),
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueAzure,
-            ),
-            anchor: const Offset(0.5, 0.5),
-          ),
-      },
+      // The map's own blue dot, only once a fix exists (permission granted).
+      myLocationEnabled: me != null,
       zoomControlsEnabled: false,
       myLocationButtonEnabled: false,
       mapToolbarEnabled: false,

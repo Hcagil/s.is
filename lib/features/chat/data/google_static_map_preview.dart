@@ -1,16 +1,14 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 
 import '../domain/geo.dart';
 import 'maps_request_headers.dart';
 
 /// The map picture of a location bubble: a Google Static Maps image (centre =
-/// the point, zoom 15) fetched once, kept in a file in the cache folder and in
-/// memory; while it loads or when it cannot be fetched the picture area is a
+/// the point, zoom 15) fetched once and kept in memory only (Maps Platform
+/// terms forbid storing the images on disk); while it loads or when it cannot be fetched the picture area is a
 /// plain light-grey fill.
 class GoogleStaticMapPreview extends StatefulWidget {
   /// Creates a static map preview widget.
@@ -60,13 +58,6 @@ class _GoogleStaticMapPreviewState extends State<GoogleStaticMapPreview> {
     final cached = _memory[key];
     if (cached != null) return cached;
     try {
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/$key.png');
-      if (await file.exists()) {
-        final b = await file.readAsBytes();
-        _memory[key] = b;
-        return b;
-      }
       final r = await widget.client
           .get(
             Uri.https('maps.googleapis.com', '/maps/api/staticmap', {
@@ -84,7 +75,6 @@ class _GoogleStaticMapPreviewState extends State<GoogleStaticMapPreview> {
           !(r.headers['content-type'] ?? '').startsWith('image/')) {
         return null;
       }
-      await file.writeAsBytes(r.bodyBytes);
       _memory[key] = r.bodyBytes;
       return r.bodyBytes;
     } catch (_) {

@@ -18,6 +18,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
 import '../support/dead_host.dart';
+import '../support/video_fakes.dart';
 
 const _url = String.fromEnvironment(
   'SUPABASE_TEST_URL',
@@ -71,6 +72,7 @@ late String direct;
 ProviderContainer c(SupabaseClient client) {
   final container = ProviderContainer.test(
     overrides: [
+      ...videoOverrides(),
       chatRepositoryProvider.overrideWithValue(
         SupabaseChatRepository(sanaClient),
       ),

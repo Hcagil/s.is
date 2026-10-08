@@ -17,6 +17,9 @@ Future<void> until(bool Function() ok, String what) async {
   fail('timed out: $what');
 }
 
+GeoPoint? addressPoint(ProviderContainer c) =>
+    c.read(locationPickerProvider).address?.point;
+
 void main() {
   group('LocationPicker', () {
     test('start() never asks for permission', () async {
@@ -273,6 +276,10 @@ void main() {
       );
       c.listen(locationPickerProvider, (_, _) {});
       final picker = c.read(locationPickerProvider.notifier);
+      // The first lookup answers last, as a slow network can.
+      search.reverseDelay = (p) => p == const GeoPoint(1, 1)
+          ? const Duration(milliseconds: 200)
+          : Duration.zero;
       picker.moveTo(const GeoPoint(1, 1));
       picker.moveTo(const GeoPoint(2, 2));
       await until(() {
@@ -280,7 +287,8 @@ void main() {
         return state.address != null &&
             state.address!.point == const GeoPoint(2, 2);
       }, 'last address not set');
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future.delayed(const Duration(milliseconds: 400));
+      expect(addressPoint(c), const GeoPoint(2, 2));
       final state = c.read(locationPickerProvider);
       expect(state.center, const GeoPoint(2, 2));
       expect(picker.pinned()!.lat, 2);

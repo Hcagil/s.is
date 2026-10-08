@@ -97,9 +97,15 @@ class FakePlaceSearch implements PlaceSearch {
 
   final reversed = <GeoPoint>[];
 
+  /// How long the address lookup of a point takes, like a real network
+  /// round trip; answers can arrive out of order.
+  Duration Function(GeoPoint) reverseDelay = (_) => Duration.zero;
+
   @override
   Future<Result<Place?>> reverse(GeoPoint point) async {
     reversed.add(point);
+    final delay = reverseDelay(point);
+    if (delay > Duration.zero) await Future<void>.delayed(delay);
     return Ok(reverseAnswer(point));
   }
 }

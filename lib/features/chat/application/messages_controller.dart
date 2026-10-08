@@ -430,8 +430,12 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       for (final m in result.value)
         if (!shown.contains(m.id) && !m.createdAt.isAfter(oldest.createdAt)) m,
     ];
-    // Counted before dropping vanished rows: a short page is the real start.
-    if (fresh.length < messagePageSize) _noOlder = true;
+    final page = result.value
+        .where((m) => !m.createdAt.isAfter(oldest.createdAt))
+        .length;
+    // Counted from the server's page, before shown rows are dropped: a row
+    // live delivery already added must not make a full page look short.
+    if (page <= messagePageSize) _noOlder = true;
     final older = [
       for (final m in fresh)
         if (m.deletion != MessageDeletion.vanished) m,
@@ -706,6 +710,22 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       final p = message.attachmentPath != null && message.isFrom(_me ?? '')
           ? current.indexWhere((m) => m.isPendingOf(message))
           : -1;
+      if (p < 0 && !message.isPending) {
+        // A row older than the oldest shown one (Realtime delivered it late) is
+        // ignored, like the open's buffered merge: loadOlder fetches it in
+        // order. A row inside the shown range goes in sorted, never at the end.
+        final oldest = current.where((m) => !m.isPending).firstOrNull;
+        if (oldest != null && message.createdAt.isBefore(oldest.createdAt)) {
+          return;
+        }
+        final at = current.indexWhere(
+          (m) => !m.isPending && m.createdAt.isAfter(message.createdAt),
+        );
+        state = AsyncData(
+          at < 0 ? [...current, message] : ([...current]..insert(at, message)),
+        );
+        return;
+      }
       state = AsyncData(
         p >= 0
             ? ([...current]

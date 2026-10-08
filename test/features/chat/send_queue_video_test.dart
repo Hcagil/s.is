@@ -157,6 +157,8 @@ void main() {
     await hop(t);
     expect(c.read(sendQueueProvider)['c1'] ?? const <Message>[], isEmpty);
     expect(files.sends.isEmpty, true);
+    expect(videos.cancels, 1, reason: 'the running shrink is stopped');
+    expect(videos.discarded, contains('v1'), reason: 'the picked copy goes');
 
     await t.pump(const Duration(seconds: 30));
     await hop(t);

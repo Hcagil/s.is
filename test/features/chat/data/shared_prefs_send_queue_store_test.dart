@@ -24,14 +24,14 @@ void main() {
     }
   });
 
-  QueuedRecord _textRecord(String id) => QueuedRecord(
+  QueuedRecord textRecord(String id) => QueuedRecord(
     id: id,
     conversationId: 'c1',
     createdAt: DateTime.now(),
     body: 'text',
   );
 
-  QueuedRecord _fileRecord(String id, String filePath) => QueuedRecord(
+  QueuedRecord fileRecord(String id, String filePath) => QueuedRecord(
     id: id,
     conversationId: 'c1',
     createdAt: DateTime.now(),
@@ -45,7 +45,7 @@ void main() {
     ),
   );
 
-  QueuedRecord _videoRecord(String id, String videoPath) => QueuedRecord(
+  QueuedRecord videoRecord(String id, String videoPath) => QueuedRecord(
     id: id,
     conversationId: 'c1',
     createdAt: DateTime.now(),
@@ -62,20 +62,20 @@ void main() {
     ),
   );
 
-  Future<File> _createFile(String name) async {
+  Future<File> createFile(String name) async {
     final file = File('${tempDir.path}/$name');
     await file.writeAsString('x');
     return file;
   }
 
   test('save then load returns same records', () async {
-    final file = await _createFile('file.txt');
-    final video = await _createFile('video.mp4');
+    final file = await createFile('file.txt');
+    final video = await createFile('video.mp4');
 
     final records = [
-      _textRecord('t1'),
-      _fileRecord('f1', file.path),
-      _videoRecord('v1', video.path),
+      textRecord('t1'),
+      fileRecord('f1', file.path),
+      videoRecord('v1', video.path),
     ];
 
     await store.save('u1', records);
@@ -98,11 +98,11 @@ void main() {
   });
 
   test('users are separate', () async {
-    final file1 = await _createFile('file1.txt');
-    final file2 = await _createFile('file2.txt');
+    final file1 = await createFile('file1.txt');
+    final file2 = await createFile('file2.txt');
 
-    await store.save('u1', [_fileRecord('f1', file1.path)]);
-    await store.save('u2', [_fileRecord('f2', file2.path)]);
+    await store.save('u1', [fileRecord('f1', file1.path)]);
+    await store.save('u2', [fileRecord('f2', file2.path)]);
 
     final loadedU1 = await store.load('u1');
     final loadedU2 = await store.load('u2');
@@ -114,8 +114,8 @@ void main() {
   });
 
   test('save with empty list removes the key', () async {
-    final file = await _createFile('file.txt');
-    await store.save('u1', [_fileRecord('f1', file.path)]);
+    final file = await createFile('file.txt');
+    await store.save('u1', [fileRecord('f1', file.path)]);
     var prefs = await SharedPreferences.getInstance();
     expect(prefs.getKeys().any((k) => k.startsWith('sis.sendqueue.')), isTrue);
 
@@ -125,10 +125,10 @@ void main() {
   });
 
   test('file record missing on disk is dropped', () async {
-    final file = await _createFile('file.txt');
-    final text = _textRecord('t1');
+    final file = await createFile('file.txt');
+    final text = textRecord('t1');
 
-    await store.save('u1', [_fileRecord('f1', file.path), text]);
+    await store.save('u1', [fileRecord('f1', file.path), text]);
 
     // Delete the file before loading
     file.deleteSync();
@@ -139,10 +139,10 @@ void main() {
   });
 
   test('video record missing on disk is dropped', () async {
-    final video = await _createFile('video.mp4');
-    final text = _textRecord('t1');
+    final video = await createFile('video.mp4');
+    final text = textRecord('t1');
 
-    await store.save('u1', [_videoRecord('v1', video.path), text]);
+    await store.save('u1', [videoRecord('v1', video.path), text]);
 
     // Delete the video file before loading
     video.deleteSync();
@@ -154,10 +154,10 @@ void main() {
 
   test('clear removes only sendqueue keys', () async {
     SharedPreferences.setMockInitialValues({'sis.appearance': 'keep'});
-    final file = await _createFile('file.txt');
+    final file = await createFile('file.txt');
 
-    await store.save('u1', [_fileRecord('f1', file.path)]);
-    await store.save('u2', [_fileRecord('f2', file.path)]);
+    await store.save('u1', [fileRecord('f1', file.path)]);
+    await store.save('u2', [fileRecord('f2', file.path)]);
 
     await store.clear();
 
@@ -173,9 +173,9 @@ void main() {
   });
 
   test('save replaces existing records', () async {
-    final file = await _createFile('file.txt');
-    final a = _fileRecord('a', file.path);
-    final b = _fileRecord('b', file.path);
+    final file = await createFile('file.txt');
+    final a = fileRecord('a', file.path);
+    final b = fileRecord('b', file.path);
 
     await store.save('u1', [a, b]);
     await store.save('u1', [b]);

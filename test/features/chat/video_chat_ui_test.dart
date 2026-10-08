@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/autodownload/domain/auto_download_settings.dart';
-import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/chat_drafts.dart';
-import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/video.dart';
 
 import '../../support/file_fakes.dart';
@@ -313,7 +311,7 @@ void main() {
         pickResult: VideoPick(videos: [videoSource('a'), videoSource('b')]),
       );
       final chat = world();
-      final container = await pumpVideoChat(t, chat, videos: videos);
+      await pumpVideoChat(t, chat, videos: videos);
       await frames(t);
 
       await t.tap(find.byKey(const Key('composer-attach')));
@@ -345,7 +343,7 @@ void main() {
         pickResult: VideoPick(videos: [videoSource('a'), videoSource('b')]),
       );
       final chat = world();
-      final container = await pumpVideoChat(t, chat, videos: videos);
+      await pumpVideoChat(t, chat, videos: videos);
       await frames(t);
 
       await t.tap(find.byKey(const Key('composer-attach')));

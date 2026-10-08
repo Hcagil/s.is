@@ -19,7 +19,7 @@ class _Size {
   String toString() => '${width}x$height';
 }
 
-_Size size(int w, int h) {
+_Size _size(int w, int h) {
   final s = videoTargetSize(w, h);
   return _Size(s.width, s.height);
 }
@@ -56,36 +56,36 @@ void main() {
 
     test('videoTargetSize', () {
       // Standard cases
-      expect(size(1920, 1080), _Size(1280, 720));
-      expect(size(1080, 1920), _Size(720, 1280));
-      expect(size(1280, 720), _Size(1280, 720));
+      expect(_size(1920, 1080), _Size(1280, 720));
+      expect(_size(1080, 1920), _Size(720, 1280));
+      expect(_size(1280, 720), _Size(1280, 720));
 
       // No upscaling
-      expect(size(640, 360), _Size(640, 360));
+      expect(_size(640, 360), _Size(640, 360));
 
       // Even rounding
-      expect(size(641, 361), _Size(640, 360));
+      expect(_size(641, 361), _Size(640, 360));
 
       // Tiny sizes
-      final tiny3 = size(3, 3);
+      final tiny3 = _size(3, 3);
       expect(tiny3.width, greaterThanOrEqualTo(2));
       expect(tiny3.height, greaterThanOrEqualTo(2));
       expect(tiny3.width % 2, 0);
       expect(tiny3.height % 2, 0);
 
-      final tiny1 = size(1, 1);
+      final tiny1 = _size(1, 1);
       expect(tiny1.width, greaterThanOrEqualTo(2));
       expect(tiny1.height, greaterThanOrEqualTo(2));
       expect(tiny1.width % 2, 0);
       expect(tiny1.height % 2, 0);
 
       // Edge cases around 720
-      expect(size(720, 720), _Size(720, 720));
-      expect(size(721, 721), _Size(720, 720));
-      expect(size(721, 360), _Size(720, 360));
-      expect(size(721, 361), _Size(720, 360));
-      expect(size(721, 720), _Size(720, 720));
-      expect(size(720, 721), _Size(720, 720));
+      expect(_size(720, 720), _Size(720, 720));
+      expect(_size(721, 721), _Size(720, 720));
+      expect(_size(721, 360), _Size(720, 360));
+      expect(_size(721, 361), _Size(720, 360));
+      expect(_size(721, 720), _Size(720, 720));
+      expect(_size(720, 721), _Size(720, 720));
     });
 
     test('videoFileName', () {

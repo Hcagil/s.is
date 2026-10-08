@@ -266,7 +266,7 @@ void main() {
     ];
 
     for (final input in garbageInputs) {
-      test('decodeQueue("${input}") returns [] and does not throw', () {
+      test('decodeQueue("$input") returns [] and does not throw', () {
         expect(() => decodeQueue(input), returnsNormally);
         final result = decodeQueue(input);
         expect(result, isEmpty);

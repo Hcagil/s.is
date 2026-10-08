@@ -185,11 +185,14 @@ class VoicePlayer extends Notifier<VoicePlayerState> {
   }
 
   Future<void> _release() async {
-    await _sub?.cancel();
+    // Nothing here is awaited: a cancel or dispose that waits on its own
+    // stream must never hold up the next message or the stop.
+    unawaited(_sub?.cancel());
     _sub = null;
     final p = _playback;
     _playback = null;
-    await p?.dispose();
+    if (p == null) return;
+    unawaited(p.pause().then((_) => p.dispose(), onError: (_) => p.dispose()));
   }
 
   void _markPlayed(String id) {
@@ -210,7 +213,6 @@ class VoicePlayer extends Notifier<VoicePlayerState> {
   /// Stops and unloads.
   Future<void> stop() async {
     ++_gen;
-    await _release();
     if (ref.mounted) {
       state = state.copyWith(
         clearMessage: true,
@@ -219,6 +221,7 @@ class VoicePlayer extends Notifier<VoicePlayerState> {
         duration: Duration.zero,
       );
     }
+    await _release();
   }
 }
 

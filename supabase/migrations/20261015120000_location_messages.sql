@@ -22,8 +22,9 @@ alter table public.messages
   add column location_lat double precision,
   add column location_lng double precision,
   add constraint messages_location_range check (
-    (location_lat is null and location_lng is null)
-    or (location_lat between -90 and 90 and location_lng between -180 and 180));
+    (location_lat is null) = (location_lng is null)
+    and (location_lat is null
+         or (location_lat between -90 and 90 and location_lng between -180 and 180)));
 
 create function app_private.messages_location_frozen() returns trigger
 language plpgsql security definer set search_path = '' as $$
@@ -31,13 +32,15 @@ begin
   if new.deleted is not null then
     new.location_lat := null;
     new.location_lng := null;
-  elsif old.location_lat is not null and new.body is distinct from old.body then
+  elsif new.location_lat is distinct from old.location_lat
+     or new.location_lng is distinct from old.location_lng
+     or (old.location_lat is not null and new.body is distinct from old.body) then
     raise exception 'not permitted' using errcode = '42501';
   end if;
   return new;
 end $$;
 revoke all on function app_private.messages_location_frozen() from public, anon, authenticated;
-create trigger messages_location_frozen before update of body, deleted on public.messages
+create trigger messages_location_frozen before update of body, deleted, location_lat, location_lng on public.messages
   for each row execute function app_private.messages_location_frozen();
 
 -- Sends a location. [p_id] is the new message's id, made on the phone, so a

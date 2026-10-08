@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -17,7 +19,7 @@ val missingReleaseSigningValues = releaseSigningValues.filterValues { it.isNullO
 val mapsApiKey: String =
     System.getenv("MAPS_API_KEY_ANDROID")?.takeIf { it.isNotBlank() }
         ?: rootProject.file("../.private/maps.properties").takeIf { it.exists() }?.let { file ->
-            java.util.Properties().apply { file.inputStream().use { load(it) } }
+            Properties().apply { file.inputStream().use { load(it) } }
                 .getProperty("MAPS_API_KEY_ANDROID")?.trim()
         }
         ?: ""

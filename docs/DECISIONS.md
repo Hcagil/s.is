@@ -1968,7 +1968,13 @@ cannot power the search box.
 **Decision.**
 - Google Maps Platform on its free tier: `google_maps_flutter` for the map,
   Places API (New) over REST for search, the Maps Static API for the card
-  preview (cached on the phone), the Geocoding API for the address.
+  preview, the Geocoding API for the address. Static map images are kept in
+  memory only, never on disk (Maps Platform terms); Places and Geocoding
+  coordinates may be cached for at most 30 days under the same terms.
+- Before a location is sent, the phone sends the pin or position to Google
+  (reverse address, search bias, each pin move).
+- The iOS implementation is `google_maps_flutter_ios_sdk9` (Swift Package
+  Manager, iOS 15), so the repo stays SPM-only with no Podfile.
 - Keys are restricted per platform (Android package + signing SHA-1, iOS
   bundle id) and each API has a per-day request cap, so a leaked key cannot
   run up a bill.

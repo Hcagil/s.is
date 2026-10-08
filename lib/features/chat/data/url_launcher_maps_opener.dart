@@ -15,9 +15,11 @@ final class UrlLauncherMapsOpener implements MapsOpener {
     final lng = point.lng.toStringAsFixed(6);
     final Uri uri;
     if (Platform.isAndroid) {
-      uri = Uri.parse(
-        'geo:$lat,$lng?q=$lat,$lng(${Uri.encodeComponent(label)})',
-      );
+      // encodeComponent leaves ( and ) alone, but they close the geo: label.
+      final name = Uri.encodeComponent(label)
+          .replaceAll('(', '%28')
+          .replaceAll(')', '%29');
+      uri = Uri.parse('geo:$lat,$lng?q=$lat,$lng($name)');
     } else {
       uri = Uri.https('maps.apple.com', '/', {'ll': '$lat,$lng', 'q': label});
     }

@@ -23,6 +23,8 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   geolocator: ^14.1.1
   google_maps_flutter: ^2.18.2
+  # iOS implementation with Swift Package Manager support (the repo has no Podfile).
+  google_maps_flutter_ios_sdk9: ^2.19.0
   google_sign_in: ^7.2.0
   http: ^1.6.0
   in_app_update: ^5.0.0

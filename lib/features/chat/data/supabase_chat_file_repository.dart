@@ -36,7 +36,12 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
             .upload(
               path,
               File(file.path),
-              fileOptions: FileOptions(contentType: file.mime),
+              // Always octet-stream: the bucket serves objects as-is, so a
+              // scripted type must never be stored. The real type travels in
+              // attachment_mime.
+              fileOptions: const FileOptions(
+                contentType: 'application/octet-stream',
+              ),
             );
       } on StorageException catch (e) {
         if (e.statusCode != '409') rethrow;
@@ -100,6 +105,7 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
     String attachmentPath,
     String destPath, {
     void Function(double fraction)? onProgress,
+    int? expectedSize,
   }) async {
     final client = _http();
     final part = File('$destPath.part');
@@ -122,6 +128,10 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
         }
       } finally {
         await sink.close();
+      }
+      if (expectedSize != null && await part.length() != expectedSize) {
+        await part.delete();
+        return const Err(NetworkFailure('This file is not available.'));
       }
       await part.rename(destPath);
       return const Ok(null);

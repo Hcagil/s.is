@@ -5,15 +5,19 @@
 --
 --  * Additive: three nullable columns, one trigger, one more column at the END
 --    of conversation_previews, the push text, and the bucket limit widened.
---  * The bucket accepted only 10 MiB images. It now accepts any type up to
---    50 MiB (52428800 bytes), enforced by storage itself. The phone still
---    limits photos to 10 MiB and re-encodes them; only a hand-made upload
---    could now send a larger or non-image object, and it is still
---    members-only (attachments_write) and tied to the sender
+--  * The bucket accepted only 10 MiB images. It now takes 50 MiB (52428800
+--    bytes, enforced by storage itself), and the type list is the four image
+--    types plus application/octet-stream. The phone uploads every non-photo
+--    file as octet-stream (the real type travels in attachment_mime), so a
+--    scripted SVG, XHTML or HTML object can never be stored and then served
+--    as-is from the API domain. The phone still limits photos to 10 MiB and
+--    re-encodes them; a hand-made upload could send a larger image, and it is
+--    still members-only (attachments_write) and tied to the sender
 --    (owns_attachment). No policy changes.
 --  * The three file columns are all set or all null, and only with an
 --    attachment_path. The name is display text only (1 to 255 characters, no
---    control character); it is never used as a storage key or a path.
+--    control character, no direction mark or zero-width character that could
+--    disguise the type); it is never used as a storage key or a path.
 --  * A file's body is frozen while the message lives, so edit_message cannot
 --    add a caption. Delete for everyone clears the file columns with the
 --    path in the same update (the trigger below), so nothing about a deleted
@@ -21,7 +25,10 @@
 
 update storage.buckets
    set file_size_limit = 52428800,
-       allowed_mime_types = null
+       allowed_mime_types = array[
+         'image/jpeg','image/png','image/webp','image/gif',
+         'application/octet-stream'
+       ]
  where id = 'attachments';
 
 alter table public.messages
@@ -35,6 +42,8 @@ alter table public.messages
         and attachment_size is not null
         and char_length(attachment_name) between 1 and 255
         and attachment_name !~ '[[:cntrl:]]'
+        -- direction marks and zero-width characters can disguise the type
+        and attachment_name !~ '[\u200B-\u200F\u202A-\u202E\u2066-\u2069]'
         and char_length(attachment_mime) between 3 and 127
         and attachment_mime ~ '^[^[:space:]/]+/[^[:space:]/]+$'
         and attachment_size between 1 and 52428800));

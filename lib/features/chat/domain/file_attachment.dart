@@ -98,9 +98,18 @@ String fileTypeLabel(String name) {
 /// Returns the one-line preview of a file message in the chat list.
 String filePreview(String name) => '\u{1F4CE} $name';
 
+/// Unicode direction marks and zero-width characters (U+200B-U+200F,
+/// U+202A-U+202E, U+2066-U+2069). They can disguise a file's real type
+/// ("invoice, RLO mark, fdp.apk"), so they never stay in a name.
+final _hiddenChars = RegExp('[\u200B-\u200F\u202A-\u202E\u2066-\u2069]');
+
+/// Returns [name] without direction marks and zero-width characters.
+String stripHiddenChars(String name) => name.replaceAll(_hiddenChars, '');
+
 /// Returns a safe file name for use on the phone.
 String safeFileName(String name) {
-  final clean = name.replaceAll(RegExp(r'[\\/:*?"<>|\u0000-\u001f]'), '_');
+  final clean = stripHiddenChars(name)
+      .replaceAll(RegExp(r'[\\/:*?"<>|\u0000-\u001f]'), '_');
   var trimmed = clean.trim();
   trimmed = trimmed.replaceFirst(RegExp(r'^\.+'), '');
   if (trimmed.isEmpty) return 'file';

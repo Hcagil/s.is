@@ -63,6 +63,7 @@ class FileDownloads extends Notifier<Map<String, double>> {
               state = {...state, message.id: f};
             }
           },
+          expectedSize: message.file?.size,
         );
     if (!ref.mounted) return null;
     state = {...state}..remove(message.id);

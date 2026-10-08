@@ -11,11 +11,16 @@ abstract interface class ChatFileRepository {
     String? replyTo,
   });
 
-  /// Downloads the stored object [attachmentPath] to the phone file [destPath], reporting progress from 0 to 1 in [onProgress] when the size is known. Never leaves a half-written file at [destPath].
+  /// Downloads the stored object [attachmentPath] to the phone file
+  /// [destPath], reporting progress from 0 to 1 in [onProgress] when the size
+  /// is known. Never leaves a half-written file at [destPath]. [expectedSize],
+  /// when given, is the size the message promised: a different byte count
+  /// deletes the download and fails.
   Future<Result<void>> download(
     String attachmentPath,
     String destPath, {
     void Function(double fraction)? onProgress,
+    int? expectedSize,
   });
 }
 

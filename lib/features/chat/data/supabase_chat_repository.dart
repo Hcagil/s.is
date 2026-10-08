@@ -1226,7 +1226,7 @@ final class SupabaseChatRepository implements ChatRepository {
     contact: row['contact'] as bool? ?? false,
     file: switch (row['attachment_name']) {
       final String name => AttachedFile(
-        name: name,
+        name: stripHiddenChars(name),
         mime: row['attachment_mime'] as String? ?? 'application/octet-stream',
         size: (row['attachment_size'] as num?)?.toInt() ?? 0,
       ),

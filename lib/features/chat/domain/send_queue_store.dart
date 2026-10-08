@@ -99,7 +99,9 @@ List<QueuedRecord> decodeQueue(String? json) {
         if (item is! Map<String, dynamic>) continue;
         final id = item['id'] as String;
         final conversationId = item['conversationId'] as String;
-        final createdAt = DateTime.fromMillisecondsSinceEpoch(item['createdAt'] as int);
+        final createdAt = DateTime.fromMillisecondsSinceEpoch(
+          item['createdAt'] as int,
+        );
         final body = item['body'] as String? ?? '';
         final replyTo = item['replyTo'] as String?;
         PickedFile? file;
@@ -128,15 +130,17 @@ List<QueuedRecord> decodeQueue(String? json) {
             thumbPath: v['thumbPath'] as String,
           );
         }
-        result.add(QueuedRecord(
-          id: id,
-          conversationId: conversationId,
-          createdAt: createdAt,
-          body: body,
-          replyTo: replyTo,
-          file: file,
-          video: video,
-        ));
+        result.add(
+          QueuedRecord(
+            id: id,
+            conversationId: conversationId,
+            createdAt: createdAt,
+            body: body,
+            replyTo: replyTo,
+            file: file,
+            video: video,
+          ),
+        );
       } catch (_) {
         // Skip invalid entries
         continue;

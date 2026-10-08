@@ -1903,3 +1903,20 @@ design. Update 2, slice 4 builds them.
 - Themes and wallpaper are not backed up or shared between phones; the
   Appearance page says so.
 - The editor needs no storage change.
+
+## 2026-10-08 — Video uses the system picker, like photos
+
+**Context.** Sending a video needs the member to choose one. A gallery grid of
+our own would need `READ_MEDIA_VIDEO`, which the "Photos only" decision
+(Play data-safety and permission posture) deliberately avoids.
+
+**Decision.**
+- Video uses the system chooser through `file_picker`, like photos and files;
+  no `READ_MEDIA_VIDEO`, the manifest does not change.
+- After the pick, a review page shows the videos as tiles with "Send (N)".
+- A video is limited to 5 minutes, shrunk on the phone to about 720p
+  (`light_compressor_v2`) and then uploaded under the existing 50 MiB cap;
+  playback uses `video_player`, the share sheet `share_plus` (all in `data/`).
+- The send queue is saved on the phone, so text, file and video sends
+  survive the app being closed.
+- The thumbnail is a small jpeg stored next to the video as `<path>.t`.

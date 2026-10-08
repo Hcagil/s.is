@@ -48,6 +48,8 @@ import 'file_card.dart';
 import 'group_event_line.dart';
 import 'group_gone_guard.dart';
 import 'swipeable_message.dart';
+import 'video_card.dart';
+import 'video_review_page.dart';
 import 'message_actions.dart';
 import 'member_name.dart';
 import 'message_menu_card.dart';

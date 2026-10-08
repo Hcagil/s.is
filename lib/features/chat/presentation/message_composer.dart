@@ -53,7 +53,11 @@ class _ComposerState extends ConsumerState<_Composer>
     _applyDraft(drafts.draftFor(id));
     final failure = drafts.consumeFailure(id);
     if (failure != null && mounted) {
-      showSisNotice(context, failure.message, isError: true);
+      showSisNotice(
+        context,
+        _videoFailureText(context, failure),
+        isError: true,
+      );
     }
   }
 
@@ -173,6 +177,36 @@ class _ComposerState extends ConsumerState<_Composer>
     }
   }
 
+  /// Opens the phone's video chooser (several allowed), shows the picked
+  /// videos on the review page, and queues each selected one: the bubble shows
+  /// at once, the video is shrunk and sent by itself, waiting offline. Videos
+  /// over 5 minutes are skipped with one notice. Backing out sends nothing and
+  /// the picked copies are deleted.
+  Future<void> _sendVideos() async {
+    final id = _conversationId;
+    if (id == null) return;
+    final device = ref.read(deviceVideosProvider);
+    final pick = await device.pick();
+    if (!mounted) return;
+    if (pick.tooLong > 0) {
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).videoTooLong(pick.tooLong),
+        isError: true,
+      );
+    }
+    if (pick.videos.isEmpty) return;
+    final chosen = await showVideoReview(context, pick.videos) ?? const [];
+    for (final video in pick.videos) {
+      if (!chosen.contains(video)) await device.discard(video);
+    }
+    if (!mounted) return;
+    final queue = ref.read(sendQueueProvider.notifier);
+    for (final video in chosen) {
+      queue.enqueueVideo(id, video, replyTo: ref.read(replyingToProvider));
+    }
+  }
+
   /// Picks one or more images (the paperclip's photo grid: recent photos,
   /// the camera tile, or "Gallery"), previews them with a caption box, and
   /// sends them -- the caption goes with the first one, the rest with none,
@@ -187,6 +221,7 @@ class _ComposerState extends ConsumerState<_Composer>
     if (choice == 'poll') return _sendPoll();
     if (choice == 'contact') return _sendContact();
     if (choice == 'file') return _sendFiles();
+    if (choice == 'video') return _sendVideos();
     if (choice != 'photo') return;
     final picked = await showAttachmentSheet(context);
     if (picked.images.isEmpty || !mounted) return;
@@ -595,3 +630,14 @@ String quoteText(AppLocalizations l, Message? message) => switch (message) {
   Message(hasAttachment: true) => l.quotePhoto,
   _ => l.commonMessage,
 };
+
+/// The words for a failed send; the video failures are translated here, any
+/// other failure keeps its own message.
+String _videoFailureText(BuildContext context, Failure failure) {
+  final l = AppLocalizations.of(context);
+  return switch (failure) {
+    VideoTooBigFailure() => l.videoTooBig,
+    VideoFailedFailure() => l.videoFailed,
+    _ => failure.message,
+  };
+}

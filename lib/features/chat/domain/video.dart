@@ -3,23 +3,33 @@ import 'dart:math' as math;
 import '../../../core/failure.dart';
 import 'file_attachment.dart';
 
-const int maxVideoMs = 300000;   // a video may be at most 5 minutes
-const int videoShortSide = 720;  // a video is shrunk so its short side is at most 720 px
+const int maxVideoMs = 300000; // a video may be at most 5 minutes
+const int videoShortSide =
+    720; // a video is shrunk so its short side is at most 720 px
 const String videoMime = 'video/mp4';
-const String videoPreview = '\u{1F3A5} Video';   // the one-line preview / quote / forward text
+const String videoPreview =
+    '\u{1F3A5} Video'; // the one-line preview / quote / forward text
 
 bool isVideoTooLong(int durationMs) => durationMs > maxVideoMs;
 
 /// m:ss of a length, minutes not capped, seconds rounded from ms: 41000 -> '0:41', 65400 -> '1:05'.
-String durationLabel(int ms) { final total = (ms / 1000).round(); return '${total ~/ 60}:${(total % 60).toString().padLeft(2, '0')}'; }
+String durationLabel(int ms) {
+  final total = (ms / 1000).round();
+  return '${total ~/ 60}:${(total % 60).toString().padLeft(2, '0')}';
+}
 
 /// The size a video is shrunk to: aspect kept, short side at most videoShortSide, never larger than the original, both sides even (round down to even, minimum 2).
 ({int width, int height}) videoTargetSize(int width, int height) {
   int even(int v) => math.max(2, v - v % 2);
   final short = math.min(width, height);
-  if (short <= videoShortSide) return (width: even(width), height: even(height));
+  if (short <= videoShortSide) {
+    return (width: even(width), height: even(height));
+  }
   final scale = videoShortSide / short;
-  return (width: even((width * scale).round()), height: even((height * scale).round()));
+  return (
+    width: even((width * scale).round()),
+    height: even((height * scale).round()),
+  );
 }
 
 /// The file name a shrunk video is sent under: the original name without its extension, cleaned, plus '.mp4'.
@@ -95,7 +105,10 @@ abstract interface class DeviceVideos {
   Future<VideoPick> pick();
 
   /// Shrinks to videoTargetSize (mp4), reporting 0..1 in onProgress; returns the file kept for the message (PickedFile with mime videoMime, name videoFileName(source.name), durationMs and thumbPath set). Err(VideoTooBigFailure()) when the result is over maxFileBytes, Err(VideoCancelledFailure()) after cancelCompression, Err(VideoFailedFailure()) on any other failure. The source copy is deleted when it succeeded.
-  Future<Result<PickedFile>> compress(VideoSource source, {void Function(double fraction)? onProgress});
+  Future<Result<PickedFile>> compress(
+    VideoSource source, {
+    void Function(double fraction)? onProgress,
+  });
 
   /// Stops the running compress.
   Future<void> cancelCompression();

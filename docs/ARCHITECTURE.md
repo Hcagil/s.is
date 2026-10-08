@@ -30,7 +30,8 @@ lib/
                           firebase_messaging, firebase_core,
                           shared_preferences, web_socket_channel,
                           path_provider, photo_manager, flutter_contacts, url_launcher, http,
-                          connectivity_plus, file_picker, open_filex
+                          connectivity_plus, file_picker, open_filex,
+                          light_compressor_v2, video_player, share_plus
     application/          Riverpod Notifiers: state machines; import domain only
     presentation/         widgets: watch state, call notifiers, render
 ```

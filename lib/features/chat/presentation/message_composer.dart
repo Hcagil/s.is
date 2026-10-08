@@ -194,14 +194,27 @@ class _ComposerState extends ConsumerState<_Composer>
     var pick = const VideoPick();
     if (ref.read(videoGridEnabledProvider)) {
       final grid = await showVideoGrid(context);
-      if (!mounted || grid == null) return;
+      if (!mounted) {
+        if (grid != null && !grid.phonePicker) {
+          for (final video in grid.pick.videos) {
+            await device.discard(video);
+          }
+        }
+        return;
+      }
+      if (grid == null) return;
       if (!grid.phonePicker) {
         pick = grid.pick;
         viaGrid = true;
       }
     }
     if (!viaGrid) pick = await device.pick();
-    if (!mounted) return;
+    if (!mounted) {
+      for (final video in pick.videos) {
+        await device.discard(video);
+      }
+      return;
+    }
     if (pick.tooLong > 0) {
       showSisNotice(
         context,
@@ -216,7 +229,12 @@ class _ComposerState extends ConsumerState<_Composer>
     for (final video in pick.videos) {
       if (!chosen.contains(video)) await device.discard(video);
     }
-    if (!mounted) return;
+    if (!mounted) {
+      for (final video in chosen) {
+        await device.discard(video);
+      }
+      return;
+    }
     final queue = ref.read(sendQueueProvider.notifier);
     for (final video in chosen) {
       queue.enqueueVideo(id, video, replyTo: ref.read(replyingToProvider));

@@ -9,7 +9,7 @@ import '../domain/file_repository.dart';
 import '../domain/gallery.dart';
 import '../domain/video.dart';
 import '../domain/video_gallery.dart';
-import 'photo_manager_gallery.dart' show requestLibraryAccess;
+import 'photo_manager_gallery.dart' show requestLibraryAccess, retryOnce;
 import 'video_source_prep.dart';
 
 /// The phone's video library through photo_manager. Thin on purpose
@@ -21,12 +21,6 @@ final class PhotoManagerVideoGallery implements VideoGallery {
 
   final DeviceFiles _files;
   final lc.LightCompressor _lc;
-
-  /// On iPhone with LIMITED access the first thumbnail request can come back
-  /// null (a degraded, opportunistic result); asking again works. One retry,
-  /// not a loop. Verified on a device only.
-  static Future<Uint8List?> _retry(Future<Uint8List?> Function() fetch) async =>
-      await fetch() ?? await fetch();
 
   @override
   Future<GalleryAccess> requestAccess() =>
@@ -62,7 +56,7 @@ final class PhotoManagerVideoGallery implements VideoGallery {
   Future<Uint8List?> thumbnail(GalleryVideo video, {int size = 240}) async {
     final e = await AssetEntity.fromId(video.id);
     if (e == null) return null;
-    return _retry(() => e.thumbnailDataWithSize(ThumbnailSize.square(size)));
+    return retryOnce(() => e.thumbnailDataWithSize(ThumbnailSize.square(size)));
   }
 
   @override

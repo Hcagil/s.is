@@ -34,6 +34,13 @@ Future<GalleryAccess> requestLibraryAccess(RequestType type) async {
   return GalleryAccess.denied;
 }
 
+/// On iPhone with LIMITED library access the first thumbnail or load request
+/// can come back null (a degraded, opportunistic result); asking again
+/// works. One retry, not a loop. Verified on a device only. Shared by the
+/// photo and the video gallery.
+Future<Uint8List?> retryOnce(Future<Uint8List?> Function() fetch) async =>
+    await fetch() ?? await fetch();
+
 /// The phone's photo library through photo_manager. Thin on purpose
 /// (ARCHITECTURE rule 4): verified on a device. Images only; video and audio
 /// are never asked for.
@@ -46,12 +53,6 @@ final class PhotoManagerGallery implements Gallery {
   /// Long edge of a picture's crop source: big enough to crop a good
   /// picture from, small enough to decode and hold in memory.
   static const _cropEdge = 2048;
-
-  /// On iPhone with LIMITED photo access the first thumbnail or load request
-  /// can come back null (a degraded, opportunistic result); asking again
-  /// works. One retry, not a loop. Verified on a device only.
-  static Future<Uint8List?> _retry(Future<Uint8List?> Function() fetch) async =>
-      await fetch() ?? await fetch();
 
   @override
   Future<GalleryAccess> requestAccess() =>
@@ -80,7 +81,7 @@ final class PhotoManagerGallery implements Gallery {
   Future<Uint8List?> thumbnail(GalleryPhoto photo, {int size = 240}) async {
     final e = await AssetEntity.fromId(photo.id);
     if (e == null) return null;
-    return _retry(() => e.thumbnailDataWithSize(ThumbnailSize.square(size)));
+    return retryOnce(() => e.thumbnailDataWithSize(ThumbnailSize.square(size)));
   }
 
   @override
@@ -101,7 +102,7 @@ final class PhotoManagerGallery implements Gallery {
             (w * _maxEdge / long).round(),
             (h * _maxEdge / long).round(),
           );
-    final bytes = await _retry(
+    final bytes = await retryOnce(
       () => e.thumbnailDataWithSize(
         size,
         format: ThumbnailFormat.jpeg,
@@ -137,7 +138,7 @@ final class PhotoManagerGallery implements Gallery {
             (w * _cropEdge / long).round(),
             (h * _cropEdge / long).round(),
           );
-    final bytes = await _retry(
+    final bytes = await retryOnce(
       () => e.thumbnailDataWithSize(
         size,
         format: ThumbnailFormat.jpeg,

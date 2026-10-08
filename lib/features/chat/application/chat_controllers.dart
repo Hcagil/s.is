@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
+import '../../../core/platform_features.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/member.dart';
 import '../../auth/domain/session_state.dart';
@@ -38,6 +39,7 @@ import '../domain/read_marks.dart';
 import '../domain/send_queue_store.dart';
 import '../domain/shared_contact.dart';
 import '../domain/video.dart';
+import '../domain/video_gallery.dart';
 import 'chat_drafts.dart';
 
 part 'open_conversation.dart';

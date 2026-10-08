@@ -1557,4 +1557,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoSelectLabel => 'Select video';
+
+  @override
+  String get videoGridEmpty => 'No videos yet';
+
+  @override
+  String get videoAccessTitle => 'Pick videos right here';
+
+  @override
+  String get videoAccessBody =>
+      'Allow access so your videos show up here – nothing is uploaded until you send it.';
+
+  @override
+  String get videoAllow => 'Allow videos';
+
+  @override
+  String get videoUsePhonePicker => 'Use the phone\'s picker';
+
+  @override
+  String get videoLoadMoreFailed => 'Could not load more videos.';
 }

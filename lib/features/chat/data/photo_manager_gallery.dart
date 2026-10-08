@@ -8,6 +8,32 @@ import '../domain/attachment.dart';
 import '../domain/gallery.dart';
 import 'tiny_preview.dart';
 
+/// photo_manager (and Android) never says "permanently denied" directly:
+/// the OS silently stops showing its own prompt once the member has
+/// refused once already. So: remember that a refusal was shown, and read
+/// a second refusal as permanent. Ceiling: a member who denies, quits
+/// without asking again, then later taps deny from a cold app state is
+/// read the same way on their next ask -- indistinguishable from here.
+const _askedBeforeKey = 'gallery_permission_asked_before';
+
+/// Asks for the library (the first time; afterwards answers from what is
+/// known) for [type] and maps the answer. Shared by the photo and the video
+/// gallery: on iPhone it is one library permission, on Android one per kind.
+Future<GalleryAccess> requestLibraryAccess(RequestType type) async {
+  final prefs = await SharedPreferences.getInstance();
+  final askedBefore = prefs.getBool(_askedBeforeKey) ?? false;
+  final s = await PhotoManager.requestPermissionExtend(
+    requestOption: PermissionRequestOption(
+      androidPermission: AndroidPermission(type: type, mediaLocation: false),
+    ),
+  );
+  if (s.isAuth) return GalleryAccess.full;
+  if (s.hasAccess) return GalleryAccess.limited;
+  if (askedBefore) return GalleryAccess.permanentlyDenied;
+  await prefs.setBool(_askedBeforeKey, true);
+  return GalleryAccess.denied;
+}
+
 /// The phone's photo library through photo_manager. Thin on purpose
 /// (ARCHITECTURE rule 4): verified on a device. Images only; video and audio
 /// are never asked for.
@@ -21,14 +47,6 @@ final class PhotoManagerGallery implements Gallery {
   /// picture from, small enough to decode and hold in memory.
   static const _cropEdge = 2048;
 
-  /// photo_manager (and Android) never says "permanently denied" directly:
-  /// the OS silently stops showing its own prompt once the member has
-  /// refused once already. So: remember that a refusal was shown, and read
-  /// a second refusal as permanent. Ceiling: a member who denies, quits
-  /// without asking again, then later taps deny from a cold app state is
-  /// read the same way on their next ask -- indistinguishable from here.
-  static const _askedBeforeKey = 'gallery_permission_asked_before';
-
   /// On iPhone with LIMITED photo access the first thumbnail or load request
   /// can come back null (a degraded, opportunistic result); asking again
   /// works. One retry, not a loop. Verified on a device only.
@@ -36,23 +54,8 @@ final class PhotoManagerGallery implements Gallery {
       await fetch() ?? await fetch();
 
   @override
-  Future<GalleryAccess> requestAccess() async {
-    final prefs = await SharedPreferences.getInstance();
-    final askedBefore = prefs.getBool(_askedBeforeKey) ?? false;
-    final s = await PhotoManager.requestPermissionExtend(
-      requestOption: const PermissionRequestOption(
-        androidPermission: AndroidPermission(
-          type: RequestType.image,
-          mediaLocation: false,
-        ),
-      ),
-    );
-    if (s.isAuth) return GalleryAccess.full;
-    if (s.hasAccess) return GalleryAccess.limited;
-    if (askedBefore) return GalleryAccess.permanentlyDenied;
-    await prefs.setBool(_askedBeforeKey, true);
-    return GalleryAccess.denied;
-  }
+  Future<GalleryAccess> requestAccess() =>
+      requestLibraryAccess(RequestType.image);
 
   @override
   Future<void> openSettings() => PhotoManager.openSetting();

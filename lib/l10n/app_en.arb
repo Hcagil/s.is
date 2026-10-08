@@ -1164,5 +1164,17 @@
   "videoCannotPlay": "This video cannot be played.",
   "@videoCannotPlay": {"description": "Notice when the player cannot open a video"},
   "videoSelectLabel": "Select video",
-  "@videoSelectLabel": {"description": "Accessibility label of a video tile on the review page"}
+  "@videoSelectLabel": {"description": "Accessibility label of a video tile on the review page"},
+  "videoGridEmpty": "No videos yet",
+  "@videoGridEmpty": {"description": "Empty video grid"},
+  "videoAccessTitle": "Pick videos right here",
+  "@videoAccessTitle": {"description": "Title of the video library permission prompt"},
+  "videoAccessBody": "Allow access so your videos show up here – nothing is uploaded until you send it.",
+  "@videoAccessBody": {"description": "Explains the video library permission prompt"},
+  "videoAllow": "Allow videos",
+  "@videoAllow": {"description": "Button that asks for video library access"},
+  "videoUsePhonePicker": "Use the phone's picker",
+  "@videoUsePhonePicker": {"description": "Button that opens the phone's own video picker instead of the grid"},
+  "videoLoadMoreFailed": "Could not load more videos.",
+  "@videoLoadMoreFailed": {"description": "Notice in the video grid"}
 }

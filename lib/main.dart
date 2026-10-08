@@ -34,6 +34,7 @@ import 'features/chat/data/flutter_device_videos.dart';
 import 'features/chat/data/flutter_phone_book.dart';
 import 'features/chat/data/native_picture_cropper.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
+import 'features/chat/data/photo_manager_video_gallery.dart';
 import 'features/chat/data/share_plus_video_sharer.dart';
 import 'features/chat/data/shared_prefs_send_queue_store.dart';
 import 'features/chat/data/supabase_chat_archive_repository.dart';
@@ -216,6 +217,9 @@ Future<void> main() async {
           ),
           lastSessionStoreProvider.overrideWithValue(FileLastSessionStore()),
           galleryProvider.overrideWithValue(const PhotoManagerGallery()),
+          videoGalleryProvider.overrideWithValue(
+            PhotoManagerVideoGallery(deviceFiles),
+          ),
           externalPickerProvider.overrideWithValue(
             const ExternalPickerChannel(),
           ),

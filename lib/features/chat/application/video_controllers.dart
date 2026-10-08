@@ -5,6 +5,15 @@ final deviceVideosProvider = Provider<DeviceVideos>(
   (_) => throw UnimplementedError('override in main'),
 );
 
+/// The phone's own videos, for the in-app video grid.
+final videoGalleryProvider = Provider<VideoGallery>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Whether the chat's video picker is SIS's own grid (true) or the phone's
+/// picker (false): [inAppVideoGrid], per platform. Overridable in tests.
+final videoGridEnabledProvider = Provider<bool>((_) => inAppVideoGrid);
+
 /// Makes a player for each player screen.
 final videoPlaybackFactoryProvider = Provider<VideoPlaybackFactory>(
   (_) => throw UnimplementedError('override in main'),

@@ -1535,4 +1535,23 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get videoSelectLabel => 'Videoyu seç';
+
+  @override
+  String get videoGridEmpty => 'Henüz video yok';
+
+  @override
+  String get videoAccessTitle => 'Videoları burada seç';
+
+  @override
+  String get videoAccessBody =>
+      'Videoların burada görünmesi için erişime izin ver – sen göndermeden hiçbir şey yüklenmez.';
+
+  @override
+  String get videoAllow => 'Videolara izin ver';
+
+  @override
+  String get videoUsePhonePicker => 'Telefonun seçicisini kullan';
+
+  @override
+  String get videoLoadMoreFailed => 'Daha fazla video yüklenemedi.';
 }

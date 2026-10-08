@@ -359,4 +359,81 @@ void main() {
     expect(c.read(voiceCaptureProvider).notice, VoiceNotice.micDenied);
     await t.pump(const Duration(minutes: 11));
   });
+
+  testWidgets('a take under minVoiceMs is dropped as tooShort', (
+    WidgetTester t,
+  ) async {
+    final chat = HeldSendChat();
+    final files = FileRepoFake();
+    final rec = VoiceRecorderFake(
+      take: VoiceTake(
+        path: '/app/files/v/voice.m4a',
+        durationMs: minVoiceMs - 1,
+        waveform: '0123456789abcdef0123456789abcdef01234567',
+        size: 9000,
+      ),
+    );
+    final tr = VoiceTranscriberFake();
+    final dict = DictationFake();
+    final c = await start(t, chat, files, rec, tr, dict);
+    final notifier = c.read(voiceCaptureProvider.notifier);
+    unawaited(notifier.begin('c1', 'en_US'));
+    await settle(t);
+    await t.pump(const Duration(seconds: 1));
+    unawaited(notifier.finish());
+    await settle(t);
+    expect(c.read(voiceCaptureProvider).notice, VoiceNotice.tooShort);
+    expect(files.sends.isEmpty, isTrue);
+    expect(c.read(voiceCaptureProvider).phase, VoicePhase.idle);
+    await t.pump(const Duration(minutes: 11));
+  });
+
+  testWidgets('a take of exactly minVoiceMs is sent', (WidgetTester t) async {
+    final chat = HeldSendChat();
+    final files = FileRepoFake();
+    final rec = VoiceRecorderFake(
+      take: VoiceTake(
+        path: '/app/files/v/voice.m4a',
+        durationMs: minVoiceMs,
+        waveform: '0123456789abcdef0123456789abcdef01234567',
+        size: 9000,
+      ),
+    );
+    final tr = VoiceTranscriberFake();
+    final dict = DictationFake();
+    final c = await start(t, chat, files, rec, tr, dict);
+    final notifier = c.read(voiceCaptureProvider.notifier);
+    unawaited(notifier.begin('c1', 'en_US'));
+    await settle(t);
+    await t.pump(const Duration(seconds: 1));
+    unawaited(notifier.finish());
+    await settle(t);
+    expect(files.sends.length, 1);
+    expect(files.sends[0].file.durationMs, minVoiceMs);
+    expect(c.read(voiceCaptureProvider).notice, isNull);
+    expect(c.read(voiceCaptureProvider).phase, VoicePhase.idle);
+    await t.pump(const Duration(minutes: 11));
+  });
+
+  testWidgets('recording stops by itself at maxVoiceMs', (
+    WidgetTester t,
+  ) async {
+    final chat = HeldSendChat();
+    final files = FileRepoFake();
+    final rec = VoiceRecorderFake();
+    final tr = VoiceTranscriberFake();
+    final dict = DictationFake();
+    final c = await start(t, chat, files, rec, tr, dict);
+    final notifier = c.read(voiceCaptureProvider.notifier);
+    unawaited(notifier.begin('c1', 'en_US'));
+    await settle(t);
+    await t.pump(const Duration(milliseconds: maxVoiceMs - 1000));
+    expect(c.read(voiceCaptureProvider).phase, isNot(VoicePhase.idle));
+    expect(files.sends.isEmpty, isTrue);
+    await t.pump(const Duration(seconds: 2));
+    await settle(t);
+    expect(files.sends.length, 1);
+    expect(c.read(voiceCaptureProvider).phase, VoicePhase.idle);
+    await t.pump(const Duration(minutes: 11));
+  });
 }

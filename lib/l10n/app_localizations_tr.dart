@@ -1396,4 +1396,75 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get contactPermNote =>
       'Kişiler izni yalnızca bu listeyi açtığında istenir.';
+
+  @override
+  String get autoDownloadSection => 'Medya otomatik indirme';
+
+  @override
+  String get autoDownloadEnable => 'Etkinleştir';
+
+  @override
+  String get autoDownloadWifiOnly => 'Yalnızca Wi-Fi\'de etkinleştir';
+
+  @override
+  String get autoDownloadDisabled => 'Devre dışı';
+
+  @override
+  String get autoDownloadChoose => 'Neyin indirileceğini seç';
+
+  @override
+  String get autoDownloadMobile => 'Mobil veri kullanırken';
+
+  @override
+  String get autoDownloadWifi => 'Wi-Fi\'ye bağlıyken';
+
+  @override
+  String get autoDownloadRoaming => 'Dolaşımdayken';
+
+  @override
+  String get autoDownloadPhotos => 'Fotoğraflar';
+
+  @override
+  String get autoDownloadAudio => 'Ses';
+
+  @override
+  String get autoDownloadVideos => 'Videolar';
+
+  @override
+  String get autoDownloadDocuments => 'Belgeler';
+
+  @override
+  String get autoDownloadAllMedia => 'Tüm medya';
+
+  @override
+  String get autoDownloadNoMedia => 'Medya yok';
+
+  @override
+  String get autoDownloadCancel => 'İptal';
+
+  @override
+  String get autoDownloadOk => 'Tamam';
+
+  @override
+  String fileTapToDownload(String size) {
+    return '$size · İndirmek için dokun';
+  }
+
+  @override
+  String fileTooBig(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count dosya 50 MB\'ı aşıyor ve gönderilmedi.',
+      one: '1 dosya 50 MB\'ı aşıyor ve gönderilmedi.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fileCannotOpen =>
+      'Bu telefonda bu dosyayı açabilen bir uygulama yok.';
+
+  @override
+  String get filePhotoTapToDownload => 'Fotoğrafı indirmek için dokun';
 }

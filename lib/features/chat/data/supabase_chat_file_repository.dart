@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -11,7 +12,7 @@ import '../domain/message.dart';
 /// [ChatFileRepository] backed by Supabase storage and messages table.
 final class SupabaseChatFileRepository implements ChatFileRepository {
   SupabaseChatFileRepository(this._client, {http.Client Function()? httpClient})
-      : _http = httpClient ?? http.Client.new;
+    : _http = httpClient ?? http.Client.new;
 
   final SupabaseClient _client;
   final http.Client Function() _http;
@@ -29,49 +30,64 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
       final path = '$conversationId/${file.id}';
 
       try {
-        await _client.storage.from('attachments').upload(
-          path,
-          File(file.path),
-          fileOptions: FileOptions(contentType: file.mime),
-        );
+        await _client.storage
+            .from('attachments')
+            .upload(
+              path,
+              File(file.path),
+              fileOptions: FileOptions(contentType: file.mime),
+            );
       } on StorageException catch (e) {
         if (e.statusCode != '409') rethrow;
       }
 
       DateTime createdAt;
       try {
-        final row = await _client.from('messages').insert({
-          'id': file.id,
-          'conversation_id': conversationId,
-          'sender_id': me,
-          'body': '',
-          'attachment_path': path,
-          'attachment_name': file.name,
-          'attachment_mime': file.mime,
-          'attachment_size': file.size,
-          'reply_to': replyTo,
-        }).select('id, created_at').single();
+        final row = await _client
+            .from('messages')
+            .insert({
+              'id': file.id,
+              'conversation_id': conversationId,
+              'sender_id': me,
+              'body': '',
+              'attachment_path': path,
+              'attachment_name': file.name,
+              'attachment_mime': file.mime,
+              'attachment_size': file.size,
+              'reply_to': replyTo,
+            })
+            .select('id, created_at')
+            .single();
         createdAt = DateTime.parse(row['created_at'] as String).toLocal();
       } on PostgrestException catch (e) {
         if (e.code != '23505') rethrow;
-        final row = await _client.from('messages').select('created_at').eq('id', file.id).single();
+        final row = await _client
+            .from('messages')
+            .select('created_at')
+            .eq('id', file.id)
+            .single();
         createdAt = DateTime.parse(row['created_at'] as String).toLocal();
       }
 
-      return Ok(Message(
-        id: file.id,
-        conversationId: conversationId,
-        senderId: me,
-        body: '',
-        createdAt: createdAt,
-        attachmentPath: path,
-        replyTo: replyTo,
-        file: file.attached,
-      ));
+      return Ok(
+        Message(
+          id: file.id,
+          conversationId: conversationId,
+          senderId: me,
+          body: '',
+          createdAt: createdAt,
+          attachmentPath: path,
+          replyTo: replyTo,
+          file: file.attached,
+        ),
+      );
     } catch (e) {
       return Err(switch (e) {
-        PostgrestException(:final code) when code == '42501' => const DeniedFailure(),
-        StorageException(:final statusCode) when statusCode == '401' || statusCode == '403' => const DeniedFailure(),
+        PostgrestException(:final code) when code == '42501' =>
+          const DeniedFailure(),
+        StorageException(:final statusCode)
+            when statusCode == '401' || statusCode == '403' =>
+          const DeniedFailure(),
         _ => readableFailure(e),
       });
     }
@@ -86,10 +102,12 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
     final client = _http();
     final part = File('$destPath.part');
     try {
-      final url = await _client.storage.from('attachments').createSignedUrl(attachmentPath, 600);
+      final url = await _client.storage
+          .from('attachments')
+          .createSignedUrl(attachmentPath, 600);
       final response = await client.send(http.Request('GET', Uri.parse(url)));
       if (response.statusCode != 200) {
-        return const Err(NetworkFailure(serverMessage));
+        return const Err(NetworkFailure('This file is not available.'));
       }
       final total = response.contentLength;
       var received = 0;
@@ -110,7 +128,9 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
         if (await part.exists()) await part.delete();
       } catch (_) {}
       return Err(switch (e) {
-        StorageException(:final statusCode) when statusCode == '401' || statusCode == '403' => const DeniedFailure(),
+        StorageException(:final statusCode)
+            when statusCode == '401' || statusCode == '403' =>
+          const DeniedFailure(),
         _ => readableFailure(e),
       });
     } finally {

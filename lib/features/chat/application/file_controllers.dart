@@ -83,8 +83,9 @@ class FileDownloads extends Notifier<Map<String, double>> {
 }
 
 /// Photos the member chose to download by tapping.
-final photoApprovalsProvider =
-    NotifierProvider<PhotoApprovals, Set<String>>(PhotoApprovals.new);
+final photoApprovalsProvider = NotifierProvider<PhotoApprovals, Set<String>>(
+  PhotoApprovals.new,
+);
 
 /// The storage paths of photos approved by a tap.
 class PhotoApprovals extends Notifier<Set<String>> {

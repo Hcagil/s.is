@@ -25,13 +25,12 @@ final autoDownloadProvider =
     );
 
 /// Whether media of [kind] downloads by itself right now, on the network the phone is on (false when offline).
-final autoDownloadNowProvider = FutureProvider.autoDispose.family<bool, MediaKind>(
-  (ref, kind) async {
-    final settings = ref.watch(autoDownloadProvider);
-    final network = await ref.read(networkProbeProvider).current();
-    return network != null && settings.allows(network, kind);
-  },
-);
+final autoDownloadNowProvider = FutureProvider.autoDispose
+    .family<bool, MediaKind>((ref, kind) async {
+      final settings = ref.watch(autoDownloadProvider);
+      final network = await ref.read(networkProbeProvider).current();
+      return network != null && settings.allows(network, kind);
+    });
 
 /// The member's auto-download choices. Each change shows at once and is then
 /// saved; a failed save never throws or reverts the screen.
@@ -52,7 +51,10 @@ class AutoDownloadController extends Notifier<AutoDownloadSettings> {
     try {
       await ref.read(autoDownloadStoreProvider).save(next);
     } catch (e) {
-      log('Saving auto-download failed: ${e.runtimeType}', name: 'sis.autodownload');
+      log(
+        'Saving auto-download failed: ${e.runtimeType}',
+        name: 'sis.autodownload',
+      );
     }
   }
 }

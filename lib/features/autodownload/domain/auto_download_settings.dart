@@ -12,17 +12,25 @@ final class AutoDownloadSettings {
   /// Defaults: mobile data = photos; Wi-Fi = all; roaming = nothing.
   static const Map<NetworkKind, Set<MediaKind>> _defaultRules = {
     NetworkKind.mobile: {MediaKind.photos},
-    NetworkKind.wifi: {MediaKind.photos, MediaKind.audio, MediaKind.videos, MediaKind.documents},
+    NetworkKind.wifi: {
+      MediaKind.photos,
+      MediaKind.audio,
+      MediaKind.videos,
+      MediaKind.documents,
+    },
     NetworkKind.roaming: <MediaKind>{},
   };
 
   /// A network missing from [rules] counts as nothing downloading.
-  Set<MediaKind> kindsFor(NetworkKind network) => rules[network] ?? const <MediaKind>{};
+  Set<MediaKind> kindsFor(NetworkKind network) =>
+      rules[network] ?? const <MediaKind>{};
 
-  bool allows(NetworkKind network, MediaKind kind) => kindsFor(network).contains(kind);
+  bool allows(NetworkKind network, MediaKind kind) =>
+      kindsFor(network).contains(kind);
 
   /// A copy where [network] downloads exactly [kinds].
-  AutoDownloadSettings withKinds(NetworkKind network, Set<MediaKind> kinds) => AutoDownloadSettings(rules: {...rules, network: Set.unmodifiable(kinds)});
+  AutoDownloadSettings withKinds(NetworkKind network, Set<MediaKind> kinds) =>
+      AutoDownloadSettings(rules: {...rules, network: Set.unmodifiable(kinds)});
 
   /// The preset these rules equal exactly, or null when they are a custom mix (the defaults are a custom mix). enable = every kind on every network; wifiOnly = every kind on wifi, nothing on mobile and roaming; disabled = nothing anywhere.
   AutoDownloadPreset? get preset {
@@ -30,32 +38,45 @@ final class AutoDownloadSettings {
     final wifi = kindsFor(NetworkKind.wifi);
     final roaming = kindsFor(NetworkKind.roaming);
 
-    if (mobile.isEmpty && wifi.isEmpty && roaming.isEmpty) return AutoDownloadPreset.disabled;
-    if (mobile.isEmpty && wifi == MediaKind.values.toSet() && roaming.isEmpty) return AutoDownloadPreset.wifiOnly;
-    if (mobile == MediaKind.values.toSet() && wifi == MediaKind.values.toSet() && roaming == MediaKind.values.toSet()) return AutoDownloadPreset.enable;
+    final all = MediaKind.values.toSet();
+    if (mobile.isEmpty && wifi.isEmpty && roaming.isEmpty) {
+      return AutoDownloadPreset.disabled;
+    }
+    if (mobile.isEmpty && wifi == all && roaming.isEmpty) {
+      return AutoDownloadPreset.wifiOnly;
+    }
+    if (mobile == all && wifi == all && roaming == all) {
+      return AutoDownloadPreset.enable;
+    }
     return null;
   }
 
   static AutoDownloadSettings forPreset(AutoDownloadPreset preset) {
     switch (preset) {
       case AutoDownloadPreset.enable:
-        return AutoDownloadSettings(rules: {
-          NetworkKind.mobile: MediaKind.values.toSet(),
-          NetworkKind.wifi: MediaKind.values.toSet(),
-          NetworkKind.roaming: MediaKind.values.toSet(),
-        });
+        return AutoDownloadSettings(
+          rules: {
+            NetworkKind.mobile: MediaKind.values.toSet(),
+            NetworkKind.wifi: MediaKind.values.toSet(),
+            NetworkKind.roaming: MediaKind.values.toSet(),
+          },
+        );
       case AutoDownloadPreset.wifiOnly:
-        return AutoDownloadSettings(rules: {
-          NetworkKind.mobile: <MediaKind>{},
-          NetworkKind.wifi: MediaKind.values.toSet(),
-          NetworkKind.roaming: <MediaKind>{},
-        });
+        return AutoDownloadSettings(
+          rules: {
+            NetworkKind.mobile: <MediaKind>{},
+            NetworkKind.wifi: MediaKind.values.toSet(),
+            NetworkKind.roaming: <MediaKind>{},
+          },
+        );
       case AutoDownloadPreset.disabled:
-        return AutoDownloadSettings(rules: {
-          NetworkKind.mobile: <MediaKind>{},
-          NetworkKind.wifi: <MediaKind>{},
-          NetworkKind.roaming: <MediaKind>{},
-        });
+        return AutoDownloadSettings(
+          rules: {
+            NetworkKind.mobile: <MediaKind>{},
+            NetworkKind.wifi: <MediaKind>{},
+            NetworkKind.roaming: <MediaKind>{},
+          },
+        );
     }
   }
 
@@ -63,17 +84,32 @@ final class AutoDownloadSettings {
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     if (other is! AutoDownloadSettings) return false;
-    return _sameSets(other.kindsFor(NetworkKind.mobile), kindsFor(NetworkKind.mobile)) &&
-        _sameSets(other.kindsFor(NetworkKind.wifi), kindsFor(NetworkKind.wifi)) &&
-        _sameSets(other.kindsFor(NetworkKind.roaming), kindsFor(NetworkKind.roaming));
+    return _sameSets(
+          other.kindsFor(NetworkKind.mobile),
+          kindsFor(NetworkKind.mobile),
+        ) &&
+        _sameSets(
+          other.kindsFor(NetworkKind.wifi),
+          kindsFor(NetworkKind.wifi),
+        ) &&
+        _sameSets(
+          other.kindsFor(NetworkKind.roaming),
+          kindsFor(NetworkKind.roaming),
+        );
   }
 
   @override
   int get hashCode {
     return Object.hashAll([
-      Object.hashAll(kindsFor(NetworkKind.mobile).map((k) => k.index).toList()..sort()),
-      Object.hashAll(kindsFor(NetworkKind.wifi).map((k) => k.index).toList()..sort()),
-      Object.hashAll(kindsFor(NetworkKind.roaming).map((k) => k.index).toList()..sort()),
+      Object.hashAll(
+        kindsFor(NetworkKind.mobile).map((k) => k.index).toList()..sort(),
+      ),
+      Object.hashAll(
+        kindsFor(NetworkKind.wifi).map((k) => k.index).toList()..sort(),
+      ),
+      Object.hashAll(
+        kindsFor(NetworkKind.roaming).map((k) => k.index).toList()..sort(),
+      ),
     ]);
   }
 

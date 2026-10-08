@@ -60,6 +60,7 @@ class _Bubble extends StatelessWidget {
   /// A photo and nothing else: no box around it; the time and tick sit on
   /// the picture.
   bool get _boxless =>
+      message.file == null &&
       message.hasAttachment &&
       message.body.isEmpty &&
       message.replyTo == null &&
@@ -248,7 +249,7 @@ class _Bubble extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (message.hasAttachment)
+              if (message.hasAttachment && message.file == null)
                 _boxless
                     ? Stack(
                         children: [
@@ -306,6 +307,25 @@ class _Bubble extends StatelessWidget {
                 )
               else if (message.contact && !message.isDeleted)
                 ContactCard(
+                  message: message,
+                  ink: mine ? brand.onMine : brand.onTheirs,
+                  accent: mine
+                      ? brand.onMine
+                      : Theme.of(context).colorScheme.primary,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: (mine ? brand.onMine : brand.onTheirs).withValues(
+                        alpha: SisTokens.timeOpacity,
+                      ),
+                    ),
+                    delivery: delivery,
+                  ),
+                )
+              else if (message.file != null && !message.isDeleted)
+                FileCard(
                   message: message,
                   ink: mine ? brand.onMine : brand.onTheirs,
                   accent: mine

@@ -2587,6 +2587,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Contacts permission is asked only when you open this list'**
   String get contactPermNote;
+
+  /// Auto-download page: section title
+  ///
+  /// In en, this message translates to:
+  /// **'Media auto-download'**
+  String get autoDownloadSection;
+
+  /// Auto-download preset
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get autoDownloadEnable;
+
+  /// Auto-download preset
+  ///
+  /// In en, this message translates to:
+  /// **'Enable only on Wi-Fi'**
+  String get autoDownloadWifiOnly;
+
+  /// Auto-download preset
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get autoDownloadDisabled;
+
+  /// Auto-download page: section title
+  ///
+  /// In en, this message translates to:
+  /// **'Choose what downloads'**
+  String get autoDownloadChoose;
+
+  /// Auto-download row
+  ///
+  /// In en, this message translates to:
+  /// **'When using mobile data'**
+  String get autoDownloadMobile;
+
+  /// Auto-download row
+  ///
+  /// In en, this message translates to:
+  /// **'When connected on Wi-Fi'**
+  String get autoDownloadWifi;
+
+  /// Auto-download row
+  ///
+  /// In en, this message translates to:
+  /// **'When roaming'**
+  String get autoDownloadRoaming;
+
+  /// Media kind
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get autoDownloadPhotos;
+
+  /// Media kind
+  ///
+  /// In en, this message translates to:
+  /// **'Audio'**
+  String get autoDownloadAudio;
+
+  /// Media kind
+  ///
+  /// In en, this message translates to:
+  /// **'Videos'**
+  String get autoDownloadVideos;
+
+  /// Media kind
+  ///
+  /// In en, this message translates to:
+  /// **'Documents'**
+  String get autoDownloadDocuments;
+
+  /// Auto-download row value: every kind is on
+  ///
+  /// In en, this message translates to:
+  /// **'All media'**
+  String get autoDownloadAllMedia;
+
+  /// Auto-download row value: nothing is on
+  ///
+  /// In en, this message translates to:
+  /// **'No media'**
+  String get autoDownloadNoMedia;
+
+  /// Auto-download dialog button
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get autoDownloadCancel;
+
+  /// Auto-download dialog button
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get autoDownloadOk;
+
+  /// File bubble sub line before download
+  ///
+  /// In en, this message translates to:
+  /// **'{size} · Tap to download'**
+  String fileTapToDownload(String size);
+
+  /// Notice after picking files over the limit
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 file is over 50 MB and was not sent.} other{{count} files are over 50 MB and were not sent.}}'**
+  String fileTooBig(int count);
+
+  /// Notice when a file cannot be opened
+  ///
+  /// In en, this message translates to:
+  /// **'No app on this phone can open this file.'**
+  String get fileCannotOpen;
+
+  /// Accessibility label on a photo waiting for a tap
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to download the photo'**
+  String get filePhotoTapToDownload;
 }
 
 class _AppLocalizationsDelegate

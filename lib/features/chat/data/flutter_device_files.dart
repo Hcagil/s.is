@@ -14,12 +14,11 @@ import '../domain/message.dart';
 final class FlutterDeviceFiles implements DeviceFiles {
   /// Creates a file manager with an optional root directory.
   FlutterDeviceFiles({Future<Directory> Function()? root})
-      : _root = root ?? getApplicationDocumentsDirectory;
+    : _root = root ?? getApplicationDocumentsDirectory;
 
   final Future<Directory> Function() _root;
 
-  Future<Directory> _dir() async =>
-      Directory('${(await _root()).path}/files');
+  Future<Directory> _dir() async => Directory('${(await _root()).path}/files');
 
   @override
   Future<FilePick> pick() async {
@@ -42,15 +41,20 @@ final class FlutterDeviceFiles implements DeviceFiles {
           final sink = dest.openWrite();
           await sink.addStream(f.readAsByteStream());
           await sink.close();
-          files.add(PickedFile(
-            id: id,
-            path: dest.path,
-            name: name,
-            mime: lookupMimeType(name) ?? 'application/octet-stream',
-            size: await dest.length(),
-          ));
+          files.add(
+            PickedFile(
+              id: id,
+              path: dest.path,
+              name: name,
+              mime: lookupMimeType(name) ?? 'application/octet-stream',
+              size: await dest.length(),
+            ),
+          );
         } catch (e) {
-          log('Copying a picked file failed: ${e.runtimeType}', name: 'sis.files');
+          log(
+            'Copying a picked file failed: ${e.runtimeType}',
+            name: 'sis.files',
+          );
           try {
             await dest.parent.delete(recursive: true);
           } catch (_) {}

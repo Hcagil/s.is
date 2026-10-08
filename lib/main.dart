@@ -18,6 +18,9 @@ import 'core/startup_marks.dart';
 import 'features/appearance/application/appearance_controller.dart';
 import 'features/appearance/data/picker_wallpaper_photos.dart';
 import 'features/appearance/data/shared_prefs_appearance_store.dart';
+import 'features/autodownload/application/auto_download_controller.dart';
+import 'features/autodownload/data/connectivity_network_probe.dart';
+import 'features/autodownload/data/shared_prefs_auto_download_store.dart';
 import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/file_last_session_store.dart';
 import 'features/auth/data/secure_session_storage.dart';
@@ -26,11 +29,13 @@ import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/data/external_picker_channel.dart';
 import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/file_chat_list_snapshot_store.dart';
+import 'features/chat/data/flutter_device_files.dart';
 import 'features/chat/data/flutter_phone_book.dart';
 import 'features/chat/data/native_picture_cropper.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
 import 'features/chat/data/supabase_chat_archive_repository.dart';
 import 'features/chat/data/supabase_chat_delete_repository.dart';
+import 'features/chat/data/supabase_chat_file_repository.dart';
 import 'features/chat/data/supabase_chat_pin_repository.dart';
 import 'features/chat/data/supabase_group_settings_repository.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
@@ -115,6 +120,16 @@ Future<void> main() async {
       const PickerWallpaperPhotos(ExternalPickerChannel()),
     ),
   ];
+  // Same reason: the member's auto-download choices are known at the first
+  // frame, so a photo's gate never flickers.
+  const autoDownloadStore = SharedPrefsAutoDownloadStore();
+  final autoDownloadOverrides = [
+    autoDownloadStoreProvider.overrideWithValue(autoDownloadStore),
+    initialAutoDownloadProvider.overrideWithValue(
+      await autoDownloadStore.load(),
+    ),
+    networkProbeProvider.overrideWithValue(ConnectivityNetworkProbe()),
+  ];
   if (!config.isComplete) {
     runApp(
       ProviderScope(overrides: appearanceOverrides, child: const SisApp()),
@@ -143,6 +158,7 @@ Future<void> main() async {
       ProviderScope(
         overrides: [
           ...appearanceOverrides,
+          ...autoDownloadOverrides,
           runtimeConfigProvider.overrideWithValue(config),
           ...platformOverrides(defaultTargetPlatform, client, config),
           chatRepositoryProvider.overrideWithValue(
@@ -173,6 +189,10 @@ Future<void> main() async {
             SupabaseContactShareRepository(client),
           ),
           phoneBookProvider.overrideWithValue(const FlutterPhoneBook()),
+          chatFileRepositoryProvider.overrideWithValue(
+            SupabaseChatFileRepository(client),
+          ),
+          deviceFilesProvider.overrideWithValue(FlutterDeviceFiles()),
           attachmentCacheProvider.overrideWithValue(attachmentCache),
           chatListSnapshotStoreProvider.overrideWithValue(
             FileChatListSnapshotStore(),

@@ -1419,4 +1419,74 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get contactPermNote =>
       'Contacts permission is asked only when you open this list';
+
+  @override
+  String get autoDownloadSection => 'Media auto-download';
+
+  @override
+  String get autoDownloadEnable => 'Enable';
+
+  @override
+  String get autoDownloadWifiOnly => 'Enable only on Wi-Fi';
+
+  @override
+  String get autoDownloadDisabled => 'Disabled';
+
+  @override
+  String get autoDownloadChoose => 'Choose what downloads';
+
+  @override
+  String get autoDownloadMobile => 'When using mobile data';
+
+  @override
+  String get autoDownloadWifi => 'When connected on Wi-Fi';
+
+  @override
+  String get autoDownloadRoaming => 'When roaming';
+
+  @override
+  String get autoDownloadPhotos => 'Photos';
+
+  @override
+  String get autoDownloadAudio => 'Audio';
+
+  @override
+  String get autoDownloadVideos => 'Videos';
+
+  @override
+  String get autoDownloadDocuments => 'Documents';
+
+  @override
+  String get autoDownloadAllMedia => 'All media';
+
+  @override
+  String get autoDownloadNoMedia => 'No media';
+
+  @override
+  String get autoDownloadCancel => 'Cancel';
+
+  @override
+  String get autoDownloadOk => 'OK';
+
+  @override
+  String fileTapToDownload(String size) {
+    return '$size · Tap to download';
+  }
+
+  @override
+  String fileTooBig(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count files are over 50 MB and were not sent.',
+      one: '1 file is over 50 MB and was not sent.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fileCannotOpen => 'No app on this phone can open this file.';
+
+  @override
+  String get filePhotoTapToDownload => 'Tap to download the photo';
 }

@@ -4,7 +4,11 @@ const int maxFileBytes = 50 * 1024 * 1024;
 /// The file a stored message carries: its original name, MIME type and size in bytes.
 final class AttachedFile {
   /// Creates a file attachment with the given name, MIME type and size.
-  const AttachedFile({required this.name, required this.mime, required this.size});
+  const AttachedFile({
+    required this.name,
+    required this.mime,
+    required this.size,
+  });
 
   /// The file's original name.
   final String name;

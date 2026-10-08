@@ -9,15 +9,11 @@ import '../domain/auto_download_settings.dart';
 /// (ConnectivityManager NOT_ROAMING capability) because connectivity_plus
 /// cannot tell roaming.
 final class ConnectivityNetworkProbe implements NetworkProbe {
-  ConnectivityNetworkProbe({
-    Connectivity? connectivity,
-    MethodChannel channel = const MethodChannel('sis/network'),
-  })
-  // ignore: prefer_initializing_formals
-  : _connectivity = connectivity ?? Connectivity(), _channel = channel;
+  ConnectivityNetworkProbe({Connectivity? connectivity})
+    : _connectivity = connectivity ?? Connectivity();
 
   final Connectivity _connectivity;
-  final MethodChannel _channel;
+  final _channel = const MethodChannel('sis/network');
 
   @override
   Future<NetworkKind?> current() async {

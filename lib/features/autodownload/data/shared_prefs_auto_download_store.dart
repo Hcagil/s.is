@@ -18,7 +18,8 @@ final class SharedPrefsAutoDownloadStore implements AutoDownloadStore {
           settings = settings.withKinds(
             network,
             {for (final name in raw) MediaKind.values.asNameMap()[name]}
-                .whereType<MediaKind>().toSet(),
+                .whereType<MediaKind>()
+                .toSet(),
           );
         }
       }
@@ -33,7 +34,9 @@ final class SharedPrefsAutoDownloadStore implements AutoDownloadStore {
     final prefs = await SharedPreferences.getInstance();
     for (final network in NetworkKind.values) {
       final key = 'sis.autodownload.${network.name}';
-      prefs.setStringList(key, [for (final k in settings.kindsFor(network)) k.name]);
+      prefs.setStringList(key, [
+        for (final k in settings.kindsFor(network)) k.name,
+      ]);
     }
   }
 }

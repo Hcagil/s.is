@@ -21,6 +21,8 @@ import '../../support/fakes.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../../support/video_fakes.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
 const cleo = Member(userId: 'u3', displayName: 'Cleo');
@@ -39,6 +41,7 @@ class _SignedIn extends SessionController {
 
 ProviderContainer _scope(ChatFake chat) => ProviderContainer.test(
   overrides: [
+    ...videoOverrides(),
     chatRepositoryProvider.overrideWithValue(chat),
     presenceRepositoryProvider.overrideWithValue(PresenceFake()),
     sessionControllerProvider.overrideWith(_SignedIn.new),

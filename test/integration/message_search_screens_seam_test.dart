@@ -40,6 +40,7 @@ import '../support/dead_host.dart';
 import '../support/fakes.dart';
 import '../support/service_key.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Message search's screens on their seams (v0.16), the whole app mounted as
 /// main.dart mounts it for vedat: the real chat, presence and profile
@@ -285,6 +286,7 @@ class _Switch implements ChatRepository {
 }
 
 List<Override> _production(SupabaseClient client, ChatRepository chat) => [
+  ...videoOverrides(),
   runtimeConfigProvider.overrideWithValue(
     const RuntimeConfig(
       supabaseUrl: _url,

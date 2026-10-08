@@ -22,6 +22,7 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 
 import '../../support/account_fakes.dart';
+import '../../support/video_fakes.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -38,6 +39,7 @@ class Phone {
     presence = SessionPresence(backend);
     c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(config),
         authRepositoryProvider.overrideWithValue(auth),
         chatRepositoryProvider.overrideWithValue(chat),

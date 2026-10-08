@@ -17,6 +17,7 @@ import 'package:sis/features/chat/domain/poll.dart';
 
 import '../../support/fakes.dart';
 import '../../support/poll_fakes.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 
@@ -49,6 +50,7 @@ Poll poll(String id, {bool closed = false, bool anonymous = false}) => Poll(
 Future<ProviderContainer> ready(PollFake fake) async {
   final c = ProviderContainer.test(
     overrides: [
+      ...videoOverrides(),
       chatRepositoryProvider.overrideWithValue(ChatFake()),
       pollRepositoryProvider.overrideWithValue(fake),
       sessionControllerProvider.overrideWith(_SignedIn.new),

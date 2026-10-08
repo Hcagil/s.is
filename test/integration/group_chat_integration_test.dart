@@ -12,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Groups through the real stack.
 ///
@@ -73,7 +74,10 @@ class ChatRepositoryOwner {
 
 ProviderContainer containerFor(ChatRepositoryOwner owner) =>
     ProviderContainer.test(
-      overrides: [chatRepositoryProvider.overrideWithValue(owner.repository)],
+      overrides: [
+        ...videoOverrides(),
+        chatRepositoryProvider.overrideWithValue(owner.repository),
+      ],
     );
 
 /// A fresh read of [owner]'s conversations through their own controller.

@@ -26,6 +26,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// The controllers that set a picture, wired as main.dart wires them: the
 /// Supabase repositories over one signed-in client, the chat repository and
@@ -97,6 +98,7 @@ class _App {
     final id = client.auth.currentUser!.id;
     container = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         sessionControllerProvider.overrideWith(
           () => _SignedIn(Member(userId: id, displayName: id)),
         ),

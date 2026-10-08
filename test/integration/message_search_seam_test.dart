@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// The search controllers on the real repository against the local stack,
 /// wired as main.dart wires them: chatRepositoryProvider overridden with
@@ -158,7 +159,10 @@ void main() {
 
   ProviderContainer wired(ChatRepository repository) {
     final c = ProviderContainer.test(
-      overrides: [chatRepositoryProvider.overrideWithValue(repository)],
+      overrides: [
+        ...videoOverrides(),
+        chatRepositoryProvider.overrideWithValue(repository),
+      ],
     );
     c.listen(chatSearchProvider, (_, _) {});
     c.listen(chatListSearchProvider, (_, _) {});

@@ -36,6 +36,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import '../../support/fakes.dart';
 import '../../support/held_send_chat.dart';
 import '../../support/sis_ui.dart';
+import '../../support/video_fakes.dart';
 
 const bob = Member(userId: 'u2', displayName: 'Bob Stone');
 const cem = Member(userId: 'u3', displayName: 'Cem Ay');
@@ -75,6 +76,7 @@ class World {
 
   Widget app() => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(config),
       authRepositoryProvider.overrideWithValue(
         FakeAuth(session: true, member: me),

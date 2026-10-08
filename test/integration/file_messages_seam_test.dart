@@ -21,6 +21,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/fakes.dart';
 import '../support/file_fakes.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// The seam SendQueueController.enqueueFile / FileDownloads.start <->
 /// SupabaseChatFileRepository <-> the attachments bucket and messages on the
@@ -83,6 +84,7 @@ void main() {
   ) async {
     final c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(
           SupabaseChatRepository(client),
         ),

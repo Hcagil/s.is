@@ -31,6 +31,7 @@ import '../support/session_claim.dart';
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// The profile pages' three reads through the real stack --
 /// [SupabaseChatRepository.conversationMembers], `sharedMedia` and
@@ -471,7 +472,10 @@ void main() {
         'from a dead host', () async {
       final g = await freshGroup('provider');
       final live = ProviderContainer.test(
-        overrides: [chatRepositoryProvider.overrideWithValue(fern)],
+        overrides: [
+          ...videoOverrides(),
+          chatRepositoryProvider.overrideWithValue(fern),
+        ],
       );
       final sub = live.listen(conversationMembersProvider(g), (_, _) {});
       final got = await live.read(conversationMembersProvider(g).future);
@@ -479,7 +483,10 @@ void main() {
       sub.close();
 
       final down = ProviderContainer.test(
-        overrides: [chatRepositoryProvider.overrideWithValue(dead)],
+        overrides: [
+          ...videoOverrides(),
+          chatRepositoryProvider.overrideWithValue(dead),
+        ],
       );
       final s2 = down.listen(sharedLinksProvider(g), (_, _) {});
       await expectLater(
@@ -494,6 +501,7 @@ void main() {
   group('the pages on the real stack', () {
     Widget app() => ProviderScope(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(
           const RuntimeConfig(
             supabaseUrl: _url,

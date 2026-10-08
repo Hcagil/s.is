@@ -30,6 +30,8 @@ import '../../support/fakes.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../../support/video_fakes.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = 'u2';
 
@@ -74,6 +76,7 @@ Future<ProviderContainer> pump(
   final container = await settled(
     ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         linkOpenerProvider.overrideWithValue(opener ?? LinkOpenerFake()),

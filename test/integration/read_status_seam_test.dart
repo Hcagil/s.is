@@ -39,6 +39,7 @@ import '../support/session_claim.dart';
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Read status on its seams, wired as main.dart wires it: the REAL
 /// [ReadMarksController] over the real chat and profile repositories, the
@@ -264,6 +265,7 @@ List<Override> _production(
   String name, {
   ChatRepository? chat,
 }) => [
+  ...videoOverrides(),
   runtimeConfigProvider.overrideWithValue(
     const RuntimeConfig(
       supabaseUrl: _url,

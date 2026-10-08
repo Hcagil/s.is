@@ -19,6 +19,7 @@ import 'package:sis/features/chat/domain/group_member.dart';
 import '../../support/chat_delete_fakes.dart';
 import '../../support/fakes.dart';
 import '../../support/group_settings_fakes.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob Stone');
@@ -102,6 +103,7 @@ Future<W> start(
   final groups = GroupSettingsFake(onDeleted: drop);
   final c = ProviderContainer.test(
     overrides: [
+      ...videoOverrides(),
       chatRepositoryProvider.overrideWithValue(chat),
       sessionControllerProvider.overrideWith(_SignedIn.new),
       chatDeleteRepositoryProvider.overrideWithValue(del),

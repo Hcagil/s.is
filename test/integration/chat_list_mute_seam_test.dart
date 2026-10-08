@@ -29,6 +29,7 @@ import '../support/dead_host.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
 import '../support/sis_ui.dart' as ui;
+import '../support/video_fakes.dart';
 
 /// The chat list's long-press mute (Update 1 slice 4) wired as main.dart
 /// wires it: SisApp over the REAL SupabaseChatRepository and the REAL
@@ -150,6 +151,7 @@ void main() {
 
   Widget app(SupabaseClient notifClient) => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(
         const RuntimeConfig(
           supabaseUrl: _url,

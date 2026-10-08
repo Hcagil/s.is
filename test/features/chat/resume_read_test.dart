@@ -32,6 +32,7 @@ import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 
 const maya = Member(userId: 'u1', displayName: 'Maya');
 final _t0 = DateTime.utc(2026, 9, 29, 12);
@@ -98,6 +99,7 @@ void main() {
   Future<void> make({bool allowed = true}) async {
     c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
         pushSourceProvider.overrideWithValue(push),
         profileRepositoryProvider.overrideWithValue(profiles),

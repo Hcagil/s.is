@@ -19,6 +19,7 @@ import '../../support/contact_fakes.dart';
 import '../../support/fakes.dart';
 import '../../support/poll_fakes.dart';
 import '../../support/reaction_fakes.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 
@@ -41,6 +42,7 @@ Future<ProviderContainer> make({
 }) => settled(
   ProviderContainer.test(
     overrides: [
+      ...videoOverrides(),
       chatRepositoryProvider.overrideWithValue(ChatFake()),
       pollRepositoryProvider.overrideWithValue(PollFake()),
       reactionRepositoryProvider.overrideWithValue(ReactionFake()),

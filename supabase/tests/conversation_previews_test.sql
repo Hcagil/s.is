@@ -127,14 +127,15 @@ select has_column('public', 'conversation_previews', 'deleted',
 -- a migration that put it anywhere else would not apply to an existing view.
 -- Later columns append after it in turn (poll, 20261011120000_polls; then
 -- contact, 20261012120000_contact_messages; then attachment_name,
--- 20261013120000_file_messages).
+-- 20261013120000_file_messages; then attachment_duration_ms,
+-- 20261014120000_video_messages).
 select is((select array_agg(attname::text order by attnum) from (
              select attname, attnum from pg_attribute
               where attrelid = 'public.conversation_previews'::regclass
                 and attnum > 0 and not attisdropped
-              order by attnum desc limit 3) last_three),
-          array['poll', 'contact', 'attachment_name'],
-          'poll was appended, then contact, and attachment_name is now the last column');
+              order by attnum desc limit 4) last_four),
+          array['poll', 'contact', 'attachment_name', 'attachment_duration_ms'],
+          'poll was appended, then contact, attachment_name, and attachment_duration_ms is now the last column');
 
 select * from finish();
 rollback;

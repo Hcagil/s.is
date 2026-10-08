@@ -33,6 +33,7 @@ import '../../support/archive_fakes.dart';
 import '../../support/chat_delete_fakes.dart';
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart' as ui;
+import '../../support/video_fakes.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -91,6 +92,7 @@ Future<NotificationSettingsFake> pumpList(
       key: const ValueKey('screen'),
       child: ProviderScope(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(config),
           authRepositoryProvider.overrideWithValue(
             FakeAuth(session: true, member: me),

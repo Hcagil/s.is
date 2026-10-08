@@ -27,6 +27,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 const _url = String.fromEnvironment(
   'SUPABASE_TEST_URL',
@@ -129,6 +130,7 @@ void main() {
 
   Widget app(SupabaseClient notifClient) => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(
         const RuntimeConfig(
           supabaseUrl: _url,

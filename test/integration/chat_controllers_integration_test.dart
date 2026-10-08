@@ -15,6 +15,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// The controller seam against the real stack.
 ///
@@ -84,7 +85,10 @@ void expectOffline(String message) {
 
 ProviderContainer containerFor(ChatRepositoryOwner owner) =>
     ProviderContainer.test(
-      overrides: [chatRepositoryProvider.overrideWithValue(owner.repository)],
+      overrides: [
+        ...videoOverrides(),
+        chatRepositoryProvider.overrideWithValue(owner.repository),
+      ],
     );
 
 /// Keeps the repository and the client it was built on together, so a test

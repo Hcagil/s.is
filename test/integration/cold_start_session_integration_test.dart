@@ -42,6 +42,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/reach.dart';
 import '../support/service_key.dart';
+import '../support/video_fakes.dart';
 
 const _url = String.fromEnvironment(
   'SUPABASE_TEST_URL',
@@ -126,6 +127,7 @@ class Run {
   Run(Phone p)
     : c = ProviderContainer(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(config),
           authRepositoryProvider.overrideWithValue(
             SupabaseAuthRepository(

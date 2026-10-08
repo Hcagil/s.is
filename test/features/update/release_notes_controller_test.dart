@@ -25,6 +25,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:sis/features/update/domain/release_notes.dart';
 
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 
 class DeliveryFake implements ReleaseNotesDelivery {
   /// Who was asked for, in order.
@@ -69,6 +70,7 @@ Future<void> pumpEvents() async {
   final chat = ChatFake(latency: const Duration(milliseconds: 1));
   final c = ProviderContainer.test(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(
         const RuntimeConfig(
           supabaseUrl: 'https://x.supabase.co',
@@ -219,6 +221,7 @@ void main() {
     Widget app(DeliveryFake delivery, {RuntimeConfig cfg = config}) =>
         ProviderScope(
           overrides: [
+            ...videoOverrides(),
             runtimeConfigProvider.overrideWithValue(cfg),
             authRepositoryProvider.overrideWithValue(
               FakeAuth(session: true, member: maya),

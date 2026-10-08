@@ -22,6 +22,7 @@ import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../support/account_fakes.dart';
+import '../support/video_fakes.dart';
 import '../support/fakes.dart'
     show AttachmentCacheFake, FakeUpdate, PushRegistryFake, PushSourceFake;
 
@@ -54,6 +55,7 @@ class Owner {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(config),
           authRepositoryProvider.overrideWithValue(auth),
           updateRepositoryProvider.overrideWithValue(FakeUpdate()),

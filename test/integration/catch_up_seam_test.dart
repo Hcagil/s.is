@@ -10,6 +10,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Catching up after the socket died, against the real stack: the REAL
 /// ConversationListController and MessagesController on the REAL
@@ -100,7 +101,10 @@ void main() {
 
   /// As production mounts it: only the repository is overridden.
   ProviderContainer container() => ProviderContainer.test(
-    overrides: [chatRepositoryProvider.overrideWithValue(rho)],
+    overrides: [
+      ...videoOverrides(),
+      chatRepositoryProvider.overrideWithValue(rho),
+    ],
   );
 
   Future<void> sigSays(String body) async => expect(

@@ -20,6 +20,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/l10n/app_localizations.dart';
 
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -57,6 +58,7 @@ class World {
   Future<ProviderContainer> container() async {
     final c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
         presenceRepositoryProvider.overrideWithValue(presence),
         profileRepositoryProvider.overrideWithValue(profileFake),

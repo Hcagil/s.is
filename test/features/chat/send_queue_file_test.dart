@@ -9,6 +9,7 @@ import 'package:sis/features/chat/domain/message.dart';
 
 import '../../support/file_fakes.dart';
 import '../../support/held_send_chat.dart';
+import '../../support/video_fakes.dart';
 
 class _SignedIn extends SessionController {
   @override
@@ -30,6 +31,7 @@ Future<ProviderContainer> start(
 ) async {
   final c = ProviderContainer.test(
     overrides: [
+      ...videoOverrides(),
       chatRepositoryProvider.overrideWithValue(chat),
       chatFileRepositoryProvider.overrideWithValue(files),
       sessionControllerProvider.overrideWith(_SignedIn.new),

@@ -43,6 +43,8 @@ import '../../support/sis_ui.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../../support/video_fakes.dart';
+
 const maya = Member(userId: 'u1', displayName: 'Maya');
 final _t0 = DateTime.utc(2026, 10, 1, 12);
 
@@ -230,6 +232,7 @@ void main() {
     states = [];
     c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(server),
         sessionControllerProvider.overrideWith(_In.new),
       ],
@@ -683,6 +686,7 @@ void main() {
     final s = _Server()..seed([m('a1', 1, conv: 'cA'), m('b1', 1, conv: 'cB')]);
     final container = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(s),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         sessionControllerProvider.overrideWith(_In.new),

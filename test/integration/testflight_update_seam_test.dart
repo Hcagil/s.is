@@ -18,6 +18,7 @@ import 'package:url_launcher_platform_interface/url_launcher_platform_interface.
 
 import '../support/fakes.dart';
 import '../support/url_launcher_platform.dart';
+import '../support/video_fakes.dart';
 
 /// The iOS update seam: UpdateController over the real
 /// TestFlightUpdateRepository, whose minimum comes from the real
@@ -86,6 +87,7 @@ void main() {
   Future<(ProviderContainer, UpdateState)> settle() async {
     final c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(
           RuntimeConfig(
             supabaseUrl: _url,

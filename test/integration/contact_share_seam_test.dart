@@ -18,6 +18,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// The seam MessagesController.sendContact <-> SupabaseContactShareRepository
 /// <-> send_contact on the local stack, wired as main.dart wires it (the chat,
@@ -70,6 +71,7 @@ void main() {
   Future<ProviderContainer> opened(SupabaseClient client, String id) async {
     final c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(
           SupabaseChatRepository(client),
         ),

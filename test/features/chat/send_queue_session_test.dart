@@ -15,6 +15,7 @@ import 'package:sis/features/chat/domain/message.dart';
 
 import '../../support/held_send_chat.dart';
 import '../../support/last_session_fakes.dart';
+import '../../support/video_fakes.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -39,6 +40,7 @@ Future<(ColdAuth, HeldSendChat)> start(WidgetTester t) async {
   final chat = HeldSendChat();
   c = ProviderContainer(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(config),
       authRepositoryProvider.overrideWithValue(auth),
       lastSessionStoreProvider.overrideWithValue(

@@ -26,6 +26,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 
 import '../../support/fakes.dart';
 import '../../support/held_send_chat.dart';
+import '../../support/video_fakes.dart';
 
 class _SignedIn extends SessionController {
   @override
@@ -62,6 +63,7 @@ HeldSendChat groups() => HeldSendChat()
 Future<ProviderContainer> start(WidgetTester t, ChatFake chat) async {
   final c = ProviderContainer.test(
     overrides: [
+      ...videoOverrides(),
       chatRepositoryProvider.overrideWithValue(chat),
       sessionControllerProvider.overrideWith(_SignedIn.new),
     ],
@@ -80,6 +82,7 @@ Future<ProviderContainer> start(WidgetTester t, ChatFake chat) async {
 Future<ProviderContainer> startReal(ChatFake chat) async {
   final c = ProviderContainer.test(
     overrides: [
+      ...videoOverrides(),
       chatRepositoryProvider.overrideWithValue(chat),
       sessionControllerProvider.overrideWith(_SignedIn.new),
     ],
@@ -386,6 +389,7 @@ void main() {
       final chat = groups();
       final c = ProviderContainer.test(
         overrides: [
+          ...videoOverrides(),
           chatRepositoryProvider.overrideWithValue(chat),
           profileRepositoryProvider.overrideWithValue(
             ProfileFake(
@@ -436,6 +440,7 @@ void main() {
       final presence = PresenceFake();
       final c = ProviderContainer.test(
         overrides: [
+          ...videoOverrides(),
           chatRepositoryProvider.overrideWithValue(chat),
           presenceRepositoryProvider.overrideWithValue(presence),
           profileRepositoryProvider.overrideWithValue(

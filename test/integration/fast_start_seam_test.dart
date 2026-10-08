@@ -31,6 +31,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// The app opening faster (v0.21.4, docs/DECISIONS.md 2026-09-28) against the
 /// real local stack: the REAL [SupabaseChatRepository] and
@@ -435,6 +436,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(
             const RuntimeConfig(
               supabaseUrl: _url,
@@ -547,6 +549,7 @@ void main() {
     /// directory: path_provider has no platform side in a test).
     ProviderContainer app(FileChatListSnapshotStore store) => ProviderContainer(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(
           const RuntimeConfig(
             supabaseUrl: _url,

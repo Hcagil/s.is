@@ -28,6 +28,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:sis/features/update/presentation/whats_new_card.dart';
 
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
 const bob = Member(userId: 'ub', displayName: 'Bob Stone', tag: 'bobby');
@@ -63,6 +64,7 @@ class World {
 
   Widget app() => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(
         const RuntimeConfig(
           supabaseUrl: 'https://x.supabase.co',

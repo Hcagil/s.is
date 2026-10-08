@@ -16,6 +16,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// The newest-page open (0.30.14) against the real local stack:
 /// - messages() is the newest messagePageSize rows, oldest first, with no
@@ -212,7 +213,10 @@ void main() {
 
     setUp(() {
       c = ProviderContainer.test(
-        overrides: [chatRepositoryProvider.overrideWithValue(nami)],
+        overrides: [
+          ...videoOverrides(),
+          chatRepositoryProvider.overrideWithValue(nami),
+        ],
       );
       c.listen(messagesProvider, (_, _) {});
       c.read(openConversationProvider.notifier).open(chat);

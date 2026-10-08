@@ -15,6 +15,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// The seam ReactionsController <-> SupabaseReactionRepository <-> the local
 /// stack, wired as main.dart wires it (reactionRepositoryProvider overridden
@@ -79,6 +80,7 @@ void main() {
   Future<ProviderContainer> opened(SupabaseClient client, String id) async {
     final c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(ChatFake()),
         reactionRepositoryProvider.overrideWithValue(
           SupabaseReactionRepository(client),

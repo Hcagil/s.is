@@ -20,6 +20,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/fakes.dart';
 import '../support/service_key.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Which kind of push a phone is sent, decided by how it registered.
 ///
@@ -188,6 +189,7 @@ void main() {
     final source = PushSourceFake(token: orenToken);
     final c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(
           const RuntimeConfig(
             supabaseUrl: _url,

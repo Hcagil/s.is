@@ -25,6 +25,8 @@ import '../../support/fakes.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../../support/video_fakes.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 
 class _SignedIn extends SessionController {
@@ -51,6 +53,7 @@ Future<ChatFake> pumpChat(WidgetTester tester) async {
   final container = await settled(
     ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),

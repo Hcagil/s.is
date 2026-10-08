@@ -207,9 +207,10 @@ select is((select array_agg(attname::text order by attnum) from (
              select attname, attnum from pg_attribute
               where attrelid = 'public.conversation_previews'::regclass
                 and attnum > 0 and not attisdropped
-              order by attnum desc limit 3) last_three),
-          array['poll', 'contact', 'attachment_name'],
-          'conversation_previews ends with poll, contact, attachment_name (20261013120000_file_messages.sql)');
+              order by attnum desc limit 4) last_four),
+          array['poll', 'contact', 'attachment_name', 'attachment_duration_ms'],
+          'conversation_previews ends with poll, contact, attachment_name (20261013120000_file_messages.sql), '
+          'attachment_duration_ms (20261014120000_video_messages.sql)');
 select as_('01');
 select is(sc(g('G'), gen_random_uuid(), 'Newest', '123'), 'ok', 'fixture: a contact as the newest message');
 select is((select contact from public.conversation_previews where conversation_id = g('G')), true,

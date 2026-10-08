@@ -25,6 +25,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/dead_host.dart';
 import '../support/fakes.dart';
 import '../support/push_platform.dart';
+import '../support/video_fakes.dart';
 
 /// Push receipts, from the phone's buffer to the server, as main.dart
 /// mounts them: PushRegistration starting over the production
@@ -157,6 +158,7 @@ void main() {
   ProviderContainer start(SupabaseClient client, {SupabaseClient? receipts}) {
     final c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(
           const RuntimeConfig(
             supabaseUrl: _url,

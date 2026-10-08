@@ -28,6 +28,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import '../../support/l10n.dart';
 import '../../support/sis_ui.dart';
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -70,6 +71,7 @@ class World {
   /// The app as main.dart mounts it, fakes only at the repository boundary.
   Widget app() => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(config),
       authRepositoryProvider.overrideWithValue(FakeAuth(session: true)),
       updateRepositoryProvider.overrideWithValue(FakeUpdate()),

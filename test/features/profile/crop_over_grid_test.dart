@@ -36,6 +36,7 @@ import '../../support/fakes.dart';
 import '../../support/gallery_paging.dart' hide steps;
 import '../../support/sis_ui.dart';
 import 'avatar_from_app_test.dart' show picked;
+import '../../support/video_fakes.dart';
 import 'avatar_widgets_test.dart'
     show
         World,
@@ -130,6 +131,7 @@ class Host {
 
   Widget app() => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       galleryProvider.overrideWithValue(gallery),
       externalPickerProvider.overrideWithValue(picker),
       pictureCropperProvider.overrideWithValue(cropper),

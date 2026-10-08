@@ -28,6 +28,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import '../support/fakes.dart';
 import '../support/join_chat.dart';
 import '../support/last_session_fakes.dart';
+import '../support/video_fakes.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -90,6 +91,7 @@ class World {
 
   Widget app() => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(config),
       authRepositoryProvider.overrideWithValue(auth),
       lastSessionStoreProvider.overrideWithValue(markers),

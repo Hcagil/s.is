@@ -20,6 +20,7 @@ import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../support/fakes.dart';
+import '../support/video_fakes.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -77,6 +78,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(config),
           authRepositoryProvider.overrideWithValue(FakeAuth(session: true)),
           updateRepositoryProvider.overrideWithValue(FakeUpdate()),

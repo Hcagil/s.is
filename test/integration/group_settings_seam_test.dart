@@ -28,6 +28,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/dead_host.dart';
 import '../support/reach.dart';
 import '../support/service_key.dart';
+import '../support/video_fakes.dart';
 
 /// Group settings and delete group, wired as main.dart wires them: GroupController
 /// over the Supabase chat and group-settings repositories of one signed-in
@@ -105,6 +106,7 @@ class _App {
     final me = id ?? client.auth.currentUser!.id;
     container = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         sessionControllerProvider.overrideWith(
           () => _SignedIn(Member(userId: me, displayName: me)),
         ),

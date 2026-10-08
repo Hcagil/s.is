@@ -30,6 +30,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Pins over the real local stack: [SupabaseChatPinRepository] against the
 /// chat_pins table, its triggers and the pin RPCs, and SisApp wired as
@@ -252,6 +253,7 @@ void main() {
 
   Widget app() => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(
         const RuntimeConfig(
           supabaseUrl: _url,

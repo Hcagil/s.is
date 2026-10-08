@@ -2,6 +2,7 @@
 // the video fakes passed in: for the video bubble, composer and player tests.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
@@ -62,6 +63,7 @@ Future<ProviderContainer> pumpVideoChat(
   VideoSharerFake? sharer,
   SendQueueStoreFake? store,
   Locale locale = const Locale('en'),
+  List<Override> extra = const [],
 }) async {
   phone(t);
   final files = devices ?? DeviceFilesFake();
@@ -90,6 +92,7 @@ Future<ProviderContainer> pumpVideoChat(
         ),
         initialAutoDownloadProvider.overrideWithValue(settings),
         autoDownloadStoreProvider.overrideWithValue(AutoDownloadStoreFake()),
+        ...extra,
       ],
     ),
   );

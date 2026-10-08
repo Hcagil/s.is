@@ -182,17 +182,15 @@ class _VoiceBubbleState extends ConsumerState<VoiceBubble> {
                     SizedBox(
                       height: 28,
                       key: ValueKey('voice-wave-${widget.message.id}'),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return CustomPaint(
-                            size: Size(constraints.maxWidth, 28),
-                            painter: _WavePainter(
-                              bars: barList,
-                              fraction: fraction,
-                              ink: widget.ink,
-                            ),
-                          );
-                        },
+                      // No LayoutBuilder: the bubble sits in an IntrinsicWidth,
+                      // which cannot ask a LayoutBuilder for its size.
+                      child: CustomPaint(
+                        painter: _WavePainter(
+                          bars: barList,
+                          fraction: fraction,
+                          ink: widget.ink,
+                        ),
+                        child: const SizedBox.expand(),
                       ),
                     ),
                     const SizedBox(height: 4),

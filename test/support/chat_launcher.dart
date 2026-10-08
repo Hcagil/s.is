@@ -11,6 +11,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/l10n/app_localizations.dart';
 import 'package:sis/app/theme.dart';
@@ -98,6 +99,7 @@ Future<ProviderContainer> pumpLauncher(
   FakeContactShare? contacts,
   Locale? locale,
   bool tap = true,
+  List<Override> overrides = const [],
 }) async {
   phoneView(tester);
   final repo =
@@ -128,6 +130,7 @@ Future<ProviderContainer> pumpLauncher(
         contactShareRepositoryProvider.overrideWithValue(
           contacts ?? FakeContactShare(),
         ),
+        ...overrides,
       ],
     ),
   );
@@ -175,6 +178,7 @@ Future<ProviderContainer> openChat(
   FakePhoneBook? phoneBook,
   FakeContactShare? contacts,
   Locale? locale,
+  List<Override> overrides = const [],
 }) async {
   final c = await pumpLauncher(
     tester,
@@ -185,6 +189,7 @@ Future<ProviderContainer> openChat(
     phoneBook: phoneBook,
     contacts: contacts,
     locale: locale,
+    overrides: overrides,
   );
   expect(find.byType(MessageScreen), findsOneWidget, reason: 'never opened');
   return c;

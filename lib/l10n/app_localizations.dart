@@ -2815,6 +2815,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Select video'**
   String get videoSelectLabel;
+
+  /// Empty video grid
+  ///
+  /// In en, this message translates to:
+  /// **'No videos yet'**
+  String get videoGridEmpty;
+
+  /// Title of the video library permission prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Pick videos right here'**
+  String get videoAccessTitle;
+
+  /// Explains the video library permission prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Allow access so your videos show up here – nothing is uploaded until you send it.'**
+  String get videoAccessBody;
+
+  /// Button that asks for video library access
+  ///
+  /// In en, this message translates to:
+  /// **'Allow videos'**
+  String get videoAllow;
+
+  /// Button that opens the phone's own video picker instead of the grid
+  ///
+  /// In en, this message translates to:
+  /// **'Use the phone\'s picker'**
+  String get videoUsePhonePicker;
+
+  /// Notice in the video grid
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load more videos.'**
+  String get videoLoadMoreFailed;
 }
 
 class _AppLocalizationsDelegate

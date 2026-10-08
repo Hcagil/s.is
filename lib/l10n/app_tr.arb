@@ -484,5 +484,11 @@
   "videoPlay": "Oynat",
   "videoPause": "Duraklat",
   "videoCannotPlay": "Bu video oynatılamıyor.",
-  "videoSelectLabel": "Videoyu seç"
+  "videoSelectLabel": "Videoyu seç",
+  "videoGridEmpty": "Henüz video yok",
+  "videoAccessTitle": "Videoları burada seç",
+  "videoAccessBody": "Videoların burada görünmesi için erişime izin ver – sen gönderene kadar hiçbir şey gönderilmez.",
+  "videoAllow": "Videolara izin ver",
+  "videoUsePhonePicker": "Telefonun seçicisini kullan",
+  "videoLoadMoreFailed": "Daha fazla video yüklenemedi."
 }

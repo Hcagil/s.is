@@ -7,8 +7,8 @@ import 'package:light_compressor_v2/light_compressor_v2.dart' as lc;
 import '../../../core/failure.dart';
 import '../domain/file_attachment.dart';
 import '../domain/file_repository.dart';
-import '../domain/message.dart';
 import '../domain/video.dart';
+import 'video_source_prep.dart';
 
 /// Picks videos with the system picker and shrinks them to about 720p.
 ///
@@ -28,54 +28,17 @@ final class FlutterDeviceVideos implements DeviceVideos {
       var tooLong = 0;
       final videos = <VideoSource>[];
       for (final f in picked) {
-        final id = randomMessageId();
-        final name = safeFileName(f.name);
-        final dest = File(await _files.pathFor(id, 'source'));
-        try {
-          await dest.parent.create(recursive: true);
-          final sink = dest.openWrite();
-          await sink.addStream(f.readAsByteStream());
-          await sink.close();
-          final info = await _lc.getMediaInfo(dest.path);
-          final duration = info.duration;
-          final width = info.width;
-          final height = info.height;
-          if (duration == null || width == null || height == null) {
-            await dest.parent.delete(recursive: true);
-            continue;
-          }
-          final ms = duration.inMilliseconds;
-          if (isVideoTooLong(ms)) {
-            tooLong++;
-            await dest.parent.delete(recursive: true);
-            continue;
-          }
-          final shot = await _lc.getVideoThumbnail(dest.path, quality: 40);
-          final thumbDest = await _files.pathFor(id, 'thumb.jpg');
-          await File(shot).copy(thumbDest);
-          try {
-            await File(shot).delete();
-          } catch (_) {}
-          videos.add(
-            VideoSource(
-              id: id,
-              path: dest.path,
-              name: name,
-              size: await dest.length(),
-              durationMs: ms,
-              width: width,
-              height: height,
-              thumbPath: thumbDest,
-            ),
-          );
-        } catch (e) {
-          log(
-            'Preparing a picked video failed: ${e.runtimeType}',
-            name: 'sis.video',
-          );
-          try {
-            await dest.parent.delete(recursive: true);
-          } catch (_) {}
+        final result = await prepareVideoSource(
+          files: _files,
+          compressor: _lc,
+          name: safeFileName(f.name),
+          bytes: f.readAsByteStream(),
+        );
+        final source = result.source;
+        if (source != null) {
+          videos.add(source);
+        } else if (result.tooLong) {
+          tooLong++;
         }
       }
       return VideoPick(videos: videos, tooLong: tooLong);

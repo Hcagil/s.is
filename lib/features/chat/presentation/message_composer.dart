@@ -181,13 +181,40 @@ class _ComposerState extends ConsumerState<_Composer>
   /// videos on the review page, and queues each selected one: the bubble shows
   /// at once, the video is shrunk and sent by itself, waiting offline. Videos
   /// over 5 minutes are skipped with one notice. Backing out sends nothing and
-  /// the picked copies are deleted.
+  /// the picked copies are deleted. With the in-app grid (iPhone) the ticked
+  /// videos are the selection; otherwise the phone's own chooser and the
+  /// review page are used.
   Future<void> _sendVideos() async {
     final id = _conversationId;
     if (id == null) return;
     final device = ref.read(deviceVideosProvider);
-    final pick = await device.pick();
-    if (!mounted) return;
+    // The in-app grid (iPhone) is itself the selection and has already
+    // copied the ticked videos; the phone's picker needs the review page.
+    var viaGrid = false;
+    var pick = const VideoPick();
+    if (ref.read(videoGridEnabledProvider)) {
+      final grid = await showVideoGrid(context);
+      if (!mounted) {
+        if (grid != null && !grid.phonePicker) {
+          for (final video in grid.pick.videos) {
+            await device.discard(video);
+          }
+        }
+        return;
+      }
+      if (grid == null) return;
+      if (!grid.phonePicker) {
+        pick = grid.pick;
+        viaGrid = true;
+      }
+    }
+    if (!viaGrid) pick = await device.pick();
+    if (!mounted) {
+      for (final video in pick.videos) {
+        await device.discard(video);
+      }
+      return;
+    }
     if (pick.tooLong > 0) {
       showSisNotice(
         context,
@@ -196,11 +223,18 @@ class _ComposerState extends ConsumerState<_Composer>
       );
     }
     if (pick.videos.isEmpty) return;
-    final chosen = await showVideoReview(context, pick.videos) ?? const [];
+    final chosen = viaGrid
+        ? pick.videos
+        : await showVideoReview(context, pick.videos) ?? const [];
     for (final video in pick.videos) {
       if (!chosen.contains(video)) await device.discard(video);
     }
-    if (!mounted) return;
+    if (!mounted) {
+      for (final video in chosen) {
+        await device.discard(video);
+      }
+      return;
+    }
     final queue = ref.read(sendQueueProvider.notifier);
     for (final video in chosen) {
       queue.enqueueVideo(id, video, replyTo: ref.read(replyingToProvider));

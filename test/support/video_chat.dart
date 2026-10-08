@@ -1,7 +1,10 @@
 // The chat screen as file_card_test mounts it (fakes at every boundary), with
 // the video fakes passed in: for the video bubble, composer and player tests.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
@@ -50,6 +53,18 @@ Future<void> frames(WidgetTester t) async {
 /// Lets a notice's timer run out before the tree is torn down.
 Future<void> noticeGone(WidgetTester t) => t.pump(const Duration(seconds: 10));
 
+/// With `asRoute`, the chat screen is a route over a blank home, so a test
+/// can take it away ([closeChat]) while a page it opened stays on top.
+final chatNavigator = GlobalKey<NavigatorState>();
+Route<void>? chatRoute;
+
+/// The chat screen goes away (as when the member leaves it) while whatever
+/// it pushed stays open.
+Future<void> closeChat(WidgetTester t) async {
+  chatNavigator.currentState!.removeRoute(chatRoute!);
+  await frames(t);
+}
+
 Future<ProviderContainer> pumpVideoChat(
   WidgetTester t,
   ChatFake chat, {
@@ -62,6 +77,8 @@ Future<ProviderContainer> pumpVideoChat(
   VideoSharerFake? sharer,
   SendQueueStoreFake? store,
   Locale locale = const Locale('en'),
+  List<Override> extra = const [],
+  bool asRoute = false,
 }) async {
   phone(t);
   final files = devices ?? DeviceFilesFake();
@@ -90,6 +107,7 @@ Future<ProviderContainer> pumpVideoChat(
         ),
         initialAutoDownloadProvider.overrideWithValue(settings),
         autoDownloadStoreProvider.overrideWithValue(AutoDownloadStoreFake()),
+        ...extra,
       ],
     ),
   );
@@ -101,10 +119,17 @@ Future<ProviderContainer> pumpVideoChat(
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: const MessageScreen(title: 'Bob'),
+        navigatorKey: asRoute ? chatNavigator : null,
+        home: asRoute ? const SizedBox() : const MessageScreen(title: 'Bob'),
       ),
     ),
   );
+  if (asRoute) {
+    chatRoute = MaterialPageRoute<void>(
+      builder: (_) => const MessageScreen(title: 'Bob'),
+    );
+    unawaited(chatNavigator.currentState!.push(chatRoute!));
+  }
   await frames(t);
   return container;
 }

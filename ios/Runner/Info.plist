@@ -71,6 +71,10 @@
 	<string>Allow camera access to take a photo and send it in the chat. The photo is only uploaded when you send it.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Allow access so you can share where you are in a chat. Your location is only read when you choose to send it.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Allow microphone access to record voice messages and to dictate text. Audio is only sent when you send the voice message.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Allow speech recognition to turn your voice into text in the message box. It runs on your phone.</string>
 	<key>MapsApiKey</key>
 	<string>$(MAPS_API_KEY_IOS)</string>
 	<key>NSContactsUsageDescription</key>

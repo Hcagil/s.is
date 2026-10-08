@@ -7,6 +7,7 @@ import 'poll.dart';
 import 'shared_contact.dart';
 import 'shared_location.dart';
 import 'video.dart';
+import 'voice.dart';
 
 /// The longest body the database will accept, per the check constraint on
 /// `public.messages.body`.
@@ -44,7 +45,7 @@ bool isSendableBody(String body) {
 /// without a caption has an empty body, which would read as "no messages".
 /// A poll shows [pollPreview] of its question, a contact [contactPreview]
 /// of its name, a file [filePreview] of its name, a location
-/// [locationPreviewText].
+/// [locationPreviewText], a voice message [voicePreview].
 String previewText(Message message) => message.poll
     ? pollPreview(message.body)
     : message.location != null
@@ -52,7 +53,11 @@ String previewText(Message message) => message.poll
     : message.contact
     ? contactPreview(message.body)
     : message.file != null
-    ? (message.file!.isVideo ? videoPreview : filePreview(message.file!.name))
+    ? (message.file!.isVoice
+          ? voicePreview
+          : message.file!.isVideo
+          ? videoPreview
+          : filePreview(message.file!.name))
     : message.body.isNotEmpty
     ? message.body
     : (message.hasAttachment ? 'Photo' : '');

@@ -173,7 +173,9 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
     final preview = body.isNotEmpty
         ? body
         : widget.message.file != null
-        ? (widget.message.file!.isVideo
+        ? (widget.message.file!.isVoice
+              ? l.voicePreviewLine
+              : widget.message.file!.isVideo
               ? videoPreview
               : widget.message.file!.name)
         : widget.message.hasAttachment

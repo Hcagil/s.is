@@ -672,7 +672,12 @@ String quoteText(AppLocalizations l, Message? message) => switch (message) {
   null => l.quoteOriginal,
   Message(isDeleted: true) => l.quoteDeleted,
   Message(:final body) when body.isNotEmpty => body,
-  Message(:final file?) => file.isVideo ? videoPreview : file.name,
+  Message(:final file?) =>
+    file.isVoice
+        ? l.voicePreviewLine
+        : file.isVideo
+        ? videoPreview
+        : file.name,
   Message(hasAttachment: true) => l.quotePhoto,
   _ => l.commonMessage,
 };

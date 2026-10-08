@@ -1,3 +1,5 @@
+import 'voice.dart';
+
 /// The maximum a file message may weigh (the server bucket enforces the same).
 const int maxFileBytes = 50 * 1024 * 1024;
 
@@ -10,6 +12,8 @@ final class AttachedFile {
     required this.size,
     this.durationMs,
     this.thumbPath,
+    this.waveform,
+    this.transcript,
   });
 
   /// The file's original name.
@@ -27,8 +31,17 @@ final class AttachedFile {
   /// The path of the small jpeg picture of a video on this phone while it is still being sent, or null.
   final String? thumbPath;
 
-  /// Whether this file is a video (it carries a length).
-  bool get isVideo => durationMs != null;
+  /// Voice messages: the stored waveform, see encodeWaveform.
+  final String? waveform;
+
+  /// Voice messages: the words, made on the sender's phone, or null.
+  final String? transcript;
+
+  /// Whether this is a voice message: an audio/mp4 file with a length.
+  bool get isVoice => durationMs != null && mime == voiceMime;
+
+  /// Whether this is a video: a file with a length that is not a voice message.
+  bool get isVideo => durationMs != null && !isVoice;
 }
 
 /// A file the member picked, already copied into the app's own folder at [path];
@@ -43,6 +56,8 @@ final class PickedFile {
     required this.size,
     this.durationMs,
     this.thumbPath,
+    this.waveform,
+    this.transcript,
   });
 
   /// The ID of the message that will carry this file.
@@ -66,6 +81,12 @@ final class PickedFile {
   /// The path of the video's jpeg thumbnail on this phone, or null.
   final String? thumbPath;
 
+  /// Voice messages: the stored waveform, see encodeWaveform.
+  final String? waveform;
+
+  /// Voice messages: the words, made on the sender's phone, or null.
+  final String? transcript;
+
   /// Returns an attached file representation of this picked file.
   AttachedFile get attached => AttachedFile(
     name: name,
@@ -73,6 +94,8 @@ final class PickedFile {
     size: size,
     durationMs: durationMs,
     thumbPath: thumbPath,
+    waveform: waveform,
+    transcript: transcript,
   );
 }
 

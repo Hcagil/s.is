@@ -33,7 +33,7 @@ lib/
                           connectivity_plus, file_picker, open_filex,
                           light_compressor_v2, video_player, share_plus,
                           google_maps_flutter, flutter_map, latlong2,
-                          geolocator
+                          geolocator, record, speech_to_text
     application/          Riverpod Notifiers: state machines; import domain only
     presentation/         widgets: watch state, call notifiers, render
 ```

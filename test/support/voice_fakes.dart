@@ -190,11 +190,31 @@ class VoicePlaybackFake implements VoicePlayback {
   @override
   Stream<VideoPlaybackState> get states => _states.stream;
 
-  @override
-  Future<void> play() async => calls.add('play');
+  /// Like the real player, a play or pause is reported on [states] a little
+  /// later, not by the call itself.
+  void _report(bool playing) =>
+      Future<void>.delayed(const Duration(milliseconds: 3), () {
+        if (!_states.isClosed) {
+          emit(
+            VideoPlaybackState(
+              duration: const Duration(seconds: 41),
+              playing: playing,
+            ),
+          );
+        }
+      });
 
   @override
-  Future<void> pause() async => calls.add('pause');
+  Future<void> play() async {
+    calls.add('play');
+    _report(true);
+  }
+
+  @override
+  Future<void> pause() async {
+    calls.add('pause');
+    _report(false);
+  }
 
   @override
   Future<void> seekTo(Duration position) async =>
@@ -216,14 +236,16 @@ class VoicePlaybackFake implements VoicePlayback {
   }
 
   /// Emit a finished state at the given duration.
-  void finish(Duration d) => emit(
-    VideoPlaybackState(
-      position: d,
-      duration: d,
-      playing: false,
-      finished: true,
-    ),
-  );
+  void finish(Duration d) => _states.isClosed
+      ? null
+      : emit(
+          VideoPlaybackState(
+            position: d,
+            duration: d,
+            playing: false,
+            finished: true,
+          ),
+        );
 }
 
 /// A fake factory that creates [VoicePlaybackFake] instances.

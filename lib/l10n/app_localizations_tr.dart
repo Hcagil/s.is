@@ -1544,7 +1544,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get videoAccessBody =>
-      'Videoların burada görünmesi için erişime izin ver – sen göndermeden hiçbir şey yüklenmez.';
+      'Videoların burada görünmesi için erişime izin ver – sen gönderene kadar hiçbir şey gönderilmez.';
 
   @override
   String get videoAllow => 'Videolara izin ver';

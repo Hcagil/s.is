@@ -2004,7 +2004,13 @@ waveform, sent through the existing upload, offline queue and storage.
   `speech_to_text` 7.5.0 (dictation, https://pub.dev/packages/speech_to_text).
   Both are SDK imports, so they live in `data/` only (`tool/check_pattern.sh`).
 - Dictation runs on the phone only (on-device recognition) and writes into the
-  message box in the app language. Nothing is sent to a server.
+  message box in the app language. Nothing is sent to a server. The
+  `speech_to_text` package silently falls back to the network recogniser when
+  no on-device one exists, so on Android dictation first asks the phone
+  (`SpeechRecognizer.isOnDeviceRecognitionAvailable`, Android 12 and later,
+  through the `sis/speech` channel in `MainActivity`) and refuses to start,
+  showing the "unavailable" notice, when the answer is no or unknown. iOS sets
+  `requiresOnDeviceRecognition`.
 - The transcript is a nullable column (`voice_transcript`, 1 to 10000
   characters) with the same row security as `body`. It is never part of a push
   or notification text and never part of the chat list preview. The

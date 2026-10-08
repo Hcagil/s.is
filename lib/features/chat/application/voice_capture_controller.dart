@@ -106,7 +106,7 @@ final voiceCaptureProvider = NotifierProvider<VoiceCapture, VoiceCaptureState>(
 /// Records a voice message or dictates into the message box.
 class VoiceCapture extends Notifier<VoiceCaptureState> {
   Timer? _ticker;
-  final Stopwatch _clock = Stopwatch();
+  final Stopwatch _clock = clock.stopwatch();
   String? _conversationId;
   String _localeTag = 'en_US';
   String _base = '';
@@ -229,7 +229,11 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
     final id = _conversationId;
     final messageId = _messageId;
     final name = _fileName;
-    if (take == null || id == null || messageId == null || name == null) {
+    if (take == null ||
+        take.durationMs < minVoiceMs ||
+        id == null ||
+        messageId == null ||
+        name == null) {
       state = state.copyWith(notice: VoiceNotice.tooShort);
       return;
     }

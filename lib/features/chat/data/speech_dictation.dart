@@ -1,13 +1,19 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../domain/voice.dart';
 
-/// Uses the speech_to_text package to recognise speech.
+/// Uses the speech_to_text package to recognise speech. On Android it refuses
+/// to start unless the phone has an on-device recogniser, because the package
+/// would otherwise fall back to a server.
 final class SpeechDictation implements Dictation {
   /// Creates a dictation.
   SpeechDictation();
 
+  static const _channel = MethodChannel('sis/speech');
   final SpeechToText _stt = SpeechToText();
   void Function(String)? _onText;
   void Function()? _onEnd;
@@ -19,6 +25,7 @@ final class SpeechDictation implements Dictation {
     required void Function() onEnd,
   }) async {
     try {
+      if (!await _onDeviceOnly()) return VoiceStart.failed;
       final ok = await _stt.initialize(onError: _error, onStatus: _status);
       if (!ok) {
         return (await _stt.hasPermission)
@@ -97,6 +104,15 @@ final class SpeechDictation implements Dictation {
       return null;
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<bool> _onDeviceOnly() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return true;
+    try {
+      return await _channel.invokeMethod<bool>('onDeviceAvailable') ?? false;
+    } catch (_) {
+      return false;
     }
   }
 }

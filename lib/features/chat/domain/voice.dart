@@ -2,6 +2,9 @@ import 'dart:math' as math;
 
 import 'video.dart';
 
+/// A take shorter than this is thrown away.
+const int minVoiceMs = 500;
+
 /// A recording is at most 10 minutes.
 const int maxVoiceMs = 600000;
 

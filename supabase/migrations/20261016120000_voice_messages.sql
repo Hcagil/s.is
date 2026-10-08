@@ -105,7 +105,9 @@ language sql stable security definer set search_path = '' as $$
          end,
          case
            when coalesce(ns.preview, 'full') <> 'full' then 'New message'
-           when m.attachment_mime = 'audio/mp4' and btrim(m.body) = ''
+           when m.attachment_mime = 'audio/mp4'
+                and m.attachment_duration_ms is not null
+                and btrim(m.body) = ''
              then '🎤 Voice message'
            when m.attachment_duration_ms is not null and btrim(m.body) = ''
              then '🎥 Video'

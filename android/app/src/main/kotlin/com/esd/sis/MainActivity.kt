@@ -10,6 +10,7 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.speech.SpeechRecognizer
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -22,6 +23,7 @@ import java.util.concurrent.Executors
 private const val CHANNEL = "sis/external_picker"
 private const val TONE_CHANNEL = "sis/tone_picker"
 private const val NETWORK_CHANNEL = "sis/network"
+private const val SPEECH_CHANNEL = "sis/speech"
 private const val REQUEST_TONE = 9103
 private const val REQUEST_ATTACHMENTS = 9101
 private const val REQUEST_PICTURE = 9102
@@ -77,6 +79,10 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 if (call.method == "isRoaming") result.success(isRoaming()) else result.notImplemented()
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SPEECH_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "onDeviceAvailable") result.success(onDeviceSpeechAvailable()) else result.notImplemented()
+            }
     }
 
     // True when the active network is cellular and the carrier marks it as
@@ -89,6 +95,14 @@ class MainActivity : FlutterActivity() {
         return caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) &&
             !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING)
     }
+
+    // True only when this phone can recognise speech WITHOUT a server (the
+    // Android 12+ on-device recogniser). speech_to_text silently falls back to
+    // the network recogniser otherwise, so Dart asks first (docs/DECISIONS.md,
+    // voice messages).
+    private fun onDeviceSpeechAvailable(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(this)
 
     // The phone's own notification-sound chooser. A null uri in the reply
     // means the system default; a null reply means the member cancelled.

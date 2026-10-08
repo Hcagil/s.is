@@ -1920,3 +1920,41 @@ our own would need `READ_MEDIA_VIDEO`, which the "Photos only" decision
 - The send queue is saved on the phone, so text, file and video sends
   survive the app being closed.
 - The thumbnail is a small jpeg stored next to the video as `<path>.t`.
+
+## 2026-10-08 — The in-app video grid: iPhone now, Android when the owner says go
+
+**Context.** The owner wants the video picker to be SIS's own grid of the
+phone's videos with their lengths, like Telegram (approved design: row
+`att_vpick` of the full-design mockup). This reverses the 2026-09-24 "The
+attachment sheet shows the phone's own photos" choice ("Photos only": no video
+permission) and, for the video picker, the entry above ("Video uses the system
+picker"). On Android the grid needs `READ_MEDIA_VIDEO`. Play is likely to
+refuse that declaration for a chat app, because the system picker already
+covers the need, and a declaration that is pending blocks all publishing.
+
+**Decision.**
+- iPhone: the grid is on now. It lists videos through `photo_manager` (already
+  a dependency, 3.12.0, Apache-2.0), used only in a feature's `data/` layer
+  (`PhotoManagerVideoGallery`). `NSPhotoLibraryUsageDescription` is in English
+  and Turkish (`en.lproj` and `tr.lproj` `InfoPlist.strings`). With limited
+  library access only the allowed videos show, with "Allow more" (the system
+  sheet, `presentLimited`). With denied access SIS shows its own screen:
+  Allow or Open settings, "Use the phone's picker", "Not now".
+- Android: the grid is off. No `READ_MEDIA_VIDEO` (the manifest still removes
+  it with `tools:node="remove"`) and no other new media permission. The
+  phone's own picker from the entry above stays until the owner says go.
+- A per-platform constant in `lib/core/platform_features.dart`
+  (`videoGridOnIos`, `videoGridOnAndroid`) picks grid or phone picker. It is a
+  compile-time constant, not a remote flag. Turning Android on later is that
+  one line plus the manifest permission (and the Play declaration).
+- The grid feeds the existing video path unchanged: copy and length check up
+  to 5 minutes (the shared `prepareVideoSource`), compress, the saved send
+  queue. The grid's "Send (N)" bar replaces the review page on that path; the
+  review page stays for the phone's picker.
+
+**Consequences.**
+- iPhone members see the grid, and the Photos permission prompt the first time
+  they pick a video (the same library permission as the photo grid). Android
+  members see no change.
+- The grid and the permission flow on a real iPhone can only be checked on a
+  device (no integration test), like the photo gallery.

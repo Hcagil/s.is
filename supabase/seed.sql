@@ -168,7 +168,13 @@
 --   ct-sana/ct-theo/ct-uma test/integration/contact_share_seam_test.dart
 --     (sana sends a contact through the controller and theo reads it back;
 --      uma is not a member and is refused)
+--   fl-sana/fl-theo/fl-uma test/integration/file_messages_seam_test.dart
+--     (sana sends files through the queue, theo downloads them; uma is not
+--      a member and is refused)
 insert into app_private.allowlist(email) values
+  ('fl-sana@integration.test'),
+  ('fl-theo@integration.test'),
+  ('fl-uma@integration.test'),
   ('ct-sana@integration.test'),
   ('ct-theo@integration.test'),
   ('ct-uma@integration.test'),

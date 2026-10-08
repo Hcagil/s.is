@@ -6,6 +6,7 @@
 // download reports progress before it lands, and a probe can be unknown or
 // throw.
 import 'dart:async';
+import 'dart:io';
 
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/autodownload/domain/auto_download_settings.dart';
@@ -147,7 +148,16 @@ class DeviceFilesFake implements DeviceFiles {
     this.pickResult = const FilePick(),
     this.opens = true,
     this.latency = const Duration(milliseconds: 2),
+    this.root = '/app/files',
+    this.onDisk = false,
   });
+
+  /// Where kept files live; a real temporary folder when [onDisk].
+  final String root;
+
+  /// When true, a stored path is one that exists on disk (a real download
+  /// wrote it), not one listed in [written].
+  final bool onDisk;
 
   FilePick pickResult;
 
@@ -161,7 +171,7 @@ class DeviceFilesFake implements DeviceFiles {
   int picks = 0;
   int clears = 0;
 
-  String _path(String id, String name) => '/app/files/$id/$name';
+  String _path(String id, String name) => '$root/$id/$name';
 
   @override
   Future<FilePick> pick() async {
@@ -174,12 +184,14 @@ class DeviceFilesFake implements DeviceFiles {
   Future<String?> storedPath(String messageId, String name) async {
     await Future<void>.delayed(latency);
     final p = _path(messageId, name);
-    return written.contains(p) ? p : null;
+    final here = onDisk ? File(p).existsSync() : written.contains(p);
+    return here ? p : null;
   }
 
   @override
   Future<String> pathFor(String messageId, String name) async {
     await Future<void>.delayed(latency);
+    if (onDisk) Directory('$root/$messageId').createSync(recursive: true);
     return _path(messageId, name);
   }
 

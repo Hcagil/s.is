@@ -243,7 +243,7 @@ select set_eq(
        and grantee = 'authenticated' and privilege_type = 'INSERT'$$,
   $$values ('id'),('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
            ('reply_to'),('forwarded'),('attachment_name'),('attachment_mime'),('attachment_size'),
-           ('attachment_duration_ms')$$,
+           ('attachment_duration_ms'),('attachment_waveform'),('voice_transcript')$$,
   'authenticated may insert exactly id, conversation_id, sender_id, body, attachment_path, '
   'attachment_preview, reply_to, forwarded (20260928170000_message_client_id.sql), the three file '
   'columns and the duration (20261014120000_video_messages.sql)');

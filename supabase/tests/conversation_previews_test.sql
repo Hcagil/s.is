@@ -134,8 +134,8 @@ select is((select array_agg(attname::text order by attnum) from (
               where attrelid = 'public.conversation_previews'::regclass
                 and attnum > 0 and not attisdropped
               order by attnum desc limit 5) last_five),
-          array['poll', 'contact', 'attachment_name', 'attachment_duration_ms', 'location_lat'],
-          'poll was appended, then contact, attachment_name, attachment_duration_ms, and location_lat is now the last column');
+          array['contact', 'attachment_name', 'attachment_duration_ms', 'location_lat', 'attachment_mime'],
+          'contact, attachment_name, attachment_duration_ms, location_lat, then attachment_mime (20261016120000_voice_messages.sql) is now the last column');
 
 select * from finish();
 rollback;

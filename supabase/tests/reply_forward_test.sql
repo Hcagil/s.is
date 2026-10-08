@@ -136,8 +136,9 @@ select set_eq(
      where table_schema = 'public' and table_name = 'messages'
        and grantee = 'authenticated' and privilege_type = 'INSERT'$$,
   $$values ('id'),('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
-           ('reply_to'),('forwarded')$$,
-  'authenticated may insert exactly the original five columns plus reply_to, forwarded and id');
+           ('reply_to'),('forwarded'),('attachment_name'),('attachment_mime'),('attachment_size')$$,
+  'authenticated may insert exactly the original five columns plus reply_to, forwarded, id '
+  'and the three file columns');
 select is((select count(*) from information_schema.column_privileges
             where table_schema = 'public' and table_name = 'messages'
               and grantee = 'authenticated' and privilege_type = 'UPDATE'), 0::bigint,

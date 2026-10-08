@@ -6,12 +6,6 @@ import '../../../l10n/app_localizations.dart';
 import '../application/chat_controllers.dart';
 import '../domain/video.dart';
 
-/// The video widget for a playback; main.dart overrides it with the data
-/// layer's implementation (a plugin widget cannot live in presentation).
-final videoSurfaceProvider = Provider<Widget Function(VideoPlayback)>(
-  (ref) => throw UnimplementedError('videoSurfaceProvider is not overridden'),
-);
-
 /// Opens the full-screen player for the video file at [path].
 Future<void> openVideoPlayer(BuildContext context, String path) =>
     Navigator.of(context).push(
@@ -137,7 +131,7 @@ class _VideoPlayerPageState extends ConsumerState<VideoPlayerPage> {
                     onTap: () => _toggle(state),
                     child: Center(
                       child: _ready
-                          ? ref.watch(videoSurfaceProvider)(_playback)
+                          ? ref.watch(videoSurfaceProvider)(_playback) as Widget
                           : const SizedBox.shrink(),
                     ),
                   ),

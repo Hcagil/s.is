@@ -13,7 +13,6 @@ import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/file_attachment.dart';
 import 'package:sis/features/chat/domain/send_queue_store.dart';
 import 'package:sis/features/chat/domain/video.dart';
-import 'package:sis/features/chat/presentation/video_player_page.dart';
 
 /// A picked video, as DeviceVideos.pick hands it over (copied to [path]).
 VideoSource videoSource(

@@ -38,6 +38,7 @@ import '../domain/png_size.dart';
 import '../domain/poll.dart';
 import '../domain/reaction.dart';
 import '../domain/timeline.dart';
+import '../domain/video.dart';
 import '../domain/read_marks.dart';
 import 'attachment_preview_page.dart';
 import 'attachment_sheet.dart';

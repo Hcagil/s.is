@@ -48,7 +48,6 @@ import 'features/chat/data/supabase_contacts_repository.dart';
 import 'features/chat/data/supabase_contact_share_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
 import 'features/chat/data/video_player_playback.dart';
-import 'features/chat/presentation/video_player_page.dart';
 import 'features/notifications/application/alert_controller.dart';
 import 'features/notifications/application/badge_controller.dart';
 import 'features/notifications/application/notification_settings_controller.dart';

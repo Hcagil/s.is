@@ -114,6 +114,11 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
               Uri.parse('${_client.storage.url}/object/attachments/$path'),
             )
             ..headers.addAll(_client.storage.headers)
+            // The client-wide headers may carry only the publishable key (not
+            // a JWT: storage answers "Invalid Compact JWS"); the storage
+            // policies need the signed-in member's access token.
+            ..headers['Authorization'] =
+                'Bearer ${_client.auth.currentSession?.accessToken ?? ''}'
             ..headers['x-upsert'] = 'false'
             ..fields['cacheControl'] = '3600'
             ..files.add(

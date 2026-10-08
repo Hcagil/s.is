@@ -228,7 +228,9 @@ Future<void> main() async {
             ref.onDispose(recorder.dispose);
             return recorder;
           }),
-          voiceTranscriberProvider.overrideWithValue(const NoVoiceTranscriber()),
+          voiceTranscriberProvider.overrideWithValue(
+            const NoVoiceTranscriber(),
+          ),
           dictationProvider.overrideWithValue(SpeechDictation()),
           voicePlaybackFactoryProvider.overrideWithValue(
             const VoicePlayerPlaybackFactory(),

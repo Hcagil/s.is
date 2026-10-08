@@ -14,6 +14,7 @@ class _ComposerState extends ConsumerState<_Composer>
   bool _sending = false;
   double _lastInset = 0;
   final _attachKey = GlobalKey();
+  final _voiceGesture = VoiceGesture();
 
   /// This composer's conversation is fixed for its whole lifetime: opening
   /// a different one always pushes a new [MessageScreen] (see
@@ -94,6 +95,7 @@ class _ComposerState extends ConsumerState<_Composer>
     WidgetsBinding.instance.removeObserver(this);
     _focus.dispose();
     _controller.dispose();
+    _voiceGesture.dispose();
     super.dispose();
   }
 
@@ -428,80 +430,124 @@ class _ComposerState extends ConsumerState<_Composer>
             _EditBar(editing)
           else if (replying != null)
             _ReplyBar(replying),
-          Row(
-            children: [
-              KeyedSubtree(
-                key: _attachKey,
-                child: IconButton(
-                  key: const ValueKey('composer-attach'),
-                  onPressed: _sending ? null : _attach,
-                  icon: const Icon(Icons.attach_file_rounded),
-                  tooltip: l.composerSendPhoto,
-                ),
-              ),
-              GreyOption(
-                name: 'c_btn',
-                child: const _GreyGlyph(Icons.emoji_emotions_outlined),
-              ),
-              Expanded(
-                child: TextField(
-                  key: const ValueKey('composer-field'),
-                  controller: _controller,
-                  maxLength: maxMessageLength,
-                  minLines: 1,
-                  maxLines: 4,
-                  focusNode: _focus,
-                  // Messages, captions and edits all start with a capital; the
-                  // keyboard's own setting still decides (nothing is forced).
-                  textCapitalization: TextCapitalization.sentences,
-                  textInputAction: TextInputAction.send,
-                  // A non-null onEditingComplete replaces Flutter's default,
-                  // which unfocuses the field on the send action and so
-                  // closes the keyboard.
-                  onEditingComplete: _send,
-                  // Throttled, and silent when the member does not share typing.
-                  onChanged: (text) {
-                    if (text.isNotEmpty) {
-                      ref.read(typingProvider.notifier).signalTyping();
-                    }
-                    if (id == null || _applyingDraft) return;
-                    if (ref.read(editingProvider) != null) return;
-                    ref.read(draftsProvider.notifier).setText(id, text);
-                  },
-                  decoration: InputDecoration(
-                    hintText: l.commonMessage,
-                    counterText: '',
-                  ),
-                ),
-              ),
-              ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _controller,
-                builder: (context, value, _) =>
-                    (value.text.isNotEmpty || editing != null)
-                    ? const SizedBox.shrink()
-                    : GreyOption(
-                        name: 'v_dict',
-                        child: const _GreyGlyph(Icons.keyboard_voice_outlined),
+          ListenableBuilder(
+            listenable: _voiceGesture,
+            builder: (context, _) {
+              final recording =
+                  ref.watch(
+                    voiceCaptureProvider.select(
+                      (s) => s.phase != VoicePhase.idle,
+                    ),
+                  ) ||
+                  _voiceGesture.exit != VoiceExit.none;
+              return Stack(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Opacity(
+                          opacity: recording ? 0 : 1,
+                          child: IgnorePointer(
+                            ignoring: recording,
+                            child: Row(
+                              children: [
+                                KeyedSubtree(
+                                  key: _attachKey,
+                                  child: IconButton(
+                                    key: const ValueKey('composer-attach'),
+                                    onPressed: _sending ? null : _attach,
+                                    icon: const Icon(Icons.attach_file_rounded),
+                                    tooltip: l.composerSendPhoto,
+                                  ),
+                                ),
+                                GreyOption(
+                                  name: 'c_btn',
+                                  child: const _GreyGlyph(
+                                    Icons.emoji_emotions_outlined,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: TextField(
+                                    key: const ValueKey('composer-field'),
+                                    controller: _controller,
+                                    maxLength: maxMessageLength,
+                                    minLines: 1,
+                                    maxLines: 4,
+                                    focusNode: _focus,
+                                    // Messages, captions and edits all start with a capital; the
+                                    // keyboard's own setting still decides (nothing is forced).
+                                    textCapitalization:
+                                        TextCapitalization.sentences,
+                                    textInputAction: TextInputAction.send,
+                                    // A non-null onEditingComplete replaces Flutter's default,
+                                    // which unfocuses the field on the send action and so
+                                    // closes the keyboard.
+                                    onEditingComplete: _send,
+                                    // Throttled, and silent when the member does not share typing.
+                                    onChanged: (text) {
+                                      if (text.isNotEmpty) {
+                                        ref
+                                            .read(typingProvider.notifier)
+                                            .signalTyping();
+                                      }
+                                      if (id == null || _applyingDraft) return;
+                                      if (ref.read(editingProvider) != null) {
+                                        return;
+                                      }
+                                      ref
+                                          .read(draftsProvider.notifier)
+                                          .setText(id, text);
+                                    },
+                                    decoration: InputDecoration(
+                                      hintText: l.commonMessage,
+                                      counterText: '',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-              ),
-              const SizedBox(width: 8),
-              ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _controller,
-                builder: (context, value, _) =>
-                    (value.text.isNotEmpty || editing != null)
-                    ? IconButton.filled(
-                        key: const ValueKey('composer-send'),
-                        onPressed: _sending
-                            ? null
-                            : () {
-                                _send();
-                                _focus.requestFocus();
-                              },
-                        icon: const Icon(Icons.arrow_upward_rounded),
-                      )
-                    : GreyOption(name: 'v_rec', child: const _GreyRecGlyph()),
-              ),
-            ],
+                      const SizedBox(width: 8),
+                      ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _controller,
+                        builder: (context, value, _) =>
+                            (!recording &&
+                                (value.text.isNotEmpty || editing != null))
+                            ? IconButton.filled(
+                                key: const ValueKey('composer-send'),
+                                onPressed: _sending
+                                    ? null
+                                    : () {
+                                        _send();
+                                        _focus.requestFocus();
+                                      },
+                                icon: const Icon(Icons.arrow_upward_rounded),
+                              )
+                            : (id == null
+                                  ? const SizedBox(width: 48, height: 48)
+                                  : VoiceRecordButton(
+                                      conversationId: id,
+                                      gesture: _voiceGesture,
+                                    )),
+                      ),
+                    ],
+                  ),
+                  if (recording && id != null)
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      right: 56,
+                      child: VoiceRecordBar(
+                        gesture: _voiceGesture,
+                        conversationId: id,
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -521,31 +567,6 @@ class _GreyGlyph extends StatelessWidget {
     width: 40,
     height: 40,
     child: Icon(icon, color: Theme.of(context).colorScheme.onSurfaceVariant),
-  );
-}
-
-/// The greyed mic: the filled send button's look (brand gradient disc),
-/// with no handler.
-class _GreyRecGlyph extends StatelessWidget {
-  const _GreyRecGlyph();
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 48,
-    height: 48,
-    child: Center(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: SisBrand.of(context).gradient,
-        ),
-        child: const SizedBox(
-          width: 40,
-          height: 40,
-          child: Icon(Icons.mic_rounded, color: Colors.white),
-        ),
-      ),
-    ),
   );
 }
 

@@ -27,7 +27,7 @@ import '../support/video_fakes.dart';
 /// <-> the attachments bucket and messages on the local stack, wired as
 /// main.dart wires it; only the phone's shrinker is a stand-in that leaves a
 /// real mp4 and thumbnail on disk. A sent video reaches the other member with
-/// its length and its thumbnail at '<path>.t'; a non-member reads neither and
+/// its length and its thumbnail at `<path>.t`; a non-member reads neither and
 /// cannot send one. Uses the file seam's seeded accounts in its own group.
 /// Run with --concurrency=1, TZ=JST-9.
 const _url = String.fromEnvironment(

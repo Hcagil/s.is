@@ -59,7 +59,12 @@ final class SupabaseGroupSettingsRepository implements GroupSettingsRepository {
           final pictures = all.where((p) => p.startsWith('group/')).toList();
           final files = all.where((p) => !p.startsWith('group/')).toList();
           if (files.isNotEmpty) {
-            await _client.storage.from('attachments').remove(files);
+            // A video's thumbnail sits next to it as `<path>.t`; removing a
+            // name that does not exist is harmless.
+            await _client.storage.from('attachments').remove([
+              ...files,
+              for (final p in files) '$p.t',
+            ]);
           }
           if (pictures.isNotEmpty) {
             await _client.storage.from('avatars').remove(pictures);

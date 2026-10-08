@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -23,6 +24,7 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
     String conversationId,
     PickedFile file, {
     String? replyTo,
+    void Function(double fraction)? onProgress,
   }) async {
     final me = _client.auth.currentUser?.id;
     if (me == null) return const Err(DeniedFailure());
@@ -30,22 +32,11 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
     try {
       final path = '$conversationId/${file.id}';
 
-      try {
-        await _client.storage
-            .from('attachments')
-            .upload(
-              path,
-              File(file.path),
-              // Always octet-stream: the bucket serves objects as-is, so a
-              // scripted type must never be stored. The real type travels in
-              // attachment_mime.
-              fileOptions: const FileOptions(
-                contentType: 'application/octet-stream',
-              ),
-            );
-      } on StorageException catch (e) {
-        if (e.statusCode != '409') rethrow;
-      }
+      // A video's small jpeg picture is stored next to it as `<path>.t`
+      // (its own server rule lets whoever can read the video read it).
+      final thumb = file.thumbPath;
+      if (thumb != null) await _upload('$path.t', File(thumb), null);
+      await _upload(path, File(file.path), onProgress);
 
       DateTime createdAt;
       try {
@@ -60,6 +51,8 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
               'attachment_name': file.name,
               'attachment_mime': file.mime,
               'attachment_size': file.size,
+              if (file.durationMs != null)
+                'attachment_duration_ms': file.durationMs,
               'reply_to': replyTo,
             })
             .select('id, created_at')
@@ -97,6 +90,62 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
           const DeniedFailure(),
         _ => readableFailure(e),
       });
+    }
+  }
+
+  /// Uploads [file] to the private `attachments` bucket at [path], streaming
+  /// so [onProgress] can report 0..1 (the storage client has no progress
+  /// callback). Always octet-stream (MultipartFile's default): the bucket
+  /// serves objects as-is, so a scripted type must never be stored; the real
+  /// type travels in attachment_mime. An object that is already there from an
+  /// earlier attempt of the same send (409) is success.
+  Future<void> _upload(
+    String path,
+    File file,
+    void Function(double fraction)? onProgress,
+  ) async {
+    final client = _http();
+    try {
+      final total = await file.length();
+      var sent = 0;
+      final request =
+          http.MultipartRequest(
+              'POST',
+              Uri.parse('${_client.storage.url}/object/attachments/$path'),
+            )
+            ..headers.addAll(_client.storage.headers)
+            ..headers['x-upsert'] = 'false'
+            ..fields['cacheControl'] = '3600'
+            ..files.add(
+              http.MultipartFile(
+                '',
+                file.openRead().map((chunk) {
+                  sent += chunk.length;
+                  if (total > 0) onProgress?.call(sent / total);
+                  return chunk;
+                }),
+                total,
+                filename: file.path,
+              ),
+            );
+      final response = await http.Response.fromStream(
+        await client.send(request),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) return;
+      String? code;
+      var message = response.body;
+      try {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic>) {
+          code = data['statusCode']?.toString();
+          message = data['message'] as String? ?? message;
+        }
+      } catch (_) {}
+      code ??= '${response.statusCode}';
+      if (code == '409') return;
+      throw StorageException(message, statusCode: code);
+    } finally {
+      client.close();
     }
   }
 

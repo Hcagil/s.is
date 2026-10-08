@@ -8,6 +8,8 @@ final class AttachedFile {
     required this.name,
     required this.mime,
     required this.size,
+    this.durationMs,
+    this.thumbPath,
   });
 
   /// The file's original name.
@@ -18,6 +20,15 @@ final class AttachedFile {
 
   /// The file's size in bytes.
   final int size;
+
+  /// The length of a video in milliseconds, or null when this file is not a video.
+  final int? durationMs;
+
+  /// The path of the small jpeg picture of a video on this phone while it is still being sent, or null.
+  final String? thumbPath;
+
+  /// Whether this file is a video (it carries a length).
+  bool get isVideo => durationMs != null;
 }
 
 /// A file the member picked, already copied into the app's own folder at [path];
@@ -30,6 +41,8 @@ final class PickedFile {
     required this.name,
     required this.mime,
     required this.size,
+    this.durationMs,
+    this.thumbPath,
   });
 
   /// The ID of the message that will carry this file.
@@ -47,8 +60,20 @@ final class PickedFile {
   /// The file's size in bytes.
   final int size;
 
+  /// The video's length in milliseconds, or null when this file is not a video.
+  final int? durationMs;
+
+  /// The path of the video's jpeg thumbnail on this phone, or null.
+  final String? thumbPath;
+
   /// Returns an attached file representation of this picked file.
-  AttachedFile get attached => AttachedFile(name: name, mime: mime, size: size);
+  AttachedFile get attached => AttachedFile(
+    name: name,
+    mime: mime,
+    size: size,
+    durationMs: durationMs,
+    thumbPath: thumbPath,
+  );
 }
 
 /// What the file chooser returned: the usable files, and how many picked files

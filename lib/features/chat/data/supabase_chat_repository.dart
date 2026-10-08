@@ -22,6 +22,7 @@ import '../domain/message.dart';
 import '../domain/poll.dart';
 import '../domain/read_marks.dart';
 import '../domain/shared_contact.dart';
+import '../domain/video.dart';
 
 /// [ChatRepository] backed by Supabase Postgres and Realtime.
 ///
@@ -229,7 +230,7 @@ final class SupabaseChatRepository implements ChatRepository {
         _client
             .from('conversation_previews')
             .select(
-              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name',
+              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name, attachment_duration_ms',
             )
             .retriedOnce(),
         // Only conversations with something unread come back.
@@ -257,6 +258,8 @@ final class SupabaseChatRepository implements ChatRepository {
                 ? pollPreview(row['body'] as String)
                 : row['contact'] == true
                 ? contactPreview(row['body'] as String)
+                : row['attachment_duration_ms'] != null
+                ? videoPreview
                 : row['attachment_name'] != null
                 ? filePreview(row['attachment_name'] as String)
                 : (row['body'] as String).isNotEmpty
@@ -325,13 +328,13 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms';
 
   /// The columns of a page read (open chat): no photo preview -- those arrive
   /// separately, see [attachmentPreviews], so the first paint never waits on
   /// them.
   static const _pageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -1068,6 +1071,12 @@ final class SupabaseChatRepository implements ChatRepository {
               '$target/${DateTime.now().microsecondsSinceEpoch}'
               '-${me.substring(0, 8)}.$ext';
           await _client.storage.from('attachments').copy(source, path);
+          if (message.file?.isVideo ?? false) {
+            // The video's thumbnail travels with it.
+            await _client.storage
+                .from('attachments')
+                .copy('$source.t', '$path.t');
+          }
         }
         await _client.from('messages').insert({
           'conversation_id': target,
@@ -1081,6 +1090,7 @@ final class SupabaseChatRepository implements ChatRepository {
             'attachment_name': file.name,
             'attachment_mime': file.mime,
             'attachment_size': file.size,
+            'attachment_duration_ms': ?file.durationMs,
           },
         });
       }
@@ -1106,6 +1116,7 @@ final class SupabaseChatRepository implements ChatRepository {
         try {
           final removed = await _client.storage.from('attachments').remove([
             path,
+            if (message.file?.isVideo ?? false) '$path.t',
           ]);
           if (removed.isEmpty) {
             log(
@@ -1229,6 +1240,7 @@ final class SupabaseChatRepository implements ChatRepository {
         name: stripHiddenChars(name),
         mime: row['attachment_mime'] as String? ?? 'application/octet-stream',
         size: (row['attachment_size'] as num?)?.toInt() ?? 0,
+        durationMs: (row['attachment_duration_ms'] as num?)?.toInt(),
       ),
       _ => null,
     },

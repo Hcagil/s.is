@@ -1489,4 +1489,72 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filePhotoTapToDownload => 'Tap to download the photo';
+
+  @override
+  String get videoReviewTitle => 'Videos';
+
+  @override
+  String videoSendCount(int count) {
+    return 'Send ($count)';
+  }
+
+  @override
+  String videoCompressing(int percent) {
+    return 'Compressing $percent%';
+  }
+
+  @override
+  String videoSending(int percent) {
+    return 'Sending $percent%';
+  }
+
+  @override
+  String get videoWaitingNetwork => 'Waiting for network';
+
+  @override
+  String get videoWaiting => 'Waiting…';
+
+  @override
+  String get videoCancelSend => 'Cancel';
+
+  @override
+  String videoTooLong(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count videos are over 5 minutes and were not added.',
+      one: '1 video is over 5 minutes and was not added.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get videoTooBig => 'This video is too large to send.';
+
+  @override
+  String get videoFailed => 'This video could not be prepared.';
+
+  @override
+  String get videoShare => 'Share';
+
+  @override
+  String get videoClose => 'Close';
+
+  @override
+  String get videoMute => 'Mute';
+
+  @override
+  String get videoUnmute => 'Unmute';
+
+  @override
+  String get videoPlay => 'Play';
+
+  @override
+  String get videoPause => 'Pause';
+
+  @override
+  String get videoCannotPlay => 'This video cannot be played.';
+
+  @override
+  String get videoSelectLabel => 'Select video';
 }

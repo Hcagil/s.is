@@ -7,6 +7,8 @@ import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../domain/file_attachment.dart';
 import '../domain/message.dart';
+import '../domain/send_queue_store.dart';
+import '../domain/video.dart';
 import 'chat_controllers.dart';
 
 /// One conversation's composer state kept while it is off screen: the typed
@@ -116,22 +118,26 @@ class DraftsController extends Notifier<Map<String, Draft>> {
   }
 }
 
-/// One text send not yet stored: the pending bubble shown for it, the body
-/// and reply target exactly as typed (for [SendQueueController._drain] to
-/// retry or hand back to the draft). A file send carries the picked [file]
-/// and an empty body.
+/// One send not yet stored: the pending bubble shown for it, the body and
+/// reply target exactly as typed (for [SendQueueController._drain] to retry or
+/// hand back to the draft). A file send carries the picked [file] and an empty
+/// body; a video send carries the [video] still to be shrunk, which the drain
+/// replaces by the shrunk [file]. A send brought back after the app was killed
+/// has no [replyTo] message, only the id inside [message].
 class _QueuedSend {
   _QueuedSend({
     required this.message,
     required this.body,
     required this.replyTo,
     this.file,
+    this.video,
   });
 
   final Message message;
   final String body;
   final Message? replyTo;
-  final PickedFile? file;
+  PickedFile? file;
+  VideoSource? video;
 }
 
 /// Pending text bubbles per conversation, oldest first -- for
@@ -163,7 +169,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
 
   @override
   Map<String, List<Message>> build() {
-    ref.watch(currentUserIdProvider);
+    final userId = ref.watch(currentUserIdProvider);
     // A new owner (or none: Denied, signed out) starts with nothing queued --
     // a revoked member's waiting sends are dropped, never retried.
     for (final t in _timers.values) {
@@ -178,6 +184,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
         t.cancel();
       }
     });
+    if (userId != null) unawaited(_restore(userId));
     return const {};
   }
 
@@ -208,6 +215,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
         .putIfAbsent(conversationId, () => [])
         .add(_QueuedSend(message: message, body: body, replyTo: replyTo));
     _publish(conversationId);
+    _persist();
     ref.read(replyingToProvider.notifier).clear();
     ref.read(draftsProvider.notifier).clear(conversationId);
     unawaited(_drain(conversationId));
@@ -228,7 +236,11 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     _retries.remove(conversationId);
     _draining.remove(conversationId);
     if (items == null || items.isEmpty) return false;
+    for (final i in items) {
+      _forgetVideo(i);
+    }
     _publish(conversationId);
+    _persist();
     return true;
   }
 
@@ -256,6 +268,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
           _QueuedSend(message: message, body: '', replyTo: replyTo, file: file),
         );
     _publish(conversationId);
+    _persist();
     ref.read(replyingToProvider.notifier).clear();
     ref.read(draftsProvider.notifier).setReply(conversationId, null);
     unawaited(_drain(conversationId));
@@ -271,6 +284,128 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
       next[conversationId] = [for (final i in items) i.message];
     }
     state = next;
+  }
+
+  /// Queues a video like [enqueueFile]; it is shrunk first, then sent.
+  Message enqueueVideo(
+    String conversationId,
+    VideoSource video, {
+    Message? replyTo,
+  }) {
+    final message = Message(
+      id: video.id,
+      conversationId: conversationId,
+      senderId: _me ?? '',
+      body: '',
+      createdAt: DateTime.now(),
+      sending: true,
+      replyTo: replyTo?.id,
+      file: video.attached,
+    );
+    _queues
+        .putIfAbsent(conversationId, () => [])
+        .add(
+          _QueuedSend(
+            message: message,
+            body: '',
+            replyTo: replyTo,
+            video: video,
+          ),
+        );
+    _publish(conversationId);
+    _persist();
+    ref.read(replyingToProvider.notifier).clear();
+    ref.read(draftsProvider.notifier).setReply(conversationId, null);
+    unawaited(_drain(conversationId));
+    return message;
+  }
+
+  /// Cancels a video still waiting to be shrunk or being shrunk (nothing is
+  /// sent, its files go). A video already uploading cannot be cancelled.
+  /// Returns whether it was cancelled.
+  bool cancelVideo(String conversationId, String id) {
+    final items = _queues[conversationId];
+    if (items == null) return false;
+    final at = items.indexWhere((i) => i.message.id == id && i.video != null);
+    if (at < 0) return false;
+    if (at == 0 && _draining.contains(conversationId)) {
+      unawaited(ref.read(deviceVideosProvider).cancelCompression());
+    }
+    final item = items.removeAt(at);
+    _forgetVideo(item);
+    _publish(conversationId);
+    _persist();
+    return true;
+  }
+
+  void _forgetVideo(_QueuedSend item) {
+    ref.read(videoProgressProvider.notifier).clear(item.message.id);
+    final video = item.video;
+    if (video != null) {
+      unawaited(ref.read(deviceVideosProvider).discard(video));
+    }
+  }
+
+  /// Saves everything still queued so the app being killed loses nothing.
+  void _persist() {
+    final me = _me;
+    if (me == null) return;
+    final records = [
+      for (final items in _queues.values)
+        for (final i in items)
+          QueuedRecord(
+            id: i.message.id,
+            conversationId: i.message.conversationId,
+            createdAt: i.message.createdAt,
+            body: i.body,
+            replyTo: i.message.replyTo,
+            file: i.file,
+            video: i.video,
+          ),
+    ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    unawaited(ref.read(sendQueueStoreProvider).save(me, records));
+  }
+
+  /// Brings back the sends saved before the app was killed, ahead of anything
+  /// queued since (but behind a send already in flight).
+  Future<void> _restore(String userId) async {
+    final records = await ref.read(sendQueueStoreProvider).load(userId);
+    if (!ref.mounted || _me != userId || records.isEmpty) return;
+    final known = {
+      for (final items in _queues.values)
+        for (final i in items) i.message.id,
+    };
+    final restored = <String, List<_QueuedSend>>{};
+    for (final r in records) {
+      if (known.contains(r.id)) continue;
+      restored
+          .putIfAbsent(r.conversationId, () => [])
+          .add(
+            _QueuedSend(
+              message: Message(
+                id: r.id,
+                conversationId: r.conversationId,
+                senderId: userId,
+                body: r.body.trim(),
+                createdAt: r.createdAt,
+                sending: true,
+                replyTo: r.replyTo,
+                file: r.file?.attached ?? r.video?.attached,
+              ),
+              body: r.body,
+              replyTo: null,
+              file: r.file,
+              video: r.video,
+            ),
+          );
+    }
+    for (final e in restored.entries) {
+      final items = _queues.putIfAbsent(e.key, () => []);
+      final at = _draining.contains(e.key) && items.isNotEmpty ? 1 : 0;
+      items.insertAll(at, e.value);
+      _publish(e.key);
+      unawaited(_drain(e.key));
+    }
   }
 
   /// Cancels every scheduled retry without touching what is queued -- a
@@ -317,24 +452,74 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
       final items = _queues[conversationId];
       if (items == null || items.isEmpty) break;
       final item = items.first;
+      final progress = ref.read(videoProgressProvider.notifier);
+      final video = item.video;
+      if (video != null) {
+        final id = item.message.id;
+        progress.set(id, const VideoProgress(VideoStage.compressing));
+        final shrunk = await ref
+            .read(deviceVideosProvider)
+            .compress(
+              video,
+              onProgress: (f) {
+                if (ref.mounted) {
+                  progress.set(id, VideoProgress(VideoStage.compressing, f));
+                }
+              },
+            );
+        if (!ref.mounted) return;
+        if (!identical(_queues[conversationId]?.firstOrNull, item)) {
+          // Cancelled while it was being shrunk.
+          unawaited(ref.read(deviceVideosProvider).discard(video));
+          continue;
+        }
+        switch (shrunk) {
+          case Ok(:final value):
+            item.file = value;
+            item.video = null;
+            _persist();
+          case Err(:final failure):
+            _refuse(conversationId, items, failure);
+            continue;
+        }
+      }
       final file = item.file;
+      final isVideo = file?.durationMs != null;
+      if (isVideo) {
+        progress.set(item.message.id, const VideoProgress(VideoStage.sending));
+      }
       final result = file != null
           ? await ref
                 .read(chatFileRepositoryProvider)
-                .send(conversationId, file, replyTo: item.replyTo?.id)
+                .send(
+                  conversationId,
+                  file,
+                  replyTo: item.message.replyTo,
+                  onProgress: isVideo
+                      ? (f) {
+                          if (ref.mounted) {
+                            progress.set(
+                              file.id,
+                              VideoProgress(VideoStage.sending, f),
+                            );
+                          }
+                        }
+                      : null,
+                )
           : await ref
                 .read(chatRepositoryProvider)
                 .send(
                   id: item.message.id,
                   conversationId: conversationId,
                   body: item.body,
-                  replyTo: item.replyTo?.id,
+                  replyTo: item.message.replyTo,
                 );
       if (!ref.mounted) return;
       switch (result) {
         case Ok(:final value):
           _retries.remove(conversationId);
           items.removeAt(0);
+          progress.clear(item.message.id);
           // Published once with the stored row in place of the pending
           // bubble, so a listening MessagesController can upsert it by id
           // before the very next publish drops it from here for good.
@@ -342,11 +527,18 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
           resolved[conversationId] = [value, for (final i in items) i.message];
           state = resolved;
           _publish(conversationId);
+          _persist();
         case Err(:final failure):
           if (failure is NetworkFailure && failure.retryable) {
             final attempt = (_retries[conversationId] ?? 0) + 1;
             _retries[conversationId] = attempt;
             _draining.remove(conversationId);
+            if (isVideo) {
+              progress.set(
+                item.message.id,
+                const VideoProgress(VideoStage.waiting),
+              );
+            }
             if (_paused) return;
             _timers[conversationId]?.cancel();
             _timers[conversationId] = Timer(_backoff(attempt), () {
@@ -355,24 +547,39 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
             });
             return;
           }
-          final stopped = List<_QueuedSend>.of(items);
-          items.clear();
-          _retries.remove(conversationId);
-          _publish(conversationId);
-          ref
-              .read(draftsProvider.notifier)
-              .restoreFailure(
-                conversationId,
-                [
-                  for (final s in stopped)
-                    if (s.body.isNotEmpty) s.body,
-                ],
-                stopped.map((s) => s.replyTo).whereType<Message>().firstOrNull,
-                failure,
-              );
+          _refuse(conversationId, items, failure);
       }
     }
     _draining.remove(conversationId);
+  }
+
+  /// A refusal: stops this conversation's queue and hands the typed bodies
+  /// back to the draft with one notice; video files that never got sent are
+  /// deleted.
+  void _refuse(
+    String conversationId,
+    List<_QueuedSend> items,
+    Failure failure,
+  ) {
+    final stopped = List<_QueuedSend>.of(items);
+    items.clear();
+    _retries.remove(conversationId);
+    for (final s in stopped) {
+      _forgetVideo(s);
+    }
+    _publish(conversationId);
+    _persist();
+    ref
+        .read(draftsProvider.notifier)
+        .restoreFailure(
+          conversationId,
+          [
+            for (final s in stopped)
+              if (s.body.isNotEmpty) s.body,
+          ],
+          stopped.map((s) => s.replyTo).whereType<Message>().firstOrNull,
+          failure,
+        );
   }
 
   // ponytail: a fixed delay ladder capped at 5s (owner: 30s left a message

@@ -1991,3 +1991,27 @@ cannot power the search box.
 address. Opening the card asks first, then hands the point to the phone's maps
 app. Tile and image requests to third parties carry the phone's IP, as any
 map does.
+
+## 2026-10-09 — Voice messages and dictation share one composer button
+
+**Decision.** The composer has one button for voice and dictation, copied from
+Telegram Android: a tap switches the mode, a hold starts it, release sends,
+a left swipe cancels, an upward swipe locks. A voice message is a file message
+(`audio/mp4`, AAC in an `.m4a`) of up to 10 minutes with a small stored
+waveform, sent through the existing upload, offline queue and storage.
+
+- Packages: `record` 7.1.1 (recording, https://pub.dev/packages/record) and
+  `speech_to_text` 7.5.0 (dictation, https://pub.dev/packages/speech_to_text).
+  Both are SDK imports, so they live in `data/` only (`tool/check_pattern.sh`).
+- Dictation runs on the phone only (on-device recognition) and writes into the
+  message box in the app language. Nothing is sent to a server.
+- The transcript is a nullable column (`voice_transcript`, 1 to 10000
+  characters) with the same row security as `body`. It is never part of a push
+  or notification text and never part of the chat list preview. The
+  `VoiceTranscriber` seam ships returning null, so "Show text" is never shown
+  yet; native recognition of a recorded file is a separate follow-up step.
+- Chat list, forward and quote previews say "Voice message".
+
+**Consequences.** Android asks for `RECORD_AUDIO` only; iOS gets English and
+Turkish usage strings for the microphone and speech recognition. Played state
+is kept on the phone only.

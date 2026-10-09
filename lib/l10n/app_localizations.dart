@@ -2953,6 +2953,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not load more videos.'**
   String get videoLoadMoreFailed;
+
+  /// Chat list preview of a voice message
+  ///
+  /// In en, this message translates to:
+  /// **'🎤 Voice message'**
+  String get voicePreviewLine;
+
+  /// Notice when the button was released too early
+  ///
+  /// In en, this message translates to:
+  /// **'Hold to record, release to send'**
+  String get voiceHoldHint;
+
+  /// Notice when the microphone is refused
+  ///
+  /// In en, this message translates to:
+  /// **'Allow the microphone in Settings to record.'**
+  String get voiceMicDenied;
+
+  /// Notice when recording cannot start
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start recording.'**
+  String get voiceMicFailed;
+
+  /// Notice when dictation cannot start
+  ///
+  /// In en, this message translates to:
+  /// **'Dictation is not available for this language on this phone.'**
+  String get voiceDictationUnavailable;
+
+  /// Hint while recording
+  ///
+  /// In en, this message translates to:
+  /// **'Slide to cancel'**
+  String get voiceSlideToCancel;
+
+  /// Cancel button while a recording is locked
+  ///
+  /// In en, this message translates to:
+  /// **'CANCEL'**
+  String get voiceCancel;
+
+  /// Shows the transcript under a voice message
+  ///
+  /// In en, this message translates to:
+  /// **'Show text'**
+  String get voiceShowText;
+
+  /// Hides the transcript under a voice message
+  ///
+  /// In en, this message translates to:
+  /// **'Hide text'**
+  String get voiceHideText;
+
+  /// Notice when a voice message will not play
+  ///
+  /// In en, this message translates to:
+  /// **'This voice message cannot be played.'**
+  String get voiceCannotPlay;
+
+  /// Accessibility label of the composer button in voice mode
+  ///
+  /// In en, this message translates to:
+  /// **'Record a voice message'**
+  String get voiceButtonVoice;
+
+  /// Accessibility label of the composer button in dictation mode
+  ///
+  /// In en, this message translates to:
+  /// **'Dictate text'**
+  String get voiceButtonDictation;
+
+  /// Accessibility label of the send button while a recording is locked
+  ///
+  /// In en, this message translates to:
+  /// **'Send voice message'**
+  String get voiceSend;
 }
 
 class _AppLocalizationsDelegate

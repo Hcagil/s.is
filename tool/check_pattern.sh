@@ -7,7 +7,7 @@ LIB_DIR="${LIB_DIR:-lib}"
 # application/ by rule 2). Keep this in sync with pubspec.yaml and with
 # docs/ARCHITECTURE.md's data/ layer list, which names this script as the
 # authority.
-SDKS='package:(supabase_flutter|supabase|google_sign_in|in_app_update|package_info_plus|flutter_secure_storage|flutter_local_notifications|firebase_messaging|firebase_core|shared_preferences|web_socket_channel|path_provider|photo_manager|flutter_contacts|url_launcher|http|connectivity_plus|file_picker|open_filex|light_compressor_v2|video_player|share_plus|google_maps_flutter|flutter_map|latlong2|geolocator)/'
+SDKS='package:(supabase_flutter|supabase|google_sign_in|in_app_update|package_info_plus|flutter_secure_storage|flutter_local_notifications|firebase_messaging|firebase_core|shared_preferences|web_socket_channel|path_provider|photo_manager|flutter_contacts|url_launcher|http|connectivity_plus|file_picker|open_filex|light_compressor_v2|video_player|share_plus|google_maps_flutter|flutter_map|latlong2|geolocator|record|speech_to_text)/'
 FAILFLAG=$(mktemp); trap 'rm -f "$FAILFLAG"' EXIT
 report() { echo "PATTERN VIOLATION: $1"; echo 1 > "$FAILFLAG"; }
 # Rule 1: presentation never imports SDKs or data/

@@ -265,7 +265,7 @@ reset role;
 -- 9 conversation_previews ---------------------------------------------------------
 select is((select attname::text from pg_attribute
             where attrelid = 'public.conversation_previews'::regclass and attnum > 0 and not attisdropped
-            order by attnum desc limit 1), 'location_lat', 'conversation_previews ends with location_lat');
+            order by attnum desc limit 1 offset 1), 'location_lat', 'conversation_previews has location_lat just before attachment_mime');
 update public.messages set created_at = created_at - interval '1 minute' where conversation_id = g('G');
 select as_('01');
 select is(sl(g('G'), gen_random_uuid(), 41.25, 29.0, 'Newest', ''), 'ok', 'fixture: a location as the newest message');

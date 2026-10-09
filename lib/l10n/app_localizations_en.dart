@@ -1632,4 +1632,44 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoLoadMoreFailed => 'Could not load more videos.';
+
+  @override
+  String get voicePreviewLine => '🎤 Voice message';
+
+  @override
+  String get voiceHoldHint => 'Hold to record, release to send';
+
+  @override
+  String get voiceMicDenied => 'Allow the microphone in Settings to record.';
+
+  @override
+  String get voiceMicFailed => 'Could not start recording.';
+
+  @override
+  String get voiceDictationUnavailable =>
+      'Dictation is not available for this language on this phone.';
+
+  @override
+  String get voiceSlideToCancel => 'Slide to cancel';
+
+  @override
+  String get voiceCancel => 'CANCEL';
+
+  @override
+  String get voiceShowText => 'Show text';
+
+  @override
+  String get voiceHideText => 'Hide text';
+
+  @override
+  String get voiceCannotPlay => 'This voice message cannot be played.';
+
+  @override
+  String get voiceButtonVoice => 'Record a voice message';
+
+  @override
+  String get voiceButtonDictation => 'Dictate text';
+
+  @override
+  String get voiceSend => 'Send voice message';
 }

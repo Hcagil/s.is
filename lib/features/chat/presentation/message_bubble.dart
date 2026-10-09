@@ -370,6 +370,26 @@ class _Bubble extends StatelessWidget {
                     delivery: delivery,
                   ),
                 )
+              else if ((message.file?.isVoice ?? false) && !message.isDeleted)
+                VoiceBubble(
+                  message: message,
+                  mine: mine,
+                  ink: mine ? brand.onMine : brand.onTheirs,
+                  accent: mine
+                      ? brand.onMine
+                      : Theme.of(context).colorScheme.primary,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: (mine ? brand.onMine : brand.onTheirs).withValues(
+                        alpha: SisTokens.timeOpacity,
+                      ),
+                    ),
+                    delivery: delivery,
+                  ),
+                )
               else if (message.file != null && !message.isDeleted)
                 FileCard(
                   message: message,

@@ -13,6 +13,8 @@
     <!-- Send a location: foreground only, asked for when the member opens the location picker. No background location. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- Voice messages and dictation: the microphone, only while the member holds the record button. No foreground service. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- Nothing but photos: drop what the photo library plugin would add. -->
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove"/>
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove"/>
@@ -102,6 +104,9 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
         </intent>
     </queries>
 </manifest>

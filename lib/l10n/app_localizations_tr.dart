@@ -1610,4 +1610,44 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get videoLoadMoreFailed => 'Daha fazla video yüklenemedi.';
+
+  @override
+  String get voicePreviewLine => '🎤 Sesli mesaj';
+
+  @override
+  String get voiceHoldHint => 'Kaydetmek için basılı tut, göndermek için bırak';
+
+  @override
+  String get voiceMicDenied => 'Kayıt için Ayarlar\'dan mikrofona izin ver.';
+
+  @override
+  String get voiceMicFailed => 'Kayıt başlatılamadı.';
+
+  @override
+  String get voiceDictationUnavailable =>
+      'Bu telefonda bu dilde yazdırma kullanılamıyor.';
+
+  @override
+  String get voiceSlideToCancel => 'İptal için kaydır';
+
+  @override
+  String get voiceCancel => 'İPTAL';
+
+  @override
+  String get voiceShowText => 'Metni göster';
+
+  @override
+  String get voiceHideText => 'Metni gizle';
+
+  @override
+  String get voiceCannotPlay => 'Bu sesli mesaj oynatılamıyor.';
+
+  @override
+  String get voiceButtonVoice => 'Sesli mesaj kaydet';
+
+  @override
+  String get voiceButtonDictation => 'Yazıyı sesle yaz';
+
+  @override
+  String get voiceSend => 'Sesli mesajı gönder';
 }

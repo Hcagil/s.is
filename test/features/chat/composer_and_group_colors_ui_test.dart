@@ -158,8 +158,8 @@ void main() {
   });
 
   group('the composer at the bottom edge', () {
-    // An empty field shows the mic in the send button's place.
-    final send = find.byKey(const ValueKey('grey-v_rec'));
+    // An empty field shows the voice button in the send button's place.
+    final send = find.byKey(const ValueKey('composer-voice'));
 
     Future<double> gap(WidgetTester t, {required TargetPlatform on}) async {
       await mountChat(t, chat, open: 'c1', platform: on);

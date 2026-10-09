@@ -3,3 +3,9 @@
 
 /* The location prompt (iPhone asks once, then Settings). */
 "NSLocationWhenInUseUsageDescription" = "Allow access so you can share where you are in a chat. Your location is only read when you choose to send it.";
+
+/* The microphone prompt (iPhone asks once, then Settings). */
+"NSMicrophoneUsageDescription" = "Allow microphone access to record voice messages and to dictate text. Audio is only sent when you send the voice message.";
+
+/* The speech recognition prompt (iPhone asks once, then Settings). */
+"NSSpeechRecognitionUsageDescription" = "Allow speech recognition to turn your voice into text in the message box. It runs on your phone.";

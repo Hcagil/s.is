@@ -53,6 +53,8 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
               'attachment_size': file.size,
               if (file.durationMs != null)
                 'attachment_duration_ms': file.durationMs,
+              if (file.waveform != null) 'attachment_waveform': file.waveform,
+              if (file.transcript != null) 'voice_transcript': file.transcript,
               'reply_to': replyTo,
             })
             .select('id, created_at')

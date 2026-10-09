@@ -3,3 +3,9 @@
 
 /* Konum izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
 "NSLocationWhenInUseUsageDescription" = "Bulunduğun yeri sohbette paylaşabilmen için erişime izin ver. Konumun yalnızca sen göndermeyi seçtiğinde okunur.";
+
+/* Mikrofon izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
+"NSMicrophoneUsageDescription" = "Sesli mesaj kaydedebilmen ve yazıyı sesle yazdırabilmen için mikrofona izin ver. Ses yalnızca sesli mesajı gönderdiğinde gönderilir.";
+
+/* Konuşma tanıma izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
+"NSSpeechRecognitionUsageDescription" = "Sesini mesaj kutusunda yazıya çevirebilmek için konuşma tanımaya izin ver. Telefonunda çalışır.";

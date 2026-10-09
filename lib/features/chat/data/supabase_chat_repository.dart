@@ -24,6 +24,7 @@ import '../domain/read_marks.dart';
 import '../domain/shared_contact.dart';
 import '../domain/shared_location.dart';
 import '../domain/video.dart';
+import '../domain/voice.dart';
 
 /// [ChatRepository] backed by Supabase Postgres and Realtime.
 ///
@@ -231,7 +232,7 @@ final class SupabaseChatRepository implements ChatRepository {
         _client
             .from('conversation_previews')
             .select(
-              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name, attachment_duration_ms, location_lat',
+              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name, attachment_duration_ms, location_lat, attachment_mime',
             )
             .retriedOnce(),
         // Only conversations with something unread come back.
@@ -261,6 +262,9 @@ final class SupabaseChatRepository implements ChatRepository {
                 ? locationPreviewText
                 : row['contact'] == true
                 ? contactPreview(row['body'] as String)
+                : row['attachment_mime'] == voiceMime &&
+                      row['attachment_duration_ms'] != null
+                ? voicePreview
                 : row['attachment_duration_ms'] != null
                 ? videoPreview
                 : row['attachment_name'] != null
@@ -331,13 +335,13 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript';
 
   /// The columns of a page read (open chat): no photo preview -- those arrive
   /// separately, see [attachmentPreviews], so the first paint never waits on
   /// them.
   static const _pageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -1094,6 +1098,8 @@ final class SupabaseChatRepository implements ChatRepository {
             'attachment_mime': file.mime,
             'attachment_size': file.size,
             'attachment_duration_ms': ?file.durationMs,
+            'attachment_waveform': ?file.waveform,
+            'voice_transcript': ?file.transcript,
           },
         });
       }
@@ -1249,6 +1255,8 @@ final class SupabaseChatRepository implements ChatRepository {
         mime: row['attachment_mime'] as String? ?? 'application/octet-stream',
         size: (row['attachment_size'] as num?)?.toInt() ?? 0,
         durationMs: (row['attachment_duration_ms'] as num?)?.toInt(),
+        waveform: row['attachment_waveform'] as String?,
+        transcript: row['voice_transcript'] as String?,
       ),
       _ => null,
     },

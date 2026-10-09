@@ -228,6 +228,7 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       // queue itself brings back the sends that were waiting when the app
       // was killed.
       ref.listen(sendQueueOwnerProvider, (_, _) {});
+      ref.listen(playedVoiceOwnerProvider, (_, _) {});
       ref.listen(sendQueueProvider, (_, _) {});
       // Drops a conversation's queue and draft the moment it is found to be
       // one the member has left or been removed from -- see

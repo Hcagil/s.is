@@ -13,6 +13,7 @@ import '../application/chat_selection_controller.dart';
 import '../domain/conversation.dart';
 import '../domain/shared_contact.dart';
 import '../domain/shared_location.dart';
+import '../domain/voice.dart';
 import 'member_name.dart';
 import 'message_screen.dart';
 import 'person_avatar.dart';
@@ -29,6 +30,8 @@ String _preview(AppLocalizations l, String text) =>
     ? l.contactPreviewLine(text.substring(contactPreviewPrefix.length))
     : text == locationPreviewText
     ? l.locationPreviewLine
+    : text == voicePreview
+    ? l.voicePreviewLine
     : text;
 
 class ConversationTile extends ConsumerWidget {

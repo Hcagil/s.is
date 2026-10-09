@@ -36,10 +36,14 @@ import 'features/chat/data/geolocator_device_location.dart';
 import 'features/chat/data/maps_backend.dart';
 import 'features/chat/data/flutter_phone_book.dart';
 import 'features/chat/data/native_picture_cropper.dart';
+import 'features/chat/data/no_voice_transcriber.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
 import 'features/chat/data/photo_manager_video_gallery.dart';
+import 'features/chat/data/record_voice_recorder.dart';
 import 'features/chat/data/share_plus_video_sharer.dart';
+import 'features/chat/data/shared_prefs_played_voice_store.dart';
 import 'features/chat/data/shared_prefs_send_queue_store.dart';
+import 'features/chat/data/speech_dictation.dart';
 import 'features/chat/data/supabase_chat_archive_repository.dart';
 import 'features/chat/data/supabase_chat_delete_repository.dart';
 import 'features/chat/data/supabase_chat_file_repository.dart';
@@ -219,6 +223,21 @@ Future<void> main() async {
             const VideoPlayerPlaybackFactory(),
           ),
           videoSharerProvider.overrideWithValue(const SharePlusVideoSharer()),
+          voiceRecorderProvider.overrideWith((ref) {
+            final recorder = RecordVoiceRecorder();
+            ref.onDispose(recorder.dispose);
+            return recorder;
+          }),
+          voiceTranscriberProvider.overrideWithValue(
+            const NoVoiceTranscriber(),
+          ),
+          dictationProvider.overrideWithValue(SpeechDictation()),
+          voicePlaybackFactoryProvider.overrideWithValue(
+            const VoicePlayerPlaybackFactory(),
+          ),
+          playedVoiceStoreProvider.overrideWithValue(
+            const SharedPrefsPlayedVoiceStore(),
+          ),
           sendQueueStoreProvider.overrideWithValue(
             const SharedPrefsSendQueueStore(),
           ),

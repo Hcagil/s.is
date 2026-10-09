@@ -71,6 +71,12 @@ String encodeQueue(List<QueuedRecord> records) {
       if (f.thumbPath != null) {
         fileMap['thumbPath'] = f.thumbPath!;
       }
+      if (f.waveform != null) {
+        fileMap['waveform'] = f.waveform!;
+      }
+      if (f.transcript != null) {
+        fileMap['transcript'] = f.transcript!;
+      }
       map['file'] = fileMap;
     } else if (record.video != null) {
       final v = record.video!;
@@ -131,6 +137,8 @@ List<QueuedRecord> decodeQueue(String? json) {
             size: f['size'] as int,
             durationMs: f['durationMs'] as int?,
             thumbPath: f['thumbPath'] as String?,
+            waveform: f['waveform'] as String?,
+            transcript: f['transcript'] as String?,
           );
         } else if (item.containsKey('video')) {
           final v = item['video'] as Map<String, dynamic>;

@@ -520,7 +520,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
         }
       }
       final file = item.file;
-      final isVideo = file?.durationMs != null;
+      final isVideo = file?.attached.isVideo ?? false;
       if (isVideo) {
         progress.set(item.message.id, const VideoProgress(VideoStage.sending));
       }

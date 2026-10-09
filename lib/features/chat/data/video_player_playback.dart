@@ -6,9 +6,10 @@ import 'package:flutter/widgets.dart';
 import 'package:video_player/video_player.dart';
 
 import '../domain/video.dart';
+import '../domain/voice.dart';
 
 /// A [VideoPlayback] backed by the video_player package.
-final class VideoPlayerPlayback implements VideoPlayback {
+final class VideoPlayerPlayback implements VoicePlayback {
   VideoPlayerController? _controller;
   final _states = StreamController<VideoPlaybackState>.broadcast();
 
@@ -94,6 +95,15 @@ final class VideoPlayerPlayback implements VideoPlayback {
   }
 
   @override
+  Future<void> setSpeed(double speed) async {
+    try {
+      await _controller?.setPlaybackSpeed(speed);
+    } catch (e) {
+      log('Video playback failed: ${e.runtimeType}', name: 'sis.video');
+    }
+  }
+
+  @override
   Future<void> dispose() async {
     final c = _controller;
     _controller = null;
@@ -114,6 +124,15 @@ final class VideoPlayerPlaybackFactory implements VideoPlaybackFactory {
 
   @override
   VideoPlayback create() => VideoPlayerPlayback();
+}
+
+/// Makes the video player used as a voice message player.
+final class VoicePlayerPlaybackFactory implements VoicePlaybackFactory {
+  /// Creates the factory.
+  const VoicePlayerPlaybackFactory();
+
+  @override
+  VoicePlayback create() => VideoPlayerPlayback();
 }
 
 /// The picture of a playing video; main.dart hands it to the player page.

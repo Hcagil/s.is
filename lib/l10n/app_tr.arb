@@ -507,5 +507,18 @@
   "videoAccessBody": "Videoların burada görünmesi için erişime izin ver – sen gönderene kadar hiçbir şey gönderilmez.",
   "videoAllow": "Videolara izin ver",
   "videoUsePhonePicker": "Telefonun seçicisini kullan",
-  "videoLoadMoreFailed": "Daha fazla video yüklenemedi."
+  "videoLoadMoreFailed": "Daha fazla video yüklenemedi.",
+  "voicePreviewLine": "🎤 Sesli mesaj",
+  "voiceHoldHint": "Kaydetmek için basılı tut, göndermek için bırak",
+  "voiceMicDenied": "Kayıt için Ayarlar'dan mikrofona izin ver.",
+  "voiceMicFailed": "Kayıt başlatılamadı.",
+  "voiceDictationUnavailable": "Bu telefonda bu dilde yazdırma kullanılamıyor.",
+  "voiceSlideToCancel": "İptal için kaydır",
+  "voiceCancel": "İPTAL",
+  "voiceShowText": "Metni göster",
+  "voiceHideText": "Metni gizle",
+  "voiceCannotPlay": "Bu sesli mesaj oynatılamıyor.",
+  "voiceButtonVoice": "Sesli mesaj kaydet",
+  "voiceButtonDictation": "Yazıyı sesle yaz",
+  "voiceSend": "Sesli mesajı gönder"
 }

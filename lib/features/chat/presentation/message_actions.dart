@@ -15,6 +15,7 @@ import '../domain/group_member.dart';
 import '../domain/message.dart';
 import 'forward_page.dart';
 import 'message_menu_card.dart';
+import 'sticker_albums.dart';
 import 'swipeable_message.dart';
 
 /// Carries out [action] on [message]; reached from the swipe-reply, the
@@ -82,6 +83,24 @@ Future<bool> runMessageAction(
           isError: true,
         );
       }
+      return false;
+    case MessageAction.stickerFavourite:
+      final added = await ref
+          .read(stickerLibraryProvider.notifier)
+          .addFavourite(message.stickerId!);
+      if (context.mounted) {
+        final l = AppLocalizations.of(context);
+        showSisNotice(
+          context,
+          added == null
+              ? l.stickerAddedFavourite
+              : stickerFailureText(l, added),
+          isError: added != null,
+        );
+      }
+      return false;
+    case MessageAction.stickerAlbum:
+      await addStickerToAlbumFlow(context, ref, message.stickerId!);
       return false;
     case MessageAction.deleteForMe:
     case MessageAction.deleteForEveryone:

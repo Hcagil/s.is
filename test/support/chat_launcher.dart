@@ -100,6 +100,7 @@ Future<ProviderContainer> pumpLauncher(
   Locale? locale,
   bool tap = true,
   List<Override> overrides = const [],
+  TextDirection? direction,
 }) async {
   phoneView(tester);
   final repo =
@@ -143,6 +144,11 @@ Future<ProviderContainer> pumpLauncher(
         supportedLocales: AppLocalizations.supportedLocales,
         locale: locale,
         theme: sisTheme(Brightness.light),
+        // No shipped locale is RTL: force the direction to test mirroring.
+        builder: direction == null
+            ? null
+            : (context, child) =>
+                  Directionality(textDirection: direction, child: child!),
         home: Consumer(
           builder: (context, ref, _) => Scaffold(
             body: Center(

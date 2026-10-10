@@ -170,8 +170,11 @@ select as_('02');
 insert into public.chat_pins(conversation_id) values (g('AB'));
 insert into public.chat_archives(conversation_id) values (g('G')), (g('HB'));
 reset role;
+-- Only this file's own chats: rows other runs left behind (a member can
+-- hold several spells in one chat) must not count as "changed".
 create temp table before as
-  select user_id, conversation_id, history_from from public.conversation_members;
+  select user_id, conversation_id, history_from from public.conversation_members
+   where conversation_id in (select id from ids);
 
 select as_('01');
 select is(sees(g('AB')), 2::bigint, 'control: ann reads the two old messages');

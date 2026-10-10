@@ -1,5 +1,62 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+
+/// Password for integration-test accounts on the local test database only:
+/// random, made once per test file (isolate), never written down. Accounts
+/// left by earlier runs are moved to it by [setLocalTestPassword].
+final localTestPassword = base64Url.encode(
+  List<int>.generate(24, (_) => Random.secure().nextInt(256)),
+);
+
+/// Sets [password] on the existing account [email] through Auth's admin API
+/// at [url] (`GET /admin/users` to find it, `PUT /admin/users/<id>`). An account
+/// that does not exist yet is left to the normal sign-up, so the allowlist
+/// hook still decides who may join.
+Future<void> setLocalTestPassword(
+  String url,
+  String email,
+  String password,
+) async {
+  final http = HttpClient();
+  final key = serviceKey();
+  Future<(int, String)> call(String method, String path, [Object? body]) async {
+    final request = await http.openUrl(method, Uri.parse('$url$path'));
+    request.headers
+      ..set('apikey', key)
+      ..set('Authorization', 'Bearer $key')
+      ..contentType = ContentType.json;
+    if (body != null) request.write(jsonEncode(body));
+    final response = await request.close();
+    return (response.statusCode, await response.transform(utf8.decoder).join());
+  }
+
+  try {
+    for (var page = 1; ; page++) {
+      final (status, text) = await call(
+        'GET',
+        '/auth/v1/admin/users?page=$page&per_page=500',
+      );
+      if (status != 200) throw StateError('admin list users: $status $text');
+      final users = (jsonDecode(text) as Map<String, dynamic>)['users'] as List;
+      if (users.isEmpty) return; // not made yet: sign-up will create it
+      for (final u in users.cast<Map<String, dynamic>>()) {
+        if ((u['email'] as String?)?.toLowerCase() != email.toLowerCase()) {
+          continue;
+        }
+        final (put, body) = await call(
+          'PUT',
+          '/auth/v1/admin/users/${u['id']}',
+          {'password': password},
+        );
+        if (put != 200) throw StateError('admin set password: $put $body');
+        return;
+      }
+    }
+  } finally {
+    http.close(force: true);
+  }
+}
 
 /// The local test stack's service-role key, for the few fixtures only the
 /// server may create (a dangling photo reference, a backdated message).

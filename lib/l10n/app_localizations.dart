@@ -3031,6 +3031,288 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send voice message'**
   String get voiceSend;
+
+  /// Chat list preview of a sticker message
+  ///
+  /// In en, this message translates to:
+  /// **'😀 Sticker'**
+  String get stickerPreviewLine;
+
+  /// Chat list preview of a shared sticker album
+  ///
+  /// In en, this message translates to:
+  /// **'📂 Sticker album'**
+  String get stickerAlbumPreviewLine;
+
+  /// Tooltip of the sticker button beside the message box
+  ///
+  /// In en, this message translates to:
+  /// **'Stickers'**
+  String get stickerButtonTooltip;
+
+  /// Tooltip of the button that brings the keyboard back
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard'**
+  String get stickerKeyboardTooltip;
+
+  /// Sticker panel tab
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get stickerTabRecent;
+
+  /// Sticker panel tab
+  ///
+  /// In en, this message translates to:
+  /// **'Favourites'**
+  String get stickerTabFavourites;
+
+  /// Sticker panel tab
+  ///
+  /// In en, this message translates to:
+  /// **'SIS starter'**
+  String get stickerTabStarter;
+
+  /// Sticker panel tab
+  ///
+  /// In en, this message translates to:
+  /// **'My stickers'**
+  String get stickerTabMine;
+
+  /// Sticker panel tab
+  ///
+  /// In en, this message translates to:
+  /// **'+ New'**
+  String get stickerTabNew;
+
+  /// Empty Recent tab
+  ///
+  /// In en, this message translates to:
+  /// **'Stickers you send show up here.'**
+  String get stickerEmptyRecent;
+
+  /// Empty Favourites tab
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press a sticker in a chat to add it to your favourites.'**
+  String get stickerEmptyFavourites;
+
+  /// Empty album
+  ///
+  /// In en, this message translates to:
+  /// **'This album is empty.'**
+  String get stickerEmptyAlbum;
+
+  /// My stickers tab with no album
+  ///
+  /// In en, this message translates to:
+  /// **'No albums yet. Make one to keep your stickers.'**
+  String get stickerNoAlbums;
+
+  /// Screen-reader label of a sticker
+  ///
+  /// In en, this message translates to:
+  /// **'Sticker'**
+  String get stickerLabel;
+
+  /// Shown in place of a sticker that did not load
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this sticker.'**
+  String get stickerLoadFailed;
+
+  /// Message menu: keep a received sticker
+  ///
+  /// In en, this message translates to:
+  /// **'Add to favourites'**
+  String get messageActionStickerFavourite;
+
+  /// Message menu: put a received sticker in an album
+  ///
+  /// In en, this message translates to:
+  /// **'Add to album'**
+  String get messageActionStickerAlbum;
+
+  /// Notice after adding a sticker to favourites
+  ///
+  /// In en, this message translates to:
+  /// **'Added to favourites.'**
+  String get stickerAddedFavourite;
+
+  /// Notice after adding a sticker to an album
+  ///
+  /// In en, this message translates to:
+  /// **'Added to {name}.'**
+  String stickerAddedAlbum(String name);
+
+  /// Title of the album picker
+  ///
+  /// In en, this message translates to:
+  /// **'Add to album'**
+  String get stickerPickAlbumTitle;
+
+  /// Row and title for making an album
+  ///
+  /// In en, this message translates to:
+  /// **'New album'**
+  String get stickerNewAlbum;
+
+  /// Hint of the album name field
+  ///
+  /// In en, this message translates to:
+  /// **'Album name'**
+  String get stickerAlbumNameHint;
+
+  /// Button that makes the album
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get stickerAlbumCreate;
+
+  /// Title of the rename card
+  ///
+  /// In en, this message translates to:
+  /// **'Rename album'**
+  String get stickerAlbumRenameTitle;
+
+  /// Title of the albums page
+  ///
+  /// In en, this message translates to:
+  /// **'My albums'**
+  String get stickerAlbumsTitle;
+
+  /// How many are used of the limit
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {max}'**
+  String stickerAlbumsCount(int count, int max);
+
+  /// Album menu: send the album card to this chat
+  ///
+  /// In en, this message translates to:
+  /// **'Share album'**
+  String get stickerAlbumShare;
+
+  /// Album menu
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get stickerAlbumRename;
+
+  /// Album menu
+  ///
+  /// In en, this message translates to:
+  /// **'Delete album'**
+  String get stickerAlbumDelete;
+
+  /// Title of the delete-album confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this album?'**
+  String get stickerAlbumDeleteTitle;
+
+  /// Body of the delete-album confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'The album is deleted for you only. Stickers in chats stay.'**
+  String get stickerAlbumDeleteBody;
+
+  /// Confirm button of the delete-album confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get stickerDelete;
+
+  /// Cancel button of the sticker cards
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get stickerCancel;
+
+  /// Notice after sharing an album
+  ///
+  /// In en, this message translates to:
+  /// **'Album shared.'**
+  String get stickerAlbumShared;
+
+  /// Size line of an album card
+  ///
+  /// In en, this message translates to:
+  /// **'{count} stickers'**
+  String stickerAlbumStickers(int count);
+
+  /// Button on a shared album card
+  ///
+  /// In en, this message translates to:
+  /// **'Add album'**
+  String get stickerAlbumAdd;
+
+  /// Button on a shared album card
+  ///
+  /// In en, this message translates to:
+  /// **'Add to favourites'**
+  String get stickerAlbumAddFavourites;
+
+  /// Notice after adding a shared album
+  ///
+  /// In en, this message translates to:
+  /// **'Album added.'**
+  String get stickerAlbumAdded;
+
+  /// Notice after adding a shared album to favourites
+  ///
+  /// In en, this message translates to:
+  /// **'Added to your favourites.'**
+  String get stickerAlbumFavouritesAdded;
+
+  /// Notice when a shared album was deleted
+  ///
+  /// In en, this message translates to:
+  /// **'This album is no longer available.'**
+  String get stickerAlbumGone;
+
+  /// Sticker menu inside an album
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from album'**
+  String get stickerRemoveFromAlbum;
+
+  /// Sticker menu inside favourites
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from favourites'**
+  String get stickerRemoveFavourite;
+
+  /// Notice at the album limit
+  ///
+  /// In en, this message translates to:
+  /// **'You can have up to {max} albums.'**
+  String stickerLimitAlbums(int max);
+
+  /// Notice at the per-album limit
+  ///
+  /// In en, this message translates to:
+  /// **'An album holds up to {max} stickers.'**
+  String stickerLimitInAlbum(int max);
+
+  /// Notice at the favourites limit
+  ///
+  /// In en, this message translates to:
+  /// **'You can keep up to {max} favourites.'**
+  String stickerLimitFavourites(int max);
+
+  /// Title of the placeholder page for making stickers
+  ///
+  /// In en, this message translates to:
+  /// **'Create stickers'**
+  String get stickerCreateTitle;
+
+  /// Body of the placeholder page for making stickers
+  ///
+  /// In en, this message translates to:
+  /// **'Making your own stickers is coming soon.'**
+  String get stickerCreateSoon;
 }
 
 class _AppLocalizationsDelegate

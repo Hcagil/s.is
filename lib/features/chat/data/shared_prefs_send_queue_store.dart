@@ -32,7 +32,7 @@ final class SharedPrefsSendQueueStore implements SendQueueStore {
     if (f != null) return File(f.path).existsSync();
     final v = r.video;
     if (v != null) return File(v.path).existsSync();
-    return r.body.isNotEmpty;
+    return r.body.isNotEmpty || r.stickerId != null || r.albumId != null;
   }
 
   @override

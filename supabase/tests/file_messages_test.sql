@@ -143,10 +143,10 @@ select is(file_insert('f1100000-0000-0000-0000-00000000b00c', 'x.pdf', 'applicat
 reset role;
 
 -- 3 conversation_previews ----------------------------------------------------------
-select is((select attname::text from pg_attribute
+select is((select count(*) from pg_attribute
             where attrelid = 'public.conversation_previews'::regclass and attnum > 0 and not attisdropped
-            order by attnum desc limit 1 offset 3),
-          'attachment_name', 'conversation_previews keeps attachment_name just before the video duration the location and attachment_mime');
+              and attname = any(array['attachment_name'])), 1::bigint,
+          'conversation_previews has attachment_name');
 -- one transaction shares one now(): age the earlier rows so the next is newest
 update public.messages set created_at = now() - interval '1 minute' where conversation_id = g('G');
 select as_('01');

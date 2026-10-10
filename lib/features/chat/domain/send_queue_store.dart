@@ -16,6 +16,9 @@ final class QueuedRecord {
     this.file,
     this.video,
     this.location,
+    this.stickerId,
+    this.albumId,
+    this.albumName,
   });
 
   /// The ID of the message that will be sent (also file.id / video.id).
@@ -41,6 +44,15 @@ final class QueuedRecord {
 
   /// A place to send, or null.
   final SharedLocation? location;
+
+  /// A sticker to send, or null.
+  final String? stickerId;
+
+  /// An own album to share as a card (with its name in [albumName]), or null.
+  final String? albumId;
+
+  /// The shared album's name, shown on the pending card.
+  final String? albumName;
 }
 
 /// Encodes a list of queued records into a JSON string.
@@ -100,6 +112,13 @@ String encodeQueue(List<QueuedRecord> records) {
         'name': loc.name,
         'address': loc.address,
       };
+    }
+    if (record.stickerId != null) {
+      map['stickerId'] = record.stickerId!;
+    }
+    if (record.albumId != null) {
+      map['albumId'] = record.albumId!;
+      map['albumName'] = record.albumName ?? '';
     }
     json.add(map);
   }
@@ -172,6 +191,9 @@ List<QueuedRecord> decodeQueue(String? json) {
             file: file,
             video: video,
             location: location,
+            stickerId: item['stickerId'] as String?,
+            albumId: item['albumId'] as String?,
+            albumName: item['albumName'] as String?,
           ),
         );
       } catch (_) {

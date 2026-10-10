@@ -1672,4 +1672,160 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceSend => 'Send voice message';
+
+  @override
+  String get stickerPreviewLine => '😀 Sticker';
+
+  @override
+  String get stickerAlbumPreviewLine => '📂 Sticker album';
+
+  @override
+  String get stickerButtonTooltip => 'Stickers';
+
+  @override
+  String get stickerKeyboardTooltip => 'Keyboard';
+
+  @override
+  String get stickerTabRecent => 'Recent';
+
+  @override
+  String get stickerTabFavourites => 'Favourites';
+
+  @override
+  String get stickerTabStarter => 'SIS starter';
+
+  @override
+  String get stickerTabMine => 'My stickers';
+
+  @override
+  String get stickerTabNew => '+ New';
+
+  @override
+  String get stickerEmptyRecent => 'Stickers you send show up here.';
+
+  @override
+  String get stickerEmptyFavourites =>
+      'Long-press a sticker in a chat to add it to your favourites.';
+
+  @override
+  String get stickerEmptyAlbum => 'This album is empty.';
+
+  @override
+  String get stickerNoAlbums =>
+      'No albums yet. Make one to keep your stickers.';
+
+  @override
+  String get stickerLabel => 'Sticker';
+
+  @override
+  String get stickerLoadFailed => 'Could not load this sticker.';
+
+  @override
+  String get messageActionStickerFavourite => 'Add to favourites';
+
+  @override
+  String get messageActionStickerAlbum => 'Add to album';
+
+  @override
+  String get stickerAddedFavourite => 'Added to favourites.';
+
+  @override
+  String stickerAddedAlbum(String name) {
+    return 'Added to $name.';
+  }
+
+  @override
+  String get stickerPickAlbumTitle => 'Add to album';
+
+  @override
+  String get stickerNewAlbum => 'New album';
+
+  @override
+  String get stickerAlbumNameHint => 'Album name';
+
+  @override
+  String get stickerAlbumCreate => 'Create';
+
+  @override
+  String get stickerAlbumRenameTitle => 'Rename album';
+
+  @override
+  String get stickerAlbumsTitle => 'My albums';
+
+  @override
+  String stickerAlbumsCount(int count, int max) {
+    return '$count of $max';
+  }
+
+  @override
+  String get stickerAlbumShare => 'Share album';
+
+  @override
+  String get stickerAlbumRename => 'Rename';
+
+  @override
+  String get stickerAlbumDelete => 'Delete album';
+
+  @override
+  String get stickerAlbumDeleteTitle => 'Delete this album?';
+
+  @override
+  String get stickerAlbumDeleteBody =>
+      'The album is deleted for you only. Stickers in chats stay.';
+
+  @override
+  String get stickerDelete => 'Delete';
+
+  @override
+  String get stickerCancel => 'Cancel';
+
+  @override
+  String get stickerAlbumShared => 'Album shared.';
+
+  @override
+  String stickerAlbumStickers(int count) {
+    return '$count stickers';
+  }
+
+  @override
+  String get stickerAlbumAdd => 'Add album';
+
+  @override
+  String get stickerAlbumAddFavourites => 'Add to favourites';
+
+  @override
+  String get stickerAlbumAdded => 'Album added.';
+
+  @override
+  String get stickerAlbumFavouritesAdded => 'Added to your favourites.';
+
+  @override
+  String get stickerAlbumGone => 'This album is no longer available.';
+
+  @override
+  String get stickerRemoveFromAlbum => 'Remove from album';
+
+  @override
+  String get stickerRemoveFavourite => 'Remove from favourites';
+
+  @override
+  String stickerLimitAlbums(int max) {
+    return 'You can have up to $max albums.';
+  }
+
+  @override
+  String stickerLimitInAlbum(int max) {
+    return 'An album holds up to $max stickers.';
+  }
+
+  @override
+  String stickerLimitFavourites(int max) {
+    return 'You can keep up to $max favourites.';
+  }
+
+  @override
+  String get stickerCreateTitle => 'Create stickers';
+
+  @override
+  String get stickerCreateSoon => 'Making your own stickers is coming soon.';
 }

@@ -3758,6 +3758,9 @@ Message withoutPreview(Message m) => Message(
   contact: m.contact,
   file: m.file,
   location: m.location,
+  stickerId: m.stickerId,
+  albumCard: m.albumCard,
+  albumId: m.albumId,
   sending: m.sending,
 );
 

@@ -64,6 +64,7 @@ flutter:
   assets:
     - assets/fonts/OFL-manrope.txt
     - assets/fonts/OFL-sora.txt
+    - assets/stickers/
   fonts:
     - family: Manrope
       fonts:

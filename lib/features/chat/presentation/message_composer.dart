@@ -16,6 +16,9 @@ class _ComposerState extends ConsumerState<_Composer>
   final _attachKey = GlobalKey();
   final _voiceGesture = VoiceGesture();
 
+  /// Whether the sticker panel is open in place of the keyboard.
+  bool _panel = false;
+
   /// This composer's conversation is fixed for its whole lifetime: opening
   /// a different one always pushes a new [MessageScreen] (see
   /// [openConversation]), never swaps this one's provider underneath it.
@@ -31,6 +34,9 @@ class _ComposerState extends ConsumerState<_Composer>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _focus.addListener(() {
+      if (_focus.hasFocus && _panel) setState(() => _panel = false);
+    });
     final id = ref.read(openConversationProvider);
     _conversationId = id;
     if (id == null) return;
@@ -76,6 +82,17 @@ class _ComposerState extends ConsumerState<_Composer>
       ref.read(replyingToProvider.notifier).start(draft.replyTo!);
     }
     _applyingDraft = false;
+  }
+
+  /// Swaps the keyboard and the sticker panel: opening the panel hides the
+  /// keyboard, closing it brings the keyboard back.
+  void _toggleStickers() {
+    if (_panel) {
+      _focus.requestFocus();
+      return;
+    }
+    _focus.unfocus();
+    setState(() => _panel = true);
   }
 
   /// The system back gesture closes the keyboard but leaves the field
@@ -410,164 +427,170 @@ class _ComposerState extends ConsumerState<_Composer>
         _restoreDraft(id);
       });
     }
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: Theme.of(context).colorScheme.outline),
+    return PopScope(
+      canPop: !_panel,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _panel = false);
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border: Border(
+            top: BorderSide(color: Theme.of(context).colorScheme.outline),
+          ),
         ),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        6,
-        8,
-        10,
-        _isIos(context) ? 4 + _composerBottomInset(context) : 12,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (editing != null)
-            _EditBar(editing)
-          else if (replying != null)
-            _ReplyBar(replying),
-          ListenableBuilder(
-            listenable: _voiceGesture,
-            builder: (context, _) {
-              final recording =
-                  ref.watch(
-                    voiceCaptureProvider.select(
-                      (s) => s.phase != VoicePhase.idle,
-                    ),
-                  ) ||
-                  _voiceGesture.exit != VoiceExit.none;
-              return Stack(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Opacity(
-                          opacity: recording ? 0 : 1,
-                          child: IgnorePointer(
-                            ignoring: recording,
-                            child: Row(
-                              children: [
-                                KeyedSubtree(
-                                  key: _attachKey,
-                                  child: IconButton(
-                                    key: const ValueKey('composer-attach'),
-                                    onPressed: _sending ? null : _attach,
-                                    icon: const Icon(Icons.attach_file_rounded),
-                                    tooltip: l.composerSendPhoto,
-                                  ),
-                                ),
-                                GreyOption(
-                                  name: 'c_btn',
-                                  child: const _GreyGlyph(
-                                    Icons.emoji_emotions_outlined,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: TextField(
-                                    key: const ValueKey('composer-field'),
-                                    controller: _controller,
-                                    maxLength: maxMessageLength,
-                                    minLines: 1,
-                                    maxLines: 4,
-                                    focusNode: _focus,
-                                    // Messages, captions and edits all start with a capital; the
-                                    // keyboard's own setting still decides (nothing is forced).
-                                    textCapitalization:
-                                        TextCapitalization.sentences,
-                                    textInputAction: TextInputAction.send,
-                                    // A non-null onEditingComplete replaces Flutter's default,
-                                    // which unfocuses the field on the send action and so
-                                    // closes the keyboard.
-                                    onEditingComplete: _send,
-                                    // Throttled, and silent when the member does not share typing.
-                                    onChanged: (text) {
-                                      if (text.isNotEmpty) {
-                                        ref
-                                            .read(typingProvider.notifier)
-                                            .signalTyping();
-                                      }
-                                      if (id == null || _applyingDraft) return;
-                                      if (ref.read(editingProvider) != null) {
-                                        return;
-                                      }
-                                      ref
-                                          .read(draftsProvider.notifier)
-                                          .setText(id, text);
-                                    },
-                                    decoration: InputDecoration(
-                                      hintText: l.commonMessage,
-                                      counterText: '',
+        padding: EdgeInsets.fromLTRB(
+          6,
+          8,
+          10,
+          _isIos(context) ? 4 + _composerBottomInset(context) : 12,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (editing != null)
+              _EditBar(editing)
+            else if (replying != null)
+              _ReplyBar(replying),
+            ListenableBuilder(
+              listenable: _voiceGesture,
+              builder: (context, _) {
+                final recording =
+                    ref.watch(
+                      voiceCaptureProvider.select(
+                        (s) => s.phase != VoicePhase.idle,
+                      ),
+                    ) ||
+                    _voiceGesture.exit != VoiceExit.none;
+                return Stack(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Opacity(
+                            opacity: recording ? 0 : 1,
+                            child: IgnorePointer(
+                              ignoring: recording,
+                              child: Row(
+                                children: [
+                                  KeyedSubtree(
+                                    key: _attachKey,
+                                    child: IconButton(
+                                      key: const ValueKey('composer-attach'),
+                                      onPressed: _sending ? null : _attach,
+                                      icon: const Icon(
+                                        Icons.attach_file_rounded,
+                                      ),
+                                      tooltip: l.composerSendPhoto,
                                     ),
                                   ),
-                                ),
-                              ],
+                                  Expanded(
+                                    child: TextField(
+                                      key: const ValueKey('composer-field'),
+                                      controller: _controller,
+                                      maxLength: maxMessageLength,
+                                      minLines: 1,
+                                      maxLines: 4,
+                                      focusNode: _focus,
+                                      // Messages, captions and edits all start with a capital; the
+                                      // keyboard's own setting still decides (nothing is forced).
+                                      textCapitalization:
+                                          TextCapitalization.sentences,
+                                      textInputAction: TextInputAction.send,
+                                      // A non-null onEditingComplete replaces Flutter's default,
+                                      // which unfocuses the field on the send action and so
+                                      // closes the keyboard.
+                                      onEditingComplete: _send,
+                                      // Throttled, and silent when the member does not share typing.
+                                      onChanged: (text) {
+                                        if (text.isNotEmpty) {
+                                          ref
+                                              .read(typingProvider.notifier)
+                                              .signalTyping();
+                                        }
+                                        if (id == null || _applyingDraft) {
+                                          return;
+                                        }
+                                        if (ref.read(editingProvider) != null) {
+                                          return;
+                                        }
+                                        ref
+                                            .read(draftsProvider.notifier)
+                                            .setText(id, text);
+                                      },
+                                      decoration: InputDecoration(
+                                        hintText: l.commonMessage,
+                                        counterText: '',
+                                        suffixIcon: IconButton(
+                                          key: const ValueKey(
+                                            'composer-stickers',
+                                          ),
+                                          onPressed: id == null
+                                              ? null
+                                              : _toggleStickers,
+                                          icon: Icon(
+                                            _panel
+                                                ? Icons.keyboard_alt_outlined
+                                                : Icons.sticky_note_2_outlined,
+                                          ),
+                                          tooltip: _panel
+                                              ? l.stickerKeyboardTooltip
+                                              : l.stickerButtonTooltip,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      ValueListenableBuilder<TextEditingValue>(
-                        valueListenable: _controller,
-                        builder: (context, value, _) =>
-                            (!recording &&
-                                (value.text.isNotEmpty || editing != null))
-                            ? IconButton.filled(
-                                key: const ValueKey('composer-send'),
-                                onPressed: _sending
-                                    ? null
-                                    : () {
-                                        _send();
-                                        _focus.requestFocus();
-                                      },
-                                icon: const Icon(Icons.arrow_upward_rounded),
-                              )
-                            : (id == null
-                                  ? const SizedBox(width: 48, height: 48)
-                                  : VoiceRecordButton(
-                                      conversationId: id,
-                                      gesture: _voiceGesture,
-                                    )),
-                      ),
-                    ],
-                  ),
-                  if (recording && id != null)
-                    Positioned(
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      right: 56,
-                      child: VoiceRecordBar(
-                        gesture: _voiceGesture,
-                        conversationId: id,
-                      ),
+                        const SizedBox(width: 8),
+                        ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: _controller,
+                          builder: (context, value, _) =>
+                              (!recording &&
+                                  (value.text.isNotEmpty || editing != null))
+                              ? IconButton.filled(
+                                  key: const ValueKey('composer-send'),
+                                  onPressed: _sending
+                                      ? null
+                                      : () {
+                                          _send();
+                                          _focus.requestFocus();
+                                        },
+                                  icon: const Icon(Icons.arrow_upward_rounded),
+                                )
+                              : (id == null
+                                    ? const SizedBox(width: 48, height: 48)
+                                    : VoiceRecordButton(
+                                        conversationId: id,
+                                        gesture: _voiceGesture,
+                                      )),
+                        ),
+                      ],
                     ),
-                ],
-              );
-            },
-          ),
-        ],
+                    if (recording && id != null)
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        right: 56,
+                        child: VoiceRecordBar(
+                          gesture: _voiceGesture,
+                          conversationId: id,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+            if (_panel && id != null) StickerPanel(conversationId: id),
+          ],
+        ),
       ),
     );
   }
-}
-
-/// A greyed composer icon: no tap target and no handler; the surrounding
-/// GreyOption supplies the dimmed look.
-class _GreyGlyph extends StatelessWidget {
-  const _GreyGlyph(this.icon);
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 40,
-    height: 40,
-    child: Icon(icon, color: Theme.of(context).colorScheme.onSurfaceVariant),
-  );
 }
 
 /// What the composer is answering, with a way to stop.
@@ -699,6 +722,8 @@ String quoteText(AppLocalizations l, Message? message) => switch (message) {
         : file.isVideo
         ? videoPreview
         : file.name,
+  Message(stickerId: final _?) => l.stickerPreviewLine,
+  Message(albumCard: true) => l.stickerAlbumPreviewLine,
   Message(hasAttachment: true) => l.quotePhoto,
   _ => l.commonMessage,
 };

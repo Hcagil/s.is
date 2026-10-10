@@ -6,7 +6,7 @@ import '../application/pin_controller.dart';
 import '../domain/message.dart';
 
 /// The bar under the chat header that shows the conversation's pinned
-/// message (its text, or "Photo"). A tap hands the message to [onTap], which
+/// message (its text, "Sticker", or "Photo"). A tap hands the message to [onTap], which
 /// scrolls to it. Nothing shows while no message is pinned or the pinned one
 /// is gone.
 class PinnedBar extends ConsumerWidget {
@@ -55,6 +55,8 @@ class PinnedBar extends ConsumerWidget {
                         Text(
                           message.body.isNotEmpty
                               ? message.body
+                              : message.stickerId != null
+                              ? previewText(message)
                               : l.pinnedBarPhoto,
                           key: const ValueKey('pinned-bar-text'),
                           maxLines: 1,

@@ -6,6 +6,7 @@ import 'file_attachment.dart';
 import 'poll.dart';
 import 'shared_contact.dart';
 import 'shared_location.dart';
+import 'sticker.dart';
 import 'video.dart';
 import 'voice.dart';
 
@@ -46,7 +47,11 @@ bool isSendableBody(String body) {
 /// A poll shows [pollPreview] of its question, a contact [contactPreview]
 /// of its name, a file [filePreview] of its name, a location
 /// [locationPreviewText], a voice message [voicePreview].
-String previewText(Message message) => message.poll
+String previewText(Message message) => message.stickerId != null
+    ? stickerPreviewText
+    : message.albumCard
+    ? stickerAlbumPreviewText
+    : message.poll
     ? pollPreview(message.body)
     : message.location != null
     ? locationPreviewText
@@ -91,6 +96,9 @@ final class Message {
     this.contact = false,
     this.location,
     this.file,
+    this.stickerId,
+    this.albumCard = false,
+    this.albumId,
     this.sending = false,
   });
 
@@ -134,6 +142,15 @@ final class Message {
   /// [attachmentPath] yet.
   final AttachedFile? file;
 
+  /// The sticker this message is (a sticker message has an empty body), or null.
+  final String? stickerId;
+
+  /// A shared sticker album card: [body] is the album's name. Its body never changes.
+  final bool albumCard;
+
+  /// The shared album's id, null when the album was deleted afterwards.
+  final String? albumId;
+
   /// True for a text-only message shown at once, before the server has
   /// answered -- like [localImage] but with nothing to display in the
   /// bubble itself, only the pending state ([isPending]).
@@ -174,6 +191,8 @@ final class Message {
       !contact &&
       location == null &&
       file == null &&
+      stickerId == null &&
+      !albumCard &&
       now.difference(createdAt) < deleteForEveryoneWindow;
 
   /// Still on its way to the server: a photo shown from the phone before
@@ -215,6 +234,9 @@ final class Message {
     attachmentPath: attachmentPath,
     attachmentPreview: attachmentPreview,
     localImage: bytes,
+    stickerId: stickerId,
+    albumCard: albumCard,
+    albumId: albumId,
     deletion: deletion,
     deletedBy: deletedBy,
     editedAt: editedAt,
@@ -237,6 +259,9 @@ final class Message {
     createdAt: createdAt,
     attachmentPath: attachmentPath,
     attachmentPreview: bytes,
+    stickerId: stickerId,
+    albumCard: albumCard,
+    albumId: albumId,
     localImage: localImage,
     deletion: deletion,
     deletedBy: deletedBy,
@@ -257,6 +282,9 @@ final class Message {
   /// server stored it.
   Message stored() => Message(
     id: id,
+    stickerId: stickerId,
+    albumCard: albumCard,
+    albumId: albumId,
     conversationId: conversationId,
     senderId: senderId,
     body: body,
@@ -323,6 +351,8 @@ enum MessageAction {
   unpin,
   retractVote,
   stopPoll,
+  stickerFavourite,
+  stickerAlbum,
 }
 
 /// The actions [me] may take on [message] at [now], in the order they are
@@ -346,7 +376,8 @@ List<MessageAction> allowedMessageActions(
     if (canShare &&
         !message.poll &&
         !message.contact &&
-        message.location == null)
+        message.location == null &&
+        !message.albumCard)
       MessageAction.forward,
     if (canEdit) MessageAction.edit,
     if (canDelete) MessageAction.deleteForEveryone,
@@ -376,14 +407,22 @@ List<MessageAction> menuMessageActions(
   final canEdit = me != null && message.canEdit(me, now);
   return [
     if (canShare) MessageAction.reply,
+    if (canShare && message.stickerId != null && message.senderId != me) ...[
+      MessageAction.stickerFavourite,
+      MessageAction.stickerAlbum,
+    ],
     if (canShare && canRetract) MessageAction.retractVote,
     if (canShare && canStop) MessageAction.stopPoll,
-    if (canShare && !message.poll && message.body.isNotEmpty)
+    if (canShare &&
+        !message.poll &&
+        !message.albumCard &&
+        message.body.isNotEmpty)
       MessageAction.copy,
     if (canShare &&
         !message.poll &&
         !message.contact &&
-        message.location == null)
+        message.location == null &&
+        !message.albumCard)
       MessageAction.forward,
     if (canEdit) MessageAction.edit,
     if (canShare && canPin) pinned ? MessageAction.unpin : MessageAction.pin,

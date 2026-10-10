@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart' show Locale;
+import 'package:flutter/material.dart' show Locale, ValueKey;
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
@@ -10,7 +10,9 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/group_settings.dart';
-import 'package:sis/features/chat/domain/message.dart' show MessageAction;
+import 'package:sis/features/chat/domain/message.dart'
+    show Message, MessageAction;
+import 'package:sis/features/chat/domain/sticker.dart' show starterStickerIds;
 import 'package:sis/features/chat/presentation/swipeable_message.dart'
     show swipeActionKeyId;
 
@@ -73,6 +75,47 @@ void main() {
         matchRoot: true,
       ),
       findsOneWidget,
+    );
+  });
+
+  // Contract (stickers 10a): a pinned sticker shows as a sticker in the
+  // banner (its image or the sticker preview line), never as a photo or
+  // an empty text line.
+  testWidgets('a pinned sticker shows as a sticker in the bar', (t) async {
+    final pins = ChatPinFake();
+    final w = World(self: 'u1', extra: pinWith(pins));
+    pinT1(w, pins);
+    pins.messages['t1'] = Message(
+      id: 't1',
+      conversationId: 'c1',
+      senderId: 'ub',
+      body: '',
+      createdAt: DateTime.utc(2026, 9, 20, 13),
+      stickerId: starterStickerIds.first,
+    );
+    await pumpApp(t, w);
+    await openChat(t, 'c1');
+    expect(byKey('pinned-bar'), findsOneWidget);
+    Finder inBar(Finder f) =>
+        find.descendant(of: byKey('pinned-bar'), matching: f);
+    expect(
+      inBar(find.text('Photo')),
+      findsNothing,
+      reason: 'a sticker is not a photo',
+    );
+    final asSticker =
+        inBar(find.textContaining('Sticker')).evaluate().isNotEmpty ||
+        inBar(
+          find.byWidgetPredicate(
+            (x) =>
+                x.key is ValueKey<String> &&
+                (x.key! as ValueKey<String>).value.startsWith('sticker-'),
+          ),
+        ).evaluate().isNotEmpty;
+    expect(
+      asSticker,
+      isTrue,
+      reason: 'the bar shows the sticker image or the sticker line',
     );
   });
 

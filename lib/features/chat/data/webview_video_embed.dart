@@ -14,10 +14,7 @@ Widget webViewVideoEmbed(VideoEmbedViewSpec spec) =>
 /// Sandboxed web view for a single video embed.
 class _EmbedWebView extends StatefulWidget {
   /// Creates the widget with the given spec.
-  const _EmbedWebView({
-    super.key,
-    required this.spec,
-  });
+  const _EmbedWebView({super.key, required this.spec});
 
   /// The video embed specification to load.
   final VideoEmbedViewSpec spec;
@@ -40,8 +37,10 @@ class _EmbedWebViewState extends State<_EmbedWebView> {
           )
         : const PlatformWebViewControllerCreationParams();
 
-    _controller = WebViewController.fromPlatformCreationParams(params,
-        onPermissionRequest: (request) => request.deny());
+    _controller = WebViewController.fromPlatformCreationParams(
+      params,
+      onPermissionRequest: (request) => request.deny(),
+    );
 
     // Sandboxed WebView settings.
     _controller
@@ -92,7 +91,11 @@ class _EmbedWebViewState extends State<_EmbedWebView> {
   NavigationDecision _onNavigation(NavigationRequest request) {
     final uri = Uri.tryParse(request.url);
     if (uri != null &&
-        videoEmbedAllows(widget.spec.embed, uri, mainFrame: request.isMainFrame)) {
+        videoEmbedAllows(
+          widget.spec.embed,
+          uri,
+          mainFrame: request.isMainFrame,
+        )) {
       return NavigationDecision.navigate;
     }
     if (request.isMainFrame &&

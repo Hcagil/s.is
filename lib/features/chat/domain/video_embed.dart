@@ -73,7 +73,8 @@ VideoEmbed? _youtube(Uri link, String host) {
   final String? id;
   if (host == 'youtu.be') {
     id = s.isEmpty ? null : s.first;
-  } else if (s.length >= 2 && const ['shorts', 'embed', 'live'].contains(s[0])) {
+  } else if (s.length >= 2 &&
+      const ['shorts', 'embed', 'live'].contains(s[0])) {
     id = s[1];
   } else if (s.length == 1 && s[0] == 'watch') {
     id = link.queryParameters['v'];
@@ -112,42 +113,32 @@ VideoEmbed? _instagram(Uri link) {
   final kind = s[i] == 'reels' ? 'reel' : s[i];
   final code = s[i + 1];
   final url = Uri.https('www.instagram.com', '/$kind/$code/embed/');
-  return VideoEmbed(
-    site: VideoSite.instagram,
-    link: link,
-    url: url,
-  );
+  return VideoEmbed(site: VideoSite.instagram, link: link, url: url);
 }
 
 VideoEmbed? _tiktok(Uri link) {
   final s = link.pathSegments;
   int? i;
   for (int j = 0; j < s.length; j++) {
-    if (s[j] == 'video' &&
-        j + 1 < s.length &&
-        _tiktokPath.hasMatch(s[j + 1])) {
+    if (s[j] == 'video' && j + 1 < s.length && _tiktokPath.hasMatch(s[j + 1])) {
       i = j;
       break;
     }
   }
   if (i == null) return null;
-  final url = Uri.https('www.tiktok.com', '/player/v1/${s[i + 1]}', {'autoplay': '1'});
-  return VideoEmbed(
-    site: VideoSite.tiktok,
-    link: link,
-    url: url,
-  );
+  final url = Uri.https('www.tiktok.com', '/player/v1/${s[i + 1]}', {
+    'autoplay': '1',
+  });
+  return VideoEmbed(site: VideoSite.tiktok, link: link, url: url);
 }
 
 VideoEmbed? _x(Uri link) {
   final s = link.pathSegments;
   if (s.length < 3 || s[1] != 'status' || !_xPath.hasMatch(s[2])) return null;
-  final url = Uri.https('platform.twitter.com', '/embed/Tweet.html', {'id': s[2]});
-  return VideoEmbed(
-    site: VideoSite.x,
-    link: link,
-    url: url,
-  );
+  final url = Uri.https('platform.twitter.com', '/embed/Tweet.html', {
+    'id': s[2],
+  });
+  return VideoEmbed(site: VideoSite.x, link: link, url: url);
 }
 
 /// Whether [embed] allows [target] to load in frame [mainFrame].

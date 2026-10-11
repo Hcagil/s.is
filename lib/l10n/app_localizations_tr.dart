@@ -1936,10 +1936,10 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String videoOpenIn(String site) {
     String _temp0 = intl.Intl.selectLogic(site, {
-      'youtube': 'YouTube\'\'da aç',
-      'instagram': 'Instagram\'\'da aç',
-      'tiktok': 'TikTok\'\'ta aç',
-      'x': 'X\'\'te aç',
+      'youtube': 'YouTube\'da aç',
+      'instagram': 'Instagram\'da aç',
+      'tiktok': 'TikTok\'ta aç',
+      'x': 'X\'te aç',
       'other': 'Tarayıcıda aç',
     });
     return '$_temp0';
@@ -1947,7 +1947,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String videoPlayerPrivacy(String site) {
-    return 'Oynat\'\'a basana kadar $site seni görmez.';
+    return 'Oynat\'a basana kadar $site seni görmez.';
   }
 
   @override

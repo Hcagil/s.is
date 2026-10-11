@@ -147,12 +147,13 @@ class _VideoPlayerSheetState extends ConsumerState<VideoPlayerSheet> {
     final t = SisBrand.of(context);
     final size = MediaQuery.sizeOf(context);
     final width = size.width;
-    final height = switch (widget.embed.site) {
+    // Sideways, the player must leave room for the title and button bar.
+    final height = math.min(size.height * 0.6, switch (widget.embed.site) {
       VideoSite.youtube => width * 9 / 16,
       VideoSite.tiktok ||
       VideoSite.instagram => math.min(size.height * 0.6, width * 1.6),
       VideoSite.x => math.min(size.height * 0.5, 420.0),
-    };
+    });
 
     return SizedBox(
       height: height,

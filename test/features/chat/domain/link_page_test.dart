@@ -183,9 +183,9 @@ void main() {
   test('TARGET L1: invisible format characters are stripped from the text', () {
     final info = parseLinkPage(
       base,
-      '<meta property="og:title" content="pay​pal‮⁦﻿">'
-      '<meta property="og:description" content="d‏e">'
-      '<meta property="og:site_name" content="s⁩ite">',
+      '<meta property="og:title" content="pay\u200Bpal\u202E\u2066\uFEFF">'
+      '<meta property="og:description" content="d\u200Fe">'
+      '<meta property="og:site_name" content="s\u2069ite">',
     );
     expect(info!.title, 'paypal');
     expect(info.description, 'de');

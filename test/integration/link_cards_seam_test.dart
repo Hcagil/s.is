@@ -1,7 +1,6 @@
 @Tags(['integration'])
 library;
 
-import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -213,62 +212,72 @@ void main() {
       body: url,
       preview: draft(url, id, image: tooBig),
     );
-    expect(sent, isA<Ok<Message>>(), reason: 'a failed upload never fails the send');
+    expect(
+      sent,
+      isA<Ok<Message>>(),
+      reason: 'a failed upload never fails the send',
+    );
     final got = await readBack(quinlan, id);
     expect(got.linkPreview?.title, 'A page title');
     expect(got.linkPreview?.imagePath, isNull);
   });
 
-  test('a retried send whose picture is already there (409) keeps it', () async {
-    final id = randomMessageId();
-    final url = page('retry');
-    await priyaClient.storage
-        .from('link-previews')
-        .uploadBinary(
-          linkImagePath(club, id),
-          _jpeg,
-          fileOptions: const FileOptions(contentType: 'image/jpeg'),
-        );
-    _ok(
-      await priya.send(
+  test(
+    'a retried send whose picture is already there (409) keeps it',
+    () async {
+      final id = randomMessageId();
+      final url = page('retry');
+      await priyaClient.storage
+          .from('link-previews')
+          .uploadBinary(
+            linkImagePath(club, id),
+            _jpeg,
+            fileOptions: const FileOptions(contentType: 'image/jpeg'),
+          );
+      _ok(
+        await priya.send(
+          id: id,
+          conversationId: club,
+          body: url,
+          preview: draft(url, id, image: _jpeg),
+        ),
+      );
+      final got = await readBack(quinlan, id);
+      expect(got.linkPreview?.imagePath, linkImagePath(club, id));
+      expect(_ok(await quinlan.linkImageBytes(linkImagePath(club, id))), _jpeg);
+    },
+  );
+
+  test(
+    'TARGET M1: a picture another member planted at the path is not '
+    'taken as the sender\'s (409 counts only when the sender owns it)',
+    () async {
+      final id = randomMessageId();
+      final url = page('planted');
+      final planted = img.encodeJpg(img.Image(width: 2, height: 2));
+      await quinlanClient.storage
+          .from('link-previews')
+          .uploadBinary(
+            linkImagePath(club, id),
+            planted,
+            fileOptions: const FileOptions(contentType: 'image/jpeg'),
+          );
+      final sent = await priya.send(
         id: id,
         conversationId: club,
         body: url,
         preview: draft(url, id, image: _jpeg),
-      ),
-    );
-    final got = await readBack(quinlan, id);
-    expect(got.linkPreview?.imagePath, linkImagePath(club, id));
-    expect(_ok(await quinlan.linkImageBytes(linkImagePath(club, id))), _jpeg);
-  });
-
-  test('TARGET M1: a picture another member planted at the path is not '
-      'taken as the sender\'s (409 counts only when the sender owns it)', () async {
-    final id = randomMessageId();
-    final url = page('planted');
-    final planted = img.encodeJpg(img.Image(width: 2, height: 2));
-    await quinlanClient.storage
-        .from('link-previews')
-        .uploadBinary(
-          linkImagePath(club, id),
-          planted,
-          fileOptions: const FileOptions(contentType: 'image/jpeg'),
-        );
-    final sent = await priya.send(
-      id: id,
-      conversationId: club,
-      body: url,
-      preview: draft(url, id, image: _jpeg),
-    );
-    if (sent is Ok<Message>) {
-      final got = await readBack(quinlan, id);
-      expect(
-        got.linkPreview?.imagePath,
-        isNull,
-        reason: 'quinlan\'s planted picture must not show as priya\'s card',
       );
-    }
-  });
+      if (sent is Ok<Message>) {
+        final got = await readBack(quinlan, id);
+        expect(
+          got.linkPreview?.imagePath,
+          isNull,
+          reason: 'quinlan\'s planted picture must not show as priya\'s card',
+        );
+      }
+    },
+  );
 
   test('a non-member cannot read the picture', () async {
     final id = randomMessageId();
@@ -286,39 +295,45 @@ void main() {
     expect(r, isNot(isA<Ok<Uint8List>>()));
   });
 
-  test('deleting for everyone removes the card from what readers get', () async {
-    final id = randomMessageId();
-    final url = page('gone');
-    final sent = _ok(
-      await priya.send(
-        id: id,
-        conversationId: club,
-        body: url,
-        preview: draft(url, id, image: _jpeg),
-      ),
-    );
-    _ok(await priya.deleteForEveryone(sent));
-    final all = _ok(await quinlan.messages(club));
-    for (final m in all.where((m) => m.id == id)) {
-      expect(m.linkPreview, isNull);
-    }
-  });
+  test(
+    'deleting for everyone removes the card from what readers get',
+    () async {
+      final id = randomMessageId();
+      final url = page('gone');
+      final sent = _ok(
+        await priya.send(
+          id: id,
+          conversationId: club,
+          body: url,
+          preview: draft(url, id, image: _jpeg),
+        ),
+      );
+      _ok(await priya.deleteForEveryone(sent));
+      final all = _ok(await quinlan.messages(club));
+      for (final m in all.where((m) => m.id == id)) {
+        expect(m.linkPreview, isNull);
+      }
+    },
+  );
 
-  test('TARGET H1: after delete for everyone the picture is unreadable', () async {
-    final id = randomMessageId();
-    final url = page('gone2');
-    final sent = _ok(
-      await priya.send(
-        id: id,
-        conversationId: club,
-        body: url,
-        preview: draft(url, id, image: _jpeg),
-      ),
-    );
-    _ok(await priya.deleteForEveryone(sent));
-    expect(
-      await quinlan.linkImageBytes(linkImagePath(club, id)),
-      isA<Err<Uint8List>>(),
-    );
-  });
+  test(
+    'TARGET H1: after delete for everyone the picture is unreadable',
+    () async {
+      final id = randomMessageId();
+      final url = page('gone2');
+      final sent = _ok(
+        await priya.send(
+          id: id,
+          conversationId: club,
+          body: url,
+          preview: draft(url, id, image: _jpeg),
+        ),
+      );
+      _ok(await priya.deleteForEveryone(sent));
+      expect(
+        await quinlan.linkImageBytes(linkImagePath(club, id)),
+        isA<Err<Uint8List>>(),
+      );
+    },
+  );
 }

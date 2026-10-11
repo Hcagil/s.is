@@ -12,7 +12,7 @@
 -- valid card with exactly one field broken, sent by a member on a plain text
 -- message, so only the rule under test can refuse it.
 begin;
-select plan(88);
+select plan(92);
 
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
   ('00000000-0000-0000-0000-0000000a1f01', 'lp-ann@example.com', now(), '{"full_name":"Ann"}'),
@@ -146,7 +146,7 @@ select is((select count(*) from storage.objects where bucket_id = 'link-previews
 select throws_ok($$delete from storage.objects where bucket_id = 'link-previews'$$,
                  null, null, 'no delete policy: deleting a card picture is refused');
 reset role;
-select is((select count(*) from storage.objects where bucket_id = 'link-previews'), 1::bigint,
+select is((select count(*) from storage.objects where bucket_id = 'link-previews' and name = pic('orphan')), 1::bigint,
           'the card picture survives the delete attempt');
 
 select test_as('00000000-0000-0000-0000-0000000a1f03', 'a1f00000-0000-0000-0000-000000000003');
@@ -374,6 +374,30 @@ select throws_ok($$update public.messages set link_preview = '{"url":"https://x.
 update public.messages set body = 'changed https://example.com/a', link_preview = link_preview where id = i('kept');
 select is((select link_preview from public.messages where id = i('kept')), null,
           'a changed body drops the card even when the update names it');
+
+-- Upload gates taken one at a time (ann is a member in every case below).
+select test_as('00000000-0000-0000-0000-0000000a1f01', 'a1f00000-0000-0000-0000-000000000001');
+select throws_ok(
+  format($$insert into storage.objects(bucket_id, name, owner_id, metadata)
+           values ('link-previews', %L, %L, '{"size":3}'::jsonb)$$,
+         (select conv from _fx)::text || '/00000000-0000-0000-0000-00000000a1e1.jpg',
+         '00000000-0000-0000-0000-0000000a1f02'),
+  '42501', null, 'a member cannot upload a picture in another member''s name');
+reset role;
+-- ann on a device that is not her active one: still a member, no app access.
+select test_as('00000000-0000-0000-0000-0000000a1f01', 'a1f00000-0000-0000-0000-0000000000ff');
+select throws_ok(
+  format($$insert into storage.objects(bucket_id, name, owner_id, metadata)
+           values ('link-previews', %L, %L, '{"size":3}'::jsonb)$$,
+         (select conv from _fx)::text || '/00000000-0000-0000-0000-00000000a1e2.jpg',
+         '00000000-0000-0000-0000-0000000a1f01'),
+  '42501', null, 'a member without app access (not the active device) cannot upload');
+select is((select count(*) from storage.objects where bucket_id = 'link-previews' and name = pic('full')),
+          0::bigint, 'a member without app access (not the active device) reads no card picture');
+reset role;
+
+select is((select prosecdef from pg_proc where proname = 'messages_link_preview_guard'), false,
+          'TARGET I1: the card guard runs as security invoker');
 
 select * from finish();
 rollback;

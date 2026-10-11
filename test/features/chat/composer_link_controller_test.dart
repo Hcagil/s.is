@@ -233,6 +233,23 @@ void main() {
       expect(link().takeForSend('https://example.com/a more words'), isNull);
     });
 
+    testWidgets('after a reset (sent, other chat) the same link gets a card '
+        'again', (t) async {
+      await start(t);
+      link().onTextChanged('https://example.com/a');
+      await t.pump(debounce);
+      fetcher.answer(0);
+      await settle(t);
+      link().dismiss();
+      link().reset();
+      link().onTextChanged('https://example.com/a');
+      await t.pump(debounce);
+      expect(fetcher.asked, hasLength(2));
+      fetcher.answer(1);
+      await settle(t);
+      expect(strip(), isNotNull);
+    });
+
     testWidgets('X while the page is still loading: its answer is dropped', (
       t,
     ) async {
@@ -374,6 +391,30 @@ void main() {
       );
       await settle(t);
       expect(chat.sentPreviews, [null]);
+    });
+
+    testWidgets('the sender\'s own card picture comes from the queue, not '
+        'from storage', (t) async {
+      await start(t);
+      final m = c
+          .read(sendQueueProvider.notifier)
+          .enqueue(
+            'c1',
+            body: 'https://example.com/a',
+            preview: card(Uri.parse('https://example.com/a')),
+          );
+      final path = linkImagePath('c1', m.id);
+      final shown = c.read(linkImageProvider(path).future);
+      expect(await t.runAsync(() => shown), picture);
+      expect(chat.calls, isNot(contains('linkImageBytes:$path')));
+    });
+
+    testWidgets('a received card picture is read from storage', (t) async {
+      await start(t);
+      chat.store('c1/m9.jpg', picture);
+      final shown = c.read(linkImageProvider('c1/m9.jpg').future);
+      expect(await t.runAsync(() => shown), picture);
+      expect(chat.calls, contains('linkImageBytes:c1/m9.jpg'));
     });
 
     testWidgets('pendingLinkImage knows only queued pictures', (t) async {

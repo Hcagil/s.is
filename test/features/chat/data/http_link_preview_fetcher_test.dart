@@ -231,24 +231,21 @@ void main() {
       expect(HttpLinkPreviewFetcher(web).timeout, const Duration(seconds: 6));
     });
 
-    test(
-      'TARGET L4: a body that stalls is abandoned at the timeout and its stream cancelled',
-      () async {
-        var cancelled = false;
-        final body = StreamController<List<int>>(
-          onCancel: () => cancelled = true,
-        );
-        body.add(utf8.encode('<html><head><title>Slow'));
-        web.routes['https://example.com/a'] = () =>
-            http.StreamedResponse(body.stream, 200);
-        final watch = Stopwatch()..start();
-        await fetcher(timeout: const Duration(milliseconds: 300))
-            .fetch(Uri.parse('https://example.com/a'));
-        expect(watch.elapsed, lessThan(const Duration(seconds: 3)));
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-        expect(cancelled, isTrue, reason: 'TARGET L4: cancel on timeout');
-      },
-    );
+    test('TARGET L4: a body that stalls is abandoned at the timeout and its stream cancelled', () async {
+      var cancelled = false;
+      final body = StreamController<List<int>>(
+        onCancel: () => cancelled = true,
+      );
+      body.add(utf8.encode('<html><head><title>Slow'));
+      web.routes['https://example.com/a'] = () =>
+          http.StreamedResponse(body.stream, 200);
+      final watch = Stopwatch()..start();
+      await fetcher(timeout: const Duration(milliseconds: 300))
+          .fetch(Uri.parse('https://example.com/a'));
+      expect(watch.elapsed, lessThan(const Duration(seconds: 3)));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(cancelled, isTrue, reason: 'TARGET L4: cancel on timeout');
+    });
 
     test(
       'a picture that never answers still gives the card, without it',
@@ -343,51 +340,57 @@ void main() {
     );
   });
 
-  group('TARGET M2: redirects followed hop by hop by the fetcher, at most 5', () {
-    void chain(int hops) {
-      for (var i = 0; i < hops; i++) {
-        web.redirect(
-          'https://example.com/r$i',
-          'https://example.com/r${i + 1}',
-        );
+  group(
+    'TARGET M2: redirects followed hop by hop by the fetcher, at most 5',
+    () {
+      void chain(int hops) {
+        for (var i = 0; i < hops; i++) {
+          web.redirect(
+            'https://example.com/r$i',
+            'https://example.com/r${i + 1}',
+          );
+        }
+        web.page('https://example.com/r$hops', _og(title: 'End'));
       }
-      web.page('https://example.com/r$hops', _og(title: 'End'));
-    }
 
-    test(
-      '5 redirects are followed; the card keeps the link that was typed',
-      () async {
-        chain(5);
-        final draft = await fetcher().fetch(
-          Uri.parse('https://example.com/r0'),
-        );
-        expect(draft?.preview.title, 'End');
-        expect(draft?.preview.url, Uri.parse('https://example.com/r0'));
-      },
-    );
-
-    test('6 redirects give null', () async {
-      chain(6);
-      expect(
-        await fetcher().fetch(Uri.parse('https://example.com/r0')),
-        isNull,
+      test(
+        '5 redirects are followed; the card keeps the link that was typed',
+        () async {
+          chain(5);
+          final draft = await fetcher().fetch(
+            Uri.parse('https://example.com/r0'),
+          );
+          expect(draft?.preview.title, 'End');
+          expect(draft?.preview.url, Uri.parse('https://example.com/r0'));
+        },
       );
-      expect(web.asked.length, lessThanOrEqualTo(6));
-    });
 
-    test('a redirect loop ends', () async {
-      web.redirect('https://example.com/a', 'https://example.com/b');
-      web.redirect('https://example.com/b', 'https://example.com/a');
-      expect(await fetcher().fetch(Uri.parse('https://example.com/a')), isNull);
-    });
+      test('6 redirects give null', () async {
+        chain(6);
+        expect(
+          await fetcher().fetch(Uri.parse('https://example.com/r0')),
+          isNull,
+        );
+        expect(web.asked.length, lessThanOrEqualTo(6));
+      });
 
-    test('a relative Location is resolved against the hop', () async {
-      web.redirect('https://example.com/a', '/b');
-      web.page('https://example.com/b', _og(title: 'B'));
-      final draft = await fetcher().fetch(Uri.parse('https://example.com/a'));
-      expect(draft?.preview.title, 'B');
-    });
-  });
+      test('a redirect loop ends', () async {
+        web.redirect('https://example.com/a', 'https://example.com/b');
+        web.redirect('https://example.com/b', 'https://example.com/a');
+        expect(
+          await fetcher().fetch(Uri.parse('https://example.com/a')),
+          isNull,
+        );
+      });
+
+      test('a relative Location is resolved against the hop', () async {
+        web.redirect('https://example.com/a', '/b');
+        web.page('https://example.com/b', _og(title: 'B'));
+        final draft = await fetcher().fetch(Uri.parse('https://example.com/a'));
+        expect(draft?.preview.title, 'B');
+      });
+    },
+  );
 
   group('TARGET M2: no private targets, every hop checked', () {
     for (final u in [

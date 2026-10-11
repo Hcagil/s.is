@@ -182,13 +182,28 @@ void main() {
     });
 
     test('a card a reader must not trust reads as none', () {
-      Map<String, Object?> with_(Map<String, Object?> patch) =>
-          {...card.toJson(), ...patch};
-      expect(LinkPreview.fromJson(with_({'url': 'javascript:alert(1)'})), isNull);
-      expect(LinkPreview.fromJson(with_({'url': 'file:///etc/passwd'})), isNull);
+      Map<String, Object?> with_(Map<String, Object?> patch) => {
+        ...card.toJson(),
+        ...patch,
+      };
+      expect(
+        LinkPreview.fromJson(with_({'url': 'javascript:alert(1)'})),
+        isNull,
+      );
+      expect(
+        LinkPreview.fromJson(with_({'url': 'file:///etc/passwd'})),
+        isNull,
+      );
+      expect(
+        LinkPreview.fromJson(with_({'url': 'ftp://example.com/x'})),
+        isNull,
+      );
+      expect(LinkPreview.fromJson(with_({'url': 'https:///nohost'})), isNull);
       expect(LinkPreview.fromJson(with_({'title': ''})), isNull);
       expect(
-        LinkPreview.fromJson(with_({'title': 'x' * (LinkPreview.maxTitle + 1)})),
+        LinkPreview.fromJson(
+          with_({'title': 'x' * (LinkPreview.maxTitle + 1)}),
+        ),
         isNull,
       );
       expect(

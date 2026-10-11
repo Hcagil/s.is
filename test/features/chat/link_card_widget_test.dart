@@ -37,7 +37,7 @@ class _SignedIn extends SessionController {
 }
 
 /// The website: any HTTP client the app opens is recorded.
-class _Web extends HttpOverrides {
+class Web extends HttpOverrides {
   final asked = <String>[];
   @override
   HttpClient createHttpClient(SecurityContext? context) {
@@ -103,7 +103,7 @@ String textIn(Finder of) => [
     (e.widget as RichText).text.toPlainText(),
 ].join(' ');
 
-late _Web web;
+late Web web;
 late LinkOpenerFake opener;
 late HeldFetcher fetcher;
 
@@ -150,7 +150,7 @@ Future<ChatFake> pump(
 
 void main() {
   setUp(() {
-    web = _Web();
+    web = Web();
     HttpOverrides.global = web;
     opener = LinkOpenerFake();
     fetcher = HeldFetcher();
@@ -229,23 +229,30 @@ void main() {
     testWidgets('a video card carries a play mark a plain card lacks', (
       t,
     ) async {
-      await pump(t, [
-        msg(
-          'm1',
-          body: 'https://www.youtube.com/watch?v=abc',
-          card: cardOf(
-            'https://www.youtube.com/watch?v=abc',
-            video: true,
-            image: 'c1/m1.jpg',
+      await pump(
+        t,
+        [
+          msg(
+            'm1',
+            body: 'https://www.youtube.com/watch?v=abc',
+            card: cardOf(
+              'https://www.youtube.com/watch?v=abc',
+              video: true,
+              image: 'c1/m1.jpg',
+            ),
           ),
-        ),
-        msg(
-          'm2',
-          minute: 1,
-          body: 'https://www.youtube.com/watch?v=abd',
-          card: cardOf('https://www.youtube.com/watch?v=abd', image: 'c1/m2.jpg'),
-        ),
-      ], pictures: {'c1/m1.jpg': pngBytes, 'c1/m2.jpg': pngBytes});
+          msg(
+            'm2',
+            minute: 1,
+            body: 'https://www.youtube.com/watch?v=abd',
+            card: cardOf(
+              'https://www.youtube.com/watch?v=abd',
+              image: 'c1/m2.jpg',
+            ),
+          ),
+        ],
+        pictures: {'c1/m1.jpg': pngBytes, 'c1/m2.jpg': pngBytes},
+      );
       int marks(String id) => find
           .descendant(of: card(id), matching: find.byType(Icon))
           .evaluate()
@@ -383,7 +390,9 @@ void main() {
       expect(strip, findsNothing);
       await t.tap(send);
       await t.pumpAndSettle();
-      expect(chat.sentPreviews, [null], reason: 'X = the link goes as plain text');
+      expect(chat.sentPreviews, [
+        null,
+      ], reason: 'X = the link goes as plain text');
     });
 
     for (final (locale, tip) in [
@@ -406,22 +415,23 @@ void main() {
       });
     }
 
-    testWidgets('sending with a ready strip sends the card and clears the strip', (
-      t,
-    ) async {
-      final chat = await pump(t, []);
-      await typeLink(t, 'https://example.com/a');
-      answer(0, image: pngBytes);
-      await t.pumpAndSettle();
-      await t.tap(send);
-      await t.pump();
-      expect(strip, findsNothing);
-      await settleImages(t);
-      final sent = chat.sentPreviews.single!;
-      expect(sent.preview.url, Uri.parse('https://example.com/a'));
-      expect(sent.image, pngBytes);
-      expect(sent.preview.imagePath, startsWith('c1/'));
-    });
+    testWidgets(
+      'sending with a ready strip sends the card and clears the strip',
+      (t) async {
+        final chat = await pump(t, []);
+        await typeLink(t, 'https://example.com/a');
+        answer(0, image: pngBytes);
+        await t.pumpAndSettle();
+        await t.tap(send);
+        await t.pump();
+        expect(strip, findsNothing);
+        await settleImages(t);
+        final sent = chat.sentPreviews.single!;
+        expect(sent.preview.url, Uri.parse('https://example.com/a'));
+        expect(sent.image, pngBytes);
+        expect(sent.preview.imagePath, startsWith('c1/'));
+      },
+    );
 
     testWidgets('sending never waits: before the card is ready the message '
         'goes at once, without one', (t) async {

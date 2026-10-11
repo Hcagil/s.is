@@ -550,13 +550,13 @@ class SessionChat implements ChatRepository {
     if (who == null) return const Err(DeniedFailure());
     return Ok(Uri.parse('https://x.supabase.co/$attachmentPath?as=$who'));
   }
+
   @override
   Future<Result<Uint8List>> linkImageBytes(String imagePath) async {
     final who = await _as('linkImageBytes:$imagePath');
     if (who == null) return const Err(DeniedFailure());
     return Ok(Uint8List.fromList(imagePath.codeUnits));
   }
-
 
   @override
   Future<Result<Uint8List>> attachmentBytes(String attachmentPath) async {

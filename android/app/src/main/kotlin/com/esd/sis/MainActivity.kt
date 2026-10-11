@@ -24,6 +24,7 @@ private const val CHANNEL = "sis/external_picker"
 private const val TONE_CHANNEL = "sis/tone_picker"
 private const val NETWORK_CHANNEL = "sis/network"
 private const val SPEECH_CHANNEL = "sis/speech"
+private const val SHARE_CHANNEL = "sis/share_intake"
 private const val REQUEST_TONE = 9103
 private const val REQUEST_ATTACHMENTS = 9101
 private const val REQUEST_PICTURE = 9102
@@ -50,6 +51,11 @@ class MainActivity : FlutterActivity() {
     // that risks freezing the UI or an ANR.
     private val pickExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val stickerCutout by lazy { StickerCutout(this) }
+    private val shareReader by lazy { ShareIntakeReader(this) }
+    private var shareChannel: MethodChannel? = null
+    private var pendingShare: Map<String, Any?>? = null
+    private var shareParsing = false
+    private val shareWaiters = mutableListOf<MethodChannel.Result>()
 
     override fun onDestroy() {
         pickExecutor.shutdown()
@@ -86,6 +92,56 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 if (call.method == "onDeviceAvailable") result.success(onDeviceSpeechAvailable()) else result.notImplemented()
             }
+        shareChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARE_CHANNEL).also {
+            it.setMethodCallHandler { call, result -> if (call.method == "take") takeShare(result) else result.notImplemented() }
+        }
+        shareReader.cleanStale()
+        handleShare(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleShare(intent)
+    }
+
+    // Dart asks for the share that started or reached the app. A parse still
+    // running is waited for; nothing waiting answers null. A share is handed
+    // over once: it is cleared as it is taken.
+    private fun takeShare(result: MethodChannel.Result) {
+        val ready = pendingShare
+        when {
+            ready != null -> { pendingShare = null; result.success(ready) }
+            shareParsing -> shareWaiters.add(result)
+            else -> result.success(null)
+        }
+    }
+
+    // Copies a share intent's files into the cache off the main thread, then
+    // hands them to a waiting Dart ask or tells Dart they arrived. A launch from
+    // history must not replay an old share.
+    private fun handleShare(intent: Intent?) {
+        if (intent == null || !shareReader.isShare(intent)) return
+        if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
+        val copy = Intent(intent)
+        intent.action = null // consumed: a recreate must not read it again
+        shareParsing = true
+        pickExecutor.execute {
+            val parsed = try { shareReader.read(copy) } catch (e: Exception) { null }
+            runOnUiThread {
+                shareParsing = false
+                if (parsed == null) {
+                    shareWaiters.forEach { it.success(null) }
+                } else if (shareWaiters.isNotEmpty()) {
+                    shareWaiters.removeAt(0).success(parsed)
+                    shareWaiters.forEach { it.success(null) }
+                } else {
+                    pendingShare = parsed
+                    shareChannel?.invokeMethod("arrived", null)
+                }
+                shareWaiters.clear()
+            }
+        }
     }
 
     // True when the active network is cellular and the carrier marks it as

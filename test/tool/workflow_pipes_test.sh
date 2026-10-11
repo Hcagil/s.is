@@ -150,12 +150,14 @@ case "$1" in
   --verify) exit 0 ;;
   *) echo "codesign stub: unexpected: $*" >&2; exit 2 ;;
 esac'
-# A real Runner.app always holds Flutter.framework (the loop has no nullglob).
-sig() { # <shell> <app authority file> [<Flutter.framework authority file>, default distribution]; rc of the step
+# A real Runner.app always holds Flutter.framework and PlugIns/ShareExtension.appex (the loops have no nullglob).
+sig() { # <shell> <app authority file> [<Flutter.framework authority file>] [<ShareExtension.appex authority file>] (default distribution); rc of the step
   rm -rf "$tmp/rt" "$tmp/cs"; mkdir -p "$tmp/rt/export" "$tmp/cs" "$tmp/pkg/Payload/Runner.app/Frameworks"
   rm -rf "$tmp/pkg/Payload/Runner.app/Frameworks/"*
   cp "$2" "$tmp/cs/Runner.app.dvv"
   mkdir "$tmp/pkg/Payload/Runner.app/Frameworks/Flutter.framework"; cp "${3:-$tmp/a-dist}" "$tmp/cs/Flutter.framework.dvv"
+  rm -rf "$tmp/pkg/Payload/Runner.app/PlugIns"; mkdir -p "$tmp/pkg/Payload/Runner.app/PlugIns/ShareExtension.appex"
+  cp "${4:-$tmp/a-dist}" "$tmp/cs/ShareExtension.appex.dvv"
   (cd "$tmp/pkg" && rm -f "$tmp/rt/export/sis.ipa" && zip -qr "$tmp/rt/export/sis.ipa" Payload)
   PATH="$tmp/bin:$PATH" CS="$tmp/cs" RUNNER_TEMP="$tmp/rt" $1 "$tmp/sig.sh" > "$tmp/out" 2>&1
 }
@@ -177,6 +179,7 @@ for sh in "${SHELLS[@]}"; do
   [ "$(grep -A1 -xF "Runner.app: $DIST" "$tmp/out" | tail -1)" = "  DR: identifier x" ] \
     || fail "the app's authority is not reported as exactly [$DIST] under '$sh'"
   sig "$sh" "$tmp/a-dist" "$tmp/a-dist" || fail "a distribution-signed app and framework failed under '$sh'"
+  grep -qxF "ShareExtension.appex: $DIST" "$tmp/out" || fail "the share extension's authority is not reported under '$sh': $(cat "$tmp/out")"
   sig "$sh" "$tmp/a-stderr" || fail "an authority printed on stderr was not read under '$sh'"
   sig "$sh" "$tmp/a-big" || fail "a distribution signature with $BIG more Authority lines failed under '$sh' (SIGPIPE?)"
   [ "$(grep -A1 -xF "Runner.app: $DIST" "$tmp/out" | tail -1)" = "  DR: identifier x" ] \
@@ -184,6 +187,7 @@ for sh in "${SHELLS[@]}"; do
   for bad in a-dev-first a-adhoc a-root-first a-prefixed a-nospace a-indented; do
     if sig "$sh" "$tmp/$bad"; then fail "app with $bad passed the signature check under '$sh'"; fi
     if sig "$sh" "$tmp/a-dist" "$tmp/$bad"; then fail "framework with $bad passed the signature check under '$sh'"; fi
+    if sig "$sh" "$tmp/a-dist" "$tmp/a-dist" "$tmp/$bad"; then fail "share extension with $bad passed the signature check under '$sh'"; fi
   done
   sig "$sh" "$tmp/a-adhoc" || true
   grep -qxF "Runner.app: unsigned or ad-hoc" "$tmp/out" || fail "no Authority line is not reported as unsigned under '$sh'"

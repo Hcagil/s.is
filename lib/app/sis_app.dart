@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +18,8 @@ import '../features/auth/presentation/status_screens.dart';
 import '../features/chat/application/chat_controllers.dart';
 import '../features/chat/application/chat_drafts.dart';
 import '../features/chat/application/group_controller.dart';
+import '../features/chat/application/share_controller.dart';
+import '../features/chat/presentation/share_page.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/notifications/application/badge_controller.dart';
 import '../features/notifications/application/push_controller.dart';
@@ -125,15 +129,17 @@ class _AllowedGate extends ConsumerWidget {
       AsyncData()
           when ref.watch(notificationExplainerShownProvider).value == false =>
         const NotificationExplainerScreen(),
-      AsyncData() => HomeScreen(member: member),
+      AsyncData() => ShareHost(child: HomeScreen(member: member)),
       // The marker said the first-run screen is done, so Home shows while the
       // profile loads or fails to load; never an error screen.
-      AsyncError() when onboarded => HomeScreen(member: member),
+      AsyncError() when onboarded => ShareHost(
+        child: HomeScreen(member: member),
+      ),
       AsyncError(:final error) => StatusScreen.error(
         failureReason(error),
         onRetry: () => ref.read(ownProfileProvider.notifier).retry(),
       ),
-      _ when onboarded => HomeScreen(member: member),
+      _ when onboarded => ShareHost(child: HomeScreen(member: member)),
       _ => const SisFullScreenLoader(),
     };
   }
@@ -193,12 +199,27 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     if (startupError != null) return StartupFailedScreen(startupError);
 
     final session = ref.watch(sessionControllerProvider);
+    // Held from the start, signed in or not: what another app shared waits
+    // here until the member has signed in and picks chats (ShareHost).
+    ref.listen(pendingShareProvider, (_, _) {});
     // A session that ends -- signed out, or Denied (revoked, replaced, found
     // out only after the stored list was shown) -- leaves no page open: a chat
     // opened from a notification in the unconfirmed window must not stay on
     // top of the Denied or sign-in screen. Synchronous on purpose (same frame).
-    ref.listen(sessionControllerProvider, (_, next) {
+    ref.listen(sessionControllerProvider, (prev, next) {
       final v = next.value;
+      // What a member was about to share must not wait for the next account: finish it (and delete its files)
+      // when the signed-in member signs out or another member signs in. A share that arrived before any
+      // sign-in is kept, so sign-in first and then continue works. A refresh (loading) keeps it.
+      final before = prev?.value;
+      final shown = ref.read(pendingShareProvider);
+      if (shown != null &&
+          before is Allowed &&
+          (v is SignedOut ||
+              v is Denied ||
+              (v is Allowed && v.member.userId != before.member.userId))) {
+        unawaited(ref.read(pendingShareProvider.notifier).finish(shown));
+      }
       if ((v is SignedOut || v is Denied) && mounted) {
         // No transition: chat content must not stay visible, even sliding
         // out, over the Denied or sign-in screen.

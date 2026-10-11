@@ -124,6 +124,10 @@ import UserNotifications
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ExternalPickerPlugin") {
       ExternalPickerPlugin.register(with: registrar)
     }
+    // Share into SIS: hands what the Share Extension left in the App Group to Dart.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ShareIntakePlugin") {
+      ShareIntakePlugin.register(with: registrar)
+    }
     // Reading a chat removes that chat's delivered pushes: the system drew
     // them (APNs), so the Flutter notifications plugin cannot see them. They
     // are matched by thread id, which the server sets to the conversation id.

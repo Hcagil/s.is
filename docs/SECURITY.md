@@ -114,8 +114,17 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     card may name only that path, only if the sender uploaded it (unique per
     message). The read policy copies `attachments`: the uploader before the
     message exists, then only through a readable message whose card names the
-    picture. The sender's phone reads the page (refusing private addresses on
-    every redirect hop); readers see the site only if they tap the card.
+    picture. The sender's phone reads the page: redirects are followed by hand
+    (at most 5, never https to http), and the page, every hop and the picture
+    must resolve to public addresses only (loopback, private, link-local,
+    CGNAT, ULA, multicast, documentation and special ranges, and the IPv4
+    inside NAT64 and 6to4 addresses, are refused). A failed, empty or slow
+    (3 s) lookup refuses. The connection goes to the exact address that was
+    checked (a custom connection factory), and for https the certificate is
+    checked against the original host name, so a DNS answer that changes
+    afterwards cannot redirect it. The whole fetch is capped at 9 s, the
+    page at 300000 bytes, the picture at 3000000 bytes and 16 megapixels
+    (checked before decoding). Readers see the site only if they tap the card.
   - `profiles` rows are readable only for an allowlisted account that is the
     caller, shares a conversation with the caller, or is a contact the
     caller saved; a tag find alone does not open the row (`find_by_tag`

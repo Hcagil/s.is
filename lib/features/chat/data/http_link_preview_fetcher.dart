@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show InternetAddress;
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 
 import '../domain/link_page.dart';
 import '../domain/link_preview.dart';
@@ -23,13 +24,14 @@ final class HttpLinkPreviewFetcher implements LinkPreviewFetcher {
   final Future<Uint8List?> Function(Uint8List bytes) _shrink;
   final Future<List<InternetAddress>> Function(String host) _lookup;
 
-  /// Longest wait for the page; the picture gets half of it on its own.
+  /// Longest wait for the page; the picture gets half of it on its own, and
+  /// the whole fetch is capped at 9 seconds.
   final Duration timeout;
 
   @override
   Future<LinkPreviewDraft?> fetch(Uri url) async {
     try {
-      return await _fetch(url);
+      return await _fetch(url).timeout(const Duration(seconds: 9));
     } catch (_) {
       return null;
     }
@@ -159,46 +161,97 @@ final class HttpLinkPreviewFetcher implements LinkPreviewFetcher {
     }
     final ip = InternetAddress.tryParse(host);
     if (ip != null) return !_private(ip);
-    try {
-      final list = await _lookup(host);
-      return !list.any(_private);
-    } catch (_) {
-      // A failed lookup means the http client cannot connect either.
-      return true;
-    }
+    return await _publicAddresses(_lookup, host) != null;
   }
+}
 
-  /// Loopback, private, link-local, CGNAT, ULA, multicast, documentation and
-  /// other special ranges.
-  static bool _private(InternetAddress a) {
-    final b = a.rawAddress;
-    if (b.length == 4) {
-      if (b[0] == 0 || b[0] == 10 || b[0] == 127 || b[0] >= 224) return true;
-      if (b[0] == 169 && b[1] == 254) return true;
-      if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true;
-      if (b[0] == 192 && b[1] == 168) return true;
-      if (b[0] == 100 && b[1] >= 64 && b[1] <= 127) return true;
-      if (b[0] == 192 && b[1] == 0 && (b[2] == 0 || b[2] == 2)) return true;
-      if (b[0] == 198 && (b[1] == 18 || b[1] == 19)) return true;
-      if (b[0] == 198 && b[1] == 51 && b[2] == 100) return true;
-      if (b[0] == 203 && b[1] == 0 && b[2] == 113) return true;
-      return false;
-    }
-    if (b.length != 16) return true;
-    if (b.sublist(0, 15).every((x) => x == 0) && b[15] <= 1) return true;
-    if ((b[0] & 0xfe) == 0xfc) return true;
-    if (b[0] == 0xfe && (b[1] & 0xc0) == 0x80) return true;
-    if (b[0] == 0xff) return true;
-    if (b[0] == 0x20 && b[1] == 0x01 && b[2] == 0x0d && b[3] == 0xb8) {
-      return true;
-    }
-    if (b.sublist(0, 10).every((x) => x == 0) &&
-        b[10] == 0xff &&
-        b[11] == 0xff) {
-      return _private(
-        InternetAddress.fromRawAddress(Uint8List.fromList(b.sublist(12))),
-      );
-    }
+/// Loopback, private, link-local, CGNAT, ULA, multicast, documentation and
+/// other special ranges.
+bool _private(InternetAddress a) {
+  final b = a.rawAddress;
+  if (b.length == 4) {
+    if (b[0] == 0 || b[0] == 10 || b[0] == 127 || b[0] >= 224) return true;
+    if (b[0] == 169 && b[1] == 254) return true;
+    if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true;
+    if (b[0] == 192 && b[1] == 168) return true;
+    if (b[0] == 100 && b[1] >= 64 && b[1] <= 127) return true;
+    if (b[0] == 192 && b[1] == 0 && (b[2] == 0 || b[2] == 2)) return true;
+    if (b[0] == 198 && (b[1] == 18 || b[1] == 19)) return true;
+    if (b[0] == 198 && b[1] == 51 && b[2] == 100) return true;
+    if (b[0] == 203 && b[1] == 0 && b[2] == 113) return true;
     return false;
   }
+  if (b.length != 16) return true;
+  // NAT64 and 6to4 carry an IPv4 address: judge that one.
+  if (b[0] == 0 &&
+      b[1] == 0x64 &&
+      b[2] == 0xff &&
+      b[3] == 0x9b &&
+      b.sublist(4, 12).every((x) => x == 0)) {
+    return _private(
+      InternetAddress.fromRawAddress(Uint8List.fromList(b.sublist(12))),
+    );
+  }
+  if (b[0] == 0x20 && b[1] == 0x02) {
+    return _private(
+      InternetAddress.fromRawAddress(Uint8List.fromList(b.sublist(2, 6))),
+    );
+  }
+  if (b.sublist(0, 15).every((x) => x == 0) && b[15] <= 1) return true;
+  if ((b[0] & 0xfe) == 0xfc) return true;
+  if (b[0] == 0xfe && (b[1] & 0xc0) == 0x80) return true;
+  if (b[0] == 0xff) return true;
+  if (b[0] == 0x20 && b[1] == 0x01 && b[2] == 0x0d && b[3] == 0xb8) {
+    return true;
+  }
+  if (b.sublist(0, 10).every((x) => x == 0) && b[10] == 0xff && b[11] == 0xff) {
+    return _private(
+      InternetAddress.fromRawAddress(Uint8List.fromList(b.sublist(12))),
+    );
+  }
+  return false;
+}
+
+/// Resolves [host] and returns its addresses only if every one is public;
+/// null on a failed, empty or timed-out lookup or any special address.
+Future<List<InternetAddress>?> _publicAddresses(
+  Future<List<InternetAddress>> Function(String host) lookup,
+  String host,
+) async {
+  try {
+    final list = await lookup(host).timeout(const Duration(seconds: 3));
+    return list.isEmpty || list.any(_private) ? null : list;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// The client the app uses for link cards. It connects only to an address it
+/// resolved and checked itself, so a DNS answer that changes between the
+/// check and the connection cannot redirect it; for https the certificate is
+/// checked against the original host name.
+http.Client linkPreviewHttpClient({
+  Future<List<InternetAddress>> Function(String host)? lookup,
+}) {
+  final look = lookup ?? InternetAddress.lookup;
+  final inner = HttpClient()
+    ..findProxy = ((_) => 'DIRECT')
+    ..connectionFactory = (url, proxyHost, proxyPort) async {
+      final addresses = await _publicAddresses(look, url.host);
+      if (addresses == null) {
+        throw const SocketException('link target is not a public address');
+      }
+      final secure = url.scheme == 'https';
+      final task = await Socket.startConnect(
+        addresses.first,
+        url.hasPort ? url.port : (secure ? 443 : 80),
+      );
+      if (!secure) return task;
+      // HttpClient adds no TLS to a custom connection: do it here.
+      return ConnectionTask.fromSocket(
+        task.socket.then((s) => SecureSocket.secure(s, host: url.host)),
+        task.cancel,
+      );
+    };
+  return IOClient(inner);
 }

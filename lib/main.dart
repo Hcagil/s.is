@@ -298,7 +298,10 @@ Future<void> main() async {
           ),
           linkOpenerProvider.overrideWithValue(const UrlLauncherLinkOpener()),
           linkPreviewFetcherProvider.overrideWithValue(
-            HttpLinkPreviewFetcher(http.Client(), shrink: shrinkLinkImage),
+            HttpLinkPreviewFetcher(
+              linkPreviewHttpClient(),
+              shrink: shrinkLinkImage,
+            ),
           ),
           pushSourceProvider.overrideWithValue(
             DeferredPushSource(pushReady.future),

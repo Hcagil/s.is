@@ -3,7 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:imcodec/imcodec.dart' as img;
 
-const _maxPixels = 40000000; // 40 megapixels
+const _maxPixels = 16000000; // 16 megapixels
 
 /// Shrinks a downloaded picture to a JPEG card picture: at most [width] pixels wide (never enlarged) and at most [maxBytes] bytes. Null when it cannot be decoded or no quality fits.
 Future<Uint8List?> shrinkLinkImage(

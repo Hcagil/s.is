@@ -7,6 +7,7 @@ import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
+import com.google.mlkit.vision.segmentation.subject.SubjectSegmenter
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import kotlin.math.roundToInt
 
@@ -23,24 +24,28 @@ class StickerCutout(private val context: Context) {
     // [onDone] gets 512*512 foreground-confidence bytes (0..255, row-major), or
     // null on any failure or when no subject was found. Called exactly once.
     fun mask(jpeg: ByteArray, onDone: (ByteArray?) -> Unit) {
-        val decoded = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
-        if (decoded == null) {
-            onDone(null)
-            return
-        }
-        val scaled = Bitmap.createScaledBitmap(decoded, SIDE, SIDE, true)
-        // createScaledBitmap hands back the same object when no scaling is needed.
-        if (scaled !== decoded) decoded.recycle()
-        val segmenter = SubjectSegmentation.getClient(
-            SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build()
-        )
-        fun finish(bytes: ByteArray?) {
-            segmenter.close()
-            scaled.recycle()
-            onDone(bytes)
-        }
+        var scaled: Bitmap? = null
+        var segmenter: SubjectSegmenter? = null
         try {
-            segmenter.process(InputImage.fromBitmap(scaled, 0))
+            val decoded = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
+            if (decoded == null) {
+                onDone(null)
+                return
+            }
+            val small = Bitmap.createScaledBitmap(decoded, SIDE, SIDE, true)
+            scaled = small
+            // createScaledBitmap hands back the same object when no scaling is needed.
+            if (small !== decoded) decoded.recycle()
+            val seg = SubjectSegmentation.getClient(
+                SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build()
+            )
+            segmenter = seg
+            fun finish(bytes: ByteArray?) {
+                seg.close()
+                small.recycle()
+                onDone(bytes)
+            }
+            seg.process(InputImage.fromBitmap(small, 0))
                 .addOnSuccessListener { result ->
                     val mask = result.foregroundConfidenceMask
                     if (mask == null) {
@@ -58,8 +63,11 @@ class StickerCutout(private val context: Context) {
                     finish(if (floats.any { it > 0.1f }) bytes else null)
                 }
                 .addOnFailureListener { finish(null) }
-        } catch (e: Exception) {
-            finish(null)
+        } catch (e: Throwable) {
+            // An OutOfMemoryError is not an Exception; the channel must still answer.
+            segmenter?.close()
+            scaled?.recycle()
+            onDone(null)
         }
     }
 }

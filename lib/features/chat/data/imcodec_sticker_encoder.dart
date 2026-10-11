@@ -6,8 +6,9 @@ import 'package:imcodec/imcodec.dart' as img;
 import '../domain/sticker_maker.dart';
 
 /// [StickerEncoder] in pure Dart: iOS has no WebP encoder of its own, and a
-/// CocoaPods plugin would not fit this SwiftPM-only project. Lossy WebP with
-/// transparency, the quality lowered until the file fits [stickerMaxBytes].
+/// CocoaPods plugin would not fit this SwiftPM-only project. Lossless WebP
+/// first (this package's lossy WebP stores alpha uncompressed), then lossy
+/// with the quality lowered until the file fits [stickerMaxBytes].
 final class ImcodecStickerEncoder implements StickerEncoder {
   const ImcodecStickerEncoder();
 
@@ -31,6 +32,11 @@ Uint8List? _encode(Uint8List rgba) {
     numChannels: 4,
     order: img.ChannelOrder.rgba,
   );
+  final lossless = img.encodeWebP(
+    image,
+    options: const img.WebPEncodeOptions(),
+  );
+  if (lossless.length <= stickerMaxBytes) return lossless;
   for (final q in const [90, 80, 70, 60, 50, 40, 30, 20]) {
     final out = img.encodeWebP(
       image,

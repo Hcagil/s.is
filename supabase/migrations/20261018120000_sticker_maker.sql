@@ -24,6 +24,7 @@ grant execute on function public.create_sticker() to authenticated;
 create function public.discard_sticker(p_id uuid) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
+  perform app_private.sticker_gate();
   delete from public.stickers s
   where s.id = p_id
     and s.owner_id = auth.uid()
@@ -68,5 +69,5 @@ drop policy if exists stickers_insert on storage.objects;
 create policy stickers_insert on storage.objects for insert to authenticated
   with check (bucket_id = 'stickers'
               and (select app_private.has_app_access())
-              and not app_private.is_bot(auth.uid())
+              and not app_private.is_bot((select auth.uid()))
               and app_private.sticker_object_uploadable(name));

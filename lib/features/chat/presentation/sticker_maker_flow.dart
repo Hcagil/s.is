@@ -102,12 +102,13 @@ Future<void> startStickerMaker(
       }),
     );
   }
-  await Navigator.of(context).push(
-    stickerMakerRoute(
-      supported
-          ? StickerCutoutPage(draft: draft)
-          : StickerEditorPage(draft: draft),
-    ),
+  final route = stickerMakerRoute(
+    supported
+        ? StickerCutoutPage(draft: draft)
+        : StickerEditorPage(draft: draft),
   );
+  unawaited(Navigator.of(context).push(route));
+  // The pages paint the draft while they slide out; free it only afterwards.
+  await route.completed;
   draft.dispose();
 }

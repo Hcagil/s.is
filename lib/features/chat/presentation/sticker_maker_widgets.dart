@@ -7,7 +7,7 @@ import 'sticker_painter.dart';
 
 /// A maker page route that finishes with true when the sticker was saved.
 /// The pages draw with the finger, so the page-wide swipe back is off.
-Route<bool> stickerMakerRoute(Widget page) =>
+MaterialPageRoute<bool> stickerMakerRoute(Widget page) =>
     MaterialPageRoute<bool>(settings: noSwipeBack, builder: (_) => page);
 
 /// The square checkerboard-backed preview of the sticker; drags report

@@ -26,7 +26,7 @@ class _StickerTextPageState extends State<StickerTextPage> {
     super.initState();
     if (widget.draft.texts.isEmpty) {
       _t = MakerText();
-      widget.draft.addText(_t);
+      widget.draft.texts.add(_t);
       _created = true;
     } else {
       _t = widget.draft.texts.last;

@@ -110,4 +110,54 @@ void main() {
     expect(labels.length, many.length);
     expect(labels.fold(0, (a, b) => a + b), many.fold(0, (a, b) => a + b));
   });
+
+  // Contract (stickers 10a): the starter stickers are Noto Emoji art, and
+  // their Apache 2.0 credit appears on Settings > About > Open-source
+  // licences, registered by main() like the font licences.
+  testWidgets('the Noto Emoji credit is on the licences page', (t) async {
+    LicenseRegistry.reset();
+    addTearDown(LicenseRegistry.reset);
+    SharedPreferences.setMockInitialValues({});
+    await t.pumpWidget(const SizedBox());
+    await entry.main();
+    await t.pumpWidget(const SizedBox());
+
+    final entries = (await t.runAsync(
+      () => LicenseRegistry.licenses.toList(),
+    ))!;
+    final noto = entries
+        .where((e) => e.packages.any((p) => p.contains('Noto Emoji')))
+        .toList();
+    expect(noto, hasLength(1), reason: 'one Noto Emoji entry');
+    expect(
+      noto.single.paragraphs.map((p) => p.text).join('\n'),
+      contains('Apache License'),
+    );
+    // Apache 2.0 section 4(b): the changed files carry a notice saying so.
+    expect(
+      noto.single.paragraphs.map((p) => p.text).join('\n'),
+      allOf(contains('Modification notice'), contains('changed')),
+    );
+    final name = noto.single.packages.firstWhere(
+      (p) => p.contains('Noto Emoji'),
+    );
+
+    await t.pumpWidget(
+      localizedApp(
+        theme: sisTheme(Brightness.light),
+        home: const SisLicencesPage(
+          applicationName: 'SIS',
+          applicationVersion: '1.0.0',
+        ),
+      ),
+    );
+    for (var i = 0; i < 200 && find.text(name).evaluate().isEmpty; i++) {
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await t.pump();
+    }
+    await t.pumpAndSettle();
+    expect(find.text(name), findsOneWidget, reason: 'the credit has a tile');
+  });
 }

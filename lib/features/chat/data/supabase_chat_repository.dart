@@ -23,6 +23,7 @@ import '../domain/poll.dart';
 import '../domain/read_marks.dart';
 import '../domain/shared_contact.dart';
 import '../domain/shared_location.dart';
+import '../domain/sticker.dart';
 import '../domain/video.dart';
 import '../domain/voice.dart';
 
@@ -232,7 +233,7 @@ final class SupabaseChatRepository implements ChatRepository {
         _client
             .from('conversation_previews')
             .select(
-              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name, attachment_duration_ms, location_lat, attachment_mime',
+              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name, attachment_duration_ms, location_lat, attachment_mime, sticker_id, sticker_album',
             )
             .retriedOnce(),
         // Only conversations with something unread come back.
@@ -256,6 +257,10 @@ final class SupabaseChatRepository implements ChatRepository {
             // would read as "no messages" while hiding a real one.
             body: row['deleted'] != null
                 ? 'This message was deleted'
+                : row['sticker_id'] != null
+                ? stickerPreviewText
+                : row['sticker_album'] == true
+                ? stickerAlbumPreviewText
                 : row['poll'] == true
                 ? pollPreview(row['body'] as String)
                 : row['location_lat'] != null
@@ -335,13 +340,13 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album';
 
   /// The columns of a page read (open chat): no photo preview -- those arrive
   /// separately, see [attachmentPreviews], so the first paint never waits on
   /// them.
   static const _pageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -1068,6 +1073,19 @@ final class SupabaseChatRepository implements ChatRepository {
     if (me == null) return const Err(DeniedFailure());
     try {
       for (final target in conversationIds) {
+        if (message.stickerId case final sticker?) {
+          // A sticker is a message of its own kind: the server function copies nothing, it only checks the sender may read the sticker.
+          await _client.rpc(
+            'send_sticker',
+            params: {
+              'p_conversation': target,
+              'p_id': randomMessageId(),
+              'p_sticker': sticker,
+              'p_forwarded': true,
+            },
+          );
+          continue;
+        }
         String? path;
         final source = message.attachmentPath;
         if (source != null) {
@@ -1244,6 +1262,9 @@ final class SupabaseChatRepository implements ChatRepository {
     forwarded: row['forwarded'] as bool? ?? false,
     poll: row['poll'] as bool? ?? false,
     contact: row['contact'] as bool? ?? false,
+    stickerId: row['sticker_id'] as String?,
+    albumCard: row['sticker_album'] as bool? ?? false,
+    albumId: row['sticker_album_id'] as String?,
     location: SharedLocation.fromRow(
       lat: (row['location_lat'] as num?)?.toDouble(),
       lng: (row['location_lng'] as num?)?.toDouble(),

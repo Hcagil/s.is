@@ -24,6 +24,17 @@ final class DeniedFailure extends Failure {
   String get message => 'Not allowed';
 }
 
+/// A sticker limit hit on the server: 'STKA1' (10 albums), 'STKA2' (50 stickers in an album) or 'STKF1' (200 favourites); the screen shows its own translated line.
+final class StickerLimitFailure extends Failure {
+  const StickerLimitFailure(this.code);
+
+  /// The server's error code: STKA1, STKA2 or STKF1.
+  final String code;
+
+  @override
+  String get message => 'Sticker limit reached.';
+}
+
 /// Pinning a sixth chat; the screen shows its own translated line.
 final class PinLimitFailure extends Failure {
   const PinLimitFailure();

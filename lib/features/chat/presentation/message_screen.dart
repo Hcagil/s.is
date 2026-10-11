@@ -10,7 +10,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
 import '../../../app/delivery_tick.dart';
-import '../../../app/grey_option.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../app/theme.dart';
@@ -40,6 +39,7 @@ import '../domain/reaction.dart';
 import '../domain/timeline.dart';
 import '../domain/video.dart';
 import '../domain/read_marks.dart';
+import '../domain/sticker.dart';
 import 'attachment_preview_page.dart';
 import 'attachment_sheet.dart';
 import 'chat_search_bar.dart';
@@ -54,6 +54,10 @@ import 'location_card.dart';
 import 'location_share_page.dart';
 import 'group_event_line.dart';
 import 'group_gone_guard.dart';
+import 'sticker_album_card.dart';
+import 'sticker_message.dart';
+import 'sticker_panel.dart';
+import 'starter_album_page.dart';
 import 'swipeable_message.dart';
 import 'video_card.dart';
 import 'video_grid_page.dart';
@@ -435,6 +439,46 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     );
   }
 
+  /// A tap on a sticker: a starter sticker opens the starter album, any other
+  /// opens the small save card (add to favourites / to an album).
+  Future<void> _tapSticker(Message message, {required bool mine}) async {
+    final id = message.stickerId!;
+    if (isStarterSticker(id)) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              StarterAlbumPage(conversationId: message.conversationId),
+        ),
+      );
+      return;
+    }
+    final anchor = _bubbleRect(message.id);
+    if (anchor == null) return;
+    final l = AppLocalizations.of(context);
+    final picked = await showMenuCard<MessageAction>(
+      context,
+      anchor: anchor,
+      alignEnd: mine,
+      cardKey: const ValueKey('sticker-save-menu'),
+      actions: [
+        MenuCardAction<MessageAction>(
+          value: MessageAction.stickerFavourite,
+          keyId: 'sticker-favourite',
+          icon: Icons.favorite_border,
+          label: l.messageActionStickerFavourite,
+        ),
+        MenuCardAction<MessageAction>(
+          value: MessageAction.stickerAlbum,
+          keyId: 'sticker-album',
+          icon: Icons.collections_bookmark_outlined,
+          label: l.messageActionStickerAlbum,
+        ),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    await runMessageAction(context, ref, message, picked);
+  }
+
   /// Sets or clears (null) the member's reaction on [messageId] and closes the
   /// tap extras; a refusal shows a notice (this screen outlives the bar).
   Future<void> _react(String messageId, String? emoji) async {
@@ -812,6 +856,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                   // A tap shows the "Seen by" pill and the reactions bar; a long press opens the action card. The system chat takes neither.
                                   onTap: isSystem
                                       ? null
+                                      : message.stickerId != null &&
+                                            !message.isDeleted
+                                      ? () => unawaited(
+                                          _tapSticker(message, mine: mine),
+                                        )
                                       : () => ref
                                             .read(
                                               tappedMessageProvider.notifier,

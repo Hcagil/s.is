@@ -15,6 +15,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/service_key.dart';
 
 /// Delivery marks (Update 1 slice 5) on the real local stack:
 /// [SupabaseChatRepository.markDelivered] through the `mark_delivered` RPC,
@@ -38,18 +39,21 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
 
 Future<SupabaseClient> _signedIn(String email) async {
+  await setLocalTestPassword(_url, email, localTestPassword);
   final client = SupabaseClient(
     _url,
     _key,
     authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
   );
   try {
-    await client.auth.signInWithPassword(email: email, password: _password);
+    await client.auth.signInWithPassword(
+      email: email,
+      password: localTestPassword,
+    );
   } on AuthException {
-    await client.auth.signUp(email: email, password: _password);
+    await client.auth.signUp(email: email, password: localTestPassword);
   }
   expect(client.auth.currentUser, isNotNull, reason: 'sign-in failed');
   expect(await client.rpc('activate_session'), isTrue);

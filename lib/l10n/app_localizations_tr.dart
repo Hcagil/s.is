@@ -1650,4 +1650,161 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get voiceSend => 'Sesli mesajı gönder';
+
+  @override
+  String get stickerPreviewLine => '😀 Çıkartma';
+
+  @override
+  String get stickerAlbumPreviewLine => '📂 Çıkartma albümü';
+
+  @override
+  String get stickerButtonTooltip => 'Çıkartmalar';
+
+  @override
+  String get stickerKeyboardTooltip => 'Klavye';
+
+  @override
+  String get stickerTabRecent => 'Son kullanılan';
+
+  @override
+  String get stickerTabFavourites => 'Favoriler';
+
+  @override
+  String get stickerTabStarter => 'SIS başlangıç';
+
+  @override
+  String get stickerTabMine => 'Çıkartmalarım';
+
+  @override
+  String get stickerTabNew => '+ Yeni';
+
+  @override
+  String get stickerEmptyRecent => 'Gönderdiğin çıkartmalar burada görünür.';
+
+  @override
+  String get stickerEmptyFavourites =>
+      'Favorilere eklemek için sohbetteki bir çıkartmaya uzun bas.';
+
+  @override
+  String get stickerEmptyAlbum => 'Bu albüm boş.';
+
+  @override
+  String get stickerNoAlbums =>
+      'Henüz albüm yok. Çıkartmalarını saklamak için bir tane oluştur.';
+
+  @override
+  String get stickerLabel => 'Çıkartma';
+
+  @override
+  String get stickerLoadFailed => 'Bu çıkartma yüklenemedi.';
+
+  @override
+  String get messageActionStickerFavourite => 'Favorilere ekle';
+
+  @override
+  String get messageActionStickerAlbum => 'Albüme ekle';
+
+  @override
+  String get stickerAddedFavourite => 'Favorilere eklendi.';
+
+  @override
+  String stickerAddedAlbum(String name) {
+    return '$name albümüne eklendi.';
+  }
+
+  @override
+  String get stickerPickAlbumTitle => 'Albüme ekle';
+
+  @override
+  String get stickerNewAlbum => 'Yeni albüm';
+
+  @override
+  String get stickerAlbumNameHint => 'Albüm adı';
+
+  @override
+  String get stickerAlbumCreate => 'Oluştur';
+
+  @override
+  String get stickerAlbumRenameTitle => 'Albümü yeniden adlandır';
+
+  @override
+  String get stickerAlbumsTitle => 'Albümlerim';
+
+  @override
+  String stickerAlbumsCount(int count, int max) {
+    return '$count / $max';
+  }
+
+  @override
+  String get stickerAlbumShare => 'Albümü paylaş';
+
+  @override
+  String get stickerAlbumRename => 'Yeniden adlandır';
+
+  @override
+  String get stickerAlbumDelete => 'Albümü sil';
+
+  @override
+  String get stickerAlbumDeleteTitle => 'Bu albüm silinsin mi?';
+
+  @override
+  String get stickerAlbumDeleteBody =>
+      'Albüm yalnızca sende silinir. Sohbetlerdeki çıkartmalar kalır.';
+
+  @override
+  String get stickerDelete => 'Sil';
+
+  @override
+  String get stickerCancel => 'Vazgeç';
+
+  @override
+  String get stickerAlbumShared => 'Albüm paylaşıldı.';
+
+  @override
+  String stickerAlbumStickers(int count) {
+    return '$count çıkartma';
+  }
+
+  @override
+  String get stickerAlbumAdd => 'Albümü ekle';
+
+  @override
+  String get stickerAlbumAddFavourites => 'Favorilere ekle';
+
+  @override
+  String get stickerAlbumAdded => 'Albüm eklendi.';
+
+  @override
+  String get stickerAlbumFavouritesAdded => 'Favorilerine eklendi.';
+
+  @override
+  String get stickerAlbumGone => 'Bu albüm artık mevcut değil.';
+
+  @override
+  String get stickerRemoveFromAlbum => 'Albümden çıkar';
+
+  @override
+  String get stickerRemoveFavourite => 'Favorilerden çıkar';
+
+  @override
+  String stickerLimitAlbums(int max) {
+    return 'En fazla $max albümün olabilir.';
+  }
+
+  @override
+  String stickerLimitInAlbum(int max) {
+    return 'Bir albüme en fazla $max çıkartma girer.';
+  }
+
+  @override
+  String stickerLimitFavourites(int max) {
+    return 'En fazla $max favori tutabilirsin.';
+  }
+
+  @override
+  String get stickerCreateTitle => 'Çıkartma oluştur';
+
+  @override
+  String get stickerCreateSoon =>
+      'Kendi çıkartmalarını yapmak yakında geliyor.';
 }

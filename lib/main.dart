@@ -42,6 +42,7 @@ import 'features/chat/data/photo_manager_video_gallery.dart';
 import 'features/chat/data/record_voice_recorder.dart';
 import 'features/chat/data/share_plus_video_sharer.dart';
 import 'features/chat/data/shared_prefs_played_voice_store.dart';
+import 'features/chat/data/shared_prefs_recent_sticker_store.dart';
 import 'features/chat/data/shared_prefs_send_queue_store.dart';
 import 'features/chat/data/speech_dictation.dart';
 import 'features/chat/data/supabase_chat_archive_repository.dart';
@@ -54,6 +55,7 @@ import 'features/chat/data/supabase_location_share_repository.dart';
 import 'features/chat/data/url_launcher_maps_opener.dart';
 import 'features/chat/data/supabase_poll_repository.dart';
 import 'features/chat/data/supabase_reaction_repository.dart';
+import 'features/chat/data/supabase_sticker_repository.dart';
 import 'features/chat/data/supabase_contacts_repository.dart';
 import 'features/chat/data/supabase_contact_share_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
@@ -124,6 +126,12 @@ Future<void> main() async {
         font,
       ], await rootBundle.loadString('assets/fonts/OFL-$font.txt'));
     }
+  });
+  // The starter stickers are Noto Emoji images: Apache 2.0, credit included.
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'Noto Emoji images',
+    ], await rootBundle.loadString('assets/stickers/NOTO-EMOJI-LICENSE.txt'));
   });
   final config = RuntimeConfig.fromEnvironment();
   // Read before runApp (like the session marker), so the first frame already
@@ -240,6 +248,12 @@ Future<void> main() async {
           ),
           sendQueueStoreProvider.overrideWithValue(
             const SharedPrefsSendQueueStore(),
+          ),
+          stickerRepositoryProvider.overrideWithValue(
+            SupabaseStickerRepository(client),
+          ),
+          recentStickerStoreProvider.overrideWithValue(
+            const SharedPrefsRecentStickerStore(),
           ),
           videoSurfaceProvider.overrideWithValue(videoSurface),
           locationShareRepositoryProvider.overrideWithValue(

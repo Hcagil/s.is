@@ -118,7 +118,7 @@ final class SupabaseChatPinRepository implements ChatPinRepository {
           .from('messages')
           .select(
             'id, conversation_id, sender_id, body, created_at, '
-            'attachment_path, deleted',
+            'attachment_path, deleted, sticker_id, sticker_album, sticker_album_id',
           )
           .eq('id', messageId)
           .eq('conversation_id', conversationId)
@@ -135,6 +135,9 @@ final class SupabaseChatPinRepository implements ChatPinRepository {
           body: row['body'] as String,
           createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
           attachmentPath: row['attachment_path'] as String?,
+          stickerId: row['sticker_id'] as String?,
+          albumCard: row['sticker_album'] as bool? ?? false,
+          albumId: row['sticker_album_id'] as String?,
         ),
       );
     } catch (e) {

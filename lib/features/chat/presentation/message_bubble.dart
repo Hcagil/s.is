@@ -76,6 +76,20 @@ class _Bubble extends StatelessWidget {
       !message.forwarded &&
       !message.isDeleted;
 
+  /// A sticker is drawn on its own, 160 px, with no bubble (unless it carries a reply or a forward note).
+  bool get _stickerBox =>
+      message.stickerId != null &&
+      message.replyTo == null &&
+      !message.forwarded &&
+      !message.isDeleted;
+
+  /// A shared-album card draws its own box, so the bubble around it is dropped.
+  bool get _albumBox =>
+      message.albumCard &&
+      message.replyTo == null &&
+      !message.forwarded &&
+      !message.isDeleted;
+
   double get _contentWidth =>
       _maxWidth - 2 * _hPad - (_hasBorder ? 2 * _borderWidth : 0);
 
@@ -91,10 +105,10 @@ class _Bubble extends StatelessWidget {
         key: ValueKey('message-${message.id}'),
         constraints: const BoxConstraints(maxWidth: _maxWidth),
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        padding: _boxless || _locationCard
+        padding: _boxless || _locationCard || _stickerBox || _albumBox
             ? EdgeInsets.zero
             : const EdgeInsets.symmetric(horizontal: _hPad, vertical: 8),
-        decoration: _boxless || _locationCard
+        decoration: _boxless || _locationCard || _stickerBox || _albumBox
             ? null
             : BoxDecoration(
                 color: mine ? null : brand.theirs,
@@ -243,7 +257,7 @@ class _Bubble extends StatelessWidget {
               if (sender != null)
                 Padding(
                   padding: EdgeInsets.fromLTRB(
-                    _locationCard ? _hPad : 0,
+                    _locationCard || _albumBox ? _hPad : 0,
                     0,
                     0,
                     2,
@@ -317,6 +331,34 @@ class _Bubble extends StatelessWidget {
                       ),
                       delivery: delivery,
                     ),
+                  ),
+                )
+              else if (message.stickerId != null && !message.isDeleted)
+                StickerMessage(
+                  message: message,
+                  mine: mine,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: brand.muted,
+                    ),
+                    delivery: delivery,
+                  ),
+                )
+              else if (message.albumCard && !message.isDeleted)
+                StickerAlbumCard(
+                  message: message,
+                  mine: mine,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: brand.muted,
+                    ),
+                    delivery: delivery,
                   ),
                 )
               else if (message.location != null && !message.isDeleted)

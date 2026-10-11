@@ -179,10 +179,10 @@ select is(voice_insert('f3300000-0000-0000-0000-00000000a010', 'audio/mp4', '410
 select is((select attachment_mime from public.conversation_previews where conversation_id = g('G')),
           'audio/mp4', 'the preview carries the newest message''s mime');
 reset role;
-select is((select attname::text from pg_attribute
+select is((select count(*) from pg_attribute
             where attrelid = 'public.conversation_previews'::regclass and attnum > 0 and not attisdropped
-            order by attnum desc limit 1),
-          'attachment_mime', 'conversation_previews ends with attachment_mime');
+              and attname = any(array['attachment_mime'])), 1::bigint,
+          'conversation_previews has attachment_mime');
 select is((select string_agg(body, ',') from app_private.push_targets_for_message(
              'f3300000-0000-0000-0000-00000000a010') where user_id = u('02')),
           E'\U0001F3A4 Voice message', 'the push of a voice message reads the mic and Voice message');

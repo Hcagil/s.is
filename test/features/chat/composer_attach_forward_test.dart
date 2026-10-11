@@ -297,9 +297,9 @@ void main() {
   });
 
   group('the composer', () {
-    testWidgets('empty: sticker and the voice button; no send', (t) async {
+    testWidgets('empty: the sticker and voice buttons; no send', (t) async {
       await pumpChat(t, world());
-      expect(byKey('grey-c_btn'), findsOneWidget);
+      expect(byKey('composer-stickers'), findsOneWidget);
       expect(byKey('composer-voice'), findsOneWidget);
       expect(byKey('voice-mode-voice'), findsOneWidget);
       expect(byKey('composer-send'), findsNothing);
@@ -315,7 +315,7 @@ void main() {
         expect(byKey('composer-voice'), findsNothing);
         expect(byKey('voice-mode-voice'), findsNothing);
         expect(byKey('voice-mode-dictation'), findsNothing);
-        expect(byKey('grey-c_btn'), findsOneWidget);
+        expect(byKey('composer-stickers'), findsOneWidget);
 
         await t.enterText(byKey('composer-field'), '');
         await t.pump();
@@ -323,7 +323,7 @@ void main() {
         expect(byKey('composer-voice'), findsOneWidget);
         expect(byKey('voice-mode-voice'), findsOneWidget);
         expect(byKey('voice-mode-dictation'), findsNothing);
-        expect(byKey('grey-c_btn'), findsOneWidget);
+        expect(byKey('composer-stickers'), findsOneWidget);
       },
     );
 
@@ -343,7 +343,7 @@ void main() {
         expect(byKey('composer-voice'), findsNothing);
         expect(byKey('voice-mode-voice'), findsNothing);
         expect(byKey('voice-mode-dictation'), findsNothing);
-        expect(byKey('grey-c_btn'), findsOneWidget);
+        expect(byKey('composer-stickers'), findsOneWidget);
 
         await t.enterText(byKey('composer-field'), '');
         await t.pump();
@@ -351,23 +351,18 @@ void main() {
         expect(byKey('composer-voice'), findsNothing);
         expect(byKey('voice-mode-voice'), findsNothing);
         expect(byKey('voice-mode-dictation'), findsNothing);
-        expect(byKey('grey-c_btn'), findsOneWidget);
+        expect(byKey('composer-stickers'), findsOneWidget);
       },
     );
 
     testWidgets(
-      'the sticker tap does nothing and a voice-button tap only switches the mode; the field still takes taps and focus',
+      // The sticker button opens the sticker panel since 10a; that is
+      // covered in sticker_ui_test.dart.
+      'a voice-button tap only switches the mode; the field still takes taps and focus',
       (t) async {
         final chat = world();
         await pumpChat(t, chat);
         expect(fieldFocused(t), isFalse, reason: 'precondition');
-        for (final k in ['grey-c_btn']) {
-          await t.tap(byKey(k));
-          await t.pumpAndSettle();
-          expect(find.byType(MessageScreen), findsOneWidget, reason: k);
-          expect(byKey('attach-menu'), findsNothing, reason: k);
-          expect(fieldText(t), isEmpty, reason: k);
-        }
         expect(chat.sent, isEmpty);
 
         // Tap the voice button to switch to dictation mode
@@ -389,9 +384,12 @@ void main() {
         );
 
         final field = t.getRect(byKey('composer-field'));
+        // The end of the field is the sticker button (its suffix): the text
+        // area ends just before it.
+        final stickers = t.getRect(byKey('composer-stickers'));
         for (final at in [
           field.centerLeft + const Offset(3, 0),
-          field.centerRight - const Offset(3, 0),
+          Offset(stickers.left - 3, field.center.dy),
         ]) {
           FocusManager.instance.primaryFocus?.unfocus();
           await t.pumpAndSettle();

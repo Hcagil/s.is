@@ -172,6 +172,8 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
     final body = widget.message.body.trim();
     final preview = body.isNotEmpty
         ? body
+        : widget.message.stickerId != null
+        ? l.stickerPreviewLine
         : widget.message.file != null
         ? (widget.message.file!.isVoice
               ? l.voicePreviewLine

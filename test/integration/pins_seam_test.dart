@@ -16,8 +16,10 @@ import 'package:sis/features/chat/data/supabase_chat_archive_repository.dart';
 import 'package:sis/features/chat/data/supabase_chat_pin_repository.dart';
 import 'package:sis/features/chat/data/supabase_chat_delete_repository.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
+import 'package:sis/features/chat/data/supabase_sticker_repository.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/sticker.dart';
 import 'package:sis/features/notifications/application/notification_settings_controller.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/notifications/data/supabase_notification_settings_repository.dart';
@@ -28,6 +30,7 @@ import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/service_key.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
 import '../support/video_fakes.dart';
@@ -45,7 +48,6 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
 
 Future<SupabaseClient> _signedIn(String email) async {
   final client = SupabaseClient(
@@ -53,10 +55,14 @@ Future<SupabaseClient> _signedIn(String email) async {
     _key,
     authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
   );
+  await setLocalTestPassword(_url, email, localTestPassword);
   try {
-    await client.auth.signInWithPassword(email: email, password: _password);
+    await client.auth.signInWithPassword(
+      email: email,
+      password: localTestPassword,
+    );
   } on AuthException {
-    await client.auth.signUp(email: email, password: _password);
+    await client.auth.signUp(email: email, password: localTestPassword);
   }
   expect(client.auth.currentUser, isNotNull, reason: 'sign-in failed');
   expect(await client.rpc('activate_session'), isTrue);
@@ -222,6 +228,27 @@ void main() {
         isNull,
       );
     });
+
+    test(
+      'a pinned sticker comes back as a sticker, not a plain message',
+      () async {
+        final repo = SupabaseChatPinRepository(pina);
+        final id = randomMessageId();
+        final sticker = starterStickerIds.first;
+        _ok(
+          await SupabaseStickerRepository(pina).send(direct, id, sticker),
+          'pina sends a sticker',
+        );
+        _ok(await repo.setPinnedMessage(direct, id), 'pin the sticker');
+        final seen = _ok(
+          await SupabaseChatPinRepository(pinb).pinnedMessage(direct, id),
+          'pinb fetches it',
+        );
+        expect(seen?.id, id);
+        expect(seen?.stickerId, sticker);
+        expect(seen?.albumCard, isFalse);
+      },
+    );
 
     test('who may pin cannot be switched in a 1:1', () async {
       expect(

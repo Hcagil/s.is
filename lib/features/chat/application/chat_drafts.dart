@@ -134,6 +134,8 @@ class _QueuedSend {
     this.file,
     this.video,
     this.location,
+    this.stickerId,
+    this.albumId,
   });
 
   final Message message;
@@ -142,6 +144,12 @@ class _QueuedSend {
   PickedFile? file;
   VideoSource? video;
   final SharedLocation? location;
+
+  /// A sticker send: the sticker's id.
+  final String? stickerId;
+
+  /// An album-card send: the own album's id (its name is the message body).
+  final String? albumId;
 }
 
 /// Pending text bubbles per conversation, oldest first -- for
@@ -308,6 +316,73 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     return message;
   }
 
+  /// Queues the sticker [stickerId] for [conversationId] like [enqueueFile] and returns the pending bubble at once. The typed draft text stays; only the reply target is spent.
+  Message enqueueSticker(
+    String conversationId,
+    String stickerId, {
+    Message? replyTo,
+  }) {
+    final message = Message(
+      id: randomMessageId(),
+      conversationId: conversationId,
+      senderId: _me ?? '',
+      body: '',
+      createdAt: DateTime.now(),
+      sending: true,
+      replyTo: replyTo?.id,
+      stickerId: stickerId,
+    );
+    _queues
+        .putIfAbsent(conversationId, () => [])
+        .add(
+          _QueuedSend(
+            message: message,
+            body: '',
+            replyTo: replyTo,
+            stickerId: stickerId,
+          ),
+        );
+    _publish(conversationId);
+    _persist();
+    ref.read(replyingToProvider.notifier).clear();
+    ref.read(draftsProvider.notifier).setReply(conversationId, null);
+    unawaited(ref.read(stickerLibraryProvider.notifier).markUsed(stickerId));
+    unawaited(_drain(conversationId));
+    return message;
+  }
+
+  /// Queues a card for the member's own album [albumId] (called [albumName]) like [enqueueSticker]; an album card is never a reply.
+  Message enqueueStickerAlbum(
+    String conversationId,
+    String albumId,
+    String albumName,
+  ) {
+    final message = Message(
+      id: randomMessageId(),
+      conversationId: conversationId,
+      senderId: _me ?? '',
+      body: albumName,
+      createdAt: DateTime.now(),
+      sending: true,
+      albumCard: true,
+      albumId: albumId,
+    );
+    _queues
+        .putIfAbsent(conversationId, () => [])
+        .add(
+          _QueuedSend(
+            message: message,
+            body: '',
+            replyTo: null,
+            albumId: albumId,
+          ),
+        );
+    _publish(conversationId);
+    _persist();
+    unawaited(_drain(conversationId));
+    return message;
+  }
+
   void _publish(String conversationId) {
     final items = _queues[conversationId];
     final next = {...state};
@@ -395,6 +470,9 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
             file: i.file,
             video: i.video,
             location: i.location,
+            stickerId: i.stickerId,
+            albumId: i.albumId,
+            albumName: i.albumId == null ? null : i.message.body,
           ),
     ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     unawaited(ref.read(sendQueueStoreProvider).save(me, records));
@@ -420,11 +498,14 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
                 id: r.id,
                 conversationId: r.conversationId,
                 senderId: userId,
-                body: r.location?.body ?? r.body.trim(),
+                body: r.location?.body ?? r.albumName ?? r.body.trim(),
                 createdAt: r.createdAt,
                 sending: true,
                 replyTo: r.replyTo,
                 location: r.location,
+                stickerId: r.stickerId,
+                albumCard: r.albumId != null,
+                albumId: r.albumId,
                 file: r.file?.attached ?? r.video?.attached,
               ),
               body: r.body,
@@ -432,6 +513,8 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
               file: r.file,
               video: r.video,
               location: r.location,
+              stickerId: r.stickerId,
+              albumId: r.albumId,
             ),
           );
     }
@@ -525,7 +608,11 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
         progress.set(item.message.id, const VideoProgress(VideoStage.sending));
       }
       final location = item.location;
-      final Result<Message> result = location != null
+      final Result<Message> result = item.stickerId != null
+          ? await _sendSticker(conversationId, item)
+          : item.albumId != null
+          ? await _sendStickerAlbum(conversationId, item)
+          : location != null
           ? await _sendLocation(conversationId, item.message, location)
           : file != null
           ? await ref
@@ -634,6 +721,39 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
         .send(conversationId, pending.id, location);
     return switch (sent) {
       Ok() => Ok(pending.stored()),
+      Err(:final failure) => Err(failure),
+    };
+  }
+
+  /// Stores the sticker through the sticker repository; on success the stored copy of the pending bubble stands in for the server row.
+  Future<Result<Message>> _sendSticker(
+    String conversationId,
+    _QueuedSend item,
+  ) async {
+    final sent = await ref
+        .read(stickerRepositoryProvider)
+        .send(
+          conversationId,
+          item.message.id,
+          item.stickerId!,
+          replyTo: item.message.replyTo,
+        );
+    return switch (sent) {
+      Ok() => Ok(item.message.stored()),
+      Err(:final failure) => Err(failure),
+    };
+  }
+
+  /// Stores the album card through the sticker repository, like [_sendSticker].
+  Future<Result<Message>> _sendStickerAlbum(
+    String conversationId,
+    _QueuedSend item,
+  ) async {
+    final sent = await ref
+        .read(stickerRepositoryProvider)
+        .sendAlbum(conversationId, item.message.id, item.albumId!);
+    return switch (sent) {
+      Ok() => Ok(item.message.stored()),
       Err(:final failure) => Err(failure),
     };
   }

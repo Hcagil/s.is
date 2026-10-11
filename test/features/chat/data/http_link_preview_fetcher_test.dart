@@ -52,6 +52,25 @@ class _Web extends http.BaseClient {
   }
 }
 
+/// A resolver that answers like the system one, without a network: an IP
+/// literal answers itself, a name in [records] its addresses, any other name
+/// one public address. [answer] replaces the whole behaviour when set.
+class _Dns {
+  final records = <String, List<InternetAddress>>{
+    'localhost': [InternetAddress('127.0.0.1'), InternetAddress('::1')],
+  };
+  final asked = <String>[];
+  Future<List<InternetAddress>> Function(String host)? answer;
+
+  Future<List<InternetAddress>> call(String host) async {
+    asked.add(host);
+    if (answer case final a?) return a(host);
+    final literal = InternetAddress.tryParse(host);
+    if (literal != null) return [literal];
+    return records[host] ?? [InternetAddress('93.184.215.14')];
+  }
+}
+
 String _og({
   String title = 'A page',
   String? image,
@@ -69,6 +88,7 @@ final _shrunk = Uint8List.fromList([1, 2, 3]);
 
 void main() {
   late _Web web;
+  late _Dns dns;
   late List<Uint8List> shrinkCalls;
 
   HttpLinkPreviewFetcher fetcher({Duration? timeout}) => HttpLinkPreviewFetcher(
@@ -78,10 +98,12 @@ void main() {
       return _shrunk;
     },
     timeout: timeout ?? const Duration(seconds: 6),
+    lookup: dns.call,
   );
 
   setUp(() {
     web = _Web();
+    dns = _Dns();
     shrinkCalls = [];
   });
 
@@ -129,6 +151,7 @@ void main() {
     final draft = await HttpLinkPreviewFetcher(
       web,
       shrink: (_) async => null,
+      lookup: dns.call,
     ).fetch(Uri.parse('https://example.com/a'));
     expect(draft!.preview.title, 'A page');
     expect(draft.image, isNull);
@@ -195,6 +218,7 @@ void main() {
       final draft = await HttpLinkPreviewFetcher(
         web,
         shrink: (_) async => throw const FormatException('bad jpeg'),
+        lookup: dns.call,
       ).fetch(Uri.parse('https://example.com/a'));
       expect(draft?.image, isNull);
     });
@@ -228,7 +252,10 @@ void main() {
     });
 
     test('the default timeout is 6 seconds', () {
-      expect(HttpLinkPreviewFetcher(web).timeout, const Duration(seconds: 6));
+      expect(
+        HttpLinkPreviewFetcher(web, lookup: dns.call).timeout,
+        const Duration(seconds: 6),
+      );
     });
 
     test('TARGET L4: a body that stalls is abandoned at the timeout and its stream cancelled', () async {
@@ -433,5 +460,161 @@ void main() {
       web.page('http://example.com/a', _og(title: 'Plain'));
       expect(await fetcher().fetch(Uri.parse('https://example.com/a')), isNull);
     });
+  });
+
+  group('name resolution fails closed (M2)', () {
+    test('a lookup that fails refuses the link without asking it', () async {
+      web.page('https://example.com/a', _og());
+      dns.answer = (_) async => throw const SocketException('no such host');
+      expect(await fetcher().fetch(Uri.parse('https://example.com/a')), isNull);
+      expect(web.asked, isEmpty);
+    });
+
+    test('an empty lookup refuses the link without asking it', () async {
+      web.page('https://example.com/a', _og());
+      dns.answer = (_) async => [];
+      expect(await fetcher().fetch(Uri.parse('https://example.com/a')), isNull);
+      expect(web.asked, isEmpty);
+    });
+
+    test('a lookup that never answers refuses the link within about 3 s, '
+        'long before the page timeout', () async {
+      web.page('https://example.com/a', _og());
+      dns.answer = (_) => Completer<List<InternetAddress>>().future;
+      final watch = Stopwatch()..start();
+      final draft = await fetcher(timeout: const Duration(seconds: 30))
+          .fetch(Uri.parse('https://example.com/a'));
+      expect(draft, isNull);
+      expect(watch.elapsed, lessThan(const Duration(milliseconds: 4500)));
+      expect(web.asked, isEmpty);
+    });
+
+    test(
+      'a public name that resolves to a private address is refused',
+      () async {
+        dns.records['intranet.example.com'] = [InternetAddress('10.1.2.3')];
+        web.page('https://intranet.example.com/', _og(title: 'Internal'));
+        expect(
+          await fetcher().fetch(Uri.parse('https://intranet.example.com/')),
+          isNull,
+        );
+        expect(dns.asked, contains('intranet.example.com'));
+        expect(web.asked, isEmpty);
+      },
+    );
+
+    test('one private address among public ones is enough to refuse', () async {
+      dns.records['mixed.example.com'] = [
+        InternetAddress('93.184.215.14'),
+        InternetAddress('127.0.0.1'),
+      ];
+      web.page('https://mixed.example.com/', _og());
+      expect(
+        await fetcher().fetch(Uri.parse('https://mixed.example.com/')),
+        isNull,
+      );
+      expect(web.asked, isEmpty);
+    });
+
+    test('a redirect to a name resolving privately is not followed', () async {
+      dns.records['inside.example.net'] = [InternetAddress('192.168.0.9')];
+      web.redirect('https://example.com/a', 'https://inside.example.net/x');
+      web.page('https://inside.example.net/x', _og(title: 'Inside'));
+      expect(await fetcher().fetch(Uri.parse('https://example.com/a')), isNull);
+      expect(
+        web.asked.map((u) => u.host),
+        isNot(contains('inside.example.net')),
+      );
+    });
+
+    test(
+      'an og:image on a name resolving privately is not downloaded',
+      () async {
+        dns.records['img.example.net'] = [InternetAddress('fd00::7')];
+        web.page(
+          'https://example.com/a',
+          _og(image: 'https://img.example.net/p.jpg'),
+        );
+        web.bytes('https://img.example.net/p.jpg', _jpeg);
+        final draft = await fetcher().fetch(Uri.parse('https://example.com/a'));
+        expect(draft?.preview.title, 'A page', reason: 'the card itself stays');
+        expect(draft?.image, isNull);
+        expect(
+          web.asked.map((u) => u.host),
+          isNot(contains('img.example.net')),
+        );
+      },
+    );
+
+    test(
+      'a public name resolving publicly is read (the control case)',
+      () async {
+        dns.records['ok.example.org'] = [InternetAddress('2606:4700::1')];
+        web.page('https://ok.example.org/', _og(title: 'Fine'));
+        final draft = await fetcher().fetch(
+          Uri.parse('https://ok.example.org/'),
+        );
+        expect(draft?.preview.title, 'Fine');
+      },
+    );
+  });
+
+  group('NAT64 and 6to4 are judged by the IPv4 address they carry', () {
+    for (final (addr, carried, private) in [
+      ('64:ff9b::a00:1', '10.0.0.1', true),
+      ('64:ff9b::7f00:1', '127.0.0.1', true),
+      ('64:ff9b::a9fe:a9fe', '169.254.169.254', true),
+      ('64:ff9b::808:808', '8.8.8.8', false),
+      ('2002:a00:1::1', '10.0.0.1', true),
+      ('2002:c0a8:101::1', '192.168.1.1', true),
+      ('2002:808:808::1', '8.8.8.8', false),
+    ]) {
+      test(
+        '$addr (carries $carried) is ${private ? 'refused' : 'read'}',
+        () async {
+          dns.records['wrapped.example.com'] = [InternetAddress(addr)];
+          web.page('https://wrapped.example.com/', _og(title: 'W'));
+          final draft = await fetcher().fetch(
+            Uri.parse('https://wrapped.example.com/'),
+          );
+          if (private) {
+            expect(draft, isNull);
+            expect(web.asked, isEmpty);
+          } else {
+            expect(draft?.preview.title, 'W');
+          }
+        },
+      );
+    }
+  });
+
+  group('the whole fetch is capped at 9 s', () {
+    test('a long page timeout still ends the fetch by 9 s', () async {
+      Future<http.StreamedResponse> slow(http.StreamedResponse r) =>
+          Future.delayed(const Duration(milliseconds: 2500), () => r);
+      for (var i = 0; i < 4; i++) {
+        web.routes['https://example.com/$i'] = () => slow(
+          http.StreamedResponse(
+            const Stream.empty(),
+            302,
+            headers: {'location': 'https://example.com/${i + 1}'},
+            isRedirect: true,
+          ),
+        );
+      }
+      web.routes['https://example.com/4'] = () => slow(
+        http.StreamedResponse(
+          Stream.value(utf8.encode(_og(title: 'Late'))),
+          200,
+          headers: {'content-type': 'text/html'},
+        ),
+      );
+      final watch = Stopwatch()..start();
+      final draft = await fetcher(timeout: const Duration(seconds: 20))
+          .fetch(Uri.parse('https://example.com/0'));
+      expect(draft, isNull, reason: 'the page would come at 12.5 s');
+      expect(watch.elapsed, lessThan(const Duration(milliseconds: 10000)));
+      expect(watch.elapsed, greaterThan(const Duration(milliseconds: 8000)));
+    }, timeout: const Timeout(Duration(seconds: 30)));
   });
 }

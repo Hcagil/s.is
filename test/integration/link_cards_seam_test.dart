@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:imcodec/imcodec.dart' as img;
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
@@ -52,6 +53,23 @@ Future<SupabaseClient> _signedIn(String email) async {
   expect(client.auth.currentUser, isNotNull, reason: 'sign-in failed');
   expect(await client.rpc('activate_session'), isTrue);
   return client;
+}
+
+/// Forwards every request; [beforeInsert] runs just before a message insert
+/// leaves, so a test can change the server between upload and insert.
+class _Race extends http.BaseClient {
+  final _inner = http.Client();
+  Future<void> Function()? beforeInsert;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest r) async {
+    if (r.method == 'POST' && r.url.path.endsWith('/rest/v1/messages')) {
+      final hook = beforeInsert;
+      beforeInsert = null;
+      await hook?.call();
+    }
+    return _inner.send(r);
+  }
 }
 
 T _ok<T>(Result<T> r) {
@@ -268,16 +286,121 @@ void main() {
         body: url,
         preview: draft(url, id, image: _jpeg),
       );
-      if (sent is Ok<Message>) {
-        final got = await readBack(quinlan, id);
-        expect(
-          got.linkPreview?.imagePath,
-          isNull,
-          reason: 'quinlan\'s planted picture must not show as priya\'s card',
-        );
-      }
+      _ok(sent);
+      final got = await readBack(quinlan, id);
+      expect(got.body, url);
+      expect(got.linkPreview?.title, 'A page title', reason: 'card kept');
+      expect(
+        got.linkPreview?.imagePath,
+        isNull,
+        reason: 'quinlan\'s planted picture must not show as priya\'s card',
+      );
     },
   );
+
+  group('a card the server refuses (LNKP1) never blocks the text', () {
+    test('a picture path with no picture behind it: sent with the card, '
+        'without the picture', () async {
+      final id = randomMessageId();
+      final url = page('ghost-picture');
+      final sent = await priya.send(
+        id: id,
+        conversationId: club,
+        body: url,
+        preview: LinkPreviewDraft(
+          preview: LinkPreview(
+            url: Uri.parse(url),
+            title: 'Ghost',
+            imagePath: linkImagePath(club, randomMessageId()),
+          ),
+        ),
+      );
+      expect(_ok(sent).linkPreview?.title, 'Ghost');
+      final got = await readBack(quinlan, id);
+      expect(got.body, url);
+      expect(got.linkPreview?.title, 'Ghost');
+      expect(got.linkPreview?.imagePath, isNull);
+    });
+
+    test('the picture vanished between upload and insert: the server '
+        'refuses it, the text goes with the card minus its picture', () async {
+      final race = _Race();
+      final racer = SupabaseClient(
+        _url,
+        _key,
+        httpClient: race,
+        authOptions: const AuthClientOptions(
+          authFlowType: AuthFlowType.implicit,
+        ),
+      );
+      addTearDown(racer.dispose);
+      // One active session per account: hand it back to priya's own client.
+      addTearDown(() async {
+        await priyaClient.auth.signInWithPassword(
+          email: 'priya@integration.test',
+          password: localTestPassword,
+        );
+        expect(await priyaClient.rpc('activate_session'), isTrue);
+      });
+      await racer.auth.signInWithPassword(
+        email: 'priya@integration.test',
+        password: localTestPassword,
+      );
+      expect(await racer.rpc('activate_session'), isTrue);
+      final id = randomMessageId();
+      final url = page('vanished');
+      race.beforeInsert = () async {
+        final gone = await _client(serviceKey()).storage
+            .from('link-previews')
+            .remove([linkImagePath(club, id)]);
+        expect(gone, hasLength(1), reason: 'the picture was uploaded first');
+      };
+      final sent = await SupabaseChatRepository(racer).send(
+        id: id,
+        conversationId: club,
+        body: url,
+        preview: draft(url, id, image: _jpeg),
+      );
+      expect(race.beforeInsert, isNull, reason: 'the insert was raced');
+      _ok(sent);
+      final got = await readBack(quinlan, id);
+      expect(got.body, url);
+      expect(got.linkPreview?.title, 'A page title');
+      expect(got.linkPreview?.imagePath, isNull);
+    });
+
+    test('a card whose link is not in the text: sent as plain text', () async {
+      final id = randomMessageId();
+      final sent = await priya.send(
+        id: id,
+        conversationId: club,
+        body: 'no link here',
+        preview: draft(page('elsewhere'), id),
+      );
+      _ok(sent);
+      final got = await readBack(quinlan, id);
+      expect(got.body, 'no link here');
+      expect(got.linkPreview, isNull);
+    });
+
+    test(
+      'a title with a hidden character and a picture: sent as plain text',
+      () async {
+        final id = randomMessageId();
+        final url = page('zero-width');
+        final sent = await priya.send(
+          id: id,
+          conversationId: club,
+          body: url,
+          preview: draft(url, id, image: _jpeg, title: 'Hid\u200Bden'),
+        );
+        _ok(sent);
+        final got = await readBack(quinlan, id);
+        expect(got.body, url);
+        expect(got.linkPreview, isNull);
+      },
+    );
+  });
 
   test('a non-member cannot read the picture', () async {
     final id = randomMessageId();

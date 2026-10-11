@@ -18,6 +18,7 @@ import '../domain/group_event.dart';
 import '../domain/group_member.dart';
 import '../domain/file_attachment.dart';
 import '../domain/group_settings.dart';
+import '../domain/link_preview.dart';
 import '../domain/message.dart';
 import '../domain/poll.dart';
 import '../domain/read_marks.dart';
@@ -340,13 +341,13 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, link_preview';
 
   /// The columns of a page read (open chat): no photo preview -- those arrive
   /// separately, see [attachmentPreviews], so the first paint never waits on
   /// them.
   static const _pageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, link_preview';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -655,6 +656,7 @@ final class SupabaseChatRepository implements ChatRepository {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) async {
     final me = _uid;
     if (me == null) return const Err(DeniedFailure());
@@ -668,6 +670,7 @@ final class SupabaseChatRepository implements ChatRepository {
       // the Realtime echo to display it. id comes from the caller
       // (randomMessageId) so a retried send after a lost answer is
       // idempotent -- see the unique_violation branch below.
+      final card = await _uploadLinkPicture(preview);
       final row = await _client
           .from('messages')
           .insert({
@@ -676,6 +679,7 @@ final class SupabaseChatRepository implements ChatRepository {
             'sender_id': me,
             'body': trimmed,
             'reply_to': ?replyTo,
+            if (card != null) 'link_preview': card.toJson(),
           })
           .select(_messageColumns)
           .single();
@@ -927,6 +931,47 @@ final class SupabaseChatRepository implements ChatRepository {
     } catch (e) {
       return Err(_asFailure(e));
     }
+  }
+
+  @override
+  Future<Result<Uint8List>> linkImageBytes(String imagePath) async {
+    final cached = await _cache.read(imagePath);
+    if (cached != null) return Ok(cached);
+    try {
+      final bytes = await _client.storage
+          .from('link-previews')
+          .download(imagePath);
+      await _cache.write(imagePath, bytes);
+      return Ok(bytes);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  /// Uploads the card picture (if any). A failed upload drops the picture,
+  /// never the card; 409 (a retried send) counts as uploaded.
+  Future<LinkPreview?> _uploadLinkPicture(LinkPreviewDraft? draft) async {
+    if (draft == null) return null;
+    final path = draft.preview.imagePath;
+    final bytes = draft.image;
+    if (path == null || bytes == null) {
+      return draft.preview.withImagePath(null);
+    }
+    try {
+      await _client.storage
+          .from('link-previews')
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: const FileOptions(contentType: 'image/jpeg'),
+          );
+    } on StorageException catch (e) {
+      if (e.statusCode != '409') return draft.preview.withImagePath(null);
+    } catch (_) {
+      return draft.preview.withImagePath(null);
+    }
+    await _cache.write(path, bytes);
+    return draft.preview;
   }
 
   @override
@@ -1259,6 +1304,7 @@ final class SupabaseChatRepository implements ChatRepository {
     attachmentPath: row['attachment_path'] as String?,
     attachmentPreview: _preview(row['attachment_preview']),
     replyTo: row['reply_to'] as String?,
+    linkPreview: LinkPreview.fromJson(row['link_preview']),
     forwarded: row['forwarded'] as bool? ?? false,
     poll: row['poll'] as bool? ?? false,
     contact: row['contact'] as bool? ?? false,

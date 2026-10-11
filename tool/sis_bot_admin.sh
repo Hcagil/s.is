@@ -10,6 +10,7 @@
 #   on | off                                the OFF switch (stops every path at the next statement)
 #   list                                    contacts the bot may chat with
 #   list-add <user_id|email> | list-remove <user_id>
+#   rename <text>                           set the bot's display name (1 to 80 characters)
 #   revoke                                  OFF + delete every session + delete the local token file
 #   delete                                  OFF, allowlist row, sessions, then the user (cascades)
 #
@@ -194,6 +195,14 @@ end \$\$" >/dev/null
     sql "delete from app_private.bot_contacts where contact_id = '$1'" >/dev/null
     echo "removed $1" ;;
 
+  rename)
+    name=$(python3 -c "import sys; print(sys.argv[1].strip())" "${1:-}")
+    [ ${#name} -ge 1 ] && [ ${#name} -le 80 ] || die "the name must be 1 to 80 characters"
+    name=${name//\'/\'\'}
+    n=$(sql "with u as (update public.profiles set display_name = '$name' where user_id = (select user_id from app_private.bot_accounts) returning 1) select count(*) from u")
+    [ "$n" = 1 ] || die "rename changed $n rows (no bot yet? run bootstrap)"
+    echo renamed ;;
+
   revoke)
     sql "update app_private.bot_accounts set enabled = false;
          delete from auth.sessions where user_id = (select user_id from app_private.bot_accounts)" >/dev/null
@@ -209,5 +218,5 @@ end \$\$" >/dev/null
     shred -u "$STATE" 2>/dev/null || rm -f "$STATE"
     echo deleted ;;
 
-  *) die "usage: tool/sis_bot_admin.sh bootstrap [--debug id] | mint | on | off | list | list-add <user|email> | list-remove <user> | revoke | delete" ;;
+  *) die "usage: tool/sis_bot_admin.sh bootstrap [--debug id] | mint | on | off | list | list-add <user|email> | list-remove <user> | rename <text> | revoke | delete" ;;
 esac

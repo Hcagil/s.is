@@ -11,7 +11,8 @@
 # busy lock, superseded by a second sign-in, revoked), 4 (unlisted chat,
 # unlisted user, OFF), 5 (rate limited); revoke; the sign-up hook refusing a
 # public sign-up of the bot address; and probes with the bot's REAL JWT of
-# storage, avatars, profile update, add_members, set_admin and Realtime.
+# storage, avatars, profile update, add_members, set_admin and Realtime; admin
+# rename (trim, 1-80 characters, exact quotes/backslashes, no bot -> exit 1).
 # While the tools run, a poller checks that no token or key is in any argv and
 # that sis_bot.sh keeps its temp files in one mode-700 directory it removes.
 set -euo pipefail
@@ -299,6 +300,47 @@ else
   bad "probe: Realtime: $(grep -E 'Expected|Actual|reason|Failed|Error' "$BOX/rt" | head -8 | tr '\n' ' ')"
 fi
 
+# 12b admin rename: trims, 1-80 characters, stored exactly; the bot still cannot --------
+name_is() { test "$(sql "select display_name from public.profiles where user_id = '$BOT_ID'")" = "$1"; }
+expect_exit 0 "admin rename" "$ADMIN" rename "  SIS Yardım  "
+check "rename prints only 'renamed'" bash -c "test \"\$(cat '$BOX/out')\" = renamed && test ! -s '$BOX/err'"
+check "rename trims and stores the name" name_is "SIS Yardım"
+q="O'Brien \\ back\\\\slash \"x\""
+expect_exit 0 "admin rename with quotes and backslashes" "$ADMIN" rename "$q"
+check "quotes and backslashes are stored exactly" \
+  test "$(docker exec -i "$DB" psql -U postgres -XAtq -c "select encode(convert_to(display_name, 'UTF8'), 'hex') from public.profiles where user_id = '$BOT_ID'")" \
+       = "$(printf '%s' "$q" | od -An -tx1 | tr -d ' \n')"
+n80=$(printf 'ş%.0s' $(seq 80))
+expect_exit 0 "admin rename to 80 characters (multi-byte)" "$ADMIN" rename "$n80"
+check "the 80-character name is stored" name_is "$n80"
+expect_exit 0 "admin rename to 1 character" "$ADMIN" rename " Z "
+check "the 1-character name is stored" name_is "Z"
+too_long() {  # NAME args...: exit 1, the length message, the name unchanged
+  local name=$1; shift
+  expect_exit 1 "admin rename refuses $name" "$ADMIN" rename "$@"
+  check "admin rename refuses $name: says 1 to 80 characters" \
+    grep -qF "the name must be 1 to 80 characters" "$BOX/err" "$BOX/out"
+  check "admin rename refuses $name: the name is unchanged" name_is "Z"
+}
+too_long "81 characters" "${n80}x"
+too_long "an empty name" ""
+too_long "a blank name" "   "
+too_long "a missing name"
+expect_exit 0 "admin rename back" "$ADMIN" rename "SIS Destek"
+# return=minimal: return=representation needs a table-wide SELECT grant and is
+# refused for everyone, so it would pass even with the bot guard gone.
+self_rename() {  # jwt user name -> http code
+  curl -sS -o "$BOX/body" -w '%{http_code}' -X PATCH "$SIS_URL/rest/v1/profiles?user_id=eq.$2" \
+    -H "apikey: $SIS_ANON_KEY" -H "Authorization: Bearer $1" -H 'content-type: application/json' \
+    -H 'Prefer: return=minimal' -d "{\"display_name\":\"$3\"}"
+}
+c=$(self_rename "$ANN_JWT" "$ANN" "Ann Renamed")
+check "control: a human renames itself with the same request (HTTP $c)" \
+  test "$(sql "select display_name from public.profiles where user_id = '$ANN'")" = "Ann Renamed"
+self_rename "$ANN_JWT" "$ANN" "Ann" >/dev/null
+c=$(self_rename "$BOT_JWT" "$BOT_ID" "Evil after rename")
+check "probe: after an admin rename the bot still cannot rename itself (HTTP $c)" name_is "SIS Destek"
+
 # 13 admin mint gives the tool a session again; revoke ends it ------------------------------
 watch 0 "admin mint" "$SKEY" "$ADMIN" mint
 expect_exit 0 "the tool works on the new session" "$BOT" status
@@ -317,6 +359,9 @@ check "and removed every bot session" test "$(sql "select count(*) from auth.ses
 expect_exit 0 "admin delete" "$ADMIN" delete
 check "the bot user is gone" test "$(sql "select count(*) from auth.users where email = 'sis-destek-bot@example.com'")" = 0
 check "and its bot rows with it" test "$(sql "select count(*) from app_private.bot_accounts")" = 0
+
+expect_exit 1 "admin rename with no bot" "$ADMIN" rename "Nobody"
+check "it says rename changed 0 rows" grep -qF "rename changed 0 rows" "$BOX/err" "$BOX/out"
 
 echo "# passed $PASS, failed $FAIL"
 [ "$FAIL" = 0 ]

@@ -497,7 +497,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
                 return _CameraTile(onTap: _opening ? null : _takePhoto);
               }
               final p = _photos[i - (widget.square ? 0 : 1)];
-              return _Thumb(
+              return GalleryThumb(
                 key: ValueKey('sheet-photo-${p.id}'),
                 photo: p,
                 onTap: () => _choose(p),
@@ -659,8 +659,9 @@ class _CameraTile extends StatelessWidget {
   }
 }
 
-class _Thumb extends ConsumerStatefulWidget {
-  const _Thumb({
+/// One photo tile of a gallery grid; fetches its thumbnail once.
+class GalleryThumb extends ConsumerStatefulWidget {
+  const GalleryThumb({
     super.key,
     required this.photo,
     required this.onTap,
@@ -676,10 +677,10 @@ class _Thumb extends ConsumerStatefulWidget {
   final bool selected;
 
   @override
-  ConsumerState<_Thumb> createState() => _ThumbState();
+  ConsumerState<GalleryThumb> createState() => _ThumbState();
 }
 
-class _ThumbState extends ConsumerState<_Thumb> {
+class _ThumbState extends ConsumerState<GalleryThumb> {
   // Asked once: rebuilding the grid must not refetch every thumbnail.
   late final Future<Uint8List?> _bytes = ref
       .read(galleryProvider)

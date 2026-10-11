@@ -599,5 +599,7 @@
   "makerSaveFailed": "Çıkartma kaydedilemedi. Tekrar dene.",
   "makerSaveToCount": "Albüme kaydet ({count}/{max})",
   "makerCountOf": "{count}/{max}",
-  "makerSavedTo": "Kaydedildi: {name}"
+  "makerSavedTo": "Kaydedildi: {name}",
+  "makerGalleryTitle": "Fotoğraf seç",
+  "makerRecent": "Son eklenenler"
 }

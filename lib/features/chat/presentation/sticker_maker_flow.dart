@@ -6,11 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../application/chat_controllers.dart';
-import 'attachment_sheet.dart';
 import 'message_menu_card.dart';
 import 'sticker_cutout_page.dart';
 import 'sticker_draft.dart';
 import 'sticker_editor_page.dart';
+import 'sticker_gallery_page.dart';
 import 'sticker_maker_widgets.dart';
 
 /// The panel's "+ New" start: a small card, then the gallery.
@@ -68,9 +68,9 @@ Future<void> startStickerMaker(
   WidgetRef ref, {
   String? albumId,
 }) async {
-  final picked = await showAttachmentSheet(context, square: true);
-  if (picked.images.isEmpty || !context.mounted) return;
-  final jpeg = picked.images.first.bytes;
+  final picked = await pickStickerPhoto(context);
+  if (picked == null || !context.mounted) return;
+  final jpeg = picked.bytes;
   final codec = await ui.instantiateImageCodec(
     jpeg,
     targetWidth: 512,
@@ -93,6 +93,8 @@ Future<void> startStickerMaker(
       cutter.mask(jpeg).then((m) async {
         if (draft.closed) return;
         if (m == null) {
+          // The member just sees the whole image; once in the log is enough.
+          debugPrint('sis.sticker cut-out unavailable, showing whole image');
           draft.setCutOut(false);
         } else {
           await draft.setMask(m);

@@ -5,8 +5,8 @@
 --    limits size (100 KB) and type (image/webp).
 --  * A member can own at most 700 stickers (10 albums x 50 + 200 favourites,
 --    the most anyone can hold): STKS1.
---  * Known limit (shortcut): a failed upload leaves an unused row that still
---    counts toward the cap; add a cleanup when it matters.
+--  * If the upload fails the client calls discard_sticker(), which removes the
+--    unused row.
 
 create function public.create_sticker() returns uuid
 language plpgsql security definer set search_path = '' as $$
@@ -20,6 +20,19 @@ begin
 end $$;
 revoke all on function public.create_sticker() from public, anon;
 grant execute on function public.create_sticker() to authenticated;
+
+create function public.discard_sticker(p_id uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  delete from public.stickers s
+  where s.id = p_id
+    and s.owner_id = auth.uid()
+    and not s.starter
+    and not exists (select 1 from public.sticker_album_items i where i.sticker_id = s.id)
+    and not exists (select 1 from public.sticker_favourites f where f.sticker_id = s.id);
+end $$;
+revoke all on function public.discard_sticker(uuid) from public, anon;
+grant execute on function public.discard_sticker(uuid) to authenticated;
 
 create function app_private.stickers_owner_limit() returns trigger
 language plpgsql security definer set search_path = '' as $$

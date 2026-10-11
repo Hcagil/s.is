@@ -1930,4 +1930,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String makerSavedTo(String name) {
     return 'Saved to $name';
   }
+
+  @override
+  String get makerGalleryTitle => 'Choose a photo';
+
+  @override
+  String get makerRecent => 'Recent';
 }

@@ -1394,5 +1394,9 @@
   "makerCountOf": "{count}/{max}",
   "@makerCountOf": {"description": "Used count of an album or of the favourites", "placeholders": {"count": {"type": "int"}, "max": {"type": "int"}}},
   "makerSavedTo": "Saved to {name}",
-  "@makerSavedTo": {"description": "Confirmation after saving", "placeholders": {"name": {"type": "String"}}}
+  "@makerSavedTo": {"description": "Confirmation after saving", "placeholders": {"name": {"type": "String"}}},
+  "makerGalleryTitle": "Choose a photo",
+  "@makerGalleryTitle": {"description": "Title of the full-page photo picker of the sticker maker"},
+  "makerRecent": "Recent",
+  "@makerRecent": {"description": "Label above the newest photos in the sticker maker picker"}
 }

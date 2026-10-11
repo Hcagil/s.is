@@ -1908,4 +1908,10 @@ class AppLocalizationsTr extends AppLocalizations {
   String makerSavedTo(String name) {
     return 'Kaydedildi: $name';
   }
+
+  @override
+  String get makerGalleryTitle => 'Fotoğraf seç';
+
+  @override
+  String get makerRecent => 'Son eklenenler';
 }

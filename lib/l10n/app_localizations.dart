@@ -3505,6 +3505,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Saved to {name}'**
   String makerSavedTo(String name);
+
+  /// Title of the full-page photo picker of the sticker maker
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a photo'**
+  String get makerGalleryTitle;
+
+  /// Label above the newest photos in the sticker maker picker
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get makerRecent;
 }
 
 class _AppLocalizationsDelegate

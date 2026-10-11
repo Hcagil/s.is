@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -246,19 +245,28 @@ class _VideoPlayerSheetState extends ConsumerState<VideoPlayerSheet> {
           Positioned(
             left: 10,
             top: 10,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                child: Text(
-                  widget.embed.site.label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: (_loaded || _refusal != null) ? 0 : 1,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    child: Text(
+                      widget.embed.site.label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -289,7 +297,9 @@ class _VideoPlayerSheetState extends ConsumerState<VideoPlayerSheet> {
   }
 
   void _onExternal(Uri uri) {
-    unawaited(ref.read(linkOpenerProvider).open(uri));
+    if (mounted && _refusal == null) {
+      setState(() => _refusal = VideoRefusal.other);
+    }
   }
 
   void _onLoaded() {

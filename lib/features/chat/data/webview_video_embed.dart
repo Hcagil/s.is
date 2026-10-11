@@ -77,6 +77,11 @@ class _EmbedWebViewState extends State<_EmbedWebView> {
       platform.setMediaPlaybackRequiresUserGesture(false);
     }
 
+    // Wipe anything a killed app left behind before the first load.
+    unawaited(_controller.clearCache());
+    unawaited(_controller.clearLocalStorage());
+    unawaited(WebViewCookieManager().clearCookies());
+
     unawaited(
       _controller.loadRequest(
         widget.spec.embed.url,

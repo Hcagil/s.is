@@ -2035,7 +2035,7 @@ Nothing contacts the site before that tap.
   (the app is on 24 and 15). All three are SDK imports, so they live in
   `data/` only (`tool/check_pattern.sh`). No new permission.
 - Embeds, official forms only: YouTube `youtube-nocookie.com/embed/<id>`
-  (the privacy mode; it needs a `Referer` of `https://com.esd.sis`, or YouTube
+  (YouTube's no-cookie embed address; it needs a `Referer` of `https://com.esd.sis`, or YouTube
   answers error 153); Instagram `/p|reel|tv/<code>/embed/`; TikTok
   `tiktok.com/player/v1/<id>` (its embed player); X
   `platform.twitter.com/embed/Tweet.html?id=<id>`. Short links (vm.tiktok.com,

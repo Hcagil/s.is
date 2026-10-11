@@ -4,7 +4,9 @@ import 'dart:math';
 
 /// Password for integration-test accounts on the local test database only:
 /// random, made once per test file (isolate), never written down. Accounts
-/// left by earlier runs are moved to it by [setLocalTestPassword].
+/// left by earlier runs are moved to it by [setLocalTestPassword]. Every file
+/// that signs in to an account another file moves must move it too: a file
+/// with a fixed password is locked out (its sign-up then fails with 422).
 final localTestPassword = base64Url.encode(
   List<int>.generate(24, (_) => Random.secure().nextInt(256)),
 );

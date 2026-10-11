@@ -10,6 +10,16 @@ final recentStickerStoreProvider = Provider<RecentStickerStore>(
   (_) => throw UnimplementedError('override in main'),
 );
 
+/// Cuts the subject out of a photo on the phone.
+final stickerCutterProvider = Provider<StickerCutter>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Turns straight RGBA pixels into a small WebP.
+final stickerEncoderProvider = Provider<StickerEncoder>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
 /// What the sticker panel shows: recent, favourites and the member's albums.
 final class StickerLibrary {
   /// Creates the library state.
@@ -258,6 +268,27 @@ class StickerLibraryController extends Notifier<StickerLibrary> {
         return null;
       case Err(:final failure):
         return failure;
+    }
+  }
+
+  /// Encodes [rgba] (512x512 straight RGBA), uploads it as a new sticker,
+  /// puts it in [albumId] and, if [favourite], in the favourites.
+  Future<Failure?> saveMade(
+    Uint8List rgba, {
+    required String albumId,
+    bool favourite = false,
+  }) async {
+    final webp = await ref.read(stickerEncoderProvider).encode(rgba);
+    if (webp == null) return const StickerMakeFailure();
+    final made = await ref.read(stickerRepositoryProvider).create(webp);
+    if (!ref.mounted) return null;
+    switch (made) {
+      case Err(:final failure):
+        return failure;
+      case Ok(:final value):
+        final added = await addToAlbum(albumId, value);
+        if (added != null) return added;
+        return favourite ? addFavourite(value) : null;
     }
   }
 

@@ -226,11 +226,13 @@ void main() {
       );
     });
 
-    testWidgets('+ New opens the create page', (t) async {
+    // 10b replaced the placeholder page with the maker's start card.
+    testWidgets('+ New opens the make-a-sticker card', (t) async {
       await open(t);
       await openPanel(t);
       await tab(t, 4);
-      expect(k('sticker-create-page'), findsOneWidget);
+      expect(k('maker-start-card'), findsOneWidget);
+      expect(k('maker-use-photo'), findsOneWidget);
     });
 
     testWidgets('tapping a sticker sends it at once, shows it in the chat '

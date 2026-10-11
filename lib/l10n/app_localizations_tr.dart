@@ -1805,6 +1805,113 @@ class AppLocalizationsTr extends AppLocalizations {
   String get stickerCreateTitle => 'Çıkartma oluştur';
 
   @override
-  String get stickerCreateSoon =>
-      'Kendi çıkartmalarını yapmak yakında geliyor.';
+  String get makerUsePhoto => 'Fotoğraf kullan';
+
+  @override
+  String get makerCancel => 'Vazgeç';
+
+  @override
+  String get makerCutoutTitle => 'Ayır';
+
+  @override
+  String get makerWhole => 'Tüm görsel';
+
+  @override
+  String get makerCut => 'Ayrılmış';
+
+  @override
+  String get makerErase => 'Sil';
+
+  @override
+  String get makerRestore => 'Geri getir';
+
+  @override
+  String get makerUndo => 'Geri al';
+
+  @override
+  String get makerReset => 'Sıfırla';
+
+  @override
+  String get makerBrushHint => 'Silmek ya da geri getirmek için boya';
+
+  @override
+  String get makerEditTitle => 'Çıkartmayı düzenle';
+
+  @override
+  String get makerEditHint => 'Çıkartmana yazı ekle ya da çiz';
+
+  @override
+  String get makerToAlbum => 'Albüme kaydet';
+
+  @override
+  String get makerTextTitle => 'Yazı';
+
+  @override
+  String get makerTextHint => 'Yazını yaz';
+
+  @override
+  String get makerSize => 'Boyut';
+
+  @override
+  String get makerFontSans => 'Sans';
+
+  @override
+  String get makerFontSerif => 'Serif';
+
+  @override
+  String get makerFontHand => 'Hand';
+
+  @override
+  String get makerDrawTitle => 'Çiz';
+
+  @override
+  String get makerThin => 'İnce';
+
+  @override
+  String get makerMedium => 'Orta';
+
+  @override
+  String get makerThick => 'Kalın';
+
+  @override
+  String get makerSaveTitle => 'Çıkartmayı kaydet';
+
+  @override
+  String get makerFull => 'Dolu';
+
+  @override
+  String get makerLimitReached => 'Sınıra ulaşıldı';
+
+  @override
+  String get makerAlsoFavourite => 'Favorilere de ekle';
+
+  @override
+  String get makerSave => 'Kaydet';
+
+  @override
+  String get makerDone => 'Bitti';
+
+  @override
+  String get makerSaveFailed => 'Çıkartma kaydedilemedi. Tekrar dene.';
+
+  @override
+  String makerSaveToCount(int count, int max) {
+    return 'Albüme kaydet ($count/$max)';
+  }
+
+  @override
+  String makerCountOf(int count, int max) {
+    return '$count/$max';
+  }
+
+  @override
+  String makerSavedTo(String name) {
+    return 'Kaydedildi: $name';
+  }
+
+  @override
+  String get makerGalleryTitle => 'Fotoğraf seç';
+
+  @override
+  String get makerRecent => 'Son eklenenler';
 }

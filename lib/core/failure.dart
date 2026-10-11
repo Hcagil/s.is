@@ -35,6 +35,14 @@ final class StickerLimitFailure extends Failure {
   String get message => 'Sticker limit reached.';
 }
 
+/// The picture could not be turned into a sticker, or the upload failed to start.
+final class StickerMakeFailure extends Failure {
+  const StickerMakeFailure();
+
+  @override
+  String get message => 'Could not make the sticker.';
+}
+
 /// Pinning a sixth chat; the screen shows its own translated line.
 final class PinLimitFailure extends Failure {
   const PinLimitFailure();

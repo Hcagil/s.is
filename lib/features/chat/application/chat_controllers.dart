@@ -46,6 +46,7 @@ import '../domain/recent_sticker_store.dart';
 import '../domain/shared_location.dart';
 import '../domain/shared_contact.dart';
 import '../domain/sticker.dart';
+import '../domain/sticker_maker.dart';
 import '../domain/sticker_repository.dart';
 import '../domain/video.dart';
 import '../domain/video_gallery.dart';

@@ -3302,17 +3302,221 @@ abstract class AppLocalizations {
   /// **'You can keep up to {max} favourites.'**
   String stickerLimitFavourites(int max);
 
-  /// Title of the placeholder page for making stickers
+  /// Title of the card that starts making a sticker
   ///
   /// In en, this message translates to:
-  /// **'Create stickers'**
+  /// **'Create sticker'**
   String get stickerCreateTitle;
 
-  /// Body of the placeholder page for making stickers
+  /// Button that starts making a sticker from a photo
   ///
   /// In en, this message translates to:
-  /// **'Making your own stickers is coming soon.'**
-  String get stickerCreateSoon;
+  /// **'Use a photo'**
+  String get makerUsePhoto;
+
+  /// Button that closes the create-sticker card
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get makerCancel;
+
+  /// Title of the cut-out step
+  ///
+  /// In en, this message translates to:
+  /// **'Cut-out'**
+  String get makerCutoutTitle;
+
+  /// Choice: keep the whole picture
+  ///
+  /// In en, this message translates to:
+  /// **'Whole image'**
+  String get makerWhole;
+
+  /// Choice: keep only the subject
+  ///
+  /// In en, this message translates to:
+  /// **'Cut-out'**
+  String get makerCut;
+
+  /// Brush that erases parts
+  ///
+  /// In en, this message translates to:
+  /// **'Erase'**
+  String get makerErase;
+
+  /// Brush that brings parts back
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get makerRestore;
+
+  /// Undo the last stroke
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get makerUndo;
+
+  /// Forget all brush strokes
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get makerReset;
+
+  /// Hint under the cut-out brush
+  ///
+  /// In en, this message translates to:
+  /// **'Paint to erase or bring back parts'**
+  String get makerBrushHint;
+
+  /// Title of the sticker editor
+  ///
+  /// In en, this message translates to:
+  /// **'Edit sticker'**
+  String get makerEditTitle;
+
+  /// Hint on the sticker editor
+  ///
+  /// In en, this message translates to:
+  /// **'Add text or draw on your sticker'**
+  String get makerEditHint;
+
+  /// Button to go to the save step
+  ///
+  /// In en, this message translates to:
+  /// **'Save to album'**
+  String get makerToAlbum;
+
+  /// Title of the text step
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get makerTextTitle;
+
+  /// Placeholder of the sticker text field
+  ///
+  /// In en, this message translates to:
+  /// **'Type your text'**
+  String get makerTextHint;
+
+  /// Label of the text size slider
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get makerSize;
+
+  /// Plain font choice
+  ///
+  /// In en, this message translates to:
+  /// **'Sans'**
+  String get makerFontSans;
+
+  /// Serif font choice
+  ///
+  /// In en, this message translates to:
+  /// **'Serif'**
+  String get makerFontSerif;
+
+  /// Handwriting font choice
+  ///
+  /// In en, this message translates to:
+  /// **'Hand'**
+  String get makerFontHand;
+
+  /// Title of the draw step
+  ///
+  /// In en, this message translates to:
+  /// **'Draw'**
+  String get makerDrawTitle;
+
+  /// Thin pen
+  ///
+  /// In en, this message translates to:
+  /// **'Thin'**
+  String get makerThin;
+
+  /// Medium pen
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get makerMedium;
+
+  /// Thick pen
+  ///
+  /// In en, this message translates to:
+  /// **'Thick'**
+  String get makerThick;
+
+  /// Title of the save step
+  ///
+  /// In en, this message translates to:
+  /// **'Save sticker'**
+  String get makerSaveTitle;
+
+  /// Shown on an album that is full
+  ///
+  /// In en, this message translates to:
+  /// **'Full'**
+  String get makerFull;
+
+  /// Shown on the new-album row at the album limit
+  ///
+  /// In en, this message translates to:
+  /// **'Limit reached'**
+  String get makerLimitReached;
+
+  /// Option to also favourite the new sticker
+  ///
+  /// In en, this message translates to:
+  /// **'Also add to favourites'**
+  String get makerAlsoFavourite;
+
+  /// Button that saves the sticker
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get makerSave;
+
+  /// Button after the sticker was saved
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get makerDone;
+
+  /// Notice when saving failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the sticker. Try again.'**
+  String get makerSaveFailed;
+
+  /// Label above the album list
+  ///
+  /// In en, this message translates to:
+  /// **'Save to album ({count}/{max})'**
+  String makerSaveToCount(int count, int max);
+
+  /// Used count of an album or of the favourites
+  ///
+  /// In en, this message translates to:
+  /// **'{count}/{max}'**
+  String makerCountOf(int count, int max);
+
+  /// Confirmation after saving
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to {name}'**
+  String makerSavedTo(String name);
+
+  /// Title of the full-page photo picker of the sticker maker
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a photo'**
+  String get makerGalleryTitle;
+
+  /// Label above the newest photos in the sticker maker picker
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get makerRecent;
 }
 
 class _AppLocalizationsDelegate

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/domain/recent_sticker_store.dart';
 import 'package:sis/features/chat/domain/sticker.dart';
+import 'package:sis/features/chat/domain/sticker_maker.dart';
 import 'package:sis/features/chat/domain/sticker_repository.dart';
 
 /// One send that reached the "server" and waits for its answer.
@@ -32,8 +33,12 @@ class StickerSend {
 /// another member's album is DeniedFailure; [offline] makes every call a
 /// retryable NetworkFailure. Albums list oldest first, favourites newest first.
 class StickerRepoFake implements StickerRepository {
-  StickerRepoFake({Map<String, List<String>>? shared, this.images = const {}})
-    : shared = shared ?? {};
+  StickerRepoFake({
+    Map<String, List<String>>? shared,
+    Map<String, Uint8List> images = const {},
+    this.owned = 0,
+  }) : shared = shared ?? {},
+       images = {...images};
 
   final sends = <StickerSend>[];
   final albumList = <StickerAlbum>[];
@@ -241,6 +246,24 @@ class StickerRepoFake implements StickerRepository {
     return Ok(add.length);
   }
 
+  /// How many stickers this member already owns (the server caps it at 700).
+  int owned;
+
+  /// Every image create() stored, by the id it returned.
+  final made = <String, Uint8List>{};
+
+  @override
+  Future<Result<String>> create(Uint8List webp) async {
+    final g = _gate<String>('create ${webp.length}');
+    if (g != null) return g;
+    if (owned >= 700) return const Err(StickerLimitFailure('STKS1'));
+    owned++;
+    final id = 'made-${++_n}';
+    made[id] = webp;
+    images[id] = webp;
+    return Ok(id);
+  }
+
   @override
   Future<Result<Uint8List>> image(String stickerId) async {
     if (offline) return Err(const NetworkFailure('offline', retryable: true));
@@ -271,5 +294,22 @@ class RecentStickerStoreFake implements RecentStickerStore {
   Future<void> clear() async {
     cleared++;
     ids.clear();
+  }
+}
+
+/// A [StickerEncoder] from the contract: hands back [output] (null = no
+/// quality fits) after [latency]; records every input.
+class StickerEncoderFake implements StickerEncoder {
+  StickerEncoderFake({Uint8List? output, this.latency = Duration.zero})
+    : output = output ?? Uint8List.fromList(List.filled(64, 7));
+  Uint8List? output;
+  final Duration latency;
+  final inputs = <Uint8List>[];
+
+  @override
+  Future<Uint8List?> encode(Uint8List rgba) async {
+    inputs.add(rgba);
+    await Future<void>.delayed(latency);
+    return output;
   }
 }

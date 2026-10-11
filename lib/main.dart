@@ -35,7 +35,9 @@ import 'features/chat/data/flutter_device_videos.dart';
 import 'features/chat/data/geolocator_device_location.dart';
 import 'features/chat/data/maps_backend.dart';
 import 'features/chat/data/flutter_phone_book.dart';
+import 'features/chat/data/imcodec_sticker_encoder.dart';
 import 'features/chat/data/native_picture_cropper.dart';
+import 'features/chat/data/native_sticker_cutter.dart';
 import 'features/chat/data/no_voice_transcriber.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
 import 'features/chat/data/photo_manager_video_gallery.dart';
@@ -280,6 +282,10 @@ Future<void> main() async {
           ),
           pictureCropperProvider.overrideWithValue(
             const NativePictureCropper(),
+          ),
+          stickerCutterProvider.overrideWithValue(const NativeStickerCutter()),
+          stickerEncoderProvider.overrideWithValue(
+            const ImcodecStickerEncoder(),
           ),
           presenceRepositoryProvider.overrideWithValue(
             SupabasePresenceRepository(client),

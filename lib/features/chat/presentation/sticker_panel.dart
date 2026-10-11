@@ -10,7 +10,7 @@ import '../domain/sticker.dart';
 import 'message_menu_card.dart';
 import 'sticker_album_page.dart';
 import 'sticker_albums.dart';
-import 'sticker_create_page.dart';
+import 'sticker_maker_flow.dart';
 import 'sticker_image.dart';
 
 /// A panel for selecting and sending stickers in a conversation.
@@ -77,9 +77,7 @@ class _StickerPanelState extends ConsumerState<StickerPanel> {
         if (index < 4) {
           setState(() => _tab = index);
         } else {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const StickerCreatePage()),
-          );
+          openStickerMaker(context, ref);
         }
       },
       child: Padding(

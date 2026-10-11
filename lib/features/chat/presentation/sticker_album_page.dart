@@ -9,6 +9,7 @@ import '../domain/sticker.dart';
 import 'message_menu_card.dart';
 import 'sticker_albums.dart';
 import 'sticker_image.dart';
+import 'sticker_maker_flow.dart';
 
 /// A page displaying the stickers of one of the member's own albums.
 class StickerAlbumPage extends ConsumerWidget {
@@ -46,6 +47,11 @@ class StickerAlbumPage extends ConsumerWidget {
       appBar: AppBar(
         title: Text(album.name),
         actions: [
+          IconButton(
+            key: const ValueKey('sticker-album-add'),
+            icon: const Icon(Icons.add),
+            onPressed: () => startStickerMaker(context, ref, albumId: album.id),
+          ),
           Builder(
             builder: (btn) => IconButton(
               key: const ValueKey('sticker-album-menu'),

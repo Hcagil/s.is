@@ -1824,8 +1824,110 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get stickerCreateTitle => 'Create stickers';
+  String get stickerCreateTitle => 'Create sticker';
 
   @override
-  String get stickerCreateSoon => 'Making your own stickers is coming soon.';
+  String get makerUsePhoto => 'Use a photo';
+
+  @override
+  String get makerCancel => 'Cancel';
+
+  @override
+  String get makerCutoutTitle => 'Cut-out';
+
+  @override
+  String get makerWhole => 'Whole image';
+
+  @override
+  String get makerCut => 'Cut-out';
+
+  @override
+  String get makerErase => 'Erase';
+
+  @override
+  String get makerRestore => 'Restore';
+
+  @override
+  String get makerUndo => 'Undo';
+
+  @override
+  String get makerReset => 'Reset';
+
+  @override
+  String get makerBrushHint => 'Paint to erase or bring back parts';
+
+  @override
+  String get makerEditTitle => 'Edit sticker';
+
+  @override
+  String get makerEditHint => 'Add text or draw on your sticker';
+
+  @override
+  String get makerToAlbum => 'Save to album';
+
+  @override
+  String get makerTextTitle => 'Text';
+
+  @override
+  String get makerTextHint => 'Type your text';
+
+  @override
+  String get makerSize => 'Size';
+
+  @override
+  String get makerFontSans => 'Sans';
+
+  @override
+  String get makerFontSerif => 'Serif';
+
+  @override
+  String get makerFontHand => 'Hand';
+
+  @override
+  String get makerDrawTitle => 'Draw';
+
+  @override
+  String get makerThin => 'Thin';
+
+  @override
+  String get makerMedium => 'Medium';
+
+  @override
+  String get makerThick => 'Thick';
+
+  @override
+  String get makerSaveTitle => 'Save sticker';
+
+  @override
+  String get makerFull => 'Full';
+
+  @override
+  String get makerLimitReached => 'Limit reached';
+
+  @override
+  String get makerAlsoFavourite => 'Also add to favourites';
+
+  @override
+  String get makerSave => 'Save';
+
+  @override
+  String get makerDone => 'Done';
+
+  @override
+  String get makerSaveFailed => 'Could not save the sticker. Try again.';
+
+  @override
+  String makerSaveToCount(int count, int max) {
+    return 'Save to album ($count/$max)';
+  }
+
+  @override
+  String makerCountOf(int count, int max) {
+    return '$count/$max';
+  }
+
+  @override
+  String makerSavedTo(String name) {
+    return 'Saved to $name';
+  }
 }

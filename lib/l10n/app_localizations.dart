@@ -1316,6 +1316,18 @@ abstract class AppLocalizations {
   /// **'Cancel reply'**
   String get composerCancelReply;
 
+  /// Tooltip of the X on the link preview strip above the composer: the link goes without a card
+  ///
+  /// In en, this message translates to:
+  /// **'Send as a plain link'**
+  String get composerLinkRemove;
+
+  /// Screen-reader label of a link card in a message
+  ///
+  /// In en, this message translates to:
+  /// **'Open link'**
+  String get linkCardOpen;
+
   /// Title of the edit bar above the composer
   ///
   /// In en, this message translates to:

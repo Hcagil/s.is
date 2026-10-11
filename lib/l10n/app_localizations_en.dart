@@ -661,6 +661,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get composerCancelReply => 'Cancel reply';
 
   @override
+  String get composerLinkRemove => 'Send as a plain link';
+
+  @override
+  String get linkCardOpen => 'Open link';
+
+  @override
   String get composerEditing => 'Editing message';
 
   @override

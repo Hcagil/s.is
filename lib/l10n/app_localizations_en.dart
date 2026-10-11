@@ -827,6 +827,61 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get shareTitle => 'Share to';
+
+  @override
+  String sharePhotos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos to share',
+      one: '1 photo to share',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareVideos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count videos to share',
+      one: '1 video to share',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareItems(int count) {
+    return '$count items to share';
+  }
+
+  @override
+  String get shareSending => 'Sending…';
+
+  @override
+  String shareDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Sent to $count chats',
+      one: 'Sent to 1 chat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareUnreadable(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos could not be read and were not sent.',
+      one: '1 photo could not be read and was not sent.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get avatarTakePhoto => 'Take photo';
 
   @override

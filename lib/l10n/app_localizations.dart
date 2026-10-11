@@ -1604,6 +1604,48 @@ abstract class AppLocalizations {
   /// **'Send ({count})'**
   String forwardSendCount(int count);
 
+  /// Title of the page that opens when another app shares into SIS
+  ///
+  /// In en, this message translates to:
+  /// **'Share to'**
+  String get shareTitle;
+
+  /// Strip above the chat list: how many photos are being shared
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 photo to share} other{{count} photos to share}}'**
+  String sharePhotos(int count);
+
+  /// Strip above the chat list: how many videos are being shared
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 video to share} other{{count} videos to share}}'**
+  String shareVideos(int count);
+
+  /// Strip above the chat list: photos and videos together
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items to share'**
+  String shareItems(int count);
+
+  /// Notice while a share is being sent
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get shareSending;
+
+  /// Notice after a share was handed to the chats
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Sent to 1 chat} other{Sent to {count} chats}}'**
+  String shareDone(int count);
+
+  /// Notice when shared photos could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 photo could not be read and was not sent.} other{{count} photos could not be read and were not sent.}}'**
+  String shareUnreadable(int count);
+
   /// Picture menu: use the camera
   ///
   /// In en, this message translates to:

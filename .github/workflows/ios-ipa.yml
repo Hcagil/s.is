@@ -137,8 +137,10 @@ jobs:
       # it and sets aps-environment to the profile's value (production).
       - name: Sign the archive with its entitlements
         run: |
-          codesign --force --sign - --entitlements ios/Runner/Runner.entitlements \
-            "$RUNNER_TEMP/Runner.xcarchive/Products/Applications/Runner.app"
+          app="$RUNNER_TEMP/Runner.xcarchive/Products/Applications/Runner.app"
+          codesign --force --sign - --entitlements ios/ShareExtension/ShareExtension.entitlements \
+            "$app/PlugIns/ShareExtension.appex"
+          codesign --force --sign - --entitlements ios/Runner/Runner.entitlements "$app"
       # One long-lived distribution certificate for every build. A per-run one
       # cannot work: Apple validates a build's signature again in TestFlight beta
       # review (up to about 48 hours after the upload) and a revoked certificate
@@ -155,6 +157,9 @@ jobs:
           dir="$RUNNER_TEMP/sign"
           mkdir -m 700 "$dir"
           (umask 077; printf '%s\n' "$KEY_PEM" > "$dir/key.pem")
+          # Idempotent: makes the share App ID and profile if missing, and replaces a profile only when it lacks the App Group.
+          python3 tool/asc_signing.py ensure com.esd.sis "sis ci distribution" "sis ci distribution"
+          python3 tool/asc_signing.py ensure com.esd.sis.share "sis ci distribution share" "sis ci distribution"
           python3 tool/asc_signing.py fetch "sis ci distribution" "$dir"
           openssl x509 -inform der -in "$dir/cert.cer" -out "$dir/cert.pem"
           openssl pkey -in "$dir/key.pem" -pubout -out "$dir/key.pub" 2>/dev/null || { echo 'IOS_DISTRIBUTION_KEY is not a valid private key PEM' >&2; exit 1; }
@@ -180,6 +185,18 @@ jobs:
             mkdir -p "$profiles" && cp "$dir/profile.mobileprovision" "$profiles/$uuid.mobileprovision"
           done
           echo "SIGNING_PROFILE_UUID=$uuid" >> "$GITHUB_ENV"
+          # The Share Extension has its own App Store profile (com.esd.sis.share). Both profiles must carry the App Group:
+          # Apple invalidates a profile when its App ID changes; ensure (above) has replaced any such profile.
+          mkdir -m 700 "$dir/share"
+          python3 tool/asc_signing.py fetch "sis ci distribution share" "$dir/share"
+          for p in "$dir/profile.mobileprovision" "$dir/share/profile.mobileprovision"; do
+            security cms -D -i "$p" | grep -q 'group.com.esd.sis' || { echo 'a signing profile lacks the App Group group.com.esd.sis: add it to the App IDs in the Apple developer portal (docs/DELIVERY.md)' >&2; exit 1; }
+          done
+          share_uuid=$(security cms -D -i "$dir/share/profile.mobileprovision" | plutil -extract UUID raw -o - -)
+          for profiles in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            cp "$dir/share/profile.mobileprovision" "$profiles/$share_uuid.mobileprovision"
+          done
+          echo "SHARE_PROFILE_UUID=$share_uuid" >> "$GITHUB_ENV"
           echo "SIGNING_IDENTITY=$(openssl x509 -in "$dir/cert.pem" -noout -fingerprint -sha1 | sed 's/.*=//; s/://g')" >> "$GITHUB_ENV"
       - name: Export for App Store Connect
         run: |
@@ -191,7 +208,7 @@ jobs:
             <key>method</key><string>app-store-connect</string>
             <key>signingStyle</key><string>manual</string>
             <key>signingCertificate</key><string>$SIGNING_IDENTITY</string>
-            <key>provisioningProfiles</key><dict><key>com.esd.sis</key><string>$SIGNING_PROFILE_UUID</string></dict>
+            <key>provisioningProfiles</key><dict><key>com.esd.sis</key><string>$SIGNING_PROFILE_UUID</string><key>com.esd.sis.share</key><string>$SHARE_PROFILE_UUID</string></dict>
             <key>teamID</key><string>$TEAM_ID</string>
             <key>destination</key><string>export</string>
             <key>uploadSymbols</key><true/>
@@ -211,7 +228,7 @@ jobs:
           ipa=$(ls "$RUNNER_TEMP"/export/*.ipa)
           unzip -q "$ipa" -d "$RUNNER_TEMP/resign"
           app="$RUNNER_TEMP/resign/Payload/Runner.app"
-          for object in "$app"/Frameworks/*.framework "$app"; do
+          for object in "$app"/Frameworks/*.framework "$app"/PlugIns/*.appex "$app"; do
             identifier=$(plutil -extract CFBundleIdentifier raw -o - "$object/Info.plist")
             codesign --force --sign "$SIGNING_IDENTITY" --preserve-metadata=identifier,entitlements,flags \
               --requirements "=designated => anchor apple generic and identifier \"$identifier\" and certificate leaf[subject.OU] = \"$TEAM_ID\"" \
@@ -228,7 +245,7 @@ jobs:
           unzip -q "$ipa" -d "$RUNNER_TEMP/sig"
           app="$RUNNER_TEMP/sig/Payload/Runner.app"
           bad=0
-          for object in "$app" "$app"/Frameworks/*.framework; do
+          for object in "$app" "$app"/PlugIns/*.appex "$app"/Frameworks/*.framework; do
             authority=$(codesign -dvv "$object" 2>&1 | awk '/^Authority=/ && !n { sub(/^Authority=/, ""); print; n = 1 }')
             echo "$(basename "$object"): ${authority:-unsigned or ad-hoc}"
             codesign -d -r- "$object" 2>&1 | sed -n 's/^designated => /  DR: /p'
@@ -246,6 +263,10 @@ jobs:
             | plutil -extract aps-environment raw -o - -)
           echo "aps-environment: $env"
           test "$env" = production || { echo "aps-environment is not production" >&2; exit 1; }
+          for object in Runner.app Runner.app/PlugIns/ShareExtension.appex; do
+            codesign -d --entitlements :- "$RUNNER_TEMP/ipa/Payload/$object" 2>/dev/null | grep -q 'group.com.esd.sis' \
+              || { echo "$object has no App Group entitlement" >&2; exit 1; }
+          done
       # Apple's own validation (signature, SDK, entitlements, Info.plist) on
       # the pull request, so a rejection is found before the merge, not at the
       # release upload. The upload below validates again as part of itself.

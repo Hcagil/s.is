@@ -823,6 +823,61 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String get shareTitle => 'Şuraya paylaş';
+
+  @override
+  String sharePhotos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Paylaşılacak $count fotoğraf',
+      one: 'Paylaşılacak 1 fotoğraf',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareVideos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Paylaşılacak $count video',
+      one: 'Paylaşılacak 1 video',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareItems(int count) {
+    return 'Paylaşılacak $count öğe';
+  }
+
+  @override
+  String get shareSending => 'Gönderiliyor…';
+
+  @override
+  String shareDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sohbete gönderildi',
+      one: '1 sohbete gönderildi',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareUnreadable(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count fotoğraf okunamadı ve gönderilmedi.',
+      one: '1 fotoğraf okunamadı ve gönderilmedi.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get avatarTakePhoto => 'Fotoğraf çek';
 
   @override

@@ -26,6 +26,14 @@
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.esd.sis.share</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>sisshare</string>
+			</array>
+		</dict>
+		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.googleusercontent.apps.306417977220-vqg0ne5360a921i23quf294g8e0fjshq</string>
@@ -34,6 +42,8 @@
 	</array>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>

@@ -178,12 +178,12 @@ reset role;
 select is(exists_(g('CLEAN')), false, 'the clean sticker row is gone');
 
 select as_('01');
-select discard(g('BOBS'));
+do $$ begin perform discard(g('BOBS')); end $$;
 reset role;
 select is(exists_(g('BOBS')), true, 'someone else''s sticker stays');
 
 select as_('01');
-select discard(g('STR'));
+do $$ begin perform discard(g('STR')); end $$;
 reset role;
 select is(exists_(g('STR')), true, 'a starter stays, even one the caller owns');
 
@@ -192,7 +192,7 @@ insert into ids values ('AL', public.create_sticker_album('Mine'));
 select commit_check();
 select is(try(format('select public.add_sticker_to_album(%L, %L)', g('AL'), g('ALB'))), 'ok',
           'fixture: sticker in ann''s album');
-select discard(g('ALB'));
+do $$ begin perform discard(g('ALB')); end $$;
 reset role;
 select is(exists_(g('ALB')), true, 'a sticker in an album stays');
 select is((select count(*) from public.sticker_album_items where sticker_id = g('ALB')), 1::bigint,
@@ -207,7 +207,7 @@ select is(exists_(g('ALB')), false, 'and its row is gone');
 select as_('01');
 select is(try(format('select public.add_sticker_favourite(%L)', g('FAV'))), 'ok',
           'fixture: ann''s favourite');
-select discard(g('FAV'));
+do $$ begin perform discard(g('FAV')); end $$;
 reset role;
 select is(exists_(g('FAV')), true, 'a favourite stays');
 select as_('01');
@@ -223,8 +223,8 @@ insert into public.sticker_albums(id, owner_id, name) values (g('BAL'), u('02'),
 insert into public.sticker_album_items(album_id, sticker_id) values (g('BAL'), g('OALB'));
 insert into public.sticker_favourites(user_id, sticker_id) values (u('02'), g('OFAV'));
 select as_('01');
-select discard(g('OALB'));
-select discard(g('OFAV'));
+do $$ begin perform discard(g('OALB')); end $$;
+do $$ begin perform discard(g('OFAV')); end $$;
 reset role;
 select is(exists_(g('OALB')), true, 'a sticker in another member''s album stays');
 select is(exists_(g('OFAV')), true, 'a sticker in another member''s favourites stays');
@@ -236,7 +236,7 @@ select as_('01');
 insert into ids values ('MS', gen_random_uuid());
 select is(try(format('select public.send_sticker(%L, %L, %L, null, false)', g('G'), g('MS'), g('SENT'))),
           'ok', 'fixture: the sticker is sent in G');
-select discard(g('SENT'));
+do $$ begin perform discard(g('SENT')); end $$;
 reset role;
 select is(exists_(g('SENT')), true, 'a sticker used in a message stays');
 select is((select sticker_id from public.messages where id = g('MS')), g('SENT'),

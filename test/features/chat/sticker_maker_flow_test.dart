@@ -577,17 +577,24 @@ void main() {
       expect(changed(e), greaterThan(0));
     });
 
-    testWidgets('text Cancel, Delete and an empty OK add nothing', (t) async {
+    testWidgets('text Cancel drops the new text', (t) async {
       final e = await toEditor(t);
       await baseline(t, e);
       await go(t, 'maker-text', 'sticker-text-page');
       await t.enterText(k('maker-text-field'), 'Gone');
       await go(t, 'maker-cancel', 'sticker-editor-page');
+      await resave(t, e);
+      expect(changed(e), 0);
+    });
+
+    testWidgets('text Delete removes the text', (t) async {
+      final e = await toEditor(t);
+      await baseline(t, e);
       await go(t, 'maker-text', 'sticker-text-page');
       await t.enterText(k('maker-text-field'), 'A');
-      await go(t, 'maker-delete', 'sticker-editor-page');
-      await go(t, 'maker-text', 'sticker-text-page');
       await go(t, 'maker-ok', 'sticker-editor-page');
+      await go(t, 'maker-text', 'sticker-text-page');
+      await go(t, 'maker-delete', 'sticker-editor-page');
       await resave(t, e);
       expect(changed(e), 0);
     });

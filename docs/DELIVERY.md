@@ -34,6 +34,10 @@ The squash commit title follows Conventional Commits —
 allowlist gate`) — so history reads as a changelog and release notes can be
 generated from it. Branches are deleted after merge.
 
+A legal and compliance review runs on pull requests that touch personal
+data, user content, permissions, third-party SDKs or legal documents, and
+before any release beyond internal testing.
+
 | Trigger | Workflow | Holds secrets | Does |
 |---|---|---|---|
 | pull request, push to `main` | `ci.yml` | no | pattern check, format, analyze, tests, release bundle signed with a throwaway key; pgTAP and integration tests on database changes |

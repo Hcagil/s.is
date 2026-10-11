@@ -49,6 +49,7 @@ class MainActivity : FlutterActivity() {
     // scale and JPEG compression for up to 10 photos; on the main thread
     // that risks freezing the UI or an ANR.
     private val pickExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val stickerCutout by lazy { StickerCutout(this) }
 
     override fun onDestroy() {
         pickExecutor.shutdown()
@@ -64,6 +65,8 @@ class MainActivity : FlutterActivity() {
                     "pickProfilePicture" -> startPick(multiple = false, requestCode = REQUEST_PICTURE, result = result)
                     "takePhoto" -> takePhoto(result)
                     "cropPicture" -> cropPicture(call, result)
+                    "cutoutSupported" -> result.success(stickerCutout.supported())
+                    "cutoutMask" -> cutoutMask(call, result)
                     else -> result.notImplemented()
                 }
             }
@@ -298,5 +301,12 @@ class MainActivity : FlutterActivity() {
                 runOnUiThread { result.error("crop_failed", "Could not crop the photo.", null) }
             }
         }
+    }
+
+    // Background-removal mask for a sticker photo; ML Kit calls back on its own thread, so hop to the UI thread to reply. Null reply = no mask (the caller keeps the whole image).
+    private fun cutoutMask(call: MethodCall, result: MethodChannel.Result) {
+        val bytes = (call.arguments as? Map<*, *>)?.get("bytes") as? ByteArray
+        if (bytes == null) { result.error("bad_args", "Missing photo bytes.", null); return }
+        pickExecutor.execute { stickerCutout.mask(bytes) { mask -> runOnUiThread { result.success(mask) } } }
     }
 }

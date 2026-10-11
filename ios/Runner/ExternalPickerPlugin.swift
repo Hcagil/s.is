@@ -37,6 +37,10 @@ final class ExternalPickerPlugin: NSObject, FlutterPlugin, PHPickerViewControlle
       takePhoto(result: result)
     case "cropPicture":
       crop(call.arguments as? [String: Any], result: result)
+    case "cutoutSupported":
+      result(StickerCutout.supported)
+    case "cutoutMask":
+      cutoutMask(call.arguments as? [String: Any], result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -212,6 +216,18 @@ final class ExternalPickerPlugin: NSObject, FlutterPlugin, PHPickerViewControlle
           result(FlutterError(code: "crop_failed", message: "Could not crop the photo.", details: nil))
         }
       }
+    }
+  }
+
+  // Background-removal mask for a sticker photo (512*512 bytes); nil reply = no mask, the caller keeps the whole image.
+  private func cutoutMask(_ args: [String: Any]?, result: @escaping FlutterResult) {
+    guard let bytes = args?["bytes"] as? FlutterStandardTypedData else {
+      result(FlutterError(code: "bad_args", message: "Missing photo bytes.", details: nil))
+      return
+    }
+    worker.async {
+      let mask = StickerCutout.mask(jpeg: bytes.data)
+      DispatchQueue.main.async { result(mask.map { FlutterStandardTypedData(bytes: $0) }) }
     }
   }
 }

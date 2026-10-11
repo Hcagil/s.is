@@ -2906,10 +2906,10 @@ abstract class AppLocalizations {
   /// **'Unmute'**
   String get videoUnmute;
 
-  /// Accessibility label of the play button
+  /// Screen-reader label of the play mark on a video card
   ///
   /// In en, this message translates to:
-  /// **'Play'**
+  /// **'Play video'**
   String get videoPlay;
 
   /// Accessibility label of the pause button
@@ -3529,6 +3529,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Recent'**
   String get makerRecent;
+
+  /// Close button of the video player card
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get videoPlayerClose;
+
+  /// iPhone name of the close button of the video player card
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get videoPlayerDone;
+
+  /// Copy-link button of the video player card
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get videoPlayerCopy;
+
+  /// Notice after copying the video link
+  ///
+  /// In en, this message translates to:
+  /// **'Link copied'**
+  String get videoPlayerCopied;
+
+  /// Button that opens the video in its own app or site
+  ///
+  /// In en, this message translates to:
+  /// **'{site, select, youtube{Open in YouTube} instagram{Open in Instagram} tiktok{Open in TikTok} x{Open in X} other{Open in browser}}'**
+  String videoOpenIn(String site);
+
+  /// Line inside the video player
+  ///
+  /// In en, this message translates to:
+  /// **'{site} only sees you once you press play.'**
+  String videoPlayerPrivacy(String site);
+
+  /// Reason shown when the site refuses a video
+  ///
+  /// In en, this message translates to:
+  /// **'This video is private.'**
+  String get videoRefusedPrivate;
+
+  /// Reason shown when the site refuses a video
+  ///
+  /// In en, this message translates to:
+  /// **'This video was deleted.'**
+  String get videoRefusedDeleted;
+
+  /// Reason shown when the site refuses a video
+  ///
+  /// In en, this message translates to:
+  /// **'This video is not available in your region.'**
+  String get videoRefusedRegion;
+
+  /// Reason shown when the site refuses a video
+  ///
+  /// In en, this message translates to:
+  /// **'This video needs a sign-in to watch.'**
+  String get videoRefusedLogin;
+
+  /// Reason shown when the site refuses a video
+  ///
+  /// In en, this message translates to:
+  /// **'This video could not be loaded.'**
+  String get videoRefusedOther;
+
+  /// Second line under the refusal reason
+  ///
+  /// In en, this message translates to:
+  /// **'It cannot play inside SIS.'**
+  String get videoRefusedMore;
 }
 
 class _AppLocalizationsDelegate

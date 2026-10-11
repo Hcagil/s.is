@@ -1587,7 +1587,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get videoUnmute => 'Sesi aç';
 
   @override
-  String get videoPlay => 'Oynat';
+  String get videoPlay => 'Videoyu oynat';
 
   @override
   String get videoPause => 'Duraklat';
@@ -1920,4 +1920,51 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get makerRecent => 'Son eklenenler';
+
+  @override
+  String get videoPlayerClose => 'Kapat';
+
+  @override
+  String get videoPlayerDone => 'Bitti';
+
+  @override
+  String get videoPlayerCopy => 'Bağlantıyı kopyala';
+
+  @override
+  String get videoPlayerCopied => 'Bağlantı kopyalandı';
+
+  @override
+  String videoOpenIn(String site) {
+    String _temp0 = intl.Intl.selectLogic(site, {
+      'youtube': 'YouTube\'\'da aç',
+      'instagram': 'Instagram\'\'da aç',
+      'tiktok': 'TikTok\'\'ta aç',
+      'x': 'X\'\'te aç',
+      'other': 'Tarayıcıda aç',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String videoPlayerPrivacy(String site) {
+    return 'Oynat\'\'a basana kadar $site seni görmez.';
+  }
+
+  @override
+  String get videoRefusedPrivate => 'Bu video gizli.';
+
+  @override
+  String get videoRefusedDeleted => 'Bu video silinmiş.';
+
+  @override
+  String get videoRefusedRegion => 'Bu video bölgende izlenemiyor.';
+
+  @override
+  String get videoRefusedLogin => 'Bu videoyu izlemek için giriş gerekiyor.';
+
+  @override
+  String get videoRefusedOther => 'Video yüklenemedi.';
+
+  @override
+  String get videoRefusedMore => 'SIS içinde oynatılamıyor.';
 }

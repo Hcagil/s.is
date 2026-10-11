@@ -451,7 +451,51 @@ class _Bubble extends StatelessWidget {
                     delivery: delivery,
                   ),
                 )
-              else if (message.body.isNotEmpty && !message.isDeleted)
+              else if (message.linkPreview != null &&
+                  message.body.isNotEmpty &&
+                  !message.isDeleted) ...[
+                Padding(
+                  padding: EdgeInsets.only(top: message.hasAttachment ? 8 : 0),
+                  child: _LinkedText(
+                    message.body,
+                    key: ValueKey('body-${message.id}'),
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: mine ? brand.onMine : brand.onTheirs,
+                    ),
+                    highlightQuery: highlightQuery,
+                    shorten: message.linkPreview!.url,
+                    linkColor: mine
+                        ? brand.onMine
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                LinkCard(
+                  message: message,
+                  ink: mine ? brand.onMine : brand.onTheirs,
+                  width: _contentWidth,
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _TimeTick(
+                      message: message,
+                      timeText: message.isEdited
+                          ? AppLocalizations.of(context)
+                                .bubbleEdited(clockTime(message.createdAt))
+                          : clockTime(message.createdAt),
+                      timeStyle: TextStyle(
+                        fontSize: SisTokens.timeFontSize,
+                        color: (mine ? brand.onMine : brand.onTheirs)
+                            .withValues(alpha: SisTokens.timeOpacity),
+                      ),
+                      delivery: delivery,
+                    ),
+                  ),
+                ),
+              ] else if (message.body.isNotEmpty && !message.isDeleted)
                 _BodyWithTime(
                   message: message,
                   bodyStyle: TextStyle(

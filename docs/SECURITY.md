@@ -85,7 +85,7 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     changes of members whose time in the group overlapped hers.
   - `messages` inserts: `authenticated` may insert exactly `id,
     conversation_id, sender_id, body, attachment_path, attachment_preview,
-    reply_to, forwarded`; `created_at`, `deleted`, `deleted_at` and
+    reply_to, forwarded, link_preview`; `created_at`, `deleted`, `deleted_at` and
     `edited_at` stay server-assigned, and there is no UPDATE or DELETE
     privilege (edits and deletes go through `edit_message` /
     `delete_message`). The `id` is proposed by the phone (a random v4 UUID),
@@ -105,6 +105,26 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     bucket, keyed `<conversation_id>/<file>`. The storage policies ask the same
     membership question the table policies ask, so there is one access rule and
     not two that can drift.
+  - `messages.link_preview` (a link card) is validated by the
+    `messages_link_preview_guard` trigger (security invoker, errcode LNKP1):
+    fixed keys, text without control, invisible or markup characters, an
+    http(s) url that appears in the body, plain text messages only; an edit
+    or a delete for everyone drops the card. Its picture sits in the private
+    `link-previews` bucket as `<conversation_id>/<message_id>.jpg`, and the
+    card may name only that path, only if the sender uploaded it (unique per
+    message). The read policy copies `attachments`: the uploader before the
+    message exists, then only through a readable message whose card names the
+    picture. The sender's phone reads the page: redirects are followed by hand
+    (at most 5, never https to http), and the page, every hop and the picture
+    must resolve to public addresses only (loopback, private, link-local,
+    CGNAT, ULA, multicast, documentation and special ranges, and the IPv4
+    inside NAT64 and 6to4 addresses, are refused). A failed, empty or slow
+    (3 s) lookup refuses. The connection goes to the exact address that was
+    checked (a custom connection factory), and for https the certificate is
+    checked against the original host name, so a DNS answer that changes
+    afterwards cannot redirect it. The whole fetch is capped at 9 s, the
+    page at 300000 bytes, the picture at 3000000 bytes and 16 megapixels
+    (checked before decoding). Readers see the site only if they tap the card.
   - `profiles` rows are readable only for an allowlisted account that is the
     caller, shares a conversation with the caller, or is a contact the
     caller saved; a tag find alone does not open the row (`find_by_tag`

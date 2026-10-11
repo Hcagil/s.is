@@ -137,10 +137,16 @@ class _ComposerState extends ConsumerState<_Composer>
     // in flight. It also ends this conversation's draft and the reply
     // target -- a failure comes back through draftsProvider (see the
     // listener in build()).
+    final preview = ref.read(composerLinkProvider.notifier).takeForSend(body);
     _controller.clear();
     ref
         .read(sendQueueProvider.notifier)
-        .enqueue(id, body: body, replyTo: ref.read(replyingToProvider));
+        .enqueue(
+          id,
+          body: body,
+          replyTo: ref.read(replyingToProvider),
+          preview: preview,
+        );
   }
 
   Future<void> _saveEdit(Message editing, String body) async {
@@ -448,6 +454,7 @@ class _ComposerState extends ConsumerState<_Composer>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (editing == null) const LinkStrip(),
             if (editing != null)
               _EditBar(editing)
             else if (replying != null)
@@ -514,6 +521,9 @@ class _ComposerState extends ConsumerState<_Composer>
                                         if (ref.read(editingProvider) != null) {
                                           return;
                                         }
+                                        ref
+                                            .read(composerLinkProvider.notifier)
+                                            .onTextChanged(text);
                                         ref
                                             .read(draftsProvider.notifier)
                                             .setText(id, text);

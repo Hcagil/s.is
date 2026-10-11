@@ -20,6 +20,7 @@ import 'package:sis/features/chat/domain/external_picker.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
+import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/picture_cropper.dart';
@@ -337,10 +338,12 @@ class FakeChat implements ChatRepository {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) async {
     sent.add(body);
     sentIds.add(id);
     sentReplyTo.add(replyTo);
+    sentPreviews.add(preview);
     // Like the database: the row is stored under the id the phone chose.
     return sendResult ??
         Ok(
@@ -351,8 +354,38 @@ class FakeChat implements ChatRepository {
             body: body.trim(),
             createdAt: DateTime.now(),
             replyTo: replyTo,
+            linkPreview: _storeLinkCard(preview),
           ),
         );
+  }
+
+  /// The link card handed to every send, in order (null: sent without one).
+  final sentPreviews = <LinkPreviewDraft?>[];
+
+  /// When true, uploading a card picture fails, as a full bucket would.
+  bool linkImageUploadFails = false;
+
+  /// Like the repository: the picture is stored at the card's path; a failed
+  /// upload sends the card without its picture.
+  LinkPreview? _storeLinkCard(LinkPreviewDraft? preview) {
+    if (preview == null) return null;
+    final path = preview.preview.imagePath;
+    final image = preview.image;
+    if (path == null || image == null) return preview.preview;
+    if (linkImageUploadFails) return preview.preview.withImagePath(null);
+    storedObjects.add(path);
+    objectBytes[path] = image;
+    return preview.preview;
+  }
+
+  /// Every path [linkImageBytes] was asked for, in order.
+  final linkImageRequests = <String>[];
+
+  @override
+  Future<Result<Uint8List>> linkImageBytes(String imagePath) async {
+    linkImageRequests.add(imagePath);
+    if (!storedObjects.contains(imagePath)) return const Err(DeniedFailure());
+    return Ok(objectBytes[imagePath]!);
   }
 
   @override
@@ -1086,10 +1119,17 @@ class ChatFake implements ChatRepository {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) async {
     await _tick('send:$conversationId');
     sent.add((conversationId: conversationId, body: body, replyTo: replyTo));
     sentIds.add(id);
+    sentPreviews.add(preview);
+    final path = preview?.preview.imagePath;
+    if (path != null && preview?.image != null) {
+      storedObjects.add(path);
+      objectBytes[path] = preview!.image!;
+    }
     // Like the database: the row is stored under the id the phone chose.
     return sendResult ??
         Ok(
@@ -1100,8 +1140,19 @@ class ChatFake implements ChatRepository {
             body: body.trim(),
             createdAt: DateTime.now(),
             replyTo: replyTo,
+            linkPreview: preview?.preview,
           ),
         );
+  }
+
+  /// The link card handed to every send, in order (null: sent without one).
+  final sentPreviews = <LinkPreviewDraft?>[];
+
+  @override
+  Future<Result<Uint8List>> linkImageBytes(String imagePath) async {
+    await _tick('linkImageBytes:$imagePath');
+    if (!storedObjects.contains(imagePath)) return const Err(DeniedFailure());
+    return Ok(objectBytes[imagePath]!);
   }
 
   /// When set, incoming() reports a connection that cannot be established.
@@ -3761,6 +3812,7 @@ Message withoutPreview(Message m) => Message(
   stickerId: m.stickerId,
   albumCard: m.albumCard,
   albumId: m.albumId,
+  linkPreview: m.linkPreview,
   sending: m.sending,
 );
 

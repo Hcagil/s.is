@@ -23,6 +23,7 @@ import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
+import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
@@ -223,6 +224,7 @@ class DesignChat implements ChatRepository {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) async => Ok(
     Message(
       id: id,
@@ -265,6 +267,10 @@ class DesignChat implements ChatRepository {
   @override
   Future<Result<Uri>> attachmentUrl(String attachmentPath) async =>
       const Err(NetworkFailure('not in this test'));
+  @override
+  Future<Result<Uint8List>> linkImageBytes(String imagePath) async =>
+      const Err(NetworkFailure('not in this test'));
+
   @override
   Future<Result<Uint8List>> attachmentBytes(String attachmentPath) async =>
       const Err(NetworkFailure('not in this test'));

@@ -37,6 +37,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
+import 'package:sis/features/chat/domain/link_preview.dart';
 
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
@@ -121,6 +122,7 @@ class _Server extends ChatFake {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) async {
     if (sendGate case final gate?) await gate.future;
     return super.send(
@@ -128,6 +130,7 @@ class _Server extends ChatFake {
       conversationId: conversationId,
       body: body,
       replyTo: replyTo,
+      preview: preview,
     );
   }
 

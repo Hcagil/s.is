@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +7,7 @@ import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../domain/file_attachment.dart';
+import '../domain/link_preview.dart';
 import '../domain/message.dart';
 import '../domain/send_queue_store.dart';
 import '../domain/shared_location.dart';
@@ -136,6 +138,7 @@ class _QueuedSend {
     this.location,
     this.stickerId,
     this.albumId,
+    this.preview,
   });
 
   final Message message;
@@ -150,6 +153,9 @@ class _QueuedSend {
 
   /// An album-card send: the own album's id (its name is the message body).
   final String? albumId;
+
+  /// A text send's link card with its picture, read before sending.
+  final LinkPreviewDraft? preview;
 }
 
 /// Pending text bubbles per conversation, oldest first -- for
@@ -213,25 +219,51 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     String conversationId, {
     required String body,
     Message? replyTo,
+    LinkPreviewDraft? preview,
   }) {
+    final id = randomMessageId();
+    final draft = preview == null
+        ? null
+        : preview.image == null
+        ? LinkPreviewDraft(preview: preview.preview.withImagePath(null))
+        : preview.withImagePath(linkImagePath(conversationId, id));
     final message = Message(
-      id: randomMessageId(),
+      id: id,
       conversationId: conversationId,
       senderId: _me ?? '',
       body: body.trim(),
       createdAt: DateTime.now(),
       sending: true,
       replyTo: replyTo?.id,
+      linkPreview: draft?.preview,
     );
     _queues
         .putIfAbsent(conversationId, () => [])
-        .add(_QueuedSend(message: message, body: body, replyTo: replyTo));
+        .add(
+          _QueuedSend(
+            message: message,
+            body: body,
+            replyTo: replyTo,
+            preview: draft,
+          ),
+        );
     _publish(conversationId);
     _persist();
     ref.read(replyingToProvider.notifier).clear();
     ref.read(draftsProvider.notifier).clear(conversationId);
     unawaited(_drain(conversationId));
     return message;
+  }
+
+  /// The picture of a link card still waiting to be sent, found by its storage
+  /// path; null when no queued send carries it.
+  Uint8List? pendingLinkImage(String path) {
+    for (final queue in _queues.values) {
+      for (final item in queue) {
+        if (item.preview?.preview.imagePath == path) return item.preview!.image;
+      }
+    }
+    return null;
   }
 
   /// Drops everything queued for [conversationId] outright, and cancels any
@@ -639,6 +671,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
                   conversationId: conversationId,
                   body: item.body,
                   replyTo: item.message.replyTo,
+                  preview: item.preview,
                 );
       if (!ref.mounted) return;
       switch (result) {

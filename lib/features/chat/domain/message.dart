@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../../../core/date_label.dart';
 import 'file_attachment.dart';
+import 'link_preview.dart';
 import 'poll.dart';
 import 'shared_contact.dart';
 import 'shared_location.dart';
@@ -99,6 +100,7 @@ final class Message {
     this.stickerId,
     this.albumCard = false,
     this.albumId,
+    this.linkPreview,
     this.sending = false,
   });
 
@@ -150,6 +152,10 @@ final class Message {
 
   /// The shared album's id, null when the album was deleted afterwards.
   final String? albumId;
+
+  /// The link card this text message carries (title, picture, site), or null.
+  /// Old messages, and messages sent before the preview was ready, have none.
+  final LinkPreview? linkPreview;
 
   /// True for a text-only message shown at once, before the server has
   /// answered -- like [localImage] but with nothing to display in the
@@ -237,6 +243,7 @@ final class Message {
     stickerId: stickerId,
     albumCard: albumCard,
     albumId: albumId,
+    linkPreview: linkPreview,
     deletion: deletion,
     deletedBy: deletedBy,
     editedAt: editedAt,
@@ -262,6 +269,7 @@ final class Message {
     stickerId: stickerId,
     albumCard: albumCard,
     albumId: albumId,
+    linkPreview: linkPreview,
     localImage: localImage,
     deletion: deletion,
     deletedBy: deletedBy,
@@ -285,6 +293,7 @@ final class Message {
     stickerId: stickerId,
     albumCard: albumCard,
     albumId: albumId,
+    linkPreview: linkPreview,
     conversationId: conversationId,
     senderId: senderId,
     body: body,

@@ -27,6 +27,7 @@ import 'features/auth/data/file_last_session_store.dart';
 import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
+import 'features/chat/application/link_preview_controller.dart';
 import 'features/chat/data/external_picker_channel.dart';
 import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/file_chat_list_snapshot_store.dart';
@@ -35,7 +36,9 @@ import 'features/chat/data/flutter_device_videos.dart';
 import 'features/chat/data/geolocator_device_location.dart';
 import 'features/chat/data/maps_backend.dart';
 import 'features/chat/data/flutter_phone_book.dart';
+import 'features/chat/data/http_link_preview_fetcher.dart';
 import 'features/chat/data/imcodec_sticker_encoder.dart';
+import 'features/chat/data/link_image_shrink.dart';
 import 'features/chat/data/native_picture_cropper.dart';
 import 'features/chat/data/native_sticker_cutter.dart';
 import 'features/chat/data/no_voice_transcriber.dart';
@@ -294,6 +297,12 @@ Future<void> main() async {
             SupabaseProfileRepository(client),
           ),
           linkOpenerProvider.overrideWithValue(const UrlLauncherLinkOpener()),
+          linkPreviewFetcherProvider.overrideWithValue(
+            HttpLinkPreviewFetcher(
+              linkPreviewHttpClient(),
+              shrink: shrinkLinkImage,
+            ),
+          ),
           pushSourceProvider.overrideWithValue(
             DeferredPushSource(pushReady.future),
           ),

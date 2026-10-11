@@ -658,6 +658,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get composerCancelReply => 'Yanıtı iptal et';
 
   @override
+  String get composerLinkRemove => 'Düz bağlantı olarak gönder';
+
+  @override
+  String get linkCardOpen => 'Bağlantıyı aç';
+
+  @override
   String get composerEditing => 'Mesaj düzenleniyor';
 
   @override

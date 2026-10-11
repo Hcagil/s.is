@@ -203,6 +203,8 @@
   "composerSendPhoto": "Fotoğraf gönder",
   "composerReplyingTo": "{name} kişisine yanıt",
   "composerCancelReply": "Yanıtı iptal et",
+  "composerLinkRemove": "Düz bağlantı olarak gönder",
+  "linkCardOpen": "Bağlantıyı aç",
   "composerEditing": "Mesaj düzenleniyor",
   "composerCancelEdit": "Düzenlemeyi iptal et",
   "quoteOriginal": "Asıl mesaj",

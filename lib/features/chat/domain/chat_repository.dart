@@ -6,6 +6,7 @@ import 'attachment.dart';
 import 'conversation.dart';
 import 'group_event.dart';
 import 'group_member.dart';
+import 'link_preview.dart';
 import 'message.dart';
 import 'read_marks.dart';
 
@@ -113,11 +114,18 @@ abstract interface class ChatRepository {
   /// and returns the row it wrote. Returning it matters: a sender must
   /// never depend on the Realtime echo to see their own message, or a slow
   /// or dropped subscription means they send into silence.
+  ///
+  /// [preview] is the link card read by the sender's phone: its picture (if
+  /// any) is uploaded to the link-previews bucket at
+  /// `preview.preview.imagePath` and the card travels in the message row. A
+  /// failed picture upload sends the card without the picture; a card never
+  /// blocks the text.
   Future<Result<Message>> send({
     required String id,
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   });
 
   /// Messages arriving in [conversationId] after subscription.
@@ -195,6 +203,11 @@ abstract interface class ChatRepository {
   /// The photo at [attachmentPath]: from this phone's cache when it is there,
   /// otherwise downloaded once (members of its conversation only) and kept.
   Future<Result<Uint8List>> attachmentBytes(String attachmentPath);
+
+  /// The card picture at [imagePath] (see [LinkPreview.imagePath]): from this
+  /// phone's cache when it is there, otherwise downloaded once from the
+  /// link-previews bucket (members of the conversation only) and kept.
+  Future<Result<Uint8List>> linkImageBytes(String imagePath);
 
   /// The picture at [avatarPath] (a profile's or a group's): from this
   /// phone's cache when it is there, otherwise downloaded once (only to

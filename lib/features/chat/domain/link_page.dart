@@ -30,6 +30,9 @@ final _titleTag = RegExp(
 );
 final _entity = RegExp(r'&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);');
 final _controls = RegExp(r'[\u0000-\u001F\u007F-\u009F]');
+
+/// Invisible direction and zero-width marks: removed, not turned into spaces.
+final _invisible = RegExp(r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]');
 final _spaces = RegExp(r'\s+');
 
 /// Reads [html], the start of the page at [base]; null when it has no title.
@@ -115,6 +118,7 @@ String _clean(String? raw) {
       })
       .replaceAll('<', '')
       .replaceAll('>', '')
+      .replaceAll(_invisible, '')
       .replaceAll(_controls, ' ')
       .replaceAll(_spaces, ' ')
       .trim();

@@ -55,7 +55,7 @@ class LinkCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (path != null)
+                  if (path != null || preview.video)
                     SizedBox(
                       height: 150,
                       child: Stack(

@@ -685,6 +685,21 @@ final class SupabaseChatRepository implements ChatRepository {
           .single();
       return Ok(_toMessage(row));
     } on PostgrestException catch (e) {
+      if (e.code == 'LNKP1' && preview != null) {
+        // The server refused the card: send the text with the card minus its
+        // picture, or with no card if it had no picture. A card never blocks
+        // the text, and the second call cannot loop.
+        final hadPicture = preview.preview.imagePath != null;
+        return send(
+          id: id,
+          conversationId: conversationId,
+          body: body,
+          replyTo: replyTo,
+          preview: hadPicture
+              ? LinkPreviewDraft(preview: preview.preview.withImagePath(null))
+              : null,
+        );
+      }
       if (e.code == '23505') {
         // This id is already stored: an earlier attempt's insert reached
         // the server but its answer was lost. Read it back and accept it
@@ -949,7 +964,7 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   /// Uploads the card picture (if any). A failed upload drops the picture,
-  /// never the card; 409 (a retried send) counts as uploaded.
+  /// never the card; a 409 stays only if the object is our own picture.
   Future<LinkPreview?> _uploadLinkPicture(LinkPreviewDraft? draft) async {
     if (draft == null) return null;
     final path = draft.preview.imagePath;
@@ -966,7 +981,22 @@ final class SupabaseChatRepository implements ChatRepository {
             fileOptions: const FileOptions(contentType: 'image/jpeg'),
           );
     } on StorageException catch (e) {
+      // A 409 (a retried send) is ours only if the object at the path is our
+      // own picture; someone else's object there means no picture, because
+      // the server accepts a picture only from the sender who uploaded it.
       if (e.statusCode != '409') return draft.preview.withImagePath(null);
+      try {
+        final there = await _client.storage
+            .from('link-previews')
+            .download(path);
+        var same = there.length == bytes.length;
+        for (var i = 0; same && i < there.length; i++) {
+          same = there[i] == bytes[i];
+        }
+        if (!same) return draft.preview.withImagePath(null);
+      } catch (_) {
+        return draft.preview.withImagePath(null);
+      }
     } catch (_) {
       return draft.preview.withImagePath(null);
     }

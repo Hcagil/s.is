@@ -3,6 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:imcodec/imcodec.dart' as img;
 
+const _maxPixels = 40000000; // 40 megapixels
+
 /// Shrinks a downloaded picture to a JPEG card picture: at most [width] pixels wide (never enlarged) and at most [maxBytes] bytes. Null when it cannot be decoded or no quality fits.
 Future<Uint8List?> shrinkLinkImage(
   Uint8List bytes, {
@@ -11,6 +13,14 @@ Future<Uint8List?> shrinkLinkImage(
 }) async {
   try {
     final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    // Read the claimed size first: a tiny file can claim a huge picture.
+    final descriptor = await ui.ImageDescriptor.encoded(buffer);
+    final tooBig = descriptor.width * descriptor.height > _maxPixels;
+    descriptor.dispose();
+    if (tooBig) {
+      buffer.dispose();
+      return null;
+    }
     final codec = await ui.instantiateImageCodecWithSize(
       buffer,
       getTargetSize: (int w, int h) => w > width

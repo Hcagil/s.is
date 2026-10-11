@@ -20,11 +20,29 @@ on conflict (id) do update
       file_size_limit = excluded.file_size_limit,
       allowed_mime_types = excluded.allowed_mime_types;
 
+-- Same rule as attachment_readable: the uploader before the message exists,
+-- then only through a readable message whose card names the picture.
+create function app_private.link_preview_readable(object_name text, object_owner_id text)
+returns boolean language plpgsql stable security definer set search_path = '' as $$
+declare
+  head text := (storage.foldername(object_name))[1];
+begin
+  if head is null or head !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then
+    return false;
+  end if;
+  return (object_owner_id = auth.uid()::text and app_private.was_member(head::uuid))
+      or exists (select 1 from public.messages m
+                  where m.link_preview->>'image' = object_name
+                    and app_private.message_readable(m.*));
+end $$;
+revoke all on function app_private.link_preview_readable(text, text) from public, anon;
+grant execute on function app_private.link_preview_readable(text, text) to authenticated;
+
 drop policy if exists link_previews_read on storage.objects;
 create policy link_previews_read on storage.objects for select to authenticated
   using (bucket_id = 'link-previews'
          and (select app_private.has_app_access())
-         and app_private.is_member_of_path(name));
+         and (select app_private.link_preview_readable(name, owner_id)));
 
 drop policy if exists link_previews_write on storage.objects;
 create policy link_previews_write on storage.objects for insert to authenticated
@@ -38,7 +56,7 @@ alter table public.messages add column link_preview jsonb;
 grant insert (link_preview) on public.messages to authenticated;
 
 create function app_private.messages_link_preview_guard() returns trigger
-language plpgsql security definer set search_path = '' as $$
+language plpgsql security invoker set search_path = '' as $$
 declare
   lp jsonb := new.link_preview;
   k text;
@@ -63,7 +81,7 @@ begin
   end loop;
 
   if jsonb_typeof(lp->'url') is distinct from 'string'
-     or lp->>'url' !~* '^https?://[^[:space:]<>"]+$'
+     or lp->>'url' !~* '^https?://[^[:space:][:cntrl:]<>"\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]+$'
      or char_length(lp->>'url') > 2000 then
     raise exception 'invalid link preview' using errcode = 'LNKP1';
   end if;
@@ -83,20 +101,26 @@ begin
   end if;
 
   -- Text only, never markup.
-  if lp->>'title' ~ '[[:cntrl:]<>]'
-     or coalesce(lp->>'description', '') ~ '[[:cntrl:]<>]'
-     or coalesce(lp->>'site', '') ~ '[[:cntrl:]<>]' then
+  if lp->>'title' ~ '[[:cntrl:]<>\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]'
+     or coalesce(lp->>'description', '') ~ '[[:cntrl:]<>\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]'
+     or coalesce(lp->>'site', '') ~ '[[:cntrl:]<>\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]' then
     raise exception 'invalid link preview' using errcode = 'LNKP1';
   end if;
 
   if lp ? 'image'
      and (jsonb_typeof(lp->'image') is distinct from 'string'
-          or char_length(lp->>'image') not between 3 and 400
-          or lp->>'image' ~ '[[:cntrl:]]'
-          or left(lp->>'image', 37) is distinct from new.conversation_id::text || '/') then
+          or lp->>'image' is distinct from new.conversation_id::text || '/' || new.id::text || '.jpg'
+          or not exists (select 1 from storage.objects o
+                          where o.bucket_id = 'link-previews' and o.name = lp->>'image'
+                            and o.owner_id = new.sender_id::text)) then
     raise exception 'invalid link preview' using errcode = 'LNKP1';
   end if;
   if lp ? 'video' and jsonb_typeof(lp->'video') is distinct from 'boolean' then
+    raise exception 'invalid link preview' using errcode = 'LNKP1';
+  end if;
+
+  -- The card must describe a link the message really contains.
+  if position(lower(regexp_replace(lp->>'url', '^https?://', '', 'i')) in lower(coalesce(new.body, ''))) = 0 then
     raise exception 'invalid link preview' using errcode = 'LNKP1';
   end if;
 
@@ -109,6 +133,8 @@ begin
   return new;
 end $$;
 revoke all on function app_private.messages_link_preview_guard() from public, anon, authenticated;
+create unique index messages_link_preview_image_key on public.messages ((link_preview->>'image'))
+  where link_preview->>'image' is not null;
 create trigger messages_link_preview_guard
   before insert or update of body, deleted, link_preview on public.messages
   for each row execute function app_private.messages_link_preview_guard();

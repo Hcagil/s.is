@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import '../../../core/failure.dart';
 import 'sticker.dart';
 
-/// The boundary for stickers, favourites and albums. A repository never throws: a refusal arrives as [Err] with a typed [Failure]. DeniedFailure for 42501; StickerLimitFailure (code 'STKA1' albums, 'STKA2' stickers in an album, 'STKF1' favourites) for a limit; a retryable NetworkFailure when offline.
+/// The boundary for stickers, favourites and albums. A repository never throws: a refusal arrives as [Err] with a typed [Failure]. DeniedFailure for 42501; StickerLimitFailure (code 'STKA1' albums, 'STKA2' stickers in an album, 'STKF1' favourites, 'STKS1' stickers owned) for a limit; a retryable NetworkFailure when offline.
 abstract interface class StickerRepository {
   /// Stores the sticker message [messageId] (client-generated id: a retry with the same id is harmless) in [conversationId]. [replyTo] answers a message of that chat; [forwarded] marks a forward.
   Future<Result<void>> send(
@@ -56,6 +56,9 @@ abstract interface class StickerRepository {
 
   /// "Add to favourites" on a shared album card; returns how many were added.
   Future<Result<int>> addSharedAlbumToFavourites(String albumId);
+
+  /// Stores a new sticker image of the member's own and returns its id: asks the server for a sticker row, then uploads [webp] (a square 512x512 WebP with transparency, at most 100 KB) as `<id>.webp`. StickerLimitFailure ('STKS1') when the member already owns 700 stickers.
+  Future<Result<String>> create(Uint8List webp);
 
   /// The image bytes (WebP) of a sticker that is not bundled in the app (not a starter).
   Future<Result<Uint8List>> image(String stickerId);

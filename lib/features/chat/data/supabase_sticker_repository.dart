@@ -236,6 +236,26 @@ final class SupabaseStickerRepository implements StickerRepository {
   }
 
   @override
+  Future<Result<String>> create(Uint8List webp) async {
+    try {
+      final id = (await _client.rpc('create_sticker')) as String;
+      await _client.storage
+          .from('stickers')
+          .uploadBinary(
+            '$id.webp',
+            webp,
+            fileOptions: const FileOptions(
+              contentType: 'image/webp',
+              upsert: false,
+            ),
+          );
+      return Ok(id);
+    } catch (e) {
+      return Err(_fail(e));
+    }
+  }
+
+  @override
   Future<Result<Uint8List>> image(String stickerId) async {
     try {
       final bytes = await _client.storage
@@ -255,6 +275,7 @@ final class SupabaseStickerRepository implements StickerRepository {
         case 'STKA1':
         case 'STKA2':
         case 'STKF1':
+        case 'STKS1':
           return StickerLimitFailure(e.code!);
         default:
           return readableFailure(e);

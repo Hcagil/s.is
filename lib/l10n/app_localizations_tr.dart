@@ -1587,7 +1587,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get videoUnmute => 'Sesi aç';
 
   @override
-  String get videoPlay => 'Videoyu oynat';
+  String get videoPlay => 'Oynat';
 
   @override
   String get videoPause => 'Duraklat';

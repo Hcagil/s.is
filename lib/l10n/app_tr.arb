@@ -608,7 +608,6 @@
   "videoPlayerDone": "Bitti",
   "videoPlayerCopy": "Bağlantıyı kopyala",
   "videoPlayerCopied": "Bağlantı kopyalandı",
-  "videoPlay": "Videoyu oynat",
   "videoOpenIn": "{site, select, youtube{YouTube''da aç} instagram{Instagram''da aç} tiktok{TikTok''ta aç} x{X''te aç} other{Tarayıcıda aç}}",
   "videoPlayerPrivacy": "Oynat''a basana kadar {site} seni görmez.",
   "videoRefusedPrivate": "Bu video gizli.",

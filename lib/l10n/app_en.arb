@@ -1411,8 +1411,6 @@
   "@videoPlayerCopy": {"description": "Copy-link button of the video player card"},
   "videoPlayerCopied": "Link copied",
   "@videoPlayerCopied": {"description": "Notice after copying the video link"},
-  "videoPlay": "Play video",
-  "@videoPlay": {"description": "Screen-reader label of the play mark on a video card"},
   "videoOpenIn": "{site, select, youtube{Open in YouTube} instagram{Open in Instagram} tiktok{Open in TikTok} x{Open in X} other{Open in browser}}",
   "@videoOpenIn": {"description": "Button that opens the video in its own app or site", "placeholders": {"site": {"type": "String"}}},
   "videoPlayerPrivacy": "{site} only sees you once you press play.",

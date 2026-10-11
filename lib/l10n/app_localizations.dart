@@ -2906,10 +2906,10 @@ abstract class AppLocalizations {
   /// **'Unmute'**
   String get videoUnmute;
 
-  /// Screen-reader label of the play mark on a video card
+  /// Accessibility label of the play button
   ///
   /// In en, this message translates to:
-  /// **'Play video'**
+  /// **'Play'**
   String get videoPlay;
 
   /// Accessibility label of the pause button

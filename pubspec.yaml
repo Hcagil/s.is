@@ -58,9 +58,10 @@ dev_dependencies:
   # Firebase's own test doubles for its platform side (unit tests only).
   firebase_core_platform_interface: ^8.1.1
   firebase_messaging_platform_interface: ^4.10.0
-  # Test doubles for the Google sign-in and url_launcher platform sides.
+  # Test doubles for the Google sign-in, url_launcher and web view platform sides.
   google_sign_in_platform_interface: ^3.1.0
   url_launcher_platform_interface: ^2.3.2
+  webview_flutter_platform_interface: ^2.15.1
   flutter_launcher_icons: ^0.14.4
 
 flutter:

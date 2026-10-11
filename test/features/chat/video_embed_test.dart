@@ -137,18 +137,36 @@ void main() {
     }
   });
 
+  // Manager ruling (fix round 1): the embed is always https on the fixed
+  // official host, so an http link or a user name before the real host plays.
+  for (final link in [
+    'http://www.youtube.com/watch?v=$_id',
+    'http://youtu.be/$_id',
+    'https://user@www.youtube.com/watch?v=$_id',
+  ]) {
+    test('$link still plays from https youtube-nocookie', () {
+      final e = videoEmbedFor(Uri.parse(link));
+      expect(e, isNotNull);
+      expect(e!.site, VideoSite.youtube);
+      expect(
+        e.url,
+        Uri.parse(
+          'https://www.youtube-nocookie.com/embed/$_id?playsinline=1&autoplay=1&rel=0',
+        ),
+      );
+    });
+  }
+
   group('host tricks never produce an embed', () {
     for (final link in [
-      'http://www.youtube.com/watch?v=$_id',
-      'http://youtu.be/$_id',
       'https://a.youtube.com.evil.io/watch?v=$_id',
       'https://www.youtube.com.evil.io/watch?v=$_id',
       'https://youtu.be.evil.io/$_id',
       'https://evil.io/youtube.com/watch?v=$_id',
       'https://evil.io/?u=https://youtu.be/$_id',
       'https://youtube.com@evil.io/watch?v=$_id',
-      // Contract: userinfo never produces an embed, even on the real host.
-      'https://user@www.youtube.com/watch?v=$_id',
+      // The real host decides: here it is evil.io, not YouTube.
+      'https://www.youtube.com@evil.io/watch?v=$_id',
       'https://notyoutube.com/watch?v=$_id',
       'https://instagram.com.evil.io/p/$_code/',
       'https://evilinstagram.com/p/$_code/',

@@ -19,6 +19,7 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/links.dart';
+import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/presence/domain/presence_repository.dart';
@@ -431,6 +432,7 @@ class SessionChat implements ChatRepository {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) async {
     final who = await _as('send:$conversationId');
     final r = _roomFor(conversationId, who);
@@ -548,6 +550,13 @@ class SessionChat implements ChatRepository {
     if (who == null) return const Err(DeniedFailure());
     return Ok(Uri.parse('https://x.supabase.co/$attachmentPath?as=$who'));
   }
+  @override
+  Future<Result<Uint8List>> linkImageBytes(String imagePath) async {
+    final who = await _as('linkImageBytes:$imagePath');
+    if (who == null) return const Err(DeniedFailure());
+    return Ok(Uint8List.fromList(imagePath.codeUnits));
+  }
+
 
   @override
   Future<Result<Uint8List>> attachmentBytes(String attachmentPath) async {

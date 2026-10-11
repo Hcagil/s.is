@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/link_preview.dart';
 
 import 'fakes.dart';
 
@@ -51,6 +52,7 @@ class HeldSendChat extends ChatFake {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) async {
     final ask = Ask(id, conversationId, body, replyTo);
     asked.add(ask);

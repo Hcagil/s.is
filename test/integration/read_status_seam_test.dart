@@ -23,6 +23,7 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/delivery.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
+import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
@@ -190,11 +191,13 @@ class _Wired implements ChatRepository {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) => live.send(
     id: id,
     conversationId: conversationId,
     body: body,
     replyTo: replyTo,
+    preview: preview,
   );
   @override
   Future<Result<Stream<Message>>> incoming(String id) => live.incoming(id);
@@ -225,6 +228,10 @@ class _Wired implements ChatRepository {
       live.forward(message, ids);
   @override
   Future<Result<Uri>> attachmentUrl(String path) => live.attachmentUrl(path);
+  @override
+  Future<Result<Uint8List>> linkImageBytes(String path) =>
+      live.linkImageBytes(path);
+
   @override
   Future<Result<Uint8List>> attachmentBytes(String path) =>
       live.attachmentBytes(path);

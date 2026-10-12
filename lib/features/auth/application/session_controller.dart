@@ -194,7 +194,7 @@ class SessionController extends AsyncNotifier<SessionState> {
       case Err(:final failure):
         return SessionError(failure.message);
       case Ok(value: false):
-        return _hadSession ? const Replaced() : const Denied();
+        return _hadSession ? Replaced(userId: repo.userId) : const Denied();
       case Ok(value: true):
         return switch (await repo.currentMember()) {
           Ok(:final value) => Allowed(value),
@@ -298,7 +298,9 @@ class SessionController extends AsyncNotifier<SessionState> {
     // The local sign-out must not look like a new answer from the stream.
     _lastSignedIn = false;
     _attempt = 0;
-    state = const AsyncData(Replaced());
+    state = AsyncData(
+      Replaced(userId: ref.read(authRepositoryProvider).userId),
+    );
     await _wipeMarker();
   }
 
@@ -309,6 +311,14 @@ class SessionController extends AsyncNotifier<SessionState> {
     try {
       await ref.read(authRepositoryProvider).signOut();
     } catch (_) {}
+  }
+
+  /// Records how many unsent messages were deleted, so the replaced screen
+  /// can say so. Kept in the state: the store is empty when the screen reads.
+  void noteUnsentDeleted(int count) {
+    final s = state.value;
+    if (!ref.mounted || s is! Replaced || count <= 0) return;
+    state = AsyncData(Replaced(userId: s.userId, unsentDeleted: count));
   }
 
   /// The profile says the first-run screen is done: the marker may now stand
@@ -341,7 +351,7 @@ class SessionController extends AsyncNotifier<SessionState> {
 
   Future<void> signIn() async {
     _hadSession = false;
-    final wasReplaced = state.value is Replaced;
+    final replaced = state.value is Replaced ? state.value as Replaced : null;
     state = const AsyncData(SessionLoading());
     final r = await ref.read(authRepositoryProvider).signInWithGoogle();
     if (!ref.mounted) return;
@@ -356,7 +366,7 @@ class SessionController extends AsyncNotifier<SessionState> {
       // signed-out one: that would delete its unsent messages.
       state = AsyncData(
         canceled
-            ? (wasReplaced ? const Replaced() : SignedOut(reason: f.message))
+            ? (replaced ?? SignedOut(reason: f.message))
             : SessionError(f.message),
       );
     }

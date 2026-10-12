@@ -12,6 +12,7 @@ class StatusScreen extends StatelessWidget {
     this.reason,
     required this.onPressed,
     this.replaced = false,
+    this.unsentDeleted = 0,
   });
 
   /// Signed in with Google but not on the allowlist.
@@ -42,17 +43,20 @@ class StatusScreen extends StatelessWidget {
   const StatusScreen.replaced({
     Key? key,
     required Future<void> Function() onSignIn,
+    int unsentDeleted = 0,
   }) : this._(
          key: key,
          icon: Icons.smartphone_outlined,
          denied: false,
          replaced: true,
          onPressed: onSignIn,
+         unsentDeleted: unsentDeleted,
        );
 
   final IconData icon;
   final bool denied;
   final bool replaced;
+  final int unsentDeleted;
   final String? reason;
   final Future<void> Function() onPressed;
 
@@ -87,6 +91,14 @@ class StatusScreen extends StatelessWidget {
                 Text(title, style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 8),
                 Text(message, textAlign: TextAlign.center),
+                if (replaced && unsentDeleted > 0) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    l.replacedUnsentDeleted(unsentDeleted),
+                    key: const ValueKey('replaced-unsent'),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
                 const SizedBox(height: 24),
                 FilledButton(
                   onPressed: () => onPressed(),

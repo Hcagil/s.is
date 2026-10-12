@@ -1154,6 +1154,16 @@ class AppLocalizationsTr extends AppLocalizations {
   String get replacedSignIn => 'Oturum aç';
 
   @override
+  String replacedUnsentDeleted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Bu telefondan gönderilmemiş $count mesaj silindi.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get statusConnectTitle => 'Bağlanılamadı';
 
   @override

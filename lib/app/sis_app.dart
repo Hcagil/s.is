@@ -231,7 +231,19 @@ class _SessionGateState extends ConsumerState<SessionGate> {
         // server already sends this phone nothing; this also tidies the token.
         final push = ref.read(pushRegistrationProvider.notifier);
         final session = ref.read(sessionControllerProvider.notifier);
+        final store = ref.read(sendQueueStoreProvider);
+        final uid = v.userId;
         unawaited(() async {
+          // Count first: the screen shows how many were deleted.
+          try {
+            if (uid != null) {
+              final n = (await store.load(uid)).length;
+              await store.clear();
+              session.noteUnsentDeleted(n);
+            } else {
+              await store.clear();
+            }
+          } catch (_) {}
           try {
             await push.forget().timeout(const Duration(seconds: 5));
           } catch (_) {}
@@ -294,8 +306,9 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       AsyncData(value: Denied()) => StatusScreen.denied(
         onSignOut: notifier.signOut,
       ),
-      AsyncData(value: Replaced()) => StatusScreen.replaced(
+      AsyncData(value: Replaced(:final unsentDeleted)) => StatusScreen.replaced(
         onSignIn: notifier.signIn,
+        unsentDeleted: unsentDeleted,
       ),
       AsyncData(value: SessionError(:final reason)) => StatusScreen.error(
         reason,

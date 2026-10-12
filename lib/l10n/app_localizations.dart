@@ -2102,6 +2102,12 @@ abstract class AppLocalizations {
   /// **'Sign in'**
   String get replacedSignIn;
 
+  /// Line on the replaced-phone screen: how many unsent messages were deleted
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 unsent message was deleted from this phone.} other{{count} unsent messages were deleted from this phone.}}'**
+  String replacedUnsentDeleted(int count);
+
   /// Title of the connection error screen
   ///
   /// In en, this message translates to:

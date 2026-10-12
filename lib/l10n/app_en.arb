@@ -902,6 +902,8 @@
   "@replacedBody": {"description": "Body of the replaced-phone screen"},
   "replacedSignIn": "Sign in",
   "@replacedSignIn": {"description": "Button on the replaced-phone screen"},
+  "replacedUnsentDeleted": "{count, plural, =1{1 unsent message was deleted from this phone.} other{{count} unsent messages were deleted from this phone.}}",
+  "@replacedUnsentDeleted": {"description": "Line on the replaced-phone screen: how many unsent messages were deleted", "placeholders": {"count": {"type": "int"}}},
   "statusConnectTitle": "Could not connect",
   "@statusConnectTitle": {"description": "Title of the connection error screen"},
   "statusStartTitle": "Could not start SIS",

@@ -1158,6 +1158,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get replacedSignIn => 'Sign in';
 
   @override
+  String replacedUnsentDeleted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count unsent messages were deleted from this phone.',
+      one: '1 unsent message was deleted from this phone.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get statusConnectTitle => 'Could not connect';
 
   @override

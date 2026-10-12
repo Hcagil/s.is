@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'dart:io';
 
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/send_queue_store.dart';
@@ -50,12 +51,36 @@ final class SharedPrefsSendQueueStore implements SendQueueStore {
     }
   }
 
+  static Future<List<String>> _ownFolders() async {
+    try {
+      return [
+        (await getTemporaryDirectory()).path,
+        (await getApplicationSupportDirectory()).path,
+        (await getApplicationDocumentsDirectory()).path,
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
   @override
   Future<void> clear() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final keys = prefs.getKeys().where((k) => k.startsWith(_prefix)).toList();
+      // Files outside the app's own folders are the member's own and are
+      // never deleted.
+      final own = await _ownFolders();
       for (final key in keys) {
+        for (final r in decodeQueue(prefs.getString(key))) {
+          final paths = [r.file?.path, r.file?.thumbPath, r.video?.path];
+          for (final p in paths) {
+            if (p == null || !own.any(p.startsWith)) continue;
+            try {
+              await File(p).delete();
+            } catch (_) {}
+          }
+        }
         await prefs.remove(key);
       }
     } catch (e) {

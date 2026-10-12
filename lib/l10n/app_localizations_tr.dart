@@ -2002,7 +2002,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String videoPlayerPrivacy(String site) {
-    return 'Oynat\'a basana kadar $site seni görmez.';
+    return 'İzlerken $site IP adresini ve cihazını görür. Kapatınca SIS çerezlerini siler.';
   }
 
   @override

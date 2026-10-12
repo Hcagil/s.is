@@ -3605,7 +3605,7 @@ abstract class AppLocalizations {
   /// Line inside the video player
   ///
   /// In en, this message translates to:
-  /// **'{site} only sees you once you press play.'**
+  /// **'{site} sees your IP address and device while you watch. SIS deletes its cookies when you close.'**
   String videoPlayerPrivacy(String site);
 
   /// Reason shown when the site refuses a video

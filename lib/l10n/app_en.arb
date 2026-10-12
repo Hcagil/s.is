@@ -1427,7 +1427,7 @@
   "@videoPlayerCopied": {"description": "Notice after copying the video link"},
   "videoOpenIn": "{site, select, youtube{Open in YouTube} instagram{Open in Instagram} tiktok{Open in TikTok} x{Open in X} other{Open in browser}}",
   "@videoOpenIn": {"description": "Button that opens the video in its own app or site", "placeholders": {"site": {"type": "String"}}},
-  "videoPlayerPrivacy": "{site} only sees you once you press play.",
+  "videoPlayerPrivacy": "{site} sees your IP address and device while you watch. SIS deletes its cookies when you close.",
   "@videoPlayerPrivacy": {"description": "Line inside the video player", "placeholders": {"site": {"type": "String"}}},
   "videoRefusedPrivate": "This video is private.",
   "@videoRefusedPrivate": {"description": "Reason shown when the site refuses a video"},

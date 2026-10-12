@@ -616,7 +616,7 @@
   "videoPlayerCopy": "Bağlantıyı kopyala",
   "videoPlayerCopied": "Bağlantı kopyalandı",
   "videoOpenIn": "{site, select, youtube{YouTube'da aç} instagram{Instagram'da aç} tiktok{TikTok'ta aç} x{X'te aç} other{Tarayıcıda aç}}",
-  "videoPlayerPrivacy": "Oynat'a basana kadar {site} seni görmez.",
+  "videoPlayerPrivacy": "İzlerken {site} IP adresini ve cihazını görür. Kapatınca SIS çerezlerini siler.",
   "videoRefusedPrivate": "Bu video gizli.",
   "videoRefusedDeleted": "Bu video silinmiş.",
   "videoRefusedRegion": "Bu video bölgende izlenemiyor.",

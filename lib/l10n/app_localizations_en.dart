@@ -2024,7 +2024,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String videoPlayerPrivacy(String site) {
-    return '$site only sees you once you press play.';
+    return '$site sees your IP address and device while you watch. SIS deletes its cookies when you close.';
   }
 
   @override

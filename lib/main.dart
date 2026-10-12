@@ -28,7 +28,10 @@ import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/application/link_preview_controller.dart';
+import 'features/chat/application/share_controller.dart';
 import 'features/chat/data/external_picker_channel.dart';
+import 'features/chat/data/file_video_importer.dart';
+import 'features/chat/data/method_channel_share_intake.dart';
 import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/file_chat_list_snapshot_store.dart';
 import 'features/chat/data/flutter_device_files.dart';
@@ -285,6 +288,10 @@ Future<void> main() async {
           ),
           externalPickerProvider.overrideWithValue(
             const ExternalPickerChannel(),
+          ),
+          shareIntakeProvider.overrideWithValue(MethodChannelShareIntake()),
+          sharedVideoImporterProvider.overrideWithValue(
+            FileVideoImporter(deviceFiles),
           ),
           pictureCropperProvider.overrideWithValue(
             const NativePictureCropper(),

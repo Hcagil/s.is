@@ -577,12 +577,13 @@ def xcodebuild():
         for sub, ident in (("Frameworks/Flutter.framework", "io.flutter.flutter"),
                            ("Frameworks/App.framework", "io.flutter.flutter.app"),
                            ("Frameworks/objective_c.framework", "io.flutter.flutter.native-assets.objective-c"),
+                           ("PlugIns/ShareExtension.appex", "com.esd.sis.share"),
                            ("", "com.esd.sis")):
             d = os.path.join(app, sub)
             os.makedirs(d, exist_ok=True)
             with open(os.path.join(d, "Info.plist"), "wb") as f:
                 plistlib.dump({"CFBundleIdentifier": ident}, f)
-            if sub:
+            if sub.startswith("Frameworks/"):
                 write_sig(d, None, None, ident, None)
         return
     # export
@@ -740,7 +741,7 @@ def openssl():
     os.execv(OPENSSL, [OPENSSL, *ARGS])
 
 
-def issue(csr, name, out):
+def issue(csr, name, out, bundle="com.esd.sis", der=None):
     """A certificate for the CSR's key from the test intermediate, for a team whose
     name has non-ASCII letters, and an App Store profile naming it; the ids printed."""
     team = E["STUB_TEAM"]
@@ -758,12 +759,18 @@ def issue(csr, name, out):
              "-addext", "1.2.840.113635.100.6.1.4=critical,DER:0500", "-outform", "der")
     if p.returncode != 0 or not p.stdout:
         die("asc_signing stand-in: could not issue: %s" % p.stderr.decode())
+    # One certificate: a later profile (the share one) names the same one.
+    der = der or p.stdout
     with open(os.path.join(out, "cert.cer"), "wb") as f:
-        f.write(p.stdout)
+        f.write(der)
+    with open(E["STUB_CALLS"] + ".cert", "wb") as f:
+        f.write(der)
     import uuid
-    prof = {"Name": name, "UUID": str(uuid.uuid4()).upper(), "TeamIdentifier": [team], "DeveloperCertificates": [p.stdout],
-            "Entitlements": {"application-identifier": team + ".com.esd.sis", "com.apple.developer.team-identifier": team,
+    prof = {"Name": name, "UUID": str(uuid.uuid4()).upper(), "TeamIdentifier": [team], "DeveloperCertificates": [der],
+            "Entitlements": {"application-identifier": team + "." + bundle, "com.apple.developer.team-identifier": team,
                              "aps-environment": E.get("STUB_PROFILE_APS", "production"), "get-task-allow": False}}
+    if E.get("STUB_PROFILE_GROUP", "1") == "1":
+        prof["Entitlements"]["com.apple.security.application-groups"] = ["group.com.esd.sis"]
     with open(os.path.join(out, "profile.mobileprovision"), "wb") as f:
         f.write(b"STUBCMS\n" + plistlib.dumps(prof))
     print("SIGNING_CERTIFICATE_ID=CERT-1", flush=True)
@@ -782,7 +789,7 @@ def asc_signing():
         # $STUB_DIST_KEY (what IOS_DISTRIBUTION_KEY should hold).
         name, out = ARGS[1:]
         record("asc fetch %s" % name)
-        if name != "sis ci distribution":
+        if name not in ("sis ci distribution", "sis ci distribution share"):
             die("no active profile named %s in App Store Connect; run the iOS signing bootstrap workflow" % name)
         if E.get("STUB_ASC_FAIL") == "fetch":
             die("the signing certificate expired; rotate it (docs/DELIVERY.md)")
@@ -792,8 +799,20 @@ def asc_signing():
         p = ossl("req", "-new", "-key", E["STUB_DIST_KEY"], "-subj", "/CN=sis distribution", "-out", csr)
         if p.returncode != 0:
             die("asc_signing stand-in: no CSR: %s" % p.stderr.decode())
-        issue(csr, name, out)
+        prev = E["STUB_CALLS"] + ".cert"
+        share = name == "sis ci distribution share"
+        issue(csr, name, out, "com.esd.sis.share" if share else "com.esd.sis",
+              open(prev, "rb").read() if share and os.path.isfile(prev) else None)
         os.remove(csr)
+    elif ARGS[:1] == ["ensure"] and len(ARGS) in (4, 6):
+        rest = ARGS[1:]
+        if len(rest) == 5:
+            if rest[0] != "--cert-id":
+                reject("ensure: unknown option %s" % rest[0])
+            rest = rest[2:]
+        record("asc ensure %s" % " | ".join(rest))
+        if E.get("STUB_ASC_FAIL") == "ensure":
+            die("Nothing was changed: the App ID lacks the App Groups capability")
     elif ARGS[:1] == ["create"] and len(ARGS) == 5:
         csr, bundle, name, out = ARGS[1:]
         record("asc create %s %s" % (bundle, name))
@@ -813,7 +832,7 @@ def asc_signing():
             die("asc_signing: build %s still PROCESSING at the polling limit" % build)
     else:
         reject("usage: create CSR BUNDLE_ID PROFILE_NAME OUT_DIR | delete CERT_ID PROFILE_ID"
-               " | distribute BUNDLE_ID BUILD_NUMBER GROUPS NOTE | fetch PROFILE_NAME OUT_DIR | cleanup [MIN_AGE_HOURS]")
+               " | distribute BUNDLE_ID BUILD_NUMBER GROUPS NOTE | ensure [--cert-id CERT_ID] BUNDLE_ID PROFILE_NAME BASE_PROFILE_NAME | fetch PROFILE_NAME OUT_DIR | cleanup [MIN_AGE_HOURS]")
 
 {"codesign": codesign, "asc_signing.py": asc_signing, "plutil": plutil, "security": security, "xcodebuild": xcodebuild,
  "xcrun": xcrun, "curl": curl, "openssl": openssl}[TOOL]()

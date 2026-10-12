@@ -303,6 +303,8 @@ insert into app_private.allowlist(email) values
   ('csz@integration.test'),
   ('sda@integration.test'),
   ('sdb@integration.test'),
+  ('shr-a@integration.test'),
+  ('shr-b@integration.test'),
   ('gate-invited@integration.test'),
   ('sis-destek-bot@example.com')
 on conflict do nothing;

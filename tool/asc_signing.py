@@ -26,6 +26,15 @@
       prints ids only (SIGNING_CERTIFICATE_ID=..., SIGNING_PROFILE_ID=...).
       Fails if there is none or either has expired; prints a ::warning:: when
       either expires within 30 days.
+  asc_signing.py ensure [--cert-id CERT_ID] BUNDLE_ID PROFILE_NAME BASE_PROFILE_NAME
+      Makes sure an ACTIVE App Store profile named PROFILE_NAME exists for
+      BUNDLE_ID, bound to the certificate BASE_PROFILE_NAME uses. Creates the
+      bundle ID if it is missing, and the profile if there is none or it is no
+      longer ACTIVE (Apple invalidates a profile when its App ID changes, e.g.
+      when the App Group is added). A profile is only replaced when the App ID
+      already has the App Groups capability, and only after the certificate id
+      is known (printed, so --cert-id can recover a failed re-create). Prints ids
+      and names only.
   asc_signing.py cleanup [MIN_AGE_HOURS]
       One-time sweep of the old per-run material: profiles named
       "sis ci <run>-<attempt>" (nothing else is touched; not the long-lived
@@ -62,6 +71,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+GROUP = b"group.com.esd.sis"  # the App Group shared by the app and its Share Extension
 API = "https://api.appstoreconnect.apple.com/v1"
 
 
@@ -210,6 +220,69 @@ def cleanup(min_age_hours=6.0):
         sys.exit(1)
 
 
+def distribution_certificates(base_profile_name):
+    """The distribution certificates the newest profile named base_profile_name uses (any state: an invalid profile still points at its certificate)."""
+    bases = call("GET", "/profiles?filter[name]=%s&limit=200" % urllib.parse.quote(base_profile_name))["data"]
+    bases = [p for p in bases if p["attributes"]["name"] == base_profile_name]
+    if not bases:
+        sys.exit("no profile named %s in App Store Connect; run the iOS signing bootstrap workflow" % base_profile_name)
+    base = max(bases, key=lambda p: parse_date(p["attributes"]["createdDate"]))
+    certs = call("GET", "/profiles/%s/certificates" % base["id"])["data"]
+    certs = [c for c in certs if c["attributes"].get("certificateType", "DISTRIBUTION") == "DISTRIBUTION"]
+    if not certs:
+        sys.exit("no distribution certificate found through profile %s; run the iOS signing bootstrap workflow" % base_profile_name)
+    return certs
+
+
+def ensure(bundle_identifier, profile_name, base_profile_name, cert_id=None):
+    """Makes sure an ACTIVE App Store profile named profile_name exists for bundle_identifier. cert_id (optional) names the certificate directly, to recover when no profile is left to find it through."""
+    bundles = call("GET", "/bundleIds?filter[identifier]=%s&filter[platform]=IOS" % bundle_identifier)["data"]
+    bundles = [b for b in bundles if b["attributes"]["identifier"] == bundle_identifier]
+    if not bundles:
+        bundle = call("POST", "/bundleIds", {"data": {
+            "type": "bundleIds",
+            "attributes": {"identifier": bundle_identifier, "name": "SIS " + bundle_identifier, "platform": "IOS"},
+        }})["data"]
+        print("BUNDLE_ID_CREATED=%s" % bundle["attributes"]["identifier"], flush=True)
+        bundles = [bundle]
+    # The name filter matches partially: keep the exact name.
+    found = call("GET", "/profiles?filter[name]=%s&limit=200" % urllib.parse.quote(profile_name))["data"]
+    found = [p for p in found if p["attributes"]["name"] == profile_name]
+    # Apple invalidates a profile when its App ID changes, and a profile made before the App Group was
+    # enabled lacks it: only such a profile is replaced, so a run that finds a good one changes nothing.
+    # The signed profile is a CMS blob whose plist is readable inside it.
+    for p in found:
+        if p["attributes"]["profileState"] == "ACTIVE" and GROUP in base64.b64decode(p["attributes"]["profileContent"]):
+            print("PROFILE_OK=%s" % profile_name, flush=True)
+            return
+    # Nothing is touched before the App ID really carries App Groups: the profile is only replaced after the owner's portal steps.
+    caps = call("GET", "/bundleIds/%s/bundleIdCapabilities" % bundles[0]["id"])["data"]
+    if not any(c["attributes"].get("capabilityType") == "APP_GROUPS" for c in caps):
+        sys.exit("the App ID %s has no App Groups capability yet: enable App Groups and the group %s on it in the Apple developer portal (docs/DELIVERY.md), then run again. Nothing was changed." % (bundle_identifier, GROUP.decode()))
+    certs = [{"id": cert_id}] if cert_id else distribution_certificates(base_profile_name)
+    # Only now, with everything needed to recreate it in hand: the profile can be the only way to find the
+    # certificate again, so nothing is deleted before the lookup above has succeeded.
+    print("SIGNING_CERTIFICATE_ID=%s (re-run ensure with --cert-id %s if the profile is lost)" % (certs[0]["id"], certs[0]["id"]), flush=True)
+    for p in found:  # a name can only exist once in App Store Connect
+        delete("-", p["id"])
+    body = {"data": {
+        "type": "profiles",
+        "attributes": {"name": profile_name, "profileType": "IOS_APP_STORE"},
+        "relationships": {
+            "bundleId": {"data": {"type": "bundleIds", "id": bundles[0]["id"]}},
+            "certificates": {"data": [{"type": "certificates", "id": certs[0]["id"]}]},
+        },
+    }}
+    try:
+        created = call("POST", "/profiles", body)
+    except SystemExit as first:
+        print("creating the profile failed (%s); trying once more" % first.code, file=sys.stderr, flush=True)
+        created = call("POST", "/profiles", body)
+    print("PROFILE_CREATED=%s" % profile_name, flush=True)
+    if GROUP not in base64.b64decode(created["data"]["attributes"]["profileContent"]):
+        sys.exit("the App ID %s does not carry the App Group %s yet: enable it in the Apple developer portal (docs/DELIVERY.md), then run again" % (bundle_identifier, GROUP.decode()))
+
+
 def fetch(profile_name, out_dir):
     """Writes the long-lived certificate and profile to out_dir; warns before they expire."""
     found = call("GET", "/profiles?filter[name]=%s&limit=200" % urllib.parse.quote(profile_name))["data"]
@@ -311,6 +384,10 @@ def main(argv):
         delete(*argv[2:])
     elif argv[1:2] == ["distribute"] and len(argv) == 6:
         distribute(argv[2], argv[3], [g.strip() for g in argv[4].split(",") if g.strip()], argv[5])
+    elif argv[1:2] == ["ensure"] and len(argv) == 5:
+        ensure(*argv[2:])
+    elif argv[1:3] == ["ensure", "--cert-id"] and len(argv) == 7:
+        ensure(*argv[4:], cert_id=argv[3])
     elif argv[1:2] == ["fetch"] and len(argv) == 4:
         fetch(*argv[2:])
     elif argv[1:2] == ["cleanup"] and len(argv) in (2, 3):

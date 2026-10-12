@@ -68,3 +68,17 @@ WhatsNewNote parseWhatsNewNote(String body, {String lang = 'en'}) {
 
   return WhatsNewNote(text: body, version: version, bullets: bullets);
 }
+
+/// True when version name [a] (e.g. '0.31' or '0.30.17') is higher than [b].
+/// Compares dot-separated numbers; a missing part counts as 0; a part that is not a number counts as 0.
+bool isNewerVersion(String a, String b) {
+  final pa = a.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+  final pb = b.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+  final n = pa.length > pb.length ? pa.length : pb.length;
+  for (var i = 0; i < n; i++) {
+    final x = i < pa.length ? pa[i] : 0;
+    final y = i < pb.length ? pb[i] : 0;
+    if (x != y) return x > y;
+  }
+  return false;
+}

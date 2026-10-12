@@ -36,8 +36,13 @@ class WhatsNewCard extends ConsumerWidget {
     final installedName = ref.watch(installedVersionProvider).value?.name;
     final installed = note.version != null && note.version == installedName;
     final state = ref.watch(updateControllerProvider).value;
-    final accent =
-        isNewest && _updateWaiting(ref.watch(updateControllerProvider).value);
+    // This card is a build newer than the installed one: the member can go and get it.
+    final newer =
+        isNewest &&
+        note.version != null &&
+        installedName != null &&
+        isNewerVersion(note.version!, installedName);
+    final accent = isNewest && (newer || _updateWaiting(state));
     final t = SisBrand.of(context);
     return Container(
       key: ValueKey(accent ? 'whats-new-card-new' : 'whats-new-card-old'),
@@ -122,10 +127,17 @@ class WhatsNewCard extends ConsumerWidget {
               ],
             ),
           ],
-          if (isNewest && state is UpdateAvailableFlexible)
+          if (isNewest &&
+              (state is UpdateAvailableFlexible ||
+                  (newer &&
+                      state is! UpdateDownloading &&
+                      state is! UpdateReadyToInstall)))
             _UpdateButton(
               label: AppLocalizations.of(context).updateNow,
-              onPressed: ref.read(updateControllerProvider.notifier).download,
+              // Play offers a flexible update: take it here. Otherwise the store page.
+              onPressed: state is UpdateAvailableFlexible
+                  ? ref.read(updateControllerProvider.notifier).download
+                  : ref.read(updateControllerProvider.notifier).openStore,
             ),
           if (isNewest && state is UpdateDownloading) ...[
             const SizedBox(height: 12),
@@ -171,13 +183,25 @@ class _UpdateButton extends StatelessWidget {
 
 /// "You're up to date": a small pill shown when no update is waiting.
 class UpToDateMark extends ConsumerWidget {
-  const UpToDateMark({super.key});
+  const UpToDateMark({super.key, this.newestBody});
+
+  /// Text of the newest note in the chat; when it names a build newer than the
+  /// installed one the chip stays hidden.
+  final String? newestBody;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (ref.watch(updateControllerProvider).value is! UpdateIdle) {
       return const SizedBox.shrink();
     }
-    final t = SisBrand.of(context);
+    final newest = newestBody == null
+        ? null
+        : parseWhatsNewNote(newestBody!).version;
+    final installedName = ref.watch(installedVersionProvider).value?.name;
+    if (newest != null &&
+        installedName != null &&
+        isNewerVersion(newest, installedName)) {
+      return const SizedBox.shrink();
+    }
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 4),
       child: Center(
@@ -185,13 +209,13 @@ class UpToDateMark extends ConsumerWidget {
           key: const ValueKey('whats-new-up-to-date'),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
-            color: t.brand.withAlpha(46),
+            color: _ok(context).withAlpha(46),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Text(
             AppLocalizations.of(context).whatsNewUpToDate,
             style: TextStyle(
-              color: t.brand,
+              color: _ok(context),
               fontSize: 13,
               fontWeight: FontWeight.w700,
             ),

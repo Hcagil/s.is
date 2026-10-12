@@ -990,7 +990,14 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                   ),
                 ),
               ),
-              if (isSystem) const UpToDateMark(),
+              if (isSystem)
+                UpToDateMark(
+                  newestBody: ref
+                      .watch(messagesProvider)
+                      .value
+                      ?.lastOrNull
+                      ?.body,
+                ),
               const _Composer(),
             ],
           ),

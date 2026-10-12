@@ -214,6 +214,19 @@ class Fake(http.server.BaseHTTPRequestHandler):
             bid = "BID-NEW%d" % len(bundles)
             st.setdefault("bundles", dict(BUNDLES))[bid] = a.get("identifier")
             return self.reply(201, {"data": {"type": "bundleIds", "id": bid, "attributes": a}})
+        if key == ("POST", "/v1/bundleIdCapabilities"):
+            # Enabling a capability: 201 and it is on; already on is Apple's 409.
+            d = (raw and json.loads(raw) or {}).get("data", {})
+            bid = d.get("relationships", {}).get("bundleId", {}).get("data", {}).get("id")
+            cap = d.get("attributes", {}).get("capabilityType")
+            if bid not in bundles or not cap:
+                return self.error(404 if bid not in bundles else 409)
+            if cap in st["caps"].get(bid, []):
+                return self.reply(409, {"errors": [{"status": "409", "code": "ENTITY_ERROR.RELATIONSHIP.INVALID",
+                                                    "detail": "The capability is already enabled."}]})
+            st["caps"].setdefault(bid, []).append(cap)
+            return self.reply(201, {"data": {"type": "bundleIdCapabilities", "id": "%s_%s" % (bid, cap),
+                                             "attributes": {"capabilityType": cap}}})
         if key == ("POST", "/v1/certificates"):
             return self.reply(201, {"data": {"type": "certificates", "id": "CERT-1", "attributes": {
                 "certificateType": "DISTRIBUTION", "name": "Apple Distribution: Şirket",
@@ -1290,6 +1303,73 @@ class AscSigningTest(unittest.TestCase):
             p = self.tool(*args)
             self.assertNotEqual(p.returncode, 0, "%s accepted" % args)
             self.assertFalse(self.reqs(), "%s made a request" % args)
+
+    # ---- ensure --signin: the app's App ID and profile also carry Sign in with Apple ----
+    SIGNIN = b"<key>com.apple.developer.applesignin</key><array><string>Default</string></array>"
+    GROUPED_SIGNIN = base64.b64encode(PROFILE_BYTES + b"<key>com.apple.security.application-groups</key><array>"
+                                      b"<string>group.com.esd.sis</string></array>" + SIGNIN).decode()
+
+    def signin_state(self, has_cap=False, content=None, created=None):
+        """As production runs it: ensure --signin com.esd.sis with the base profile as its own target (P-D)."""
+        self.ensure_state(share_profile=None)
+        st = self.srv.state
+        st["caps"]["BID-APP"] = ["APP_GROUPS", "PUSH_NOTIFICATIONS"] + (["APPLE_ID_AUTH"] if has_cap else [])
+        st["pattrs"]["P-D"]["profileContent"] = content or self.GROUPED
+        st["prof_b64"] = created or self.GROUPED_SIGNIN
+
+    def ensure_si(self):
+        return self.tool("ensure", "--signin", "com.esd.sis", self.BASE, self.BASE, TZ="JST-9")
+
+    def cap_posts(self):
+        return self.posts("/v1/bundleIdCapabilities")
+
+    def test_signin_enables_apple_id_auth_when_missing(self):
+        self.signin_state(has_cap=False)
+        p = self.ensure_si()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        posts = self.cap_posts()
+        self.assertEqual(len(posts), 1, "APPLE_ID_AUTH was not enabled (once)")
+        d = posts[0]["body"]["data"]
+        self.assertEqual(d.get("type"), "bundleIdCapabilities")
+        self.assertEqual(d["attributes"].get("capabilityType"), "APPLE_ID_AUTH")
+        self.assertEqual(d["relationships"]["bundleId"]["data"]["id"], "BID-APP",
+                         "the capability went to another App ID (partial match)")
+        self.assertIn("APPLE_ID_AUTH", self.srv.state["caps"]["BID-APP"])
+        self.assertLess(posts[0]["t"], self.posts()[0]["t"], "the profile was created before the App ID had the capability")
+
+    def test_signin_capability_present_is_not_posted_again(self):
+        self.signin_state(has_cap=True, content=self.GROUPED_SIGNIN)
+        p = self.ensure_si()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.cap_posts(), [], "APPLE_ID_AUTH posted although enabled")
+        self.assertEqual(self.deletes(), [], "a profile with the entitlement was deleted")
+        self.assertEqual(self.posts(), [], "a profile with the entitlement was recreated")
+
+    def test_signin_profile_without_entitlement_is_stale_and_replaced(self):
+        self.signin_state(has_cap=True, content=self.GROUPED)
+        p = self.ensure_si()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), ["/v1/profiles/P-D"], "the profile without Sign in with Apple was kept")
+        self.assertEqual(len(self.posts()), 1)
+        body = self.posts()[0]["body"]["data"]
+        self.assertEqual(body["attributes"].get("name"), self.BASE)
+        self.assertEqual(body["relationships"]["bundleId"]["data"]["id"], "BID-APP")
+        self.assertEqual([c["id"] for c in body["relationships"]["certificates"]["data"]], ["C-D"],
+                         "the certificate was not taken from the profile before it was deleted")
+        self.assertRegex(p.stdout, r"(?m)^SIGNING_CERTIFICATE_ID=C-D\b")
+
+    def test_signin_new_profile_still_without_entitlement_fails(self):
+        self.signin_state(has_cap=False, content=self.GROUPED, created=self.GROUPED)
+        p = self.ensure_si()
+        self.assertNotEqual(p.returncode, 0, "a created profile without Sign in with Apple passed")
+        self.assertNotIn("Traceback", p.stderr)
+
+    def test_without_signin_the_entitlement_is_not_required(self):
+        self.signin_state(has_cap=False, content=self.GROUPED)
+        p = self.tool("ensure", "com.esd.sis", self.BASE, self.BASE, TZ="JST-9")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.cap_posts(), [], "APPLE_ID_AUTH enabled without --signin")
+        self.assertEqual(self.deletes(), [], "without --signin a grouped profile was replaced")
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

@@ -311,6 +311,10 @@ class AppLocalizationsTr extends AppLocalizations {
   String get signInWithApple => 'Apple ile giriş yap';
 
   @override
+  String get signInHiddenEmail =>
+      'SIS gerçek e-posta adresinizi gerektirir. Apple girişinde E-postamı Paylaş\'ı seçip tekrar deneyin.';
+
+  @override
   String get findFromContacts => 'Kişilerinden insanları bul';
 
   @override

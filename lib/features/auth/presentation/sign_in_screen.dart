@@ -2,15 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
-import '../../../app/grey_option.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/session_controller.dart';
 
 /// Signed-out screen; shows why the last attempt did not complete, if any.
 class SignInScreen extends ConsumerWidget {
-  const SignInScreen({super.key, this.reason});
+  const SignInScreen({
+    super.key,
+    this.reason,
+    this.hiddenEmail = false,
+    this.appleButton,
+  });
 
   final String? reason;
+
+  /// Apple's email was hidden: show the translated line instead of [reason].
+  final bool hiddenEmail;
+
+  /// Builds the Apple button (text, onPressed); null draws none. The widget
+  /// itself lives in data/ and is supplied by the app.
+  final Widget Function(String text, VoidCallback onPressed)? appleButton;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -39,10 +50,12 @@ class SignInScreen extends ConsumerWidget {
                   AppLocalizations.of(context).signInBody,
                   style: theme.textTheme.bodyLarge?.copyWith(color: muted),
                 ),
-                if (reason != null) ...[
+                if (hiddenEmail || reason != null) ...[
                   const SizedBox(height: 16),
                   Text(
-                    reason!,
+                    hiddenEmail
+                        ? AppLocalizations.of(context).signInHiddenEmail
+                        : reason!,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.error,
                     ),
@@ -90,29 +103,14 @@ class SignInScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                if (theme.platform == TargetPlatform.iOS) ...[
+                if (appleButton != null &&
+                    theme.platform == TargetPlatform.iOS) ...[
                   const SizedBox(height: 12),
-                  GreyOption(
-                    name: 's_apple',
-                    label: AppLocalizations.of(context).signInWithApple,
-                    child: Container(
-                      width: double.infinity,
-                      height: 48,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFF444444)),
-                      ),
-                      child: Text(
-                        AppLocalizations.of(context).signInWithApple,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
+                  appleButton!(
+                    AppLocalizations.of(context).signInWithApple,
+                    () => ref
+                        .read(sessionControllerProvider.notifier)
+                        .signInWithApple(),
                   ),
                 ],
                 const SizedBox(height: 12),

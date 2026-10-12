@@ -12,5 +12,10 @@
 	<array>
 		<string>group.com.esd.sis</string>
 	</array>
+	<!-- Sign in with Apple (the iPhone button). The profile must carry the same entitlement: tool/asc_signing.py (ensure with the signin flag). -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
 </dict>
 </plist>

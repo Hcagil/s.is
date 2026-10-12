@@ -2054,3 +2054,16 @@ Nothing contacts the site before that tap.
 
 **Consequences.** Cards that were refused show the normal link card with an
 "Open in <site>" row until the app is closed (kept in memory only).
+
+## 2026-10-12 — Sign in with Apple on the iPhone, with the real email only
+
+**The iPhone gets a Sign in with Apple button below the Google button; Android keeps Google only.** App Store rule 4.8 asks for an equivalent sign-in when another third-party one is offered. It is native (the `sign_in_with_apple` package, 8.2.0) and goes through `signInWithIdToken` like Google.
+
+- A hidden Apple email (`@privaterelay.appleid.com`) is refused: SIS matches people by a real address on the invite list, and a relay address matches nothing. The phone refuses it first, with its own message; the sign-up hook refuses it as a server backstop and nothing is stored.
+- The same real email through Google and Apple is one account (Supabase automatic linking of identities with the same verified email).
+- The invite list applies exactly as for Google, through the same `before_user_created` hook.
+- Every attempt sends a fresh nonce (SHA-256 to Apple, raw to Supabase) and the Apple provider keeps the nonce check on.
+- Both sign-in ways obey one-phone-at-a-time, including the sign-in buttons on the "You signed in on another phone" screen.
+- CI turns the Sign in with Apple capability on for `com.esd.sis` through the App Store Connect API and replaces a profile that lacks the entitlement.
+
+**Reason.** Rule 4.8, and iPhone users without a Google account. **Consequence.** The Supabase Apple provider must be enabled with the bundle ID as Client ID before the iPhone build can sign in.

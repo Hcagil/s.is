@@ -158,7 +158,8 @@ jobs:
           mkdir -m 700 "$dir"
           (umask 077; printf '%s\n' "$KEY_PEM" > "$dir/key.pem")
           # Idempotent: makes the share App ID and profile if missing, and replaces a profile only when it lacks the App Group.
-          python3 tool/asc_signing.py ensure com.esd.sis "sis ci distribution" "sis ci distribution"
+          # The app's App ID also gets Sign in with Apple, and a profile without it is replaced.
+          python3 tool/asc_signing.py ensure --signin com.esd.sis "sis ci distribution" "sis ci distribution"
           python3 tool/asc_signing.py ensure com.esd.sis.share "sis ci distribution share" "sis ci distribution"
           # The Notification Service Extension shares no data with the app: no App Group on its App ID or profile.
           python3 tool/asc_signing.py ensure --no-group com.esd.sis.notify "sis ci distribution notify" "sis ci distribution"
@@ -277,6 +278,8 @@ jobs:
             codesign -d --entitlements :- "$RUNNER_TEMP/ipa/Payload/$object" 2>/dev/null | grep -q 'group.com.esd.sis' \
               || { echo "$object has no App Group entitlement" >&2; exit 1; }
           done
+          codesign -d --entitlements :- "$RUNNER_TEMP/ipa/Payload/Runner.app" 2>/dev/null | grep -q 'com.apple.developer.applesignin' \
+            || { echo "Runner.app has no Sign in with Apple entitlement" >&2; exit 1; }
       # Apple's own validation (signature, SDK, entitlements, Info.plist) on
       # the pull request, so a rejection is found before the merge, not at the
       # release upload. The upload below validates again as part of itself.

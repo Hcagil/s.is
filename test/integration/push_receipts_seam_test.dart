@@ -103,6 +103,9 @@ class _SignedInAuth implements AuthRepository {
   Future<Result<void>> signInWithGoogle() async =>
       const Err(ProviderFailure('no Google locally'));
   @override
+  Future<Result<void>> signInWithApple() async =>
+      const Err(ProviderFailure('no Apple locally'));
+  @override
   bool get hasSession => real.hasSession;
   @override
   Stream<bool> get signedInChanges => real.signedInChanges;

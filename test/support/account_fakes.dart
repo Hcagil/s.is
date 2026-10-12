@@ -137,6 +137,9 @@ class SwitchingAuth implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> signInWithApple() => signInWithGoogle();
+
+  @override
   Future<Result<bool>> activateSession() async {
     final who = backend.signedIn;
     await backend.hop();

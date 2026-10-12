@@ -668,6 +668,12 @@ abstract class AppLocalizations {
   /// **'Sign in with Apple'**
   String get signInWithApple;
 
+  /// Shown on the sign-in screen when Apple gave a hidden email
+  ///
+  /// In en, this message translates to:
+  /// **'SIS needs your real email address. In Apple\'s sign-in choose Share My Email and try again.'**
+  String get signInHiddenEmail;
+
   /// New chat page row
   ///
   /// In en, this message translates to:

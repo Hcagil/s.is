@@ -299,7 +299,7 @@ of **the Play App Signing certificate** and of the upload certificate. A
 missing registration surfaces as a Credential Manager cancellation after
 account selection; the app shows that reason rather than returning silently.
 
-**Sign-up gate (before user created hook).** Google is the only provider. The
+**Sign-up gate (before user created hook).** Google and Apple (iPhone) are the only providers. The
 hosted email provider is off (since 2026-10-05; Anonymous sign-ins off,
 "Allow new users to sign up" on, so Google sign-up still works); the local stack keeps email on, with confirmations off, for the
 integration fixtures only. Supabase Auth runs `app_private.before_user_created`
@@ -359,6 +359,10 @@ nonce pair is limited only by the token's expiry. The nonce is fixed for the app
 process because `google_sign_in` takes it once, at initialize. Android sends
 no nonce: nothing shows that Play services embeds it, and a mismatch would
 break the production sign-in. Revisit with a device test.
+
+**Sign in with Apple (iPhone only).** Native flow: the `sign_in_with_apple` package (8.2.0, `data/` only) gives an Apple identity token, which goes to `auth.signInWithIdToken(provider: apple)`. Android has no Apple button. Each attempt makes a fresh random 32-byte nonce (`Random.secure`); Apple gets its SHA-256 hex, Supabase the raw value, and "Skip nonce checks" stays off for the Apple provider. In Supabase the Apple provider needs the bundle ID `com.esd.sis` in Client IDs (the native flow accepts any listed client ID as the token audience). The Apple secret key (which Apple makes the owner rotate every 6 months) is only for the web OAuth flow, which SIS does not use. The App ID `com.esd.sis` carries the Sign in with Apple capability and `Runner.entitlements` the `com.apple.developer.applesignin` entitlement; `tool/asc_signing.py ensure --signin` turns the capability on through the App Store Connect API and replaces a profile that lacks it, and CI fails the build if the signed app has no such entitlement.
+
+One person, one account: Supabase automatically links identities with the same verified email, so the same address through Google and Apple is one user. The allowlist applies exactly as for Google, through the same hook: an uninvited address gets the same not-invited screen and nothing is stored. A hidden email (`@privaterelay.appleid.com`, what Apple's "Hide My Email" gives) is refused twice: on the phone before any request is sent (the member stays on the sign-in screen and reads "SIS needs your real email address. In Apple's sign-in choose Share My Email and try again."), and by the hook as a server backstop, because a relay address is on no allowlist and cannot be matched to a Google account. A real Apple email that matches an existing member links to that member without the hook running. Both sign-in ways end in `activate_session()`, so one-phone-at-a-time applies to Apple unchanged, including the sign-in buttons on the "You signed in on another phone" screen.
 
 ### System account
 

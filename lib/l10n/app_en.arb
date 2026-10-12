@@ -352,6 +352,10 @@
   "@signInWithApple": {
     "description": "Sign-in button, iPhone only"
   },
+  "signInHiddenEmail": "SIS needs your real email address. In Apple's sign-in choose Share My Email and try again.",
+  "@signInHiddenEmail": {
+    "description": "Shown on the sign-in screen when Apple gave a hidden email"
+  },
   "findFromContacts": "Find people from contacts",
   "@findFromContacts": {
     "description": "New chat page row"

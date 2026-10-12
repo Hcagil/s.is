@@ -97,6 +97,9 @@ class PasswordAuth implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> signInWithApple() => signInWithGoogle();
+
+  @override
   bool get hasSession => real.hasSession;
   @override
   Stream<bool> get signedInChanges => real.signedInChanges;

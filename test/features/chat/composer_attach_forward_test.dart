@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/theme.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
+import 'package:sis/features/auth/data/apple_button.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/auth/presentation/sign_in_screen.dart';
@@ -56,6 +57,9 @@ class _SignedOut extends SessionController {
   Future<SessionState> build() async => const SignedOut();
   @override
   Future<void> signIn() async => signIns++;
+  int appleSignIns = 0;
+  @override
+  Future<void> signInWithApple() async => appleSignIns++;
 }
 
 /// A phone in portrait; [width] logical pixels wide.
@@ -406,7 +410,11 @@ void main() {
     // The default 800-wide surface, as the other sign-in tests use: the
     // test font's square glyphs make the Google label far wider than on a
     // phone.
-    Future<_SignedOut> pumpSignIn(WidgetTester t, TargetPlatform p) async {
+    Future<_SignedOut> pumpSignIn(
+      WidgetTester t,
+      TargetPlatform p, {
+      Widget Function(String, VoidCallback)? apple = appleSignInButton,
+    }) async {
       final session = _SignedOut();
       await t.pumpWidget(
         ProviderScope(
@@ -415,7 +423,7 @@ void main() {
             theme: sisTheme(Brightness.light).copyWith(platform: p),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            home: const SignInScreen(),
+            home: SignInScreen(appleButton: apple),
           ),
         ),
       );
@@ -428,11 +436,20 @@ void main() {
           '${p == TargetPlatform.iOS ? 'shown' : 'absent'}', (t) async {
         await pumpSignIn(t, p);
         expect(
-          byKey('grey-s_apple'),
+          byKey('apple-sign-in'),
           p == TargetPlatform.iOS ? findsOneWidget : findsNothing,
         );
       });
     }
+
+    testWidgets('Apple button on iOS without a builder: absent', (t) async {
+      await pumpSignIn(t, TargetPlatform.iOS, apple: null);
+      expect(byKey('apple-sign-in'), findsNothing);
+      expect(
+        find.widgetWithText(FilledButton, 'Continue with Google'),
+        findsOneWidget,
+      );
+    });
 
     for (final p in [TargetPlatform.android, TargetPlatform.iOS]) {
       testWidgets('on ${p.name} Google is a FilledButton that signs in', (
@@ -448,9 +465,14 @@ void main() {
         await t.pump();
         expect(session.signIns, 1);
         if (p == TargetPlatform.iOS) {
-          await t.tap(byKey('grey-s_apple'));
+          await t.tap(byKey('apple-sign-in'));
           await t.pump();
-          expect(session.signIns, 1, reason: 'the grey Apple button signs in');
+          expect(session.signIns, 1, reason: 'the Apple button ran Google');
+          expect(
+            session.appleSignIns,
+            1,
+            reason: 'the Apple button did nothing',
+          );
         }
       });
     }

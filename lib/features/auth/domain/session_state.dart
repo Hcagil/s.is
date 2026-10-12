@@ -12,9 +12,12 @@ final class SetupRequired extends SessionState {
 
 /// No session; [reason] explains why the last sign-in did not complete.
 final class SignedOut extends SessionState {
-  const SignedOut({this.reason});
+  const SignedOut({this.reason, this.hiddenEmail = false});
 
   final String? reason;
+
+  /// Apple's email was hidden: the sign-in screen shows its translated line instead of [reason].
+  final bool hiddenEmail;
 }
 
 /// A session is being established or refreshed.

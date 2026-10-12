@@ -106,6 +106,21 @@ class CancelAuth extends ColdAuth {
     }
     return super.signInWithGoogle();
   }
+
+  int appleSignIns = 0;
+
+  /// Apple's sheet, dismissed by the member.
+  @override
+  Future<Result<void>> signInWithApple() async {
+    appleSignIns++;
+    await Future<void>.delayed(Duration.zero);
+    return const Err(
+      ProviderFailure(
+        'Sign-in was cancelled. Please try again.',
+        userCanceled: true,
+      ),
+    );
+  }
 }
 
 /// forget_device_token that never answers, as on a dead connection.
@@ -680,6 +695,26 @@ void main() {
       expectReplacedScreen('after cancelling');
       expect(find.text(line), findsOneWidget, reason: 'the count was lost');
     });
+
+    testWidgets('iOS: backing out of Apple sign-in keeps Replaced and the '
+        'same count', (t) async {
+      final auth = CancelAuth();
+      await replaced(t, {'u1': 4}, auth: auth);
+      const line = '4 unsent messages were deleted from this phone.';
+      final apple = find.byKey(const ValueKey('apple-sign-in'));
+      expect(apple, findsOneWidget, reason: 'no Apple button on iOS');
+      await t.tap(apple);
+      await frames(t);
+      expect(auth.appleSignIns, 1, reason: 'the button did not start Apple');
+      expect(auth.signIns, 0, reason: 'Google ran instead');
+      expectReplacedScreen('after cancelling Apple');
+      expect(find.text(line), findsOneWidget, reason: 'the count was lost');
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets('Android: the Replaced screen has no Apple button', (t) async {
+      await replaced(t, {'u1': 1});
+      expect(find.byKey(const ValueKey('apple-sign-in')), findsNothing);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
     testWidgets('resume path counts too', (t) async {
       final w = World(unsent: {'u1': 2});

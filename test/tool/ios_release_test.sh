@@ -304,9 +304,9 @@ grep -qxF '          KEY_PEM: ${{ secrets.IOS_DISTRIBUTION_KEY }}' <<<"$(step_ke
 for f in "$ipa_wf" "$release" "$ci"; do
   grep -nE 'asc_signing\.py +(create|delete|cleanup|release|revoke)' "$f" && fail "$f creates, cleans up or revokes signing material"
 done
-# ensure only makes the share App ID / profiles if missing (test/tool/asc_signing_test.py); exact calls, exact order.
+# ensure only makes the share App ID / profiles if missing (test/tool/asc_signing_test.py); exact calls, exact order. The app profile must carry Sign in with Apple (--signin).
 # The notification extension's profile carries no App Group (--no-group).
-want_asc='asc_signing.py ensure com.esd.sis "sis ci distribution" "sis ci distribution"
+want_asc='asc_signing.py ensure --signin com.esd.sis "sis ci distribution" "sis ci distribution"
 asc_signing.py ensure com.esd.sis.share "sis ci distribution share" "sis ci distribution"
 asc_signing.py ensure --no-group com.esd.sis.notify "sis ci distribution notify" "sis ci distribution"
 asc_signing.py fetch "sis ci distribution" "$dir"
@@ -525,7 +525,7 @@ done
 grep -q 'build ipa' "$tmp/calls" && fail "flutter build ipa cannot sign this app"
 # One long-lived identity: the only App Store Connect call of the whole job.
 # ensure (idempotent: makes the share / notify App ID and profile if missing) then fetch, all three profiles.
-asc_calls='asc ensure com.esd.sis | sis ci distribution | sis ci distribution
+asc_calls='asc ensure --signin | com.esd.sis | sis ci distribution | sis ci distribution
 asc ensure com.esd.sis.share | sis ci distribution share | sis ci distribution
 asc ensure --no-group | com.esd.sis.notify | sis ci distribution notify | sis ci distribution
 asc fetch sis ci distribution
@@ -686,7 +686,7 @@ if sig_case Flutter.framework tamper; then fail "a framework changed after the a
 grep -q "sealed resource is missing or invalid" "$tmp/out" || fail "the check did not fail on the broken seal: $(cat "$tmp/out")"
 
 # 12 the push entitlement on its own: production passes; everything else fails.
-mkipa() { # <aps-environment | unset | unsigned> [lacks: app | appex]: $RUNNER_TEMP/export/sis.ipa
+mkipa() { # <aps-environment | unset | unsigned> [lacks: app | appex | signin]: $RUNNER_TEMP/export/sis.ipa
   rm -rf "$tmp/rt/export" "$tmp/rt/ipa"; mkdir -p "$tmp/rt/export"
   python3 - "$tmp/rt/export/sis.ipa" "$1" "${2:-}" <<'EOF'
 import io, json, plistlib, sys, zipfile
@@ -699,6 +699,7 @@ for obj, ident in (("Runner.app", "com.esd.sis"), ("Runner.app/PlugIns/ShareExte
     ents = {"application-identifier": "TEAM123." + ident}
     if sys.argv[3] != obj.split(".")[-1]: ents.update(group)
     if obj == "Runner.app" and sys.argv[2] != "unset": ents["aps-environment"] = sys.argv[2]
+    if obj == "Runner.app" and sys.argv[3] != "signin": ents["com.apple.developer.applesignin"] = ["Default"]
     z.writestr("Payload/%s/_CodeSignature/stub.json" % obj, json.dumps({"identifier": ident, "adhoc": True,
                "leaf": None, "entitlements": ents, "dr": None, "seal": {}}))
 EOF
@@ -716,6 +717,10 @@ for lacks in app appex; do
   if run "Check the push entitlement"; then fail "the push check passed with no App Group on the $lacks"; fi
   grep -q "has no App Group entitlement" "$tmp/out" || fail "a missing App Group on the $lacks is not named: $(cat "$tmp/out")"
 done
+# Sign in with Apple on the app: without it the iPhone button fails at Apple.
+fresh; mkipa production signin
+if run "Check the push entitlement"; then fail "the push check passed with no Sign in with Apple on the app"; fi
+grep -q "Runner.app has no Sign in with Apple entitlement" "$tmp/out" || fail "a missing Sign in with Apple is not named: $(cat "$tmp/out")"
 fresh
 if run "Check the push entitlement"; then fail "the push check passed with no exported .ipa"; fi
 

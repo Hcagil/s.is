@@ -109,6 +109,15 @@ final class ProviderFailure extends Failure {
   final bool userCanceled;
 }
 
+/// Apple gave a hidden (private relay) email; SIS needs the real one. The sign-in screen shows its own translated line.
+final class HiddenEmailFailure extends Failure {
+  const HiddenEmailFailure();
+
+  @override
+  String get message =>
+      "SIS needs your real email address. In Apple's sign-in choose Share My Email and try again.";
+}
+
 /// Words for any error a screen shows: a Failure's own message, never a raw
 /// SDK error (a platform plugin's text must not reach the member).
 String failureReason(Object error) =>

@@ -110,9 +110,11 @@ void main() {
   }
 
   setUpAll(() async {
-    sana = await _signedIn('fl-sana@integration.test');
-    theo = await _signedIn('fl-theo@integration.test');
-    uma = await _signedIn('fl-uma@integration.test');
+    // Users every file signs in through setLocalTestPassword. It resets the
+    // password, so the fl-* users (fixed password elsewhere) would lock out.
+    sana = await _signedIn('priya@integration.test');
+    theo = await _signedIn('quinlan@integration.test');
+    uma = await _signedIn('remy@integration.test');
     service = SupabaseClient(_url, serviceKey());
     club = await group(sana, theo, 'picture seam ${stamp()}');
     // theo and uma: a chat sana is not in, for the forward.

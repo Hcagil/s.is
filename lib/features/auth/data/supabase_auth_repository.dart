@@ -189,8 +189,9 @@ final class SupabaseAuthRepository implements AuthRepository {
     try {
       await _google.signOut();
     } catch (_) {}
+    // Local scope: a global sign-out would also end the phone that replaced this one.
     try {
-      await _client.auth.signOut();
+      await _client.auth.signOut(scope: SignOutScope.local);
     } catch (_) {
       // gotrue rethrows network errors before clearing the stored session;
       // make sure this device forgets it regardless.

@@ -217,13 +217,26 @@ class _SessionGateState extends ConsumerState<SessionGate> {
           before is Allowed &&
           (v is SignedOut ||
               v is Denied ||
+              v is Replaced ||
               (v is Allowed && v.member.userId != before.member.userId))) {
         unawaited(ref.read(pendingShareProvider.notifier).finish(shown));
       }
-      if ((v is SignedOut || v is Denied) && mounted) {
+      if ((v is SignedOut || v is Denied || v is Replaced) && mounted) {
         // No transition: chat content must not stay visible, even sliding
         // out, over the Denied or sign-in screen.
         ref.read(routeStackProvider).removeAllAboveFirst();
+      }
+      if (v is Replaced && prev?.value is! Replaced) {
+        // Stop push while this phone's session still exists, then end it. The
+        // server already sends this phone nothing; this also tidies the token.
+        final push = ref.read(pushRegistrationProvider.notifier);
+        final session = ref.read(sessionControllerProvider.notifier);
+        unawaited(() async {
+          try {
+            await push.forget().timeout(const Duration(seconds: 5));
+          } catch (_) {}
+          await session.finishReplaced();
+        }());
       }
     });
     // For the life of the app, whatever screen it is on: keeps this phone on
@@ -280,6 +293,9 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       ),
       AsyncData(value: Denied()) => StatusScreen.denied(
         onSignOut: notifier.signOut,
+      ),
+      AsyncData(value: Replaced()) => StatusScreen.replaced(
+        onSignIn: notifier.signIn,
       ),
       AsyncData(value: SessionError(:final reason)) => StatusScreen.error(
         reason,

@@ -42,6 +42,13 @@ final class Denied extends SessionState {
   const Denied();
 }
 
+/// This phone was replaced: the member signed in on another phone, which now
+/// holds the one active session. This phone is signed out and its account data
+/// is gone (except unsent messages).
+final class Replaced extends SessionState {
+  const Replaced();
+}
+
 /// Something failed; [reason] is always shown to the user.
 final class SessionError extends SessionState {
   const SessionError(this.reason);

@@ -1144,6 +1144,16 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bu Google hesabı şu an SIS için onaylı değil.';
 
   @override
+  String get replacedTitle => 'Başka bir telefonda giriş yaptın';
+
+  @override
+  String get replacedBody =>
+      'SIS aynı anda tek telefonda çalışır. Burada kullanmak için yeniden giriş yap; diğer telefonun oturumu kapanır.';
+
+  @override
+  String get replacedSignIn => 'Giriş yap';
+
+  @override
   String get statusConnectTitle => 'Bağlanılamadı';
 
   @override

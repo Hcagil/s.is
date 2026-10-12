@@ -150,10 +150,18 @@ final attachmentCacheProvider = Provider<AttachmentCache>(
 /// `fireImmediately` so a cold start landing directly on either state is
 /// caught too. Shared by [attachmentCacheOwnerProvider] and
 /// [chatListSnapshotOwnerProvider], mirroring pushInboxOwnerProvider's reach.
-void _onSessionEnd(Ref ref, Future<void> Function() onEnd) {
+/// A replaced phone ([Replaced]) ends the same way, except for owners that
+/// pass `onReplaced: false`.
+void _onSessionEnd(
+  Ref ref,
+  Future<void> Function() onEnd, {
+  bool onReplaced = true,
+}) {
   ref.listen(sessionControllerProvider, (_, next) {
     switch (next.value) {
       case SignedOut() || Denied():
+        unawaited(onEnd());
+      case Replaced() when onReplaced:
         unawaited(onEnd());
       case _:
     }

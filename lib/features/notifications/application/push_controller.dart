@@ -39,7 +39,7 @@ final pushInboxOwnerProvider = Provider<void>((ref) {
     switch (next.value) {
       case Allowed(:final member):
         unawaited(source.forUser(member.userId));
-      case SignedOut() || Denied():
+      case SignedOut() || Denied() || Replaced():
         unawaited(source.forUser(null));
       case _:
     }

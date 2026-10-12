@@ -11,6 +11,7 @@ class StatusScreen extends StatelessWidget {
     required this.denied,
     this.reason,
     required this.onPressed,
+    this.replaced = false,
   });
 
   /// Signed in with Google but not on the allowlist.
@@ -37,17 +38,42 @@ class StatusScreen extends StatelessWidget {
          onPressed: onRetry,
        );
 
+  /// This phone was replaced by another one; one button signs in again.
+  const StatusScreen.replaced({
+    Key? key,
+    required Future<void> Function() onSignIn,
+  }) : this._(
+         key: key,
+         icon: Icons.smartphone_outlined,
+         denied: false,
+         replaced: true,
+         onPressed: onSignIn,
+       );
+
   final IconData icon;
   final bool denied;
+  final bool replaced;
   final String? reason;
   final Future<void> Function() onPressed;
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final title = denied ? l.statusDeniedTitle : l.statusConnectTitle;
-    final message = denied ? l.statusDeniedBody : reason!;
-    final actionLabel = denied ? l.settingsSignOut : l.commonTryAgain;
+    final title = replaced
+        ? l.replacedTitle
+        : denied
+        ? l.statusDeniedTitle
+        : l.statusConnectTitle;
+    final message = replaced
+        ? l.replacedBody
+        : denied
+        ? l.statusDeniedBody
+        : reason!;
+    final actionLabel = replaced
+        ? l.replacedSignIn
+        : denied
+        ? l.settingsSignOut
+        : l.commonTryAgain;
     return Scaffold(
       body: SafeArea(
         child: Center(

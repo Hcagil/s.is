@@ -21,7 +21,9 @@ import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/send_queue_store.dart';
 import 'package:sis/features/home/presentation/home_screen.dart';
+import 'package:sis/features/notifications/application/badge_controller.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/notifications/domain/push.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
@@ -127,15 +129,106 @@ class HangingRegistry implements PushRegistry {
   }
 }
 
+/// The send queue as the phone keeps it: per member, until cleared. Notes
+/// what had happened elsewhere when it was cleared.
+class QueueFake implements SendQueueStore {
+  QueueFake(Map<String, int> unsent)
+    : saved = {
+        for (final MapEntry(:key, :value) in unsent.entries)
+          key: [
+            for (var i = 0; i < value; i++)
+              QueuedRecord(
+                id: '$key-q$i',
+                conversationId: 'c1',
+                createdAt: DateTime(2026, 10, 12, 9, i),
+                body: 'unsent $i',
+              ),
+          ],
+      };
+  final Map<String, List<QueuedRecord>> saved;
+  int clears = 0;
+  bool Function() forgotten = () => false;
+  int Function() signOuts = () => 0;
+  bool? forgottenAtClear;
+  int? signOutsAtClear;
+
+  @override
+  Future<List<QueuedRecord>> load(String userId) async =>
+      List.of(saved[userId] ?? const []);
+
+  @override
+  Future<void> save(String userId, List<QueuedRecord> records) async {
+    if (records.isEmpty) {
+      saved.remove(userId);
+    } else {
+      saved[userId] = List.of(records);
+    }
+  }
+
+  @override
+  Future<void> clear() async {
+    clears++;
+    forgottenAtClear ??= forgotten();
+    signOutsAtClear ??= signOuts();
+    saved.clear();
+  }
+}
+
+/// The app icon's number, every value set, in order.
+class BadgeFake implements AppBadge {
+  final sets = <int>[];
+  @override
+  Future<void> set(int count) async => sets.add(count);
+}
+
+/// A server whose forget_device_token answers only when the test says so;
+/// every call is logged in arrival order, as the server would apply them.
+class LateForgetRegistry implements PushRegistry {
+  final log = <String>[];
+  final _pending = <Completer<Result<void>>>[];
+
+  void answerForgets() {
+    for (final c in _pending) {
+      c.complete(const Ok(null));
+    }
+    _pending.clear();
+  }
+
+  @override
+  Future<Result<void>> register(String token) async {
+    log.add('register $token');
+    return const Ok(null);
+  }
+
+  @override
+  Future<Result<void>> forget(String token) async {
+    final c = Completer<Result<void>>();
+    _pending.add(c);
+    final r = await c.future;
+    log.add('forget $token'); // applied on the server when it answers
+    return r;
+  }
+}
+
 class World {
-  World({MemoryLastSessionStore? markers, ColdAuth? auth, this.registry})
-    : auth = auth ?? CancelAuth(),
-      markers = markers ?? MemoryLastSessionStore(marker());
+  World({
+    MemoryLastSessionStore? markers,
+    ColdAuth? auth,
+    this.registry,
+    Map<String, int> unsent = const {},
+  }) : auth = auth ?? CancelAuth(),
+       markers = markers ?? MemoryLastSessionStore(marker()),
+       queue = QueueFake(unsent);
+  final QueueFake queue;
+  final badge = BadgeFake();
   final ColdAuth auth;
   final MemoryLastSessionStore markers;
   final PushRegistry? registry;
   final snapshot = MemorySnapshotStore(owner: 'u1', list: const [bob]);
-  final chat = FakeChat()..conversationsResult = const Ok([bob]);
+  // Offline for sending: what is queued stays unsent.
+  final chat = FakeChat()
+    ..conversationsResult = const Ok([bob])
+    ..sendResult = const Err(NetworkFailure('offline', retryable: true));
   final cache = AttachmentCacheFake();
   final files = DeviceFilesFake();
   final played = PlayedVoiceStoreFake({'m1'});
@@ -151,9 +244,12 @@ class World {
       sessionAtForget = auth.session;
     };
     if (registry case final HangingRegistry h) h.auth = auth;
+    queue.forgotten = () => push.forgotten.isNotEmpty;
+    queue.signOuts = () => auth.signOuts;
     return ProviderScope(
       overrides: [
-        ...videoOverrides(),
+        ...videoOverrides(store: queue),
+        appBadgeProvider.overrideWithValue(badge),
         runtimeConfigProvider.overrideWithValue(config),
         authRepositoryProvider.overrideWithValue(auth),
         lastSessionStoreProvider.overrideWithValue(markers),
@@ -492,5 +588,176 @@ void main() {
     await frames(t);
     expect(deniedText, findsOneWidget);
     expect(find.text(enTitle), findsNothing);
+  });
+
+  group('unsent messages on a replaced phone', () {
+    final unsentLine = find.byKey(const ValueKey('replaced-unsent'));
+
+    Future<World> replaced(
+      WidgetTester t,
+      Map<String, int> unsent, {
+      ColdAuth? auth,
+    }) async {
+      final w = World(unsent: unsent, auth: auth);
+      await t.pumpWidget(w.app());
+      await turns(t);
+      expect(row, findsOneWidget, reason: 'setup: stored list not shown');
+      w.auth.last.deny();
+      await frames(t);
+      return w;
+    }
+
+    void expectQueueGoneFirst(World w) {
+      expect(w.queue.clears, greaterThanOrEqualTo(1), reason: 'not cleared');
+      expect(
+        w.queue.saved,
+        isEmpty,
+        reason: 'the queue survived: ${w.queue.saved.keys}',
+      );
+      expect(
+        w.queue.forgottenAtClear,
+        isFalse,
+        reason: 'the token was forgotten before the queue was deleted',
+      );
+      expect(
+        w.queue.signOutsAtClear,
+        0,
+        reason: 'signed out before the queue was deleted',
+      );
+      expect(w.push.forgotten, ['device-token-1']);
+      expect(w.auth.signOuts, 1);
+    }
+
+    testWidgets('three unsent: deleted before forget and sign-out, and the '
+        'screen says how many (this account only)', (t) async {
+      final w = await replaced(t, {'u1': 3, 'u2': 5});
+      expectReplacedScreen('with unsent');
+      expect(unsentLine, findsOneWidget);
+      expect(
+        find.text('3 unsent messages were deleted from this phone.'),
+        findsOneWidget,
+      );
+      expectQueueGoneFirst(w);
+    });
+
+    testWidgets('one unsent: the singular line', (t) async {
+      final w = await replaced(t, {'u1': 1});
+      expect(
+        find.text('1 unsent message was deleted from this phone.'),
+        findsOneWidget,
+      );
+      expectQueueGoneFirst(w);
+    });
+
+    testWidgets('none unsent (another account has some): no line, and the '
+        'queue store is still emptied', (t) async {
+      final w = await replaced(t, {'u2': 2});
+      expectReplacedScreen('no unsent');
+      expect(unsentLine, findsNothing);
+      expect(find.textContaining('unsent'), findsNothing);
+      expectQueueGoneFirst(w);
+    });
+
+    testWidgets('Turkish line', (t) async {
+      t.platformDispatcher.localesTestValue = [const Locale('tr')];
+      addTearDown(t.platformDispatcher.clearLocalesTestValue);
+      await replaced(t, {'u1': 2});
+      expect(find.text(trTitle), findsOneWidget);
+      expect(
+        find.text('Bu telefondan gönderilmemiş 2 mesaj silindi.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('backing out of sign-in keeps the same count', (t) async {
+      final auth = CancelAuth();
+      await replaced(t, {'u1': 4}, auth: auth);
+      const line = '4 unsent messages were deleted from this phone.';
+      expect(find.text(line), findsOneWidget, reason: 'setup');
+      await t.tap(find.text(enButton));
+      await frames(t);
+      expect(auth.signIns, 1);
+      expectReplacedScreen('after cancelling');
+      expect(find.text(line), findsOneWidget, reason: 'the count was lost');
+    });
+
+    testWidgets('resume path counts too', (t) async {
+      final w = World(unsent: {'u1': 2});
+      await w.confirmed(t);
+      await leaveAndReturn(t);
+      await turns(t);
+      w.auth.last.deny();
+      await frames(t);
+      expect(
+        find.text('2 unsent messages were deleted from this phone.'),
+        findsOneWidget,
+      );
+      expectQueueGoneFirst(w);
+    });
+  });
+
+  testWidgets('the app icon number goes to 0 on Replaced', (t) async {
+    final w = World();
+    w.chat.unreadTotalResult = const Ok(4);
+    await w.confirmed(t);
+    await t.pump(const Duration(seconds: 1)); // the badge read is debounced
+    await turns(t);
+    expect(
+      w.badge.sets,
+      contains(4),
+      reason: 'setup: the badge never showed 4',
+    );
+    final before = w.badge.sets.length;
+    await leaveAndReturn(t);
+    await turns(t);
+    w.auth.last.deny();
+    await frames(t);
+    await t.pump(const Duration(seconds: 1));
+    await turns(t);
+    expect(
+      w.badge.sets.skip(before),
+      contains(0),
+      reason: 'not cleared on Replaced: ${w.badge.sets}',
+    );
+    expect(w.badge.sets.last, 0);
+  });
+
+  testWidgets('a late forget_device_token never deletes the token the phone '
+      'registers after signing in again', (t) async {
+    final reg = LateForgetRegistry();
+    final auth = CancelAuth()..cancel = false;
+    final w = World(auth: auth, registry: reg);
+    await w.confirmed(t);
+    await t.pump(const Duration(seconds: 1));
+    expect(reg.log, ['register device-token-1'], reason: 'setup');
+
+    await leaveAndReturn(t);
+    await turns(t);
+    auth.last.deny();
+    await frames(t);
+    await t.pump(const Duration(seconds: 6)); // past the 5 s forget limit
+    await frames(t);
+    expect(auth.signOuts, 1, reason: 'setup: not signed out');
+    expectReplacedScreen('setup');
+
+    // Signs in again while the old forget is still in flight.
+    await t.tap(find.text(enButton));
+    await turns(t);
+    auth.last.allow();
+    await frames(t);
+    await t.pump(const Duration(seconds: 2));
+    expect(home, findsOneWidget, reason: 'setup: not back in');
+    expect(reg.log, [
+      'register device-token-1',
+    ], reason: 'registered while the old forget was still pending');
+
+    reg.answerForgets();
+    await frames(t);
+    await t.pump(const Duration(seconds: 2));
+    expect(reg.log, [
+      'register device-token-1',
+      'forget device-token-1',
+      'register device-token-1',
+    ]);
   });
 }

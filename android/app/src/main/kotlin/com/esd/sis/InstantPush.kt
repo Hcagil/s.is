@@ -35,6 +35,9 @@ object InstantPush {
     private var lastDrawEnd = 0L
     @Volatile private var legacyChannelsDeleted = false
 
+    // One draw or picture update of the stored inbox at a time: the late picture (another thread) must not interleave with a newer push's read-modify-write.
+    private val drawLock = Any()
+
     /** What one notification does once the chat's choices met the defaults (Dart's EffectiveAlert). [tone] null is the system default and is always null when [sound] is off. */
     data class Alert(val sound: Boolean, val tone: String?, val vibration: Boolean)
 
@@ -235,8 +238,44 @@ object InstantPush {
         NotificationManagerCompat.from(context).notify(SUMMARY_ID, summary)
     }
 
+    /** Whether this push carries a picture link worth fetching: an https link and the message id its file is named after. */
+    fun wantsPicture(extras: Bundle): Boolean =
+        extras.getString("thumb_url")?.startsWith("https://") == true && !extras.getString("message_id").isNullOrEmpty()
+
+    /** Runs after the text notification is already in the shade (the picture never delays it): fetches the small picture, stores its file name on the message's inbox line, and draws the chat's notification again, silently, with the picture. Does nothing when the picture cannot be fetched, the member has read the chat meanwhile (no inbox line any more) or the app came to the front. Blocks (network): call it off the main thread. */
+    fun attachPicture(context: Context, extras: Bundle) {
+        try {
+            val url = extras.getString("thumb_url") ?: return
+            val messageId = extras.getString("message_id") ?: return
+            val conversationId = extras.getString("conversation_id") ?: return
+            // Only for a signed-in member, and only from the host the push's own action link names (our Supabase host).
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val owner = prefs.getString("flutter.sis.push_inbox_owner", null) ?: return
+            val actionHost = try { java.net.URI(extras.getString("action_url") ?: return).host } catch (e: Exception) { null }
+            val thumbHost = try { java.net.URI(url).host } catch (e: Exception) { null }
+            if (actionHost == null || thumbHost == null || !actionHost.equals(thumbHost, ignoreCase = true)) return
+            val file = NotificationPicture.fetch(context, url, extras.getString("thumb_kind") == "video", messageId) ?: return
+            val inboxKey = "flutter.sis.push_inbox.$owner"
+            val updated = synchronized(drawLock) {
+                val next = PushInbox.setImage(prefs.getString(inboxKey, null), conversationId, messageId, file) ?: return
+                prefs.edit().putString(inboxKey, next).commit()
+                next
+            }
+            val again = Bundle(extras)
+            again.remove("thumb_url")
+            show(context, again, postSummaryNow = false, paced = false, redraw = true)
+            NotificationPicture.prune(context, PushInbox.images(updated))
+        } catch (e: Throwable) {
+            android.util.Log.w("InstantPush", "picture failed: ${e.javaClass.simpleName}")
+        }
+    }
+
     /** [postSummaryNow] false when more pushes are queued behind this one: the last of them posts the group summary, which depends only on the stored inbox. [paced] false skips the pacing sleeps (a big queued burst must not outlast the receiver's time limit). */
-    fun show(context: Context, extras: Bundle, postSummaryNow: Boolean = true, paced: Boolean = true): Boolean {
+    fun show(context: Context, extras: Bundle, postSummaryNow: Boolean = true, paced: Boolean = true, redraw: Boolean = false): Boolean =
+        synchronized(drawLock) { drawChat(context, extras, postSummaryNow, paced, redraw) }
+
+    /** [redraw] true: the same push drawn again once its picture is ready -- the stored inbox is used as it is (nothing is added, so a chat the member has read meanwhile stays gone) and the notification does not alert again. */
+    private fun drawChat(context: Context, extras: Bundle, postSummaryNow: Boolean, paced: Boolean, redraw: Boolean): Boolean {
         try {
             val conversationId = extras.getString("conversation_id")
             val title = extras.getString("title")
@@ -289,7 +328,7 @@ object InstantPush {
 
             val tap = tapIntent(context, id, conversationId) ?: return false
             // As before the native takeover: a high-priority push (once drawn by Dart) alerts only when the shade has been quiet; any other push always alerted.
-            val loud = extras.getString("google.original_priority") != "high" || isLoud()
+            val loud = !redraw && (extras.getString("google.original_priority") != "high" || isLoud())
 
             val line = body(text, extras.getString("sender"), !chat.isNullOrEmpty())
             // The unread total the server computed for this member (see the push
@@ -299,7 +338,7 @@ object InstantPush {
             // This push is stored in the inbox now, so the chat's notification lists every unread line.
             val ownerId = owner ?: return false
             val inboxKey = "flutter.sis.push_inbox.$ownerId"
-            val inbox = PushInbox.add(
+            val inbox = if (redraw) (prefs.getString(inboxKey, null) ?: return false) else PushInbox.add(
                 prefs.getString(inboxKey, null),
                 conversationId,
                 title,
@@ -310,7 +349,7 @@ object InstantPush {
                 extras.getString("message_id"),
             )
             // commit(), not apply(): written before Dart can read it, narrowing the read-modify-write race.
-            prefs.edit().putString(inboxKey, inbox).commit()
+            if (!redraw) prefs.edit().putString(inboxKey, inbox).commit()
             val inboxChats = PushInbox.parse(inbox)
             val entry = PushInbox.find(inboxChats, conversationId) ?: return false
             val isGroup = entry.optBoolean("g")
@@ -331,7 +370,10 @@ object InstantPush {
                         if (!isGroup && avatar != null) setIcon(IconCompat.createWithBitmap(avatar))
                     }.build()
                 }
-                style.addMessage(l.optString("x"), l.optLong("a"), person)
+                val message = NotificationCompat.MessagingStyle.Message(l.optString("x"), l.optLong("a"), person)
+                // The picture of a photo/video line, once it has been fetched (NotificationPicture): shown by the system inside the message.
+                NotificationPicture.uri(context, l.optString("i"))?.let { message.setData("image/jpeg", it) }
+                style.addMessage(message)
             }
             val notification = NotificationCompat.Builder(context, channel)
                 .setSmallIcon(R.drawable.ic_launcher_monochrome)

@@ -27,6 +27,7 @@ import '../domain/shared_location.dart';
 import '../domain/sticker.dart';
 import '../domain/video.dart';
 import '../domain/voice.dart';
+import 'link_image_shrink.dart';
 
 /// [ChatRepository] backed by Supabase Postgres and Realtime.
 ///
@@ -909,6 +910,7 @@ final class SupabaseChatRepository implements ChatRepository {
             image.bytes,
             fileOptions: FileOptions(contentType: image.contentType),
           );
+      await _uploadNotificationPicture(path, image.bytes);
 
       final row = await _client
           .from('messages')
@@ -928,6 +930,27 @@ final class SupabaseChatRepository implements ChatRepository {
       return Ok(_toMessage(row));
     } catch (e) {
       return Err(_asFailure(e));
+    }
+  }
+
+  /// The small picture a notification shows for this photo, stored next to it as `<path>.t` (the name a video's thumbnail has) BEFORE the message row exists, so the push the insert triggers can find it. Best effort: a photo without one is simply announced as text.
+  Future<void> _uploadNotificationPicture(String path, Uint8List bytes) async {
+    try {
+      final small = await shrinkLinkImage(bytes, width: 480, maxBytes: 65536);
+      if (small == null) return;
+      await _client.storage
+          .from('attachments')
+          .uploadBinary(
+            '$path.t',
+            small,
+            fileOptions: const FileOptions(contentType: 'image/jpeg'),
+          );
+    } catch (e) {
+      log(
+        'sendImage: notification picture not stored: ${e.runtimeType}',
+        name: 'sis.data',
+        level: 900,
+      );
     }
   }
 
@@ -1176,6 +1199,13 @@ final class SupabaseChatRepository implements ChatRepository {
             await _client.storage
                 .from('attachments')
                 .copy('$source.t', '$path.t');
+          } else if (message.file == null) {
+            // A photo's small notification picture travels with it too; an old photo has none, which is fine.
+            try {
+              await _client.storage
+                  .from('attachments')
+                  .copy('$source.t', '$path.t');
+            } catch (_) {}
           }
         }
         await _client.from('messages').insert({
@@ -1218,7 +1248,8 @@ final class SupabaseChatRepository implements ChatRepository {
         try {
           final removed = await _client.storage.from('attachments').remove([
             path,
-            if (message.file?.isVideo ?? false) '$path.t',
+            // The small picture next to a photo or video (removing a name that does not exist is harmless).
+            '$path.t',
           ]);
           if (removed.isEmpty) {
             log(

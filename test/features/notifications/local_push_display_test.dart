@@ -19,6 +19,7 @@
 //   read earlier. The two "other isolate" cases write the store underneath
 //   a live copy, as the other isolate's write does on a device.
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -295,6 +296,61 @@ void main() {
       expect(Shade.text(shade.summaries.single), contains('1 new message'));
       expect(Shade.text(shade.summaries.single), isNot(contains('chats')));
     }
+
+    group('notification pictures (cacheDir/notif)', () {
+      late Directory cache;
+      late File picture;
+      const pathProvider = MethodChannel('plugins.flutter.io/path_provider');
+
+      setUp(() {
+        cache = Directory.systemTemp.createTempSync('sis-cache');
+        picture =
+            File('${cache.path}/notif/00000000-0000-4000-8000-000000000001.jpg')
+              ..createSync(recursive: true)
+              ..writeAsBytesSync([0xff, 0xd8, 0xff]);
+        messenger.setMockMethodCallHandler(
+          pathProvider,
+          (call) async =>
+              call.method == 'getTemporaryDirectory' ? cache.path : null,
+        );
+      });
+
+      tearDown(() {
+        messenger.setMockMethodCallHandler(pathProvider, null);
+        if (cache.existsSync()) cache.deleteSync(recursive: true);
+      });
+
+      /// The removal is not awaited by forUser: give it a moment.
+      Future<bool> goneSoon(File f) async {
+        for (var i = 0; i < 100 && f.existsSync(); i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
+        return !f.existsSync();
+      }
+
+      test('signing out deletes the stored pictures', () async {
+        await LocalPushDisplay.forUser('member-a');
+        expect(picture.existsSync(), isTrue, reason: 'kept while signed in');
+        await LocalPushDisplay.forUser(null);
+        expect(
+          await goneSoon(picture),
+          isTrue,
+          reason: 'a signed-out phone keeps no pictures',
+        );
+        expect(
+          cache.existsSync(),
+          isTrue,
+          reason: 'only notif/ goes, not the whole cache',
+        );
+      });
+
+      test('a sign-out with no pictures folder is fine', () async {
+        Directory('${cache.path}/notif').deleteSync(recursive: true);
+        await LocalPushDisplay.forUser('member-a');
+        await LocalPushDisplay.forUser(null);
+        expect(await LocalPushDisplay.currentOwner(), isNull);
+      });
+    });
 
     test('to another member: the shade and the stored lines are gone, and '
         'their first push is theirs alone', () async {

@@ -217,6 +217,24 @@ these one-time steps are made by the owner in the Apple developer portal:
 Until the group is on both App IDs the signed build stops with a message
 naming the missing group.
 
+#### Notification Extension (picture in the notification)
+
+The iPhone app embeds a Notification Service Extension (`com.esd.sis.notify`,
+folder `ios/NotificationService`). When a photo or video message arrives, the
+server marks the push `mutable-content` and adds a short-lived signed link to
+a small picture (about 480 px wide, at most 64 KiB); the extension downloads it
+and attaches it, so the banner and the expanded notification show the picture
+without opening SIS. If the download fails or takes more than 10 seconds the
+text notification is shown as it is. The extension shares no data with the app,
+so it needs no App Group and no entitlements: `ios-ipa.yml` runs
+`tool/asc_signing.py ensure --no-group` for it, which creates the
+`com.esd.sis.notify` App ID and its profile ("sis ci distribution notify") if
+missing, and treats any ACTIVE profile as good. The owner has no manual Apple
+step for this extension: nothing to click in the Apple developer portal (the
+App Store Connect API key the workflow already holds creates the App ID and the
+profile on the first signed run). Only if that run stops with an error from
+App Store Connect, read the message first.
+
 ### Before pushing
 
 `tool/ci_local.sh` replays `ci.yml`'s Android checks and Database checks jobs

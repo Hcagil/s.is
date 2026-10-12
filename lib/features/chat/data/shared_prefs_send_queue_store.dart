@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'dart:io';
 
+import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -75,9 +76,13 @@ final class SharedPrefsSendQueueStore implements SendQueueStore {
         for (final r in decodeQueue(prefs.getString(key))) {
           final paths = [r.file?.path, r.file?.thumbPath, r.video?.path];
           for (final p in paths) {
-            if (p == null || !own.any(p.startsWith)) continue;
+            if (p == null) continue;
+            // Normalised, and a real folder boundary: neither "<app>/../DCIM/x"
+            // nor "<app>-gallery/x" counts as inside the app's folders.
+            final clean = path.normalize(p);
+            if (!own.any((d) => path.isWithin(d, clean))) continue;
             try {
-              await File(p).delete();
+              await File(clean).delete();
             } catch (_) {}
           }
         }

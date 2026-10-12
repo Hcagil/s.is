@@ -399,7 +399,7 @@ reset role;
 select is((select prosecdef from pg_proc where proname = 'messages_link_preview_guard'), false,
           'TARGET I1: the card guard runs as security invoker');
 
--- 9 the card url must be in the body as a WHOLE link (20261020120000) -------
+-- 9 the card url must be in the body as a WHOLE link (20261021120000) -------
 select test_as('00000000-0000-0000-0000-0000000a1f01', 'a1f00000-0000-0000-0000-000000000001');
 select lives_ok($$select lp_send(lp_card(), 'look at https://example.com/a now')$$,
                 'whole link: the url in the middle of a sentence is accepted');

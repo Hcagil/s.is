@@ -54,6 +54,19 @@ grep -q '^ *continue-on-error: true *$' <<<"$note_keys" \
 grep -q '^ *VERSION: \${{ needs\.scope\.outputs\.name }} *$' <<<"$note_keys" \
   || { echo "FAIL: the note step must get VERSION: \${{ needs.scope.outputs.name }} (the version line)"; exit 1; }
 grep -q '^ *id: note *$' <<<"$note_keys" || { echo "FAIL: the note step must be id: note (publish reads steps.note.outputs.b64)"; exit 1; }
+# Inserting the row announces the release to every member, so the note step runs
+# only after the Play upload succeeded: it comes after the upload step, the
+# upload may not continue on error, and the note step has no `if:` that would
+# run it after a failure (always(), failure(), !cancelled()).
+upload_line=$(grep -n '^ *- name: Upload to Play internal track *$' "$workflow" | cut -d: -f1)
+note_line=$(grep -n '^ *- name: Store the What.s new note for this build *$' "$workflow" | cut -d: -f1)
+[[ -n $upload_line && -n $note_line && $note_line -gt $upload_line ]] \
+  || { echo "FAIL: the note step must come after 'Upload to Play internal track' (a failed upload never announces)"; exit 1; }
+upload_keys=$(awk -v s="$upload_line" -v e="$note_line" 'NR > s && NR < e' "$workflow")
+! grep -q '^ *continue-on-error:' <<<"$upload_keys" \
+  || { echo "FAIL: the Play upload must not continue on error: the note would announce a build that is not there"; exit 1; }
+! grep -q '^ *if:' <<<"$note_keys" \
+  || { echo "FAIL: the note step must not carry an if: that could run it after a failed upload"; exit 1; }
 # publish's outputs map hands the note on.
 grep -q '^      note_b64: \${{ steps\.note\.outputs\.b64 }}$' <<<"$(awk '$0 == "  publish:" { j = 1; next } j && /^  [A-Za-z0-9_-]+:/ { exit } j && /^    outputs:$/ { o = 1; next }
      o && !/^      / { o = 0 } o' "$workflow")" \

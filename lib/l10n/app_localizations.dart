@@ -2084,6 +2084,30 @@ abstract class AppLocalizations {
   /// **'This Google account is not currently approved for SIS.'**
   String get statusDeniedBody;
 
+  /// Title of the screen shown on a phone that another phone replaced
+  ///
+  /// In en, this message translates to:
+  /// **'You signed in on another phone'**
+  String get replacedTitle;
+
+  /// Body of the replaced-phone screen
+  ///
+  /// In en, this message translates to:
+  /// **'SIS works on one phone at a time. Sign in again to use it here; the other phone will be signed out.'**
+  String get replacedBody;
+
+  /// Button on the replaced-phone screen
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get replacedSignIn;
+
+  /// Line on the replaced-phone screen: how many unsent messages were deleted
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 unsent message was deleted from this phone.} other{{count} unsent messages were deleted from this phone.}}'**
+  String replacedUnsentDeleted(int count);
+
   /// Title of the connection error screen
   ///
   /// In en, this message translates to:

@@ -30,9 +30,15 @@ final sendQueueStoreProvider = Provider<SendQueueStore>(
 );
 
 /// Forgets the saved queue as soon as the session ends, like
-/// [deviceFilesOwnerProvider].
+/// [deviceFilesOwnerProvider]. A replaced phone keeps its unsent messages
+/// (owner decision pending): they stay stored on the phone and go out after
+/// the next sign-in.
 final sendQueueOwnerProvider = Provider<void>((ref) {
-  _onSessionEnd(ref, () => ref.read(sendQueueStoreProvider).clear());
+  _onSessionEnd(
+    ref,
+    () => ref.read(sendQueueStoreProvider).clear(),
+    onReplaced: false,
+  );
 });
 
 /// Message id -> stage and fraction for every video send running or waiting

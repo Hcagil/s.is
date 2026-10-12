@@ -1148,6 +1148,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'This Google account is not currently approved for SIS.';
 
   @override
+  String get replacedTitle => 'You signed in on another phone';
+
+  @override
+  String get replacedBody =>
+      'SIS works on one phone at a time. Sign in again to use it here; the other phone will be signed out.';
+
+  @override
+  String get replacedSignIn => 'Sign in';
+
+  @override
+  String replacedUnsentDeleted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count unsent messages were deleted from this phone.',
+      one: '1 unsent message was deleted from this phone.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get statusConnectTitle => 'Could not connect';
 
   @override

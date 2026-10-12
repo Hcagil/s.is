@@ -3,8 +3,9 @@
 // repository and store boundaries -- and every network fake held, so a screen
 // that waits for the network cannot pass by accident.
 //
-// B1 (security design 2026-10-04): when the answer is Denied or the session
-// ends, every page above the first is removed without a transition: one 1 ms
+// B1 (security design 2026-10-04): when the answer is Denied or Replaced
+// (one phone at a time: a marker is stored, so a clear "not allowed" means
+// another phone took over) or the session ends, every page above the first is removed without a transition: one 1 ms
 // pump later no chat is on screen, not even sliding out.
 import 'dart:async';
 
@@ -56,7 +57,7 @@ void noStrip(String why) {
 }
 
 final home = find.byType(HomeScreen);
-final deniedText = find.textContaining('not currently approved');
+final replacedText = find.text('You signed in on another phone');
 final signIn = find.text('Continue with Google');
 
 class World {
@@ -152,8 +153,8 @@ void main() {
     expect(row, findsNothing);
   });
 
-  group('B1: Denied after the list is shown removes every page at once', () {
-    Future<void> deniedWithChatOpen(WidgetTester t, World w) async {
+  group('B1: Replaced after the list is shown removes every page at once', () {
+    Future<void> replacedWithChatOpen(WidgetTester t, World w) async {
       expect(find.byType(MessageScreen), findsOneWidget);
       // A dialog or sheet over the chat, as the message menu opens one.
       final nav = Navigator.of(t.element(find.byType(MessageScreen)));
@@ -169,7 +170,7 @@ void main() {
       w.auth.last.deny();
       await t.pump(const Duration(milliseconds: 1));
 
-      expect(deniedText, findsOneWidget, reason: 'Denied is not on screen');
+      expect(replacedText, findsOneWidget, reason: 'Replaced is not on screen');
       expect(find.byType(MessageScreen), findsNothing, reason: 'chat stayed');
       expect(find.text('a dialog over the chat'), findsNothing);
       expect(row, findsNothing, reason: 'the list stayed visible');
@@ -185,7 +186,7 @@ void main() {
       await turns(t);
       await t.tap(row);
       await frames(t);
-      await deniedWithChatOpen(t, w);
+      await replacedWithChatOpen(t, w);
     });
 
     testWidgets('a chat opened by the notification that launched the app', (
@@ -194,7 +195,7 @@ void main() {
       final w = World(launchChat: 'c1');
       await t.pumpWidget(w.app());
       await frames(t);
-      await deniedWithChatOpen(t, w);
+      await replacedWithChatOpen(t, w);
     });
 
     testWidgets('the session ending (expired, signed out elsewhere) with a '

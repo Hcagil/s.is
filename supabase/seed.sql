@@ -306,5 +306,8 @@ insert into app_private.allowlist(email) values
   ('shr-a@integration.test'),
   ('shr-b@integration.test'),
   ('gate-invited@integration.test'),
+  -- one phone at a time (test/integration/one_phone_seam_test.dart)
+  ('one-phone@integration.test'),
+  ('one-phone-friend@integration.test'),
   ('sis-destek-bot@example.com')
 on conflict do nothing;

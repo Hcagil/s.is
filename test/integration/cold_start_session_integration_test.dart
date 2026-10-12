@@ -263,7 +263,7 @@ void main() {
   tearDownAll(() => service.dispose());
 
   test('removed from the allowlist: the next start shows the stored state, '
-      'then Denied, the marker is wiped, and RLS returns zero rows', () async {
+      'then Replaced (a false with a marker), the marker is wiped, and RLS returns zero rows', () async {
     final p = await phone('csa@integration.test');
     final partner = await phone('csz@integration.test');
     final chat = SupabaseChatRepository(p.client);
@@ -285,7 +285,7 @@ void main() {
 
     await offAllowlist(p, 'csa@integration.test');
     final run = Run(p);
-    await run.until(() => run.state is Denied, 'Denied');
+    await run.until(() => run.state is Replaced, 'Replaced');
     expect(
       isUnconfirmed(run.states.first),
       isTrue,
@@ -303,7 +303,7 @@ void main() {
   });
 
   test('replaced by a second phone: the first phone\'s next start shows the '
-      'stored state, then Denied', () async {
+      'stored state, then Replaced', () async {
     final p = await phone('csb@integration.test');
     await firstRun(p);
 
@@ -314,7 +314,7 @@ void main() {
     );
 
     final run = Run(p);
-    await run.until(() => run.state is Denied, 'Denied');
+    await run.until(() => run.state is Replaced, 'Replaced');
     expect(isUnconfirmed(run.states.first), isTrue, reason: '${run.states}');
     await run.until(() => !p.markerFile.existsSync(), 'the marker wipe');
     expect((await visible(p))['messages'], 0);
@@ -345,12 +345,12 @@ void main() {
     expect(isUnconfirmed(run.state!), isTrue, reason: 'still unconfirmed');
 
     p.line.releaseChecks();
-    await run.until(() => run.state is Denied, 'Denied');
+    await run.until(() => run.state is Replaced, 'Replaced');
     run.c.dispose();
   });
 
   test('revoked while the phone was offline: the stored state while the '
-      'ladder retries, then Denied within one retry of reconnecting', () async {
+      'ladder retries, then Replaced within one retry of reconnecting', () async {
     final p = await phone('csd@integration.test');
     await firstRun(p);
     await offAllowlist(p, 'csd@integration.test');
@@ -372,8 +372,8 @@ void main() {
     p.line.offline = false;
     // The ladder's longest wait up to here is its next step; the first is 2 s.
     await run.until(
-      () => run.state is Denied,
-      'Denied after reconnecting',
+      () => run.state is Replaced,
+      'Replaced after reconnecting',
       timeout: const Duration(seconds: 12),
     );
     expect(
@@ -399,7 +399,10 @@ void main() {
 
     final run = Run(p);
     await run.until(
-      () => run.state is Denied || run.state is SignedOut,
+      () =>
+          run.state is Denied ||
+          run.state is SignedOut ||
+          run.state is Replaced,
       'a locked state',
     );
     expect(isUnconfirmed(run.states.first), isTrue, reason: '${run.states}');

@@ -1144,6 +1144,26 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bu Google hesabı şu an SIS için onaylı değil.';
 
   @override
+  String get replacedTitle => 'Başka bir telefonda oturum açtın';
+
+  @override
+  String get replacedBody =>
+      'SIS aynı anda tek telefonda çalışır. Burada kullanmak için yeniden oturum aç; diğer telefonun oturumu kapanır.';
+
+  @override
+  String get replacedSignIn => 'Oturum aç';
+
+  @override
+  String replacedUnsentDeleted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Bu telefondan gönderilmemiş $count mesaj silindi.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get statusConnectTitle => 'Bağlanılamadı';
 
   @override

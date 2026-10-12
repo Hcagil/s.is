@@ -342,8 +342,14 @@ void main() {
     });
 
     for (final (locale, line) in [
-      (const Locale('en'), 'YouTube only sees you once you press play.'),
-      (const Locale('tr'), "Oynat'a basana kadar YouTube seni görmez."),
+      (
+        const Locale('en'),
+        'YouTube sees your IP address and device while you watch. SIS deletes its cookies when you close.',
+      ),
+      (
+        const Locale('tr'),
+        'İzlerken YouTube IP adresini ve cihazını görür. Kapatınca SIS çerezlerini siler.',
+      ),
     ]) {
       testWidgets('the privacy line ($locale)', (t) async {
         await pump(t, oneVideo(), locale: locale);
@@ -477,7 +483,9 @@ void main() {
         expect(chipText(site), findsOneWidget);
         expect(
           textIn(_key('video-player-privacy')),
-          contains('$site only sees you once you press play.'),
+          contains(
+            '$site sees your IP address and device while you watch. SIS deletes its cookies when you close.',
+          ),
         );
         view.last.onRefused(VideoRefusal.other);
         await t.pumpAndSettle();

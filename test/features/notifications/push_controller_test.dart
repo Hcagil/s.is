@@ -8,7 +8,7 @@
 // Time is the test binding's fake clock; flush() drains the fakes' async hops
 // deterministically, the way the rest of this suite does.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart' hide testWidgets;
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
@@ -17,6 +17,7 @@ import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/notifications/domain/push.dart';
 
+import '../../support/container_end.dart';
 import '../../support/fakes.dart';
 
 const config = RuntimeConfig(
@@ -29,13 +30,15 @@ ProviderContainer make(
   FakeAuth auth,
   PushSourceFake source,
   PushRegistryFake registry,
-) => ProviderContainer.test(
-  overrides: [
-    runtimeConfigProvider.overrideWithValue(config),
-    authRepositoryProvider.overrideWithValue(auth),
-    pushSourceProvider.overrideWithValue(source),
-    pushRegistryProvider.overrideWithValue(registry),
-  ],
+) => track(
+  ProviderContainer.test(
+    overrides: [
+      runtimeConfigProvider.overrideWithValue(config),
+      authRepositoryProvider.overrideWithValue(auth),
+      pushSourceProvider.overrideWithValue(source),
+      pushRegistryProvider.overrideWithValue(registry),
+    ],
+  ),
 );
 
 /// Lets the fakes' async hops and the controller's reactions run, the way the
@@ -400,19 +403,21 @@ void main() {
     ) async {
       final source = PushSourceFake();
       final registry = PushRegistryFake();
-      final c = ProviderContainer.test(
-        overrides: [
-          runtimeConfigProvider.overrideWithValue(
-            const RuntimeConfig(
-              supabaseUrl: '',
-              supabasePublishableKey: '',
-              googleWebClientId: '',
+      final c = track(
+        ProviderContainer.test(
+          overrides: [
+            runtimeConfigProvider.overrideWithValue(
+              const RuntimeConfig(
+                supabaseUrl: '',
+                supabasePublishableKey: '',
+                googleWebClientId: '',
+              ),
             ),
-          ),
-          authRepositoryProvider.overrideWithValue(FakeAuth(session: true)),
-          pushSourceProvider.overrideWithValue(source),
-          pushRegistryProvider.overrideWithValue(registry),
-        ],
+            authRepositoryProvider.overrideWithValue(FakeAuth(session: true)),
+            pushSourceProvider.overrideWithValue(source),
+            pushRegistryProvider.overrideWithValue(registry),
+          ],
+        ),
       );
       c.listen(sessionControllerProvider, (_, _) {});
       c.listen(pushRegistrationProvider, (_, _) {});
@@ -520,8 +525,10 @@ void main() {
       t,
     ) async {
       final source = PushSourceFake(launchConversationId: 'c-launch');
-      final c = ProviderContainer.test(
-        overrides: [pushSourceProvider.overrideWithValue(source)],
+      final c = track(
+        ProviderContainer.test(
+          overrides: [pushSourceProvider.overrideWithValue(source)],
+        ),
       );
       final seen = <String>[];
       c.listen(openedFromNotificationProvider, (_, next) {
@@ -542,8 +549,10 @@ void main() {
       t,
     ) async {
       final source = PushSourceFake();
-      final c = ProviderContainer.test(
-        overrides: [pushSourceProvider.overrideWithValue(source)],
+      final c = track(
+        ProviderContainer.test(
+          overrides: [pushSourceProvider.overrideWithValue(source)],
+        ),
       );
       final seen = <String>[];
       c.listen(openedFromNotificationProvider, (_, next) {

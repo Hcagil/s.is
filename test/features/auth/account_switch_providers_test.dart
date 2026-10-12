@@ -11,7 +11,7 @@
 // session every repository fake answers for — so a provider that kept the
 // last account's answer shows that account's data, exactly as on the phone.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart' hide testWidgets;
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
@@ -22,6 +22,7 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 
 import '../../support/account_fakes.dart';
+import '../../support/container_end.dart';
 import '../../support/video_fakes.dart';
 
 const config = RuntimeConfig(
@@ -37,15 +38,17 @@ class Phone {
     chat = SessionChat(backend);
     profile = SessionProfile(backend);
     presence = SessionPresence(backend);
-    c = ProviderContainer.test(
-      overrides: [
-        ...videoOverrides(),
-        runtimeConfigProvider.overrideWithValue(config),
-        authRepositoryProvider.overrideWithValue(auth),
-        chatRepositoryProvider.overrideWithValue(chat),
-        profileRepositoryProvider.overrideWithValue(profile),
-        presenceRepositoryProvider.overrideWithValue(presence),
-      ],
+    c = track(
+      ProviderContainer.test(
+        overrides: [
+          ...videoOverrides(),
+          runtimeConfigProvider.overrideWithValue(config),
+          authRepositoryProvider.overrideWithValue(auth),
+          chatRepositoryProvider.overrideWithValue(chat),
+          profileRepositoryProvider.overrideWithValue(profile),
+          presenceRepositoryProvider.overrideWithValue(presence),
+        ],
+      ),
     );
     // The session gate watches both for as long as the app runs.
     c.listen(sessionControllerProvider, (_, _) {});

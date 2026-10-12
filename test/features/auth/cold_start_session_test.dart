@@ -136,8 +136,10 @@ void main() {
       },
     );
 
-    testWidgets('server says not allowed: Denied in the same turn, before the '
-        'marker wipe has finished', (t) async {
+    // A marker is stored, so a clear "not allowed" means another phone took
+    // the account over (one phone at a time): Replaced, not Denied.
+    testWidgets('server says not allowed: Replaced in the same turn, before '
+        'the marker wipe has finished', (t) async {
       final store = MemoryLastSessionStore(marker())..holdClear();
       final r = Rig(ColdAuth(), store);
       await flush(t);
@@ -147,14 +149,14 @@ void main() {
       await flush(t);
       expect(
         r.state,
-        isA<Denied>(),
+        isA<Replaced>(),
         reason: 'the lock waited for the disk wipe',
       );
       expect(store.clears, greaterThanOrEqualTo(1));
       expect(store.stored, isNull);
       store.releaseClear();
       await flush(t);
-      expect(r.state, isA<Denied>());
+      expect(r.state, isA<Replaced>());
       await end(t);
     });
   });
@@ -229,7 +231,7 @@ void main() {
       await flush(t);
       r2.auth.last.deny();
       await flush(t);
-      expect(r2.state, isA<Denied>());
+      expect(r2.state, isA<Replaced>(), reason: 'a marker is stored');
       expect(store2.stored, isNull);
       await end(t);
     });
@@ -261,14 +263,25 @@ void main() {
       await end(t);
     });
 
-    testWidgets('recheck() does nothing once confirmed', (t) async {
+    // One phone at a time: a resume asks again even once confirmed (has
+    // this phone been replaced?); an allow then changes nothing.
+    testWidgets('recheck() once confirmed asks once more; an allow changes '
+        'nothing and starts no ladder', (t) async {
       final r = Rig(ColdAuth(), MemoryLastSessionStore(marker()));
       await flush(t);
       r.auth.last.allow();
       await flush(t);
+      final before = r.states.length;
       r.ctl.recheck();
       await flush(t);
-      expect(r.auth.checks, hasLength(1));
+      expect(r.auth.checks, hasLength(2), reason: 'no replacement check');
+      r.auth.last.allow();
+      await flush(t);
+      expect(r.state, allowed(confirmed: true));
+      expect(r.states.skip(before).where((s) => s.value is! Allowed), isEmpty);
+      await t.pump(const Duration(seconds: 3));
+      await flush(t);
+      expect(r.auth.checks, hasLength(2), reason: 'a retry ladder started');
       await end(t);
     });
   });
@@ -392,6 +405,7 @@ void main() {
       auth.last.allow();
       await flush(t);
       expect(c.read(sessionControllerProvider).value, allowed(confirmed: true));
+      c.dispose(); // not a Rig: end() does not know it
       await end(t);
     });
   });
@@ -452,13 +466,13 @@ void main() {
 
       r.auth.last.deny();
       await flush(t);
-      expect(r.state, isA<Denied>());
+      expect(r.state, isA<Replaced>(), reason: 'a marker is stored');
       first.allow();
       await flush(t);
       expect(
         r.state,
-        isA<Denied>(),
-        reason: 'the stale allow overwrote Denied',
+        isA<Replaced>(),
+        reason: 'the stale allow overwrote Replaced',
       );
       expect(store.stored, isNull, reason: 'the stale allow saved a marker');
       await end(t);

@@ -243,7 +243,7 @@ def ensure(bundle_identifier, profile_name, base_profile_name, cert_id=None, gro
     if not bundles:
         bundle = call("POST", "/bundleIds", {"data": {
             "type": "bundleIds",
-            "attributes": {"identifier": bundle_identifier, "name": "SIS " + bundle_identifier, "platform": "IOS"},
+            "attributes": {"identifier": bundle_identifier, "name": "SIS " + re.sub(r"[^A-Za-z0-9]+", " ", bundle_identifier).strip(), "platform": "IOS"},
         }})["data"]
         print("BUNDLE_ID_CREATED=%s" % bundle["attributes"]["identifier"], flush=True)
         bundles = [bundle]

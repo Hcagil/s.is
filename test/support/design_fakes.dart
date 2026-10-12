@@ -57,6 +57,7 @@ class DesignAuth implements AuthRepository {
   bool session;
   Result<void> signInResult;
   int signInCalls = 0;
+  int appleCalls = 0;
   final _changes = StreamController<bool>.broadcast();
 
   @override
@@ -73,6 +74,13 @@ class DesignAuth implements AuthRepository {
       _changes.add(true);
     }
     return signInResult;
+  }
+
+  @override
+  Future<Result<void>> signInWithApple() async {
+    appleCalls++;
+    await Future<void>.delayed(Duration.zero);
+    return const Ok(null);
   }
 
   @override

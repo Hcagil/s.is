@@ -315,6 +315,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signInWithApple => 'Sign in with Apple';
 
   @override
+  String get signInHiddenEmail =>
+      'SIS needs your real email address. In Apple\'s sign-in choose Share My Email and try again.';
+
+  @override
   String get findFromContacts => 'Find people from contacts';
 
   @override

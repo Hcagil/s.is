@@ -114,6 +114,9 @@ class ColdAuth implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> signInWithApple() => signInWithGoogle();
+
+  @override
   Future<Result<bool>> activateSession() {
     final c = PendingCheck();
     checks.add(c);

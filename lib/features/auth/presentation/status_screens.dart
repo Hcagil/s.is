@@ -13,6 +13,8 @@ class StatusScreen extends StatelessWidget {
     required this.onPressed,
     this.replaced = false,
     this.unsentDeleted = 0,
+    this.onSignInApple,
+    this.appleButton,
   });
 
   /// Signed in with Google but not on the allowlist.
@@ -44,6 +46,8 @@ class StatusScreen extends StatelessWidget {
     Key? key,
     required Future<void> Function() onSignIn,
     int unsentDeleted = 0,
+    Future<void> Function()? onSignInApple,
+    Widget Function(String text, VoidCallback onPressed)? appleButton,
   }) : this._(
          key: key,
          icon: Icons.smartphone_outlined,
@@ -51,6 +55,8 @@ class StatusScreen extends StatelessWidget {
          replaced: true,
          onPressed: onSignIn,
          unsentDeleted: unsentDeleted,
+         onSignInApple: onSignInApple,
+         appleButton: appleButton,
        );
 
   final IconData icon;
@@ -59,6 +65,12 @@ class StatusScreen extends StatelessWidget {
   final int unsentDeleted;
   final String? reason;
   final Future<void> Function() onPressed;
+
+  /// The replaced screen's Apple choice; shown on iPhone only.
+  final Future<void> Function()? onSignInApple;
+
+  /// Builds the Apple button (text, onPressed); supplied by the app.
+  final Widget Function(String text, VoidCallback onPressed)? appleButton;
 
   @override
   Widget build(BuildContext context) {
@@ -104,6 +116,13 @@ class StatusScreen extends StatelessWidget {
                   onPressed: () => onPressed(),
                   child: Text(actionLabel),
                 ),
+                if (replaced &&
+                    onSignInApple != null &&
+                    appleButton != null &&
+                    Theme.of(context).platform == TargetPlatform.iOS) ...[
+                  const SizedBox(height: 12),
+                  appleButton!(l.signInWithApple, () => onSignInApple!()),
+                ],
               ],
             ),
           ),

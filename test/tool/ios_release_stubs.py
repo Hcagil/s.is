@@ -809,7 +809,7 @@ def asc_signing():
     elif ARGS[:1] == ["ensure"] and len(ARGS) in (4, 5, 6):
         rest = ARGS[1:]
         if len(rest) == 4:
-            if rest[0] != "--no-group":
+            if rest[0] not in ("--no-group", "--signin"):
                 reject("ensure: unknown option %s" % rest[0])
         elif len(rest) == 5:
             if rest[0] != "--cert-id":
@@ -837,7 +837,7 @@ def asc_signing():
             die("asc_signing: build %s still PROCESSING at the polling limit" % build)
     else:
         reject("usage: create CSR BUNDLE_ID PROFILE_NAME OUT_DIR | delete CERT_ID PROFILE_ID"
-               " | distribute BUNDLE_ID BUILD_NUMBER GROUPS NOTE | ensure [--cert-id CERT_ID | --no-group] BUNDLE_ID PROFILE_NAME BASE_PROFILE_NAME | fetch PROFILE_NAME OUT_DIR | cleanup [MIN_AGE_HOURS]")
+               " | distribute BUNDLE_ID BUILD_NUMBER GROUPS NOTE | ensure [--cert-id CERT_ID | --no-group | --signin] BUNDLE_ID PROFILE_NAME BASE_PROFILE_NAME | fetch PROFILE_NAME OUT_DIR | cleanup [MIN_AGE_HOURS]")
 
 {"codesign": codesign, "asc_signing.py": asc_signing, "plutil": plutil, "security": security, "xcodebuild": xcodebuild,
  "xcrun": xcrun, "curl": curl, "openssl": openssl}[TOOL]()

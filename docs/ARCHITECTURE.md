@@ -25,7 +25,8 @@ lib/
     data/                 repository implementations — the ONLY layer importing
                           an SDK. tool/check_pattern.sh holds the list and is
                           the authority: supabase_flutter, supabase,
-                          google_sign_in, in_app_update, package_info_plus,
+                          google_sign_in, sign_in_with_apple, in_app_update,
+                          package_info_plus,
                           flutter_secure_storage, flutter_local_notifications,
                           firebase_messaging, firebase_core,
                           shared_preferences, web_socket_channel,
@@ -45,6 +46,8 @@ inside `chat`.
 ### Layer rules (mechanically checked)
 
 A provider whose type is a widget lives in `presentation/`.
+A widget that an SDK owns (the Sign in with Apple button) is built by a
+plain function in `data/`; `app/` passes it to the screen as a builder.
 
 1. `presentation/` never imports `supabase_flutter`, `google_sign_in`,
    `in_app_update`, or any `data/` file.

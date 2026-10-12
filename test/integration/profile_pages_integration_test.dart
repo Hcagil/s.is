@@ -184,6 +184,8 @@ class _AccountAuth implements AuthRepository {
   @override
   Future<Result<void>> signInWithGoogle() async => const Ok(null);
   @override
+  Future<Result<void>> signInWithApple() async => const Ok(null);
+  @override
   Future<Result<bool>> activateSession() async =>
       Ok(await client.rpc('activate_session') as bool);
   @override

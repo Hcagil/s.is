@@ -12,6 +12,9 @@ abstract interface class AuthRepository {
   /// Native Google sign-in; any provider problem is an [Err] with its reason.
   Future<Result<void>> signInWithGoogle();
 
+  /// Native Sign in with Apple on iPhone; a hidden relay email is an [Err] with a HiddenEmailFailure and nothing is stored.
+  Future<Result<void>> signInWithApple();
+
   /// `Ok(true)` when allowlisted and this device holds the active session.
   Future<Result<bool>> activateSession();
 

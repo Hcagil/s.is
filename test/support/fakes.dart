@@ -83,6 +83,20 @@ class FakeAuth implements AuthRepository {
     return signInResult;
   }
 
+  /// What [signInWithApple] answers; Ok also brings the session up, like Google.
+  Result<void> appleResult = const Ok(null);
+  int appleCalls = 0;
+
+  @override
+  Future<Result<void>> signInWithApple() async {
+    appleCalls++;
+    if (appleResult is Ok) {
+      session = true;
+      changes.add(true);
+    }
+    return appleResult;
+  }
+
   @override
   Future<Result<bool>> activateSession() async {
     activations++;

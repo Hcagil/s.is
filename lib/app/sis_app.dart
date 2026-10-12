@@ -10,6 +10,7 @@ import '../features/appearance/application/appearance_controller.dart';
 import '../features/appearance/domain/appearance_settings.dart';
 import '../features/appearance/domain/custom_theme.dart';
 import '../features/appearance/domain/wallpaper.dart';
+import '../features/auth/data/apple_button.dart';
 import '../features/auth/domain/member.dart';
 import '../features/auth/application/session_controller.dart';
 import '../features/auth/domain/session_state.dart';
@@ -300,14 +301,19 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     final notifier = ref.read(sessionControllerProvider.notifier);
     return switch (session) {
       AsyncData(value: SetupRequired()) => const SetupRequiredScreen(),
-      AsyncData(value: SignedOut(:final reason)) => SignInScreen(
-        reason: reason,
-      ),
+      AsyncData(value: SignedOut(:final reason, :final hiddenEmail)) =>
+        SignInScreen(
+          reason: reason,
+          hiddenEmail: hiddenEmail,
+          appleButton: appleSignInButton,
+        ),
       AsyncData(value: Denied()) => StatusScreen.denied(
         onSignOut: notifier.signOut,
       ),
       AsyncData(value: Replaced(:final unsentDeleted)) => StatusScreen.replaced(
         onSignIn: notifier.signIn,
+        onSignInApple: notifier.signInWithApple,
+        appleButton: appleSignInButton,
         unsentDeleted: unsentDeleted,
       ),
       AsyncData(value: SessionError(:final reason)) => StatusScreen.error(

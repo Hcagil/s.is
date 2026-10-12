@@ -349,16 +349,26 @@ class SessionController extends AsyncNotifier<SessionState> {
     unawaited(_settle(repo, next));
   }
 
-  Future<void> signIn() async {
+  Future<void> signIn() => _signIn((repo) => repo.signInWithGoogle());
+
+  Future<void> signInWithApple() => _signIn((repo) => repo.signInWithApple());
+
+  Future<void> _signIn(
+    Future<Result<void>> Function(AuthRepository repo) method,
+  ) async {
     _hadSession = false;
     final replaced = state.value is Replaced ? state.value as Replaced : null;
     state = const AsyncData(SessionLoading());
-    final r = await ref.read(authRepositoryProvider).signInWithGoogle();
+    final r = await method(ref.read(authRepositoryProvider));
     if (!ref.mounted) return;
     if (r is Err) {
       final f = r.failure;
       if (f is DeniedFailure) {
         state = const AsyncData(Denied());
+        return;
+      }
+      if (f is HiddenEmailFailure) {
+        state = AsyncData(SignedOut(reason: f.message, hiddenEmail: true));
         return;
       }
       final canceled = f is ProviderFailure && f.userCanceled;

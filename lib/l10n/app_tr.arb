@@ -95,6 +95,7 @@
   "attachContact": "Kişi",
   "attachPoll": "Anket",
   "signInWithApple": "Apple ile giriş yap",
+  "signInHiddenEmail": "SIS gerçek e-posta adresinizi gerektirir. Apple girişinde E-postamı Paylaş'ı seçip tekrar deneyin.",
   "findFromContacts": "Kişilerinden insanları bul",
   "pickerAddCaption": "Alt yazı ekle",
   "pickerNewChat": "Yeni sohbet",

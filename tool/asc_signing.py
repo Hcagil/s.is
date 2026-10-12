@@ -37,6 +37,9 @@
       already has the App Groups capability, and only after the certificate id
       is known (printed, so --cert-id can recover a failed re-create). Prints ids
       and names only.
+  asc_signing.py ensure --signin BUNDLE_ID PROFILE_NAME BASE_PROFILE_NAME
+      (the app: also turns Sign in with Apple on for the App ID and replaces
+      a profile that lacks that entitlement)
   asc_signing.py cleanup [MIN_AGE_HOURS]
       One-time sweep of the old per-run material: profiles named
       "sis ci <run>-<attempt>" (nothing else is touched; not the long-lived
@@ -74,6 +77,7 @@ import urllib.parse
 import urllib.request
 
 GROUP = b"group.com.esd.sis"  # the App Group shared by the app and its Share Extension
+SIGNIN = b"com.apple.developer.applesignin"  # the entitlement a profile carries once the App ID has Sign in with Apple
 API = "https://api.appstoreconnect.apple.com/v1"
 
 
@@ -236,8 +240,8 @@ def distribution_certificates(base_profile_name):
     return certs
 
 
-def ensure(bundle_identifier, profile_name, base_profile_name, cert_id=None, group=True):
-    """Makes sure an ACTIVE App Store profile named profile_name exists for bundle_identifier. cert_id (optional) names the certificate directly, to recover when no profile is left to find it through. group=False is for an extension that shares no data with the app (no App Group): the profile is then good when it is ACTIVE."""
+def ensure(bundle_identifier, profile_name, base_profile_name, cert_id=None, group=True, signin=False):
+    """Makes sure an ACTIVE App Store profile named profile_name exists for bundle_identifier. cert_id (optional) names the certificate directly, to recover when no profile is left to find it through. group=False is for an extension that shares no data with the app (no App Group): the profile is then good when it is ACTIVE. signin=True also turns the Sign in with Apple capability (APPLE_ID_AUTH) on for the App ID, and a profile without that entitlement is replaced."""
     bundles = call("GET", "/bundleIds?filter[identifier]=%s&filter[platform]=IOS" % bundle_identifier)["data"]
     bundles = [b for b in bundles if b["attributes"]["identifier"] == bundle_identifier]
     if not bundles:
@@ -254,13 +258,22 @@ def ensure(bundle_identifier, profile_name, base_profile_name, cert_id=None, gro
     # enabled lacks it: only such a profile is replaced, so a run that finds a good one changes nothing.
     # The signed profile is a CMS blob whose plist is readable inside it.
     for p in found:
-        if p["attributes"]["profileState"] == "ACTIVE" and (not group or GROUP in base64.b64decode(p["attributes"]["profileContent"])):
+        content = base64.b64decode(p["attributes"]["profileContent"])
+        if p["attributes"]["profileState"] == "ACTIVE" and (not group or GROUP in content) and (not signin or SIGNIN in content):
             print("PROFILE_OK=%s" % profile_name, flush=True)
             return
     # Nothing is touched before the App ID really carries App Groups: the profile is only replaced after the owner's portal steps.
-    caps = call("GET", "/bundleIds/%s/bundleIdCapabilities" % bundles[0]["id"])["data"] if group else []
+    caps = call("GET", "/bundleIds/%s/bundleIdCapabilities" % bundles[0]["id"])["data"] if group or signin else []
     if group and not any(c["attributes"].get("capabilityType") == "APP_GROUPS" for c in caps):
         sys.exit("the App ID %s has no App Groups capability yet: enable App Groups and the group %s on it in the Apple developer portal (docs/DELIVERY.md), then run again. Nothing was changed." % (bundle_identifier, GROUP.decode()))
+    if signin and not any(c["attributes"].get("capabilityType") == "APPLE_ID_AUTH" for c in caps):
+        # Apple documents APPLE_ID_AUTH with the setting APPLE_ID_AUTH_APP_CONSENT = PRIMARY_APP_CONSENT (this App ID is the primary one).
+        call("POST", "/bundleIdCapabilities", {"data": {
+            "type": "bundleIdCapabilities",
+            "attributes": {"capabilityType": "APPLE_ID_AUTH", "settings": [{"key": "APPLE_ID_AUTH_APP_CONSENT", "options": [{"key": "PRIMARY_APP_CONSENT"}]}]},
+            "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bundles[0]["id"]}}},
+        }})
+        print("SIGNIN_CAPABILITY_ENABLED=%s" % bundle_identifier, flush=True)
     certs = [{"id": cert_id}] if cert_id else distribution_certificates(base_profile_name)
     # Only now, with everything needed to recreate it in hand: the profile can be the only way to find the
     # certificate again, so nothing is deleted before the lookup above has succeeded.
@@ -283,6 +296,8 @@ def ensure(bundle_identifier, profile_name, base_profile_name, cert_id=None, gro
     print("PROFILE_CREATED=%s" % profile_name, flush=True)
     if group and GROUP not in base64.b64decode(created["data"]["attributes"]["profileContent"]):
         sys.exit("the App ID %s does not carry the App Group %s yet: enable it in the Apple developer portal (docs/DELIVERY.md), then run again" % (bundle_identifier, GROUP.decode()))
+    if signin and SIGNIN not in base64.b64decode(created["data"]["attributes"]["profileContent"]):
+        sys.exit("the new profile for %s lacks Sign in with Apple; enable the capability on the App ID in the Apple developer portal, then run again" % bundle_identifier)
 
 
 def fetch(profile_name, out_dir):
@@ -392,6 +407,8 @@ def main(argv):
         ensure(*argv[4:], cert_id=argv[3])
     elif argv[1:3] == ["ensure", "--no-group"] and len(argv) == 6:
         ensure(*argv[3:], group=False)
+    elif argv[1:3] == ["ensure", "--signin"] and len(argv) == 6:
+        ensure(*argv[3:], signin=True)
     elif argv[1:2] == ["fetch"] and len(argv) == 4:
         fetch(*argv[2:])
     elif argv[1:2] == ["cleanup"] and len(argv) in (2, 3):

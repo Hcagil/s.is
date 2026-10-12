@@ -35,6 +35,7 @@ begin
   for u in select au.id from auth.users au
            where au.id <> sender
              and app_private.is_allowed(au.id)
+             and not app_private.is_bot(au.id)
   loop
     -- One member's failure must not stop the others or the release_notes insert.
     begin
@@ -97,6 +98,9 @@ declare
   n      record;
   sent   integer := 0;
 begin
+  if app_private.is_bot(auth.uid()) then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
   if not app_private.has_app_access() then
     raise exception 'not permitted' using errcode = '42501';
   end if;

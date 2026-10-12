@@ -116,12 +116,16 @@ class WhatsNewCard extends ConsumerWidget {
               children: [
                 Icon(Icons.check_rounded, size: 14, color: _ok(context)),
                 const SizedBox(width: 5),
-                Text(
-                  AppLocalizations.of(context).whatsNewInstalled,
-                  style: TextStyle(
-                    color: _ok(context),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                Flexible(
+                  child: Text(
+                    AppLocalizations.of(context).whatsNewInstalled,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _ok(context),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],

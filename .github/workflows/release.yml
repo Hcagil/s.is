@@ -151,6 +151,7 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -o pipefail
+          export LC_ALL=C.UTF-8  # ${note:0:N} counts characters, never splits a Turkish letter
           prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
           if [ -n "$prev" ]; then range="$prev..$SHA"; else range="$SHA^..$SHA"; fi
           bodies=$(git log --reverse --format=%s "$range" \

@@ -1215,6 +1215,57 @@ class AscSigningTest(unittest.TestCase):
         self.assertEqual(len(self.posts("/v1/bundleIds")), 1,
                          "com.esd.sis.widget / com.esd.sis taken for com.esd.sis.share: %s" % (p.stdout + p.stderr))
 
+    # ---- ensure --no-group: the notification extension's profile carries no App Group ----
+    def ensure_ng(self):
+        return self.tool("ensure", "--no-group", "com.esd.sis.share", self.SHARE, self.BASE, TZ="JST-9")
+
+    def test_ensure_no_group_keeps_ungrouped_profile(self):
+        self.ensure_state(share_profile="ungrouped", caps=())
+        p = self.ensure_ng()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), [], "--no-group deleted a good profile for lacking the group")
+        self.assertEqual(self.reqs("POST"), [], "--no-group recreated a good profile")
+
+    def test_ensure_no_group_creates_missing_profile_without_app_groups(self):
+        self.ensure_state(share_profile=None, caps=(), created=self.UNGROUPED)
+        p = self.ensure_ng()
+        self.assertEqual(p.returncode, 0, "--no-group refused a profile without the group: %s" % (p.stdout + p.stderr))
+        self.assertNotIn("Nothing was changed", p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), [])
+        self.assertEqual(len(self.posts()), 1, "the missing profile was not created")
+        body = self.posts()[0]["body"]["data"]
+        self.assertEqual(body["attributes"].get("name"), self.SHARE)
+        self.assertEqual(body["relationships"]["bundleId"]["data"]["id"], "BID-SHARE")
+
+    def test_ensure_no_group_replaces_invalid_profile(self):
+        self.ensure_state(share_profile="ungrouped", caps=(), created=self.UNGROUPED)
+        self.srv.state["pattrs"]["P-S"]["profileState"] = "INVALID"
+        p = self.ensure_ng()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), ["/v1/profiles/P-S"], "an INVALID profile was kept under --no-group")
+        self.assertEqual(len(self.posts()), 1)
+
+    def test_ensure_no_group_creates_missing_app_id(self):
+        self.ensure_state(share_profile=None, share_bundle=False, created=self.UNGROUPED)
+        p = self.ensure_ng()
+        self.assertEqual(len(self.posts("/v1/bundleIds")), 1, "the missing App ID was not created: %s" % (p.stdout + p.stderr))
+        self.assertEqual(self.posts("/v1/bundleIds")[0]["body"]["data"]["attributes"].get("identifier"), "com.esd.sis.share")
+
+    def test_ensure_group_is_still_the_default(self):
+        # The same team as test_ensure_no_group_keeps_ungrouped_profile, without the flag: refused, nothing changed.
+        self.ensure_state(share_profile="ungrouped", caps=())
+        p = self.ensure()
+        self.assertNotEqual(p.returncode, 0, "without --no-group a profile lacking the group passed")
+        self.assertEqual(self.deletes(), [])
+        self.assertEqual(self.reqs("POST"), [])
+
+    def test_ensure_no_group_bad_usage(self):
+        for args in (["ensure", "--no-group"], ["ensure", "--no-group", "com.esd.sis.share", self.SHARE]):
+            self.setUp()
+            p = self.tool(*args)
+            self.assertNotEqual(p.returncode, 0, "%s accepted" % args)
+            self.assertFalse(self.reqs(), "%s made a request" % args)
+
     def test_ensure_bad_usage(self):
         for args in (["ensure"], ["ensure", "com.esd.sis.share", self.SHARE], ["ensure", "--cert-id"],
                      ["ensure", "--cert-id", "X", "com.esd.sis.share", self.SHARE]):

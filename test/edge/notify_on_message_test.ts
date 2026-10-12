@@ -105,6 +105,12 @@ async function checkActions(message: Record<string, unknown>) {
   const data = m.data as Record<string, unknown>;
   const raw = JSON.stringify(message);
   assertEquals(data.action_url, actionUrl, `action_url: ${raw}`);
+  // A picture link always travels with an action_url on the same host: the
+  // phone fetches a picture only from the host it already talks to.
+  if ('thumb_url' in data) {
+    assertEquals(new URL(String(data.thumb_url)).host.toLowerCase(), new URL(String(data.action_url)).host.toLowerCase(),
+      `thumb_url and action_url on one host: ${raw}`);
+  }
   const claims = await verifyActionToken(String(data.action_token), serviceKey);
   assert(claims, `action_token does not verify: ${raw}`);
   const now = Math.floor(Date.now() / 1000);
@@ -1037,6 +1043,232 @@ Deno.test({
     } finally {
       mintGate = null;
       await g.cleanup();
+    }
+  },
+});
+
+// Update 2 step 12: the picture in a notification. For a photo, or a video
+// with a duration, whose small picture '<attachment_path>.t' exists, the data
+// map carries thumb_url (a signed link to exactly that object, valid 600 s)
+// and thumb_kind ('photo' | 'video'); an iPhone's aps then carries
+// mutable-content: 1 so its Notification Service Extension can fetch it.
+// Nothing of that for a text, for a recipient whose preview is not 'full',
+// or for an old photo that has no .t. Failing to sign the link must never
+// hold the text back: the push goes out without a picture.
+Deno.test({
+  name: 'picture: photo and video carry a signed link to the .t only; text, preview sender and old photos carry none',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const run = Date.now().toString(36);
+    const who = ['sender', 'droid', 'ios', 'droidsender', 'iossender'];
+    const people = who.map((w) => ({
+      id: crypto.randomUUID(),
+      session: crypto.randomUUID(),
+      email: `pic${w}-${run}@edge.test`,
+      name: `${w[0].toUpperCase()}${w.slice(1)}`,
+      token: `edge-pic${w}-${run}`.padEnd(16, '0'),
+    }));
+    const p = Object.fromEntries(who.map((w, i) => [w, people[i]]));
+    const sender = p.sender;
+    const recipients = people.slice(1);
+    const asP = <T>(x: typeof sender, body: (tx: postgres.TransactionSql) => Promise<T>) =>
+      as(x.id, x.email, x.session, body);
+    const storage = `${apiUrl}/storage/v1/object`;
+    const svc = { apikey: serviceKey, authorization: `Bearer ${serviceKey}` };
+    const uploaded: string[] = [];
+    // Uploads [bytes] at [path] for real, owned by the sender (messages_send checks the owner).
+    const upload = async (path: string, bytes: Uint8Array) => {
+      const res = await realFetch(`${storage}/attachments/${path}`, {
+        method: 'POST',
+        headers: { ...svc, 'content-type': 'image/jpeg', 'x-upsert': 'true' },
+        body: bytes,
+      });
+      assertEquals(res.status, 200, `fixture: upload ${path}: ${await res.text()}`);
+      uploaded.push(path);
+      await sql`update storage.objects set owner_id = ${sender.id} where bucket_id = 'attachments' and name = ${path}`;
+    };
+    const original = new Uint8Array(4096).fill(7);
+    const small = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 0xff, 0xd9]);
+    try {
+      for (const x of people) {
+        await sql`insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+                  values (${x.id}, ${x.email}, now(), ${sql.json({ full_name: x.name })})`;
+        await sql`insert into app_private.allowlist(email) values (${x.email})`;
+        await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+                  values (${x.session}, ${x.id}, now(), now())`;
+        await asP(x, (tx) => tx`select public.activate_session()`);
+      }
+      const register = (x: typeof sender, platform: string) =>
+        asP(x, (tx) => tx`select public.register_device_token(${x.token}, ${platform}, true)`);
+      await register(p.droid, 'android');
+      await register(p.ios, 'ios');
+      await register(p.droidsender, 'android');
+      await register(p.iossender, 'ios');
+      for (const x of [p.droidsender, p.iossender]) {
+        await asP(x, (tx) => tx`insert into public.notification_settings(preview) values ('sender')`);
+      }
+      await sql`insert into app_private.tag_finds(finder, found_id)
+                select ${sender.id}::uuid, unnest(${recipients.map((r) => r.id)}::uuid[])`;
+      const [{ id: conv }] = await asP(sender,
+        (tx) => tx`select public.start_group_conversation(${`edge-pic-${run}`}, ${recipients.map((r) => r.id)}::uuid[]) as id`);
+
+      // the messages, each with its own id and path
+      const photoId = crypto.randomUUID();
+      const photoPath = `${conv}/${photoId}/pic.jpg`;
+      await upload(photoPath, original);
+      await upload(`${photoPath}.t`, small);
+      const videoId = crypto.randomUUID();
+      const videoPath = `${conv}/${videoId}/clip.mp4`;
+      await upload(videoPath, original);
+      await upload(`${videoPath}.t`, small);
+      const oldId = crypto.randomUUID();
+      const oldPath = `${conv}/${oldId}/old.jpg`;
+      await upload(oldPath, original); // an old photo: no .t was ever uploaded
+      const insertPhoto = (id: string, path: string) => asP(sender,
+        (tx) => tx`insert into public.messages(id, conversation_id, sender_id, body, attachment_path)
+                   values (${id}, ${conv}, ${sender.id}, '', ${path})`);
+      await insertPhoto(photoId, photoPath);
+      await insertPhoto(oldId, oldPath);
+      await asP(sender, (tx) => tx`insert into public.messages(id, conversation_id, sender_id, body, attachment_path,
+                                     attachment_name, attachment_mime, attachment_size, attachment_duration_ms)
+                                   values (${videoId}, ${conv}, ${sender.id}, '', ${videoPath},
+                                           'clip.mp4', 'video/mp4', 4096, 41000)`);
+      const [{ id: textId }] = await asP(sender, (tx) => tx`insert into public.messages(conversation_id, sender_id, body)
+                                                            values (${conv}, ${sender.id}, 'pic words') returning id`);
+
+      const to = (x: typeof sender) => {
+        const mine = sent.filter((s) => s.message.token === x.token);
+        assertEquals(mine.length, 1, `exactly one send to ${x.name}: ${JSON.stringify(sent)}`);
+        return mine[0].message;
+      };
+      const dataOf = (x: typeof sender) => to(x).data as Record<string, string>;
+      const apsOf = (x: typeof sender) =>
+        ((to(x).apns as { payload?: { aps?: Record<string, unknown> } } | undefined)?.payload?.aps ?? {});
+      // The link must be a signed link to exactly [path], for 600 s, and serve its bytes.
+      const checkLink = async (data: Record<string, string>, path: string, why: string) => {
+        const url = data.thumb_url;
+        assert(typeof url === 'string' && url.length > 0, `${why}: thumb_url missing`);
+        const u = new URL(url);
+        assertEquals(decodeURIComponent(u.pathname).endsWith(`/object/sign/attachments/${path}`), true,
+          `${why}: signs exactly ${path}: ${url}`);
+        const token = u.searchParams.get('token') ?? '';
+        const claims = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        assertEquals(claims.exp - claims.iat, 600, `${why}: valid 600 s: ${JSON.stringify(claims)}`);
+        // Fetched through the local stack: the same path and token.
+        const res = await realFetch(`${apiUrl}/storage/v1${u.pathname.replace(/^.*\/storage\/v1/, '')}${u.search}`);
+        assertEquals(res.status, 200, `${why}: the link serves`);
+        assertEquals(new Uint8Array(await res.arrayBuffer()), small, `${why}: the small picture, never the full file`);
+      };
+
+      // 1 a photo
+      assertEquals(await deliver(photoId), { status: 204, text: '' });
+      assertEquals(sent.length, 4, `one send per recipient: ${JSON.stringify(sent)}`);
+      for (const x of [p.droid, p.ios]) {
+        assertEquals(dataOf(x).thumb_kind, 'photo', `${x.name}: a photo's picture`);
+        await checkLink(dataOf(x), `${photoPath}.t`, `${x.name} photo`);
+      }
+      assertEquals(apsOf(p.ios)['mutable-content'], 1, 'the iPhone may fetch the picture before showing');
+      for (const x of [p.droidsender, p.iossender]) {
+        assert(!('thumb_url' in dataOf(x)) && !('thumb_kind' in dataOf(x)),
+          `${x.name}: preview sender gets no picture: ${JSON.stringify(to(x))}`);
+      }
+      assert(!('mutable-content' in apsOf(p.iossender)), `preview sender: no mutable-content: ${JSON.stringify(to(p.iossender))}`);
+
+      // 2 a video with a duration
+      assertEquals(await deliver(videoId), { status: 204, text: '' });
+      for (const x of [p.droid, p.ios]) {
+        assertEquals(dataOf(x).thumb_kind, 'video', `${x.name}: a video's poster`);
+        await checkLink(dataOf(x), `${videoPath}.t`, `${x.name} video`);
+      }
+      assertEquals(apsOf(p.ios)['mutable-content'], 1, 'a video: mutable-content too');
+
+      // 3 an old photo, no .t: text only
+      assertEquals(await deliver(oldId), { status: 204, text: '' });
+      assertEquals(sent.length, 4, `an old photo still notifies everyone: ${JSON.stringify(sent)}`);
+      for (const x of [p.droid, p.ios]) {
+        assert(!('thumb_url' in dataOf(x)) && !('thumb_kind' in dataOf(x)),
+          `${x.name}: no .t, no picture: ${JSON.stringify(to(x))}`);
+      }
+      assert(!('mutable-content' in apsOf(p.ios)), `no .t: no mutable-content: ${JSON.stringify(to(p.ios))}`);
+
+      // 4 a text
+      assertEquals(await deliver(textId), { status: 204, text: '' });
+      assert(!('thumb_url' in dataOf(p.droid)), `a text has no picture: ${JSON.stringify(to(p.droid))}`);
+      assert(!('mutable-content' in apsOf(p.ios)), `a text: no mutable-content: ${JSON.stringify(to(p.ios))}`);
+
+      // 5 storage refuses to sign: the text still goes out, without a picture
+      const brokenId = crypto.randomUUID();
+      const brokenPath = `${conv}/${brokenId}/pic.jpg`;
+      await upload(brokenPath, original);
+      await upload(`${brokenPath}.t`, small);
+      await insertPhoto(brokenId, brokenPath);
+      const stub = globalThis.fetch;
+      globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes('/storage/v1/')) return Promise.resolve(Response.json({ error: 'down' }, { status: 500 }));
+        return stub(input, init);
+      };
+      try {
+        assertEquals((await deliver(brokenId)).status, 204);
+      } finally {
+        globalThis.fetch = stub;
+      }
+      assertEquals(sent.length, 4, `storage down: every recipient still notified: ${JSON.stringify(sent)}`);
+      for (const x of [p.droid, p.ios]) {
+        assert(!('thumb_url' in dataOf(x)), `${x.name}: no link when signing failed: ${JSON.stringify(to(x))}`);
+        assertEquals(dataOf(x).message_id, brokenId, `${x.name}: the message itself still arrives`);
+      }
+      assert(!('mutable-content' in apsOf(p.ios)), `signing failed: no mutable-content: ${JSON.stringify(to(p.ios))}`);
+
+      // 6 storage is slow (stalls 20 s): the picture must not hold the text
+      // back -- every recipient is sent the message within 5 s.
+      const slowId = crypto.randomUUID();
+      const slowPath = `${conv}/${slowId}/pic.jpg`;
+      await upload(slowPath, original);
+      await upload(`${slowPath}.t`, small);
+      await insertPhoto(slowId, slowPath);
+      let release = () => {};
+      const stalled = new Promise<void>((r) => (release = r));
+      const stallTimer = setTimeout(() => release(), 20_000);
+      globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes('/storage/v1/')) await stalled;
+        return stub(input, init);
+      };
+      sent.length = 0;
+      pending.length = 0;
+      let atDeadline = 0;
+      try {
+        const res = handler!(new Request('http://localhost/notify-on-message', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ type: 'INSERT', table: 'messages', record: { id: slowId } }),
+        }));
+        const deadline = Date.now() + 5_000;
+        while (Date.now() < deadline && sent.length < 4) await new Promise((r) => setTimeout(r, 50));
+        atDeadline = sent.length;
+        release();
+        await res;
+        await Promise.all(pending);
+      } finally {
+        release();
+        clearTimeout(stallTimer);
+        globalThis.fetch = stub;
+      }
+      assertEquals(atDeadline, 4, `storage stalled: the text waited for the picture (${atDeadline} of 4 sent within 5 s)`);
+      for (const x of [p.droid, p.ios]) {
+        assert(!('thumb_url' in dataOf(x)), `${x.name}: a link that timed out is not sent: ${JSON.stringify(to(x))}`);
+      }
+    } finally {
+      for (const path of uploaded) {
+        await realFetch(`${storage}/attachments/${path}`, { method: 'DELETE', headers: svc }).then((r) => r.body?.cancel()).catch(() => {});
+      }
+      await sql.begin(async (tx) => {
+        await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
+      }).catch(() => {});
     }
   },
 });

@@ -27,6 +27,8 @@
       Fails if there is none or either has expired; prints a ::warning:: when
       either expires within 30 days.
   asc_signing.py ensure [--cert-id CERT_ID] BUNDLE_ID PROFILE_NAME BASE_PROFILE_NAME
+  asc_signing.py ensure --no-group BUNDLE_ID PROFILE_NAME BASE_PROFILE_NAME
+      (for an extension without an App Group: any ACTIVE profile is good)
       Makes sure an ACTIVE App Store profile named PROFILE_NAME exists for
       BUNDLE_ID, bound to the certificate BASE_PROFILE_NAME uses. Creates the
       bundle ID if it is missing, and the profile if there is none or it is no
@@ -234,8 +236,8 @@ def distribution_certificates(base_profile_name):
     return certs
 
 
-def ensure(bundle_identifier, profile_name, base_profile_name, cert_id=None):
-    """Makes sure an ACTIVE App Store profile named profile_name exists for bundle_identifier. cert_id (optional) names the certificate directly, to recover when no profile is left to find it through."""
+def ensure(bundle_identifier, profile_name, base_profile_name, cert_id=None, group=True):
+    """Makes sure an ACTIVE App Store profile named profile_name exists for bundle_identifier. cert_id (optional) names the certificate directly, to recover when no profile is left to find it through. group=False is for an extension that shares no data with the app (no App Group): the profile is then good when it is ACTIVE."""
     bundles = call("GET", "/bundleIds?filter[identifier]=%s&filter[platform]=IOS" % bundle_identifier)["data"]
     bundles = [b for b in bundles if b["attributes"]["identifier"] == bundle_identifier]
     if not bundles:
@@ -252,12 +254,12 @@ def ensure(bundle_identifier, profile_name, base_profile_name, cert_id=None):
     # enabled lacks it: only such a profile is replaced, so a run that finds a good one changes nothing.
     # The signed profile is a CMS blob whose plist is readable inside it.
     for p in found:
-        if p["attributes"]["profileState"] == "ACTIVE" and GROUP in base64.b64decode(p["attributes"]["profileContent"]):
+        if p["attributes"]["profileState"] == "ACTIVE" and (not group or GROUP in base64.b64decode(p["attributes"]["profileContent"])):
             print("PROFILE_OK=%s" % profile_name, flush=True)
             return
     # Nothing is touched before the App ID really carries App Groups: the profile is only replaced after the owner's portal steps.
-    caps = call("GET", "/bundleIds/%s/bundleIdCapabilities" % bundles[0]["id"])["data"]
-    if not any(c["attributes"].get("capabilityType") == "APP_GROUPS" for c in caps):
+    caps = call("GET", "/bundleIds/%s/bundleIdCapabilities" % bundles[0]["id"])["data"] if group else []
+    if group and not any(c["attributes"].get("capabilityType") == "APP_GROUPS" for c in caps):
         sys.exit("the App ID %s has no App Groups capability yet: enable App Groups and the group %s on it in the Apple developer portal (docs/DELIVERY.md), then run again. Nothing was changed." % (bundle_identifier, GROUP.decode()))
     certs = [{"id": cert_id}] if cert_id else distribution_certificates(base_profile_name)
     # Only now, with everything needed to recreate it in hand: the profile can be the only way to find the
@@ -279,7 +281,7 @@ def ensure(bundle_identifier, profile_name, base_profile_name, cert_id=None):
         print("creating the profile failed (%s); trying once more" % first.code, file=sys.stderr, flush=True)
         created = call("POST", "/profiles", body)
     print("PROFILE_CREATED=%s" % profile_name, flush=True)
-    if GROUP not in base64.b64decode(created["data"]["attributes"]["profileContent"]):
+    if group and GROUP not in base64.b64decode(created["data"]["attributes"]["profileContent"]):
         sys.exit("the App ID %s does not carry the App Group %s yet: enable it in the Apple developer portal (docs/DELIVERY.md), then run again" % (bundle_identifier, GROUP.decode()))
 
 
@@ -384,10 +386,12 @@ def main(argv):
         delete(*argv[2:])
     elif argv[1:2] == ["distribute"] and len(argv) == 6:
         distribute(argv[2], argv[3], [g.strip() for g in argv[4].split(",") if g.strip()], argv[5])
-    elif argv[1:2] == ["ensure"] and len(argv) == 5:
+    elif argv[1:2] == ["ensure"] and len(argv) == 5 and not argv[2].startswith("--"):
         ensure(*argv[2:])
     elif argv[1:3] == ["ensure", "--cert-id"] and len(argv) == 7:
         ensure(*argv[4:], cert_id=argv[3])
+    elif argv[1:3] == ["ensure", "--no-group"] and len(argv) == 6:
+        ensure(*argv[3:], group=False)
     elif argv[1:2] == ["fetch"] and len(argv) == 4:
         fetch(*argv[2:])
     elif argv[1:2] == ["cleanup"] and len(argv) in (2, 3):

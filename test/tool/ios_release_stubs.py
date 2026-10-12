@@ -789,7 +789,7 @@ def asc_signing():
         # $STUB_DIST_KEY (what IOS_DISTRIBUTION_KEY should hold).
         name, out = ARGS[1:]
         record("asc fetch %s" % name)
-        if name not in ("sis ci distribution", "sis ci distribution share"):
+        if name not in ("sis ci distribution", "sis ci distribution share", "sis ci distribution notify"):
             die("no active profile named %s in App Store Connect; run the iOS signing bootstrap workflow" % name)
         if E.get("STUB_ASC_FAIL") == "fetch":
             die("the signing certificate expired; rotate it (docs/DELIVERY.md)")
@@ -800,13 +800,18 @@ def asc_signing():
         if p.returncode != 0:
             die("asc_signing stand-in: no CSR: %s" % p.stderr.decode())
         prev = E["STUB_CALLS"] + ".cert"
-        share = name == "sis ci distribution share"
-        issue(csr, name, out, "com.esd.sis.share" if share else "com.esd.sis",
-              open(prev, "rb").read() if share and os.path.isfile(prev) else None)
+        # The share and notify profiles carry the base profile's certificate.
+        ext = {"sis ci distribution share": "com.esd.sis.share",
+               "sis ci distribution notify": "com.esd.sis.notify"}.get(name)
+        issue(csr, name, out, ext or "com.esd.sis",
+              open(prev, "rb").read() if ext and os.path.isfile(prev) else None)
         os.remove(csr)
-    elif ARGS[:1] == ["ensure"] and len(ARGS) in (4, 6):
+    elif ARGS[:1] == ["ensure"] and len(ARGS) in (4, 5, 6):
         rest = ARGS[1:]
-        if len(rest) == 5:
+        if len(rest) == 4:
+            if rest[0] != "--no-group":
+                reject("ensure: unknown option %s" % rest[0])
+        elif len(rest) == 5:
             if rest[0] != "--cert-id":
                 reject("ensure: unknown option %s" % rest[0])
             rest = rest[2:]
@@ -832,7 +837,7 @@ def asc_signing():
             die("asc_signing: build %s still PROCESSING at the polling limit" % build)
     else:
         reject("usage: create CSR BUNDLE_ID PROFILE_NAME OUT_DIR | delete CERT_ID PROFILE_ID"
-               " | distribute BUNDLE_ID BUILD_NUMBER GROUPS NOTE | ensure [--cert-id CERT_ID] BUNDLE_ID PROFILE_NAME BASE_PROFILE_NAME | fetch PROFILE_NAME OUT_DIR | cleanup [MIN_AGE_HOURS]")
+               " | distribute BUNDLE_ID BUILD_NUMBER GROUPS NOTE | ensure [--cert-id CERT_ID | --no-group] BUNDLE_ID PROFILE_NAME BASE_PROFILE_NAME | fetch PROFILE_NAME OUT_DIR | cleanup [MIN_AGE_HOURS]")
 
 {"codesign": codesign, "asc_signing.py": asc_signing, "plutil": plutil, "security": security, "xcodebuild": xcodebuild,
  "xcrun": xcrun, "curl": curl, "openssl": openssl}[TOOL]()

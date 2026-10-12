@@ -160,6 +160,8 @@ jobs:
           # Idempotent: makes the share App ID and profile if missing, and replaces a profile only when it lacks the App Group.
           python3 tool/asc_signing.py ensure com.esd.sis "sis ci distribution" "sis ci distribution"
           python3 tool/asc_signing.py ensure com.esd.sis.share "sis ci distribution share" "sis ci distribution"
+          # The Notification Service Extension shares no data with the app: no App Group on its App ID or profile.
+          python3 tool/asc_signing.py ensure --no-group com.esd.sis.notify "sis ci distribution notify" "sis ci distribution"
           python3 tool/asc_signing.py fetch "sis ci distribution" "$dir"
           openssl x509 -inform der -in "$dir/cert.cer" -out "$dir/cert.pem"
           openssl pkey -in "$dir/key.pem" -pubout -out "$dir/key.pub" 2>/dev/null || { echo 'IOS_DISTRIBUTION_KEY is not a valid private key PEM' >&2; exit 1; }
@@ -197,6 +199,14 @@ jobs:
             cp "$dir/share/profile.mobileprovision" "$profiles/$share_uuid.mobileprovision"
           done
           echo "SHARE_PROFILE_UUID=$share_uuid" >> "$GITHUB_ENV"
+          # The Notification Service Extension (com.esd.sis.notify) has its own profile; it carries no App Group, so it is not in the group check above.
+          mkdir -m 700 "$dir/notify"
+          python3 tool/asc_signing.py fetch "sis ci distribution notify" "$dir/notify"
+          notify_uuid=$(security cms -D -i "$dir/notify/profile.mobileprovision" | plutil -extract UUID raw -o - -)
+          for profiles in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            cp "$dir/notify/profile.mobileprovision" "$profiles/$notify_uuid.mobileprovision"
+          done
+          echo "NOTIFY_PROFILE_UUID=$notify_uuid" >> "$GITHUB_ENV"
           echo "SIGNING_IDENTITY=$(openssl x509 -in "$dir/cert.pem" -noout -fingerprint -sha1 | sed 's/.*=//; s/://g')" >> "$GITHUB_ENV"
       - name: Export for App Store Connect
         run: |
@@ -208,7 +218,7 @@ jobs:
             <key>method</key><string>app-store-connect</string>
             <key>signingStyle</key><string>manual</string>
             <key>signingCertificate</key><string>$SIGNING_IDENTITY</string>
-            <key>provisioningProfiles</key><dict><key>com.esd.sis</key><string>$SIGNING_PROFILE_UUID</string><key>com.esd.sis.share</key><string>$SHARE_PROFILE_UUID</string></dict>
+            <key>provisioningProfiles</key><dict><key>com.esd.sis</key><string>$SIGNING_PROFILE_UUID</string><key>com.esd.sis.share</key><string>$SHARE_PROFILE_UUID</string><key>com.esd.sis.notify</key><string>$NOTIFY_PROFILE_UUID</string></dict>
             <key>teamID</key><string>$TEAM_ID</string>
             <key>destination</key><string>export</string>
             <key>uploadSymbols</key><true/>

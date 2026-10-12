@@ -1997,4 +1997,52 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get makerRecent => 'Recent';
+
+  @override
+  String get videoPlayerClose => 'Close';
+
+  @override
+  String get videoPlayerDone => 'Done';
+
+  @override
+  String get videoPlayerCopy => 'Copy link';
+
+  @override
+  String get videoPlayerCopied => 'Link copied';
+
+  @override
+  String videoOpenIn(String site) {
+    String _temp0 = intl.Intl.selectLogic(site, {
+      'youtube': 'Open in YouTube',
+      'instagram': 'Open in Instagram',
+      'tiktok': 'Open in TikTok',
+      'x': 'Open in X',
+      'other': 'Open in browser',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String videoPlayerPrivacy(String site) {
+    return '$site sees your IP address and device while you watch. SIS deletes its cookies when you close.';
+  }
+
+  @override
+  String get videoRefusedPrivate => 'This video is private.';
+
+  @override
+  String get videoRefusedDeleted => 'This video was deleted.';
+
+  @override
+  String get videoRefusedRegion =>
+      'This video is not available in your region.';
+
+  @override
+  String get videoRefusedLogin => 'This video needs a sign-in to watch.';
+
+  @override
+  String get videoRefusedOther => 'This video could not be loaded.';
+
+  @override
+  String get videoRefusedMore => 'It cannot play inside SIS.';
 }

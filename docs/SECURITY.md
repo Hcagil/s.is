@@ -125,6 +125,15 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     afterwards cannot redirect it. The whole fetch is capped at 9 s, the
     page at 300000 bytes, the picture at 3000000 bytes and 16 megapixels
     (checked before decoding). Readers see the site only if they tap the card.
+    The card's url must appear in the body as a whole link (after the start,
+    whitespace, a bracket or a quote; before whitespace, the end or closing
+    punctuation), not inside a longer word or address. Addresses of the form
+    `::a.b.c.d` are refused like `::` and `::1`; an international host name is
+    looked up and checked in its ASCII (punycode) form; each resolved address
+    is tried in turn (3 s each) and the TLS handshake has its own 5 s limit.
+    The video player loads only the official embed of YouTube, Instagram,
+    TikTok or X in a sandboxed web view, and only after the tap (see
+    `docs/DECISIONS.md`, 2026-10-11).
   - `profiles` rows are readable only for an allowlisted account that is the
     caller, shares a conversation with the caller, or is a contact the
     caller saved; a tag find alone does not open the row (`find_by_tag`

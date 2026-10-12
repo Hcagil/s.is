@@ -171,7 +171,12 @@
 --   fl-sana/fl-theo/fl-uma test/integration/file_messages_seam_test.dart
 --     (sana sends files through the queue, theo downloads them; uma is not
 --      a member and is refused)
+--   vp-ada/vp-ben test/integration/video_player_seam_test.dart
+--     (ada sends video link cards; ben's screen, wired as main.dart wires
+--      it, plays them and remembers a refusal per message)
 insert into app_private.allowlist(email) values
+  ('vp-ada@integration.test'),
+  ('vp-ben@integration.test'),
   ('fl-sana@integration.test'),
   ('fl-theo@integration.test'),
   ('fl-uma@integration.test'),

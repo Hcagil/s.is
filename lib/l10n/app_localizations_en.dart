@@ -335,6 +335,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get whatsNewUpToDate => 'You\'re up to date';
 
   @override
+  String get whatsNewInstalled => 'Installed (your version)';
+
+  @override
   String get messageActionReply => 'Reply';
 
   @override

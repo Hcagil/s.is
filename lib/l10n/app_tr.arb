@@ -101,6 +101,7 @@
   "pickerRecent": "Son kullanılanlar",
   "whatsNewVersion": "Sürüm {version}",
   "whatsNewUpToDate": "Güncelsiniz",
+  "whatsNewInstalled": "Kurulu (sürümünüz)",
   "messageActionReply": "Yanıtla",
   "messageActionCopy": "Kopyala",
   "messageActionForward": "İlet",

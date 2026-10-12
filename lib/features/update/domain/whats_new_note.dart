@@ -27,8 +27,13 @@ final class WhatsNewNote {
 /// a line that is empty after removing the marker is dropped.
 /// If the first line is not a version line: version = null and bullets = const [] (plain note).
 /// text is always the original [body] unchanged.
-WhatsNewNote parseWhatsNewNote(String body) {
-  final lines = body
+/// A line that is exactly '---' splits the body into English (first) and Turkish (second); [lang] 'tr' picks the second when it is not empty, anything else picks the first. 'sürüm 0.31' also reads as a version line.
+WhatsNewNote parseWhatsNewNote(String body, {String lang = 'en'}) {
+  final parts = body.split(RegExp(r'^\s*---\s*$', multiLine: true));
+  final chosen = lang == 'tr' && parts.length > 1 && parts[1].trim().isNotEmpty
+      ? parts[1]
+      : parts[0];
+  final lines = chosen
       .split('\n')
       .map((line) => line.replaceAll('\r', '').trim())
       .where((line) => line.isNotEmpty)
@@ -39,7 +44,7 @@ WhatsNewNote parseWhatsNewNote(String body) {
   }
 
   final versionRx = RegExp(
-    r'^(?:v|version\s+)?(\d+\.\d+(?:\.\d+)?)$',
+    r'^(?:v|version\s+|sürüm\s+)?(\d+\.\d+(?:\.\d+)?)$',
     caseSensitive: false,
   );
   final bulletRx = RegExp(r'^[-*•–]\s*');

@@ -12,7 +12,7 @@
 -- valid card with exactly one field broken, sent by a member on a plain text
 -- message, so only the rule under test can refuse it.
 begin;
-select plan(92);
+select plan(105);
 
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
   ('00000000-0000-0000-0000-0000000a1f01', 'lp-ann@example.com', now(), '{"full_name":"Ann"}'),
@@ -398,6 +398,36 @@ reset role;
 
 select is((select prosecdef from pg_proc where proname = 'messages_link_preview_guard'), false,
           'TARGET I1: the card guard runs as security invoker');
+
+-- 9 the card url must be in the body as a WHOLE link (20261020120000) -------
+select test_as('00000000-0000-0000-0000-0000000a1f01', 'a1f00000-0000-0000-0000-000000000001');
+select lives_ok($$select lp_send(lp_card(), 'look at https://example.com/a now')$$,
+                'whole link: the url in the middle of a sentence is accepted');
+select lives_ok($$select lp_send(lp_card(), 'https://example.com/a')$$,
+                'whole link: the url as the whole body is accepted');
+select lives_ok($$select lp_send(lp_card(), 'see example.com/a')$$,
+                'whole link: bare host and path (no scheme) is accepted');
+select lives_ok($$select lp_send(lp_card(), '(https://example.com/a)')$$,
+                'whole link: the url in brackets is accepted');
+select lives_ok($$select lp_send(lp_card(), 'see https://EXAMPLE.COM/a')$$,
+                'whole link: an upper-case host is accepted');
+select lives_ok($$select lp_send(lp_card(), 'is it https://example.com/a?')$$,
+                'whole link: trailing punctuation is accepted');
+select lives_ok($$select lp_send(lp_card(), E'https://example.com/a\nsecond line')$$,
+                'whole link: a line break after the url is accepted');
+select throws_ok($$select lp_send(lp_card(), 'see evilhttps://example.com/a')$$, 'LNKP1', 'invalid link preview',
+                 'whole link: the url glued to a word before it is refused');
+select throws_ok($$select lp_send(lp_card(), 'see evilexample.com/a')$$, 'LNKP1', 'invalid link preview',
+                 'whole link: a bare host glued to a word before it is refused');
+select throws_ok($$select lp_send(lp_card('{"url":"https://a.com"}'), 'see https://a.com.evil.io')$$, 'LNKP1', 'invalid link preview',
+                 'whole link: a longer host (a.com.evil.io) is refused');
+select throws_ok($$select lp_send(lp_card('{"url":"https://a.com"}'), 'see aXcom')$$, 'LNKP1', 'invalid link preview',
+                 'whole link: the dot is literal (aXcom) is refused');
+select throws_ok($$select lp_send(lp_card(), 'see https://example.com/ab')$$, 'LNKP1', 'invalid link preview',
+                 'whole link: a longer path after the stored url is refused');
+select throws_ok($$select lp_send(lp_card(), 'see https://example.com/a/more')$$, 'LNKP1', 'invalid link preview',
+                 'whole link: a deeper path after the stored url is refused');
+reset role;
 
 select * from finish();
 rollback;

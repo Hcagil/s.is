@@ -617,4 +617,39 @@ void main() {
       expect(watch.elapsed, greaterThan(const Duration(milliseconds: 8000)));
     }, timeout: const Timeout(Duration(seconds: 30)));
   });
+
+  group('link-card lows (step 11b)', () {
+    for (final addr in ['::7f00:1', '::a00:1', '::808:808']) {
+      test('an IPv4-compatible address ($addr, first 12 bytes zero) is '
+          'refused', () async {
+        dns.records['compat.example.com'] = [InternetAddress(addr)];
+        web.page('https://compat.example.com/', _og(title: 'C'));
+        expect(
+          await fetcher().fetch(Uri.parse('https://compat.example.com/')),
+          isNull,
+        );
+        expect(web.asked, isEmpty);
+      });
+    }
+
+    test('an IPv4-compatible literal is refused without asking it', () async {
+      web.page('http://[::7f00:1]/', _og(title: 'C'));
+      expect(await fetcher().fetch(Uri.parse('http://[::7f00:1]/')), isNull);
+      expect(web.asked, isEmpty);
+    });
+
+    test('an IDN host is looked up as punycode and gets a card', () async {
+      final link = Uri.parse('https://bücher.example/a');
+      for (final u in ['https://xn--bcher-kva.example/a', link.toString()]) {
+        web.page(u, _og(title: 'Books'));
+      }
+      final draft = await fetcher().fetch(link);
+      expect(dns.asked, contains('xn--bcher-kva.example'));
+      expect(
+        dns.asked.where((h) => h.contains('%') || h.contains('ü')),
+        isEmpty,
+      );
+      expect(draft?.preview.title, 'Books');
+    });
+  });
 }

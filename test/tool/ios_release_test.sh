@@ -305,13 +305,16 @@ for f in "$ipa_wf" "$release" "$ci"; do
   grep -nE 'asc_signing\.py +(create|delete|cleanup|release|revoke)' "$f" && fail "$f creates, cleans up or revokes signing material"
 done
 # ensure only makes the share App ID / profiles if missing (test/tool/asc_signing_test.py); exact calls, exact order.
+# The notification extension's profile carries no App Group (--no-group).
 want_asc='asc_signing.py ensure com.esd.sis "sis ci distribution" "sis ci distribution"
 asc_signing.py ensure com.esd.sis.share "sis ci distribution share" "sis ci distribution"
+asc_signing.py ensure --no-group com.esd.sis.notify "sis ci distribution notify" "sis ci distribution"
 asc_signing.py fetch "sis ci distribution" "$dir"
-asc_signing.py fetch "sis ci distribution share" "$dir/share"'
+asc_signing.py fetch "sis ci distribution share" "$dir/share"
+asc_signing.py fetch "sis ci distribution notify" "$dir/notify"'
 [ "$(grep -oE 'asc_signing\.py .*' "$ipa_wf")" = "$want_asc" ] \
-  || fail "ios-ipa must call asc_signing.py only to ensure then fetch the two profiles: $(grep -n 'asc_signing' "$ipa_wf")"
-[ "$(step_run "$ipa_wf" "Import the signing certificate" /dev/stdout | grep -c 'asc_signing\.py')" -eq 4 ] \
+  || fail "ios-ipa must call asc_signing.py only to ensure then fetch the three profiles: $(grep -n 'asc_signing' "$ipa_wf")"
+[ "$(step_run "$ipa_wf" "Import the signing certificate" /dev/stdout | grep -c 'asc_signing\.py')" -eq 6 ] \
   || fail "the asc_signing.py calls are not all in the import step"
 # Step order, exactly the contract's; the gates on validate, upload and cleanup.
 mapfile -t steps < <(sed -n 's/^      - name: //p' "$ipa_wf")
@@ -521,16 +524,18 @@ for f in --config-only --release --no-codesign --build-number=4242 --build-name=
 done
 grep -q 'build ipa' "$tmp/calls" && fail "flutter build ipa cannot sign this app"
 # One long-lived identity: the only App Store Connect call of the whole job.
-# ensure (idempotent: makes the share App ID / profile if missing) then fetch, both profiles.
+# ensure (idempotent: makes the share / notify App ID and profile if missing) then fetch, all three profiles.
 asc_calls='asc ensure com.esd.sis | sis ci distribution | sis ci distribution
 asc ensure com.esd.sis.share | sis ci distribution share | sis ci distribution
+asc ensure --no-group | com.esd.sis.notify | sis ci distribution notify | sis ci distribution
 asc fetch sis ci distribution
-asc fetch sis ci distribution share'
+asc fetch sis ci distribution share
+asc fetch sis ci distribution notify'
 # only_fetch <case> [partial]: partial = the job stopped part way, so a prefix of those calls, in order.
 only_fetch() {
   local c; c=$(grep '^asc' "$tmp/calls")
   { [ "$c" = "$asc_calls" ] || { [ -n "${2:-}" ] && [ -n "$c" ] && [ "${asc_calls:0:${#c}}" = "$c" ]; }; } \
-    || fail "$1: the job must only ensure and fetch the two profiles (no create, cleanup, delete, revoke): [$(grep '^asc' "$tmp/calls")]"
+    || fail "$1: the job must only ensure and fetch the three profiles (no create, cleanup, delete, revoke): [$(grep '^asc' "$tmp/calls")]"
 }
 only_fetch "a pull request"
 for v in SIGNING_IDENTITY SIGNING_PROFILE_UUID; do
@@ -542,11 +547,15 @@ sha1=$(sed -n 's/^SIGNING_IDENTITY=//p' "$tmp/github_env")
 uuid=$(sed -n 's/^SIGNING_PROFILE_UUID=//p' "$tmp/github_env")
 share_uuid=$(sed -n 's/^SHARE_PROFILE_UUID=//p' "$tmp/github_env")
 [ -n "$share_uuid" ] && [ "$share_uuid" != "$uuid" ] || fail "SHARE_PROFILE_UUID is not the share profile's own: [$share_uuid]"
-python3 - "$tmp/export-options.plist" "$sha1" "$uuid" "$share_uuid" <<'EOF' || fail "ExportOptions.plist is wrong"
+notify_uuid=$(sed -n 's/^NOTIFY_PROFILE_UUID=//p' "$tmp/github_env")
+[ -n "$notify_uuid" ] && [ "$notify_uuid" != "$uuid" ] && [ "$notify_uuid" != "$share_uuid" ] \
+  || fail "NOTIFY_PROFILE_UUID is not the notify profile's own: [$notify_uuid]"
+python3 - "$tmp/export-options.plist" "$sha1" "$uuid" "$share_uuid" "$notify_uuid" <<'EOF' || fail "ExportOptions.plist is wrong"
 import plistlib, sys
 d = plistlib.load(open(sys.argv[1], "rb"))
 want = {"method": "app-store-connect", "signingStyle": "manual", "teamID": "TEAM123",
-        "signingCertificate": sys.argv[2], "provisioningProfiles": {"com.esd.sis": sys.argv[3], "com.esd.sis.share": sys.argv[4]}}
+        "signingCertificate": sys.argv[2], "provisioningProfiles": {"com.esd.sis": sys.argv[3], "com.esd.sis.share": sys.argv[4],
+                                 "com.esd.sis.notify": sys.argv[5]}}
 bad = {k: d.get(k) for k in want if d.get(k) != want[k]}
 if bad or len(sys.argv[2]) != 40: print("ExportOptions:", bad, file=sys.stderr); sys.exit(1)
 EOF

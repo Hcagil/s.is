@@ -204,6 +204,10 @@ class Fake(http.server.BaseHTTPRequestHandler):
                                               "attributes": {"capabilityType": c}} for c in st["caps"].get(m.group(1), [])]})
         if key == ("POST", "/v1/bundleIds"):
             a = (raw and json.loads(raw) or {}).get("data", {}).get("attributes", {})
+            if not re.fullmatch(r"[A-Za-z0-9 ]+", a.get("name") or ""):
+                # Apple's answer seen on GitHub to the name "SIS com.esd.sis.notify".
+                return self.reply(409, {"errors": [{"status": "409", "code": "ENTITY_ERROR.ATTRIBUTE.INVALID",
+                                                    "detail": "Please choose a name containing only alphanumeric characters and spaces."}]})
             if a.get("identifier") in bundles.values():
                 return self.reply(409, {"errors": [{"status": "409", "code": "ENTITY_ERROR.ATTRIBUTE.INVALID",
                                                     "detail": "An App ID with Identifier is not available."}]})
@@ -1214,6 +1218,70 @@ class AscSigningTest(unittest.TestCase):
         p = self.ensure()
         self.assertEqual(len(self.posts("/v1/bundleIds")), 1,
                          "com.esd.sis.widget / com.esd.sis taken for com.esd.sis.share: %s" % (p.stdout + p.stderr))
+
+    # ---- ensure --no-group: the notification extension's profile carries no App Group ----
+    def ensure_ng(self):
+        return self.tool("ensure", "--no-group", "com.esd.sis.share", self.SHARE, self.BASE, TZ="JST-9")
+
+    def test_ensure_no_group_keeps_ungrouped_profile(self):
+        self.ensure_state(share_profile="ungrouped", caps=())
+        p = self.ensure_ng()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), [], "--no-group deleted a good profile for lacking the group")
+        self.assertEqual(self.reqs("POST"), [], "--no-group recreated a good profile")
+
+    def test_ensure_no_group_creates_missing_profile_without_app_groups(self):
+        self.ensure_state(share_profile=None, caps=(), created=self.UNGROUPED)
+        p = self.ensure_ng()
+        self.assertEqual(p.returncode, 0, "--no-group refused a profile without the group: %s" % (p.stdout + p.stderr))
+        self.assertNotIn("Nothing was changed", p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), [])
+        self.assertEqual(len(self.posts()), 1, "the missing profile was not created")
+        body = self.posts()[0]["body"]["data"]
+        self.assertEqual(body["attributes"].get("name"), self.SHARE)
+        self.assertEqual(body["relationships"]["bundleId"]["data"]["id"], "BID-SHARE")
+
+    def test_ensure_no_group_replaces_invalid_profile(self):
+        self.ensure_state(share_profile="ungrouped", caps=(), created=self.UNGROUPED)
+        self.srv.state["pattrs"]["P-S"]["profileState"] = "INVALID"
+        p = self.ensure_ng()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), ["/v1/profiles/P-S"], "an INVALID profile was kept under --no-group")
+        self.assertEqual(len(self.posts()), 1)
+
+    def test_ensure_no_group_creates_missing_app_id(self):
+        self.ensure_state(share_profile=None, share_bundle=False, created=self.UNGROUPED)
+        p = self.ensure_ng()
+        self.assertEqual(len(self.posts("/v1/bundleIds")), 1, "the missing App ID was not created: %s" % (p.stdout + p.stderr))
+        self.assertEqual(self.posts("/v1/bundleIds")[0]["body"]["data"]["attributes"].get("identifier"), "com.esd.sis.share")
+
+    def test_ensure_group_is_still_the_default(self):
+        # The same team as test_ensure_no_group_keeps_ungrouped_profile, without the flag: refused, nothing changed.
+        self.ensure_state(share_profile="ungrouped", caps=())
+        p = self.ensure()
+        self.assertNotEqual(p.returncode, 0, "without --no-group a profile lacking the group passed")
+        self.assertEqual(self.deletes(), [])
+        self.assertEqual(self.reqs("POST"), [])
+
+    def test_ensure_notify_app_id_name_is_alphanumeric(self):
+        # Apple refuses App ID names with anything but letters, digits and spaces (409 seen on GitHub).
+        for flags in (["--no-group"], []):
+            self.setUp()
+            self.ensure_state(share_profile=None, share_bundle=False, created=self.UNGROUPED)
+            p = self.tool("ensure", *flags, "com.esd.sis.notify", self.SHARE, self.BASE, TZ="JST-9")
+            made = self.posts("/v1/bundleIds")
+            self.assertEqual(len(made), 1, "%s: the notify App ID was not created: %s" % (flags, p.stdout + p.stderr))
+            a = made[0]["body"]["data"]["attributes"]
+            self.assertRegex(a.get("name") or "", r"\ASIS [A-Za-z0-9 ]*\Z", "%s: App ID name %r" % (flags, a.get("name")))
+            self.assertEqual(a.get("identifier"), "com.esd.sis.notify")
+            self.assertNotIn("alphanumeric", p.stdout + p.stderr)
+
+    def test_ensure_no_group_bad_usage(self):
+        for args in (["ensure", "--no-group"], ["ensure", "--no-group", "com.esd.sis.share", self.SHARE]):
+            self.setUp()
+            p = self.tool(*args)
+            self.assertNotEqual(p.returncode, 0, "%s accepted" % args)
+            self.assertFalse(self.reqs(), "%s made a request" % args)
 
     def test_ensure_bad_usage(self):
         for args in (["ensure"], ["ensure", "com.esd.sis.share", self.SHARE], ["ensure", "--cert-id"],

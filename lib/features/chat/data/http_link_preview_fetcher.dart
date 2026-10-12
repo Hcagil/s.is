@@ -155,7 +155,7 @@ final class HttpLinkPreviewFetcher implements LinkPreviewFetcher {
 
   Future<bool> _allowed(Uri u) async {
     if (u.scheme != 'http' && u.scheme != 'https') return false;
-    final host = u.host.toLowerCase();
+    final host = displayHost(u);
     if (host.isEmpty || host == 'localhost' || host.endsWith('.localhost')) {
       return false;
     }
@@ -197,7 +197,8 @@ bool _private(InternetAddress a) {
       InternetAddress.fromRawAddress(Uint8List.fromList(b.sublist(2, 6))),
     );
   }
-  if (b.sublist(0, 15).every((x) => x == 0) && b[15] <= 1) return true;
+  // ::, ::1 and the old IPv4-compatible form ::a.b.c.d.
+  if (b.sublist(0, 12).every((x) => x == 0)) return true;
   if ((b[0] & 0xfe) == 0xfc) return true;
   if (b[0] == 0xfe && (b[1] & 0xc0) == 0x80) return true;
   if (b[0] == 0xff) return true;
@@ -237,21 +238,54 @@ http.Client linkPreviewHttpClient({
   final inner = HttpClient()
     ..findProxy = ((_) => 'DIRECT')
     ..connectionFactory = (url, proxyHost, proxyPort) async {
-      final addresses = await _publicAddresses(look, url.host);
+      final host = displayHost(url);
+      final addresses = await _publicAddresses(look, host);
       if (addresses == null) {
         throw const SocketException('link target is not a public address');
       }
       final secure = url.scheme == 'https';
-      final task = await Socket.startConnect(
-        addresses.first,
-        url.hasPort ? url.port : (secure ? 443 : 80),
-      );
-      if (!secure) return task;
-      // HttpClient adds no TLS to a custom connection: do it here.
+      // HttpClient adds no TLS to a custom connection: _connectAny does it.
       return ConnectionTask.fromSocket(
-        task.socket.then((s) => SecureSocket.secure(s, host: url.host)),
-        task.cancel,
+        _connectAny(
+          addresses,
+          url.hasPort ? url.port : (secure ? 443 : 80),
+          secure ? host : null,
+        ),
+        () {},
       );
     };
   return IOClient(inner);
+}
+
+/// Connects to the first address that answers (3 s each); for https it then
+/// does the TLS handshake for [tlsHost] within 5 s, so a silent server cannot
+/// hold the connection open.
+Future<Socket> _connectAny(
+  List<InternetAddress> addresses,
+  int port,
+  String? tlsHost,
+) async {
+  Object? last;
+  for (final a in addresses) {
+    try {
+      final s = await Socket.connect(
+        a,
+        port,
+        timeout: const Duration(seconds: 3),
+      );
+      if (tlsHost == null) return s;
+      try {
+        return await SecureSocket.secure(
+          s,
+          host: tlsHost,
+        ).timeout(const Duration(seconds: 5));
+      } catch (_) {
+        s.destroy();
+        rethrow;
+      }
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last ?? const SocketException('no address');
 }

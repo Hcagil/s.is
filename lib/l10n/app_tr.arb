@@ -614,5 +614,17 @@
   "makerCountOf": "{count}/{max}",
   "makerSavedTo": "Kaydedildi: {name}",
   "makerGalleryTitle": "Fotoğraf seç",
-  "makerRecent": "Son eklenenler"
+  "makerRecent": "Son eklenenler",
+  "videoPlayerClose": "Kapat",
+  "videoPlayerDone": "Bitti",
+  "videoPlayerCopy": "Bağlantıyı kopyala",
+  "videoPlayerCopied": "Bağlantı kopyalandı",
+  "videoOpenIn": "{site, select, youtube{YouTube'da aç} instagram{Instagram'da aç} tiktok{TikTok'ta aç} x{X'te aç} other{Tarayıcıda aç}}",
+  "videoPlayerPrivacy": "İzlerken {site} IP adresini ve cihazını görür. Kapatınca SIS çerezlerini siler.",
+  "videoRefusedPrivate": "Bu video gizli.",
+  "videoRefusedDeleted": "Bu video silinmiş.",
+  "videoRefusedRegion": "Bu video bölgende izlenemiyor.",
+  "videoRefusedLogin": "Bu videoyu izlemek için giriş gerekiyor.",
+  "videoRefusedOther": "Video yüklenemedi.",
+  "videoRefusedMore": "SIS içinde oynatılamıyor."
 }

@@ -47,6 +47,10 @@ dependencies:
   url_launcher: ^6.3.2
   video_player: ^2.14.1
   web_socket_channel: ^3.0.3
+  webview_flutter: ^4.14.1
+  # Platform sides, used directly for the sandbox settings of the player.
+  webview_flutter_android: ^4.14.1
+  webview_flutter_wkwebview: ^3.27.0
 
 dev_dependencies:
   flutter_test:
@@ -55,9 +59,10 @@ dev_dependencies:
   # Firebase's own test doubles for its platform side (unit tests only).
   firebase_core_platform_interface: ^8.1.1
   firebase_messaging_platform_interface: ^4.10.0
-  # Test doubles for the Google sign-in and url_launcher platform sides.
+  # Test doubles for the Google sign-in, url_launcher and web view platform sides.
   google_sign_in_platform_interface: ^3.1.0
   url_launcher_platform_interface: ^2.3.2
+  webview_flutter_platform_interface: ^2.15.1
   flutter_launcher_icons: ^0.14.4
 
 flutter:

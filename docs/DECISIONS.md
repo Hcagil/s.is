@@ -2021,3 +2021,36 @@ waveform, sent through the existing upload, offline queue and storage.
 **Consequences.** Android asks for `RECORD_AUDIO` only; iOS gets English and
 Turkish usage strings for the microphone and speech recognition. Played state
 is kept on the phone only.
+
+## 2026-10-11 — Videos from links play inside the chat, in a sandboxed web view
+
+A tap on the play mark of a YouTube, Instagram, TikTok or X link card opens a
+card rising from the bottom (the approved "option B" mock) with the card's own
+picture and a dimmed play mark; the site's official embed loads behind it.
+Nothing contacts the site before that tap.
+
+- Packages: `webview_flutter` 4.14.1 (https://pub.dev/packages/webview_flutter),
+  with `webview_flutter_android` 4.14.1 and `webview_flutter_wkwebview` 3.27.0
+  used directly for the sandbox settings. Support: Android SDK 24+, iOS 13.0+
+  (the app is on 24 and 15). All three are SDK imports, so they live in
+  `data/` only (`tool/check_pattern.sh`). No new permission.
+- Embeds, official forms only: YouTube `youtube-nocookie.com/embed/<id>`
+  (YouTube's no-cookie embed address; it needs a `Referer` of `https://com.esd.sis`, or YouTube
+  answers error 153); Instagram `/p|reel|tv/<code>/embed/`; TikTok
+  `tiktok.com/player/v1/<id>` (its embed player); X
+  `platform.twitter.com/embed/Tweet.html?id=<id>`. Short links (vm.tiktok.com,
+  t.co) have no embed and keep opening outside the app. The rules live in
+  `domain/video_embed.dart` (`videoEmbedFor`, `videoEmbedAllows`).
+- Sandbox: HTTPS only, hosts on a per-site allowlist, any other navigation
+  opens the browser or app and is cancelled, no JavaScript bridge, no file or
+  content access, mixed content never allowed, no permission requests, no
+  zoom, and the cache, local storage and cookies are cleared when the card
+  closes. JavaScript stays on because the embeds need it.
+- A refusal is shown when the page answers 401, 403, 404, 410, 451 or fails to
+  load. With no bridge the app cannot see errors drawn inside the player
+  itself; the site shows its own message there.
+- Picture-in-picture is not built: `webview_flutter` has no support for it and
+  it would need native code on both platforms.
+
+**Consequences.** Cards that were refused show the normal link card with an
+"Open in <site>" row until the app is closed (kept in memory only).

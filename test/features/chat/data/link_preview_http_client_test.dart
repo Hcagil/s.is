@@ -13,6 +13,8 @@
 //   docker compose run -d --name qa-pin-flutter flutter sleep infinity
 //   docker network connect --ip 11.99.0.10 qa-pin qa-pin-flutter
 //   docker exec qa-pin-flutter flutter test <this file>
+// The second-address test needs two such interfaces (add a second network,
+// e.g. 11.98.0.0/24 at 11.98.0.10).
 // Elsewhere they are skipped with that reason, never passed silently.
 import 'dart:async';
 import 'dart:io';
@@ -46,6 +48,12 @@ Future<InternetAddress?> _publicInterface() async {
   }
   return null;
 }
+
+Future<List<InternetAddress>> _publicInterfaces() async => [
+  for (final i in await NetworkInterface.list())
+    for (final a in i.addresses)
+      if (!_special(a)) a,
+];
 
 /// The SNI host name in a TLS ClientHello, or null if it carries none.
 String? _sni(List<int> b) {
@@ -262,6 +270,61 @@ void main() {
         );
         expect(served, 0);
       },
+    );
+
+    test('when the first checked address does not answer, the second one '
+        'is tried, and only checked addresses are used', () async {
+      final all = await _publicInterfaces();
+      if (all.length < 2) {
+        return markTestSkipped(
+          'needs two non-private interface addresses; see the recipe at the top',
+        );
+      }
+      final server = await HttpServer.bind(all[1], 0);
+      server.listen((r) {
+        r.response
+          ..write('second')
+          ..close();
+      });
+      addTearDown(() => server.close(force: true));
+      // Nothing listens on that port at the first address: refused at once.
+      final client = linkPreviewHttpClient(
+        lookup: answering((_) => [all[0], all[1]]),
+      );
+      addTearDown(client.close);
+      final res = await client.get(
+        Uri.parse('http://nowhere.invalid:${server.port}/'),
+      );
+      expect(res.body, 'second');
+      expect(asked, ['nowhere.invalid']);
+    });
+
+    test(
+      'a TLS handshake that never answers gives up after about 5 s',
+      () async {
+        if (skipReason() case final r?) return markTestSkipped(r);
+        final server = await ServerSocket.bind(public!, 0);
+        final held = <Socket>[];
+        server.listen(held.add); // accepts, then says nothing
+        addTearDown(() async {
+          for (final s in held) {
+            s.destroy();
+          }
+          await server.close();
+        });
+        final client = linkPreviewHttpClient(
+          lookup: answering((_) => [public!]),
+        );
+        addTearDown(client.close);
+        final watch = Stopwatch()..start();
+        await expectLater(
+          client.get(Uri.parse('https://pin.example:${server.port}/')),
+          throwsA(anything),
+        );
+        expect(watch.elapsed, greaterThan(const Duration(milliseconds: 4500)));
+        expect(watch.elapsed, lessThan(const Duration(milliseconds: 7000)));
+      },
+      timeout: const Timeout(Duration(seconds: 30)),
     );
   });
 }

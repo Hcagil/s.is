@@ -125,6 +125,15 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     afterwards cannot redirect it. The whole fetch is capped at 9 s, the
     page at 300000 bytes, the picture at 3000000 bytes and 16 megapixels
     (checked before decoding). Readers see the site only if they tap the card.
+    The card's url must appear in the body as a whole link (after the start,
+    whitespace, a bracket or a quote; before whitespace, the end or closing
+    punctuation), not inside a longer word or address. Addresses of the form
+    `::a.b.c.d` are refused like `::` and `::1`; an international host name is
+    looked up and checked in its ASCII (punycode) form; each resolved address
+    is tried in turn (3 s each) and the TLS handshake has its own 5 s limit.
+    The video player loads only the official embed of YouTube, Instagram,
+    TikTok or X in a sandboxed web view, and only after the tap (see
+    `docs/DECISIONS.md`, 2026-10-11).
   - `profiles` rows are readable only for an allowlisted account that is the
     caller, shares a conversation with the caller, or is a contact the
     caller saved; a tag find alone does not open the row (`find_by_tag`
@@ -419,6 +428,10 @@ signs a short-lived action token into the push and `notification-action`
 - A request over 20000 bytes or a reply over 4000 characters is refused (400)
   before the database; every refused ticket is 403, a missing token 400.
 - Lock-screen Reply: decided 2026-10-06 (owner). Reply requires an unlocked phone on Android 12+ (the system enforces it, `setAuthenticationRequired`) and iOS. On Android 11 and older (API below 31) the system cannot enforce it, so a notification drawn natively (`InstantPush`) omits Reply whenever the phone has a secure lock (`KeyguardManager.isDeviceSecure`), locked or not; the check is made when the notification is drawn, so a lock set afterwards applies from the next one. Mark as read stays on every version. Limit: on those versions a phone with a PIN, pattern or password loses Reply in the shade too, because the app cannot tell when the phone locks; a phone with no secure lock (no PIN, pattern or password) keeps Reply below API 31. As a second guard, `NotificationActionReceiver` refuses a Reply on API below 31 while `KeyguardManager.isDeviceLocked` is true (nothing is sent, the "not sent" line shows), which covers a notification drawn by an older build or before a lock was set (finding L1) (the screen-off and user-present broadcasts cannot be declared in the manifest, and a lock-screen-only version of the notification does not hold when the user shows all content on the lock screen). Native `InstantPush` is the only drawer of chat notifications on Android; the Dart handler only keeps the delivery receipt. Therefore, on Android 12+, Reply is behind the unlock for every push, high-priority ones included; there is no Dart-drawn Reply and no `sis.reply_offered` preference. The Android receiver draws on one background thread under `goAsync`, so pacing never blocks the main thread. iOS buttons are drawn by `AppDelegate.swift` (Reply carries `.authenticationRequired`); the Dart side adds no iOS buttons.
+
+### Notification picture link
+
+A photo or video push carries a signed link (600 s) to the small `.t` picture. It is a bearer link: whoever holds it can read that one picture until it expires, without an active session. This is an accepted exception to the active-session rule: the link goes only to recipients `push_targets` chose, is never logged, and deleting the message removes the `.t` object, which ends the link. Both phones fetch it only over https, only from the host of the push's own action link (our Supabase host), without following redirects, and only while a member is signed in (Android).
 
 ### Group name colour slot (finding L1)
 

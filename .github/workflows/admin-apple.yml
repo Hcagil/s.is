@@ -43,9 +43,10 @@ jobs:
           set -eu -o pipefail
           printf '%s' "$JOB_ID" | grep -Eqi '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' || { echo 'job_id is not a uuid' >&2; exit 1; }
 
+          tok=$(curl -sS --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sis-admin-apple" | jq -r .value)
+          echo "::add-mask::$tok"
+
           report() {
-            tok=$(curl -sS --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sis-admin-apple" | jq -r .value)
-            echo "::add-mask::$tok"
             curl -sS --fail -X POST -H "Authorization: Bearer $tok" -H 'content-type: application/json' -d "$1" "$SUPABASE_URL/functions/v1/admin-apple-report"
           }
 

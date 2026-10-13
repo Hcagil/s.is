@@ -17,6 +17,7 @@
 //   502 jwks                                 JWKS fetch failed
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { type Jwks, OIDC_JWKS_URL, verifyGithubOidc } from '../_shared/github_oidc.ts';
+import { unb64url } from '../_shared/action_token.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -25,6 +26,33 @@ const reply = (status: number, body: Record<string, unknown>) =>
     status,
     headers: { 'content-type': 'application/json' },
   });
+
+let jwksCache: { jwks: Jwks; at: number } | null = null;
+let lastRefetch = 0;
+const JWKS_TTL = 10 * 60_000;
+const RETRY_GAP = 60_000;
+
+const fetchJwks = async (): Promise<Jwks | null> => {
+  try {
+    const res = await fetch(OIDC_JWKS_URL, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+};
+
+// Returns the token's kid when it is three dot-separated parts with an RS256 header and a kid.
+const tokenKid = (token: string): string | null => {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const h = JSON.parse(new TextDecoder().decode(unb64url(parts[0])));
+    return h?.alg === 'RS256' && typeof h.kid === 'string' && h.kid ? h.kid : null;
+  } catch {
+    return null;
+  }
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return reply(405, { error: 'method' });
@@ -47,14 +75,20 @@ Deno.serve(async (req: Request) => {
   }
   const token = authHeader.substring(7);
 
-  let jwks: Jwks;
-  try {
-    const res = await fetch(OIDC_JWKS_URL, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return reply(502, { error: 'jwks' });
-    jwks = await res.json();
-  } catch {
-    return reply(502, { error: 'jwks' });
+  const kid = tokenKid(token);
+  if (!kid) return reply(403, { error: 'not_permitted' });
+  const now = Date.now();
+  if (!jwksCache || now - jwksCache.at > JWKS_TTL) {
+    const j = await fetchJwks();
+    if (!j) return reply(502, { error: 'jwks' });
+    jwksCache = { jwks: j, at: now };
+    lastRefetch = now;
+  } else if (!jwksCache.jwks.keys.some((k) => k.kid === kid) && now - lastRefetch >= RETRY_GAP) {
+    lastRefetch = now;
+    const j = await fetchJwks();
+    if (j) jwksCache = { jwks: j, at: now };
   }
+  const jwks = jwksCache.jwks;
 
   const expected = {
     audience: 'sis-admin-apple',

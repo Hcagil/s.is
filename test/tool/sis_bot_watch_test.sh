@@ -37,7 +37,8 @@ same() {  # NAME WANT GOT
 }
 
 # The fake sis_bot.sh. Every call is logged as "<epoch> <args>". `status`
-# prints user=<bot id>. `read` exit codes come one per read call from
+# prints "ok user=<bot id> session active", exactly as the real one. `read`
+# exit codes come one per read call from
 # $FAKE/exits (missing line: 0). Mailbox lines are "<epoch> <raw line>"; a read
 # prints the raw lines whose epoch is after --since.
 cat >"$FAKE/sis_bot.sh" <<'EOF'
@@ -46,7 +47,7 @@ set -euo pipefail
 d=$(dirname "$0")
 printf '%s %s\n' "$(date +%s.%N)" "$*" >>"$d/calls"
 sleep 0.2
-if [ "$*" = status ]; then echo "user=$FAKE_BOT_ID"; exit 0; fi
+if [ "$*" = status ]; then echo "ok user=$FAKE_BOT_ID session active"; exit 0; fi  # as tool/sis_bot.sh prints it
 n=$(grep -c ' read ' "$d/calls")
 code=$(sed -n "${n}p" "$d/exits" 2>/dev/null); code=${code:-0}
 if [ "$code" != 0 ]; then
@@ -105,7 +106,7 @@ if fence: out.append('UNCLOSED')
 print('\n'.join(out))
 EOF
 }
-hex() { printf '%s' "$1" | od -An -tx1 | tr -d ' \n'; }
+hex() { printf '%s' "$1" | od -v -An -tx1 | tr -d ' \n'; }
 entry() {  # CREATED_AT SENDER CONV BODY -> the expected inbox_view lines
   printf '## %s — %s\nconversation: %s\nB %s\n' "$1" "$2" "$3" "$(hex "$4")"
 }
@@ -203,6 +204,14 @@ same "both good ones are appended" "$WANT" "$(inbox_view)"
 same "the marker moves to the newest good one" "$(ts $((base+13)))" "$(cat "$SEEN")"
 run 3 "" 100
 same "the next check appends nothing twice" "$WANT" "$(inbox_view)"
+# the newest line malformed: reported once, not again every round
+printf '%s500000000 %s\n' $((base+13)) '{"id":"broken-last", "body": "cut off' >>"$FAKE/mailbox"
+run 3 "" 100
+same "a malformed newest line is reported" "watch: skipped a bad line" "$(cat "$BOX/out")"
+run 3 "" 100
+same "and not again on the next round" "" "$(cat "$BOX/out")"
+same "nothing was appended for it" "$WANT" "$(inbox_view)"
+sed -i '/broken-last/d' "$FAKE/mailbox"  # keep later sections independent of this one
 
 # 8 a failing read: one line per exit code, no error text, nothing moves ----------
 fails() {  # CODE LINE

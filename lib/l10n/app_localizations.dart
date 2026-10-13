@@ -3461,19 +3461,19 @@ abstract class AppLocalizations {
   /// Shown while background removal is being prepared
   ///
   /// In en, this message translates to:
-  /// **'Preparing cut-out…'**
+  /// **'Removing background…'**
   String get makerCutoutPreparing;
 
   /// Notice when background removal failed or timed out
   ///
   /// In en, this message translates to:
-  /// **'Can\'t remove the background now. Whole photo kept.'**
+  /// **'Couldn\'t remove the background right now. Your image stays as it is.'**
   String get makerCutoutUnavailable;
 
   /// Notice when the phone has no background removal
   ///
   /// In en, this message translates to:
-  /// **'This phone can\'t remove backgrounds. Whole photo kept.'**
+  /// **'This phone can\'t remove backgrounds. Your image stays as it is.'**
   String get makerCutoutNoSupport;
 
   /// Title of the sticker editor

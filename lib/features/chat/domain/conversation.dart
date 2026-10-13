@@ -222,7 +222,7 @@ final class Conversation {
     'avatarPath': avatarPath,
     'hasLeft': hasLeft,
     'isSystem': isSystem,
-    'isAdminChat': isAdminChat,
+    if (isAdminChat) 'isAdminChat': true,
     'senders': {for (final e in senders.entries) e.key: e.value.toJson()},
     'settings': settings.toJson(),
     // Written only when true: the saved list the native side reads keeps its

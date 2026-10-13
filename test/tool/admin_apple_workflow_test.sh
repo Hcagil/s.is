@@ -2,10 +2,14 @@
 # Static checks on the admin Apple path's workflows (the repo is PUBLIC, so
 # what a workflow may print, take as input or be granted is checked as text):
 #   admin-apple.yml  workflow_dispatch only; one input job_id, uuid-checked and
-#                    passed through env; permissions id-token: write only;
+#                    passed through env; permissions exactly id-token: write
+#                    and contents: read;
 #                    ::add-mask:: of the email before any other output; the
 #                    email never in argv; no step summary, artifacts or set -x.
-#   release.yml      refuses a head_sha that is not the live origin/main tip;
+#   release.yml      a first attempt always proceeds; a re-run (run_attempt
+#                    >= 2) is refused unless head_sha is the live main tip
+#                    (an empty tip refuses); the step's script is RUN here
+#                    against a stubbed git;
 #                    deploys admin-apple and admin-apple-report; creates the
 #                    vault secret admin_apple_url in `where not exists` form.
 #   ios-signing-bootstrap.yml  its job runs behind environment apple-signing.
@@ -44,20 +48,30 @@ a3() {
   ! grep -E 'inputs\.job_id' "$F" | grep -vqE '^\s*[A-Z_][A-Z0-9_]*:\s*\$\{\{\s*(github\.event\.)?inputs\.job_id\s*\}\}\s*$'
 }
 a4() {
+  # every permissions block holds exactly id-token: write and contents: read
   awk '
     function ind(s) { match(s, /^ */); return RLENGTH }
+    function close_block() { if (inb && keys != "contents: read|id-token: write|") bad = 1; inb = 0 }
     /^[[:space:]]*permissions:/ {
-      blocks++; inb = 1; base = ind($0)
+      close_block()
+      blocks++; inb = 1; base = ind($0); keys = ""; n = 0
       rest = $0; sub(/^[[:space:]]*permissions:[[:space:]]*/, "", rest)
       if (rest != "" && rest !~ /^#/) bad = 1   # inline form (write-all, {...})
       next
     }
     inb {
       if ($0 ~ /^[ \t]*(#.*)?$/) next
-      if (ind($0) <= base) { inb = 0 }
-      else { if ($0 !~ /^[[:space:]]*id-token:[[:space:]]*write[[:space:]]*$/) bad = 1; next }
+      if (ind($0) <= base) { close_block() }
+      else {
+        l = $0; sub(/^[[:space:]]+/, "", l); sub(/[[:space:]]*(#.*)?$/, "", l)
+        line[n++] = l
+        # keys in sorted order: insertion sort of the few lines
+        keys = ""; for (i = 0; i < n; i++) for (j = i + 1; j < n; j++) if (line[j] < line[i]) { t = line[i]; line[i] = line[j]; line[j] = t }
+        for (i = 0; i < n; i++) keys = keys line[i] "|"
+        next
+      }
     }
-    END { exit !(blocks >= 1 && !bad) }' "$F"
+    END { close_block(); exit !(blocks >= 1 && !bad) }' "$F"
 }
 a5() {
   local e m
@@ -83,6 +97,37 @@ r1() {
     /exit 1/ { ex = 1 }
     END { if (hit && ex) found = 1; exit !(found && live) }' "$R"
 }
+# The tip-check step's script, run with a stubbed `git ls-remote` printing $TIP.
+tip_script() {
+  awk '
+    function ind(s) { match(s, /^ */); return RLENGTH }
+    /^[[:space:]]*- name:/ { instep = ($0 ~ /tip of main/) }
+    instep && /^[[:space:]]*run:[[:space:]]*\|/ { inr = 1; base = ind($0); next }
+    inr { if ($0 !~ /^[[:space:]]*$/ && ind($0) <= base) { inr = 0; instep = 0 } else print }' "$R"
+}
+tip_run() {  # tip_run ATTEMPT TIP HEAD -> the step's exit status
+  local d rc
+  d=$(mktemp -d)
+  printf '#!/bin/sh\n[ -n "$TIP" ] && printf "%%s\\trefs/heads/main\\n" "$TIP"\nexit 0\n' > "$d/git"
+  chmod +x "$d/git"
+  tip_script > "$d/step.sh"
+  [ -s "$d/step.sh" ] || { echo "no tip-check script found" >&2; return 99; }
+  PATH="$d:$PATH" TIP=$2 RUN_ATTEMPT=$1 HEAD_SHA=$3 GITHUB_REPOSITORY=o/r bash -e "$d/step.sh" >/dev/null 2>&1
+  rc=$?
+  rm -f "$d/git" "$d/step.sh"; rmdir "$d"
+  return $rc
+}
+r1b() {
+  grep -qE 'RUN_ATTEMPT:[[:space:]]*\$\{\{[[:space:]]*github\.run_attempt[[:space:]]*\}\}' "$R" || return 1
+  local a=aaaaaaa b=bbbbbbb
+  tip_run 1 "$b" "$a" || return 1          # a first attempt always proceeds
+  tip_run 1 "" "$a" || return 1            # ... even when the tip cannot be read
+  tip_run 2 "$a" "$a" || return 1          # a re-run of the live tip proceeds
+  ! tip_run 2 "$b" "$a" || return 1        # a re-run of an older commit is refused
+  ! tip_run 3 "$b" "$a" || return 1
+  ! tip_run 2 "" "$a" || return 1          # a re-run with no readable tip is refused
+  ! tip_run 2 "" ""                        # ... even if head_sha came through empty
+}
 r2() { grep -qE 'functions deploy admin-apple( |$)' "$R" && grep -qE 'functions deploy admin-apple-report( |$)' "$R"; }
 r3() {
   # the create and its not-exists guard on the same name, in one statement
@@ -97,11 +142,12 @@ b1() { grep -qE '^\s+environment:\s*apple-signing\s*$' "$B" ||
 check "A1 admin-apple: workflow_dispatch is the only trigger" a1
 check "A2 admin-apple: job_id is the only input" a2
 check "A3 admin-apple: job_id regex-checked, read only through env" a3
-check "A4 admin-apple: permissions id-token: write only" a4
+check "A4 admin-apple: permissions exactly id-token: write, contents: read" a4
 check "A5 admin-apple: ::add-mask:: of the email before any other output" a5
 check "A6 admin-apple: email only via TESTER_EMAIL env, never argv" a6
 check "A7 admin-apple: no step summary, artifacts or xtrace" a7
 check "R1 release: refuses a head_sha that is not the live main tip" r1
+check "R1b release: first attempt proceeds; a re-run only for the live tip" r1b
 check "R2 release: deploys admin-apple and admin-apple-report" r2
 check "R3 release: vault admin_apple_url created where not exists" r3
 check "B1 bootstrap: job behind environment apple-signing" b1

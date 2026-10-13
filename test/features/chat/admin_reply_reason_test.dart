@@ -1,6 +1,7 @@
 // AdminReplyBubble: a failed Apple step (k = fail / failRm) names its reason
 // code r in words -- timeout, rejected and dispatch map to their own strings
-// in English and Turkish; any other code is shown as it came.
+// in English and Turkish; any other code is shown as it came. The reply also
+// names the masked email e it came with (adminFail(email, reason)).
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -35,6 +36,7 @@ class RecordingAdminRepo implements AdminChatRepository {
 }
 
 const bot = '00000000-0000-0000-0000-00000000ad41';
+const masked = 'p***@m***.test';
 Message adminMsg(Map<String, dynamic> m, {String id = 'card-1'}) => Message(
   id: id,
   conversationId: 'admin-conv',
@@ -92,9 +94,10 @@ void main() {
         final reasons = ['timeout', 'rejected', 'dispatch'];
         for (final k in kinds) {
           for (final r in reasons) {
-            await pump(tester, {'k': k, 'r': r}, locale: locale);
+            await pump(tester, {'k': k, 'r': r, 'e': masked}, locale: locale);
             final expected = k == 'fail'
                 ? l.adminFail(
+                    masked,
                     r == 'timeout'
                         ? l.adminReasonTimeout
                         : r == 'rejected'
@@ -102,6 +105,7 @@ void main() {
                         : l.adminReasonDispatch,
                   )
                 : l.adminFailRm(
+                    masked,
                     r == 'timeout'
                         ? l.adminReasonTimeout
                         : r == 'rejected'
@@ -109,6 +113,7 @@ void main() {
                         : l.adminReasonDispatch,
                   );
             expect(screenText(tester), contains(expected), reason: '$k/$r');
+            expect(screenText(tester), contains(masked), reason: '$k/$r');
           }
         }
       });
@@ -116,10 +121,14 @@ void main() {
       testWidgets('weird-code shows raw code', (tester) async {
         final kinds = ['fail', 'failRm'];
         for (final k in kinds) {
-          await pump(tester, {'k': k, 'r': 'weird-code'}, locale: locale);
+          await pump(tester, {
+            'k': k,
+            'r': 'weird-code',
+            'e': masked,
+          }, locale: locale);
           final expected = k == 'fail'
-              ? l.adminFail('weird-code')
-              : l.adminFailRm('weird-code');
+              ? l.adminFail(masked, 'weird-code')
+              : l.adminFailRm(masked, 'weird-code');
           expect(
             screenText(tester),
             contains(expected),
@@ -131,8 +140,15 @@ void main() {
       testWidgets('fail with timeout does not show raw timeout', (
         tester,
       ) async {
-        await pump(tester, {'k': 'fail', 'r': 'timeout'}, locale: locale);
-        expect(screenText(tester), isNot(contains(l.adminFail('timeout'))));
+        await pump(tester, {
+          'k': 'fail',
+          'r': 'timeout',
+          'e': masked,
+        }, locale: locale);
+        expect(
+          screenText(tester),
+          isNot(contains(l.adminFail(masked, 'timeout'))),
+        );
       });
     });
   }

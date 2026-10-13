@@ -1,5 +1,5 @@
 begin;
-select plan(79);
+select plan(86);
 
 -- Admin chat, slice 2 (step 15): the Apple/TestFlight job lifecycle.
 -- Written from the contract, not from the migration:
@@ -60,12 +60,12 @@ create temp table adm as select id from public.conversations where admin_chat;
 grant select on adm to authenticated;
 select is((select count(*) from adm), 1::bigint, 'fixture: one admin conversation');
 
--- New replies from the system account since the last call: [{k, r, push, txt}].
+-- New replies from the system account since the last call: [{id, k, r, e, push, txt}].
 create temp table seen(id uuid primary key);
 create function fresh() returns jsonb language plpgsql as $$
 declare r jsonb;
 begin
-  select coalesce(jsonb_agg(jsonb_build_object('k', m.admin_msg->>'k', 'r', m.admin_msg->>'r',
+  select coalesce(jsonb_agg(jsonb_build_object('id', m.id, 'k', m.admin_msg->>'k', 'r', m.admin_msg->>'r', 'e', m.admin_msg->>'e',
            'push', m.admin_push, 'txt', lower(coalesce(m.body, '') || ' ' || coalesce(m.admin_msg::text, '')))
            order by m.created_at), '[]') into r
     from public.messages m
@@ -192,6 +192,9 @@ select is(jsonb_array_length((select v from rep where name = 'df')), 1, 'it post
 select ok((select v @> '[{"k":"fail","r":"dispatch","push":true}]' from rep where name = 'df'),
           'k = fail, r = dispatch, flagged admin_push');
 select is((select position('posted@mail.test' in v::text) from rep where name = 'df'), 0, 'the reply holds no raw email');
+select ok((select v @> '[{"e":"p***@m***.test"}]' from rep where name = 'df'), 'it carries the masked email as e');
+select ok((select v->0->>'txt' like '%apple step failed for p***@m***.test:%' from rep where name = 'df'),
+          'and its text names the masked email');
 select is(svc(format('select public.admin_job_claim(%L, 101)::text', (select id from j where name = 'posted'))), 'null',
           'a failed job cannot be claimed');
 
@@ -262,6 +265,12 @@ select svc(format('select public.admin_job_finish(%L, 301, true, null)::text', (
 select ok(fresh() @> '[{"k":"r3"}]', 'a remove success posts r3');
 select is(st((select id from j where name = 'rm1')), 'ok:-:null:closed', 'and ends ok with the email nulled');
 
+-- The escalation push: notify_new_message posts the message id to the push
+-- function, which reads that message; so the pushed content is the reply above.
+select vault.create_secret(v.url, v.n)
+  from (values ('https://aj-test.local/notify', 'notify_on_message_url')) v(url, n)
+ where v.n not in (select name from vault.secrets);
+create temp table q1 as select coalesce(max(id), 0) as n from net.http_request_queue;
 insert into j values ('add2', job('add', 'add2@mail.test'));
 select svc(format('select public.admin_job_claim(%L, 401)::text', (select id from j where name = 'add2')));
 select fresh();
@@ -272,13 +281,26 @@ select is(jsonb_array_length((select v from rep where name = 'fail')), 1, 'a fai
 select ok((select v @> '[{"k":"fail","r":"rejected","push":true}]' from rep where name = 'fail'),
           'k = fail, r = rejected, flagged admin_push');
 select is((select position('add2@mail.test' in v::text) from rep where name = 'fail'), 0, 'it holds no raw email');
+select ok((select v @> '[{"e":"a***@m***.test"}]' from rep where name = 'fail'), 'it carries the masked email as e');
+select ok((select v->0->>'txt' like '%apple step failed for a***@m***.test: %' from rep where name = 'fail'),
+          'and its text (what the push shows) names the masked email');
+select is((select count(*) from net.http_request_queue
+            where id > (select n from q1)
+              and convert_from(body, 'utf8')::jsonb = jsonb_build_object('record', jsonb_build_object('id', (select v->0->>'id' from rep where name = 'fail')))),
+          1::bigint, 'the failure is pushed: one post carrying only its message id');
+select is((select count(*) from net.http_request_queue
+            where id > (select n from q1) and position('add2@mail.test' in convert_from(body, 'utf8')) > 0),
+          0::bigint, 'no push request carries the raw email');
 
 insert into j values ('rm2', job('remove', 'rm2@mail.test'));
 select svc(format('select public.admin_job_claim(%L, 402)::text', (select id from j where name = 'rm2')));
 select fresh();
 select svc(format('select public.admin_job_finish(%L, 402, false, %L)::text', (select id from j where name = 'rm2'), 'dispatch'));
 select is(st((select id from j where name = 'rm2')), 'failed:dispatch:null:closed', 'reason dispatch is kept');
-select ok(fresh() @> '[{"k":"failRm","r":"dispatch","push":true}]', 'a remove failure posts failRm, pushed');
+insert into rep select 'failrm', fresh();
+select ok((select v @> '[{"k":"failRm","r":"dispatch","push":true,"e":"r***@m***.test"}]' from rep where name = 'failrm'),
+          'a remove failure posts failRm with the masked email, pushed');
+select is((select position('rm2@mail.test' in v::text) from rep where name = 'failrm'), 0, 'and no raw email');
 
 insert into j values ('add3', job('add', 'add3@mail.test'));
 select svc(format('select public.admin_job_claim(%L, 403)::text', (select id from j where name = 'add3')));

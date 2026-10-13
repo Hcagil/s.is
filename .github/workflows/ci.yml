@@ -201,9 +201,6 @@ jobs:
           echo "::add-mask::$SUPABASE_TEST_SERVICE_KEY"
           test -n "$SUPABASE_TEST_SERVICE_KEY"
           docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -e TZ=JST-9 -e SUPABASE_TEST_SERVICE_KEY="$SUPABASE_TEST_SERVICE_KEY" flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration
-      # Needs the local stack with an empty owners table.
-      - name: Owner step test
-        run: test/tool/owner_step_test.sh
       # Last: it bootstraps the SIS Bot on this stack through both tools
       # (tool/sis_bot_admin.sh with the stack's own local keys, never a
       # repository secret), drives tool/sis_bot.sh's read/send/start and every

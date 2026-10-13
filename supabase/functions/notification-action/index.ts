@@ -66,6 +66,10 @@ Deno.serve(async (req: Request) => {
   }
 
   const db = createClient(Deno.env.get('SUPABASE_URL')!, key);
+
+  // The admin chat takes no notification action: never a reply, never a read mark.
+  const { data: chat } = await db.from('conversations').select('admin_chat').eq('id', conversation).maybeSingle();
+  if (chat?.admin_chat) return reply(403, { error: 'not_permitted' });
   const { error } = await db.rpc('notification_action', {
     p_user: claims.u,
     p_device: claims.d,

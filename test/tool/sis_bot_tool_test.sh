@@ -9,7 +9,8 @@
 # token rotating on every run and the old one refused after the reuse
 # interval; two parallel runs; exit 2 (usage, mode 644, foreign owner), 3 (missing file,
 # busy lock, superseded by a second sign-in, revoked), 4 (unlisted chat,
-# unlisted user, OFF), 5 (rate limited); revoke; the sign-up hook refusing a
+# unlisted user, OFF), 5 (rate limited); two parallel first sends to
+# one user giving one AI line and one intro record; revoke; the sign-up hook refusing a
 # public sign-up of the bot address; and probes with the bot's REAL JWT of
 # storage, avatars, profile update, add_members, set_admin and Realtime; admin
 # rename (trim, 1-80 characters, exact quotes/backslashes, no bot -> exit 1).
@@ -198,9 +199,10 @@ expect_exit 0 "send from stdin" bash -c "printf 'piped body' | '$BOT' send '$DEB
 check "the stdin body arrived" \
   test "$(sql "select count(*) from public.messages where sender_id = '$BOT_ID' and body = 'piped body'")" = 1
 expect_exit 0 "start a 1:1 with a listed contact by id" "$BOT" start "$DAN" "hi dan"
-check "the 1:1 with dan exists with the greeting" \
+INTRO='Merhaba, ben SIS Destek, bir yapay zekâ asistanıyım. Mesajlarımı yapay zekâ yazar.'
+check "the 1:1 with dan exists with the greeting, after the AI line (first message to dan)" \
   test "$(sql "select count(*) from public.messages m join public.conversations c on c.id = m.conversation_id
-              where m.sender_id = '$BOT_ID' and m.body = 'hi dan' and c.direct_key like '%$DAN%'")" = 1
+              where m.sender_id = '$BOT_ID' and m.body = '$INTRO' || E'\\n\\n' || 'hi dan' and c.direct_key like '%$DAN%'")" = 1
 BOB_TAG=$(sql "select tag from public.profiles where user_id = '$BOB'")
 expect_exit 0 "start a 1:1 with a listed contact by @tag" "$BOT" start "@$BOB_TAG" "hi bob"
 
@@ -299,6 +301,42 @@ if "${COMPOSE[@]}" run --rm flutter flutter test --run-skipped --tags sis_bot_pr
 else
   bad "probe: Realtime: $(grep -E 'Expected|Actual|reason|Failed|Error' "$BOX/rt" | head -8 | tr '\n' ' ')"
 fi
+
+# 12a two parallel first sends to one user: exactly one AI line, one record -------------
+# eve starts a 1:1 with the bot; the bot then sends twice at once with its REAL JWT.
+# A psql session holds the 1:1's row FOR UPDATE, so each insert runs its BEFORE
+# triggers and then waits on the foreign-key check: both decide "first message
+# or not" before either commits. Both must be seen waiting, or it was no race.
+sql "insert into app_private.allowlist(email) values ('eve@$DOM')" >/dev/null
+EVE=$(create_user "eve@$DOM" Eve)
+sql "insert into app_private.bot_contacts(bot_id, contact_id) values ('$BOT_ID', '$EVE');
+     delete from app_private.bot_actions where bot_id = '$BOT_ID'" >/dev/null
+EVE_JWT=$(token_for "eve@$DOM")
+EB=$(rpc "$EVE_JWT" start_direct_conversation "{\"other_user\":\"$BOT_ID\"}" | jq -r .)
+[[ $EB =~ ^[0-9a-f-]{36}$ ]] || { echo "fixture 1:1 with eve failed: $EB"; exit 1; }
+bot_post() {  # body -> HTTP code in $BOX/par_<body>
+  curl -sS -o /dev/null -w '%{http_code}' -X POST "$SIS_URL/rest/v1/messages" -H "apikey: $SIS_ANON_KEY" \
+    -H "Authorization: Bearer $BOT_JWT" -H 'content-type: application/json' \
+    -d "{\"conversation_id\":\"$EB\",\"sender_id\":\"$BOT_ID\",\"body\":\"$1\"}" >"$BOX/par_$1"
+}
+sql "select 1 from public.conversations where id = '$EB' for update; select pg_sleep(4)" >/dev/null & holder=$!
+sleep 1
+bot_post race1 & pa=$!; bot_post race2 & pb=$!
+sleep 2
+waiting=$(sql "select count(*) from pg_stat_activity where wait_event_type = 'Lock'
+               and query ilike '%insert into%messages%' and query not ilike '%pg_stat_activity%'")
+wait "$pa" || true; wait "$pb" || true; wait "$holder" || true
+check "both parallel first sends were in flight at once ($waiting waiting)" test "$waiting" = 2
+check "both parallel first sends succeed ($(cat "$BOX/par_race1"), $(cat "$BOX/par_race2"))" \
+  test "$(cat "$BOX/par_race1")$(cat "$BOX/par_race2")" = 201201
+check "exactly one of them carries the AI line" \
+  test "$(sql "select count(*) from public.messages where conversation_id = '$EB' and sender_id = '$BOT_ID'
+              and body in ('$INTRO' || E'\\n\\n' || 'race1', '$INTRO' || E'\\n\\n' || 'race2')")" = 1
+check "and the other is stored unchanged" \
+  test "$(sql "select count(*) from public.messages where conversation_id = '$EB' and sender_id = '$BOT_ID'
+              and body in ('race1', 'race2')")" = 1
+check "one intro record for (bot, eve)" \
+  test "$(sql "select count(*) from app_private.bot_intro_sent where bot_id = '$BOT_ID' and user_id = '$EVE'")" = 1
 
 # 12b admin rename: trims, 1-80 characters, stored exactly; the bot still cannot --------
 name_is() { test "$(sql "select display_name from public.profiles where user_id = '$BOT_ID'")" = "$1"; }

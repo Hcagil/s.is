@@ -9,7 +9,9 @@
 # token rotating on every run and the old one refused after the reuse
 # interval; two parallel runs; exit 2 (usage, mode 644, foreign owner), 3 (missing file,
 # busy lock, superseded by a second sign-in, revoked), 4 (unlisted chat,
-# unlisted user, OFF), 5 (rate limited); revoke; the sign-up hook refusing a
+# unlisted user, OFF), 5 (rate limited); two parallel first sends to
+# one user, and in one group, giving one AI line and one intro record; the
+# bot's first Debug message carrying the line and its second not; revoke; the sign-up hook refusing a
 # public sign-up of the bot address; and probes with the bot's REAL JWT of
 # storage, avatars, profile update, add_members, set_admin and Realtime; admin
 # rename (trim, 1-80 characters, exact quotes/backslashes, no bot -> exit 1).
@@ -191,16 +193,20 @@ check "read prints Debug's message as JSON lines" \
   bash -c "grep -q 'hello from ann' '$BOX/out' && grep -v '^\$' '$BOX/out' | jq -e . >/dev/null"
 t1=$(jq -r .refresh_token "$STATE")
 check "each run rotates the refresh token" test "$t0" != "$t1"
+INTRO='Merhaba, ben SIS Destek, bir yapay zekâ asistanıyım. Mesajlarımı yapay zekâ yazar.'
 expect_exit 0 "send to Debug" "$BOT" send "$DEBUG" "hello from the bot"
-check "the message is in Debug, from the bot" \
-  test "$(sql "select count(*) from public.messages where conversation_id = '$DEBUG' and sender_id = '$BOT_ID' and body = 'hello from the bot'")" = 1
+check "the message is in Debug, from the bot, after the AI line (the bot's first in Debug)" \
+  test "$(sql "select count(*) from public.messages where conversation_id = '$DEBUG' and sender_id = '$BOT_ID'
+              and body = '$INTRO' || E'\\n\\n' || 'hello from the bot'")" = 1
 expect_exit 0 "send from stdin" bash -c "printf 'piped body' | '$BOT' send '$DEBUG' -"
-check "the stdin body arrived" \
+check "the stdin body arrived unchanged (the bot's second in Debug)" \
   test "$(sql "select count(*) from public.messages where sender_id = '$BOT_ID' and body = 'piped body'")" = 1
+check "one group intro record for (bot, Debug)" \
+  test "$(sql "select count(*) from app_private.bot_group_intro_sent where bot_id = '$BOT_ID' and conversation_id = '$DEBUG'")" = 1
 expect_exit 0 "start a 1:1 with a listed contact by id" "$BOT" start "$DAN" "hi dan"
-check "the 1:1 with dan exists with the greeting" \
+check "the 1:1 with dan exists with the greeting, after the AI line (first message to dan)" \
   test "$(sql "select count(*) from public.messages m join public.conversations c on c.id = m.conversation_id
-              where m.sender_id = '$BOT_ID' and m.body = 'hi dan' and c.direct_key like '%$DAN%'")" = 1
+              where m.sender_id = '$BOT_ID' and m.body = '$INTRO' || E'\\n\\n' || 'hi dan' and c.direct_key like '%$DAN%'")" = 1
 BOB_TAG=$(sql "select tag from public.profiles where user_id = '$BOB'")
 expect_exit 0 "start a 1:1 with a listed contact by @tag" "$BOT" start "@$BOB_TAG" "hi bob"
 
@@ -299,6 +305,71 @@ if "${COMPOSE[@]}" run --rm flutter flutter test --run-skipped --tags sis_bot_pr
 else
   bad "probe: Realtime: $(grep -E 'Expected|Actual|reason|Failed|Error' "$BOX/rt" | head -8 | tr '\n' ' ')"
 fi
+
+# 12a two parallel first sends to one user: exactly one AI line, one record -------------
+# eve starts a 1:1 with the bot; the bot then sends twice at once with its REAL JWT.
+# A psql session holds the 1:1's row FOR UPDATE, so each insert runs its BEFORE
+# triggers and then waits on the foreign-key check: both decide "first message
+# or not" before either commits. Both must be seen waiting, or it was no race.
+sql "insert into app_private.allowlist(email) values ('eve@$DOM')" >/dev/null
+EVE=$(create_user "eve@$DOM" Eve)
+sql "insert into app_private.bot_contacts(bot_id, contact_id) values ('$BOT_ID', '$EVE');
+     delete from app_private.bot_actions where bot_id = '$BOT_ID'" >/dev/null
+EVE_JWT=$(token_for "eve@$DOM")
+EB=$(rpc "$EVE_JWT" start_direct_conversation "{\"other_user\":\"$BOT_ID\"}" | jq -r .)
+[[ $EB =~ ^[0-9a-f-]{36}$ ]] || { echo "fixture 1:1 with eve failed: $EB"; exit 1; }
+bot_post() {  # body -> HTTP code in $BOX/par_<body>
+  curl -sS -o /dev/null -w '%{http_code}' -X POST "$SIS_URL/rest/v1/messages" -H "apikey: $SIS_ANON_KEY" \
+    -H "Authorization: Bearer $BOT_JWT" -H 'content-type: application/json' \
+    -d "{\"conversation_id\":\"$EB\",\"sender_id\":\"$BOT_ID\",\"body\":\"$1\"}" >"$BOX/par_$1"
+}
+sql "select 1 from public.conversations where id = '$EB' for update; select pg_sleep(4)" >/dev/null & holder=$!
+sleep 1
+bot_post race1 & pa=$!; bot_post race2 & pb=$!
+sleep 2
+waiting=$(sql "select count(*) from pg_stat_activity where wait_event_type = 'Lock'
+               and query ilike '%insert into%messages%' and query not ilike '%pg_stat_activity%'")
+wait "$pa" || true; wait "$pb" || true; wait "$holder" || true
+check "both parallel first sends were in flight at once ($waiting waiting)" test "$waiting" = 2
+check "both parallel first sends succeed ($(cat "$BOX/par_race1"), $(cat "$BOX/par_race2"))" \
+  test "$(cat "$BOX/par_race1")$(cat "$BOX/par_race2")" = 201201
+check "exactly one of them carries the AI line" \
+  test "$(sql "select count(*) from public.messages where conversation_id = '$EB' and sender_id = '$BOT_ID'
+              and body in ('$INTRO' || E'\\n\\n' || 'race1', '$INTRO' || E'\\n\\n' || 'race2')")" = 1
+check "and the other is stored unchanged" \
+  test "$(sql "select count(*) from public.messages where conversation_id = '$EB' and sender_id = '$BOT_ID'
+              and body in ('race1', 'race2')")" = 1
+check "one intro record for (bot, eve)" \
+  test "$(sql "select count(*) from app_private.bot_intro_sent where bot_id = '$BOT_ID' and user_id = '$EVE'")" = 1
+
+# 12a2 two parallel first sends in one group: exactly one AI line, one record ------------
+# A fresh group (ann, bob) becomes the bot's Debug for this case; same lock as 12a.
+G3=$(rpc "$ANN_JWT" start_group_conversation "{\"title\":\"Race\",\"members\":[\"$BOB\"]}" | jq -r .)
+[[ $G3 =~ ^[0-9a-f-]{36}$ ]] || { echo "fixture race group failed: $G3"; exit 1; }
+sql "update app_private.bot_accounts set debug_conversation = '$G3' where user_id = '$BOT_ID';
+     insert into public.conversation_members(conversation_id, user_id, role, history_from, joined_at)
+     values ('$G3', '$BOT_ID', 'member', now(), now());
+     delete from app_private.bot_actions where bot_id = '$BOT_ID'" >/dev/null
+EB=$G3
+sql "select 1 from public.conversations where id = '$G3' for update; select pg_sleep(4)" >/dev/null & holder=$!
+sleep 1
+bot_post grace1 & pa=$!; bot_post grace2 & pb=$!
+sleep 2
+waiting=$(sql "select count(*) from pg_stat_activity where wait_event_type = 'Lock'
+               and query ilike '%insert into%messages%' and query not ilike '%pg_stat_activity%'")
+wait "$pa" || true; wait "$pb" || true; wait "$holder" || true
+check "group: both parallel first sends were in flight at once ($waiting waiting)" test "$waiting" = 2
+check "group: both parallel first sends succeed ($(cat "$BOX/par_grace1"), $(cat "$BOX/par_grace2"))" \
+  test "$(cat "$BOX/par_grace1")$(cat "$BOX/par_grace2")" = 201201
+check "group: exactly one of them carries the AI line" \
+  test "$(sql "select count(*) from public.messages where conversation_id = '$G3' and sender_id = '$BOT_ID'
+              and body in ('$INTRO' || E'\\n\\n' || 'grace1', '$INTRO' || E'\\n\\n' || 'grace2')")" = 1
+check "group: and the other is stored unchanged" \
+  test "$(sql "select count(*) from public.messages where conversation_id = '$G3' and sender_id = '$BOT_ID'
+              and body in ('grace1', 'grace2')")" = 1
+check "group: one intro record for (bot, race group)" \
+  test "$(sql "select count(*) from app_private.bot_group_intro_sent where bot_id = '$BOT_ID' and conversation_id = '$G3'")" = 1
+sql "update app_private.bot_accounts set debug_conversation = '$DEBUG' where user_id = '$BOT_ID'" >/dev/null
 
 # 12b admin rename: trims, 1-80 characters, stored exactly; the bot still cannot --------
 name_is() { test "$(sql "select display_name from public.profiles where user_id = '$BOT_ID'")" = "$1"; }

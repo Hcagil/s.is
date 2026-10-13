@@ -1,5 +1,5 @@
 begin;
-select plan(131);
+select plan(135);
 
 -- SIS Bot: one auth user (sis-destek-bot@example.com, "SIS Destek",
 -- sis_destek) that an AI session drives with its own JWT only.
@@ -169,6 +169,7 @@ reset role;
 -- an old Debug message, two hours ago
 insert into public.messages(conversation_id, sender_id, body, created_at)
 values (g('DEBUG'), u('01'), 'old debug note', now() - interval '2 hours');
+insert into ids select 'ANN_MSG', id from public.messages where body = 'old debug note';
 select as_('01'); select public.deliver_release_notes(179); reset role;
 insert into ids select 'SYS', id from public.conversations
   where system and id in (select conversation_id from public.conversation_members where user_id = u('01'))
@@ -236,6 +237,19 @@ select throws_ok($$insert into public.messages(conversation_id, sender_id, body)
                    values (g('DEBUG'), u('01'), 'forged')$$,
                  '42501', null, 'it cannot send as anyone else (sender_id)');
 select is((select array_agg(b) from public.bot_ids() b), array[u('bot')], 'the bot sees bot_ids too');
+-- edit/delete of another user's message: the bot is a member with app access,
+-- the message is in Debug and 2 h old, so only sender_id = auth.uid() refuses.
+select throws_ok(format($$select public.edit_message(%L, 'bot edit')$$, g('ANN_MSG')),
+                 '42501', null, 'the bot cannot edit another user''s message');
+select throws_ok(format($$select public.delete_message(%L)$$, g('ANN_MSG')),
+                 '42501', null, 'the bot cannot delete another user''s message');
+select send(g('DEBUG'), 'bot own note');
+select lives_ok(format($$select public.edit_message(%L, 'bot edited')$$,
+                  (select id from public.messages where body = 'bot own note')),
+                'control: the bot edits its own message');
+select lives_ok(format($$select public.delete_message(%L)$$,
+                  (select id from public.messages where body = 'bot edited')),
+                'control: the bot deletes its own message');
 reset role;
 select as_('01');
 select is((select array_agg(b) from public.bot_ids() b), array[u('bot')], 'a member reads bot_ids: the bot');

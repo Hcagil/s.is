@@ -381,6 +381,10 @@
   "@whatsNewUpToDate": {
     "description": "Mark above the SIS chat's footer when no update is waiting"
   },
+  "whatsNewInstalled": "Installed (your version)",
+  "@whatsNewInstalled": {
+    "description": "Mark on the What's new card of the version the member runs"
+  },
   "messageActionReply": "Reply",
   "@messageActionReply": {
     "description": "Long-press card row: reply"

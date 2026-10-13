@@ -335,6 +335,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get whatsNewUpToDate => 'Güncelsiniz';
 
   @override
+  String get whatsNewInstalled => 'Kurulu (sürümünüz)';
+
+  @override
   String get messageActionReply => 'Yanıtla';
 
   @override

@@ -23,6 +23,14 @@ import '../support/service_key.dart';
 ///   on success, stores the build (Ok(true)). Any failure is Err and stores
 ///   nothing, so the next start tries again.
 ///
+/// Since step 14 an insert into release_notes already posts the note to every
+/// allowed member (the broadcast trigger); deliver_release_notes is the
+/// backstop for a member the broadcast missed (no release_note_sent row).
+/// The backstop is tested on its own with [missed] notes: inserted empty (the
+/// broadcast posts and records nothing for an empty note) and then given
+/// their text, so no member has them yet. One case shows the broadcast and
+/// the backstop together still give exactly one message.
+///
 /// A skip is proven over a dead host: a call that should have been skipped
 /// but was made fails instead of returning Ok(false).
 ///
@@ -100,6 +108,16 @@ void main() {
     return rows.length;
   }
 
+  /// A note the broadcast never posted: empty on insert, text added after.
+  Future<void> missed(int build, String text) async {
+    await note(build, '');
+    await service
+        .from('release_notes')
+        .update({'note': text})
+        .eq('build', build);
+    expect(await delivered(text), 0, reason: 'the broadcast posted it');
+  }
+
   Future<Object?> stored() async =>
       (await SharedPreferences.getInstance()).get(prefKey);
 
@@ -123,7 +141,7 @@ void main() {
   test('a newer build: the RPC runs, the note arrives once, and the build is '
       'remembered for this member', () async {
     final b = base + 1;
-    await note(b, 'whit note $b');
+    await missed(b, 'whit note $b');
     installed(b);
     SharedPreferences.setMockInitialValues({});
 
@@ -178,7 +196,7 @@ void main() {
     'offline: Err, nothing remembered, and the next start delivers',
     () async {
       final b = base + 3;
-      await note(b, 'whit note $b');
+      await missed(b, 'whit note $b');
       installed(b);
       SharedPreferences.setMockInitialValues({prefKey: base + 1});
       final dead = await deadButSignedIn(whit);
@@ -219,8 +237,8 @@ void main() {
 
   test('parallel RPCs deliver each note exactly once', () async {
     final b = base + 6;
-    await note(base + 5, 'whit note ${base + 5}');
-    await note(b, 'whit note $b');
+    await missed(base + 5, 'whit note ${base + 5}');
+    await missed(b, 'whit note $b');
 
     final counts = await Future.wait([
       for (var i = 0; i < 8; i++)
@@ -234,7 +252,7 @@ void main() {
 
   test('two starts at once through the class deliver the note once', () async {
     final b = base + 7;
-    await note(b, 'whit note $b');
+    await missed(b, 'whit note $b');
     installed(b);
     SharedPreferences.setMockInitialValues({});
 
@@ -246,6 +264,22 @@ void main() {
 
     expect(rs, everyElement(isA<Ok<bool>>()));
     expect(await delivered('whit note $b'), 1);
+    expect('${await stored()}', '$b');
+  });
+
+  test('a note the broadcast already posted: the backstop adds nothing, '
+      'and the build is still remembered', () async {
+    final b = base + 8;
+    await note(b, 'whit note $b');
+    expect(await delivered('whit note $b'), 1, reason: 'the broadcast');
+    installed(b);
+    SharedPreferences.setMockInitialValues({prefKey: base + 7});
+
+    final r = await SupabaseReleaseNotesDelivery(whit).deliver(uid);
+
+    expect(r, isA<Ok<bool>>());
+    expect((r as Ok<bool>).value, isTrue);
+    expect(await delivered('whit note $b'), 1, reason: 'still one message');
     expect('${await stored()}', '$b');
   });
 }

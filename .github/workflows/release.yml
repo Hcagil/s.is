@@ -109,37 +109,6 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-      # The "What's new" note for this build: the `For users:` line of every PR
-      # merged since the previous release (docs/DECISIONS.md, 2026-09-30). The
-      # app fetches it on its first start of this build. No such line, no row,
-      # so nothing is delivered. The text goes to SQL base64-encoded: PR bodies
-      # are untrusted input. An existing row is left alone so an edit made in
-      # the dashboard survives a re-run.
-      - name: Store the What's new note for this build
-        id: note
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BUILD: ${{ needs.scope.outputs.code }}
-          VERSION: ${{ needs.scope.outputs.name }}
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: |
-          set -o pipefail
-          prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
-          if [ -n "$prev" ]; then range="$prev..$SHA"; else range="$SHA^..$SHA"; fi
-          note=$(git log --reverse --format=%s "$range" \
-            | sed -n 's/.*(#\([0-9][0-9]*\))$/\1/p' \
-            | while read -r pr; do
-                echo "PR #$pr" >&2
-                gh api "repos/${GITHUB_REPOSITORY}/pulls/$pr" --jq 'select(.author_association | IN("OWNER","MEMBER","COLLABORATOR")) | .body' </dev/null | tr -d '\r' | sed -n 's/^For users: *//p' || exit 1
-              done | sed '/^[[:space:]]*$/d')
-          note=${note:0:3980}
-          echo "Note: $note"
-          if [ -z "$note" ]; then echo "No user-facing change in $range"; exit 0; fi
-          note="Version $VERSION"$'\n'"$note"
-          b64=$(printf '%s' "$note" | base64 -w0)
-          echo "b64=$b64" >> "$GITHUB_OUTPUT"
-          supabase db query --linked "insert into public.release_notes(build, note) values ($BUILD, convert_from(decode('$b64', 'base64'), 'utf8')) on conflict (build) do nothing"
       # The push sender, and notification-action, the endpoint its notification
       # buttons call (the push carries a signed token instead of a session).
       # Deployed before the trigger learns its URL, so the
@@ -164,6 +133,44 @@ jobs:
           releaseFiles: build/app/outputs/bundle/release/app-release.aab
           track: internal
           status: completed
+      # The "What's new" note for this build: the `For users:` line of every PR
+      # merged since the previous release (docs/DECISIONS.md, 2026-09-30). The
+      # app fetches it on its first start of this build. No such line, no row,
+      # so nothing is delivered. The text goes to SQL base64-encoded: PR bodies
+      # are untrusted input. An existing row is left alone so an edit made in
+      # the dashboard survives a re-run. A Turkish part follows after a line
+      # "---": every "Kullanıcılar için:" line under "Sürüm <version>"; the app
+      # shows the part in its own language.
+      - name: Store the What's new note for this build
+        id: note
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD: ${{ needs.scope.outputs.code }}
+          VERSION: ${{ needs.scope.outputs.name }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -o pipefail
+          export LC_ALL=C.UTF-8  # ${note:0:N} counts characters, never splits a Turkish letter
+          prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
+          if [ -n "$prev" ]; then range="$prev..$SHA"; else range="$SHA^..$SHA"; fi
+          bodies=$(git log --reverse --format=%s "$range" \
+            | sed -n 's/.*(#\([0-9][0-9]*\))$/\1/p' \
+            | while read -r pr; do
+                echo "PR #$pr" >&2
+                gh api "repos/${GITHUB_REPOSITORY}/pulls/$pr" --jq 'select(.author_association | IN("OWNER","MEMBER","COLLABORATOR")) | .body' </dev/null | tr -d '\r' || exit 1
+              done)
+          note=$(printf '%s\n' "$bodies" | sed -n 's/^For users: *//p' | sed '/^[[:space:]]*$/d')
+          note_tr=$(printf '%s\n' "$bodies" | sed -n 's/^Kullanıcılar için: *//p' | sed '/^[[:space:]]*$/d')
+          note=${note:0:1900}
+          note_tr=${note_tr:0:1900}
+          echo "Note: $note"
+          if [ -z "$note" ]; then echo "No user-facing change in $range"; exit 0; fi
+          note="Version $VERSION"$'\n'"$note"
+          if [ -n "$note_tr" ]; then note="$note"$'\n---\n'"Sürüm $VERSION"$'\n'"$note_tr"; fi
+          b64=$(printf '%s' "$note" | base64 -w0)
+          echo "b64=$b64" >> "$GITHUB_OUTPUT"
+          supabase db query --linked "insert into public.release_notes(build, note) values ($BUILD, convert_from(decode('$b64', 'base64'), 'utf8')) on conflict (build) do nothing"
       - name: Tag and publish release notes
         env:
           GH_TOKEN: ${{ github.token }}

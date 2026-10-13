@@ -710,6 +710,12 @@ abstract class AppLocalizations {
   /// **'You\'re up to date'**
   String get whatsNewUpToDate;
 
+  /// Mark on the What's new card of the version the member runs
+  ///
+  /// In en, this message translates to:
+  /// **'Installed (your version)'**
+  String get whatsNewInstalled;
+
   /// Long-press card row: reply
   ///
   /// In en, this message translates to:

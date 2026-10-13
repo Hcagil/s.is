@@ -1923,6 +1923,17 @@ class AppLocalizationsTr extends AppLocalizations {
   String get makerBrushHint => 'Silmek ya da geri getirmek için boya';
 
   @override
+  String get makerCutoutPreparing => 'Ayırma hazırlanıyor…';
+
+  @override
+  String get makerCutoutUnavailable =>
+      'Arka plan şu an kaldırılamıyor. Tüm görsel korundu.';
+
+  @override
+  String get makerCutoutNoSupport =>
+      'Bu telefon arka planı kaldıramıyor. Tüm görsel korundu.';
+
+  @override
   String get makerEditTitle => 'Çıkartmayı düzenle';
 
   @override

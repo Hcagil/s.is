@@ -71,7 +71,7 @@ class MainActivity : FlutterActivity() {
                     "pickProfilePicture" -> startPick(multiple = false, requestCode = REQUEST_PICTURE, result = result)
                     "takePhoto" -> takePhoto(result)
                     "cropPicture" -> cropPicture(call, result)
-                    "cutoutSupported" -> result.success(stickerCutout.supported())
+                    "cutoutSupported" -> result.success(stickerCutout.supported().also { if (it) stickerCutout.requestModel() })
                     "cutoutMask" -> cutoutMask(call, result)
                     else -> result.notImplemented()
                 }

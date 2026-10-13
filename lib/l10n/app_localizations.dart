@@ -3458,6 +3458,24 @@ abstract class AppLocalizations {
   /// **'Paint to erase or bring back parts'**
   String get makerBrushHint;
 
+  /// Shown while background removal is being prepared
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing cut-out…'**
+  String get makerCutoutPreparing;
+
+  /// Notice when background removal failed or timed out
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t remove the background now. Whole photo kept.'**
+  String get makerCutoutUnavailable;
+
+  /// Notice when the phone has no background removal
+  ///
+  /// In en, this message translates to:
+  /// **'This phone can\'t remove backgrounds. Whole photo kept.'**
+  String get makerCutoutNoSupport;
+
   /// Title of the sticker editor
   ///
   /// In en, this message translates to:

@@ -50,6 +50,7 @@ import 'features/chat/data/photo_manager_video_gallery.dart';
 import 'features/chat/data/record_voice_recorder.dart';
 import 'features/chat/data/share_plus_text_sharer.dart';
 import 'features/chat/data/share_plus_video_sharer.dart';
+import 'features/chat/data/shared_prefs_contacts_disclosure_store.dart';
 import 'features/chat/data/shared_prefs_played_voice_store.dart';
 import 'features/chat/data/shared_prefs_recent_sticker_store.dart';
 import 'features/chat/data/shared_prefs_send_queue_store.dart';
@@ -227,6 +228,9 @@ Future<void> main() async {
           ),
           pollRepositoryProvider.overrideWithValue(
             SupabasePollRepository(client),
+          ),
+          contactsDisclosureStoreProvider.overrideWithValue(
+            const SharedPrefsContactsDisclosureStore(),
           ),
           contactsRepositoryProvider.overrideWithValue(
             SupabaseContactsRepository(client),

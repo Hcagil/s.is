@@ -43,6 +43,33 @@ final class SupabaseContactsRepository implements ContactsRepository {
   }
 
   @override
+  Future<Result<List<ContactMatch>>> findByContacts(List<String> hashes) async {
+    try {
+      final rows = await _client.rpc(
+        'find_by_contacts',
+        params: {'hashes': hashes},
+      ) as List<dynamic>;
+      return Ok([
+        for (final r in rows.cast<Map<String, dynamic>>())
+          ContactMatch(
+            hash: r['matched_hash'] as String,
+            member: Member(
+              userId: r['user_id'] as String,
+              displayName: r['display_name'] as String,
+              tag: r['tag'] as String?,
+              avatarPath: r['avatar_path'] as String?,
+            ),
+          ),
+      ]);
+    } on PostgrestException catch (e) {
+      if (e.code == 'RLMT1') return const Err(SearchLimitFailure());
+      return Err(_asFailure(e));
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
   Future<Result<void>> add(String userId) async {
     final me = _client.auth.currentUser?.id;
     if (me == null) return const Err(DeniedFailure());

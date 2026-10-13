@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+
 import 'message.dart';
 import 'shared_contact.dart';
 
@@ -28,6 +32,33 @@ final class PhoneBookEntry {
   final String phone;
 }
 
+/// One contact on the phone with the email addresses it holds; for Find
+/// people. Never stored, never logged.
+final class PhoneBookPerson {
+  const PhoneBookPerson({
+    required this.id,
+    required this.name,
+    required this.emails,
+  });
+
+  final String id;
+  final String name;
+  final List<String> emails;
+}
+
+/// SHA-256 hex of the trimmed, lower-cased [email] as UTF-8: the only form
+/// of a contact's address that leaves the phone. No dot or plus folding.
+String hashContactEmail(String email) =>
+    sha256.convert(utf8.encode(email.trim().toLowerCase())).toString();
+
+/// Whether this member accepted the "Find people from your contacts"
+/// disclosure on this phone, kept locally.
+abstract interface class ContactsDisclosureStore {
+  Future<bool> accepted();
+
+  Future<void> accept();
+}
+
 /// The phone's own contacts, for the Send a contact picker.
 ///
 /// Its own boundary because reading contacts is a platform capability that
@@ -40,6 +71,10 @@ abstract interface class PhoneBook {
   /// Contacts that have a phone number, sorted by name, one entry per contact;
   /// empty without access.
   Future<List<PhoneBookEntry>> entries();
+
+  /// Every contact with its email addresses (may be empty), sorted by name;
+  /// empty without access.
+  Future<List<PhoneBookPerson>> people();
 
   /// Opens this app's page in the phone's settings, for when access is
   /// [PhoneBookAccess.permanentlyDenied] and no prompt will be shown again.

@@ -2,6 +2,7 @@
 -- bot sends to a user in a 1:1 chat starts with a one-line AI notice, once per
 -- user, written in the same transaction as the send. The unique key makes two
 -- parallel first sends race safely: the loser inserts 0 rows and adds no line.
+-- Group chats (not system): the same line, once per (bot, group conversation).
 -- The user's language is not known on the server, so the line is Turkish.
 
 create table app_private.bot_intro_sent (
@@ -13,11 +14,22 @@ create table app_private.bot_intro_sent (
 alter table app_private.bot_intro_sent enable row level security;  -- no policies: no client access
 revoke all on table app_private.bot_intro_sent from public, anon, authenticated;
 
+-- Group chats (Debug and others): one line per (bot, group conversation).
+create table app_private.bot_group_intro_sent (
+  bot_id          uuid not null references auth.users(id) on delete cascade,
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  sent_at         timestamptz not null default now(),
+  primary key (bot_id, conversation_id)
+);
+alter table app_private.bot_group_intro_sent enable row level security;  -- no policies: no client access
+revoke all on table app_private.bot_group_intro_sent from public, anon, authenticated;
+
 create function app_private.messages_bot_intro() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare
   other uuid;
   n     integer;
+  line constant text := 'Merhaba, ben SIS Destek, bir yapay zekâ asistanıyım. Mesajlarımı yapay zekâ yazar.';
 begin
   if not app_private.is_bot(new.sender_id) or btrim(new.body) = '' then
     return new;
@@ -32,6 +44,17 @@ begin
      and m.left_at is null
    limit 1;
   if other is null then
+    -- group chat: once per (bot, conversation), not per member
+    if exists (select 1 from public.conversations c
+                where c.id = new.conversation_id and not c.system and c.direct_key is null) then
+      insert into app_private.bot_group_intro_sent(bot_id, conversation_id)
+      values (new.sender_id, new.conversation_id)
+      on conflict do nothing;
+      get diagnostics n = row_count;
+      if n = 1 then
+        new.body := line || E'\n\n' || new.body;
+      end if;
+    end if;
     return new;
   end if;
   insert into app_private.bot_intro_sent(bot_id, user_id)
@@ -39,8 +62,7 @@ begin
   on conflict do nothing;
   get diagnostics n = row_count;
   if n = 1 then
-    new.body := 'Merhaba, ben SIS Destek, bir yapay zekâ asistanıyım. Mesajlarımı yapay zekâ yazar.'
-                || E'\n\n' || new.body;
+    new.body := line || E'\n\n' || new.body;
   end if;
   return new;
 end $$;

@@ -47,8 +47,8 @@ values ('00000000-0000-0000-0000-00000000ad41', '00000000-0000-0000-0000-0000000
 on conflict (id) do nothing;
 delete from public.profiles where user_id = '00000000-0000-0000-0000-00000000ad41';
 
--- At most one row: filled once by the release workflow or by the owner in the
--- SQL editor, never by the app.
+-- At most one row: filled once by the owner in the SQL editor, never by the
+-- app, CI or a migration.
 create table app_private.owners (
   only_row   boolean primary key default true check (only_row),
   user_id    uuid not null unique references auth.users(id) on delete restrict,

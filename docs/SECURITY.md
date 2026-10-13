@@ -180,6 +180,7 @@ Postgres Row Level Security is the only authority. The client is untrusted.
   bodies, so it exists solely for the notifier and must never be granted
   wider. It wraps `app_private.push_targets_for_message`, which keeps
   `app_private` unreachable from the API.
+- The owner row (`app_private.owners`) is set once by the owner with the SQL Editor; never by the app, CI or a migration.
 
 ### Helpers and the access gate
 

@@ -671,5 +671,21 @@
   "adminKeep": "İptal edildi: bu kart artık geçerli değil.",
   "adminErr": "Bir şeyler ters gitti. Hiçbir şey değiştirilmedi.",
   "adminNoLink": "Play davet bağlantısı henüz ayarlanmadı. Sahibinden ayarlamasını iste, sonra komutu yeniden yaz.",
-  "adminListOther": "Diğer ({count})"
+  "adminListOther": "Diğer ({count})",
+  "findPeopleTitle": "Kişi bul",
+  "findPeopleSub": "Rehberinizden",
+  "findOnSis": "SIS'te",
+  "findNotOnSis": "Henüz SIS'te değil",
+  "findNotOnSisSub": "SIS'te değil",
+  "findMessage": "Mesaj",
+  "findInvite": "Davet et",
+  "findDiscTitle": "Rehberden kişi bul",
+  "findDiscBody": "SIS, rehberinizdeki kişilerin hangilerinin SIS kullandığını gösterebilmek için bu kişilerin e-posta adreslerini kodlanmış (hash) biçimde SIS sunucusuna gönderir. Bu, Kişi bul sayfasını her açtığınızda yapılır. Kodlar saklanmaz; SIS yalnızca hangi üyeleri bulduğunuzu kaydeder. Ad ve telefon numaraları telefonunuzda kalır.",
+  "findContinue": "Devam",
+  "findNotNow": "Şimdi değil",
+  "findAskTitle": "Arkadaşlarını SIS'te bul",
+  "findAskBody": "SIS, kimlerin zaten burada olduğunu göstermek için rehberine bakabilir.",
+  "findAllow": "Rehbere izin ver",
+  "findLater": "Daha sonra tekrar dene.",
+  "findEmpty": "Kişi bulunamadı"
 }

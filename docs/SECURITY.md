@@ -139,7 +139,7 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     caller saved; a tag find alone does not open the row (`find_by_tag`
     returns its own single row). **Reach** (`app_private.can_reach`) is those
     three plus someone the caller found by exact tag (`app_private.tag_finds`,
-    written by `find_by_tag`, cleared when the found member changes their
+    written by `find_by_tag` and `find_by_contacts`, cleared when the found member changes their
     tag); it gates contacts insert, `start_*`, `last_seen_of` and the
     `everyone` picture. Clients may select
     every column except `avatar_object` (the real picture path) and
@@ -150,7 +150,8 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     (security definer, repeats the row rule, masks the path).
   - `contacts(owner_id, contact_id)`: one-way, owner-only read/insert/delete;
     inserting requires the contact be allowlisted and reachable.
-  - `find_by_tag(tag)` is the one deliberate way to reach a stranger: exact
+  - `find_by_contacts(hashes)` is the second deliberate way to reach a stranger: the phone sends SHA-256 hex hashes of its contacts' lower-cased, trimmed emails (at most 2000 per call, each exactly 64 lower-case hex characters, else 22023); the server hashes the allowlisted emails of confirmed, not deleted, not banned, non-bot accounts per call and returns only those that match (the 4 `find_by_tag` columns plus the matched hash, never an email), and records each in `tag_finds` so Message works. Refused for the bot (42501). At most 3 calls per hour and 10 per 24 hours per member (`app_private.tag_lookups` kind `contacts`, serialised by an advisory lock, row written before any lookup work), `RLMT1` beyond. Nothing else is stored: no hashes, no contact data. Known limit: an email hash can be guessed, so a member could test email lists; bounded by the app gate, the caps above and allowlisted targets only.
+  - `find_by_tag(tag)` is the one deliberate way to reach a stranger by name: exact
     match on the stored tag after folding (case, Turkish/Latin letters, a
     leading @), never prefix or wildcard; at most 20 calls per 10 minutes per
     member (`app_private.tag_lookups`, serialised by an advisory lock),
@@ -375,7 +376,7 @@ One person, one account: Supabase automatically links identities with the same v
 
 - Confinement: a trigger on `conversation_members` admits the bot only to its Debug chat and to the 1:1 with a listed tester, always as `member`. It is never an admin and never auto-promoted (`leave_group`, `promote_on_member_deleted` and the admin guard skip it). Removing a contact deletes the bot's membership at once, so its history there is unreadable. Listing the tester again re-adds the bot, with history from that moment only.
 - OFF: `has_app_access()` is false while `enabled` is false, which stops every policy and RPC at the next statement, even with a live token.
-- Refused for the bot outright (even when ON): `find_by_tag`, `set_group_avatar`, `deliver_release_notes`, `register_device_token` (so it never gets push), profile edits, contacts, attachment upload, avatar paths, and the Realtime receive and send policies (`presence:members` is project-wide).
+- Refused for the bot outright (even when ON): `find_by_tag`, `find_by_contacts`, `set_group_avatar`, `deliver_release_notes`, `register_device_token` (so it never gets push), profile edits, contacts, attachment upload, avatar paths, and the Realtime receive and send policies (`presence:members` is project-wide).
 - Rate limits, error code `RLMT2`: 20 messages per 10 minutes, 200 per 24 hours, 10 chats started per 24 hours by the bot itself (a listed tester starting a 1:1 with the bot does not count against it). Text only.
 - It acts through `tool/sis_bot.sh` with its own refresh token in `.private/sis_bot.json` (mode 600, rotated on every run, locked) and never holds the service key. Revoke with `tool/sis_bot.sh revoke` (global sign-out) or, owner-run, `tool/sis_bot_admin.sh revoke` (OFF plus every session deleted).
 - The admin tool takes the service key only from a file named by `SIS_SERVICE_KEY_FILE` (mode 600, owned by you, else exit 2), never from an environment variable and never from the repo; the Management API token likewise from `SUPABASE_ACCESS_TOKEN_FILE`. Run it in your own terminal, never through Claude Code `!`, and never export the key in the shell that starts Claude Code. Every run is an authentication in the owner's account and is reported.

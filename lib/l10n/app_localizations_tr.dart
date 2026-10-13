@@ -2205,4 +2205,54 @@ class AppLocalizationsTr extends AppLocalizations {
   String adminListOther(int count) {
     return 'Diğer ($count)';
   }
+
+  @override
+  String get findPeopleTitle => 'Kişi bul';
+
+  @override
+  String get findPeopleSub => 'Rehberinizden';
+
+  @override
+  String get findOnSis => 'SIS\'te';
+
+  @override
+  String get findNotOnSis => 'Henüz SIS\'te değil';
+
+  @override
+  String get findNotOnSisSub => 'SIS\'te değil';
+
+  @override
+  String get findMessage => 'Mesaj';
+
+  @override
+  String get findInvite => 'Davet et';
+
+  @override
+  String get findDiscTitle => 'Rehberden kişi bul';
+
+  @override
+  String get findDiscBody =>
+      'SIS, rehberinizdeki kişilerin hangilerinin SIS kullandığını gösterebilmek için bu kişilerin e-posta adreslerini kodlanmış (hash) biçimde SIS sunucusuna gönderir. Bu, Kişi bul sayfasını her açtığınızda yapılır. Kodlar saklanmaz; SIS yalnızca hangi üyeleri bulduğunuzu kaydeder. Ad ve telefon numaraları telefonunuzda kalır.';
+
+  @override
+  String get findContinue => 'Devam';
+
+  @override
+  String get findNotNow => 'Şimdi değil';
+
+  @override
+  String get findAskTitle => 'Arkadaşlarını SIS\'te bul';
+
+  @override
+  String get findAskBody =>
+      'SIS, kimlerin zaten burada olduğunu göstermek için rehberine bakabilir.';
+
+  @override
+  String get findAllow => 'Rehbere izin ver';
+
+  @override
+  String get findLater => 'Daha sonra tekrar dene.';
+
+  @override
+  String get findEmpty => 'Kişi bulunamadı';
 }

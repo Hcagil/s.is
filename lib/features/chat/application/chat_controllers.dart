@@ -58,6 +58,7 @@ import 'chat_drafts.dart';
 part 'open_conversation.dart';
 part 'conversation_list_controller.dart';
 part 'contacts_controller.dart';
+part 'find_from_contacts_controller.dart';
 part 'file_controllers.dart';
 part 'video_controllers.dart';
 part 'voice_capture_controller.dart';

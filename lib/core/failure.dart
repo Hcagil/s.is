@@ -24,6 +24,14 @@ final class DeniedFailure extends Failure {
   String get message => 'Not allowed';
 }
 
+/// A server search limit hit ('RLMT1'); the screen shows its own line.
+final class SearchLimitFailure extends Failure {
+  const SearchLimitFailure();
+
+  @override
+  String get message => 'Too many searches, try again later.';
+}
+
 /// A sticker limit hit on the server: 'STKA1' (10 albums), 'STKA2' (50 stickers in an album) or 'STKF1' (200 favourites); the screen shows its own translated line.
 final class StickerLimitFailure extends Failure {
   const StickerLimitFailure(this.code);

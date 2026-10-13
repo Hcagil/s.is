@@ -1,6 +1,14 @@
 import '../../../core/failure.dart';
 import '../../auth/domain/member.dart';
 
+/// One contact-hash match: the member and the hash that matched.
+final class ContactMatch {
+  const ContactMatch({required this.member, required this.hash});
+
+  final Member member;
+  final String hash;
+}
+
 /// A member's own contacts, and the exact-tag lookup that finds someone not
 /// already reachable through "your people" (a contact or someone you share a
 /// conversation with). Row-level security scopes every call to the caller.
@@ -13,6 +21,11 @@ abstract interface class ContactsRepository {
   /// again later." -- the app shows that message as-is, and must not retry
   /// automatically.
   Future<Result<Member?>> findByTag(String tag);
+
+  /// Members whose email hash is in [hashes] (SHA-256 hex, at most 2000).
+  /// Server limits: 3 calls per hour and 10 per day; a limit hit comes back
+  /// as [Err] with a [SearchLimitFailure].
+  Future<Result<List<ContactMatch>>> findByContacts(List<String> hashes);
 
   /// Saves [userId] to the caller's own contacts. Idempotent: adding someone
   /// already saved succeeds without creating a second row.

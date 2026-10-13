@@ -56,6 +56,37 @@ final class FlutterPhoneBook implements PhoneBook {
   }
 
   @override
+  Future<List<PhoneBookPerson>> people() async {
+    try {
+      final contacts = await FlutterContacts.getAll(
+        properties: {ContactProperty.name, ContactProperty.email},
+      );
+      final result = <PhoneBookPerson>[];
+      for (final c in contacts) {
+        final name = c.displayName?.trim() ?? '';
+        if (c.id == null || name.isEmpty) continue;
+        result.add(
+          PhoneBookPerson(
+            id: c.id!,
+            name: name,
+            emails: [
+              for (final e in c.emails)
+                if (e.address.trim().isNotEmpty) e.address.trim(),
+            ],
+          ),
+        );
+      }
+      result.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
+      return result;
+    } on Object catch (e) {
+      log('contacts people: ${e.runtimeType}', name: 'sis.data');
+      return const [];
+    }
+  }
+
+  @override
   Future<void> openSettings() => FlutterContacts.permissions.openSettings();
 
   @override

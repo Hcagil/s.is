@@ -3937,6 +3937,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Other ({count})'**
   String adminListOther(int count);
+
+  /// Find people page title
+  ///
+  /// In en, this message translates to:
+  /// **'Find people'**
+  String get findPeopleTitle;
+
+  /// Find people page subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'From your contacts'**
+  String get findPeopleSub;
+
+  /// Section header: contacts who are members
+  ///
+  /// In en, this message translates to:
+  /// **'On SIS'**
+  String get findOnSis;
+
+  /// Section header: contacts who are not members
+  ///
+  /// In en, this message translates to:
+  /// **'Not on SIS yet'**
+  String get findNotOnSis;
+
+  /// Line under a contact who is not a member
+  ///
+  /// In en, this message translates to:
+  /// **'Not on SIS'**
+  String get findNotOnSisSub;
+
+  /// Button that opens a chat with a contact who is a member
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get findMessage;
+
+  /// Greyed button; invite comes later
+  ///
+  /// In en, this message translates to:
+  /// **'Invite'**
+  String get findInvite;
+
+  /// Disclosure title, shown before contacts are read
+  ///
+  /// In en, this message translates to:
+  /// **'Find people from your contacts'**
+  String get findDiscTitle;
+
+  /// Disclosure body
+  ///
+  /// In en, this message translates to:
+  /// **'SIS sends the email addresses in your contacts, in coded (hashed) form, to the SIS server to show which of your contacts use SIS. This happens each time you open Find people. The codes are not stored; SIS only keeps a note of which members you found. Names and phone numbers stay on your phone.'**
+  String get findDiscBody;
+
+  /// Disclosure accept button
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get findContinue;
+
+  /// Disclosure and permission decline button
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get findNotNow;
+
+  /// Contacts permission screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Find your friends on SIS'**
+  String get findAskTitle;
+
+  /// Contacts permission screen body
+  ///
+  /// In en, this message translates to:
+  /// **'SIS can look at your phone contacts to show who is already here.'**
+  String get findAskBody;
+
+  /// Button that asks for contacts permission
+  ///
+  /// In en, this message translates to:
+  /// **'Allow contacts'**
+  String get findAllow;
+
+  /// Shown when the server search limit is reached
+  ///
+  /// In en, this message translates to:
+  /// **'Try again later.'**
+  String get findLater;
+
+  /// Shown when the phone has no contacts
+  ///
+  /// In en, this message translates to:
+  /// **'No contacts found'**
+  String get findEmpty;
 }
 
 class _AppLocalizationsDelegate

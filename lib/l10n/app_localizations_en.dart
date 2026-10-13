@@ -2229,4 +2229,54 @@ class AppLocalizationsEn extends AppLocalizations {
   String adminListOther(int count) {
     return 'Other ($count)';
   }
+
+  @override
+  String get findPeopleTitle => 'Find people';
+
+  @override
+  String get findPeopleSub => 'From your contacts';
+
+  @override
+  String get findOnSis => 'On SIS';
+
+  @override
+  String get findNotOnSis => 'Not on SIS yet';
+
+  @override
+  String get findNotOnSisSub => 'Not on SIS';
+
+  @override
+  String get findMessage => 'Message';
+
+  @override
+  String get findInvite => 'Invite';
+
+  @override
+  String get findDiscTitle => 'Find people from your contacts';
+
+  @override
+  String get findDiscBody =>
+      'SIS sends the email addresses in your contacts, in coded (hashed) form, to the SIS server to show which of your contacts use SIS. This happens each time you open Find people. The codes are not stored; SIS only keeps a note of which members you found. Names and phone numbers stay on your phone.';
+
+  @override
+  String get findContinue => 'Continue';
+
+  @override
+  String get findNotNow => 'Not now';
+
+  @override
+  String get findAskTitle => 'Find your friends on SIS';
+
+  @override
+  String get findAskBody =>
+      'SIS can look at your phone contacts to show who is already here.';
+
+  @override
+  String get findAllow => 'Allow contacts';
+
+  @override
+  String get findLater => 'Try again later.';
+
+  @override
+  String get findEmpty => 'No contacts found';
 }

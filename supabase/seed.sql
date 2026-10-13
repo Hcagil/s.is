@@ -309,5 +309,10 @@ insert into app_private.allowlist(email) values
   -- one phone at a time (test/integration/one_phone_seam_test.dart)
   ('one-phone@integration.test'),
   ('one-phone-friend@integration.test'),
+  -- find people from contacts (test/integration/find_by_contacts_seam_test.dart):
+  -- asli finds bora; cem spends the hourly budget
+  ('fc-asli@mail.test'),
+  ('fc-bora@mail.test'),
+  ('fc-cem@mail.test'),
   ('sis-destek-bot@example.com')
 on conflict do nothing;

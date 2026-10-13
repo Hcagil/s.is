@@ -88,7 +88,7 @@
 	<key>MapsApiKey</key>
 	<string>$(MAPS_API_KEY_IOS)</string>
 	<key>NSContactsUsageDescription</key>
-	<string>Allow access so you can pick a contact to send in the chat. Nothing leaves your phone until you send it.</string>
+	<string>SIS uses your contacts so you can pick one to send in a chat, and, when you open Find people, to show which of your contacts use SIS. For that, your contacts' email addresses are sent in coded (hashed) form, checked against SIS members and not stored.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Allow access so your photos and videos load right here in the chat. Nothing is uploaded until you send it. You can allow just a few.</string>
 	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>

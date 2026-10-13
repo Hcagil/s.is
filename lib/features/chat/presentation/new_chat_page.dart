@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/grey_option.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
+import 'find_from_contacts_page.dart';
 import 'person_avatar.dart';
 import 'picker_widgets.dart';
 
@@ -77,6 +77,11 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
       final l = AppLocalizations.of(context);
       showSisNotice(context, isContact ? l.contactRemoved : l.contactAdded);
     }
+  }
+
+  Future<void> _openFromContacts() async {
+    final chosen = await showFindFromContactsPage(context);
+    if (chosen != null && mounted) Navigator.of(context).pop(chosen);
   }
 
   @override
@@ -170,13 +175,11 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
             ),
           ],
           const Divider(height: 1),
-          GreyOption(
-            name: 'f_perm',
-            label: AppLocalizations.of(context).findFromContacts,
-            child: ListTile(
-              leading: const Icon(Icons.contacts_outlined),
-              title: Text(AppLocalizations.of(context).findFromContacts),
-            ),
+          ListTile(
+            key: const ValueKey('find-from-contacts'),
+            leading: const Icon(Icons.contacts_outlined),
+            title: Text(l.findFromContacts),
+            onTap: _openFromContacts,
           ),
           Expanded(
             child: switch (people) {

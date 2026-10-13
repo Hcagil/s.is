@@ -4,7 +4,10 @@
 // panel's "+ New" tab with its small card, and an album's "Add", which opens
 // the gallery directly); gallery -> square crop -> cut-out -> editor (text,
 // draw) -> save. The cut-out step shows only when the phone can cut out;
-// a null mask is the "Whole image" result with one debugPrint and no message.
+// otherwise the "no support" notice and the editor at once. While the mask
+// is pending the brush is disabled with a "preparing" hint; a null mask, or
+// none within stickerCutoutTimeout, is the "unavailable" notice and the
+// whole photo. Notices live 2 s on an overlay timer, so tests flush them.
 // The pixels the save step hands to the encoder are the observable result:
 // a cut-out leaves the background transparent, the whole image keeps it.
 // Fakes only at the boundaries: gallery, cropper, cutter, encoder, repository.
@@ -20,6 +23,9 @@ import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/domain/sticker.dart';
 import 'package:sis/features/chat/domain/sticker_maker.dart';
 import 'package:sis/features/chat/presentation/sticker_album_page.dart';
+import 'package:sis/features/chat/presentation/sticker_maker_flow.dart'
+    show stickerCutoutTimeout;
+import 'package:sis/l10n/app_localizations.dart';
 
 import '../../support/chat_launcher.dart';
 import '../../support/fakes.dart';
@@ -129,6 +135,13 @@ Future<void> until(
 }
 
 bool shown(String key) => k(key).hitTestable().evaluate().isNotEmpty;
+
+final en = lookupAppLocalizations(const Locale('en'));
+
+bool said(String text) => find.text(text).evaluate().isNotEmpty;
+
+/// Lets a notice's 2 s overlay timer run out, so no timer outlives the test.
+Future<void> flushNotice(WidgetTester t) => t.pump(const Duration(seconds: 3));
 
 Future<void> tap(WidgetTester t, String key) async {
   await t.ensureVisible(k(key));
@@ -353,6 +366,7 @@ void main() {
         isEmpty,
       );
       expect(e.repo.favs, isEmpty);
+      await flushNotice(t); // the no-support notice
     });
   });
 
@@ -395,7 +409,7 @@ void main() {
     }
 
     testWidgets(
-      'a phone that cannot cut out goes straight to the editor; the whole photo is kept',
+      'a phone that cannot cut out: the no-support notice, straight to the editor, whole photo kept',
       (t) async {
         final e = await openChatWith(
           t,
@@ -404,8 +418,11 @@ void main() {
         await toGallery(t);
         await pickAndCrop(t);
         await until(t, () => shown('sticker-editor-page'), 'the editor');
+        expect(said(en.makerCutoutNoSupport), isTrue);
+        expect(said(en.makerCutoutUnavailable), isFalse);
         expect(k('sticker-cutout-page'), findsNothing);
         expect(e.cutter.maskCalls, isEmpty);
+        await flushNotice(t);
         await saveTo(t, e, 'a1');
         expect(e.alphaAt(60, 256), 255);
         expect(e.alphaAt(450, 256), 255);
@@ -444,7 +461,7 @@ void main() {
       expect(e.alphaAt(450, 256), 255);
     });
 
-    testWidgets('no mask: Whole image result, one debugPrint, no message', (
+    testWidgets('no mask: the unavailable notice, no brush, the whole photo', (
       t,
     ) async {
       final logs = <String?>[];
@@ -455,9 +472,10 @@ void main() {
           t,
           Env(cutter: StickerCutterFake(mask: null)..maskAnswer = null),
         );
-        await t.pump(const Duration(milliseconds: 500));
-        expect(logs, hasLength(1), reason: '$logs');
+        await until(t, () => said(en.makerCutoutUnavailable), 'the notice');
+        expect(said(en.makerCutoutNoSupport), isFalse);
         expect(find.byType(SnackBar), findsNothing);
+        expect(logs, isEmpty, reason: 'the old debugPrint is gone: $logs');
         for (final tool in ['maker-brush-0', 'maker-brush-1', 'maker-undo']) {
           expect(
             shown(tool),
@@ -465,6 +483,8 @@ void main() {
             reason: 'Whole image is the result, $tool',
           );
         }
+        expect(said(en.makerCutoutPreparing), isFalse);
+        await flushNotice(t);
         await finish(t, e);
         expect(e.alphaAt(60, 256), 255);
         expect(
@@ -472,11 +492,60 @@ void main() {
           255,
           reason: 'nothing may be cut without a mask',
         );
-        expect(logs, hasLength(1), reason: '$logs');
       } finally {
         debugPrint = old;
       }
     });
+
+    testWidgets(
+      'pending mask: brush disabled with the preparing hint; enabled when it arrives',
+      (t) async {
+        final e = await toCutout(t, Env(cutter: StickerCutterFake(held: true)));
+        expect(shown('maker-brush-0'), isTrue, reason: 'row stays, disabled');
+        expect(said(en.makerCutoutPreparing), isTrue);
+        expect(said(en.makerBrushHint), isFalse);
+        // A Restore tap while pending must be ignored, so the stroke below
+        // (over the background) stays Erase and changes nothing.
+        await t.tap(k('maker-brush-1'), warnIfMissed: false);
+        await t.pump(const Duration(milliseconds: 100));
+        e.cutter.release();
+        await until(t, () => said(en.makerBrushHint), 'the brush hint');
+        expect(said(en.makerCutoutPreparing), isFalse);
+        expect(said(en.makerCutoutUnavailable), isFalse);
+        await brush(t, from: 0.6, to: 0.9);
+        await finish(t, e);
+        expect(e.alphaAt(384, 256), 0, reason: 'the pending tap was ignored');
+        expect(e.alphaAt(60, 256), 255, reason: 'the subject stays');
+        await osBack(t); // save -> editor
+        await until(t, () => shown('sticker-editor-page'), 'the editor');
+        await osBack(t); // editor -> cut-out
+        await until(t, () => shown('sticker-cutout-page'), 'the cut-out');
+        await tap(t, 'maker-brush-1');
+        await brush(t, from: 0.6, to: 0.9);
+        await finish(t, e);
+        expect(e.alphaAt(384, 256), 255, reason: 'Restore works once ready');
+      },
+    );
+
+    testWidgets(
+      'no mask within the timeout: the unavailable notice and the whole photo',
+      (t) async {
+        expect(stickerCutoutTimeout, const Duration(seconds: 20));
+        final e = await toCutout(t, Env(cutter: StickerCutterFake(held: true)));
+        await t.pump(const Duration(seconds: 18));
+        expect(said(en.makerCutoutPreparing), isTrue, reason: 'still waiting');
+        expect(said(en.makerCutoutUnavailable), isFalse);
+        await t.pump(const Duration(seconds: 2));
+        await t.pump();
+        expect(said(en.makerCutoutUnavailable), isTrue);
+        expect(said(en.makerCutoutPreparing), isFalse);
+        expect(shown('maker-brush-0'), isFalse, reason: 'the brush row goes');
+        await flushNotice(t);
+        await finish(t, e);
+        expect(e.alphaAt(60, 256), 255);
+        expect(e.alphaAt(450, 256), 255, reason: 'the whole photo is kept');
+      },
+    );
 
     testWidgets(
       'Erase removes the subject under the stroke; Undo brings it back',
@@ -681,6 +750,7 @@ void main() {
         e.repo.albumList.singleWhere((a) => a.id == 'a2').stickerIds,
         isNot(contains(id)),
       );
+      await flushNotice(t); // the no-support notice
     });
 
     testWidgets('New album adds an album, and stops at the album limit', (
@@ -728,6 +798,7 @@ void main() {
       await until(t, () => shown('maker-saved'), 'saved');
       expect(e.repo.made, hasLength(1));
       expect(e.repo.favs, isEmpty);
+      await flushNotice(t); // the no-support notice
     });
 
     testWidgets(

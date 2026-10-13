@@ -428,7 +428,7 @@ declare masked text := app_private.admin_mask(em); card uuid;
 begin
   -- the owner cannot remove their own address
   if em = (select lower(u.email) from auth.users u where u.id = owner) then
-    perform app_private.admin_reply(conv, jsonb_build_object('k','err'));
+    perform app_private.admin_reply(conv, jsonb_build_object('k','err','help',true));
     return 'err';
   end if;
   if not exists (select 1 from app_private.allowlist a where a.email = em) then
@@ -449,6 +449,11 @@ declare
   t text := btrim(body, E' \t\r\n');
   parts text[]; c text; em text; masked text; outcome text; cnt integer;
 begin
+  -- No cron: each command first drops the raw email of expired cards and ended jobs.
+  update app_private.admin_pending set state = 'expired', email = null
+   where state = 'pending' and expires_at < now();
+  update app_private.admin_pending set email = null where email is not null and expires_at < now();
+  update app_private.admin_jobs set email = null where email is not null and state in ('ok','failed');
   -- Rate limit: 30 commands in 10 minutes.
   select count(*) into cnt from app_private.admin_commands
    where owner_id = owner and at > now() - interval '10 minutes';
@@ -500,7 +505,7 @@ begin
   exception when others then
     -- One generic line, never the cause: it could hold an email.
     begin
-      perform app_private.admin_reply(new.conversation_id, jsonb_build_object('k','err'));
+      perform app_private.admin_reply(new.conversation_id, jsonb_build_object('k','err','help',true));
       insert into app_private.admin_commands(owner_id, command, outcome) values (new.sender_id, 'unknown', 'err');
     exception when others then
       null;

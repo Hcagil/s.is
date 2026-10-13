@@ -116,8 +116,8 @@ class _AdminReplyBubbleState extends ConsumerState<AdminReplyBubble> {
         );
       case 'fwd':
         final text = l.adminFwdBody(
-          m['l'] as String? ?? '',
           m['e'] as String? ?? '',
+          m['l'] as String? ?? '',
         );
         content = Column(
           crossAxisAlignment: CrossAxisAlignment.start,

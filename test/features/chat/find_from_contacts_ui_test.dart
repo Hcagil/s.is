@@ -6,12 +6,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/data/shared_prefs_contacts_disclosure_store.dart';
 import 'package:sis/features/chat/domain/phone_book.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
@@ -46,8 +48,12 @@ const discBody =
     'phone.';
 
 class World {
-  World({bool accepted = false, int budget = 3})
-    : store = FakeDisclosureStore(isAccepted: accepted) {
+  World({
+    bool accepted = false,
+    int budget = 3,
+    this.user = me,
+    this.disclosure,
+  }) : store = FakeDisclosureStore(isAccepted: accepted) {
     contacts.contactsBudget = budget;
     chat.conversationsResult = const Ok([]);
     chat.membersResult = const Ok([]);
@@ -56,17 +62,23 @@ class World {
   final chat = ChatFake(latency: const Duration(milliseconds: 2));
   final contacts = ContactsFake(directory: [me, bob]);
   final FakeDisclosureStore store;
+
+  /// Who is signed in on this run of the app.
+  final Member user;
+
+  /// The real store, when a test needs it instead of [store].
+  final ContactsDisclosureStore? disclosure;
   final book = FakePhoneBook(
     persons: const [
       PhoneBookPerson(id: '1', name: 'Bobby', emails: ['bob@mail.test']),
       PhoneBookPerson(id: '2', name: 'Dan', emails: ['dan@mail.test']),
     ],
   );
-  final profile = ProfileFake(
-    profile: const OwnProfile(
-      userId: 'u1',
-      displayName: 'Maya Kaya',
-      tag: 'maya',
+  late final profile = ProfileFake(
+    profile: OwnProfile(
+      userId: user.userId,
+      displayName: user.displayName,
+      tag: user.tag!,
       onboardingDone: true,
     ),
   );
@@ -76,12 +88,12 @@ class World {
       ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(config),
       authRepositoryProvider.overrideWithValue(
-        FakeAuth(session: true, member: me),
+        FakeAuth(session: true, member: user),
       ),
       updateRepositoryProvider.overrideWithValue(FakeUpdate()),
       chatRepositoryProvider.overrideWithValue(chat),
       contactsRepositoryProvider.overrideWithValue(contacts),
-      contactsDisclosureStoreProvider.overrideWithValue(store),
+      contactsDisclosureStoreProvider.overrideWithValue(disclosure ?? store),
       phoneBookProvider.overrideWithValue(book),
       presenceRepositoryProvider.overrideWithValue(PresenceFake()),
       profileRepositoryProvider.overrideWithValue(profile),
@@ -238,6 +250,42 @@ void main() {
       w.book.access = PhoneBookAccess.granted;
       await tapKey(t, 'find-primary');
       expect(w.book.accessCalls, greaterThan(asked));
+      expect(byKey('find-on-u2'), findsOneWidget);
+    });
+  });
+
+  group('two accounts on one phone', () {
+    const nora = Member(userId: 'u7', displayName: 'Nora Lake', tag: 'nora');
+
+    // One phone: shared_preferences persists between runs of the app; the
+    // real store reads the signed-in user id the way main.dart wires it.
+    Future<void> run(WidgetTester t, Member user) async {
+      await t.pumpWidget(const SizedBox()); // the previous run ends
+      final w = World(
+        user: user,
+        disclosure: SharedPrefsContactsDisclosureStore(() => user.userId),
+      );
+      await openFind(t, w);
+    }
+
+    testWidgets('a second account sees the disclosure again; the first '
+        'keeps its acceptance', (t) async {
+      SharedPreferences.setMockInitialValues({});
+      await run(t, me);
+      expect(byKey('find-not-now'), findsOneWidget);
+      await tapKey(t, 'find-primary');
+      expect(byKey('find-on-u2'), findsOneWidget);
+
+      await run(t, nora);
+      expect(
+        byKey('find-not-now'),
+        findsOneWidget,
+        reason: "Maya's acceptance must not count for Nora",
+      );
+      expect(byKey('find-on-u2'), findsNothing);
+
+      await run(t, me);
+      expect(byKey('find-not-now'), findsNothing, reason: 'Maya accepted');
       expect(byKey('find-on-u2'), findsOneWidget);
     });
   });

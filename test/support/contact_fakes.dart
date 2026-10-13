@@ -15,10 +15,16 @@ class FakePhoneBook implements PhoneBook {
   FakePhoneBook({
     this.access = PhoneBookAccess.granted,
     List<PhoneBookEntry>? contacts,
-  }) : contacts = contacts ?? [];
+    List<PhoneBookPerson>? persons,
+  }) : contacts = contacts ?? [],
+       persons = persons ?? [];
 
   PhoneBookAccess access;
   List<PhoneBookEntry> contacts;
+
+  /// Every contact with its emails, for people(); returned sorted by name.
+  List<PhoneBookPerson> persons;
+  int peopleCalls = 0;
 
   int accessCalls = 0;
   int entriesCalls = 0;
@@ -41,6 +47,14 @@ class FakePhoneBook implements PhoneBook {
     entriesCalls++;
     if (access != PhoneBookAccess.granted) return const [];
     return List.of(contacts);
+  }
+
+  @override
+  Future<List<PhoneBookPerson>> people() async {
+    peopleCalls++;
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+    if (access != PhoneBookAccess.granted) return const [];
+    return List.of(persons)..sort((a, b) => a.name.compareTo(b.name));
   }
 
   @override
@@ -67,5 +81,29 @@ class FakeContactShare implements ContactShareRepository {
     final g = gate;
     if (g != null) await g.future;
     return answer;
+  }
+}
+
+/// The local "disclosure accepted" flag, as ContactsDisclosureStore states
+/// it: false until accept(), true afterwards, on this phone.
+class FakeDisclosureStore implements ContactsDisclosureStore {
+  FakeDisclosureStore({this.isAccepted = false});
+
+  bool isAccepted;
+  int readCalls = 0;
+  int acceptCalls = 0;
+
+  @override
+  Future<bool> accepted() async {
+    readCalls++;
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    return isAccepted;
+  }
+
+  @override
+  Future<void> accept() async {
+    acceptCalls++;
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    isAccepted = true;
   }
 }

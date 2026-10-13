@@ -478,9 +478,8 @@ void main() {
     }
   });
 
-  testWidgets('New chat: the grey permission row sits below the divider', (
-    t,
-  ) async {
+  testWidgets('New chat: the Find people from contacts row sits below the '
+      'divider and is live, not grey', (t) async {
     phone(t);
     final container = await settled(
       ProviderContainer.test(
@@ -503,7 +502,9 @@ void main() {
       ),
     );
     await t.pumpAndSettle();
-    final perm = t.getRect(byKey('grey-f_perm'));
+    // Step 16 made the old grey f_perm placeholder a live row.
+    expect(byKey('grey-f_perm'), findsNothing);
+    final perm = t.getRect(byKey('find-from-contacts'));
     final dividers = find.descendant(
       of: byKey('new-chat-page'),
       matching: find.byType(Divider),
@@ -512,7 +513,7 @@ void main() {
     expect(
       t.getRect(dividers.first).bottom,
       lessThanOrEqualTo(perm.top),
-      reason: 'grey-f_perm is not below the divider',
+      reason: 'find-from-contacts is not below the divider',
     );
   });
 

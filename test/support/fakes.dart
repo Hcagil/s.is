@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -3723,6 +3724,64 @@ class ContactsFake implements ContactsRepository {
   Result<void>? addResult;
   Result<void>? removeResult;
   Result<Set<String>>? idsResult;
+
+  /// find_by_contacts, as docs/SECURITY.md and the step-16 contract state it:
+  /// matches a [directory] member whose [Member.email] hashes (SHA-256 hex
+  /// of lower(btrim)) to a sent hash, never the caller, never more than once
+  /// per hash; the email never comes back. [contactsBudget] calls succeed,
+  /// then every call is [SearchLimitFailure]. More than 2000 hashes, or one
+  /// that is not 64 lower-case hex characters, is refused like 22023.
+  int contactsBudget = 3;
+  Result<List<ContactMatch>>? contactsResult;
+
+  /// Every list of hashes sent, in call order.
+  final contactCalls = <List<String>>[];
+
+  Completer<void>? _contacts;
+  void holdContacts() => _contacts = Completer<void>();
+  void releaseContacts() {
+    _contacts?.complete();
+    _contacts = null;
+  }
+
+  @override
+  Future<Result<List<ContactMatch>>> findByContacts(List<String> hashes) async {
+    contactCalls.add(List.of(hashes));
+    await _tick('contacts:${hashes.length}');
+    final held = _contacts;
+    if (held != null) await held.future;
+    if (contactsResult case final forced?) return forced;
+    if (contactCalls.length > contactsBudget) {
+      return const Err(SearchLimitFailure());
+    }
+    final hex = RegExp(r'^[0-9a-f]{64}$');
+    if (hashes.length > 2000 || !hashes.every(hex.hasMatch)) {
+      return const Err(ProviderFailure('Something went wrong'));
+    }
+    final wanted = hashes.toSet();
+    final out = <ContactMatch>[];
+    for (final m in directory.values) {
+      final email = m.email;
+      if (m.userId == me || email == null) continue;
+      final h = sha256
+          .convert(utf8.encode(email.trim().toLowerCase()))
+          .toString();
+      if (!wanted.contains(h)) continue;
+      found.add(m.userId);
+      out.add(
+        ContactMatch(
+          member: Member(
+            userId: m.userId,
+            displayName: m.displayName,
+            tag: m.tag,
+            avatarPath: m.avatarPath,
+          ),
+          hash: h,
+        ),
+      );
+    }
+    return Ok(out);
+  }
 
   /// Called after the server state changed (a save or a removal), so a world
   /// can re-derive what `profiles_public()` would now return.

@@ -7,6 +7,8 @@
 #   tool/sis_bot.sh start <user_id|@tag> [text|-]  open a 1:1 with a listed tester (and say hello)
 #   tool/sis_bot.sh status
 #   tool/sis_bot.sh revoke                         sign this session out everywhere, delete the file
+#   tool/sis_bot.sh edit <message_id> <text|->    change one of the bot's own messages (within 6 hours)
+#   tool/sis_bot.sh delete <message_id>           delete one of the bot's own messages for everyone
 #
 # Exit codes: 1 other error, 2 usage or unsafe state file, 3 session lost or
 # superseded (the owner runs the admin tool's `mint`), 4 not permitted (not
@@ -24,8 +26,8 @@ UUID_RE='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F
 
 die() { echo "$2" >&2; exit "$1"; }
 cmd=${1:-}; [ $# -gt 0 ] && shift
-case "$cmd" in read|send|start|status|revoke) ;;
-  *) die 2 "usage: tool/sis_bot.sh read [--since ISO] | send <conversation_id> [text|-] | start <user_id|@tag> [text|-] | status | revoke" ;;
+case "$cmd" in read|send|start|status|revoke|edit|delete) ;;
+  *) die 2 "usage: tool/sis_bot.sh read [--since ISO] | send <conversation_id> [text|-] | start <user_id|@tag> [text|-] | status | revoke | edit <message_id> <text|-> | delete <message_id>" ;;
 esac
 
 # Body text from the first remaining argument or stdin ('-' or missing).
@@ -46,6 +48,8 @@ case "$cmd" in
   send) [ $# -ge 1 ] || die 2 "send needs a conversation id"; TEXT=$(body_arg "${2:--}") ;;
   start) [ $# -ge 1 ] || die 2 "start needs a user id or @tag"
          if [ $# -ge 2 ]; then TEXT=$(body_arg "$2"); fi ;;
+  edit) [ $# -ge 1 ] || die 2 "edit needs a message id"; TEXT=$(body_arg "${2:--}") ;;
+  delete) [ $# -ge 1 ] || die 2 "delete needs a message id" ;;
 esac
 
 # 2. One run at a time.
@@ -178,5 +182,17 @@ PY
     [ "$STATUS" = 204 ] || die 1 "revoke failed (http $STATUS); the owner runs tool/sis_bot_admin.sh revoke"
     shred -u "$FILE" 2>/dev/null || rm -f "$FILE"
     echo revoked
+    ;;
+
+  edit)
+    [[ $1 =~ $UUID_RE ]] || die 2 "not a message id"
+    call POST /rest/v1/rpc/edit_message "$(python3 -c 'import json,sys;print(json.dumps({"message":sys.argv[1],"body":sys.argv[2]}))' "$1" "$TEXT")"
+    echo "edited $1"
+    ;;
+
+  delete)
+    [[ $1 =~ $UUID_RE ]] || die 2 "not a message id"
+    call POST /rest/v1/rpc/delete_message "{\"message\":\"$1\"}"
+    echo "deleted $1"
     ;;
 esac

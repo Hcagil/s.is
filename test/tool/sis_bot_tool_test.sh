@@ -254,13 +254,16 @@ n4000=$(printf 'ş%.0s' $(seq 4000))
 expect_exit 0 "edit to 4000 characters (multi-byte, stdin)" bash -c "printf '%s' '$n4000' | '$BOT' edit '$M1' -"
 check "the 4000-character body is stored" test "$(sql "select char_length(body) from public.messages where id = '$M1'")" = 4000
 expect_exit 0 "edit back" "$BOT" edit "$M1" "edited body"
-expect_exit 2 "edit with empty text" "$BOT" edit "$M1" ""
+# open_stdin cmd...: cmd with a stdin that stays open and silent, killed after
+# 10 s, so a command that waits on stdin when it should not shows as exit 124.
+open_stdin() { timeout 10 "$@" < <(sleep 30); }
+expect_exit 2 "edit with empty text (stdin left unread)" open_stdin "$BOT" edit "$M1" ""
 expect_exit 2 "edit with empty stdin" bash -c "printf '' | '$BOT' edit '$M1' -"
-expect_exit 2 "edit with no text" "$BOT" edit "$M1"
-expect_exit 2 "edit with no id" "$BOT" edit
+expect_exit 2 "edit with no text (stdin left unread)" open_stdin "$BOT" edit "$M1"
+expect_exit 2 "edit with no id" open_stdin "$BOT" edit
 expect_exit 2 "edit a bad uuid" "$BOT" edit "not-a-uuid" "x"
 expect_exit 2 "delete a bad uuid" "$BOT" delete "1234"
-expect_exit 2 "delete with no id" "$BOT" delete
+expect_exit 2 "delete with no id" open_stdin "$BOT" delete
 check "the refused edits left the body alone" test "$(body_of "$M1")" = "edited body"
 ANN_MSG=$(sql "select id from public.messages where sender_id = '$ANN' and body = 'hello from ann'")
 t=$(jq -r .refresh_token "$STATE")

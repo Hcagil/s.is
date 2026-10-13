@@ -41,6 +41,7 @@ class _StickerCutoutPageState extends State<StickerCutoutPage> {
         builder: (context, child) {
           final d = widget.draft;
           final ready = d.cutOut && d.hasCutOut;
+          final pending = d.cutOut && !d.hasCutOut; // mask not arrived yet
           return Column(
             children: [
               TweenAnimationBuilder<double>(
@@ -72,6 +73,7 @@ class _StickerCutoutPageState extends State<StickerCutoutPage> {
                           labels: [l.makerErase, l.makerRestore],
                           selected: _erase ? 0 : 1,
                           onChanged: (i) => setState(() => _erase = i == 0),
+                          enabled: !pending,
                         ),
                         const SizedBox(height: 10),
                         Row(
@@ -99,7 +101,7 @@ class _StickerCutoutPageState extends State<StickerCutoutPage> {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          l.makerBrushHint,
+                          pending ? l.makerCutoutPreparing : l.makerBrushHint,
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodySmall,
                         ),

@@ -100,6 +100,8 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     // Sticker maker background removal (ML Kit subject segmentation, beta). The model is downloaded by Google Play services; needs minSdk 24 (Flutter's default).
+    // ModuleInstallClient (explicit model install), per developers.google.com/android/guides/module-install-apis.
+    implementation("com.google.android.gms:play-services-base:18.11.0")
     implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
     testImplementation("junit:junit:4.13.2")
     // android.jar's org.json is a stub in JVM unit tests; this is the real one.

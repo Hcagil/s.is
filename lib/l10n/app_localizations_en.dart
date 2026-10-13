@@ -1946,6 +1946,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get makerBrushHint => 'Paint to erase or bring back parts';
 
   @override
+  String get makerCutoutPreparing => 'Removing background…';
+
+  @override
+  String get makerCutoutUnavailable =>
+      'Couldn\'t remove the background right now. Your image stays as it is.';
+
+  @override
+  String get makerCutoutNoSupport =>
+      'This phone can\'t remove backgrounds. Your image stays as it is.';
+
+  @override
   String get makerEditTitle => 'Edit sticker';
 
   @override

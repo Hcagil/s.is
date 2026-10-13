@@ -40,10 +40,11 @@ final contactsDisclosureStoreProvider = Provider<ContactsDisclosureStore>(
   (_) => throw UnimplementedError('override in main'),
 );
 
-final findFromContactsControllerProvider = AsyncNotifierProvider.autoDispose<
-  FindFromContactsController,
-  FindContactsState
->(FindFromContactsController.new, retry: _never);
+final findFromContactsControllerProvider =
+    AsyncNotifierProvider.autoDispose<
+      FindFromContactsController,
+      FindContactsState
+    >(FindFromContactsController.new, retry: _never);
 
 /// The last result of this session; outlives the page so a reopening that hits
 /// the limit can still show it.

@@ -40,22 +40,28 @@ final contactsDisclosureStoreProvider = Provider<ContactsDisclosureStore>(
   (_) => throw UnimplementedError('override in main'),
 );
 
-final findFromContactsControllerProvider =
-    AsyncNotifierProvider<FindFromContactsController, FindContactsState>(
-      FindFromContactsController.new,
-      retry: _never,
-    );
+final findFromContactsControllerProvider = AsyncNotifierProvider.autoDispose<
+  FindFromContactsController,
+  FindContactsState
+>(FindFromContactsController.new, retry: _never);
+
+/// The last result of this session; outlives the page so a reopening that hits
+/// the limit can still show it.
+final _lastFindProvider = Provider<_LastFind>((_) => _LastFind());
+
+class _LastFind {
+  FindResult? result;
+  String? user;
+}
 
 class FindFromContactsController extends AsyncNotifier<FindContactsState> {
-  FindResult? _last;
-  String? _lastUser;
-
   @override
   Future<FindContactsState> build() async {
     final uid = ref.watch(currentUserIdProvider);
-    if (uid != _lastUser) {
-      _last = null; // never carry one member's result to the next
-      _lastUser = uid;
+    final mem = ref.read(_lastFindProvider);
+    if (uid != mem.user) {
+      mem.result = null; // never carry one member's result to the next
+      mem.user = uid;
     }
     if (!await ref.read(contactsDisclosureStoreProvider).accepted()) {
       return const FindNeedsConsent();
@@ -110,8 +116,8 @@ class FindFromContactsController extends AsyncNotifier<FindContactsState> {
           }
         case Err(failure: SearchLimitFailure()):
           return FindResult(
-            onSis: _last?.onSis ?? const [],
-            notOnSis: _last?.notOnSis ?? const [],
+            onSis: ref.read(_lastFindProvider).result?.onSis ?? const [],
+            notOnSis: ref.read(_lastFindProvider).result?.notOnSis ?? const [],
             limited: true,
           );
         case Err(:final failure):
@@ -132,6 +138,9 @@ class FindFromContactsController extends AsyncNotifier<FindContactsState> {
         onSis.add(FoundContact(name: p.name, member: member));
       }
     }
-    return _last = FindResult(onSis: onSis, notOnSis: notOnSis);
+    return ref.read(_lastFindProvider).result = FindResult(
+      onSis: onSis,
+      notOnSis: notOnSis,
+    );
   }
 }

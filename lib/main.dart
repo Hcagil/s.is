@@ -230,7 +230,9 @@ Future<void> main() async {
             SupabasePollRepository(client),
           ),
           contactsDisclosureStoreProvider.overrideWithValue(
-            const SharedPrefsContactsDisclosureStore(),
+            SharedPrefsContactsDisclosureStore(
+              () => client.auth.currentUser?.id,
+            ),
           ),
           contactsRepositoryProvider.overrideWithValue(
             SupabaseContactsRepository(client),

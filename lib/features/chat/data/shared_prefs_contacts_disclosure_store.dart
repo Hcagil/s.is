@@ -8,12 +8,18 @@ import '../domain/phone_book.dart';
 final class SharedPrefsContactsDisclosureStore
     implements ContactsDisclosureStore {
   /// Creates the store.
-  const SharedPrefsContactsDisclosureStore();
+  const SharedPrefsContactsDisclosureStore([this._userId]);
 
-  static const _key = 'sis.contacts.disclosure';
+  final String? Function()? _userId;
+
+  String get _key => 'sis.contacts.disclosure.${_userId?.call() ?? ''}';
+
+  // A signed-in check that finds no user must not share a flag across accounts.
+  bool get _noUser => _userId != null && (_userId.call() ?? '').isEmpty;
 
   @override
   Future<bool> accepted() async {
+    if (_noUser) return false;
     try {
       final prefs = await SharedPreferences.getInstance();
       return prefs.getBool(_key) ?? false;
@@ -28,6 +34,7 @@ final class SharedPrefsContactsDisclosureStore
 
   @override
   Future<void> accept() async {
+    if (_noUser) return;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_key, true);

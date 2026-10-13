@@ -578,3 +578,25 @@ begin
 end $$;
 revoke all on function public.admin_answer(uuid, boolean) from public, anon;
 grant execute on function public.admin_answer(uuid, boolean) to authenticated;
+
+-- The chat list words admin chat previews in the reader's language: admin_msg at the end.
+create or replace view public.conversation_previews
+with (security_invoker = true) as
+select cm.conversation_id, m.body, m.attachment_path, m.created_at,
+       m.sender_id, m.deleted, m.poll, m.contact, m.attachment_name,
+       m.attachment_duration_ms, m.location_lat, m.attachment_mime,
+       m.sticker_id, m.sticker_album, m.admin_msg
+  from (select distinct conversation_id from public.conversation_members
+         where user_id = auth.uid()) cm
+  cross join lateral (
+    select mm.body, mm.attachment_path, mm.created_at, mm.sender_id, mm.deleted, mm.poll,
+           mm.contact, mm.attachment_name, mm.attachment_duration_ms, mm.location_lat,
+           mm.attachment_mime, mm.sticker_id, mm.sticker_album, mm.admin_msg
+      from public.messages mm
+     where mm.conversation_id = cm.conversation_id
+       and mm.deleted is distinct from 'vanished'
+     order by mm.created_at desc
+     limit 1
+  ) m;
+revoke all on public.conversation_previews from anon, authenticated;
+grant select on public.conversation_previews to authenticated;

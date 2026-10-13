@@ -239,7 +239,7 @@ final class SupabaseChatRepository implements ChatRepository {
         _client
             .from('conversation_previews')
             .select(
-              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name, attachment_duration_ms, location_lat, attachment_mime, sticker_id, sticker_album',
+              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name, attachment_duration_ms, location_lat, attachment_mime, sticker_id, sticker_album, admin_msg',
             )
             .retriedOnce(),
         // Only conversations with something unread come back.
@@ -281,7 +281,9 @@ final class SupabaseChatRepository implements ChatRepository {
                 : row['attachment_name'] != null
                 ? filePreview(row['attachment_name'] as String)
                 : adminChatById[row['conversation_id']] == true
-                ? (row['body'] as String).split('\n').first
+                ? (row['admin_msg'] == null
+                      ? (row['body'] as String).split('\n').first
+                      : adminPreviewPrefix + jsonEncode(row['admin_msg']))
                 : (row['body'] as String).isNotEmpty
                 ? row['body'] as String
                 : (row['attachment_path'] == null ? '' : 'Photo'),

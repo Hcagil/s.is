@@ -44,6 +44,15 @@ String? adminReplyText(AppLocalizations l, Map<String, dynamic> m) {
       '/listtesters - ${l.adminHelpList}';
 }
 
+/// The one-line chat-list preview of an admin reply in the reader's language.
+String adminPreviewLine(AppLocalizations l, Map<String, dynamic> m) =>
+    switch (m['k']) {
+      'list' => l.adminListHeader(m['n'] as int? ?? 0),
+      'fwd' => l.adminFwdTitle,
+      'conf' => l.adminConfTitle,
+      _ => (adminReplyText(l, m) ?? '').split('\n').first,
+    };
+
 List<String> _emails(Object? v) => [
   for (final x in (v as List?) ?? const []) '$x',
 ];
@@ -119,12 +128,21 @@ class _AdminReplyBubbleState extends ConsumerState<AdminReplyBubble> {
             ),
             const SizedBox(height: 4),
             Text(text),
-            TextButton(
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: text));
-                if (context.mounted) showSisNotice(context, l.adminCopied);
-              },
-              child: Text(l.adminCopy),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextButton(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: text));
+                    if (context.mounted) showSisNotice(context, l.adminCopied);
+                  },
+                  child: Text(l.adminCopy),
+                ),
+                TextButton(
+                  onPressed: () => ref.read(textSharerProvider).share(text),
+                  child: Text(l.adminShare),
+                ),
+              ],
             ),
           ],
         );

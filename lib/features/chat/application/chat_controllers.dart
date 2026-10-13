@@ -38,6 +38,7 @@ import '../domain/phone_book.dart';
 import '../domain/picture_cropper.dart';
 import '../domain/poll.dart';
 import '../domain/admin_chat_repository.dart';
+import '../domain/text_sharer.dart';
 import '../domain/poll_repository.dart';
 import '../domain/reaction.dart';
 import '../domain/reaction_repository.dart';
@@ -79,6 +80,9 @@ final reactionRepositoryProvider = Provider<ReactionRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 final pollRepositoryProvider = Provider<PollRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+final textSharerProvider = Provider<TextSharer>(
   (_) => throw UnimplementedError('override in main'),
 );
 final adminChatRepositoryProvider = Provider<AdminChatRepository>(

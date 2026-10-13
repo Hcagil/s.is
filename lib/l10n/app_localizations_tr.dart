@@ -2049,4 +2049,151 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get videoRefusedMore => 'SIS içinde oynatılamıyor.';
+
+  @override
+  String get adminUnk => 'Bu komutu bilmiyorum.';
+
+  @override
+  String get adminNoem => 'Bu komut bir e-posta adresi gerektiriyor.';
+
+  @override
+  String get adminBad => 'E-posta adresi doğru görünmüyor.';
+
+  @override
+  String get adminHelpHeader => 'Komutlar:';
+
+  @override
+  String get adminHelpIos => 'iPhone test kullanıcısı ekle';
+
+  @override
+  String get adminHelpAnd => 'Android test kullanıcısı ekle';
+
+  @override
+  String get adminHelpRm => 'Test kullanıcısı kaldır';
+
+  @override
+  String get adminHelpList => 'Test kullanıcılarını say ve listele';
+
+  @override
+  String adminIosOk(String email) {
+    return '$email izin listesine eklendi. Apple, daveti e-posta ile gönderecek. Aynı e-postayla giriş yapmasını söyle.';
+  }
+
+  @override
+  String get adminP1 => 'Apple’a davet gönderiliyor…';
+
+  @override
+  String get adminP2 => 'Apple yavaş. Tekrar deniyor (2/3)…';
+
+  @override
+  String get adminP3 => 'Apple kabul etti. Davet e-postası yollanıyor.';
+
+  @override
+  String adminFail(String reason) {
+    return 'Apple adımı başarısız: $reason. İzin listesi kaydedildi; tekrar denemek için komutu yeniden yaz.';
+  }
+
+  @override
+  String adminAndOk(String email) {
+    return '$email izin listesine eklendi. Elle bir adım: Bu e-postayı Play Console > Internal testing > Testers > Bacanaks kısmına ekle.';
+  }
+
+  @override
+  String get adminFwdTitle => 'İletilmeye hazır';
+
+  @override
+  String adminFwdBody(String email, String link) {
+    return 'Merhaba! SIS’i Android ile test edebilirsin.\n1. Bu bağlantıyı aç ve daveti kabul et: $link\n2. Google Play’den SIS’i yükle.\n3. Şu e-postayla giriş yap: $email';
+  }
+
+  @override
+  String get adminCopy => 'Kopyala';
+
+  @override
+  String get adminCopied => 'Kopyalandı';
+
+  @override
+  String get adminShare => 'Paylaş';
+
+  @override
+  String get adminConfTitle => 'Bu test kullanıcısı kaldırılsın mı?';
+
+  @override
+  String adminConfBody(String email) {
+    return '$email artık SIS’e erişemeyecek.';
+  }
+
+  @override
+  String get adminConfNo => 'İptal';
+
+  @override
+  String get adminConfYes => 'Kaldır';
+
+  @override
+  String get adminConfDone => 'Kaldırıldı';
+
+  @override
+  String get adminConfCancelled => 'İptal edildi';
+
+  @override
+  String adminRmOk(String email) {
+    return '$email izin listesinden kaldırıldı. Şimdi Play’de elle kaldır: Play Console > Internal testing > Testers > Bacanaks > bu e-postayı sil.';
+  }
+
+  @override
+  String get adminCanOk => 'İptal edildi. Hiçbir şey kaldırılmadı.';
+
+  @override
+  String adminNoList(String email) {
+    return '$email test kullanıcı listesinde yok.';
+  }
+
+  @override
+  String adminR1(String email) {
+    return '$email TestFlight grubundan çıkarılıyor…';
+  }
+
+  @override
+  String get adminR2 => 'Apple yavaş. Tekrar deniyor (2/3)…';
+
+  @override
+  String get adminR3 => 'TestFlight’tan çıkarıldı.';
+
+  @override
+  String adminFailRm(String reason) {
+    return 'Apple adımı başarısız: $reason. İzin listesi satırı zaten kaldırıldı; tekrar denemek için komutu yeniden yaz.';
+  }
+
+  @override
+  String adminListHeader(int count) {
+    return 'Test kullanıcıları: $count';
+  }
+
+  @override
+  String adminListIos(int count) {
+    return 'iPhone ($count)';
+  }
+
+  @override
+  String adminListAnd(int count) {
+    return 'Android ($count)';
+  }
+
+  @override
+  String get adminRate => 'Çok fazla komut. Bir dakika bekle ve tekrar dene.';
+
+  @override
+  String get adminKeep => 'İptal edildi: bu kart artık geçerli değil.';
+
+  @override
+  String get adminErr => 'Bir şeyler ters gitti. Hiçbir şey değiştirilmedi.';
+
+  @override
+  String get adminNoLink =>
+      'Play davet bağlantısı henüz ayarlanmadı. Sahibinden ayarlamasını iste, sonra komutu yeniden yaz.';
+
+  @override
+  String adminListOther(int count) {
+    return 'Diğer ($count)';
+  }
 }

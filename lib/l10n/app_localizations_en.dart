@@ -2073,4 +2073,151 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoRefusedMore => 'It cannot play inside SIS.';
+
+  @override
+  String get adminUnk => 'I don’t know that command.';
+
+  @override
+  String get adminNoem => 'That command needs an email address.';
+
+  @override
+  String get adminBad => 'That email address doesn’t look right.';
+
+  @override
+  String get adminHelpHeader => 'Commands:';
+
+  @override
+  String get adminHelpIos => 'Add an iPhone tester';
+
+  @override
+  String get adminHelpAnd => 'Add an Android tester';
+
+  @override
+  String get adminHelpRm => 'Remove a tester';
+
+  @override
+  String get adminHelpList => 'Count and list testers';
+
+  @override
+  String adminIosOk(String email) {
+    return 'Added $email to the allowlist. Apple will email the invite. Tell them to sign in with the same email.';
+  }
+
+  @override
+  String get adminP1 => 'Sending the invite to Apple…';
+
+  @override
+  String get adminP2 => 'Apple is slow. Trying again (2 of 3)…';
+
+  @override
+  String get adminP3 => 'Apple accepted. The invite email is on its way.';
+
+  @override
+  String adminFail(String reason) {
+    return 'Apple step failed: $reason. The allowlist row is saved; type the command again to retry.';
+  }
+
+  @override
+  String adminAndOk(String email) {
+    return 'Added $email to the allowlist. One step by hand: add this email to Play Console > Internal testing > Testers > Bacanaks.';
+  }
+
+  @override
+  String get adminFwdTitle => 'Ready to forward';
+
+  @override
+  String adminFwdBody(String email, String link) {
+    return 'Hi! You can test SIS on Android now.\n1. Open this link and accept the invite: $link\n2. Install SIS from Google Play.\n3. Sign in with this email: $email';
+  }
+
+  @override
+  String get adminCopy => 'Copy';
+
+  @override
+  String get adminCopied => 'Copied';
+
+  @override
+  String get adminShare => 'Share';
+
+  @override
+  String get adminConfTitle => 'Remove this tester?';
+
+  @override
+  String adminConfBody(String email) {
+    return '$email loses access to SIS.';
+  }
+
+  @override
+  String get adminConfNo => 'Cancel';
+
+  @override
+  String get adminConfYes => 'Remove';
+
+  @override
+  String get adminConfDone => 'Removed';
+
+  @override
+  String get adminConfCancelled => 'Cancelled';
+
+  @override
+  String adminRmOk(String email) {
+    return 'Removed $email from the allowlist. Now remove it by hand in Play: Play Console > Internal testing > Testers > Bacanaks > delete this email.';
+  }
+
+  @override
+  String get adminCanOk => 'Cancelled. Nothing was removed.';
+
+  @override
+  String adminNoList(String email) {
+    return '$email is not on the tester list.';
+  }
+
+  @override
+  String adminR1(String email) {
+    return 'Removing $email from the TestFlight group…';
+  }
+
+  @override
+  String get adminR2 => 'Apple is slow. Trying again (2 of 3)…';
+
+  @override
+  String get adminR3 => 'Removed from TestFlight.';
+
+  @override
+  String adminFailRm(String reason) {
+    return 'Apple step failed: $reason. The allowlist row is already removed; type the command again to retry.';
+  }
+
+  @override
+  String adminListHeader(int count) {
+    return 'Testers: $count';
+  }
+
+  @override
+  String adminListIos(int count) {
+    return 'iPhone ($count)';
+  }
+
+  @override
+  String adminListAnd(int count) {
+    return 'Android ($count)';
+  }
+
+  @override
+  String get adminRate => 'Too many commands. Wait a minute and try again.';
+
+  @override
+  String get adminKeep => 'Cancelled: this card is no longer valid.';
+
+  @override
+  String get adminErr => 'Something went wrong. Nothing was changed.';
+
+  @override
+  String get adminNoLink =>
+      'The Play opt-in link is not set yet. Ask the owner to set it, then type the command again.';
+
+  @override
+  String adminListOther(int count) {
+    return 'Other ($count)';
+  }
 }

@@ -61,6 +61,7 @@ import 'features/chat/data/supabase_group_settings_repository.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
 import 'features/chat/data/supabase_location_share_repository.dart';
 import 'features/chat/data/url_launcher_maps_opener.dart';
+import 'features/chat/data/supabase_admin_chat_repository.dart';
 import 'features/chat/data/supabase_poll_repository.dart';
 import 'features/chat/data/supabase_reaction_repository.dart';
 import 'features/chat/data/supabase_sticker_repository.dart';
@@ -219,6 +220,9 @@ Future<void> main() async {
           ),
           reactionRepositoryProvider.overrideWithValue(
             SupabaseReactionRepository(client),
+          ),
+          adminChatRepositoryProvider.overrideWithValue(
+            SupabaseAdminChatRepository(client),
           ),
           pollRepositoryProvider.overrideWithValue(
             SupabasePollRepository(client),

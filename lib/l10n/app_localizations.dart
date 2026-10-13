@@ -3679,6 +3679,246 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'It cannot play inside SIS.'**
   String get videoRefusedMore;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'I don’t know that command.'**
+  String get adminUnk;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'That command needs an email address.'**
+  String get adminNoem;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'That email address doesn’t look right.'**
+  String get adminBad;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Commands:'**
+  String get adminHelpHeader;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Add an iPhone tester'**
+  String get adminHelpIos;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Add an Android tester'**
+  String get adminHelpAnd;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Remove a tester'**
+  String get adminHelpRm;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Count and list testers'**
+  String get adminHelpList;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Added {email} to the allowlist. Apple will email the invite. Tell them to sign in with the same email.'**
+  String adminIosOk(String email);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Sending the invite to Apple…'**
+  String get adminP1;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Apple is slow. Trying again (2 of 3)…'**
+  String get adminP2;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Apple accepted. The invite email is on its way.'**
+  String get adminP3;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Apple step failed: {reason}. The allowlist row is saved; type the command again to retry.'**
+  String adminFail(String reason);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Added {email} to the allowlist. One step by hand: add this email to Play Console > Internal testing > Testers > Bacanaks.'**
+  String adminAndOk(String email);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to forward'**
+  String get adminFwdTitle;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Hi! You can test SIS on Android now.\n1. Open this link and accept the invite: {link}\n2. Install SIS from Google Play.\n3. Sign in with this email: {email}'**
+  String adminFwdBody(String email, String link);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get adminCopy;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get adminCopied;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get adminShare;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this tester?'**
+  String get adminConfTitle;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'{email} loses access to SIS.'**
+  String adminConfBody(String email);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get adminConfNo;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get adminConfYes;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Removed'**
+  String get adminConfDone;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get adminConfCancelled;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Removed {email} from the allowlist. Now remove it by hand in Play: Play Console > Internal testing > Testers > Bacanaks > delete this email.'**
+  String adminRmOk(String email);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled. Nothing was removed.'**
+  String get adminCanOk;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'{email} is not on the tester list.'**
+  String adminNoList(String email);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Removing {email} from the TestFlight group…'**
+  String adminR1(String email);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Apple is slow. Trying again (2 of 3)…'**
+  String get adminR2;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Removed from TestFlight.'**
+  String get adminR3;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Apple step failed: {reason}. The allowlist row is already removed; type the command again to retry.'**
+  String adminFailRm(String reason);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Testers: {count}'**
+  String adminListHeader(int count);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'iPhone ({count})'**
+  String adminListIos(int count);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Android ({count})'**
+  String adminListAnd(int count);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Too many commands. Wait a minute and try again.'**
+  String get adminRate;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled: this card is no longer valid.'**
+  String get adminKeep;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Nothing was changed.'**
+  String get adminErr;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'The Play opt-in link is not set yet. Ask the owner to set it, then type the command again.'**
+  String get adminNoLink;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Other ({count})'**
+  String adminListOther(int count);
 }
 
 class _AppLocalizationsDelegate

@@ -37,6 +37,7 @@ import '../domain/message.dart';
 import '../domain/phone_book.dart';
 import '../domain/picture_cropper.dart';
 import '../domain/poll.dart';
+import '../domain/admin_chat_repository.dart';
 import '../domain/poll_repository.dart';
 import '../domain/reaction.dart';
 import '../domain/reaction_repository.dart';
@@ -80,6 +81,15 @@ final reactionRepositoryProvider = Provider<ReactionRepository>(
 final pollRepositoryProvider = Provider<PollRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
+final adminChatRepositoryProvider = Provider<AdminChatRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Answers an admin chat confirmation card: true removes the tester, false cancels.
+final adminAnswerProvider =
+    Provider<Future<Result<void>> Function(String cardId, bool yes)>(
+      (ref) => ref.read(adminChatRepositoryProvider).answer,
+    );
 final groupSettingsRepositoryProvider = Provider<GroupSettingsRepository>(
   (_) => throw UnimplementedError('override in main'),
 );

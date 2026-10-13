@@ -1,5 +1,5 @@
 begin;
-select plan(158);
+select plan(179);
 
 -- Admin chat, slice 1 (step 15): the owner types tester commands into a
 -- private chat; the server parses them and answers from a fixed account.
@@ -546,6 +546,65 @@ select is((select email from app_private.admin_pending where card_message_id = (
 select is((select count(*) from app_private.admin_pending where email is not null and expires_at < now()), 0::bigint,
           'no expired pending row keeps a raw email');
 
+-- the sweep runs first on ANY owner command (here an unknown one): expired
+-- pending cards -> state expired, raw email gone; finished jobs (ok, failed)
+-- lose their raw email. Controls: a live card, a used card past its time, and
+-- unfinished jobs (pending, running) keep what they have.
+insert into r select 'conf_rob5', say('/removetester rob@mail.test');
+insert into card select id, 'rob5' from public.messages
+  where conversation_id = (select id from adm) and admin_msg->>'k' = 'conf' and id not in (select id from card);
+insert into r select 'conf_rob6', say('/removetester rob@mail.test');
+insert into card select id, 'rob6' from public.messages
+  where conversation_id = (select id from adm) and admin_msg->>'k' = 'conf' and id not in (select id from card);
+update app_private.admin_pending set expires_at = now() - interval '1 second'
+ where card_message_id = (select id from card where who = 'rob5');
+-- a card already used, past its time, still holding an email (as a row written before the sweep existed)
+update app_private.admin_pending set state = 'used', email = 'old@mail.test', expires_at = now() - interval '1 hour'
+ where card_message_id = (select id from card where who = 'rob4');
+delete from app_private.admin_jobs where email like 'job-%';
+insert into app_private.admin_jobs(kind, email, email_masked, state) values
+  ('add', 'job-ok@mail.test', 'j***@m***.test', 'ok'),
+  ('remove', 'job-failed@mail.test', 'j***@m***.test', 'failed'),
+  ('add', 'job-pending@mail.test', 'j***@m***.test', 'pending'),
+  ('remove', 'job-running@mail.test', 'j***@m***.test', 'running');
+insert into r select 'sweep_unk', say('/nosuchcommand');
+select ok((select v @> '[{"k":"unk"}]' from r where name = 'sweep_unk'), 'fixture: the sweeping command is an unknown one');
+select is((select state from app_private.admin_pending where card_message_id = (select id from card where who = 'rob5')), 'expired',
+          'sweep: an expired pending card becomes state expired');
+select is((select email from app_private.admin_pending where card_message_id = (select id from card where who = 'rob5')), null,
+          'sweep: and its raw email is nulled');
+select is((select email_masked from app_private.admin_pending where card_message_id = (select id from card where who = 'rob5')),
+          'r***@m***.test', 'sweep: the masked email stays');
+select is((select state || ':' || coalesce(email, 'null') from app_private.admin_pending
+            where card_message_id = (select id from card where who = 'rob6')), 'pending:rob@mail.test',
+          'sweep control: a card still in time keeps state pending and its email');
+select is((select state from app_private.admin_pending where card_message_id = (select id from card where who = 'rob4')), 'used',
+          'sweep control: a used card is not relabelled expired');
+select is((select email from app_private.admin_pending where card_message_id = (select id from card where who = 'rob4')), null,
+          'sweep: an ended card past its time holding a raw email loses it too');
+select is((select count(*) from app_private.admin_pending where email is not null and expires_at < now()), 0::bigint,
+          'sweep: after a command no card past its time keeps a raw email');
+select is((select email from app_private.admin_jobs where email_masked = 'j***@m***.test' and state = 'ok'), null,
+          'sweep: an ok job loses its raw email');
+select is((select email from app_private.admin_jobs where email_masked = 'j***@m***.test' and state = 'failed'), null,
+          'sweep: a failed job loses its raw email');
+select is((select email from app_private.admin_jobs where email_masked = 'j***@m***.test' and state = 'pending'),
+          'job-pending@mail.test', 'sweep control: a pending job keeps its email (the Apple step needs it)');
+select is((select email from app_private.admin_jobs where email_masked = 'j***@m***.test' and state = 'running'),
+          'job-running@mail.test', 'sweep control: a running job keeps its email');
+select as_own();
+select lives_ok(format($$select public.admin_answer(%L, false)$$, (select id from card where who = 'rob6')),
+          'the live card can still be answered after a sweep');
+reset role;
+delete from app_private.admin_jobs where email_masked = 'j***@m***.test';
+
+-- the owner removing his own address: refused as k = err, with help
+insert into r select 'rm_self', say('/removetester Own@Mail.test');
+select is((select jsonb_array_length(v) from r where name = 'rm_self'), 1, 'removing his own address -> one reply');
+select ok((select v @> '[{"k":"err","help":true}]' from r where name = 'rm_self'), 'and it is k = err with help');
+select is((select count(*) from app_private.allowlist where email = 'own@mail.test'), 1::bigint, 'the owner stays on the allowlist');
+select is((select count(*) from app_private.admin_pending where email = 'own@mail.test'), 0::bigint, 'and no card is made');
+
 -- iPhone and untagged testers: an Apple remove job is queued
 insert into r select 'conf_ivy', say('/removetester ivy@mail.test');
 insert into card select id, 'ivy' from public.messages
@@ -576,6 +635,7 @@ reset role;
 insert into r select 'boom', fresh();
 select is((select jsonb_array_length(v) from r where name = 'boom'), 1, 'one reply');
 select is((select v->0->>'k' from r where name = 'boom'), 'err', 'and it is k = err');
+select is((select (v->0->>'help')::boolean from r where name = 'boom'), true, 'the generic err carries help');
 select is((select count(*) from app_private.tester_platform where email = 'boom@mail.test'), 0::bigint,
           'nothing of the failed command is kept');
 select is(leaks('boom@mail.test'), 0::bigint, 'the email is not in the reply or the log');
@@ -624,12 +684,19 @@ do $$ begin for i in 1..60 loop insert into rate select i, say('/listtesters'); 
 select ok(exists (select 1 from rate where v @> '[{"k":"rate"}]'), 'many commands in a row hit the rate limit (k = rate)');
 select ok(not exists (select 1 from rate a join rate b on b.i > a.i
                        where a.v @> '[{"k":"rate"}]' and b.v @> '[{"k":"list"}]'), 'once limited, commands are not run');
+insert into app_private.admin_jobs(kind, email, email_masked, state) values ('add', 'job-late@mail.test', 'l***@m***.test', 'ok');
 insert into r select 'rated_add', say('/addandroidtester late@mail.test');
+select ok((select v @> '[{"k":"rate"}]' from r where name = 'rated_add'), 'fixture: this command is rate limited');
+select is((select email from app_private.admin_jobs where email_masked = 'l***@m***.test'), null,
+          'the sweep runs even for a rate-limited command (it comes first)');
 select ok((select not v @> '[{"k":"andOk"}]' from r where name = 'rated_add'), 'a limited add does not reply andOk');
 select is((select count(*) from app_private.allowlist where email = 'late@mail.test'), 0::bigint,
           'and adds nothing');
 select is((select count(*) from app_private.admin_commands where outcome = 'rate'), (select count(*) from rate where v @> '[{"k":"rate"}]') + 1,
           'every limited command is logged as rate');
 
+select is((select count(*) from public.messages
+             where admin_msg->>'k' = 'err' and (admin_msg->>'help') is distinct from 'true'), 0::bigint,
+          'every k = err reply in this run carries help');
 select * from finish();
 rollback;

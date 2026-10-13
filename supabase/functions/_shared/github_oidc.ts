@@ -1,6 +1,8 @@
 // Verifies GitHub Actions OIDC tokens issued to public repos.
 // The workflow proves itself with GitHub's signed token instead of a secret in inputs.
 
+import { unb64url } from './action_token.ts';
+
 export const OIDC_ISSUER = 'https://token.actions.githubusercontent.com';
 export const OIDC_JWKS_URL = `${OIDC_ISSUER}/.well-known/jwks`;
 export type Jwks = { keys: Array<Record<string, unknown>> };
@@ -17,7 +19,7 @@ export async function verifyGithubOidc(token: string, jwks: Jwks, expected: Oidc
     const [part0, part1, part2] = token.split('.');
     if (!part0 || !part1 || !part2) return null;
     
-    const header = JSON.parse(new TextDecoder().decode(base64urlUnescape(part0)));
+    const header = JSON.parse(new TextDecoder().decode(unb64url(part0)));
     if (header.alg !== 'RS256' || typeof header.kid !== 'string') return null;
     
     const key = jwks.keys.find(k => k.kid === header.kid && k.kty === 'RSA');
@@ -36,7 +38,7 @@ export async function verifyGithubOidc(token: string, jwks: Jwks, expected: Oidc
       ['verify'],
     );
     
-    const signature = base64urlUnescape(part2);
+    const signature = unb64url(part2);
     const dataToVerify = `${part0}.${part1}`;
     const isValid = await crypto.subtle.verify(
       'RSASSA-PKCS1-v1_5',
@@ -47,7 +49,7 @@ export async function verifyGithubOidc(token: string, jwks: Jwks, expected: Oidc
     
     if (!isValid) return null;
     
-    const payload = JSON.parse(new TextDecoder().decode(base64urlUnescape(part1)));
+    const payload = JSON.parse(new TextDecoder().decode(unb64url(part1)));
     
     if (payload.iss !== OIDC_ISSUER) return null;
     
@@ -78,5 +80,4 @@ export async function verifyGithubOidc(token: string, jwks: Jwks, expected: Oidc
   }
 }
 
-const base64urlUnescape = (s: string) =>
-  Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+

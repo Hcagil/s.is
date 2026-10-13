@@ -3755,8 +3755,8 @@ abstract class AppLocalizations {
   /// Admin chat reply text
   ///
   /// In en, this message translates to:
-  /// **'Apple step failed: {reason}. The allowlist row is saved; type the command again to retry.'**
-  String adminFail(String reason);
+  /// **'Apple step failed for {email}: {reason}. The allowlist row is saved; type the command again to retry.'**
+  String adminFail(String email, String reason);
 
   /// Admin chat reply text
   ///
@@ -3869,8 +3869,8 @@ abstract class AppLocalizations {
   /// Admin chat reply text
   ///
   /// In en, this message translates to:
-  /// **'Apple step failed: {reason}. The allowlist row is already removed; type the command again to retry.'**
-  String adminFailRm(String reason);
+  /// **'Apple step failed for {email}: {reason}. The allowlist row is already removed; type the command again to retry.'**
+  String adminFailRm(String email, String reason);
 
   /// Admin chat: why the Apple step failed
   ///

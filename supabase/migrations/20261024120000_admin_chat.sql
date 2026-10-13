@@ -177,7 +177,7 @@ language sql immutable set search_path = '' as $$
     when 'p1' then 'Sending the invite to Apple...'
     when 'p2' then 'Apple is slow. Trying again (2 of 3)...'
     when 'p3' then 'Apple accepted. The invite email is on its way.'
-    when 'fail' then 'Apple step failed: ' || app_private.admin_fail_reason(msg->>'r') || '. The allowlist row is saved; type the command again to retry.'
+    when 'fail' then 'Apple step failed for ' || coalesce(msg->>'e','') || ': ' || app_private.admin_fail_reason(msg->>'r') || '. The allowlist row is saved; type the command again to retry.'
     when 'andOk' then 'Added ' || coalesce(msg->>'e','') || ' to the allowlist. One step by hand: add this email to Play Console > Internal testing > Testers > Bacanaks.'
     when 'fwd' then 'Hi! You can test SIS on Android now.' || E'\n' || '1. Open this link and accept the invite: ' || coalesce(msg->>'l','') || E'\n' || '2. Install SIS from Google Play.' || E'\n' || '3. Sign in with this email: ' || coalesce(msg->>'e','')
     when 'conf' then 'Remove this tester? ' || coalesce(msg->>'e','') || ' loses access to SIS.'
@@ -187,7 +187,7 @@ language sql immutable set search_path = '' as $$
     when 'r1' then 'Removing ' || coalesce(msg->>'e','') || ' from the TestFlight group...'
     when 'r2' then 'Apple is slow. Trying again (2 of 3)...'
     when 'r3' then 'Removed from TestFlight.'
-    when 'failRm' then 'Apple step failed: ' || app_private.admin_fail_reason(msg->>'r') || '. The allowlist row is already removed; type the command again to retry.'
+    when 'failRm' then 'Apple step failed for ' || coalesce(msg->>'e','') || ': ' || app_private.admin_fail_reason(msg->>'r') || '. The allowlist row is already removed; type the command again to retry.'
     when 'list' then app_private.admin_body_list(msg)
     when 'rate' then 'Too many commands. Wait a minute and try again.'
     when 'keep' then 'Cancelled: this card is no longer valid.'
@@ -650,7 +650,7 @@ begin
   if succeeded then
     perform app_private.admin_reply(conv, jsonb_build_object('k', case when j.kind = 'add' then 'p3' else 'r3' end));
   else
-    perform app_private.admin_reply(conv, jsonb_build_object('k', case when j.kind = 'add' then 'fail' else 'failRm' end, 'r', code), true);
+    perform app_private.admin_reply(conv, jsonb_build_object('k', case when j.kind = 'add' then 'fail' else 'failRm' end, 'r', code, 'e', j.email_masked), true);
   end if;
 end $$;
 revoke all on function app_private.admin_job_end(uuid, boolean, text) from public, anon, authenticated;

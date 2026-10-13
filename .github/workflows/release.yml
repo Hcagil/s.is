@@ -29,14 +29,15 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 2
-      # An older Release run (a re-run) must never deploy: only the commit that is
-      # main's tip right now may publish.
+      # A re-run (attempt 2 or more) must never deploy an older commit: it may only
+      # publish when its commit is main's tip right now. A first attempt always runs.
       - name: Refuse a commit that is not the tip of main
         env:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           tip=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY" refs/heads/main | cut -f1)
-          if [ -z "$tip" ] || [ "$tip" != "$HEAD_SHA" ]; then
+          if [ "$RUN_ATTEMPT" -gt 1 ] && { [ -z "$tip" ] || [ "$tip" != "$HEAD_SHA" ]; }; then
             echo 'This commit is not the tip of main: nothing is deployed.' >&2
             exit 1
           fi

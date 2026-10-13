@@ -16,6 +16,7 @@ on:
         type: string
 permissions:
   id-token: write
+  contents: read
 concurrency:
   group: admin-apple
   cancel-in-progress: false

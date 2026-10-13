@@ -2113,8 +2113,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminP3 => 'Apple accepted. The invite email is on its way.';
 
   @override
-  String adminFail(String reason) {
-    return 'Apple step failed: $reason. The allowlist row is saved; type the command again to retry.';
+  String adminFail(String email, String reason) {
+    return 'Apple step failed for $email: $reason. The allowlist row is saved; type the command again to retry.';
   }
 
   @override
@@ -2184,8 +2184,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminR3 => 'Removed from TestFlight.';
 
   @override
-  String adminFailRm(String reason) {
-    return 'Apple step failed: $reason. The allowlist row is already removed; type the command again to retry.';
+  String adminFailRm(String email, String reason) {
+    return 'Apple step failed for $email: $reason. The allowlist row is already removed; type the command again to retry.';
   }
 
   @override

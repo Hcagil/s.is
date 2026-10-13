@@ -26,7 +26,7 @@ const enc = new TextEncoder();
 
 const b64url = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-const unb64url = (s: string) =>
+export const unb64url = (s: string) =>
   Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 
 const hmacKey = (secret: string, usage: 'sign' | 'verify') =>

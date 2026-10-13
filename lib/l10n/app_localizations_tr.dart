@@ -2089,8 +2089,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminP3 => 'Apple kabul etti. Davet e-postası yollanıyor.';
 
   @override
-  String adminFail(String reason) {
-    return 'Apple adımı başarısız: $reason. İzin listesi kaydedildi; tekrar denemek için komutu yeniden yaz.';
+  String adminFail(String email, String reason) {
+    return '$email için Apple adımı başarısız: $reason. İzin listesi kaydedildi; tekrar denemek için komutu yeniden yaz.';
   }
 
   @override
@@ -2160,8 +2160,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminR3 => 'TestFlight’tan çıkarıldı.';
 
   @override
-  String adminFailRm(String reason) {
-    return 'Apple adımı başarısız: $reason. İzin listesi satırı zaten kaldırıldı; tekrar denemek için komutu yeniden yaz.';
+  String adminFailRm(String email, String reason) {
+    return '$email için Apple adımı başarısız: $reason. İzin listesi satırı zaten kaldırıldı; tekrar denemek için komutu yeniden yaz.';
   }
 
   @override

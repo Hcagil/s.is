@@ -44,7 +44,7 @@ service_key() {
   "${CI[@]}" run --rm supabase status -o env | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p'
 }
 
-layer_rules() { tool/check_pattern.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py; }
+layer_rules() { tool/check_pattern.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/admin_apple_workflow_test.sh; }
 
 bundle() {
   test -f android/app/google-services.json \
@@ -98,6 +98,7 @@ job_database() {
   step "Build development image" "${CI[@]}" build flutter || return 1
   step "Wait until Realtime delivers" "${CI[@]}" run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart || return 1
   step "Repository integration tests" integration || return 1
+  step "Owner step test" test/tool/owner_step_test.sh || return 1
   step "SIS Bot tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_bot_tool_test.sh
 }
 

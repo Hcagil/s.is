@@ -66,6 +66,7 @@ import 'swipeable_message.dart';
 import 'video_card.dart';
 import 'video_grid_page.dart';
 import 'video_review_page.dart';
+import 'admin_reply_bubble.dart';
 import 'message_actions.dart';
 import 'member_name.dart';
 import 'message_menu_card.dart';
@@ -576,6 +577,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
             : conversationLabel(AppLocalizations.of(context), listed));
     final isGroup = widget.group || (listed?.isGroup ?? false);
     final isSystem = listed?.isSystem ?? false;
+    final isAdminChat = listed?.isAdminChat ?? false;
     final otherUserId = widget.otherUserId ?? listed?.other?.userId;
     final status = _status(ref, AppLocalizations.of(context), otherUserId);
     // The group's own roster names every sender, current or departed --
@@ -664,7 +666,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                   if (id == null) return;
                   final system =
                       (ref.read(conversationListProvider).value ?? const [])
-                          .where((c) => c.id == id)
+                          .where((c) => c.id == id && !c.isAdminChat)
                           .firstOrNull
                           ?.isSystem ==
                       true;
@@ -817,7 +819,13 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                   );
                                 }
                                 final message = (entry as MessageEntry).message;
-                                if (isSystem) {
+                                if (isAdminChat && message.adminMsg != null) {
+                                  return AdminReplyBubble(
+                                    key: _keyFor(message.id),
+                                    message: message,
+                                  );
+                                }
+                                if (isSystem && !isAdminChat) {
                                   return WhatsNewCard(
                                     key: _keyFor(message.id),
                                     body: message.body,
@@ -990,7 +998,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                   ),
                 ),
               ),
-              if (isSystem)
+              if (isSystem && !isAdminChat)
                 UpToDateMark(
                   newestBody: ref
                       .watch(messagesProvider)

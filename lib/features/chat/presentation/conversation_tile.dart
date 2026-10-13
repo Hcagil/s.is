@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,11 +23,18 @@ import 'person_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../notifications/application/notification_settings_controller.dart';
 import '../../notifications/domain/notification_settings.dart';
+import 'admin_reply_bubble.dart';
 import 'chat_row_actions.dart';
 
 /// The stored preview, with the poll or contact prefix in the app language.
 String _preview(AppLocalizations l, String text) =>
-    text.startsWith(pollPreviewPrefix)
+    text.startsWith(adminPreviewPrefix)
+    ? adminPreviewLine(
+        l,
+        jsonDecode(text.substring(adminPreviewPrefix.length))
+            as Map<String, dynamic>,
+      )
+    : text.startsWith(pollPreviewPrefix)
     ? l.pollPreviewLine(text.substring(pollPreviewPrefix.length))
     : text.startsWith(contactPreviewPrefix)
     ? l.contactPreviewLine(text.substring(contactPreviewPrefix.length))

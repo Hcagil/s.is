@@ -21,6 +21,7 @@ final class Conversation {
     this.avatarPath,
     this.hasLeft = false,
     this.isSystem = false,
+    this.isAdminChat = false,
     this.senders = const {},
     this.settings = const GroupSettings(),
     this.archived = false,
@@ -58,6 +59,10 @@ final class Conversation {
   /// nobody can write into it or leave it.
   final bool isSystem;
 
+  /// True for the owner's admin chat (SIS Admin): a system chat the owner may
+  /// type commands into. Also [isSystem].
+  final bool isAdminChat;
+
   /// For a group: each other member's name and colour slot by user id, so the
   /// list can name and colour the sender of the preview. Empty for a 1:1.
   final Map<String, GroupVoice> senders;
@@ -92,6 +97,7 @@ final class Conversation {
         avatarPath: avatarPath,
         hasLeft: hasLeft,
         isSystem: isSystem,
+        isAdminChat: isAdminChat,
         senders: senders,
         settings: settings,
         archived: archived,
@@ -111,6 +117,7 @@ final class Conversation {
     avatarPath: avatarPath,
     hasLeft: hasLeft,
     isSystem: isSystem,
+    isAdminChat: isAdminChat,
     senders: senders,
     settings: settings,
     archived: archived,
@@ -131,6 +138,7 @@ final class Conversation {
     avatarPath: avatarPath,
     hasLeft: hasLeft,
     isSystem: isSystem,
+    isAdminChat: isAdminChat,
     senders: senders,
     settings: next,
     archived: archived,
@@ -151,6 +159,7 @@ final class Conversation {
     avatarPath: avatarPath,
     hasLeft: hasLeft,
     isSystem: isSystem,
+    isAdminChat: isAdminChat,
     senders: senders,
     settings: settings,
     archived: value,
@@ -171,6 +180,7 @@ final class Conversation {
     avatarPath: avatarPath,
     hasLeft: hasLeft,
     isSystem: isSystem,
+    isAdminChat: isAdminChat,
     senders: senders,
     settings: settings,
     archived: archived,
@@ -191,6 +201,7 @@ final class Conversation {
     avatarPath: avatarPath,
     hasLeft: hasLeft,
     isSystem: isSystem,
+    isAdminChat: isAdminChat,
     senders: senders,
     settings: settings,
     archived: archived,
@@ -211,6 +222,7 @@ final class Conversation {
     'avatarPath': avatarPath,
     'hasLeft': hasLeft,
     'isSystem': isSystem,
+    if (isAdminChat) 'isAdminChat': true,
     'senders': {for (final e in senders.entries) e.key: e.value.toJson()},
     'settings': settings.toJson(),
     // Written only when true: the saved list the native side reads keeps its
@@ -236,6 +248,7 @@ final class Conversation {
     avatarPath: json['avatarPath'] as String?,
     hasLeft: json['hasLeft'] as bool? ?? false,
     isSystem: json['isSystem'] as bool? ?? false,
+    isAdminChat: json['isAdminChat'] as bool? ?? false,
     senders: {
       for (final e
           in ((json['senders'] as Map<String, Object?>?) ??
@@ -256,5 +269,9 @@ final class Conversation {
 
   /// The group's title, or who you are talking to. Empty when the partner's
   /// name is unknown; presentation localises that via conversationLabel.
-  String get label => isSystem ? 'SIS' : title ?? other?.displayName ?? '';
+  String get label => isAdminChat
+      ? 'SIS Admin'
+      : isSystem
+      ? 'SIS'
+      : title ?? other?.displayName ?? '';
 }

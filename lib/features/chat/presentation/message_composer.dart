@@ -354,7 +354,7 @@ class _ComposerState extends ConsumerState<_Composer>
     final isSystem =
         id != null &&
         (ref.watch(conversationListProvider).value ?? const [])
-                .where((c) => c.id == id)
+                .where((c) => c.id == id && !c.isAdminChat)
                 .firstOrNull
                 ?.isSystem ==
             true;

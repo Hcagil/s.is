@@ -172,7 +172,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         _deleted(message);
         return;
       }
-      if (message.editedAt != null) {
+      // An admin reply changes after it is sent (a confirmation card is answered): same in-place replacement as an edit.
+      if (message.editedAt != null ||
+          (message.adminMsg != null &&
+              (state.value?.any((m) => m.id == message.id) ?? false))) {
         _edited(message);
         return;
       }

@@ -101,6 +101,7 @@ final class Message {
     this.albumCard = false,
     this.albumId,
     this.linkPreview,
+    this.adminMsg,
     this.sending = false,
   });
 
@@ -156,6 +157,9 @@ final class Message {
   /// The link card this text message carries (title, picture, site), or null.
   /// Old messages, and messages sent before the preview was ready, have none.
   final LinkPreview? linkPreview;
+
+  /// The machine-readable form of a reply from SIS Admin ({k: key, e: email, ...}); the app words it in its own language. Null for every other message.
+  final Map<String, dynamic>? adminMsg;
 
   /// True for a text-only message shown at once, before the server has
   /// answered -- like [localImage] but with nothing to display in the
@@ -244,6 +248,7 @@ final class Message {
     albumCard: albumCard,
     albumId: albumId,
     linkPreview: linkPreview,
+    adminMsg: adminMsg,
     deletion: deletion,
     deletedBy: deletedBy,
     editedAt: editedAt,
@@ -270,6 +275,7 @@ final class Message {
     albumCard: albumCard,
     albumId: albumId,
     linkPreview: linkPreview,
+    adminMsg: adminMsg,
     localImage: localImage,
     deletion: deletion,
     deletedBy: deletedBy,
@@ -294,6 +300,7 @@ final class Message {
     albumCard: albumCard,
     albumId: albumId,
     linkPreview: linkPreview,
+    adminMsg: adminMsg,
     conversationId: conversationId,
     senderId: senderId,
     body: body,

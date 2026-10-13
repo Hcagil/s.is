@@ -48,11 +48,13 @@ import 'features/chat/data/no_voice_transcriber.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
 import 'features/chat/data/photo_manager_video_gallery.dart';
 import 'features/chat/data/record_voice_recorder.dart';
+import 'features/chat/data/share_plus_text_sharer.dart';
 import 'features/chat/data/share_plus_video_sharer.dart';
 import 'features/chat/data/shared_prefs_played_voice_store.dart';
 import 'features/chat/data/shared_prefs_recent_sticker_store.dart';
 import 'features/chat/data/shared_prefs_send_queue_store.dart';
 import 'features/chat/data/speech_dictation.dart';
+import 'features/chat/data/supabase_admin_chat_repository.dart';
 import 'features/chat/data/supabase_chat_archive_repository.dart';
 import 'features/chat/data/supabase_chat_delete_repository.dart';
 import 'features/chat/data/supabase_chat_file_repository.dart';
@@ -220,6 +222,9 @@ Future<void> main() async {
           reactionRepositoryProvider.overrideWithValue(
             SupabaseReactionRepository(client),
           ),
+          adminChatRepositoryProvider.overrideWithValue(
+            SupabaseAdminChatRepository(client),
+          ),
           pollRepositoryProvider.overrideWithValue(
             SupabasePollRepository(client),
           ),
@@ -240,6 +245,7 @@ Future<void> main() async {
           videoPlaybackFactoryProvider.overrideWithValue(
             const VideoPlayerPlaybackFactory(),
           ),
+          textSharerProvider.overrideWithValue(const SharePlusTextSharer()),
           videoSharerProvider.overrideWithValue(const SharePlusVideoSharer()),
           voiceRecorderProvider.overrideWith((ref) {
             final recorder = RecordVoiceRecorder();

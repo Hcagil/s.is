@@ -8,6 +8,9 @@ const int pollMaxOptionLength = 100;
 /// The chat list marks a poll preview with this prefix.
 const String pollPreviewPrefix = '\u{1F4CA} Poll: ';
 
+/// Marks a chat-list preview that holds an admin chat reply as JSON after the prefix.
+const String adminPreviewPrefix = '\u0001admin:';
+
 /// The chat list line of a poll: [pollPreviewPrefix] plus the question with
 /// every run of whitespace (newlines included) collapsed to one space.
 String pollPreview(String question) =>

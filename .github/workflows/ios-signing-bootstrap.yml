@@ -21,9 +21,13 @@ permissions:
 concurrency:
   group: ios-signing-bootstrap
   cancel-in-progress: false
+# The job waits for the owner's approval (environment apple-signing, owner as required
+# reviewer): it holds the App Store Connect key and can mint signing certificates, so it
+# never runs on a dispatch alone.
 jobs:
   bootstrap:
     runs-on: ubuntu-24.04
+    environment: apple-signing
     timeout-minutes: 10
     env:
       KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}

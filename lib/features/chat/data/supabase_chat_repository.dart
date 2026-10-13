@@ -121,7 +121,7 @@ final class SupabaseChatRepository implements ChatRepository {
         _client
             .from('conversations')
             .select(
-              'id, title, avatar_path, system, members_can_set_avatar, '
+              'id, title, avatar_path, system, admin_chat, members_can_set_avatar, '
               'members_can_add, new_members_see_history, '
               'members_can_pin, pinned_message_id',
             )
@@ -161,6 +161,10 @@ final class SupabaseChatRepository implements ChatRepository {
       final systemById = {
         for (final row in conversationRows)
           row['id'] as String: row['system'] == true,
+      };
+      final adminChatById = {
+        for (final row in conversationRows)
+          row['id'] as String: row['admin_chat'] == true,
       };
       final settingsById = {
         for (final row in conversationRows)
@@ -235,7 +239,7 @@ final class SupabaseChatRepository implements ChatRepository {
         _client
             .from('conversation_previews')
             .select(
-              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name, attachment_duration_ms, location_lat, attachment_mime, sticker_id, sticker_album',
+              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name, attachment_duration_ms, location_lat, attachment_mime, sticker_id, sticker_album, admin_msg',
             )
             .retriedOnce(),
         // Only conversations with something unread come back.
@@ -276,6 +280,10 @@ final class SupabaseChatRepository implements ChatRepository {
                 ? videoPreview
                 : row['attachment_name'] != null
                 ? filePreview(row['attachment_name'] as String)
+                : adminChatById[row['conversation_id']] == true
+                ? (row['admin_msg'] == null
+                      ? (row['body'] as String).split('\n').first
+                      : adminPreviewPrefix + jsonEncode(row['admin_msg']))
                 : (row['body'] as String).isNotEmpty
                 ? row['body'] as String
                 : (row['attachment_path'] == null ? '' : 'Photo'),
@@ -307,6 +315,7 @@ final class SupabaseChatRepository implements ChatRepository {
             avatarPath: avatarPathById[id],
             hasLeft: myLeftAtByConversation[id] != null,
             isSystem: systemById[id] ?? false,
+            isAdminChat: adminChatById[id] ?? false,
             settings: settingsById[id] ?? const GroupSettings(),
             archived: archivedIds.contains(id),
             pinned: pinnedIds.contains(id),
@@ -342,13 +351,13 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, link_preview';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, link_preview, admin_msg';
 
   /// The columns of a page read (open chat): no photo preview -- those arrive
   /// separately, see [attachmentPreviews], so the first paint never waits on
   /// them.
   static const _pageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, link_preview';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, link_preview, admin_msg';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -1366,6 +1375,7 @@ final class SupabaseChatRepository implements ChatRepository {
     attachmentPreview: _preview(row['attachment_preview']),
     replyTo: row['reply_to'] as String?,
     linkPreview: LinkPreview.fromJson(row['link_preview']),
+    adminMsg: row['admin_msg'] as Map<String, dynamic>?,
     forwarded: row['forwarded'] as bool? ?? false,
     poll: row['poll'] as bool? ?? false,
     contact: row['contact'] as bool? ?? false,

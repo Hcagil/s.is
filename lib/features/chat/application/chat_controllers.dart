@@ -14,6 +14,7 @@ import '../../autodownload/application/auto_download_controller.dart';
 import '../../autodownload/domain/auto_download_settings.dart';
 import '../../notifications/application/push_controller.dart';
 import '../../profile/application/profile_controller.dart';
+import '../domain/admin_chat_repository.dart';
 import '../domain/attachment.dart';
 import '../domain/chat_archive_repository.dart';
 import '../domain/chat_delete_repository.dart';
@@ -48,6 +49,7 @@ import '../domain/shared_contact.dart';
 import '../domain/sticker.dart';
 import '../domain/sticker_maker.dart';
 import '../domain/sticker_repository.dart';
+import '../domain/text_sharer.dart';
 import '../domain/video.dart';
 import '../domain/video_gallery.dart';
 import '../domain/voice.dart';
@@ -80,6 +82,18 @@ final reactionRepositoryProvider = Provider<ReactionRepository>(
 final pollRepositoryProvider = Provider<PollRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
+final textSharerProvider = Provider<TextSharer>(
+  (_) => throw UnimplementedError('override in main'),
+);
+final adminChatRepositoryProvider = Provider<AdminChatRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Answers an admin chat confirmation card: true removes the tester, false cancels.
+final adminAnswerProvider =
+    Provider<Future<Result<void>> Function(String cardId, bool yes)>(
+      (ref) => ref.read(adminChatRepositoryProvider).answer,
+    );
 final groupSettingsRepositoryProvider = Provider<GroupSettingsRepository>(
   (_) => throw UnimplementedError('override in main'),
 );

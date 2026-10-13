@@ -83,6 +83,17 @@ jobs:
       # which a later merge may already have moved past.
       SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
+      - name: Refuse a commit that is not the tip of main
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          WF_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          tip=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY" refs/heads/main | cut -f1)
+          if { [ "$RUN_ATTEMPT" -gt 1 ] || [ "${WF_ATTEMPT:-1}" -gt 1 ]; } && { [ -z "$tip" ] || [ "$tip" != "$HEAD_SHA" ]; }; then
+            echo 'This commit is not the tip of main: nothing is deployed.' >&2
+            exit 1
+          fi
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
@@ -256,6 +267,17 @@ jobs:
       KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
       ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
     steps:
+      - name: Refuse a commit that is not the tip of main
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          WF_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          tip=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY" refs/heads/main | cut -f1)
+          if { [ "$RUN_ATTEMPT" -gt 1 ] || [ "${WF_ATTEMPT:-1}" -gt 1 ]; } && { [ -z "$tip" ] || [ "$tip" != "$HEAD_SHA" ]; }; then
+            echo 'This commit is not the tip of main: nothing is deployed.' >&2
+            exit 1
+          fi
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.workflow_run.head_sha }}

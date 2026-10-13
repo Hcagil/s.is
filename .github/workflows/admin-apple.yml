@@ -43,13 +43,18 @@ jobs:
           set -eu -o pipefail
           printf '%s' "$JOB_ID" | grep -Eqi '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' || { echo 'job_id is not a uuid' >&2; exit 1; }
 
-          tok=$(curl -sS --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sis-admin-apple" | jq -r .value)
-          echo "::add-mask::$tok"
+          # Called as a plain statement before every report call: inside $(...) the
+          # mask line would be captured and tok lost.
+          fresh_token() {
+            tok=$(curl -sS --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sis-admin-apple" | jq -r .value)
+            echo "::add-mask::$tok"
+          }
 
           report() {
             curl -sS --fail -X POST -H "Authorization: Bearer $tok" -H 'content-type: application/json' -d "$1" "$SUPABASE_URL/functions/v1/admin-apple-report"
           }
 
+          fresh_token
           resp=$(report "$(jq -nc --arg j "$JOB_ID" '{action:"claim",job_id:$j}')") || { echo 'claim refused' >&2; exit 1; }
           EMAIL=$(printf '%s' "$resp" | jq -r .email)
           echo "::add-mask::$EMAIL"
@@ -59,6 +64,7 @@ jobs:
           finish() {
             local ok=$1
             local reason=$2
+            fresh_token
             report "$(jq -nc --arg j "$JOB_ID" --argjson ok "$ok" --arg r "$reason" '{action:"finish",job_id:$j,ok:$ok,reason:$r}')" >/dev/null
           }
 
@@ -86,6 +92,7 @@ jobs:
           for attempt in 1 2 3; do
             if [ "$attempt" = 2 ]; then
               sleep 5
+              fresh_token || true
               report "$(jq -nc --arg j "$JOB_ID" '{action:"progress",job_id:$j,attempt:2}')" >/dev/null || true
             elif [ "$attempt" = 3 ]; then
               sleep 20

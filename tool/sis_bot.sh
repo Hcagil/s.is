@@ -48,7 +48,7 @@ case "$cmd" in
   send) [ $# -ge 1 ] || die 2 "send needs a conversation id"; TEXT=$(body_arg "${2:--}") ;;
   start) [ $# -ge 1 ] || die 2 "start needs a user id or @tag"
          if [ $# -ge 2 ]; then TEXT=$(body_arg "$2"); fi ;;
-  edit) [ $# -ge 1 ] || die 2 "edit needs a message id"; TEXT=$(body_arg "${2:--}") ;;
+  edit) [ $# -ge 2 ] && [ -n "$2" ] || die 2 "edit needs a message id and the new text (or - for stdin)"; TEXT=$(body_arg "$2") ;;
   delete) [ $# -ge 1 ] || die 2 "delete needs a message id" ;;
 esac
 

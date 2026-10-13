@@ -3872,6 +3872,24 @@ abstract class AppLocalizations {
   /// **'Apple step failed: {reason}. The allowlist row is already removed; type the command again to retry.'**
   String adminFailRm(String reason);
 
+  /// Admin chat: why the Apple step failed
+  ///
+  /// In en, this message translates to:
+  /// **'Apple did not answer in time'**
+  String get adminReasonTimeout;
+
+  /// Admin chat: why the Apple step failed
+  ///
+  /// In en, this message translates to:
+  /// **'Apple refused the request'**
+  String get adminReasonRejected;
+
+  /// Admin chat: why the Apple step failed
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub could not start the job'**
+  String get adminReasonDispatch;
+
   /// Admin chat reply text
   ///
   /// In en, this message translates to:

@@ -29,6 +29,17 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 2
+      # An older Release run (a re-run) must never deploy: only the commit that is
+      # main's tip right now may publish.
+      - name: Refuse a commit that is not the tip of main
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          tip=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY" refs/heads/main | cut -f1)
+          if [ -z "$tip" ] || [ "$tip" != "$HEAD_SHA" ]; then
+            echo 'This commit is not the tip of main: nothing is deployed.' >&2
+            exit 1
+          fi
       # Changes that cannot affect the artefact or the database do not publish
       # a build: publishing for them burns a versionCode.
       # ponytail: diffs the last commit only. Squash merges make that one change
@@ -128,16 +139,22 @@ jobs:
       # trigger never calls a function that is not there yet. No JWT: the
       # database trigger holds none; push_targets() makes a forged call
       # harmless (docs/DECISIONS.md, 2026-09-24).
+      # admin-apple dispatches the Apple tester job; admin-apple-report takes its
+      # result, authenticated by GitHub's OIDC token.
       - name: Deploy the push sender
         run: |
-          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" FCM_SERVICE_ACCOUNT="$FCM_SERVICE_ACCOUNT"
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" FCM_SERVICE_ACCOUNT="$FCM_SERVICE_ACCOUNT" GITHUB_REPOSITORY_ID="$REPO_ID"
           supabase functions deploy notification-action --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
           supabase functions deploy notify-on-message --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+          supabase functions deploy admin-apple --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+          supabase functions deploy admin-apple-report --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
           supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/notify-on-message', 'notify_on_message_url') where not exists (select 1 from vault.secrets where name = 'notify_on_message_url')"
+          supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/admin-apple', 'admin_apple_url') where not exists (select 1 from vault.secrets where name = 'admin_apple_url')"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           FCM_SERVICE_ACCOUNT: ${{ secrets.FCM_SERVICE_ACCOUNT }}
+          REPO_ID: ${{ github.repository_id }}
       - name: Upload to Play internal track
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:

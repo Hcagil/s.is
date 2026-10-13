@@ -79,7 +79,7 @@ create table app_private.admin_commands (
 );
 create index admin_commands_owner_at_idx on app_private.admin_commands (owner_id, at desc);
 
--- Apple TestFlight work. email is nulled when the job ends.
+-- Apple TestFlight work. email is nulled in the same statement that ends the job.
 create table app_private.admin_jobs (
   id                  uuid primary key default gen_random_uuid(),
   kind                text not null check (kind in ('add','remove')),
@@ -87,6 +87,9 @@ create table app_private.admin_jobs (
   email_masked        text not null,
   state               text not null default 'pending' check (state in ('pending','running','ok','failed')),
   attempts            integer not null default 0,
+  run_id              bigint,
+  dispatched_at       timestamptz,
+  fail_reason         text,
   progress_message_id uuid references public.messages(id) on delete set null,
   created_at          timestamptz not null default now(),
   finished_at         timestamptz
@@ -150,6 +153,18 @@ language sql immutable set search_path = '' as $$
 $$;
 revoke all on function app_private.admin_body_list(jsonb) from public, anon, authenticated;
 
+-- English words for a failure code (admin_msg r); the app words it in its own language.
+create or replace function app_private.admin_fail_reason(code text) returns text
+language sql immutable set search_path = '' as $$
+  select case code
+    when 'timeout' then 'Apple did not answer in time'
+    when 'rejected' then 'Apple refused the request'
+    when 'dispatch' then 'GitHub could not start the job'
+    else 'Apple did not answer in time'
+  end
+$$;
+revoke all on function app_private.admin_fail_reason(text) from public, anon, authenticated;
+
 -- English text of a reply, from its machine-readable form. The app words the
 -- reply in its own language from msg->>'k'; this text is the fallback.
 create or replace function app_private.admin_body(msg jsonb) returns text
@@ -162,7 +177,7 @@ language sql immutable set search_path = '' as $$
     when 'p1' then 'Sending the invite to Apple...'
     when 'p2' then 'Apple is slow. Trying again (2 of 3)...'
     when 'p3' then 'Apple accepted. The invite email is on its way.'
-    when 'fail' then 'Apple step failed: ' || coalesce(msg->>'r','') || '. The allowlist row is saved; type the command again to retry.'
+    when 'fail' then 'Apple step failed: ' || app_private.admin_fail_reason(msg->>'r') || '. The allowlist row is saved; type the command again to retry.'
     when 'andOk' then 'Added ' || coalesce(msg->>'e','') || ' to the allowlist. One step by hand: add this email to Play Console > Internal testing > Testers > Bacanaks.'
     when 'fwd' then 'Hi! You can test SIS on Android now.' || E'\n' || '1. Open this link and accept the invite: ' || coalesce(msg->>'l','') || E'\n' || '2. Install SIS from Google Play.' || E'\n' || '3. Sign in with this email: ' || coalesce(msg->>'e','')
     when 'conf' then 'Remove this tester? ' || coalesce(msg->>'e','') || ' loses access to SIS.'
@@ -170,8 +185,9 @@ language sql immutable set search_path = '' as $$
     when 'canOk' then 'Cancelled. Nothing was removed.'
     when 'nolist' then coalesce(msg->>'e','') || ' is not on the tester list.'
     when 'r1' then 'Removing ' || coalesce(msg->>'e','') || ' from the TestFlight group...'
+    when 'r2' then 'Apple is slow. Trying again (2 of 3)...'
     when 'r3' then 'Removed from TestFlight.'
-    when 'failRm' then 'Apple step failed: ' || coalesce(msg->>'r','') || '. The allowlist row is already removed; type the command again to retry.'
+    when 'failRm' then 'Apple step failed: ' || app_private.admin_fail_reason(msg->>'r') || '. The allowlist row is already removed; type the command again to retry.'
     when 'list' then app_private.admin_body_list(msg)
     when 'rate' then 'Too many commands. Wait a minute and try again.'
     when 'keep' then 'Cancelled: this card is no longer valid.'
@@ -208,6 +224,8 @@ begin
   insert into public.messages(conversation_id, sender_id, body, admin_msg, admin_push, created_at)
   values (conv, '00000000-0000-0000-0000-00000000ad41', app_private.admin_body(msg), msg, push, clock_timestamp())
   returning id into result;
+  -- the permission lasts for the insert only
+  perform set_config('app_private.admin_write', '', true);
   return result;
 end;
 $$;
@@ -453,6 +471,7 @@ begin
   update app_private.admin_pending set state = 'expired', email = null
    where state = 'pending' and expires_at < now();
   update app_private.admin_pending set email = null where email is not null and expires_at < now();
+  perform app_private.admin_jobs_sweep();
   update app_private.admin_jobs set email = null where email is not null and state in ('ok','failed');
   -- Rate limit: 30 commands in 10 minutes.
   select count(*) into cnt from app_private.admin_commands
@@ -583,6 +602,139 @@ begin
 end $$;
 revoke all on function public.admin_answer(uuid, boolean) from public, anon;
 grant execute on function public.admin_answer(uuid, boolean) to authenticated;
+
+-- Apple jobs ---------------------------------------------------------------
+-- A new job is handed to the admin-apple edge function (job id only; it decides nothing).
+create or replace function app_private.admin_jobs_dispatch() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare url text;
+begin
+  select decrypted_secret into url
+    from vault.decrypted_secrets
+   where name = 'admin_apple_url';
+  if url is not null then
+    perform net.http_post(
+      url := url,
+      body := jsonb_build_object('job_id', new.id),
+      headers := '{"content-type": "application/json"}'::jsonb,
+      timeout_milliseconds := 5000);
+  end if;
+  return null;
+exception when others then
+  raise warning 'admin_jobs_dispatch failed';
+  return null;
+end $$;
+revoke all on function app_private.admin_jobs_dispatch() from public, anon, authenticated;
+create trigger admin_jobs_dispatch after insert on app_private.admin_jobs
+  for each row execute function app_private.admin_jobs_dispatch();
+
+-- Ends a job once. The raw email goes in the same statement that sets the state.
+-- A failure is a NEW reply flagged for push at insert: the only escalation.
+create or replace function app_private.admin_job_end(job uuid, succeeded boolean, reason text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare
+  j app_private.admin_jobs;
+  conv uuid;
+  code text;
+begin
+  code := case when reason in ('timeout','rejected','dispatch') then reason else 'timeout' end;
+  update app_private.admin_jobs
+     set state = case when succeeded then 'ok' else 'failed' end,
+         email = null, finished_at = now(),
+         fail_reason = case when succeeded then null else code end
+   where id = job and state in ('pending','running')
+  returning * into j;
+  if not found then return; end if;
+  select m.conversation_id into conv from public.messages m where m.id = j.progress_message_id;
+  if conv is null then return; end if;
+  if succeeded then
+    perform app_private.admin_reply(conv, jsonb_build_object('k', case when j.kind = 'add' then 'p3' else 'r3' end));
+  else
+    perform app_private.admin_reply(conv, jsonb_build_object('k', case when j.kind = 'add' then 'fail' else 'failRm' end, 'r', code), true);
+  end if;
+end $$;
+revoke all on function app_private.admin_job_end(uuid, boolean, text) from public, anon, authenticated;
+
+-- No cron: a job with no end after 15 minutes fails like any other (run by each command and each claim).
+create or replace function app_private.admin_jobs_sweep() returns void
+language plpgsql security definer set search_path = '' as $$
+declare r record;
+begin
+  for r in select id from app_private.admin_jobs
+            where state in ('pending','running') and created_at < now() - interval '15 minutes' loop
+    perform app_private.admin_job_end(r.id, false, 'timeout');
+  end loop;
+end $$;
+revoke all on function app_private.admin_jobs_sweep() from public, anon, authenticated;
+
+-- Only the first caller wins, so a job is dispatched once.
+create or replace function public.admin_job_dispatch(job uuid) returns boolean
+language plpgsql security definer set search_path = '' as $$
+begin
+  update app_private.admin_jobs set dispatched_at = now()
+   where id = job and state = 'pending' and run_id is null and dispatched_at is null;
+  return found;
+end $$;
+revoke all on function public.admin_job_dispatch(uuid) from public, anon, authenticated;
+grant execute on function public.admin_job_dispatch(uuid) to service_role;
+
+-- GitHub would not start the job: fails it, unless a run already claimed it.
+create or replace function public.admin_job_dispatch_failed(job uuid, reason text) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if exists (select 1 from app_private.admin_jobs where id = job and run_id is null) then
+    perform app_private.admin_job_end(job, false, reason);
+  end if;
+end $$;
+revoke all on function public.admin_job_dispatch_failed(uuid, text) from public, anon, authenticated;
+grant execute on function public.admin_job_dispatch_failed(uuid, text) to service_role;
+
+-- The first claim binds the job to the GitHub run; there is no second claim.
+create or replace function public.admin_job_claim(job uuid, run bigint) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare k text; em text;
+begin
+  perform app_private.admin_jobs_sweep();
+  update app_private.admin_jobs set run_id = run, state = 'running', attempts = 1
+   where id = job and state = 'pending' and run_id is null
+  returning kind, email into k, em;
+  if not found then
+    return null;
+  end if;
+  return jsonb_build_object('kind', k, 'email', em);
+end $$;
+revoke all on function public.admin_job_claim(uuid, bigint) from public, anon, authenticated;
+grant execute on function public.admin_job_claim(uuid, bigint) to service_role;
+
+create or replace function public.admin_job_progress(job uuid, run bigint, attempt integer) returns void
+language plpgsql security definer set search_path = '' as $$
+declare k text; pm uuid; conv uuid;
+begin
+  update app_private.admin_jobs set attempts = attempt
+   where id = job and run_id = run and state = 'running'
+  returning kind, progress_message_id into k, pm;
+  if not found then
+    return;
+  end if;
+  if attempt = 2 and pm is not null then
+    select m.conversation_id into conv from public.messages m where m.id = pm;
+    if conv is not null then
+      perform app_private.admin_reply(conv, jsonb_build_object('k', case when k = 'add' then 'p2' else 'r2' end));
+    end if;
+  end if;
+end $$;
+revoke all on function public.admin_job_progress(uuid, bigint, integer) from public, anon, authenticated;
+grant execute on function public.admin_job_progress(uuid, bigint, integer) to service_role;
+
+create or replace function public.admin_job_finish(job uuid, run bigint, succeeded boolean, reason text) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if exists (select 1 from app_private.admin_jobs where id = job and run_id = run) then
+    perform app_private.admin_job_end(job, succeeded, reason);
+  end if;
+end $$;
+revoke all on function public.admin_job_finish(uuid, bigint, boolean, text) from public, anon, authenticated;
+grant execute on function public.admin_job_finish(uuid, bigint, boolean, text) to service_role;
 
 -- The chat list words admin chat previews in the reader's language: admin_msg at the end.
 create or replace view public.conversation_previews

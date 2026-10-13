@@ -19,6 +19,15 @@
       is one, submits it for beta app review. Internal groups are skipped:
       they get builds by themselves ("Enable automatic distribution"). Safe
       to re-run.
+  asc_signing.py tester add|remove GROUPS
+      Adds or removes the tester whose email is in $TESTER_EMAIL (never an
+      argument: CI logs are public). add: looks the tester up first, then
+      creates it in, or attaches it to, the EXTERNAL beta groups named in GROUPS
+      (comma-separated; internal groups are never used; user invitations are
+      never called). remove: ends the tester's access to the app (DELETE
+      /betaTesters/{id}/relationships/apps); not a tester, or already out, is
+      success. Errors print only `HTTP <status> <code>`. Exit 75 means transient
+      (timeout, 429, 5xx): retry; 1 is permanent.
   asc_signing.py fetch PROFILE_NAME OUT_DIR
       The signing identity of every run: finds the ACTIVE profile named
       PROFILE_NAME (the newest, if several) and the distribution certificate it
@@ -394,6 +403,99 @@ def distribute(bundle_identifier, build_number, groups, note):
         print("submitted for beta review", flush=True)
 
 
+class AscError(Exception):
+    def __init__(self, status, code):
+        self.status = status  # int or None for network errors
+        self.code = code  # str
+        super().__init__("status=%r code=%r" % (status, code))
+
+
+def tester_call(method, path, body=None):
+    # Unlike call(), errors carry only the status and Apple's error code: CI logs are public.
+    req = urllib.request.Request(API + path, method=method, data=json.dumps(body).encode() if body is not None else None, headers={"Authorization": "Bearer " + token(), "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read()
+            return json.loads(raw) if raw else None
+    except urllib.error.HTTPError as e:
+        code = "-"
+        try:
+            code = json.loads(e.read())["errors"][0]["code"]
+        except Exception:
+            pass  # keep the default
+        raise AscError(e.code, code) from None  # no chained text carries the URL
+    except OSError as e:
+        raise AscError(None, type(e).__name__) from None
+
+
+def tester_app(bundle_id="com.esd.sis"):
+    resp = tester_call("GET", "/apps?filter[bundleId]=%s" % urllib.parse.quote(bundle_id, safe=""))
+    for item in resp["data"]:
+        if item["attributes"]["bundleId"] == bundle_id:
+            return item["id"]
+    raise AscError(None, "no-app")
+
+
+def external_groups(app_id, wanted):
+    # Strictly external: an internal group (or one without the flag) is never used.
+    resp = tester_call("GET", "/apps/%s/betaGroups?limit=200" % app_id)
+    groups = [g for g in resp["data"] if g["attributes"]["name"].strip().lower() in wanted and g["attributes"].get("isInternalGroup") is False]
+    if not groups:
+        raise AscError(None, "no-external-group")
+    return groups
+
+
+def find_tester(email):
+    resp = tester_call("GET", "/betaTesters?filter[email]=%s&limit=2" % urllib.parse.quote(email, safe=""))
+    for item in resp["data"]:
+        if item["attributes"]["email"].lower() == email.lower():
+            return item["id"]
+    return None
+
+
+def tester_add(email, groups):
+    app_id = tester_app()
+    gs = external_groups(app_id, groups)
+    tid = find_tester(email)
+    if tid is None:
+        tester_call("POST", "/betaTesters", {"data": {"type": "betaTesters", "attributes": {"email": email}, "relationships": {"betaGroups": {"data": [{"type": "betaGroups", "id": g["id"]} for g in gs]}}}})
+    else:
+        for g in gs:
+            try:
+                tester_call("POST", "/betaGroups/%s/relationships/betaTesters" % g["id"], {"data": [{"type": "betaTesters", "id": tid}]})
+            except AscError as e:
+                if e.status != 409:
+                    raise  # 409: already in the group: success
+
+
+def tester_remove(email):
+    app_id = tester_app()
+    tid = find_tester(email)
+    if tid is None:
+        return  # not a tester: nothing to remove
+    try:
+        tester_call("DELETE", "/betaTesters/%s/relationships/apps" % tid, {"data": [{"type": "apps", "id": app_id}]})
+    except AscError as e:
+        if e.status != 404:
+            raise  # 404 here means the tester is not in this app: success; any other error escalates
+
+
+def tester(action, groups_csv):
+    email = os.environ.get("TESTER_EMAIL", "").strip().lower()
+    if not email:
+        print("tester: no email", file=sys.stderr)
+        sys.exit(2)
+    groups = {g.strip().lower() for g in groups_csv.split(",") if g.strip()}
+    try:
+        if action == "add":
+            tester_add(email, groups)
+        else:
+            tester_remove(email)
+    except AscError as e:
+        print("HTTP %s %s" % (e.status if e.status is not None else "-", e.code), file=sys.stderr)
+        sys.exit(75 if e.status is None or e.status == 429 or e.status >= 500 else 1)  # 75 = transient, the workflow retries; 1 = permanent
+
+
 def main(argv):
     if argv[1:2] == ["create"] and len(argv) == 6:
         create(*argv[2:])
@@ -409,6 +511,8 @@ def main(argv):
         ensure(*argv[3:], group=False)
     elif argv[1:3] == ["ensure", "--signin"] and len(argv) == 6:
         ensure(*argv[3:], signin=True)
+    elif argv[1:2] == ["tester"] and len(argv) == 4 and argv[2] in ("add", "remove"):
+        tester(argv[2], argv[3])
     elif argv[1:2] == ["fetch"] and len(argv) == 4:
         fetch(*argv[2:])
     elif argv[1:2] == ["cleanup"] and len(argv) in (2, 3):

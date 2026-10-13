@@ -12,7 +12,13 @@ import '../domain/message.dart';
 /// The words of an admin chat reply in the app's language, from its machine-readable form; null for a key this build does not know (the caller shows the English body).
 String? adminReplyText(AppLocalizations l, Map<String, dynamic> m) {
   final e = m['e'] as String? ?? '';
-  final r = m['r'] as String? ?? '';
+  final r = switch (m['r']) {
+    'timeout' => l.adminReasonTimeout,
+    'rejected' => l.adminReasonRejected,
+    'dispatch' => l.adminReasonDispatch,
+    final String other => other,
+    _ => '',
+  };
   final text = switch (m['k']) {
     'unk' => l.adminUnk,
     'noem' => l.adminNoem,

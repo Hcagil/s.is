@@ -2189,6 +2189,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get adminReasonTimeout => 'Apple did not answer in time';
+
+  @override
+  String get adminReasonRejected => 'Apple refused the request';
+
+  @override
+  String get adminReasonDispatch => 'GitHub could not start the job';
+
+  @override
   String adminListHeader(int count) {
     return 'Testers: $count';
   }

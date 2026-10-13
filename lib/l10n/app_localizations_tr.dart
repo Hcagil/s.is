@@ -2165,6 +2165,15 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String get adminReasonTimeout => 'Apple zamanında cevap vermedi';
+
+  @override
+  String get adminReasonRejected => 'Apple isteği reddetti';
+
+  @override
+  String get adminReasonDispatch => 'GitHub işi başlatamadı';
+
+  @override
   String adminListHeader(int count) {
     return 'Test kullanıcıları: $count';
   }

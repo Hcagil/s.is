@@ -64,8 +64,8 @@ jobs:
           finish() {
             local ok=$1
             local reason=$2
-            fresh_token
-            report "$(jq -nc --arg j "$JOB_ID" --argjson ok "$ok" --arg r "$reason" '{action:"finish",job_id:$j,ok:$ok,reason:$r}')" >/dev/null
+            fresh_token || return 0
+            report "$(jq -nc --arg j "$JOB_ID" --argjson ok "$ok" --arg r "$reason" '{action:"finish",job_id:$j,ok:$ok,reason:$r}')" >/dev/null || true
           }
 
           # A crash is reported as a failure.

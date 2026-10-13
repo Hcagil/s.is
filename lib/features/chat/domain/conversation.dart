@@ -1,5 +1,6 @@
 import '../../auth/domain/member.dart';
 import 'group_colors.dart';
+import 'group_settings.dart';
 import 'message.dart';
 
 /// A conversation as the conversation list needs it.
@@ -20,7 +21,13 @@ final class Conversation {
     this.avatarPath,
     this.hasLeft = false,
     this.isSystem = false,
+    this.isAdminChat = false,
     this.senders = const {},
+    this.settings = const GroupSettings(),
+    this.archived = false,
+    this.pinned = false,
+    this.pinnedMessageId,
+    this.isAdmin = false,
   });
 
   final String id;
@@ -52,9 +59,28 @@ final class Conversation {
   /// nobody can write into it or leave it.
   final bool isSystem;
 
+  /// True for the owner's admin chat (SIS Admin): a system chat the owner may
+  /// type commands into. Also [isSystem].
+  final bool isAdminChat;
+
   /// For a group: each other member's name and colour slot by user id, so the
   /// list can name and colour the sender of the preview. Empty for a 1:1.
   final Map<String, GroupVoice> senders;
+
+  /// A group's admin-controlled switches; meaningless for a 1:1.
+  final GroupSettings settings;
+
+  /// True when the signed-in member archived this chat (per member; server-side, so it follows them across devices). Archived chats leave the main list and stay archived when new messages arrive.
+  final bool archived;
+
+  /// True when the signed-in member pinned this chat (per member; server-side). Pinned chats sit at the top of the list, up to 5.
+  final bool pinned;
+
+  /// The id of the one message pinned in this chat (shared by everyone in it), or null.
+  final String? pinnedMessageId;
+
+  /// True when the signed-in member is a current admin of this group (false for a 1:1). Only a hint for what to offer; the server decides.
+  final bool isAdmin;
 
   /// The same conversation with a newer message as its preview; [unread]
   /// grows by one when [counts] (a message from someone else, arriving while
@@ -71,7 +97,13 @@ final class Conversation {
         avatarPath: avatarPath,
         hasLeft: hasLeft,
         isSystem: isSystem,
+        isAdminChat: isAdminChat,
         senders: senders,
+        settings: settings,
+        archived: archived,
+        pinned: pinned,
+        pinnedMessageId: pinnedMessageId,
+        isAdmin: isAdmin,
       );
 
   /// The same conversation with nothing unread.
@@ -85,7 +117,97 @@ final class Conversation {
     avatarPath: avatarPath,
     hasLeft: hasLeft,
     isSystem: isSystem,
+    isAdminChat: isAdminChat,
     senders: senders,
+    settings: settings,
+    archived: archived,
+    pinned: pinned,
+    pinnedMessageId: pinnedMessageId,
+    isAdmin: isAdmin,
+  );
+
+  /// The same conversation with [next] as its settings.
+  Conversation withSettings(GroupSettings next) => Conversation(
+    id: id,
+    title: title,
+    other: other,
+    lastMessage: lastMessage,
+    lastMessageAt: lastMessageAt,
+    lastSenderId: lastSenderId,
+    unread: unread,
+    avatarPath: avatarPath,
+    hasLeft: hasLeft,
+    isSystem: isSystem,
+    isAdminChat: isAdminChat,
+    senders: senders,
+    settings: next,
+    archived: archived,
+    pinned: pinned,
+    pinnedMessageId: pinnedMessageId,
+    isAdmin: isAdmin,
+  );
+
+  /// The same conversation, archived or not.
+  Conversation withArchived(bool value) => Conversation(
+    id: id,
+    title: title,
+    other: other,
+    lastMessage: lastMessage,
+    lastMessageAt: lastMessageAt,
+    lastSenderId: lastSenderId,
+    unread: unread,
+    avatarPath: avatarPath,
+    hasLeft: hasLeft,
+    isSystem: isSystem,
+    isAdminChat: isAdminChat,
+    senders: senders,
+    settings: settings,
+    archived: value,
+    pinned: pinned,
+    pinnedMessageId: pinnedMessageId,
+    isAdmin: isAdmin,
+  );
+
+  /// The same conversation, pinned or not.
+  Conversation withPinned(bool value) => Conversation(
+    id: id,
+    title: title,
+    other: other,
+    lastMessage: lastMessage,
+    lastMessageAt: lastMessageAt,
+    lastSenderId: lastSenderId,
+    unread: unread,
+    avatarPath: avatarPath,
+    hasLeft: hasLeft,
+    isSystem: isSystem,
+    isAdminChat: isAdminChat,
+    senders: senders,
+    settings: settings,
+    archived: archived,
+    pinned: value,
+    pinnedMessageId: pinnedMessageId,
+    isAdmin: isAdmin,
+  );
+
+  /// The same conversation with [messageId] as its pinned message (null: none).
+  Conversation withPinnedMessage(String? messageId) => Conversation(
+    id: id,
+    title: title,
+    other: other,
+    lastMessage: lastMessage,
+    lastMessageAt: lastMessageAt,
+    lastSenderId: lastSenderId,
+    unread: unread,
+    avatarPath: avatarPath,
+    hasLeft: hasLeft,
+    isSystem: isSystem,
+    isAdminChat: isAdminChat,
+    senders: senders,
+    settings: settings,
+    archived: archived,
+    pinned: pinned,
+    pinnedMessageId: messageId,
+    isAdmin: isAdmin,
   );
 
   /// For the on-disk chat list snapshot only.
@@ -100,7 +222,15 @@ final class Conversation {
     'avatarPath': avatarPath,
     'hasLeft': hasLeft,
     'isSystem': isSystem,
+    if (isAdminChat) 'isAdminChat': true,
     'senders': {for (final e in senders.entries) e.key: e.value.toJson()},
+    'settings': settings.toJson(),
+    // Written only when true: the saved list the native side reads keeps its
+    // old shape for every un-archived chat.
+    if (archived) 'archived': true,
+    if (pinned) 'pinned': true,
+    if (pinnedMessageId != null) 'pinnedMessageId': pinnedMessageId,
+    if (isAdmin) 'isAdmin': true,
   };
 
   static Conversation fromJson(Map<String, Object?> json) => Conversation(
@@ -118,6 +248,7 @@ final class Conversation {
     avatarPath: json['avatarPath'] as String?,
     hasLeft: json['hasLeft'] as bool? ?? false,
     isSystem: json['isSystem'] as bool? ?? false,
+    isAdminChat: json['isAdminChat'] as bool? ?? false,
     senders: {
       for (final e
           in ((json['senders'] as Map<String, Object?>?) ??
@@ -125,11 +256,22 @@ final class Conversation {
               .entries)
         e.key: GroupVoice.fromJson(e.value! as Map<String, Object?>),
     },
+    settings: json['settings'] == null
+        ? const GroupSettings()
+        : GroupSettings.fromJson(json['settings'] as Map<String, Object?>),
+    archived: json['archived'] as bool? ?? false,
+    pinned: json['pinned'] as bool? ?? false,
+    pinnedMessageId: json['pinnedMessageId'] as String?,
+    isAdmin: json['isAdmin'] as bool? ?? false,
   );
 
   bool get isGroup => title != null;
 
   /// The group's title, or who you are talking to. Empty when the partner's
   /// name is unknown; presentation localises that via conversationLabel.
-  String get label => isSystem ? 'SIS' : title ?? other?.displayName ?? '';
+  String get label => isAdminChat
+      ? 'SIS Admin'
+      : isSystem
+      ? 'SIS'
+      : title ?? other?.displayName ?? '';
 }

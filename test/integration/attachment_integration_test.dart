@@ -30,6 +30,8 @@ import '../support/reach.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../support/video_fakes.dart';
+
 /// Image attachments against the real stack: a real upload into a private
 /// bucket, real storage row-level security, a real signed URL fetched over
 /// HTTP, and the real relaxed check constraint on `messages`.
@@ -346,7 +348,10 @@ void main() {
     /// which hands sendImage what the member chose.
     ProviderContainer containerFor(SupabaseChatRepository repository) =>
         ProviderContainer.test(
-          overrides: [chatRepositoryProvider.overrideWithValue(repository)],
+          overrides: [
+            ...videoOverrides(),
+            chatRepositoryProvider.overrideWithValue(repository),
+          ],
         );
 
     test(
@@ -672,7 +677,10 @@ void main() {
       _expectReadable((foreign as Err<Uri>).failure);
 
       final container = ProviderContainer.test(
-        overrides: [chatRepositoryProvider.overrideWithValue(noah)],
+        overrides: [
+          ...videoOverrides(),
+          chatRepositoryProvider.overrideWithValue(noah),
+        ],
       );
       container.listen(attachmentUrlProvider(realPath), (_, _) {});
       await expectLater(
@@ -707,6 +715,7 @@ void main() {
       // everything that reaches the server.
       final container = ProviderContainer(
         overrides: [
+          ...videoOverrides(),
           chatRepositoryProvider.overrideWithValue(mia),
           presenceRepositoryProvider.overrideWithValue(
             SupabasePresenceRepository(miaClient!),
@@ -823,6 +832,7 @@ void main() {
         final liamId = liamClient!.auth.currentUser!.id;
         final container = ProviderContainer.test(
           overrides: [
+            ...videoOverrides(),
             chatRepositoryProvider.overrideWithValue(liam),
             sessionControllerProvider.overrideWith(
               () => _SignedIn(Member(userId: liamId, displayName: 'Liam')),

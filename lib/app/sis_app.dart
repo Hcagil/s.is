@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +8,9 @@ import '../core/failure.dart';
 import '../core/startup_failure.dart';
 import '../features/appearance/application/appearance_controller.dart';
 import '../features/appearance/domain/appearance_settings.dart';
+import '../features/appearance/domain/custom_theme.dart';
+import '../features/appearance/domain/wallpaper.dart';
+import '../features/auth/data/apple_button.dart';
 import '../features/auth/domain/member.dart';
 import '../features/auth/application/session_controller.dart';
 import '../features/auth/domain/session_state.dart';
@@ -14,6 +19,8 @@ import '../features/auth/presentation/status_screens.dart';
 import '../features/chat/application/chat_controllers.dart';
 import '../features/chat/application/chat_drafts.dart';
 import '../features/chat/application/group_controller.dart';
+import '../features/chat/application/share_controller.dart';
+import '../features/chat/presentation/share_page.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/notifications/application/badge_controller.dart';
 import '../features/notifications/application/push_controller.dart';
@@ -39,6 +46,7 @@ class SisApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final look = ref.watch(appearanceProvider);
+    final custom = look.activeCustomTheme;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'SIS',
@@ -55,16 +63,35 @@ class SisApp extends ConsumerWidget {
         AppLanguage.en => const Locale('en'),
         AppLanguage.tr => const Locale('tr'),
       },
-      themeMode: ThemeMode.system,
+      // A custom theme can fix light or dark; everything else follows the phone.
+      themeMode: switch (custom?.mode) {
+        CustomThemeMode.light => ThemeMode.light,
+        CustomThemeMode.dark => ThemeMode.dark,
+        _ => ThemeMode.system,
+      },
       theme: sisTheme(
         Brightness.light,
         theme: look.themeId,
         systemFont: look.systemFont,
+        brand: custom == null
+            ? null
+            : sisBrandForCustom(
+                custom,
+                Brightness.light,
+                wallpaperSet: look.wallpaper.kind != WallpaperKind.none,
+              ),
       ),
       darkTheme: sisTheme(
         Brightness.dark,
         theme: look.themeId,
         systemFont: look.systemFont,
+        brand: custom == null
+            ? null
+            : sisBrandForCustom(
+                custom,
+                Brightness.dark,
+                wallpaperSet: look.wallpaper.kind != WallpaperKind.none,
+              ),
       ),
       navigatorObservers: [ref.read(routeStackProvider)],
       builder: (context, child) => MediaQuery(
@@ -103,15 +130,17 @@ class _AllowedGate extends ConsumerWidget {
       AsyncData()
           when ref.watch(notificationExplainerShownProvider).value == false =>
         const NotificationExplainerScreen(),
-      AsyncData() => HomeScreen(member: member),
+      AsyncData() => ShareHost(child: HomeScreen(member: member)),
       // The marker said the first-run screen is done, so Home shows while the
       // profile loads or fails to load; never an error screen.
-      AsyncError() when onboarded => HomeScreen(member: member),
+      AsyncError() when onboarded => ShareHost(
+        child: HomeScreen(member: member),
+      ),
       AsyncError(:final error) => StatusScreen.error(
         failureReason(error),
         onRetry: () => ref.read(ownProfileProvider.notifier).retry(),
       ),
-      _ when onboarded => HomeScreen(member: member),
+      _ when onboarded => ShareHost(child: HomeScreen(member: member)),
       _ => const SisFullScreenLoader(),
     };
   }
@@ -171,16 +200,56 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     if (startupError != null) return StartupFailedScreen(startupError);
 
     final session = ref.watch(sessionControllerProvider);
+    // Held from the start, signed in or not: what another app shared waits
+    // here until the member has signed in and picks chats (ShareHost).
+    ref.listen(pendingShareProvider, (_, _) {});
     // A session that ends -- signed out, or Denied (revoked, replaced, found
     // out only after the stored list was shown) -- leaves no page open: a chat
     // opened from a notification in the unconfirmed window must not stay on
     // top of the Denied or sign-in screen. Synchronous on purpose (same frame).
-    ref.listen(sessionControllerProvider, (_, next) {
+    ref.listen(sessionControllerProvider, (prev, next) {
       final v = next.value;
-      if ((v is SignedOut || v is Denied) && mounted) {
+      // What a member was about to share must not wait for the next account: finish it (and delete its files)
+      // when the signed-in member signs out or another member signs in. A share that arrived before any
+      // sign-in is kept, so sign-in first and then continue works. A refresh (loading) keeps it.
+      final before = prev?.value;
+      final shown = ref.read(pendingShareProvider);
+      if (shown != null &&
+          before is Allowed &&
+          (v is SignedOut ||
+              v is Denied ||
+              v is Replaced ||
+              (v is Allowed && v.member.userId != before.member.userId))) {
+        unawaited(ref.read(pendingShareProvider.notifier).finish(shown));
+      }
+      if ((v is SignedOut || v is Denied || v is Replaced) && mounted) {
         // No transition: chat content must not stay visible, even sliding
         // out, over the Denied or sign-in screen.
         ref.read(routeStackProvider).removeAllAboveFirst();
+      }
+      if (v is Replaced && prev?.value is! Replaced) {
+        // Stop push while this phone's session still exists, then end it. The
+        // server already sends this phone nothing; this also tidies the token.
+        final push = ref.read(pushRegistrationProvider.notifier);
+        final session = ref.read(sessionControllerProvider.notifier);
+        final store = ref.read(sendQueueStoreProvider);
+        final uid = v.userId;
+        unawaited(() async {
+          // Count first: the screen shows how many were deleted.
+          try {
+            if (uid != null) {
+              final n = (await store.load(uid)).length;
+              await store.clear();
+              session.noteUnsentDeleted(n);
+            } else {
+              await store.clear();
+            }
+          } catch (_) {}
+          try {
+            await push.forget().timeout(const Duration(seconds: 5));
+          } catch (_) {}
+          await session.finishReplaced();
+        }());
       }
     });
     // For the life of the app, whatever screen it is on: keeps this phone on
@@ -200,10 +269,22 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       // Same reach again, for the stored chat list: chatListSnapshotOwnerProvider
       // erases it on any path a session can end on, not only sign-out.
       ref.listen(chatListSnapshotOwnerProvider, (_, _) {});
+      // And the files kept from file messages.
+      ref.listen(deviceFilesOwnerProvider, (_, _) {});
+      // The saved send queue is forgotten the same way, and listening to the
+      // queue itself brings back the sends that were waiting when the app
+      // was killed.
+      ref.listen(sendQueueOwnerProvider, (_, _) {});
+      ref.listen(playedVoiceOwnerProvider, (_, _) {});
+      ref.listen(recentStickerOwnerProvider, (_, _) {});
+      ref.listen(sendQueueProvider, (_, _) {});
       // Drops a conversation's queue and draft the moment it is found to be
       // one the member has left or been removed from -- see
       // leftConversationGuardProvider's own doc for why this is silent.
       ref.listen(leftConversationGuardProvider, (_, _) {});
+      // Live updates of group settings, picture, members and deletion: the
+      // server nudges each member, this re-reads what changed.
+      ref.listen(groupChangesListenerProvider, (_, _) {});
       // Asks for the What's new notes due for this build once per start,
       // for whoever is signed in.
       ref.listen(releaseNotesProvider, (_, _) {});
@@ -220,11 +301,20 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     final notifier = ref.read(sessionControllerProvider.notifier);
     return switch (session) {
       AsyncData(value: SetupRequired()) => const SetupRequiredScreen(),
-      AsyncData(value: SignedOut(:final reason)) => SignInScreen(
-        reason: reason,
-      ),
+      AsyncData(value: SignedOut(:final reason, :final hiddenEmail)) =>
+        SignInScreen(
+          reason: reason,
+          hiddenEmail: hiddenEmail,
+          appleButton: appleSignInButton,
+        ),
       AsyncData(value: Denied()) => StatusScreen.denied(
         onSignOut: notifier.signOut,
+      ),
+      AsyncData(value: Replaced(:final unsentDeleted)) => StatusScreen.replaced(
+        onSignIn: notifier.signIn,
+        onSignInApple: notifier.signInWithApple,
+        appleButton: appleSignInButton,
+        unsentDeleted: unsentDeleted,
       ),
       AsyncData(value: SessionError(:final reason)) => StatusScreen.error(
         reason,

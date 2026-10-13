@@ -9,6 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
 import '../domain/message.dart';
+import '../domain/video.dart';
 import 'member_name.dart';
 import 'new_chat_page.dart';
 import 'person_avatar.dart';
@@ -97,13 +98,35 @@ class _ChosenStack extends StatelessWidget {
 /// `(chatIds, personIds)`, or null on back.
 class ForwardPage extends ConsumerStatefulWidget {
   /// Creates the page for [message]; [exclude] is the open chat, left out.
-  const ForwardPage({super.key, required this.message, required this.exclude});
+  const ForwardPage({
+    super.key,
+    this.message,
+    required this.exclude,
+    this.title,
+    this.stripText,
+    this.stripLeading,
+    this.captionController,
+  });
 
-  /// The message being forwarded.
-  final Message message;
+  /// The message being forwarded; null when sharing from another app.
+  final Message? message;
 
   /// The conversation currently open, which is not offered as a target.
   final String? exclude;
+
+  /// Replaces the forward title.
+  final String? title;
+
+  /// Strip line for shared content; when set the strip shows it plain,
+  /// without the "Forwarding:" prefix.
+  final String? stripText;
+
+  /// Leading widget of the strip instead of the shortcut icon.
+  final Widget? stripLeading;
+
+  /// When set, the caption row is a real text field the caller reads;
+  /// otherwise the greyed placeholder.
+  final TextEditingController? captionController;
 
   @override
   ConsumerState<ForwardPage> createState() => _ForwardPageState();
@@ -168,12 +191,25 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
         if (!withChat.contains(m.userId) && matchesPerson(m, query)) m,
     ];
 
-    final body = widget.message.body.trim();
-    final preview = body.isNotEmpty
-        ? body
-        : widget.message.hasAttachment
-        ? l.attachPhoto
-        : l.commonMessage;
+    final message = widget.message;
+    final body = message?.body.trim() ?? '';
+    final preview =
+        widget.stripText ??
+        (message == null
+            ? ''
+            : body.isNotEmpty
+            ? body
+            : message.stickerId != null
+            ? l.stickerPreviewLine
+            : message.file != null
+            ? (message.file!.isVoice
+                  ? l.voicePreviewLine
+                  : message.file!.isVideo
+                  ? videoPreview
+                  : message.file!.name)
+            : message.hasAttachment
+            ? l.attachPhoto
+            : l.commonMessage);
     final n = _chats.length + _people.length;
     final chosen = <({String label, String seed, String? avatarPath})>[
       for (final c in all)
@@ -192,7 +228,7 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
 
     return Scaffold(
       key: const ValueKey('forward-page'),
-      appBar: AppBar(title: Text(l.forwardTitle)),
+      appBar: AppBar(title: Text(widget.title ?? l.forwardTitle)),
       body: Column(
         children: [
           PickerSearchField(
@@ -212,19 +248,21 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.shortcut, size: 18, color: t.muted),
+                  widget.stripLeading ??
+                      Icon(Icons.shortcut, size: 18, color: t.muted),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text.rich(
                       TextSpan(
                         children: [
-                          TextSpan(
-                            text: l.forwardPrefix,
-                            style: TextStyle(
-                              color: t.muted,
-                              fontWeight: FontWeight.bold,
+                          if (widget.stripText == null)
+                            TextSpan(
+                              text: l.forwardPrefix,
+                              style: TextStyle(
+                                color: t.muted,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
                           TextSpan(text: preview),
                         ],
                       ),
@@ -306,9 +344,8 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                GreyOption(
-                  name: 'caption',
-                  child: Container(
+                if (widget.captionController != null)
+                  Container(
                     width: double.infinity,
                     height: 40,
                     alignment: Alignment.centerLeft,
@@ -317,12 +354,35 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
                       color: t.surfaceHigh,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Text(
-                      l.pickerAddCaption,
-                      style: TextStyle(color: t.muted, fontSize: 14),
+                    child: TextField(
+                      key: const ValueKey('share-caption'),
+                      controller: widget.captionController,
+                      maxLines: 1,
+                      style: const TextStyle(fontSize: 14),
+                      decoration: InputDecoration.collapsed(
+                        hintText: l.pickerAddCaption,
+                        hintStyle: TextStyle(color: t.muted, fontSize: 14),
+                      ),
+                    ),
+                  )
+                else
+                  GreyOption(
+                    name: 'caption',
+                    child: Container(
+                      width: double.infinity,
+                      height: 40,
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: t.surfaceHigh,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        l.pickerAddCaption,
+                        style: TextStyle(color: t.muted, fontSize: 14),
+                      ),
                     ),
                   ),
-                ),
                 const SizedBox(height: 10),
                 Row(
                   children: [

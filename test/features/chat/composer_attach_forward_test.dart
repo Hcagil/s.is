@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/theme.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
+import 'package:sis/features/auth/data/apple_button.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/auth/presentation/sign_in_screen.dart';
@@ -26,6 +27,7 @@ import 'package:sis/l10n/app_localizations.dart';
 
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -34,14 +36,7 @@ const dana = Member(userId: 'u4', displayName: 'Dana');
 
 Finder byKey(String k) => find.byKey(ValueKey(k));
 
-const greyTiles = [
-  'grey-att_tvideo',
-  'grey-att_tfile',
-  'grey-att_tvoice',
-  'grey-att_tloc',
-  'grey-att_tcon',
-  'grey-att_tpoll',
-];
+const greyTiles = ['grey-att_tvoice'];
 
 Message msg(String id, {String body = 'hi', String from = 'u2'}) => Message(
   id: id,
@@ -62,6 +57,9 @@ class _SignedOut extends SessionController {
   Future<SessionState> build() async => const SignedOut();
   @override
   Future<void> signIn() async => signIns++;
+  int appleSignIns = 0;
+  @override
+  Future<void> signInWithApple() async => appleSignIns++;
 }
 
 /// A phone in portrait; [width] logical pixels wide.
@@ -81,6 +79,7 @@ Future<ProviderContainer> pumpChat(
   final container = await settled(
     ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
@@ -140,12 +139,18 @@ bool fieldFocused(WidgetTester t) => t
 void main() {
   group('the attach card', () {
     testWidgets('the paperclip opens the card, not the grid; it holds Photo '
-        'and the six grey tiles', (t) async {
+        'Poll, Contact, File, Location and the grey tiles', (t) async {
       await pumpChat(t, world());
       await t.tap(byKey('composer-attach'));
       await t.pumpAndSettle();
       expect(byKey('attach-menu'), findsOneWidget);
       expect(byKey('attach-photo'), findsOneWidget);
+      expect(byKey('attach-poll'), findsOneWidget);
+      expect(byKey('attach-contact'), findsOneWidget);
+      expect(byKey('attach-file'), findsOneWidget);
+      expect(byKey('grey-att_tfile'), findsNothing);
+      expect(byKey('attach-location'), findsOneWidget);
+      expect(byKey('grey-att_tloc'), findsNothing);
       for (final k in greyTiles) {
         expect(byKey(k), findsOneWidget, reason: k);
       }
@@ -200,9 +205,9 @@ void main() {
   });
 
   group('showAttachMenu', () {
-    Future<List<bool>> mount(WidgetTester t) async {
+    Future<List<String?>> mount(WidgetTester t) async {
       phone(t);
-      final results = <bool>[];
+      final results = <String?>[];
       await t.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -232,23 +237,63 @@ void main() {
       return results;
     }
 
-    testWidgets('Photo answers true', (t) async {
+    testWidgets('Photo answers photo', (t) async {
       final results = await mount(t);
       await t.tap(byKey('attach-photo'));
       await t.pumpAndSettle();
-      expect(results, [true]);
+      expect(results, ['photo']);
     });
 
-    testWidgets('backing out answers false', (t) async {
+    testWidgets('Poll is live and answers poll', (t) async {
+      final results = await mount(t);
+      expect(byKey('grey-att_tpoll'), findsNothing);
+      await t.tap(byKey('attach-poll'));
+      await t.pumpAndSettle();
+      expect(results, ['poll']);
+    });
+
+    testWidgets('File is live and answers file', (t) async {
+      final results = await mount(t);
+      expect(byKey('grey-att_tfile'), findsNothing);
+      await t.tap(byKey('attach-file'));
+      await t.pumpAndSettle();
+      expect(results, ['file']);
+    });
+
+    testWidgets('Contact is live and answers contact', (t) async {
+      final results = await mount(t);
+      expect(byKey('grey-att_tcon'), findsNothing);
+      await t.tap(byKey('attach-contact'));
+      await t.pumpAndSettle();
+      expect(results, ['contact']);
+    });
+
+    testWidgets('Video is live and answers video', (t) async {
+      final results = await mount(t);
+      expect(byKey('grey-att_tvideo'), findsNothing);
+      await t.tap(byKey('attach-video'));
+      await t.pumpAndSettle();
+      expect(results, ['video']);
+    });
+
+    testWidgets('Location is live and answers location', (t) async {
+      final results = await mount(t);
+      expect(byKey('grey-att_tloc'), findsNothing);
+      await t.tap(byKey('attach-location'));
+      await t.pumpAndSettle();
+      expect(results, ['location']);
+    });
+
+    testWidgets('backing out answers null', (t) async {
       final results = await mount(t);
       await t.binding.handlePopRoute();
       await t.pumpAndSettle();
-      expect(results, [false]);
+      expect(results, [null]);
     });
 
     testWidgets('a grey tile answers nothing and leaves the card', (t) async {
       final results = await mount(t);
-      await t.tap(byKey('grey-att_tvideo'));
+      await t.tap(byKey('grey-att_tvoice'));
       await t.pumpAndSettle();
       expect(results, isEmpty);
       expect(byKey('attach-menu'), findsOneWidget);
@@ -256,100 +301,120 @@ void main() {
   });
 
   group('the composer', () {
-    testWidgets('empty: sticker, mic and dictation; no send', (t) async {
+    testWidgets('empty: the sticker and voice buttons; no send', (t) async {
       await pumpChat(t, world());
-      expect(byKey('grey-c_btn'), findsOneWidget);
-      expect(byKey('grey-v_rec'), findsOneWidget);
-      expect(byKey('grey-v_dict'), findsOneWidget);
+      expect(byKey('composer-stickers'), findsOneWidget);
+      expect(byKey('composer-voice'), findsOneWidget);
+      expect(byKey('voice-mode-voice'), findsOneWidget);
       expect(byKey('composer-send'), findsNothing);
     });
 
-    testWidgets('typing swaps the mic for send and hides dictation; '
-        'clearing brings them back', (t) async {
-      await pumpChat(t, world());
-      await t.enterText(byKey('composer-field'), 'hello');
-      await t.pump();
-      expect(byKey('composer-send'), findsOneWidget);
-      expect(byKey('grey-v_rec'), findsNothing);
-      expect(byKey('grey-v_dict'), findsNothing);
-      expect(byKey('grey-c_btn'), findsOneWidget);
+    testWidgets(
+      'typing swaps the voice button for send; clearing brings it back',
+      (t) async {
+        await pumpChat(t, world());
+        await t.enterText(byKey('composer-field'), 'hello');
+        await t.pump();
+        expect(byKey('composer-send'), findsOneWidget);
+        expect(byKey('composer-voice'), findsNothing);
+        expect(byKey('voice-mode-voice'), findsNothing);
+        expect(byKey('voice-mode-dictation'), findsNothing);
+        expect(byKey('composer-stickers'), findsOneWidget);
 
-      await t.enterText(byKey('composer-field'), '');
-      await t.pump();
-      expect(byKey('composer-send'), findsNothing);
-      expect(byKey('grey-v_rec'), findsOneWidget);
-      expect(byKey('grey-v_dict'), findsOneWidget);
-      expect(byKey('grey-c_btn'), findsOneWidget);
-    });
+        await t.enterText(byKey('composer-field'), '');
+        await t.pump();
+        expect(byKey('composer-send'), findsNothing);
+        expect(byKey('composer-voice'), findsOneWidget);
+        expect(byKey('voice-mode-voice'), findsOneWidget);
+        expect(byKey('voice-mode-dictation'), findsNothing);
+        expect(byKey('composer-stickers'), findsOneWidget);
+      },
+    );
 
-    testWidgets('editing: send shows, no mic and no dictation, even with the '
-        'field emptied', (t) async {
-      final chat = world()
-        ..messagesResult = Ok([msg('m9', body: 'mine', from: me.userId)]);
-      chat.history['c1'] = [msg('m9', body: 'mine', from: me.userId)];
-      await pumpChat(t, chat);
-      await t.longPress(byKey('message-m9'));
-      await t.pumpAndSettle();
-      await t.tap(byKey('menu-edit'));
-      await t.pumpAndSettle();
-      expect(byKey('edit-bar'), findsOneWidget, reason: 'edit did not open');
-      expect(byKey('composer-send'), findsOneWidget);
-      expect(byKey('grey-v_dict'), findsNothing);
-
-      await t.enterText(byKey('composer-field'), '');
-      await t.pump();
-      expect(byKey('composer-send'), findsOneWidget);
-      expect(byKey('grey-v_rec'), findsNothing);
-      expect(byKey('grey-v_dict'), findsNothing);
-      expect(byKey('grey-c_btn'), findsOneWidget);
-    });
-
-    testWidgets('type, tap send: it goes out in that frame', (t) async {
-      final chat = world();
-      await pumpChat(t, chat);
-      await t.enterText(byKey('composer-field'), 'right now');
-      await t.pump();
-      await t.tap(byKey('composer-send'));
-      await t.pump();
-      expect(chat.sent.map((s) => s.body), ['right now']);
-      expect(find.text('right now'), findsOneWidget, reason: 'no bubble yet');
-      expect(fieldText(t), isEmpty);
-    });
-
-    testWidgets('grey taps do nothing; the field next to them still takes '
-        'taps and focus', (t) async {
-      final chat = world();
-      await pumpChat(t, chat);
-      expect(fieldFocused(t), isFalse, reason: 'precondition');
-      for (final k in ['grey-c_btn', 'grey-v_rec', 'grey-v_dict']) {
-        await t.tap(byKey(k));
+    testWidgets(
+      'editing: send shows, no voice button, even with the field emptied',
+      (t) async {
+        final chat = world()
+          ..messagesResult = Ok([msg('m9', body: 'mine', from: me.userId)]);
+        chat.history['c1'] = [msg('m9', body: 'mine', from: me.userId)];
+        await pumpChat(t, chat);
+        await t.longPress(byKey('message-m9'));
         await t.pumpAndSettle();
-        expect(find.byType(MessageScreen), findsOneWidget, reason: k);
-        expect(byKey('attach-menu'), findsNothing, reason: k);
-        expect(fieldText(t), isEmpty, reason: k);
-      }
-      expect(chat.sent, isEmpty);
+        await t.tap(byKey('menu-edit'));
+        await t.pumpAndSettle();
+        expect(byKey('edit-bar'), findsOneWidget, reason: 'edit did not open');
+        expect(byKey('composer-send'), findsOneWidget);
+        expect(byKey('composer-voice'), findsNothing);
+        expect(byKey('voice-mode-voice'), findsNothing);
+        expect(byKey('voice-mode-dictation'), findsNothing);
+        expect(byKey('composer-stickers'), findsOneWidget);
 
-      final field = t.getRect(byKey('composer-field'));
-      for (final at in [
-        field.centerLeft + const Offset(3, 0),
-        field.centerRight - const Offset(3, 0),
-      ]) {
-        FocusManager.instance.primaryFocus?.unfocus();
+        await t.enterText(byKey('composer-field'), '');
+        await t.pump();
+        expect(byKey('composer-send'), findsOneWidget);
+        expect(byKey('composer-voice'), findsNothing);
+        expect(byKey('voice-mode-voice'), findsNothing);
+        expect(byKey('voice-mode-dictation'), findsNothing);
+        expect(byKey('composer-stickers'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      // The sticker button opens the sticker panel since 10a; that is
+      // covered in sticker_ui_test.dart.
+      'a voice-button tap only switches the mode; the field still takes taps and focus',
+      (t) async {
+        final chat = world();
+        await pumpChat(t, chat);
+        expect(fieldFocused(t), isFalse, reason: 'precondition');
+        expect(chat.sent, isEmpty);
+
+        // Tap the voice button to switch to dictation mode
+        await t.tap(byKey('composer-voice'));
         await t.pumpAndSettle();
-        expect(fieldFocused(t), isFalse);
-        await t.tapAt(at);
+        expect(
+          byKey('voice-mode-dictation'),
+          findsOneWidget,
+          reason: 'a tap switches the mode',
+        );
+        expect(fieldText(t), isEmpty);
+        // Tap again to switch back to voice mode
+        await t.tap(byKey('composer-voice'));
         await t.pumpAndSettle();
-        expect(fieldFocused(t), isTrue, reason: 'a tap at $at missed');
-      }
-    });
+        expect(
+          byKey('voice-mode-voice'),
+          findsOneWidget,
+          reason: 'a second tap switches back',
+        );
+
+        final field = t.getRect(byKey('composer-field'));
+        // The end of the field is the sticker button (its suffix): the text
+        // area ends just before it.
+        final stickers = t.getRect(byKey('composer-stickers'));
+        for (final at in [
+          field.centerLeft + const Offset(3, 0),
+          Offset(stickers.left - 3, field.center.dy),
+        ]) {
+          FocusManager.instance.primaryFocus?.unfocus();
+          await t.pumpAndSettle();
+          expect(fieldFocused(t), isFalse);
+          await t.tapAt(at);
+          await t.pumpAndSettle();
+          expect(fieldFocused(t), isTrue, reason: 'a tap at $at missed');
+        }
+      },
+    );
   });
 
   group('sign-in', () {
     // The default 800-wide surface, as the other sign-in tests use: the
     // test font's square glyphs make the Google label far wider than on a
     // phone.
-    Future<_SignedOut> pumpSignIn(WidgetTester t, TargetPlatform p) async {
+    Future<_SignedOut> pumpSignIn(
+      WidgetTester t,
+      TargetPlatform p, {
+      Widget Function(String, VoidCallback)? apple = appleSignInButton,
+    }) async {
       final session = _SignedOut();
       await t.pumpWidget(
         ProviderScope(
@@ -358,7 +423,7 @@ void main() {
             theme: sisTheme(Brightness.light).copyWith(platform: p),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            home: const SignInScreen(),
+            home: SignInScreen(appleButton: apple),
           ),
         ),
       );
@@ -371,11 +436,20 @@ void main() {
           '${p == TargetPlatform.iOS ? 'shown' : 'absent'}', (t) async {
         await pumpSignIn(t, p);
         expect(
-          byKey('grey-s_apple'),
+          byKey('apple-sign-in'),
           p == TargetPlatform.iOS ? findsOneWidget : findsNothing,
         );
       });
     }
+
+    testWidgets('Apple button on iOS without a builder: absent', (t) async {
+      await pumpSignIn(t, TargetPlatform.iOS, apple: null);
+      expect(byKey('apple-sign-in'), findsNothing);
+      expect(
+        find.widgetWithText(FilledButton, 'Continue with Google'),
+        findsOneWidget,
+      );
+    });
 
     for (final p in [TargetPlatform.android, TargetPlatform.iOS]) {
       testWidgets('on ${p.name} Google is a FilledButton that signs in', (
@@ -391,21 +465,26 @@ void main() {
         await t.pump();
         expect(session.signIns, 1);
         if (p == TargetPlatform.iOS) {
-          await t.tap(byKey('grey-s_apple'));
+          await t.tap(byKey('apple-sign-in'));
           await t.pump();
-          expect(session.signIns, 1, reason: 'the grey Apple button signs in');
+          expect(session.signIns, 1, reason: 'the Apple button ran Google');
+          expect(
+            session.appleSignIns,
+            1,
+            reason: 'the Apple button did nothing',
+          );
         }
       });
     }
   });
 
-  testWidgets('New chat: the grey permission row sits below the divider', (
-    t,
-  ) async {
+  testWidgets('New chat: the Find people from contacts row sits below the '
+      'divider and is live, not grey', (t) async {
     phone(t);
     final container = await settled(
       ProviderContainer.test(
         overrides: [
+          ...videoOverrides(),
           chatRepositoryProvider.overrideWithValue(world()),
           presenceRepositoryProvider.overrideWithValue(PresenceFake()),
           sessionControllerProvider.overrideWith(_SignedIn.new),
@@ -423,7 +502,9 @@ void main() {
       ),
     );
     await t.pumpAndSettle();
-    final perm = t.getRect(byKey('grey-f_perm'));
+    // Step 16 made the old grey f_perm placeholder a live row.
+    expect(byKey('grey-f_perm'), findsNothing);
+    final perm = t.getRect(byKey('find-from-contacts'));
     final dividers = find.descendant(
       of: byKey('new-chat-page'),
       matching: find.byType(Divider),
@@ -432,7 +513,7 @@ void main() {
     expect(
       t.getRect(dividers.first).bottom,
       lessThanOrEqualTo(perm.top),
-      reason: 'grey-f_perm is not below the divider',
+      reason: 'find-from-contacts is not below the divider',
     );
   });
 

@@ -141,6 +141,13 @@ reset role;
 select gm_as('08');
 insert into ids values ('G4', public.start_group_conversation('gm-delete', array[u('09'), u('13')]));
 reset role;
+-- These groups stand for groups that existed before the group settings
+-- (20261007120000): the values the migration gave them, so every case below
+-- still checks the behaviour such a group keeps. group_settings_test.sql
+-- covers the switches themselves.
+update public.conversations
+   set members_can_add = false, new_members_see_history = false, members_can_set_avatar = true
+ where id in (select id from ids);
 
 select is(current_role_of(g('G1'), '01'), 'admin', 'the creator of a group is its admin');
 select is(admins_of(g('G1')), '01', 'and the only admin: every invitee is an ordinary member');

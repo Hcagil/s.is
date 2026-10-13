@@ -28,6 +28,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:sis/features/update/presentation/whats_new_card.dart';
 
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
 const bob = Member(userId: 'ub', displayName: 'Bob Stone', tag: 'bobby');
@@ -60,9 +61,11 @@ class World {
 
   final chat = ChatFake(latency: const Duration(milliseconds: 2));
   final notif = NotificationSettingsFake();
+  FakeUpdate update = FakeUpdate();
 
   Widget app() => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(
         const RuntimeConfig(
           supabaseUrl: 'https://x.supabase.co',
@@ -73,7 +76,7 @@ class World {
       authRepositoryProvider.overrideWithValue(
         FakeAuth(session: true, member: me),
       ),
-      updateRepositoryProvider.overrideWithValue(FakeUpdate()),
+      updateRepositoryProvider.overrideWithValue(update),
       chatRepositoryProvider.overrideWithValue(chat),
       presenceRepositoryProvider.overrideWithValue(PresenceFake()),
       profileRepositoryProvider.overrideWithValue(
@@ -277,10 +280,11 @@ void main() {
       expect(byKey('composer-system'), findsOneWidget);
     });
 
-    testWidgets('a versioned note is a version card with its bullets', (
+    testWidgets('a versioned note is a version card with its bullets; '
+        'the installed newest one is marked and the chat is up to date', (
       t,
     ) async {
-      final w = World();
+      final w = World()..update = FakeUpdate(version: '0.31');
       w.chat.history['s1'] = [
         note('n1', 'Version 0.30\n- Older thing'),
         note('n2', 'v0.31\n- Chats load faster\n* Photos open in place'),
@@ -293,12 +297,56 @@ void main() {
       expect(find.text('Chats load faster'), findsOneWidget);
       expect(find.text('Photos open in place'), findsOneWidget);
       expect(find.textContaining('v0.31'), findsNothing, reason: 'parsed');
-      // Idle: nothing to update to, so no card is lit; the chat says so.
-      expect(byKey('whats-new-card-new'), findsNothing);
-      expect(byKey('whats-new-card-old'), findsNWidgets(2));
+      expect(
+        byKey('whats-new-card-new').evaluate().length +
+            byKey('whats-new-card-old').evaluate().length,
+        2,
+      );
+      expect(byKey('whats-new-card-old'), findsAtLeastNWidgets(1));
+      expect(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('Chats load faster'),
+            matching: find.byType(WhatsNewCard),
+          ),
+          matching: find.text('Installed (your version)'),
+        ),
+        findsOneWidget,
+        reason: 'the 0.31 card is the installed one',
+      );
+      expect(find.text('Installed (your version)'), findsOneWidget);
+      expect(find.text('Update now'), findsNothing);
       expect(byKey('whats-new-up-to-date'), findsOneWidget);
       expect(find.text("You're up to date"), findsOneWidget);
       expect(byKey('composer-system'), findsOneWidget);
+    });
+
+    testWidgets('a note newer than the installed app offers Update now on the '
+        'newest card only, and it opens the store', (t) async {
+      final w = World()..update = FakeUpdate(version: '0.30');
+      w.chat.history['s1'] = [
+        note('n1', 'Version 0.30\n- Older thing'),
+        note('n2', 'Version 0.31\n- Chats load faster'),
+      ];
+      await openChat(t, w, 's1');
+
+      expect(find.text('Update now'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('Chats load faster'),
+            matching: find.byType(WhatsNewCard),
+          ),
+          matching: find.text('Update now'),
+        ),
+        findsOneWidget,
+        reason: 'on the 0.31 card',
+      );
+      expect(byKey('whats-new-up-to-date'), findsNothing);
+      await t.tap(find.text('Update now'));
+      await settle(t);
+      expect(w.update.calls, contains('store'));
+      expect(w.update.calls, isNot(contains('immediate')));
     });
 
     testWidgets('control: an ordinary chat has no cards and no mark', (

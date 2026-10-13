@@ -19,6 +19,15 @@
       is one, submits it for beta app review. Internal groups are skipped:
       they get builds by themselves ("Enable automatic distribution"). Safe
       to re-run.
+  asc_signing.py tester add|remove GROUPS
+      Adds or removes the tester whose email is in $TESTER_EMAIL (never an
+      argument: CI logs are public). add: looks the tester up first, then
+      creates it in, or attaches it to, the EXTERNAL beta groups named in GROUPS
+      (comma-separated; internal groups are never used; user invitations are
+      never called). remove: ends the tester's access to the app (DELETE
+      /betaTesters/{id}/relationships/apps); not a tester, or already out, is
+      success. Errors print only `HTTP <status> <code>`. Exit 75 means transient
+      (timeout, 429, 5xx): retry; 1 is permanent.
   asc_signing.py fetch PROFILE_NAME OUT_DIR
       The signing identity of every run: finds the ACTIVE profile named
       PROFILE_NAME (the newest, if several) and the distribution certificate it
@@ -26,6 +35,20 @@
       prints ids only (SIGNING_CERTIFICATE_ID=..., SIGNING_PROFILE_ID=...).
       Fails if there is none or either has expired; prints a ::warning:: when
       either expires within 30 days.
+  asc_signing.py ensure [--cert-id CERT_ID] BUNDLE_ID PROFILE_NAME BASE_PROFILE_NAME
+  asc_signing.py ensure --no-group BUNDLE_ID PROFILE_NAME BASE_PROFILE_NAME
+      (for an extension without an App Group: any ACTIVE profile is good)
+      Makes sure an ACTIVE App Store profile named PROFILE_NAME exists for
+      BUNDLE_ID, bound to the certificate BASE_PROFILE_NAME uses. Creates the
+      bundle ID if it is missing, and the profile if there is none or it is no
+      longer ACTIVE (Apple invalidates a profile when its App ID changes, e.g.
+      when the App Group is added). A profile is only replaced when the App ID
+      already has the App Groups capability, and only after the certificate id
+      is known (printed, so --cert-id can recover a failed re-create). Prints ids
+      and names only.
+  asc_signing.py ensure --signin BUNDLE_ID PROFILE_NAME BASE_PROFILE_NAME
+      (the app: also turns Sign in with Apple on for the App ID and replaces
+      a profile that lacks that entitlement)
   asc_signing.py cleanup [MIN_AGE_HOURS]
       One-time sweep of the old per-run material: profiles named
       "sis ci <run>-<attempt>" (nothing else is touched; not the long-lived
@@ -62,6 +85,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+GROUP = b"group.com.esd.sis"  # the App Group shared by the app and its Share Extension
+SIGNIN = b"com.apple.developer.applesignin"  # the entitlement a profile carries once the App ID has Sign in with Apple
 API = "https://api.appstoreconnect.apple.com/v1"
 
 
@@ -210,6 +235,80 @@ def cleanup(min_age_hours=6.0):
         sys.exit(1)
 
 
+def distribution_certificates(base_profile_name):
+    """The distribution certificates the newest profile named base_profile_name uses (any state: an invalid profile still points at its certificate)."""
+    bases = call("GET", "/profiles?filter[name]=%s&limit=200" % urllib.parse.quote(base_profile_name))["data"]
+    bases = [p for p in bases if p["attributes"]["name"] == base_profile_name]
+    if not bases:
+        sys.exit("no profile named %s in App Store Connect; run the iOS signing bootstrap workflow" % base_profile_name)
+    base = max(bases, key=lambda p: parse_date(p["attributes"]["createdDate"]))
+    certs = call("GET", "/profiles/%s/certificates" % base["id"])["data"]
+    certs = [c for c in certs if c["attributes"].get("certificateType", "DISTRIBUTION") == "DISTRIBUTION"]
+    if not certs:
+        sys.exit("no distribution certificate found through profile %s; run the iOS signing bootstrap workflow" % base_profile_name)
+    return certs
+
+
+def ensure(bundle_identifier, profile_name, base_profile_name, cert_id=None, group=True, signin=False):
+    """Makes sure an ACTIVE App Store profile named profile_name exists for bundle_identifier. cert_id (optional) names the certificate directly, to recover when no profile is left to find it through. group=False is for an extension that shares no data with the app (no App Group): the profile is then good when it is ACTIVE. signin=True also turns the Sign in with Apple capability (APPLE_ID_AUTH) on for the App ID, and a profile without that entitlement is replaced."""
+    bundles = call("GET", "/bundleIds?filter[identifier]=%s&filter[platform]=IOS" % bundle_identifier)["data"]
+    bundles = [b for b in bundles if b["attributes"]["identifier"] == bundle_identifier]
+    if not bundles:
+        bundle = call("POST", "/bundleIds", {"data": {
+            "type": "bundleIds",
+            "attributes": {"identifier": bundle_identifier, "name": "SIS " + re.sub(r"[^A-Za-z0-9]+", " ", bundle_identifier).strip(), "platform": "IOS"},
+        }})["data"]
+        print("BUNDLE_ID_CREATED=%s" % bundle["attributes"]["identifier"], flush=True)
+        bundles = [bundle]
+    # The name filter matches partially: keep the exact name.
+    found = call("GET", "/profiles?filter[name]=%s&limit=200" % urllib.parse.quote(profile_name))["data"]
+    found = [p for p in found if p["attributes"]["name"] == profile_name]
+    # Apple invalidates a profile when its App ID changes, and a profile made before the App Group was
+    # enabled lacks it: only such a profile is replaced, so a run that finds a good one changes nothing.
+    # The signed profile is a CMS blob whose plist is readable inside it.
+    for p in found:
+        content = base64.b64decode(p["attributes"]["profileContent"])
+        if p["attributes"]["profileState"] == "ACTIVE" and (not group or GROUP in content) and (not signin or SIGNIN in content):
+            print("PROFILE_OK=%s" % profile_name, flush=True)
+            return
+    # Nothing is touched before the App ID really carries App Groups: the profile is only replaced after the owner's portal steps.
+    caps = call("GET", "/bundleIds/%s/bundleIdCapabilities" % bundles[0]["id"])["data"] if group or signin else []
+    if group and not any(c["attributes"].get("capabilityType") == "APP_GROUPS" for c in caps):
+        sys.exit("the App ID %s has no App Groups capability yet: enable App Groups and the group %s on it in the Apple developer portal (docs/DELIVERY.md), then run again. Nothing was changed." % (bundle_identifier, GROUP.decode()))
+    if signin and not any(c["attributes"].get("capabilityType") == "APPLE_ID_AUTH" for c in caps):
+        # Apple documents APPLE_ID_AUTH with the setting APPLE_ID_AUTH_APP_CONSENT = PRIMARY_APP_CONSENT (this App ID is the primary one).
+        call("POST", "/bundleIdCapabilities", {"data": {
+            "type": "bundleIdCapabilities",
+            "attributes": {"capabilityType": "APPLE_ID_AUTH", "settings": [{"key": "APPLE_ID_AUTH_APP_CONSENT", "options": [{"key": "PRIMARY_APP_CONSENT"}]}]},
+            "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bundles[0]["id"]}}},
+        }})
+        print("SIGNIN_CAPABILITY_ENABLED=%s" % bundle_identifier, flush=True)
+    certs = [{"id": cert_id}] if cert_id else distribution_certificates(base_profile_name)
+    # Only now, with everything needed to recreate it in hand: the profile can be the only way to find the
+    # certificate again, so nothing is deleted before the lookup above has succeeded.
+    print("SIGNING_CERTIFICATE_ID=%s (re-run ensure with --cert-id %s if the profile is lost)" % (certs[0]["id"], certs[0]["id"]), flush=True)
+    for p in found:  # a name can only exist once in App Store Connect
+        delete("-", p["id"])
+    body = {"data": {
+        "type": "profiles",
+        "attributes": {"name": profile_name, "profileType": "IOS_APP_STORE"},
+        "relationships": {
+            "bundleId": {"data": {"type": "bundleIds", "id": bundles[0]["id"]}},
+            "certificates": {"data": [{"type": "certificates", "id": certs[0]["id"]}]},
+        },
+    }}
+    try:
+        created = call("POST", "/profiles", body)
+    except SystemExit as first:
+        print("creating the profile failed (%s); trying once more" % first.code, file=sys.stderr, flush=True)
+        created = call("POST", "/profiles", body)
+    print("PROFILE_CREATED=%s" % profile_name, flush=True)
+    if group and GROUP not in base64.b64decode(created["data"]["attributes"]["profileContent"]):
+        sys.exit("the App ID %s does not carry the App Group %s yet: enable it in the Apple developer portal (docs/DELIVERY.md), then run again" % (bundle_identifier, GROUP.decode()))
+    if signin and SIGNIN not in base64.b64decode(created["data"]["attributes"]["profileContent"]):
+        sys.exit("the new profile for %s lacks Sign in with Apple; enable the capability on the App ID in the Apple developer portal, then run again" % bundle_identifier)
+
+
 def fetch(profile_name, out_dir):
     """Writes the long-lived certificate and profile to out_dir; warns before they expire."""
     found = call("GET", "/profiles?filter[name]=%s&limit=200" % urllib.parse.quote(profile_name))["data"]
@@ -304,6 +403,99 @@ def distribute(bundle_identifier, build_number, groups, note):
         print("submitted for beta review", flush=True)
 
 
+class AscError(Exception):
+    def __init__(self, status, code):
+        self.status = status  # int or None for network errors
+        self.code = code  # str
+        super().__init__("status=%r code=%r" % (status, code))
+
+
+def tester_call(method, path, body=None):
+    # Unlike call(), errors carry only the status and Apple's error code: CI logs are public.
+    req = urllib.request.Request(API + path, method=method, data=json.dumps(body).encode() if body is not None else None, headers={"Authorization": "Bearer " + token(), "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read()
+            return json.loads(raw) if raw else None
+    except urllib.error.HTTPError as e:
+        code = "-"
+        try:
+            code = json.loads(e.read())["errors"][0]["code"]
+        except Exception:
+            pass  # keep the default
+        raise AscError(e.code, code) from None  # no chained text carries the URL
+    except OSError as e:
+        raise AscError(None, type(e).__name__) from None
+
+
+def tester_app(bundle_id="com.esd.sis"):
+    resp = tester_call("GET", "/apps?filter[bundleId]=%s" % urllib.parse.quote(bundle_id, safe=""))
+    for item in resp["data"]:
+        if item["attributes"]["bundleId"] == bundle_id:
+            return item["id"]
+    raise AscError(None, "no-app")
+
+
+def external_groups(app_id, wanted):
+    # Strictly external: an internal group (or one without the flag) is never used.
+    resp = tester_call("GET", "/apps/%s/betaGroups?limit=200" % app_id)
+    groups = [g for g in resp["data"] if g["attributes"]["name"].strip().lower() in wanted and g["attributes"].get("isInternalGroup") is False]
+    if not groups:
+        raise AscError(None, "no-external-group")
+    return groups
+
+
+def find_tester(email):
+    resp = tester_call("GET", "/betaTesters?filter[email]=%s&limit=2" % urllib.parse.quote(email, safe=""))
+    for item in resp["data"]:
+        if item["attributes"]["email"].lower() == email.lower():
+            return item["id"]
+    return None
+
+
+def tester_add(email, groups):
+    app_id = tester_app()
+    gs = external_groups(app_id, groups)
+    tid = find_tester(email)
+    if tid is None:
+        tester_call("POST", "/betaTesters", {"data": {"type": "betaTesters", "attributes": {"email": email}, "relationships": {"betaGroups": {"data": [{"type": "betaGroups", "id": g["id"]} for g in gs]}}}})
+    else:
+        for g in gs:
+            try:
+                tester_call("POST", "/betaGroups/%s/relationships/betaTesters" % g["id"], {"data": [{"type": "betaTesters", "id": tid}]})
+            except AscError as e:
+                if e.status != 409:
+                    raise  # 409: already in the group: success
+
+
+def tester_remove(email):
+    app_id = tester_app()
+    tid = find_tester(email)
+    if tid is None:
+        return  # not a tester: nothing to remove
+    try:
+        tester_call("DELETE", "/betaTesters/%s/relationships/apps" % tid, {"data": [{"type": "apps", "id": app_id}]})
+    except AscError as e:
+        if e.status != 404:
+            raise  # 404 here means the tester is not in this app: success; any other error escalates
+
+
+def tester(action, groups_csv):
+    email = os.environ.get("TESTER_EMAIL", "").strip().lower()
+    if not email:
+        print("tester: no email", file=sys.stderr)
+        sys.exit(2)
+    groups = {g.strip().lower() for g in groups_csv.split(",") if g.strip()}
+    try:
+        if action == "add":
+            tester_add(email, groups)
+        else:
+            tester_remove(email)
+    except AscError as e:
+        print("HTTP %s %s" % (e.status if e.status is not None else "-", e.code), file=sys.stderr)
+        sys.exit(75 if e.status is None or e.status == 429 or e.status >= 500 else 1)  # 75 = transient, the workflow retries; 1 = permanent
+
+
 def main(argv):
     if argv[1:2] == ["create"] and len(argv) == 6:
         create(*argv[2:])
@@ -311,6 +503,16 @@ def main(argv):
         delete(*argv[2:])
     elif argv[1:2] == ["distribute"] and len(argv) == 6:
         distribute(argv[2], argv[3], [g.strip() for g in argv[4].split(",") if g.strip()], argv[5])
+    elif argv[1:2] == ["ensure"] and len(argv) == 5 and not argv[2].startswith("--"):
+        ensure(*argv[2:])
+    elif argv[1:3] == ["ensure", "--cert-id"] and len(argv) == 7:
+        ensure(*argv[4:], cert_id=argv[3])
+    elif argv[1:3] == ["ensure", "--no-group"] and len(argv) == 6:
+        ensure(*argv[3:], group=False)
+    elif argv[1:3] == ["ensure", "--signin"] and len(argv) == 6:
+        ensure(*argv[3:], signin=True)
+    elif argv[1:2] == ["tester"] and len(argv) == 4 and argv[2] in ("add", "remove"):
+        tester(argv[2], argv[3])
     elif argv[1:2] == ["fetch"] and len(argv) == 4:
         fetch(*argv[2:])
     elif argv[1:2] == ["cleanup"] and len(argv) in (2, 3):

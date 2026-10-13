@@ -27,6 +27,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 
 const maya = Member(userId: 'u1', displayName: 'Maya');
 final _t0 = DateTime.utc(2026, 9, 29, 12);
@@ -70,6 +71,7 @@ void main() {
 
   ProviderContainer make({bool allowed = true}) => ProviderContainer.test(
     overrides: [
+      ...videoOverrides(),
       chatRepositoryProvider.overrideWithValue(chat),
       pushSourceProvider.overrideWithValue(push),
       sessionControllerProvider.overrideWith(allowed ? _In.new : _Out.new),

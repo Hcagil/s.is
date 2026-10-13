@@ -57,11 +57,35 @@ class _Bubble extends StatelessWidget {
 
   bool get _hasBorder => mine || isCurrentHit;
 
-  /// A photo and nothing else: no box around it; the time and tick sit on
-  /// the picture.
+  bool get _isVideo => message.file?.isVideo ?? false;
+
+  /// A photo or video and nothing else: no box around it; the time and tick
+  /// sit on the picture.
   bool get _boxless =>
-      message.hasAttachment &&
+      (message.file == null ? message.hasAttachment : _isVideo) &&
       message.body.isEmpty &&
+      message.replyTo == null &&
+      !message.forwarded &&
+      !message.isDeleted;
+
+  /// A location card draws its own box, so the bubble around it is dropped
+  /// (unless it carries a reply or a forward note).
+  bool get _locationCard =>
+      message.location != null &&
+      message.replyTo == null &&
+      !message.forwarded &&
+      !message.isDeleted;
+
+  /// A sticker is drawn on its own, 160 px, with no bubble (unless it carries a reply or a forward note).
+  bool get _stickerBox =>
+      message.stickerId != null &&
+      message.replyTo == null &&
+      !message.forwarded &&
+      !message.isDeleted;
+
+  /// A shared-album card draws its own box, so the bubble around it is dropped.
+  bool get _albumBox =>
+      message.albumCard &&
       message.replyTo == null &&
       !message.forwarded &&
       !message.isDeleted;
@@ -81,10 +105,10 @@ class _Bubble extends StatelessWidget {
         key: ValueKey('message-${message.id}'),
         constraints: const BoxConstraints(maxWidth: _maxWidth),
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        padding: _boxless
+        padding: _boxless || _locationCard || _stickerBox || _albumBox
             ? EdgeInsets.zero
             : const EdgeInsets.symmetric(horizontal: _hPad, vertical: 8),
-        decoration: _boxless
+        decoration: _boxless || _locationCard || _stickerBox || _albumBox
             ? null
             : BoxDecoration(
                 color: mine ? null : brand.theirs,
@@ -126,7 +150,7 @@ class _Bubble extends StatelessWidget {
                       Icons.block,
                       size: 16,
                       color: mine
-                          ? Colors.white70
+                          ? brand.onMine.withValues(alpha: 0.7)
                           : brand.text.withValues(alpha: 0.6),
                     ),
                     const SizedBox(width: 6),
@@ -141,7 +165,7 @@ class _Bubble extends StatelessWidget {
                           fontSize: 14,
                           fontStyle: FontStyle.italic,
                           color: mine
-                              ? Colors.white70
+                              ? brand.onMine.withValues(alpha: 0.7)
                               : brand.text.withValues(alpha: 0.6),
                         ),
                       ),
@@ -159,7 +183,7 @@ class _Bubble extends StatelessWidget {
                         Icons.shortcut,
                         size: 14,
                         color: mine
-                            ? Colors.white70
+                            ? brand.onMine.withValues(alpha: 0.7)
                             : brand.text.withValues(alpha: 0.6),
                       ),
                       const SizedBox(width: 4),
@@ -172,7 +196,7 @@ class _Bubble extends StatelessWidget {
                             fontSize: 12,
                             fontStyle: FontStyle.italic,
                             color: mine
-                                ? Colors.white70
+                                ? brand.onMine.withValues(alpha: 0.7)
                                 : brand.text.withValues(alpha: 0.6),
                           ),
                         ),
@@ -189,14 +213,14 @@ class _Bubble extends StatelessWidget {
                     margin: const EdgeInsets.only(bottom: 6),
                     padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
                     decoration: BoxDecoration(
-                      color: (mine ? Colors.white : brand.text).withValues(
+                      color: (mine ? brand.onMine : brand.onTheirs).withValues(
                         alpha: 0.12,
                       ),
                       borderRadius: BorderRadius.circular(6),
                       border: Border(
                         left: BorderSide(
                           color: mine
-                              ? Colors.white
+                              ? brand.onMine
                               : Theme.of(context).colorScheme.primary,
                           width: 3,
                         ),
@@ -213,7 +237,7 @@ class _Bubble extends StatelessWidget {
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                               color: mine
-                                  ? Colors.white
+                                  ? brand.onMine
                                   : Theme.of(context).colorScheme.primary,
                             ),
                           ),
@@ -223,7 +247,7 @@ class _Bubble extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 13,
-                            color: mine ? Colors.white : brand.text,
+                            color: mine ? brand.onMine : brand.onTheirs,
                           ),
                         ),
                       ],
@@ -232,7 +256,12 @@ class _Bubble extends StatelessWidget {
                 ),
               if (sender != null)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
+                  padding: EdgeInsets.fromLTRB(
+                    _locationCard || _albumBox ? _hPad : 0,
+                    0,
+                    0,
+                    2,
+                  ),
                   child: Text(
                     sender!,
                     key: ValueKey('sender-${message.id}'),
@@ -248,7 +277,7 @@ class _Bubble extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (message.hasAttachment)
+              if (message.hasAttachment && message.file == null)
                 _boxless
                     ? Stack(
                         children: [
@@ -283,15 +312,198 @@ class _Bubble extends StatelessWidget {
               // render nothing at all rather than an empty line. A deleted
               // message never shows a time, but (defensively) may still carry
               // a body, so the two conditions stay independent below.
-              if (message.body.isNotEmpty && !message.isDeleted)
+              if (message.poll && !message.isDeleted)
+                SizedBox(
+                  width: _contentWidth,
+                  child: PollCard(
+                    message: message,
+                    ink: mine ? brand.onMine : brand.onTheirs,
+                    accent: mine
+                        ? brand.onMine
+                        : Theme.of(context).colorScheme.primary,
+                    time: _TimeTick(
+                      message: message,
+                      timeText: clockTime(message.createdAt),
+                      timeStyle: TextStyle(
+                        fontSize: SisTokens.timeFontSize,
+                        color: (mine ? brand.onMine : brand.onTheirs)
+                            .withValues(alpha: SisTokens.timeOpacity),
+                      ),
+                      delivery: delivery,
+                    ),
+                  ),
+                )
+              else if (message.stickerId != null && !message.isDeleted)
+                StickerMessage(
+                  message: message,
+                  mine: mine,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: brand.muted,
+                    ),
+                    delivery: delivery,
+                  ),
+                )
+              else if (message.albumCard && !message.isDeleted)
+                StickerAlbumCard(
+                  message: message,
+                  mine: mine,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: brand.muted,
+                    ),
+                    delivery: delivery,
+                  ),
+                )
+              else if (message.location != null && !message.isDeleted)
+                LocationCard(
+                  message: message,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: brand.muted,
+                    ),
+                    delivery: delivery,
+                  ),
+                )
+              else if (message.contact && !message.isDeleted)
+                ContactCard(
+                  message: message,
+                  ink: mine ? brand.onMine : brand.onTheirs,
+                  accent: mine
+                      ? brand.onMine
+                      : Theme.of(context).colorScheme.primary,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: (mine ? brand.onMine : brand.onTheirs).withValues(
+                        alpha: SisTokens.timeOpacity,
+                      ),
+                    ),
+                    delivery: delivery,
+                  ),
+                )
+              else if (_isVideo && !message.isDeleted)
+                VideoCard(
+                  message: message,
+                  radius: brand.bubbleRadius,
+                  boxless: _boxless,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: _boxless
+                          ? Colors.white.withValues(alpha: 0.9)
+                          : (mine ? brand.onMine : brand.onTheirs).withValues(
+                              alpha: SisTokens.timeOpacity,
+                            ),
+                    ),
+                    delivery: delivery,
+                  ),
+                )
+              else if ((message.file?.isVoice ?? false) && !message.isDeleted)
+                VoiceBubble(
+                  message: message,
+                  mine: mine,
+                  ink: mine ? brand.onMine : brand.onTheirs,
+                  accent: mine
+                      ? brand.onMine
+                      : Theme.of(context).colorScheme.primary,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: (mine ? brand.onMine : brand.onTheirs).withValues(
+                        alpha: SisTokens.timeOpacity,
+                      ),
+                    ),
+                    delivery: delivery,
+                  ),
+                )
+              else if (message.file != null && !message.isDeleted)
+                FileCard(
+                  message: message,
+                  ink: mine ? brand.onMine : brand.onTheirs,
+                  accent: mine
+                      ? brand.onMine
+                      : Theme.of(context).colorScheme.primary,
+                  time: _TimeTick(
+                    message: message,
+                    timeText: clockTime(message.createdAt),
+                    timeStyle: TextStyle(
+                      fontSize: SisTokens.timeFontSize,
+                      color: (mine ? brand.onMine : brand.onTheirs).withValues(
+                        alpha: SisTokens.timeOpacity,
+                      ),
+                    ),
+                    delivery: delivery,
+                  ),
+                )
+              else if (message.linkPreview != null &&
+                  message.body.isNotEmpty &&
+                  !message.isDeleted) ...[
+                Padding(
+                  padding: EdgeInsets.only(top: message.hasAttachment ? 8 : 0),
+                  child: _LinkedText(
+                    message.body,
+                    key: ValueKey('body-${message.id}'),
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: mine ? brand.onMine : brand.onTheirs,
+                    ),
+                    highlightQuery: highlightQuery,
+                    shorten: message.linkPreview!.url,
+                    linkColor: mine
+                        ? brand.onMine
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                LinkCard(
+                  message: message,
+                  ink: mine ? brand.onMine : brand.onTheirs,
+                  width: _contentWidth,
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _TimeTick(
+                      message: message,
+                      timeText: message.isEdited
+                          ? AppLocalizations.of(context)
+                                .bubbleEdited(clockTime(message.createdAt))
+                          : clockTime(message.createdAt),
+                      timeStyle: TextStyle(
+                        fontSize: SisTokens.timeFontSize,
+                        color: (mine ? brand.onMine : brand.onTheirs)
+                            .withValues(alpha: SisTokens.timeOpacity),
+                      ),
+                      delivery: delivery,
+                    ),
+                  ),
+                ),
+              ] else if (message.body.isNotEmpty && !message.isDeleted)
                 _BodyWithTime(
                   message: message,
                   bodyStyle: TextStyle(
                     fontSize: isBigEmoji(message.body) ? 40 : 15,
-                    color: mine ? Colors.white : brand.text,
+                    color: mine ? brand.onMine : brand.onTheirs,
                   ),
                   linkColor: mine
-                      ? Colors.white
+                      ? brand.onMine
                       : Theme.of(context).colorScheme.primary,
                   maxContentWidth: _contentWidth,
                   topPadding: message.hasAttachment ? 8 : 0,
@@ -301,7 +513,7 @@ class _Bubble extends StatelessWidget {
                       : clockTime(message.createdAt),
                   timeStyle: TextStyle(
                     fontSize: SisTokens.timeFontSize,
-                    color: (mine ? Colors.white : brand.text).withValues(
+                    color: (mine ? brand.onMine : brand.onTheirs).withValues(
                       alpha: SisTokens.timeOpacity,
                     ),
                   ),
@@ -319,11 +531,11 @@ class _Bubble extends StatelessWidget {
                       key: ValueKey('body-${message.id}'),
                       style: TextStyle(
                         fontSize: 15,
-                        color: mine ? Colors.white : brand.text,
+                        color: mine ? brand.onMine : brand.onTheirs,
                       ),
                       highlightQuery: highlightQuery,
                       linkColor: mine
-                          ? Colors.white
+                          ? brand.onMine
                           : Theme.of(context).colorScheme.primary,
                     ),
                   ),
@@ -340,9 +552,8 @@ class _Bubble extends StatelessWidget {
                             : clockTime(message.createdAt),
                         timeStyle: TextStyle(
                           fontSize: SisTokens.timeFontSize,
-                          color: (mine ? Colors.white : brand.text).withValues(
-                            alpha: SisTokens.timeOpacity,
-                          ),
+                          color: (mine ? brand.onMine : brand.onTheirs)
+                              .withValues(alpha: SisTokens.timeOpacity),
                         ),
                         delivery: delivery,
                       ),

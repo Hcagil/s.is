@@ -15,6 +15,7 @@ import 'package:sis/features/update/domain/update_repository.dart';
 
 import '../support/fakes.dart';
 import '../support/sis_ui.dart';
+import '../support/video_fakes.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -25,6 +26,7 @@ const config = RuntimeConfig(
 Widget app(FakeAuth a, FakeUpdate u, [FakeChat? c, ProfileFake? p]) =>
     ProviderScope(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(config),
         authRepositoryProvider.overrideWithValue(a),
         updateRepositoryProvider.overrideWithValue(u),

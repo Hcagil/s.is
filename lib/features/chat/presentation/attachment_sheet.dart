@@ -39,19 +39,17 @@ Future<({List<PickedImage> images, int dropped})> showAttachmentSheet(
   return result ?? (images: const <PickedImage>[], dropped: 0);
 }
 
-/// Opens the attach card above [anchor] (the paperclip's global rect). True when Photo was tapped; false when closed without choosing. Only Photo is live, the other tiles are greyed.
-Future<bool> showAttachMenu(
-  BuildContext context, {
-  required Rect anchor,
-}) async {
-  final chosen = await showFloatingCard<String>(
-    context,
-    anchor: anchor,
-    cardKey: const ValueKey('attach-menu'),
-    child: const _AttachMenu(),
-  );
-  return chosen == 'photo';
-}
+/// Opens the attach card above [anchor] (the paperclip's global rect). The
+/// result is 'photo', 'video', 'file', 'contact' or 'poll' for the tile
+/// tapped, null when closed without choosing. Those five are live, the others
+/// are greyed.
+Future<String?> showAttachMenu(BuildContext context, {required Rect anchor}) =>
+    showFloatingCard<String>(
+      context,
+      anchor: anchor,
+      cardKey: const ValueKey('attach-menu'),
+      child: const _AttachMenu(),
+    );
 
 class _AttachMenu extends StatelessWidget {
   const _AttachMenu();
@@ -76,8 +74,10 @@ class _AttachMenu extends StatelessWidget {
               label: l.attachPhoto,
             ),
           ),
-          GreyOption(
-            name: 'att_tvideo',
+          InkWell(
+            key: const ValueKey('attach-video'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).pop('video'),
             child: _attachTile(
               context,
               slot: 1,
@@ -85,8 +85,10 @@ class _AttachMenu extends StatelessWidget {
               label: l.attachVideo,
             ),
           ),
-          GreyOption(
-            name: 'att_tfile',
+          InkWell(
+            key: const ValueKey('attach-file'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).pop('file'),
             child: _attachTile(
               context,
               slot: 2,
@@ -103,8 +105,10 @@ class _AttachMenu extends StatelessWidget {
               label: l.attachVoice,
             ),
           ),
-          GreyOption(
-            name: 'att_tloc',
+          InkWell(
+            key: const ValueKey('attach-location'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).pop('location'),
             child: _attachTile(
               context,
               slot: 4,
@@ -112,8 +116,10 @@ class _AttachMenu extends StatelessWidget {
               label: l.attachLocation,
             ),
           ),
-          GreyOption(
-            name: 'att_tcon',
+          InkWell(
+            key: const ValueKey('attach-contact'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).pop('contact'),
             child: _attachTile(
               context,
               slot: 5,
@@ -121,8 +127,10 @@ class _AttachMenu extends StatelessWidget {
               label: l.attachContact,
             ),
           ),
-          GreyOption(
-            name: 'att_tpoll',
+          InkWell(
+            key: const ValueKey('attach-poll'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).pop('poll'),
             child: _attachTile(
               context,
               slot: 6,
@@ -489,7 +497,7 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
                 return _CameraTile(onTap: _opening ? null : _takePhoto);
               }
               final p = _photos[i - (widget.square ? 0 : 1)];
-              return _Thumb(
+              return GalleryThumb(
                 key: ValueKey('sheet-photo-${p.id}'),
                 photo: p,
                 onTap: () => _choose(p),
@@ -651,8 +659,9 @@ class _CameraTile extends StatelessWidget {
   }
 }
 
-class _Thumb extends ConsumerStatefulWidget {
-  const _Thumb({
+/// One photo tile of a gallery grid; fetches its thumbnail once.
+class GalleryThumb extends ConsumerStatefulWidget {
+  const GalleryThumb({
     super.key,
     required this.photo,
     required this.onTap,
@@ -668,10 +677,10 @@ class _Thumb extends ConsumerStatefulWidget {
   final bool selected;
 
   @override
-  ConsumerState<_Thumb> createState() => _ThumbState();
+  ConsumerState<GalleryThumb> createState() => _ThumbState();
 }
 
-class _ThumbState extends ConsumerState<_Thumb> {
+class _ThumbState extends ConsumerState<GalleryThumb> {
   // Asked once: rebuilding the grid must not refetch every thumbnail.
   late final Future<Uint8List?> _bytes = ref
       .read(galleryProvider)

@@ -33,6 +33,7 @@ import '../features/profile/avatar_widgets_test.dart' show avatarIn, picturesIn;
 import '../support/session_claim.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// A person's page shows the picture its caller knows, on the real stack:
 /// deniz sets a picture AFTER ece's app has read the member list, so ece's
@@ -107,6 +108,8 @@ class _AccountAuth implements AuthRepository {
   Stream<bool> get signedInChanges => const Stream.empty();
   @override
   Future<Result<void>> signInWithGoogle() async => const Ok(null);
+  @override
+  Future<Result<void>> signInWithApple() async => const Ok(null);
   @override
   Future<Result<bool>> activateSession() async =>
       Ok(await client.rpc('activate_session') as bool);
@@ -203,6 +206,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(
             const RuntimeConfig(
               supabaseUrl: _url,

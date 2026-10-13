@@ -9,8 +9,10 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { ACTION_TTL_SECONDS, sha256Hex, signActionToken } from '../_shared/action_token.ts';
 
-// What each recipient may see is decided in SQL, by their own preview
-// setting (app_private.push_targets_for_message); this only delivers it.
+// Who is told, and what each recipient may see, is decided in SQL
+// (app_private.push_targets_for_message): their own preview setting, mutes,
+// and archived chats (a recipient who archived the conversation is simply not
+// returned); this only delivers it.
 type Target = {
   user_id: string;
   token: string;
@@ -23,9 +25,13 @@ type Target = {
   // setting: sender is null for 'none'; chat is null for a 1:1 and for 'none'.
   sender: string | null;
   chat: string | null;
-  // The recipient's unread total (muted chats and people left out), counting
-  // this message: the app-icon badge. Absent from an old schema.
+  // The recipient's unread total (muted and archived chats and muted people
+  // left out), counting this message: the app-icon badge. Absent from an old
+  // schema.
   badge?: number;
+  // Storage path of a small picture for the notification (a photo's or video's `.t` object); null when none or when the recipient's preview setting hides content. thumb_video marks a video. Absent from an old schema.
+  thumb_path?: string | null;
+  thumb_video?: boolean;
 };
 
 type ServiceAccount = { client_email: string; private_key: string };
@@ -37,6 +43,8 @@ type ServiceAccount = { client_email: string; private_key: string };
 // at once when FCM answers 401 (see send). The token is never logged.
 // ponytail: one service account per deployment, so the cache is not keyed.
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
+// How long the signed link to a notification picture lives; the phone fetches it on arrival.
+const THUMB_TTL_SECONDS = 600;
 let cached: { token: string; expiresAt: number } | null = null;
 let minting: Promise<string> | null = null;
 
@@ -155,6 +163,23 @@ async function send(id: string): Promise<void> {
   const actionKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const actionUrl = `${Deno.env.get('SUPABASE_URL')!}/functions/v1/notification-action`;
 
+  // A short-lived link to the small picture of a photo/video message, one per path (several recipients share it). The service role signs it; the object is private, so only the recipients push_targets chose (not muted, not archived, preview 'full') ever get the link. A missing object (an old sender never made one) or any error gives null: the push then goes out as text. The link is never logged.
+  const thumbLinks = new Map<string, Promise<string | null>>();
+  const thumbLink = (path: string): Promise<string | null> => {
+    let p = thumbLinks.get(path);
+    if (!p) {
+      // Gives up after 1.5 s so a slow storage never holds the text push.
+      let timer: number | undefined;
+      const timeout = new Promise<null>((r) => { timer = setTimeout(() => r(null), 1500); });
+      p = db.storage.from('attachments').createSignedUrl(path, THUMB_TTL_SECONDS)
+        .then(({ data, error }) => (error ? null : data?.signedUrl ?? null))
+        .catch(() => null);
+      p = Promise.race([p, timeout]).finally(() => clearTimeout(timer));
+      thumbLinks.set(path, p);
+    }
+    return p;
+  };
+
   const results = await Promise.allSettled(
     targets.map(async (t) => {
       // A token that cannot be made (missing or invalid key) costs the
@@ -183,6 +208,7 @@ async function send(id: string): Promise<void> {
       // missing or odd value sets nothing rather than a wrong number.
       const badge =
         typeof t.badge === 'number' && Number.isInteger(t.badge) && t.badge >= 0 ? t.badge : null;
+      const thumbUrl = t.thumb_path ? await thumbLink(t.thumb_path) : null;
       // A group's alert is titled with the group and each line reads
       // "Sender: message" (WhatsApp style); a 1:1's title stays the sender.
       // An iPhone shows this block as is, and Android's app takes the same
@@ -221,6 +247,7 @@ async function send(id: string): Promise<void> {
               body: t.body,
               ...(group ? { sender: t.sender!, chat: t.chat! } : {}),
               ...actionData,
+              ...(thumbUrl ? { thumb_url: thumbUrl, thumb_kind: t.thumb_video ? 'video' : 'photo' } : {}),
               // Android has no remote badge: the app's own notification sets
               // it (Notification.setNumber) from this.
               ...(badge != null ? { badge: String(badge) } : {}),
@@ -235,6 +262,8 @@ async function send(id: string): Promise<void> {
                         // category; an older build has none and shows none.
                         category: 'SIS_MESSAGE',
                         sound: 'default',
+                        // Lets the iPhone's notification service extension fetch the picture and attach it.
+                        ...(thumbUrl ? { 'mutable-content': 1 } : {}),
                         ...(badge != null ? { badge } : {}),
                       },
                     },

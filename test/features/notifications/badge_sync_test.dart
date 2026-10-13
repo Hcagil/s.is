@@ -37,6 +37,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 
@@ -84,6 +85,7 @@ void main() {
     }) async {
       final c = ProviderContainer.test(
         overrides: [
+          ...videoOverrides(),
           chatRepositoryProvider.overrideWithValue(chat),
           appBadgeProvider.overrideWithValue(badge),
           sessionControllerProvider.overrideWith(
@@ -162,6 +164,7 @@ void main() {
     Future<void> mountWith(SessionState? state) async {
       final c = ProviderContainer.test(
         overrides: [
+          ...videoOverrides(),
           chatRepositoryProvider.overrideWithValue(chat),
           appBadgeProvider.overrideWithValue(badge),
           sessionControllerProvider.overrideWith(() => _Fixed(state)),
@@ -236,6 +239,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(
             const RuntimeConfig(
               supabaseUrl: 'https://x.supabase.co',

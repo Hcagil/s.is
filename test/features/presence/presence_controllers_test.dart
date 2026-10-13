@@ -397,9 +397,23 @@ void main() {
       c.listen(typingProvider, (_, _) {});
       c.read(openConversationProvider.notifier).open('c1');
       await c.read(ownProfileProvider.future);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      int sent() => presence.typingChannels.fold<int>(
+        0,
+        (n, ch) => n + ch.signals + ch.signalsAfterClose,
+      );
+      // The channel opens asynchronously; a fixed wait lost the first signal
+      // under full-suite load. Wait for the channel itself, then for the
+      // first signal to be sent.
+      Future<void> until(bool Function() ok, String what) async {
+        for (var i = 0; i < 250 && !ok(); i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
+        expect(ok(), isTrue, reason: 'precondition: $what');
+      }
+
+      await until(() => presence.typingChannels.isNotEmpty, 'channel open');
       c.read(typingProvider.notifier).signalTyping();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await until(() => sent() == 1, 'the first signal is sent');
 
       await c.read(ownProfileProvider.notifier).setSharing(typing: false);
       await Future<void>.delayed(
@@ -408,11 +422,7 @@ void main() {
       c.read(typingProvider.notifier).signalTyping();
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      final sent = presence.typingChannels.fold<int>(
-        0,
-        (n, ch) => n + ch.signals + ch.signalsAfterClose,
-      );
-      expect(sent, 1);
+      expect(sent(), 1);
     });
 
     testWidgets('closing the conversation closes the channel and clears', (

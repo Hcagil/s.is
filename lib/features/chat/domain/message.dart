@@ -2,6 +2,14 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../../../core/date_label.dart';
+import 'file_attachment.dart';
+import 'link_preview.dart';
+import 'poll.dart';
+import 'shared_contact.dart';
+import 'shared_location.dart';
+import 'sticker.dart';
+import 'video.dart';
+import 'voice.dart';
 
 /// The longest body the database will accept, per the check constraint on
 /// `public.messages.body`.
@@ -37,7 +45,26 @@ bool isSendableBody(String body) {
 
 /// The one-line preview of a message in the conversation list. An image sent
 /// without a caption has an empty body, which would read as "no messages".
-String previewText(Message message) => message.body.isNotEmpty
+/// A poll shows [pollPreview] of its question, a contact [contactPreview]
+/// of its name, a file [filePreview] of its name, a location
+/// [locationPreviewText], a voice message [voicePreview].
+String previewText(Message message) => message.stickerId != null
+    ? stickerPreviewText
+    : message.albumCard
+    ? stickerAlbumPreviewText
+    : message.poll
+    ? pollPreview(message.body)
+    : message.location != null
+    ? locationPreviewText
+    : message.contact
+    ? contactPreview(message.body)
+    : message.file != null
+    ? (message.file!.isVoice
+          ? voicePreview
+          : message.file!.isVideo
+          ? videoPreview
+          : filePreview(message.file!.name))
+    : message.body.isNotEmpty
     ? message.body
     : (message.hasAttachment ? 'Photo' : '');
 
@@ -66,6 +93,15 @@ final class Message {
     this.editedAt,
     this.replyTo,
     this.forwarded = false,
+    this.poll = false,
+    this.contact = false,
+    this.location,
+    this.file,
+    this.stickerId,
+    this.albumCard = false,
+    this.albumId,
+    this.linkPreview,
+    this.adminMsg,
     this.sending = false,
   });
 
@@ -92,6 +128,38 @@ final class Message {
 
   /// A copy of a message from another conversation.
   final bool forwarded;
+
+  /// A poll: [body] is its question; options and votes live in the poll tables.
+  final bool poll;
+
+  /// A shared phone contact: [body] is the name, a line break, the number
+  /// (see SharedContact). Its body never changes.
+  final bool contact;
+
+  /// A shared place (see SharedLocation): [body] is its name and address; the
+  /// coordinates are in the location columns. Its body never changes.
+  final SharedLocation? location;
+
+  /// The file this message carries (name, type, size), or null. A file
+  /// message has an empty body; while it uploads it has [sending] set and no
+  /// [attachmentPath] yet.
+  final AttachedFile? file;
+
+  /// The sticker this message is (a sticker message has an empty body), or null.
+  final String? stickerId;
+
+  /// A shared sticker album card: [body] is the album's name. Its body never changes.
+  final bool albumCard;
+
+  /// The shared album's id, null when the album was deleted afterwards.
+  final String? albumId;
+
+  /// The link card this text message carries (title, picture, site), or null.
+  /// Old messages, and messages sent before the preview was ready, have none.
+  final LinkPreview? linkPreview;
+
+  /// The machine-readable form of a reply from SIS Admin ({k: key, e: email, ...}); the app words it in its own language. Null for every other message.
+  final Map<String, dynamic>? adminMsg;
 
   /// True for a text-only message shown at once, before the server has
   /// answered -- like [localImage] but with nothing to display in the
@@ -129,6 +197,12 @@ final class Message {
       !isPending &&
       deletion == null &&
       !forwarded &&
+      !poll &&
+      !contact &&
+      location == null &&
+      file == null &&
+      stickerId == null &&
+      !albumCard &&
       now.difference(createdAt) < deleteForEveryoneWindow;
 
   /// Still on its way to the server: a photo shown from the phone before
@@ -170,11 +244,20 @@ final class Message {
     attachmentPath: attachmentPath,
     attachmentPreview: attachmentPreview,
     localImage: bytes,
+    stickerId: stickerId,
+    albumCard: albumCard,
+    albumId: albumId,
+    linkPreview: linkPreview,
+    adminMsg: adminMsg,
     deletion: deletion,
     deletedBy: deletedBy,
     editedAt: editedAt,
     replyTo: replyTo,
     forwarded: forwarded,
+    poll: poll,
+    contact: contact,
+    location: location,
+    file: file,
     sending: sending,
   );
 
@@ -188,17 +271,53 @@ final class Message {
     createdAt: createdAt,
     attachmentPath: attachmentPath,
     attachmentPreview: bytes,
+    stickerId: stickerId,
+    albumCard: albumCard,
+    albumId: albumId,
+    linkPreview: linkPreview,
+    adminMsg: adminMsg,
     localImage: localImage,
     deletion: deletion,
     deletedBy: deletedBy,
     editedAt: editedAt,
     replyTo: replyTo,
     forwarded: forwarded,
+    poll: poll,
+    contact: contact,
+    location: location,
+    file: file,
     sending: sending,
   );
 
   /// Whether [userId] wrote this message; decides which side it is drawn on.
   bool isFrom(String userId) => senderId == userId;
+
+  /// A copy that is no longer pending: what the send queue shows once the
+  /// server stored it.
+  Message stored() => Message(
+    id: id,
+    stickerId: stickerId,
+    albumCard: albumCard,
+    albumId: albumId,
+    linkPreview: linkPreview,
+    adminMsg: adminMsg,
+    conversationId: conversationId,
+    senderId: senderId,
+    body: body,
+    createdAt: createdAt,
+    attachmentPath: attachmentPath,
+    attachmentPreview: attachmentPreview,
+    localImage: localImage,
+    deletion: deletion,
+    deletedBy: deletedBy,
+    editedAt: editedAt,
+    replyTo: replyTo,
+    forwarded: forwarded,
+    poll: poll,
+    contact: contact,
+    location: location,
+    file: file,
+  );
 }
 
 /// Whether [messages] (oldest first) at [index] starts a run: the first
@@ -235,7 +354,8 @@ bool isSearchable(String query) =>
 
 /// One action a member may take on a message: reply, forward, edit their
 /// own text/caption, delete for me / delete for everyone (two separate rows),
-/// copy the text (tap menu only), pin (shown greyed, not built yet).
+/// copy the text (tap menu only), pin (shown greyed, not built yet); retract
+/// your vote / stop your own poll (polls only).
 enum MessageAction {
   reply,
   forward,
@@ -244,6 +364,11 @@ enum MessageAction {
   deleteForEveryone,
   copy,
   pin,
+  unpin,
+  retractVote,
+  stopPoll,
+  stickerFavourite,
+  stickerAlbum,
 }
 
 /// The actions [me] may take on [message] at [now], in the order they are
@@ -264,7 +389,12 @@ List<MessageAction> allowedMessageActions(
   final canShare = !message.isPending && !message.isDeleted;
   return [
     if (canShare) MessageAction.reply,
-    if (canShare) MessageAction.forward,
+    if (canShare &&
+        !message.poll &&
+        !message.contact &&
+        message.location == null &&
+        !message.albumCard)
+      MessageAction.forward,
     if (canEdit) MessageAction.edit,
     if (canDelete) MessageAction.deleteForEveryone,
   ];
@@ -272,24 +402,46 @@ List<MessageAction> allowedMessageActions(
 
 /// The actions the long-press card offers for [message], in order: reply,
 /// copy (text present, not deleted), forward, edit (own text within the
-/// edit window), pin (greyed, no handler yet), delete for me (any stored
+/// edit window), pin or unpin (when [canPin]; unpin when [pinned] says this
+/// message is the chat's pinned one), delete for me (any stored
 /// message), delete for everyone (only when [Message.canDeleteForEveryone]
 /// allows, [admin] says the viewer is a group admin). Copy is never in the
-/// swipe row.
+/// swipe row. [canRetract] / [canStop] come from the poll's state (you voted
+/// and it is open / it is your own open poll) and put retract vote / stop poll
+/// right after reply.
 List<MessageAction> menuMessageActions(
   Message message, {
   required String? me,
   required DateTime now,
   bool admin = false,
+  bool canPin = true,
+  bool pinned = false,
+  bool canRetract = false,
+  bool canStop = false,
 }) {
   final canShare = !message.isPending && !message.isDeleted;
   final canEdit = me != null && message.canEdit(me, now);
   return [
     if (canShare) MessageAction.reply,
-    if (canShare && message.body.isNotEmpty) MessageAction.copy,
-    if (canShare) MessageAction.forward,
+    if (canShare && message.stickerId != null && message.senderId != me) ...[
+      MessageAction.stickerFavourite,
+      MessageAction.stickerAlbum,
+    ],
+    if (canShare && canRetract) MessageAction.retractVote,
+    if (canShare && canStop) MessageAction.stopPoll,
+    if (canShare &&
+        !message.poll &&
+        !message.albumCard &&
+        message.body.isNotEmpty)
+      MessageAction.copy,
+    if (canShare &&
+        !message.poll &&
+        !message.contact &&
+        message.location == null &&
+        !message.albumCard)
+      MessageAction.forward,
     if (canEdit) MessageAction.edit,
-    if (canShare) MessageAction.pin,
+    if (canShare && canPin) pinned ? MessageAction.unpin : MessageAction.pin,
     if (!message.isPending) MessageAction.deleteForMe,
     if (me != null && message.canDeleteForEveryone(me, admin: admin))
       MessageAction.deleteForEveryone,

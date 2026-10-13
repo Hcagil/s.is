@@ -129,6 +129,24 @@ class AppLocalizationsTr extends AppLocalizations {
   String get chatArchive => 'Arşivle';
 
   @override
+  String get chatUnarchive => 'Arşivden çıkar';
+
+  @override
+  String get archivedChatsTitle => 'Arşivlenen sohbetler';
+
+  @override
+  String archivedChatsCount(int count) {
+    return '$count sohbet';
+  }
+
+  @override
+  String get archivedChatsHint =>
+      'Yeni mesaj gelse de arşivlenen sohbetler arşivde kalır. Ses, bildirim ve rozet yok.';
+
+  @override
+  String get archivedChatsEmpty => 'Arşivlenmiş sohbet yok';
+
+  @override
   String get chatMutedLabel => 'Sessiz';
 
   @override
@@ -163,6 +181,18 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get groupDeleteForAll => 'Grubu herkes için sil';
+
+  @override
+  String groupDeleteTitle(String name) {
+    return '$name herkes için silinsin mi?';
+  }
+
+  @override
+  String get groupDeleteBody =>
+      'Bu gruptaki tüm mesajlar ve fotoğraflar herkes için silinir. Geri alınamaz.';
+
+  @override
+  String get groupDeletedNotice => 'Grup silindi';
 
   @override
   String get groupLeave => 'Gruptan ayrıl';
@@ -216,6 +246,62 @@ class AppLocalizationsTr extends AppLocalizations {
   String get attachLocation => 'Konum';
 
   @override
+  String get locationShareTitle => 'Konumu paylaş';
+
+  @override
+  String get locationShareCurrent => 'Şu anki konumu paylaş';
+
+  @override
+  String get locationShareCurrentSub => 'Şu an bulunduğun yeri gönderir';
+
+  @override
+  String locationShareAccuracy(int meters) {
+    return 'Yaklaşık $meters m doğrulukla';
+  }
+
+  @override
+  String get locationPickTitle => 'Yer seç';
+
+  @override
+  String get locationPickSub => 'Haritada iğneyi oynat';
+
+  @override
+  String get locationPermNote =>
+      'Konum izni yalnızca Paylaş\'a dokunduğunda istenir';
+
+  @override
+  String get locationSearchHint => 'Yer ara';
+
+  @override
+  String get locationSendThis => 'Bu yeri gönder';
+
+  @override
+  String get locationDenied =>
+      'SIS için konum kapalı. Telefon ayarlarından açabilir veya haritadan yer seçebilirsin.';
+
+  @override
+  String get locationUnavailable =>
+      'Konumun bulunamadı. Konumun açık olduğundan emin ol.';
+
+  @override
+  String get locationPreviewLine => '📍 Konum';
+
+  @override
+  String get locationOpenTitle => 'Haritalar\'da açılsın mı?';
+
+  @override
+  String get locationOpen => 'Aç';
+
+  @override
+  String get locationCancel => 'İptal et';
+
+  @override
+  String get locationOpenFailed => 'Hiçbir harita uygulaması bu yeri açamadı.';
+
+  @override
+  String get locationNoResults => 'Yer bulunamadı';
+
+  @override
   String get attachContact => 'Kişi';
 
   @override
@@ -223,6 +309,10 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get signInWithApple => 'Apple ile giriş yap';
+
+  @override
+  String get signInHiddenEmail =>
+      'SIS gerçek e-posta adresinizi gerektirir. Apple girişinde E-postamı Paylaş\'ı seçip tekrar deneyin.';
 
   @override
   String get findFromContacts => 'Kişilerinden insanları bul';
@@ -245,6 +335,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get whatsNewUpToDate => 'Güncelsiniz';
 
   @override
+  String get whatsNewInstalled => 'Kurulu (sürümünüz)';
+
+  @override
   String get messageActionReply => 'Yanıtla';
 
   @override
@@ -258,6 +351,38 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get messageActionPin => 'Mesajı sabitle';
+
+  @override
+  String get messageActionUnpin => 'Mesajın sabitlemesini kaldır';
+
+  @override
+  String get chatMenuUnpin => 'Sohbeti sabitlemeyi kaldır';
+
+  @override
+  String get chatPinLimit => 'En fazla 5 sohbet sabitleyebilirsin.';
+
+  @override
+  String eventPinned(String name) {
+    return '$name bir mesajı sabitledi';
+  }
+
+  @override
+  String get pinnedBarTitle => 'Sabitlenmiş mesaj';
+
+  @override
+  String get pinnedBarPhoto => 'Fotoğraf';
+
+  @override
+  String get groupPinAll => 'Tüm üyeler';
+
+  @override
+  String get groupPinAdmins => 'Yalnızca yöneticiler';
+
+  @override
+  String get listPinnedHeader => 'Sabitlenenler';
+
+  @override
+  String get listChatsHeader => 'Sohbetler';
 
   @override
   String get messageActionDeleteForMe => 'Benim için sil';
@@ -540,6 +665,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get composerCancelReply => 'Yanıtı iptal et';
 
   @override
+  String get composerLinkRemove => 'Düz bağlantı olarak gönder';
+
+  @override
+  String get linkCardOpen => 'Bağlantıyı aç';
+
+  @override
   String get composerEditing => 'Mesaj düzenleniyor';
 
   @override
@@ -626,11 +757,14 @@ class AppLocalizationsTr extends AppLocalizations {
   String get addMembersNoneBody => 'Kişilerindeki herkes zaten bu grupta.';
 
   @override
-  String get addMembersOldTitle => 'Eski mesajlar gösterilsin mi?';
+  String get addMembersOldTitle => 'Önceki mesajları göster';
 
   @override
-  String get addMembersOldHint =>
-      'Kapalıyken yalnızca bundan sonra gönderilenler görünür.';
+  String get addMembersOldHint => 'Yeni üye geçmişi görür';
+
+  @override
+  String get addMembersAdminDecides =>
+      'Yeni üyeler önceki mesajları görecekler mi, grup yöneticisi belirler';
 
   @override
   String get addMembersAdding => 'Ekleniyor…';
@@ -693,6 +827,61 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String forwardSendCount(int count) {
     return 'Gönder ($count)';
+  }
+
+  @override
+  String get shareTitle => 'Şuraya paylaş';
+
+  @override
+  String sharePhotos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Paylaşılacak $count fotoğraf',
+      one: 'Paylaşılacak 1 fotoğraf',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareVideos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Paylaşılacak $count video',
+      one: 'Paylaşılacak 1 video',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareItems(int count) {
+    return 'Paylaşılacak $count öğe';
+  }
+
+  @override
+  String get shareSending => 'Gönderiliyor…';
+
+  @override
+  String shareDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sohbete gönderildi',
+      one: '1 sohbete gönderildi',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareUnreadable(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count fotoğraf okunamadı ve gönderilmedi.',
+      one: '1 fotoğraf okunamadı ve gönderilmedi.',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -781,6 +970,11 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String eventRemoved(String name) {
     return '$name çıkarıldı';
+  }
+
+  @override
+  String eventPictureChanged(String name) {
+    return '$name grup resmini değiştirdi';
   }
 
   @override
@@ -957,6 +1151,26 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bu Google hesabı şu an SIS için onaylı değil.';
 
   @override
+  String get replacedTitle => 'Başka bir telefonda oturum açtın';
+
+  @override
+  String get replacedBody =>
+      'SIS aynı anda tek telefonda çalışır. Burada kullanmak için yeniden oturum aç; diğer telefonun oturumu kapanır.';
+
+  @override
+  String get replacedSignIn => 'Oturum aç';
+
+  @override
+  String replacedUnsentDeleted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Bu telefondan gönderilmemiş $count mesaj silindi.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get statusConnectTitle => 'Bağlanılamadı';
 
   @override
@@ -1006,4 +1220,1039 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get statusStartBootstrap => 'SIS başlatılamadı. Tekrar dene.';
+
+  @override
+  String get appearanceRename => 'Yeniden adlandır';
+
+  @override
+  String get appearanceDuplicate => 'Çoğalt';
+
+  @override
+  String get appearanceDelete => 'Sil';
+
+  @override
+  String get appearanceCancel => 'Vazgeç';
+
+  @override
+  String get appearanceRenameTitle => 'Temayı yeniden adlandır';
+
+  @override
+  String get appearanceThemeName => 'Tema adı';
+
+  @override
+  String get appearanceThemeMenu => 'Tema seçenekleri';
+
+  @override
+  String appearanceCopyName(String name) {
+    return '$name kopyası';
+  }
+
+  @override
+  String get appearanceCreateTheme => 'Yeni tema oluştur';
+
+  @override
+  String get appearanceCreate => 'Oluştur';
+
+  @override
+  String get appearanceNameEmpty => 'Ad boş olamaz';
+
+  @override
+  String get appearanceThemePlaceholder => 'Ad';
+
+  @override
+  String get themeTabAccent => 'Vurgu Rengi';
+
+  @override
+  String get themeTabBackground => 'Arka Plan';
+
+  @override
+  String get themeTabMyMessages => 'Mesajlarım';
+
+  @override
+  String get themePickAccent => 'Bir vurgu rengi seçin';
+
+  @override
+  String get themePickBackground => 'Arka plan rengini seçin';
+
+  @override
+  String get themePickMine => 'Mesaj balonumun rengini seçin';
+
+  @override
+  String get themeLowContrast =>
+      'Bu vurgu rengi zor okunabilir. Daha koyu bir ton seçin.';
+
+  @override
+  String get themeModeLabel => 'Görünüm modu';
+
+  @override
+  String get themeModeLight => 'Açık';
+
+  @override
+  String get themeModeDark => 'Koyu';
+
+  @override
+  String get themeModeAuto => 'Otomatik';
+
+  @override
+  String get themeReset => 'Varsayılana sıfırla';
+
+  @override
+  String themeSwatch(String hex) {
+    return 'Renk $hex';
+  }
+
+  @override
+  String get wallpaperColour => 'Renk';
+
+  @override
+  String get wallpaperGradient => 'Gradyan';
+
+  @override
+  String get wallpaperPicture => 'Resim';
+
+  @override
+  String get wallpaperChoosePhoto => 'Fotoğraf seç';
+
+  @override
+  String get wallpaperPickFailed =>
+      'Bu fotoğraf kullanılamadı. Başka birini dene.';
+
+  @override
+  String get wallpaperReset => 'Sohbet Arka Planlarını Sıfırla';
+
+  @override
+  String get wallpaperResetInfo =>
+      'Yüklenen tüm sohbet arka planlarını kaldır ve önceden yüklenmiş olanları geri getir.';
+
+  @override
+  String get wallpaperResetTitle => 'Sohbet arka planlarını sıfırla';
+
+  @override
+  String get wallpaperResetConfirm =>
+      'Tüm sohbet arka planlarını sıfırlamak istediğine emin misin?';
+
+  @override
+  String get wallpaperResetAction => 'Sıfırla';
+
+  @override
+  String get chatSelPin => 'Sabitle';
+
+  @override
+  String get chatSelMarkRead => 'Okundu olarak işaretle';
+
+  @override
+  String get chatDeleteAction => 'Sil';
+
+  @override
+  String get chatDeleteCancel => 'İptal et';
+
+  @override
+  String get chatDeleteUndo => 'Geri Al';
+
+  @override
+  String get chatDeleteChat => 'Sohbeti Sil';
+
+  @override
+  String chatDeleteSure(String name) {
+    return '**$name** ile olan sohbet kalıcı olarak silinsin mi?';
+  }
+
+  @override
+  String chatDeleteAlso(String name) {
+    return '$name için de sil';
+  }
+
+  @override
+  String get chatDeletedUndo => 'Sohbet silindi.';
+
+  @override
+  String get chatLeaveGroupTitle => 'Gruptan Ayrıl';
+
+  @override
+  String chatDeleteLeaveSure(String name) {
+    return '**$name** grubunu silmek ve gruptan ayrılmak istediğinizden emin misiniz?';
+  }
+
+  @override
+  String get chatDeleteGroupForAll => 'Grubu tüm üyeler için sil';
+
+  @override
+  String get chatGroupLeftUndo => 'Gruptan ayrıldınız.';
+
+  @override
+  String get chatGroupDeletedUndo => 'Grup silindi';
+
+  @override
+  String chatDeleteFewTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sohbet sil',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatDeleteFewSure =>
+      'Bu sohbetleri silmek istediğinizden emin misiniz?';
+
+  @override
+  String get chatDeleteBothSides => 'Mümkünse her iki taraftan da silin';
+
+  @override
+  String get chatsDeletedUndo => 'Sohbetler silindi.';
+
+  @override
+  String get pollNewTitle => 'Yeni Anket';
+
+  @override
+  String get pollQuestionLabel => 'Soru';
+
+  @override
+  String get pollQuestionHint => 'Bir soru sor';
+
+  @override
+  String get pollOptionsLabel => 'Seçenekler';
+
+  @override
+  String get pollOptionHint => 'Seçenek';
+
+  @override
+  String get pollAddOption => 'Bir seçenek ekle…';
+
+  @override
+  String get pollOptionsMax => 'En yüksek sayıda seçenek eklediniz.';
+
+  @override
+  String get pollMultipleTitle => 'Birden Fazla Cevap';
+
+  @override
+  String get pollAnonymousTitle => 'Anonim Oylama';
+
+  @override
+  String get pollAnonymousSubtitle => 'Kimin neye oy verdiğini kimse görmez';
+
+  @override
+  String get pollSend => 'Anketi gönder';
+
+  @override
+  String get pollDiscardTitle => 'Anket silinsin mi?';
+
+  @override
+  String get pollDiscardBody => 'Bu anketi silmek istediğinizden emin misiniz?';
+
+  @override
+  String get pollDiscardConfirm => 'Sil';
+
+  @override
+  String get pollDiscardCancel => 'İptal et';
+
+  @override
+  String get pollTypeAnonymous => 'Anonim Anket';
+
+  @override
+  String get pollTypePublic => 'Anket';
+
+  @override
+  String get pollTypeClosed => 'Kesin Sonuçlar';
+
+  @override
+  String pollVotes(int count) {
+    return '$count oy';
+  }
+
+  @override
+  String get pollNoVotes => 'Oy yok';
+
+  @override
+  String get pollVoteButton => 'Oy';
+
+  @override
+  String pollViewVotes(int count) {
+    return 'Oyları Görüntüle ($count)';
+  }
+
+  @override
+  String get pollResultsTitle => 'Anket Sonuçları';
+
+  @override
+  String pollOptionVoters(int count) {
+    return '$count oy';
+  }
+
+  @override
+  String get messageActionRetractVote => 'Oyu Geri Al';
+
+  @override
+  String get messageActionStopPoll => 'Anketi Durdur';
+
+  @override
+  String get pollStopTitle => 'Anket durdurulsun mu?';
+
+  @override
+  String get pollStopBody =>
+      'Bu anketi şimdi durdurursanız, artık kimse oy kullanamayacak. Bu işlem geri alınamaz.';
+
+  @override
+  String get pollStopConfirm => 'Durdur';
+
+  @override
+  String get pollStopCancel => 'İptal et';
+
+  @override
+  String get pollClosedNotice => 'Bu anket kapandı.';
+
+  @override
+  String pollPreviewLine(String question) {
+    return '📊 Anket: $question';
+  }
+
+  @override
+  String get contactPickerTitle => 'Kişi gönder';
+
+  @override
+  String get contactSearchHint => 'Kişilerinde ara';
+
+  @override
+  String get contactSend => 'Kişiyi gönder';
+
+  @override
+  String get contactAccessTitle => 'Kişilerine erişime izin ver';
+
+  @override
+  String get contactAccessBody =>
+      'SIS kişilerini yalnızca bu listeyi açtığında ister. Bir kişi göndermeden hiçbir şey yüklenmez.';
+
+  @override
+  String get contactAllowAccess => 'Erişime izin ver';
+
+  @override
+  String get contactEmpty => 'Telefon numarası olan kişi yok';
+
+  @override
+  String get contactNoMatch => 'Aramana uyan kişi yok';
+
+  @override
+  String contactPreviewLine(String name) {
+    return '👤 Kişi: $name';
+  }
+
+  @override
+  String get contactPermNote =>
+      'Kişiler izni yalnızca bu listeyi açtığında istenir.';
+
+  @override
+  String get autoDownloadSection => 'Medya otomatik indirme';
+
+  @override
+  String get autoDownloadEnable => 'Etkinleştir';
+
+  @override
+  String get autoDownloadWifiOnly => 'Yalnızca Wi-Fi\'de etkinleştir';
+
+  @override
+  String get autoDownloadDisabled => 'Devre dışı';
+
+  @override
+  String get autoDownloadChoose => 'Neyin indirileceğini seç';
+
+  @override
+  String get autoDownloadMobile => 'Mobil veri kullanırken';
+
+  @override
+  String get autoDownloadWifi => 'Wi-Fi\'ye bağlıyken';
+
+  @override
+  String get autoDownloadRoaming => 'Dolaşımdayken';
+
+  @override
+  String get autoDownloadPhotos => 'Fotoğraflar';
+
+  @override
+  String get autoDownloadAudio => 'Ses';
+
+  @override
+  String get autoDownloadVideos => 'Videolar';
+
+  @override
+  String get autoDownloadDocuments => 'Belgeler';
+
+  @override
+  String get autoDownloadAllMedia => 'Tüm medya';
+
+  @override
+  String get autoDownloadNoMedia => 'Medya yok';
+
+  @override
+  String get autoDownloadCancel => 'İptal';
+
+  @override
+  String get autoDownloadOk => 'Tamam';
+
+  @override
+  String fileTapToDownload(String size) {
+    return '$size · İndirmek için dokun';
+  }
+
+  @override
+  String fileTooBig(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count dosya 50 MB\'ı aşıyor ve gönderilmedi.',
+      one: '1 dosya 50 MB\'ı aşıyor ve gönderilmedi.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fileCannotOpen =>
+      'Bu telefonda bu dosyayı açabilen bir uygulama yok.';
+
+  @override
+  String get filePhotoTapToDownload => 'Fotoğrafı indirmek için dokun';
+
+  @override
+  String get videoReviewTitle => 'Videolar';
+
+  @override
+  String videoSendCount(int count) {
+    return 'Gönder ($count)';
+  }
+
+  @override
+  String videoCompressing(int percent) {
+    return 'Sıkıştırılıyor %$percent';
+  }
+
+  @override
+  String videoSending(int percent) {
+    return 'Gönderiliyor %$percent';
+  }
+
+  @override
+  String get videoWaitingNetwork => 'Ağ bekleniyor';
+
+  @override
+  String get videoWaiting => 'Bekleniyor…';
+
+  @override
+  String get videoCancelSend => 'İptal';
+
+  @override
+  String videoTooLong(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count video 5 dakikadan uzun olduğu için eklenmedi.',
+      one: '1 video 5 dakikadan uzun olduğu için eklenmedi.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get videoTooBig => 'Bu video gönderilemeyecek kadar büyük.';
+
+  @override
+  String get videoFailed => 'Bu video hazırlanamadı.';
+
+  @override
+  String get videoShare => 'Paylaş';
+
+  @override
+  String get videoClose => 'Kapat';
+
+  @override
+  String get videoMute => 'Sesi kapat';
+
+  @override
+  String get videoUnmute => 'Sesi aç';
+
+  @override
+  String get videoPlay => 'Oynat';
+
+  @override
+  String get videoPause => 'Duraklat';
+
+  @override
+  String get videoCannotPlay => 'Bu video oynatılamıyor.';
+
+  @override
+  String get videoSelectLabel => 'Videoyu seç';
+
+  @override
+  String get videoGridEmpty => 'Henüz video yok';
+
+  @override
+  String get videoAccessTitle => 'Videoları burada seç';
+
+  @override
+  String get videoAccessBody =>
+      'Videoların burada görünmesi için erişime izin ver – sen gönderene kadar hiçbir şey gönderilmez.';
+
+  @override
+  String get videoAllow => 'Videolara izin ver';
+
+  @override
+  String get videoUsePhonePicker => 'Telefonun seçicisini kullan';
+
+  @override
+  String get videoLoadMoreFailed => 'Daha fazla video yüklenemedi.';
+
+  @override
+  String get voicePreviewLine => '🎤 Sesli mesaj';
+
+  @override
+  String get voiceHoldHint => 'Kaydetmek için basılı tut, göndermek için bırak';
+
+  @override
+  String get voiceMicDenied => 'Kayıt için Ayarlar\'dan mikrofona izin ver.';
+
+  @override
+  String get voiceMicFailed => 'Kayıt başlatılamadı.';
+
+  @override
+  String get voiceDictationUnavailable =>
+      'Bu telefonda bu dilde yazdırma kullanılamıyor.';
+
+  @override
+  String get voiceSlideToCancel => 'İptal için kaydır';
+
+  @override
+  String get voiceCancel => 'İPTAL';
+
+  @override
+  String get voiceShowText => 'Metni göster';
+
+  @override
+  String get voiceHideText => 'Metni gizle';
+
+  @override
+  String get voiceCannotPlay => 'Bu sesli mesaj oynatılamıyor.';
+
+  @override
+  String get voiceButtonVoice => 'Sesli mesaj kaydet';
+
+  @override
+  String get voiceButtonDictation => 'Yazıyı sesle yaz';
+
+  @override
+  String get voiceSend => 'Sesli mesajı gönder';
+
+  @override
+  String get stickerPreviewLine => '😀 Çıkartma';
+
+  @override
+  String get stickerAlbumPreviewLine => '📂 Çıkartma albümü';
+
+  @override
+  String get stickerButtonTooltip => 'Çıkartmalar';
+
+  @override
+  String get stickerKeyboardTooltip => 'Klavye';
+
+  @override
+  String get stickerTabRecent => 'Son kullanılan';
+
+  @override
+  String get stickerTabFavourites => 'Favoriler';
+
+  @override
+  String get stickerTabStarter => 'SIS başlangıç';
+
+  @override
+  String get stickerTabMine => 'Çıkartmalarım';
+
+  @override
+  String get stickerTabNew => '+ Yeni';
+
+  @override
+  String get stickerEmptyRecent => 'Gönderdiğin çıkartmalar burada görünür.';
+
+  @override
+  String get stickerEmptyFavourites =>
+      'Favorilere eklemek için sohbetteki bir çıkartmaya uzun bas.';
+
+  @override
+  String get stickerEmptyAlbum => 'Bu albüm boş.';
+
+  @override
+  String get stickerNoAlbums =>
+      'Henüz albüm yok. Çıkartmalarını saklamak için bir tane oluştur.';
+
+  @override
+  String get stickerLabel => 'Çıkartma';
+
+  @override
+  String get stickerLoadFailed => 'Bu çıkartma yüklenemedi.';
+
+  @override
+  String get messageActionStickerFavourite => 'Favorilere ekle';
+
+  @override
+  String get messageActionStickerAlbum => 'Albüme ekle';
+
+  @override
+  String get stickerAddedFavourite => 'Favorilere eklendi.';
+
+  @override
+  String stickerAddedAlbum(String name) {
+    return '$name albümüne eklendi.';
+  }
+
+  @override
+  String get stickerPickAlbumTitle => 'Albüme ekle';
+
+  @override
+  String get stickerNewAlbum => 'Yeni albüm';
+
+  @override
+  String get stickerAlbumNameHint => 'Albüm adı';
+
+  @override
+  String get stickerAlbumCreate => 'Oluştur';
+
+  @override
+  String get stickerAlbumRenameTitle => 'Albümü yeniden adlandır';
+
+  @override
+  String get stickerAlbumsTitle => 'Albümlerim';
+
+  @override
+  String stickerAlbumsCount(int count, int max) {
+    return '$count / $max';
+  }
+
+  @override
+  String get stickerAlbumShare => 'Albümü paylaş';
+
+  @override
+  String get stickerAlbumRename => 'Yeniden adlandır';
+
+  @override
+  String get stickerAlbumDelete => 'Albümü sil';
+
+  @override
+  String get stickerAlbumDeleteTitle => 'Bu albüm silinsin mi?';
+
+  @override
+  String get stickerAlbumDeleteBody =>
+      'Albüm yalnızca sende silinir. Sohbetlerdeki çıkartmalar kalır.';
+
+  @override
+  String get stickerDelete => 'Sil';
+
+  @override
+  String get stickerCancel => 'Vazgeç';
+
+  @override
+  String get stickerAlbumShared => 'Albüm paylaşıldı.';
+
+  @override
+  String stickerAlbumStickers(int count) {
+    return '$count çıkartma';
+  }
+
+  @override
+  String get stickerAlbumAdd => 'Albümü ekle';
+
+  @override
+  String get stickerAlbumAddFavourites => 'Favorilere ekle';
+
+  @override
+  String get stickerAlbumAdded => 'Albüm eklendi.';
+
+  @override
+  String get stickerAlbumFavouritesAdded => 'Favorilerine eklendi.';
+
+  @override
+  String get stickerAlbumGone => 'Bu albüm artık mevcut değil.';
+
+  @override
+  String get stickerRemoveFromAlbum => 'Albümden çıkar';
+
+  @override
+  String get stickerRemoveFavourite => 'Favorilerden çıkar';
+
+  @override
+  String stickerLimitAlbums(int max) {
+    return 'En fazla $max albümün olabilir.';
+  }
+
+  @override
+  String stickerLimitInAlbum(int max) {
+    return 'Bir albüme en fazla $max çıkartma girer.';
+  }
+
+  @override
+  String stickerLimitFavourites(int max) {
+    return 'En fazla $max favori tutabilirsin.';
+  }
+
+  @override
+  String get stickerCreateTitle => 'Çıkartma oluştur';
+
+  @override
+  String get makerUsePhoto => 'Fotoğraf kullan';
+
+  @override
+  String get makerCancel => 'Vazgeç';
+
+  @override
+  String get makerCutoutTitle => 'Ayır';
+
+  @override
+  String get makerWhole => 'Tüm görsel';
+
+  @override
+  String get makerCut => 'Ayrılmış';
+
+  @override
+  String get makerErase => 'Sil';
+
+  @override
+  String get makerRestore => 'Geri getir';
+
+  @override
+  String get makerUndo => 'Geri al';
+
+  @override
+  String get makerReset => 'Sıfırla';
+
+  @override
+  String get makerBrushHint => 'Silmek ya da geri getirmek için boya';
+
+  @override
+  String get makerEditTitle => 'Çıkartmayı düzenle';
+
+  @override
+  String get makerEditHint => 'Çıkartmana yazı ekle ya da çiz';
+
+  @override
+  String get makerToAlbum => 'Albüme kaydet';
+
+  @override
+  String get makerTextTitle => 'Yazı';
+
+  @override
+  String get makerTextHint => 'Yazını yaz';
+
+  @override
+  String get makerSize => 'Boyut';
+
+  @override
+  String get makerFontSans => 'Sans';
+
+  @override
+  String get makerFontSerif => 'Serif';
+
+  @override
+  String get makerFontHand => 'Hand';
+
+  @override
+  String get makerDrawTitle => 'Çiz';
+
+  @override
+  String get makerThin => 'İnce';
+
+  @override
+  String get makerMedium => 'Orta';
+
+  @override
+  String get makerThick => 'Kalın';
+
+  @override
+  String get makerSaveTitle => 'Çıkartmayı kaydet';
+
+  @override
+  String get makerFull => 'Dolu';
+
+  @override
+  String get makerLimitReached => 'Sınıra ulaşıldı';
+
+  @override
+  String get makerAlsoFavourite => 'Favorilere de ekle';
+
+  @override
+  String get makerSave => 'Kaydet';
+
+  @override
+  String get makerDone => 'Bitti';
+
+  @override
+  String get makerSaveFailed => 'Çıkartma kaydedilemedi. Tekrar dene.';
+
+  @override
+  String makerSaveToCount(int count, int max) {
+    return 'Albüme kaydet ($count/$max)';
+  }
+
+  @override
+  String makerCountOf(int count, int max) {
+    return '$count/$max';
+  }
+
+  @override
+  String makerSavedTo(String name) {
+    return 'Kaydedildi: $name';
+  }
+
+  @override
+  String get makerGalleryTitle => 'Fotoğraf seç';
+
+  @override
+  String get makerRecent => 'Son eklenenler';
+
+  @override
+  String get videoPlayerClose => 'Kapat';
+
+  @override
+  String get videoPlayerDone => 'Bitti';
+
+  @override
+  String get videoPlayerCopy => 'Bağlantıyı kopyala';
+
+  @override
+  String get videoPlayerCopied => 'Bağlantı kopyalandı';
+
+  @override
+  String videoOpenIn(String site) {
+    String _temp0 = intl.Intl.selectLogic(site, {
+      'youtube': 'YouTube\'da aç',
+      'instagram': 'Instagram\'da aç',
+      'tiktok': 'TikTok\'ta aç',
+      'x': 'X\'te aç',
+      'other': 'Tarayıcıda aç',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String videoPlayerPrivacy(String site) {
+    return 'İzlerken $site IP adresini ve cihazını görür. Kapatınca SIS çerezlerini siler.';
+  }
+
+  @override
+  String get videoRefusedPrivate => 'Bu video gizli.';
+
+  @override
+  String get videoRefusedDeleted => 'Bu video silinmiş.';
+
+  @override
+  String get videoRefusedRegion => 'Bu video bölgende izlenemiyor.';
+
+  @override
+  String get videoRefusedLogin => 'Bu videoyu izlemek için giriş gerekiyor.';
+
+  @override
+  String get videoRefusedOther => 'Video yüklenemedi.';
+
+  @override
+  String get videoRefusedMore => 'SIS içinde oynatılamıyor.';
+
+  @override
+  String get adminUnk => 'Bu komutu bilmiyorum.';
+
+  @override
+  String get adminNoem => 'Bu komut bir e-posta adresi gerektiriyor.';
+
+  @override
+  String get adminBad => 'E-posta adresi doğru görünmüyor.';
+
+  @override
+  String get adminHelpHeader => 'Komutlar:';
+
+  @override
+  String get adminHelpIos => 'iPhone test kullanıcısı ekle';
+
+  @override
+  String get adminHelpAnd => 'Android test kullanıcısı ekle';
+
+  @override
+  String get adminHelpRm => 'Test kullanıcısı kaldır';
+
+  @override
+  String get adminHelpList => 'Test kullanıcılarını say ve listele';
+
+  @override
+  String adminIosOk(String email) {
+    return '$email izin listesine eklendi. Apple, daveti e-posta ile gönderecek. Aynı e-postayla giriş yapmasını söyle.';
+  }
+
+  @override
+  String get adminP1 => 'Apple’a davet gönderiliyor…';
+
+  @override
+  String get adminP2 => 'Apple yavaş. Tekrar deniyor (2/3)…';
+
+  @override
+  String get adminP3 => 'Apple kabul etti. Davet e-postası yollanıyor.';
+
+  @override
+  String adminFail(String email, String reason) {
+    return '$email için Apple adımı başarısız: $reason. İzin listesi kaydedildi; tekrar denemek için komutu yeniden yaz.';
+  }
+
+  @override
+  String adminAndOk(String email) {
+    return '$email izin listesine eklendi. Elle bir adım: Bu e-postayı Play Console > Internal testing > Testers > Bacanaks kısmına ekle.';
+  }
+
+  @override
+  String get adminFwdTitle => 'İletilmeye hazır';
+
+  @override
+  String adminFwdBody(String email, String link) {
+    return 'Merhaba! SIS’i Android ile test edebilirsin.\n1. Bu bağlantıyı aç ve daveti kabul et: $link\n2. Google Play’den SIS’i yükle.\n3. Şu e-postayla giriş yap: $email';
+  }
+
+  @override
+  String get adminCopy => 'Kopyala';
+
+  @override
+  String get adminCopied => 'Kopyalandı';
+
+  @override
+  String get adminShare => 'Paylaş';
+
+  @override
+  String get adminConfTitle => 'Bu test kullanıcısı kaldırılsın mı?';
+
+  @override
+  String adminConfBody(String email) {
+    return '$email artık SIS’e erişemeyecek.';
+  }
+
+  @override
+  String get adminConfNo => 'İptal';
+
+  @override
+  String get adminConfYes => 'Kaldır';
+
+  @override
+  String get adminConfDone => 'Kaldırıldı';
+
+  @override
+  String get adminConfCancelled => 'İptal edildi';
+
+  @override
+  String adminRmOk(String email) {
+    return '$email izin listesinden kaldırıldı. Şimdi Play’de elle kaldır: Play Console > Internal testing > Testers > Bacanaks > bu e-postayı sil.';
+  }
+
+  @override
+  String get adminCanOk => 'İptal edildi. Hiçbir şey kaldırılmadı.';
+
+  @override
+  String adminNoList(String email) {
+    return '$email test kullanıcı listesinde yok.';
+  }
+
+  @override
+  String adminR1(String email) {
+    return '$email TestFlight grubundan çıkarılıyor…';
+  }
+
+  @override
+  String get adminR2 => 'Apple yavaş. Tekrar deniyor (2/3)…';
+
+  @override
+  String get adminR3 => 'TestFlight’tan çıkarıldı.';
+
+  @override
+  String adminFailRm(String email, String reason) {
+    return '$email için Apple adımı başarısız: $reason. İzin listesi satırı zaten kaldırıldı; tekrar denemek için komutu yeniden yaz.';
+  }
+
+  @override
+  String get adminReasonTimeout => 'Apple zamanında cevap vermedi';
+
+  @override
+  String get adminReasonRejected => 'Apple isteği reddetti';
+
+  @override
+  String get adminReasonDispatch => 'GitHub işi başlatamadı';
+
+  @override
+  String adminListHeader(int count) {
+    return 'Test kullanıcıları: $count';
+  }
+
+  @override
+  String adminListIos(int count) {
+    return 'iPhone ($count)';
+  }
+
+  @override
+  String adminListAnd(int count) {
+    return 'Android ($count)';
+  }
+
+  @override
+  String get adminRate => 'Çok fazla komut. Bir dakika bekle ve tekrar dene.';
+
+  @override
+  String get adminKeep => 'İptal edildi: bu kart artık geçerli değil.';
+
+  @override
+  String get adminErr => 'Bir şeyler ters gitti. Hiçbir şey değiştirilmedi.';
+
+  @override
+  String get adminNoLink =>
+      'Play davet bağlantısı henüz ayarlanmadı. Sahibinden ayarlamasını iste, sonra komutu yeniden yaz.';
+
+  @override
+  String adminListOther(int count) {
+    return 'Diğer ($count)';
+  }
+
+  @override
+  String get findPeopleTitle => 'Kişi bul';
+
+  @override
+  String get findPeopleSub => 'Rehberinizden';
+
+  @override
+  String get findOnSis => 'SIS\'te';
+
+  @override
+  String get findNotOnSis => 'Henüz SIS\'te değil';
+
+  @override
+  String get findNotOnSisSub => 'SIS\'te değil';
+
+  @override
+  String get findMessage => 'Mesaj';
+
+  @override
+  String get findInvite => 'Davet et';
+
+  @override
+  String get findDiscTitle => 'Rehberden kişi bul';
+
+  @override
+  String get findDiscBody =>
+      'SIS, rehberinizdeki kişilerin hangilerinin SIS kullandığını gösterebilmek için bu kişilerin e-posta adreslerini kodlanmış (hash) biçimde SIS sunucusuna gönderir. Bu, Kişi bul sayfasını her açtığınızda yapılır. Kodlar saklanmaz; SIS yalnızca hangi üyeleri bulduğunuzu kaydeder. Ad ve telefon numaraları telefonunuzda kalır.';
+
+  @override
+  String get findContinue => 'Devam';
+
+  @override
+  String get findNotNow => 'Şimdi değil';
+
+  @override
+  String get findAskTitle => 'Arkadaşlarını SIS\'te bul';
+
+  @override
+  String get findAskBody =>
+      'SIS, kimlerin zaten burada olduğunu göstermek için rehberine bakabilir.';
+
+  @override
+  String get findAllow => 'Rehbere izin ver';
+
+  @override
+  String get findLater => 'Daha sonra tekrar dene.';
+
+  @override
+  String get findEmpty => 'Kişi bulunamadı';
 }

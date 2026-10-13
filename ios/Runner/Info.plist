@@ -26,6 +26,14 @@
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.esd.sis.share</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>sisshare</string>
+			</array>
+		</dict>
+		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.googleusercontent.apps.306417977220-vqg0ne5360a921i23quf294g8e0fjshq</string>
@@ -34,6 +42,8 @@
 	</array>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
@@ -69,8 +79,18 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Allow camera access to take a photo and send it in the chat. The photo is only uploaded when you send it.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Allow access so you can share where you are in a chat. Your location is only read when you choose to send it.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Allow microphone access to record voice messages and to dictate text. Audio is only sent when you send the voice message.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Allow speech recognition to turn your voice into text in the message box. It runs on your phone.</string>
+	<key>MapsApiKey</key>
+	<string>$(MAPS_API_KEY_IOS)</string>
+	<key>NSContactsUsageDescription</key>
+	<string>SIS uses your contacts so you can pick one to send in a chat, and, when you open Find people, to show which of your contacts use SIS. For that, your contacts' email addresses are sent in coded (hashed) form, checked against SIS members and not stored.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Allow access so your photos load right here in the chat. Nothing is uploaded until you send it. You can allow just a few photos.</string>
+	<string>Allow access so your photos and videos load right here in the chat. Nothing is uploaded until you send it. You can allow just a few.</string>
 	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

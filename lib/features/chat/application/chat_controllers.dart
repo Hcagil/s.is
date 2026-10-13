@@ -2,36 +2,75 @@ import 'dart:async';
 import 'dart:developer';
 import 'dart:typed_data';
 
+import 'package:clock/clock.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
+import '../../../core/platform_features.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/member.dart';
 import '../../auth/domain/session_state.dart';
+import '../../autodownload/application/auto_download_controller.dart';
+import '../../autodownload/domain/auto_download_settings.dart';
 import '../../notifications/application/push_controller.dart';
 import '../../profile/application/profile_controller.dart';
+import '../domain/admin_chat_repository.dart';
 import '../domain/attachment.dart';
+import '../domain/chat_archive_repository.dart';
+import '../domain/chat_delete_repository.dart';
 import '../domain/chat_list_snapshot_store.dart';
+import '../domain/chat_pin_repository.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
+import '../domain/contact_share_repository.dart';
 import '../domain/contacts_repository.dart';
 import '../domain/external_picker.dart';
+import '../domain/file_attachment.dart';
+import '../domain/file_repository.dart';
 import '../domain/gallery.dart';
+import '../domain/group_settings.dart';
+import '../domain/group_settings_repository.dart';
+import '../domain/geo.dart';
 import '../domain/links.dart';
+import '../domain/location_services.dart';
+import '../domain/location_share_repository.dart';
 import '../domain/message.dart';
+import '../domain/phone_book.dart';
 import '../domain/picture_cropper.dart';
+import '../domain/poll.dart';
+import '../domain/poll_repository.dart';
 import '../domain/reaction.dart';
 import '../domain/reaction_repository.dart';
 import '../domain/read_marks.dart';
+import '../domain/send_queue_store.dart';
+import '../domain/recent_sticker_store.dart';
+import '../domain/shared_location.dart';
+import '../domain/shared_contact.dart';
+import '../domain/sticker.dart';
+import '../domain/sticker_maker.dart';
+import '../domain/sticker_repository.dart';
+import '../domain/text_sharer.dart';
+import '../domain/video.dart';
+import '../domain/video_gallery.dart';
+import '../domain/voice.dart';
 import 'chat_drafts.dart';
 
 part 'open_conversation.dart';
 part 'conversation_list_controller.dart';
 part 'contacts_controller.dart';
+part 'find_from_contacts_controller.dart';
+part 'file_controllers.dart';
+part 'video_controllers.dart';
+part 'voice_capture_controller.dart';
+part 'voice_player_controller.dart';
+part 'location_controllers.dart';
+part 'sticker_controllers.dart';
 part 'messages_controller.dart';
 part 'reply_edit_controllers.dart';
 part 'read_marks_controller.dart';
 part 'reactions_controller.dart';
+part 'polls_controller.dart';
+part 'phone_book_controller.dart';
 part 'chat_search_controller.dart';
 part 'chat_list_search_controller.dart';
 
@@ -39,6 +78,35 @@ final chatRepositoryProvider = Provider<ChatRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 final reactionRepositoryProvider = Provider<ReactionRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+final pollRepositoryProvider = Provider<PollRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+final textSharerProvider = Provider<TextSharer>(
+  (_) => throw UnimplementedError('override in main'),
+);
+final adminChatRepositoryProvider = Provider<AdminChatRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Answers an admin chat confirmation card: true removes the tester, false cancels.
+final adminAnswerProvider =
+    Provider<Future<Result<void>> Function(String cardId, bool yes)>(
+      (ref) => ref.read(adminChatRepositoryProvider).answer,
+    );
+final groupSettingsRepositoryProvider = Provider<GroupSettingsRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+final chatArchiveRepositoryProvider = Provider<ChatArchiveRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+final chatPinRepositoryProvider = Provider<ChatPinRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+final chatDeleteRepositoryProvider = Provider<ChatDeleteRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 final linkOpenerProvider = Provider<LinkOpener>(
@@ -61,6 +129,16 @@ final attachmentUrlProvider = FutureProvider.autoDispose.family<Uri, String>((
 
 /// The phone's own photo library, for the attachment sheet's grid.
 final galleryProvider = Provider<Gallery>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// The phone's own contacts, for the Send a contact picker.
+final phoneBookProvider = Provider<PhoneBook>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Sends a contact as a message.
+final contactShareRepositoryProvider = Provider<ContactShareRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 
@@ -87,10 +165,18 @@ final attachmentCacheProvider = Provider<AttachmentCache>(
 /// `fireImmediately` so a cold start landing directly on either state is
 /// caught too. Shared by [attachmentCacheOwnerProvider] and
 /// [chatListSnapshotOwnerProvider], mirroring pushInboxOwnerProvider's reach.
-void _onSessionEnd(Ref ref, Future<void> Function() onEnd) {
+/// A replaced phone ([Replaced]) ends the same way, except for owners that
+/// pass `onReplaced: false`.
+void _onSessionEnd(
+  Ref ref,
+  Future<void> Function() onEnd, {
+  bool onReplaced = true,
+}) {
   ref.listen(sessionControllerProvider, (_, next) {
     switch (next.value) {
       case SignedOut() || Denied():
+        unawaited(onEnd());
+      case Replaced() when onReplaced:
         unawaited(onEnd());
       case _:
     }

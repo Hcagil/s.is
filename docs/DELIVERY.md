@@ -34,6 +34,10 @@ The squash commit title follows Conventional Commits —
 allowlist gate`) — so history reads as a changelog and release notes can be
 generated from it. Branches are deleted after merge.
 
+A legal and compliance review runs on pull requests that touch personal
+data, user content, permissions, third-party SDKs or legal documents, and
+before any release beyond internal testing.
+
 | Trigger | Workflow | Holds secrets | Does |
 |---|---|---|---|
 | pull request, push to `main` | `ci.yml` | no | pattern check, format, analyze, tests, release bundle signed with a throwaway key; pgTAP and integration tests on database changes |
@@ -189,6 +193,47 @@ Pull requests: `ci.yml` calls the same `ios-ipa.yml` with the upload disabled
 (job `iOS signed build`), so a signing problem shows on the pull request and
 not after the merge. It runs only for pull requests from this repository,
 never for forks or Dependabot.
+
+#### Share Extension (Share into SIS)
+
+The iPhone app embeds a Share Extension (`com.esd.sis.share`, folder
+`ios/ShareExtension`). It hands what was shared to the app through the App
+Group `group.com.esd.sis`, so the signed build needs a second App Store profile
+("sis ci distribution share") and both App IDs must carry the App Group.
+`ios-ipa.yml` runs `tool/asc_signing.py ensure` for both bundle IDs before it
+fetches the profiles: it creates the `com.esd.sis.share` App ID and its profile
+if missing, and replaces a profile only when that profile lacks the App Group
+(Apple invalidates a profile when its App ID changes). A run that finds good
+profiles changes nothing. The App Store Connect API cannot create an App Group
+or choose which group an App ID uses (as far as we know; not verified), so
+these one-time steps are made by the owner in the Apple developer portal:
+
+1. Identifiers, App Groups: register `group.com.esd.sis`.
+2. Identifiers, `com.esd.sis`: enable App Groups, select that group.
+3. Identifiers: register `com.esd.sis.share` with App Groups enabled and the
+   same group selected (if the first signed build created the App ID for you,
+   open it and enable the group there).
+
+Until the group is on both App IDs the signed build stops with a message
+naming the missing group.
+
+#### Notification Extension (picture in the notification)
+
+The iPhone app embeds a Notification Service Extension (`com.esd.sis.notify`,
+folder `ios/NotificationService`). When a photo or video message arrives, the
+server marks the push `mutable-content` and adds a short-lived signed link to
+a small picture (about 480 px wide, at most 64 KiB); the extension downloads it
+and attaches it, so the banner and the expanded notification show the picture
+without opening SIS. If the download fails or takes more than 10 seconds the
+text notification is shown as it is. The extension shares no data with the app,
+so it needs no App Group and no entitlements: `ios-ipa.yml` runs
+`tool/asc_signing.py ensure --no-group` for it, which creates the
+`com.esd.sis.notify` App ID and its profile ("sis ci distribution notify") if
+missing, and treats any ACTIVE profile as good. The owner has no manual Apple
+step for this extension: nothing to click in the Apple developer portal (the
+App Store Connect API key the workflow already holds creates the App ID and the
+profile on the first signed run). Only if that run stops with an error from
+App Store Connect, read the message first.
 
 ### Before pushing
 

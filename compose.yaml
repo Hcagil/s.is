@@ -34,7 +34,13 @@ services:
       - .:${PWD}
 
 volumes:
+  # Fixed names: every worktree shares one set of caches instead of making
+  # four new volumes per checkout (they filled the disk once).
   android-home:
+    name: sis-android-home
   android-sdk:
+    name: sis-android-sdk
   pub-cache:
+    name: sis-pub-cache
   gradle-cache:
+    name: sis-gradle-cache

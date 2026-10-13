@@ -10,10 +10,12 @@ import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../application/chat_controllers.dart';
 import '../application/group_controller.dart';
+import '../application/pin_controller.dart';
 import '../domain/group_member.dart';
 import '../domain/message.dart';
 import 'forward_page.dart';
 import 'message_menu_card.dart';
+import 'sticker_albums.dart';
 import 'swipeable_message.dart';
 
 /// Carries out [action] on [message]; reached from the swipe-reply, the
@@ -21,8 +23,9 @@ import 'swipeable_message.dart';
 /// offered for a message at all is decided once, by `allowedMessageActions` /
 /// `menuMessageActions` in `../domain/message.dart`; this function never
 /// re-checks that -- it trusts the caller offered only an allowed action.
-/// The two delete actions ask for a confirmation card first; pin is greyed
-/// (not built yet) and does nothing.
+/// The two delete actions ask for a confirmation card first; pin and unpin
+/// go to the server at once (the bar changes first and goes back, with a
+/// notice, if refused).
 Future<bool> runMessageAction(
   BuildContext context,
   WidgetRef ref,
@@ -48,6 +51,56 @@ Future<bool> runMessageAction(
       }
       return false;
     case MessageAction.pin:
+    case MessageAction.unpin:
+      final pins = ref.read(pinControllerProvider);
+      final r = await (action == MessageAction.pin
+          ? pins.pinMessage(message)
+          : pins.unpinMessage(message.conversationId));
+      if (r case Err(:final failure) when context.mounted) {
+        showSisNotice(context, failure.message, isError: true);
+      }
+      return false;
+    case MessageAction.retractVote:
+      final retracted = await ref
+          .read(pollsProvider.notifier)
+          .retract(message.id);
+      if (retracted case Err(:final failure) when context.mounted) {
+        showSisNotice(
+          context,
+          _pollFailureText(context, failure),
+          isError: true,
+        );
+      }
+      return false;
+    case MessageAction.stopPoll:
+      final stop = await _confirmStopPoll(context);
+      if (stop != true || !context.mounted) return false;
+      final stopped = await ref.read(pollsProvider.notifier).close(message.id);
+      if (stopped case Err(:final failure) when context.mounted) {
+        showSisNotice(
+          context,
+          _pollFailureText(context, failure),
+          isError: true,
+        );
+      }
+      return false;
+    case MessageAction.stickerFavourite:
+      final added = await ref
+          .read(stickerLibraryProvider.notifier)
+          .addFavourite(message.stickerId!);
+      if (context.mounted) {
+        final l = AppLocalizations.of(context);
+        showSisNotice(
+          context,
+          added == null
+              ? l.stickerAddedFavourite
+              : stickerFailureText(l, added),
+          isError: added != null,
+        );
+      }
+      return false;
+    case MessageAction.stickerAlbum:
+      await addStickerToAlbumFlow(context, ref, message.stickerId!);
       return false;
     case MessageAction.deleteForMe:
     case MessageAction.deleteForEveryone:
@@ -135,6 +188,65 @@ Future<bool?> _confirmDelete(
   );
 }
 
+String _pollFailureText(BuildContext context, Failure failure) =>
+    failure is PollClosedFailure
+    ? AppLocalizations.of(context).pollClosedNotice
+    : failure.message;
+
+/// The floating confirmation for stopping a poll: true to go ahead.
+Future<bool?> _confirmStopPoll(BuildContext context) {
+  final anchor = Rect.fromCenter(
+    center: MediaQuery.sizeOf(context).center(Offset.zero),
+    width: 0,
+    height: 0,
+  );
+  return showFloatingCard<bool>(
+    context,
+    anchor: anchor,
+    highlightAnchor: false,
+    cardKey: const ValueKey('stop-poll-card'),
+    child: Builder(
+      builder: (card) {
+        final l = AppLocalizations.of(card);
+        final scheme = Theme.of(card).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l.pollStopTitle,
+                style: Theme.of(card).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(l.pollStopBody),
+              const SizedBox(height: 16),
+              _Sheen(
+                child: FilledButton(
+                  key: const ValueKey('stop-poll-confirm'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: scheme.error,
+                    foregroundColor: scheme.onError,
+                  ),
+                  onPressed: () => Navigator.of(card).pop(true),
+                  child: Text(l.pollStopConfirm),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                key: const ValueKey('stop-poll-cancel'),
+                onPressed: () => Navigator.of(card).pop(false),
+                child: Text(l.pollStopCancel),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
+
 /// A faint white sheen over the top of [child] (the delete confirmation
 /// button), without touching its hit testing.
 class _Sheen extends StatelessWidget {
@@ -185,12 +297,24 @@ Future<bool> showMessageMenu(
   final admin =
       me != null &&
       roster.any((m) => m.member.userId == me && m.isAdmin && !m.hasLeft);
+  final canPin = ref.read(canPinProvider(message.conversationId));
+  final pinned =
+      ref
+          .read(conversationListProvider.notifier)
+          .pinnedMessageOf(message.conversationId) ==
+      message.id;
+  final poll = ref.read(pollsProvider).value?[message.id];
   final actions = [
     for (final a in menuMessageActions(
       message,
       me: me,
       now: DateTime.now(),
       admin: admin,
+      canPin: canPin,
+      pinned: pinned,
+      canRetract: poll != null && poll.voted && !poll.closed,
+      canStop:
+          poll != null && !poll.closed && me != null && message.senderId == me,
     ))
       if (!photoViewer ||
           a == MessageAction.reply ||
@@ -227,7 +351,6 @@ Future<bool> showMessageMenu(
           destructive:
               a == MessageAction.deleteForMe ||
               a == MessageAction.deleteForEveryone,
-          greyName: a == MessageAction.pin ? 'pin' : null,
         ),
     ],
   );

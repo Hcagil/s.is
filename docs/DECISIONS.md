@@ -1867,3 +1867,203 @@ afterwards.
 - User-facing text: the developer-only "Setup required" screen (shown when a
   build is missing its configuration) stays in English; every screen a user
   can reach is localised.
+
+## 2026-10-07 — Custom themes and chat wallpaper live on the phone
+
+**Context.** The owner approved custom themes and a chat wallpaper in the full
+design. Update 2, slice 4 builds them.
+
+**Decision.**
+- One theme object, `SisBrand`, built by `sisTheme` from `sisBrandFor`
+  (built-in) or `sisBrandForCustom` (custom), is the only source of colour.
+  Widgets read `SisBrand`; nothing hard-codes theme colours.
+- Custom themes (id, name, mode Automatic/Light/Dark, accent, my-bubble
+  colour, their-bubble colour) and the chat wallpaper (none, colour,
+  gradient or picture; dim 0 to 0.8; blur 0 to 12) are stored on the phone
+  only, in the existing shared_preferences appearance store under
+  `sis.appearance.custom_themes`, `sis.appearance.custom_theme_id` and
+  `sis.appearance.wallpaper`. No server, no migration. A picked picture is
+  copied into the app's own folder and its path is stored. The settings are
+  read before `runApp`, so the first frame is already right.
+- Effective wallpaper: the member's own non-none wallpaper wins; otherwise a
+  custom theme shows none; otherwise a built-in theme shows its own
+  wallpaper from the approved mock, in dark brightness only (light shows
+  none, so text stays readable). There is one global wallpaper, behind the
+  message list in every chat. "Reset Chat Backgrounds" sets the wallpaper to
+  none and deletes the picture file.
+- A custom theme with mode Light or Dark overrides the phone; Automatic
+  follows it.
+- The theme editor ("+ New theme") is designed but not built: it waits for
+  the owner to approve its mockup. Until then it is greyed out and custom
+  themes come from Duplicate (long-press a built-in tile, or the dots card
+  on a custom theme). Custom accent colours are not yet contrast-checked
+  against white text; the editor must restrict them.
+
+**Consequences.**
+- Themes and wallpaper are not backed up or shared between phones; the
+  Appearance page says so.
+- The editor needs no storage change.
+
+## 2026-10-08 — Video uses the system picker, like photos
+
+**Context.** Sending a video needs the member to choose one. A gallery grid of
+our own would need `READ_MEDIA_VIDEO`, which the "Photos only" decision
+(Play data-safety and permission posture) deliberately avoids.
+
+**Decision.**
+- Video uses the system chooser through `file_picker`, like photos and files;
+  no `READ_MEDIA_VIDEO`, the manifest does not change.
+- After the pick, a review page shows the videos as tiles with "Send (N)".
+- A video is limited to 5 minutes, shrunk on the phone to about 720p
+  (`light_compressor_v2`) and then uploaded under the existing 50 MiB cap;
+  playback uses `video_player`, the share sheet `share_plus` (all in `data/`).
+- The send queue is saved on the phone, so text, file and video sends
+  survive the app being closed.
+- The thumbnail is a small jpeg stored next to the video as `<path>.t`.
+
+## 2026-10-08 — The in-app video grid: iPhone now, Android when the owner says go
+
+**Context.** The owner wants the video picker to be SIS's own grid of the
+phone's videos with their lengths, like Telegram (approved design: row
+`att_vpick` of the full-design mockup). This reverses the 2026-09-24 "The
+attachment sheet shows the phone's own photos" choice ("Photos only": no video
+permission) and, for the video picker, the entry above ("Video uses the system
+picker"). On Android the grid needs `READ_MEDIA_VIDEO`. Play is likely to
+refuse that declaration for a chat app, because the system picker already
+covers the need, and a declaration that is pending blocks all publishing.
+
+**Decision.**
+- iPhone: the grid is on now. It lists videos through `photo_manager` (already
+  a dependency, 3.12.0, Apache-2.0), used only in a feature's `data/` layer
+  (`PhotoManagerVideoGallery`). `NSPhotoLibraryUsageDescription` is in English
+  and Turkish (`en.lproj` and `tr.lproj` `InfoPlist.strings`). With limited
+  library access only the allowed videos show, with "Allow more" (the system
+  sheet, `presentLimited`). With denied access SIS shows its own screen:
+  Allow or Open settings, "Use the phone's picker", "Not now".
+- Android: the grid is off. No `READ_MEDIA_VIDEO` (the manifest still removes
+  it with `tools:node="remove"`) and no other new media permission. The
+  phone's own picker from the entry above stays until the owner says go.
+- A per-platform constant in `lib/core/platform_features.dart`
+  (`videoGridOnIos`, `videoGridOnAndroid`) picks grid or phone picker. It is a
+  compile-time constant, not a remote flag. Turning Android on later is that
+  one line plus the manifest permission (and the Play declaration).
+- The grid feeds the existing video path unchanged: copy and length check up
+  to 5 minutes (the shared `prepareVideoSource`), compress, the saved send
+  queue. The grid's "Send (N)" bar replaces the review page on that path; the
+  review page stays for the phone's picker.
+
+**Consequences.**
+- iPhone members see the grid, and the Photos permission prompt the first time
+  they pick a video (the same library permission as the photo grid). Android
+  members see no change.
+- The grid and the permission flow on a real iPhone can only be checked on a
+  device (no integration test), like the photo gallery.
+
+## 2026-10-08 — Maps for locations: Google Maps on the free tier, with an OpenStreetMap fallback
+
+**Context.** Sending a location needs a map, a place search and a card
+preview. Nominatim (OpenStreetMap's search) forbids app autocomplete, so it
+cannot power the search box.
+
+**Decision.**
+- Google Maps Platform on its free tier: `google_maps_flutter` for the map,
+  Places API (New) over REST for search, the Maps Static API for the card
+  preview, the Geocoding API for the address. Static map images are kept in
+  memory only, never on disk (Maps Platform terms); Places and Geocoding
+  coordinates may be cached for at most 30 days under the same terms.
+- Before a location is sent, the phone sends the pin or position to Google
+  (reverse address, search bias, each pin move).
+- The iOS implementation is `google_maps_flutter_ios_sdk9` (Swift Package
+  Manager, iOS 15), so the repo stays SPM-only with no Podfile.
+- Keys are restricted per platform (Android package + signing SHA-1, iOS
+  bundle id) and each API has a per-day request cap, so a leaked key cannot
+  run up a bill.
+- Keys stay out of git: CI secrets `MAPS_API_KEY_ANDROID` / `MAPS_API_KEY_IOS`,
+  locally `.private/maps.properties` and `ios/Flutter/Secrets.xcconfig`
+  (both git-ignored). The Dart side reads `--dart-define=MAPS_API_KEY`.
+- Everything sits behind a swappable layer (`MapsBackend` in `data/`). With no
+  key the app builds and runs on `flutter_map` with OpenStreetMap tiles, with
+  no search and no street address.
+- Location is foreground only (`ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`,
+  `NSLocationWhenInUseUsageDescription`), asked for when the picker opens.
+
+**Consequences.** A location message stores latitude, longitude, name and
+address. Opening the card asks first, then hands the point to the phone's maps
+app. Tile and image requests to third parties carry the phone's IP, as any
+map does.
+
+## 2026-10-09 — Voice messages and dictation share one composer button
+
+**Decision.** The composer has one button for voice and dictation, copied from
+Telegram Android: a tap switches the mode, a hold starts it, release sends,
+a left swipe cancels, an upward swipe locks. A voice message is a file message
+(`audio/mp4`, AAC in an `.m4a`) of up to 10 minutes with a small stored
+waveform, sent through the existing upload, offline queue and storage.
+
+- Packages: `record` 7.1.1 (recording, https://pub.dev/packages/record) and
+  `speech_to_text` 7.5.0 (dictation, https://pub.dev/packages/speech_to_text).
+  Both are SDK imports, so they live in `data/` only (`tool/check_pattern.sh`).
+- Dictation runs on the phone only (on-device recognition) and writes into the
+  message box in the app language. Nothing is sent to a server. The
+  `speech_to_text` package silently falls back to the network recogniser when
+  no on-device one exists, so on Android dictation first asks the phone
+  (`SpeechRecognizer.isOnDeviceRecognitionAvailable`, Android 12 and later,
+  through the `sis/speech` channel in `MainActivity`) and refuses to start,
+  showing the "unavailable" notice, when the answer is no or unknown. iOS sets
+  `requiresOnDeviceRecognition`.
+- The transcript is a nullable column (`voice_transcript`, 1 to 10000
+  characters) with the same row security as `body`. It is never part of a push
+  or notification text and never part of the chat list preview. The
+  `VoiceTranscriber` seam ships returning null, so "Show text" is never shown
+  yet; native recognition of a recorded file is a separate follow-up step.
+- Chat list, forward and quote previews say "Voice message".
+
+**Consequences.** Android asks for `RECORD_AUDIO` only; iOS gets English and
+Turkish usage strings for the microphone and speech recognition. Played state
+is kept on the phone only.
+
+## 2026-10-11 — Videos from links play inside the chat, in a sandboxed web view
+
+A tap on the play mark of a YouTube, Instagram, TikTok or X link card opens a
+card rising from the bottom (the approved "option B" mock) with the card's own
+picture and a dimmed play mark; the site's official embed loads behind it.
+Nothing contacts the site before that tap.
+
+- Packages: `webview_flutter` 4.14.1 (https://pub.dev/packages/webview_flutter),
+  with `webview_flutter_android` 4.14.1 and `webview_flutter_wkwebview` 3.27.0
+  used directly for the sandbox settings. Support: Android SDK 24+, iOS 13.0+
+  (the app is on 24 and 15). All three are SDK imports, so they live in
+  `data/` only (`tool/check_pattern.sh`). No new permission.
+- Embeds, official forms only: YouTube `youtube-nocookie.com/embed/<id>`
+  (YouTube's no-cookie embed address; it needs a `Referer` of `https://com.esd.sis`, or YouTube
+  answers error 153); Instagram `/p|reel|tv/<code>/embed/`; TikTok
+  `tiktok.com/player/v1/<id>` (its embed player); X
+  `platform.twitter.com/embed/Tweet.html?id=<id>`. Short links (vm.tiktok.com,
+  t.co) have no embed and keep opening outside the app. The rules live in
+  `domain/video_embed.dart` (`videoEmbedFor`, `videoEmbedAllows`).
+- Sandbox: HTTPS only, hosts on a per-site allowlist, any other navigation
+  opens the browser or app and is cancelled, no JavaScript bridge, no file or
+  content access, mixed content never allowed, no permission requests, no
+  zoom, and the cache, local storage and cookies are cleared when the card
+  closes. JavaScript stays on because the embeds need it.
+- A refusal is shown when the page answers 401, 403, 404, 410, 451 or fails to
+  load. With no bridge the app cannot see errors drawn inside the player
+  itself; the site shows its own message there.
+- Picture-in-picture is not built: `webview_flutter` has no support for it and
+  it would need native code on both platforms.
+
+**Consequences.** Cards that were refused show the normal link card with an
+"Open in <site>" row until the app is closed (kept in memory only).
+
+## 2026-10-12 — Sign in with Apple on the iPhone, with the real email only
+
+**The iPhone gets a Sign in with Apple button below the Google button; Android keeps Google only.** App Store rule 4.8 asks for an equivalent sign-in when another third-party one is offered. It is native (the `sign_in_with_apple` package, 8.2.0) and goes through `signInWithIdToken` like Google.
+
+- A hidden Apple email (`@privaterelay.appleid.com`) is refused: SIS matches people by a real address on the invite list, and a relay address matches nothing. The phone refuses it first, with its own message; the sign-up hook refuses it as a server backstop and nothing is stored.
+- The same real email through Google and Apple is one account (Supabase automatic linking of identities with the same verified email).
+- The invite list applies exactly as for Google, through the same `before_user_created` hook.
+- Every attempt sends a fresh nonce (SHA-256 to Apple, raw to Supabase) and the Apple provider keeps the nonce check on.
+- Both sign-in ways obey one-phone-at-a-time, including the sign-in buttons on the "You signed in on another phone" screen.
+- CI turns the Sign in with Apple capability on for `com.esd.sis` through the App Store Connect API and replaces a profile that lacks the entitlement.
+
+**Reason.** Rule 4.8, and iPhone users without a Google account. **Consequence.** The Supabase Apple provider must be enabled with the bundle ID as Client ID before the iPhone build can sign in.

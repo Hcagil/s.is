@@ -29,6 +29,8 @@ import '../../support/fakes.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../../support/video_fakes.dart';
+
 const me = Member(userId: 'u1', displayName: 'Maya');
 const capNotice = 'Only the first 10 photos were sent.';
 const failNotice = 'That could not be opened.';
@@ -118,6 +120,7 @@ Future<void> pump(
   final container = await settled(
     ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         galleryProvider.overrideWithValue(gallery),

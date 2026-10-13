@@ -147,8 +147,8 @@ reset role;
 -- still respects the read policy per subscriber.
 select is((select array_agg(schemaname || '.' || tablename order by tablename)::text
              from pg_publication_tables where pubname = 'supabase_realtime'),
-          '{public.message_reactions,public.messages}',
-          'only messages and message_reactions are published to Realtime');
+          '{public.message_reactions,public.messages,public.poll_options,public.polls}',
+          'only messages, message_reactions, polls and poll_options are published to Realtime');
 select is((select pubinsert and pubupdate and not pubdelete and not pubtruncate
              from pg_publication where pubname = 'supabase_realtime'),
           true, 'Realtime publishes inserts and updates, never deletes or truncates');

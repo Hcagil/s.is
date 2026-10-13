@@ -26,6 +26,8 @@ import '../support/reach.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../support/video_fakes.dart';
+
 /// Editing through the real UI, across the seam a unit test cannot reach:
 /// hale swipes her message, picks Edit, changes the text in the
 /// composer and sends -- over the real repository and the real edit_message.
@@ -117,6 +119,7 @@ void main() {
   ProviderContainer containerFor(SupabaseClient client, Member member) =>
       ProviderContainer(
         overrides: [
+          ...videoOverrides(),
           chatRepositoryProvider.overrideWithValue(
             SupabaseChatRepository(client),
           ),

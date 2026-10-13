@@ -320,17 +320,47 @@ abstract class AppLocalizations {
   /// **'Unmute'**
   String get chatMenuUnmute;
 
-  /// Long-press card: pin row (greyed, not built yet)
+  /// Long-press card: pin row
   ///
   /// In en, this message translates to:
   /// **'Pin chat'**
   String get chatMenuPin;
 
-  /// Pill revealed by swiping a chat row (greyed, not built yet)
+  /// Pill revealed by swiping a chat row in the chat list
   ///
   /// In en, this message translates to:
   /// **'Archive'**
   String get chatArchive;
+
+  /// Pill revealed by swiping a chat row on the Archived screen
+  ///
+  /// In en, this message translates to:
+  /// **'Unarchive'**
+  String get chatUnarchive;
+
+  /// Row above the chat list (pull down to reveal) and title of the Archived screen
+  ///
+  /// In en, this message translates to:
+  /// **'Archived chats'**
+  String get archivedChatsTitle;
+
+  /// Subtitle of the Archived screen: how many chats are archived
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 chat} other{{count} chats}}'**
+  String archivedChatsCount(int count);
+
+  /// Note at the top of the Archived screen
+  ///
+  /// In en, this message translates to:
+  /// **'Archived chats stay archived when a new message arrives. No sound, no push, no badge.'**
+  String get archivedChatsHint;
+
+  /// Archived screen with nothing in it
+  ///
+  /// In en, this message translates to:
+  /// **'No archived chats'**
+  String get archivedChatsEmpty;
 
   /// Screen-reader label of the bell on a muted chat row
   ///
@@ -403,6 +433,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete group for everyone'**
   String get groupDeleteForAll;
+
+  /// Delete group confirm card title
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {name} for everyone?'**
+  String groupDeleteTitle(String name);
+
+  /// Delete group confirm card text
+  ///
+  /// In en, this message translates to:
+  /// **'All messages and photos in this group are gone for everyone. This cannot be undone.'**
+  String get groupDeleteBody;
+
+  /// Notice after the group was deleted by an admin
+  ///
+  /// In en, this message translates to:
+  /// **'Group deleted'**
+  String get groupDeletedNotice;
 
   /// Group info: leave button and confirm button
   ///
@@ -500,6 +548,108 @@ abstract class AppLocalizations {
   /// **'Location'**
   String get attachLocation;
 
+  /// Title of the share-location page
+  ///
+  /// In en, this message translates to:
+  /// **'Share location'**
+  String get locationShareTitle;
+
+  /// Row on the share-location page: send where the phone is now
+  ///
+  /// In en, this message translates to:
+  /// **'Share current location'**
+  String get locationShareCurrent;
+
+  /// Small line under the share-current-location row
+  ///
+  /// In en, this message translates to:
+  /// **'Sends where you are now'**
+  String get locationShareCurrentSub;
+
+  /// Small line under the share-current-location row once a position is known
+  ///
+  /// In en, this message translates to:
+  /// **'Accurate to about {meters} m'**
+  String locationShareAccuracy(int meters);
+
+  /// Row on the share-location page and title of the pick page
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a place'**
+  String get locationPickTitle;
+
+  /// Small line under the pick-a-place row
+  ///
+  /// In en, this message translates to:
+  /// **'Move the pin on the map'**
+  String get locationPickSub;
+
+  /// Note under the share-location card
+  ///
+  /// In en, this message translates to:
+  /// **'Location permission is asked only when you tap Share'**
+  String get locationPermNote;
+
+  /// Hint of the place search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search a place'**
+  String get locationSearchHint;
+
+  /// Button on the pick page
+  ///
+  /// In en, this message translates to:
+  /// **'Send this place'**
+  String get locationSendThis;
+
+  /// Shown when the location permission is refused
+  ///
+  /// In en, this message translates to:
+  /// **'Location is turned off for SIS. Turn it on in the phone settings, or pick a place on the map.'**
+  String get locationDenied;
+
+  /// Shown when no position could be found
+  ///
+  /// In en, this message translates to:
+  /// **'Could not find your position. Check that location is on.'**
+  String get locationUnavailable;
+
+  /// Chat list preview of a location message
+  ///
+  /// In en, this message translates to:
+  /// **'📍 Location'**
+  String get locationPreviewLine;
+
+  /// Title of the confirmation before the maps app opens
+  ///
+  /// In en, this message translates to:
+  /// **'Open in Maps?'**
+  String get locationOpenTitle;
+
+  /// Confirm button of the open-in-maps card
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get locationOpen;
+
+  /// Cancel button of the open-in-maps card
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get locationCancel;
+
+  /// Notice when the maps app could not be opened
+  ///
+  /// In en, this message translates to:
+  /// **'No maps app could open this place.'**
+  String get locationOpenFailed;
+
+  /// Shown under the place search when nothing matches
+  ///
+  /// In en, this message translates to:
+  /// **'No places found'**
+  String get locationNoResults;
+
   /// Attach card tile under the composer
   ///
   /// In en, this message translates to:
@@ -517,6 +667,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sign in with Apple'**
   String get signInWithApple;
+
+  /// Shown on the sign-in screen when Apple gave a hidden email
+  ///
+  /// In en, this message translates to:
+  /// **'SIS needs your real email address. In Apple\'s sign-in choose Share My Email and try again.'**
+  String get signInHiddenEmail;
 
   /// New chat page row
   ///
@@ -554,6 +710,12 @@ abstract class AppLocalizations {
   /// **'You\'re up to date'**
   String get whatsNewUpToDate;
 
+  /// Mark on the What's new card of the version the member runs
+  ///
+  /// In en, this message translates to:
+  /// **'Installed (your version)'**
+  String get whatsNewInstalled;
+
   /// Long-press card row: reply
   ///
   /// In en, this message translates to:
@@ -578,11 +740,71 @@ abstract class AppLocalizations {
   /// **'Edit'**
   String get messageActionEdit;
 
-  /// Long-press card row: pin (greyed, not built yet)
+  /// Long-press card row: pin
   ///
   /// In en, this message translates to:
   /// **'Pin message'**
   String get messageActionPin;
+
+  /// Long-press card row: unpin
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin message'**
+  String get messageActionUnpin;
+
+  /// Long-press card: unpin row
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin chat'**
+  String get chatMenuUnpin;
+
+  /// Notice when a sixth chat is pinned
+  ///
+  /// In en, this message translates to:
+  /// **'You can pin up to 5 chats.'**
+  String get chatPinLimit;
+
+  /// Chat line when someone pins a message
+  ///
+  /// In en, this message translates to:
+  /// **'{name} pinned a message'**
+  String eventPinned(String name);
+
+  /// Bar under the chat header
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned message'**
+  String get pinnedBarTitle;
+
+  /// Pinned bar text when the message is only a photo
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get pinnedBarPhoto;
+
+  /// Who may pin messages: value
+  ///
+  /// In en, this message translates to:
+  /// **'All members'**
+  String get groupPinAll;
+
+  /// Who may pin messages: value
+  ///
+  /// In en, this message translates to:
+  /// **'Admins only'**
+  String get groupPinAdmins;
+
+  /// Chat list section header
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get listPinnedHeader;
+
+  /// Chat list section header
+  ///
+  /// In en, this message translates to:
+  /// **'Chats'**
+  String get listChatsHeader;
 
   /// Long-press card row: hide on my devices only
   ///
@@ -1106,6 +1328,18 @@ abstract class AppLocalizations {
   /// **'Cancel reply'**
   String get composerCancelReply;
 
+  /// Tooltip of the X on the link preview strip above the composer: the link goes without a card
+  ///
+  /// In en, this message translates to:
+  /// **'Send as a plain link'**
+  String get composerLinkRemove;
+
+  /// Screen-reader label of a link card in a message
+  ///
+  /// In en, this message translates to:
+  /// **'Open link'**
+  String get linkCardOpen;
+
   /// Title of the edit bar above the composer
   ///
   /// In en, this message translates to:
@@ -1253,14 +1487,20 @@ abstract class AppLocalizations {
   /// Switch on the add members page
   ///
   /// In en, this message translates to:
-  /// **'Show old messages?'**
+  /// **'Show earlier messages'**
   String get addMembersOldTitle;
 
   /// Explains the old messages switch
   ///
   /// In en, this message translates to:
-  /// **'Off shows only messages sent from now on.'**
+  /// **'New member sees history'**
   String get addMembersOldHint;
+
+  /// Note on the add members page for a non-admin: the group switch decides about history
+  ///
+  /// In en, this message translates to:
+  /// **'Group admin sets whether new members see earlier messages'**
+  String get addMembersAdminDecides;
 
   /// Label of the add button while it works
   ///
@@ -1375,6 +1615,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send ({count})'**
   String forwardSendCount(int count);
+
+  /// Title of the page that opens when another app shares into SIS
+  ///
+  /// In en, this message translates to:
+  /// **'Share to'**
+  String get shareTitle;
+
+  /// Strip above the chat list: how many photos are being shared
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 photo to share} other{{count} photos to share}}'**
+  String sharePhotos(int count);
+
+  /// Strip above the chat list: how many videos are being shared
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 video to share} other{{count} videos to share}}'**
+  String shareVideos(int count);
+
+  /// Strip above the chat list: photos and videos together
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items to share'**
+  String shareItems(int count);
+
+  /// Notice while a share is being sent
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get shareSending;
+
+  /// Notice after a share was handed to the chats
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Sent to 1 chat} other{Sent to {count} chats}}'**
+  String shareDone(int count);
+
+  /// Notice when shared photos could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 photo could not be read and was not sent.} other{{count} photos could not be read and were not sent.}}'**
+  String shareUnreadable(int count);
 
   /// Picture menu: use the camera
   ///
@@ -1519,6 +1801,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{name} was removed'**
   String eventRemoved(String name);
+
+  /// Group event line
+  ///
+  /// In en, this message translates to:
+  /// **'{name} changed the group picture'**
+  String eventPictureChanged(String name);
 
   /// Group event line
   ///
@@ -1808,6 +2096,30 @@ abstract class AppLocalizations {
   /// **'This Google account is not currently approved for SIS.'**
   String get statusDeniedBody;
 
+  /// Title of the screen shown on a phone that another phone replaced
+  ///
+  /// In en, this message translates to:
+  /// **'You signed in on another phone'**
+  String get replacedTitle;
+
+  /// Body of the replaced-phone screen
+  ///
+  /// In en, this message translates to:
+  /// **'SIS works on one phone at a time. Sign in again to use it here; the other phone will be signed out.'**
+  String get replacedBody;
+
+  /// Button on the replaced-phone screen
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get replacedSignIn;
+
+  /// Line on the replaced-phone screen: how many unsent messages were deleted
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 unsent message was deleted from this phone.} other{{count} unsent messages were deleted from this phone.}}'**
+  String replacedUnsentDeleted(int count);
+
   /// Title of the connection error screen
   ///
   /// In en, this message translates to:
@@ -1897,6 +2209,1830 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'SIS could not start. Please try again.'**
   String get statusStartBootstrap;
+
+  /// Menu card row on a custom theme
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get appearanceRename;
+
+  /// Menu card row on a theme
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate'**
+  String get appearanceDuplicate;
+
+  /// Menu card row on a custom theme
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get appearanceDelete;
+
+  /// Cancel button of the rename card
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get appearanceCancel;
+
+  /// Title of the rename card
+  ///
+  /// In en, this message translates to:
+  /// **'Rename theme'**
+  String get appearanceRenameTitle;
+
+  /// Hint of the theme name field
+  ///
+  /// In en, this message translates to:
+  /// **'Theme name'**
+  String get appearanceThemeName;
+
+  /// Screen-reader label of the dots button on a custom theme
+  ///
+  /// In en, this message translates to:
+  /// **'Theme options'**
+  String get appearanceThemeMenu;
+
+  /// Name given to a duplicated theme
+  ///
+  /// In en, this message translates to:
+  /// **'{name} copy'**
+  String appearanceCopyName(String name);
+
+  /// Title of the new theme card
+  ///
+  /// In en, this message translates to:
+  /// **'Create a new theme'**
+  String get appearanceCreateTheme;
+
+  /// Create button of the new theme card
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get appearanceCreate;
+
+  /// Shown when the new theme name is empty
+  ///
+  /// In en, this message translates to:
+  /// **'Name cannot be empty'**
+  String get appearanceNameEmpty;
+
+  /// Hint of the new theme name field
+  ///
+  /// In en, this message translates to:
+  /// **'My theme'**
+  String get appearanceThemePlaceholder;
+
+  /// Theme editor tab
+  ///
+  /// In en, this message translates to:
+  /// **'Accent Color'**
+  String get themeTabAccent;
+
+  /// Theme editor tab
+  ///
+  /// In en, this message translates to:
+  /// **'Background'**
+  String get themeTabBackground;
+
+  /// Theme editor tab
+  ///
+  /// In en, this message translates to:
+  /// **'My Messages'**
+  String get themeTabMyMessages;
+
+  /// Theme editor accent tab label
+  ///
+  /// In en, this message translates to:
+  /// **'Pick an accent color'**
+  String get themePickAccent;
+
+  /// Theme editor background tab label
+  ///
+  /// In en, this message translates to:
+  /// **'Pick background color'**
+  String get themePickBackground;
+
+  /// Theme editor my messages tab label
+  ///
+  /// In en, this message translates to:
+  /// **'Pick my message bubble color'**
+  String get themePickMine;
+
+  /// Theme editor warning
+  ///
+  /// In en, this message translates to:
+  /// **'Accent may be hard to read. Consider a darker shade.'**
+  String get themeLowContrast;
+
+  /// Theme editor mode switch label
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance mode'**
+  String get themeModeLabel;
+
+  /// Theme editor mode
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get themeModeLight;
+
+  /// Theme editor mode
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get themeModeDark;
+
+  /// Theme editor mode, follows the phone
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get themeModeAuto;
+
+  /// Theme editor reset button
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to default'**
+  String get themeReset;
+
+  /// Screen-reader label of a colour swatch
+  ///
+  /// In en, this message translates to:
+  /// **'Colour {hex}'**
+  String themeSwatch(String hex);
+
+  /// Wallpaper tab
+  ///
+  /// In en, this message translates to:
+  /// **'Colour'**
+  String get wallpaperColour;
+
+  /// Wallpaper tab
+  ///
+  /// In en, this message translates to:
+  /// **'Gradient'**
+  String get wallpaperGradient;
+
+  /// Wallpaper tab
+  ///
+  /// In en, this message translates to:
+  /// **'Picture'**
+  String get wallpaperPicture;
+
+  /// Button to pick a wallpaper photo
+  ///
+  /// In en, this message translates to:
+  /// **'Choose photo'**
+  String get wallpaperChoosePhoto;
+
+  /// Shown when the chosen wallpaper photo could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'That photo could not be used. Try another.'**
+  String get wallpaperPickFailed;
+
+  /// Row at the bottom of the wallpaper page; opens the confirm card
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Chat Backgrounds'**
+  String get wallpaperReset;
+
+  /// Info line under the reset row
+  ///
+  /// In en, this message translates to:
+  /// **'Remove all uploaded chat backgrounds and restore the pre-installed ones.'**
+  String get wallpaperResetInfo;
+
+  /// Title of the reset confirm card
+  ///
+  /// In en, this message translates to:
+  /// **'Reset chat backgrounds'**
+  String get wallpaperResetTitle;
+
+  /// Question on the reset confirm card
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to reset all chat backgrounds?'**
+  String get wallpaperResetConfirm;
+
+  /// Confirm button of the reset card
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get wallpaperResetAction;
+
+  /// Tooltip of the pin button in the selection bar
+  ///
+  /// In en, this message translates to:
+  /// **'Pin'**
+  String get chatSelPin;
+
+  /// Selection bar menu: mark the selected chats read
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as read'**
+  String get chatSelMarkRead;
+
+  /// Delete button of the selection bar and of the many-chats dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get chatDeleteAction;
+
+  /// Cancel button of the delete-chat dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get chatDeleteCancel;
+
+  /// Button of the undo bar after deleting chats
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get chatDeleteUndo;
+
+  /// Title and button of the delete dialog for one chat or group
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Chat'**
+  String get chatDeleteChat;
+
+  /// Delete dialog for one person; the name between ** is shown bold
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete the chat with **{name}**?'**
+  String chatDeleteSure(String name);
+
+  /// Checkbox: delete the chat for the other person too
+  ///
+  /// In en, this message translates to:
+  /// **'Also delete for {name}'**
+  String chatDeleteAlso(String name);
+
+  /// Undo bar after deleting one chat
+  ///
+  /// In en, this message translates to:
+  /// **'Chat deleted'**
+  String get chatDeletedUndo;
+
+  /// Title of the delete dialog for a group
+  ///
+  /// In en, this message translates to:
+  /// **'Leave Group'**
+  String get chatLeaveGroupTitle;
+
+  /// Delete dialog for a group; the name between ** is shown bold
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete and leave the group **{name}**?'**
+  String chatDeleteLeaveSure(String name);
+
+  /// Checkbox shown to a group admin
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the group for all members'**
+  String get chatDeleteGroupForAll;
+
+  /// Undo bar after deleting a group the member only leaves
+  ///
+  /// In en, this message translates to:
+  /// **'You left the group.'**
+  String get chatGroupLeftUndo;
+
+  /// Undo bar after an admin deletes a group for everyone
+  ///
+  /// In en, this message translates to:
+  /// **'Group deleted.'**
+  String get chatGroupDeletedUndo;
+
+  /// Title of the delete dialog for several chats
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Delete 1 chat} other{Delete {count} chats}}'**
+  String chatDeleteFewTitle(int count);
+
+  /// Body of the delete dialog for several chats
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete selected chats?'**
+  String get chatDeleteFewSure;
+
+  /// Checkbox of the several-chats delete dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete for both sides where possible'**
+  String get chatDeleteBothSides;
+
+  /// Undo bar after deleting several chats
+  ///
+  /// In en, this message translates to:
+  /// **'Chats deleted.'**
+  String get chatsDeletedUndo;
+
+  /// Title of the create-poll screen
+  ///
+  /// In en, this message translates to:
+  /// **'New poll'**
+  String get pollNewTitle;
+
+  /// Section label above the poll question field
+  ///
+  /// In en, this message translates to:
+  /// **'Question'**
+  String get pollQuestionLabel;
+
+  /// Hint inside the poll question field
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a question'**
+  String get pollQuestionHint;
+
+  /// Section label above the poll options
+  ///
+  /// In en, this message translates to:
+  /// **'Options'**
+  String get pollOptionsLabel;
+
+  /// Hint inside an empty poll option field
+  ///
+  /// In en, this message translates to:
+  /// **'Option'**
+  String get pollOptionHint;
+
+  /// Row that adds another poll option
+  ///
+  /// In en, this message translates to:
+  /// **'Add option'**
+  String get pollAddOption;
+
+  /// Shown when the poll has the maximum number of options
+  ///
+  /// In en, this message translates to:
+  /// **'You have added the maximum number of options.'**
+  String get pollOptionsMax;
+
+  /// Switch: members may pick more than one option
+  ///
+  /// In en, this message translates to:
+  /// **'Allow several answers'**
+  String get pollMultipleTitle;
+
+  /// Switch: votes are anonymous
+  ///
+  /// In en, this message translates to:
+  /// **'Anonymous votes'**
+  String get pollAnonymousTitle;
+
+  /// Subtitle of the anonymous votes switch
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody sees who voted for what'**
+  String get pollAnonymousSubtitle;
+
+  /// Button that sends the new poll
+  ///
+  /// In en, this message translates to:
+  /// **'Send poll'**
+  String get pollSend;
+
+  /// Title of the leave-create-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Discard poll?'**
+  String get pollDiscardTitle;
+
+  /// Body of the leave-create-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to discard this poll?'**
+  String get pollDiscardBody;
+
+  /// Confirm button of the leave-create-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get pollDiscardConfirm;
+
+  /// Cancel button of the leave-create-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get pollDiscardCancel;
+
+  /// Subtitle of an anonymous poll bubble
+  ///
+  /// In en, this message translates to:
+  /// **'Anonymous poll'**
+  String get pollTypeAnonymous;
+
+  /// Subtitle of a public poll bubble
+  ///
+  /// In en, this message translates to:
+  /// **'Poll'**
+  String get pollTypePublic;
+
+  /// Subtitle of a closed poll bubble
+  ///
+  /// In en, this message translates to:
+  /// **'Final results'**
+  String get pollTypeClosed;
+
+  /// Vote count in a poll bubble footer
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 vote} other{{count} votes}}'**
+  String pollVotes(int count);
+
+  /// Footer of a poll bubble nobody voted in
+  ///
+  /// In en, this message translates to:
+  /// **'No votes'**
+  String get pollNoVotes;
+
+  /// Button that submits the chosen options of a several-answers poll
+  ///
+  /// In en, this message translates to:
+  /// **'Vote'**
+  String get pollVoteButton;
+
+  /// Button that opens who voted for what
+  ///
+  /// In en, this message translates to:
+  /// **'View votes ({count})'**
+  String pollViewVotes(int count);
+
+  /// Title of the voters list
+  ///
+  /// In en, this message translates to:
+  /// **'Poll results'**
+  String get pollResultsTitle;
+
+  /// Votes of one option in the voters list
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 vote} other{{count} votes}}'**
+  String pollOptionVoters(int count);
+
+  /// Message menu: take your vote back
+  ///
+  /// In en, this message translates to:
+  /// **'Retract vote'**
+  String get messageActionRetractVote;
+
+  /// Message menu: close your own poll
+  ///
+  /// In en, this message translates to:
+  /// **'Stop poll'**
+  String get messageActionStopPoll;
+
+  /// Title of the stop-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Stop poll?'**
+  String get pollStopTitle;
+
+  /// Body of the stop-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'If you stop this poll now, nobody will be able to vote in it anymore. This action cannot be undone.'**
+  String get pollStopBody;
+
+  /// Confirm button of the stop-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get pollStopConfirm;
+
+  /// Cancel button of the stop-poll confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get pollStopCancel;
+
+  /// Notice when voting in a poll that was just closed
+  ///
+  /// In en, this message translates to:
+  /// **'This poll is closed.'**
+  String get pollClosedNotice;
+
+  /// Chat list preview of a poll message
+  ///
+  /// In en, this message translates to:
+  /// **'📊 Poll: {question}'**
+  String pollPreviewLine(String question);
+
+  /// Title of the send-a-contact page
+  ///
+  /// In en, this message translates to:
+  /// **'Send a contact'**
+  String get contactPickerTitle;
+
+  /// Search field hint on the send-a-contact page
+  ///
+  /// In en, this message translates to:
+  /// **'Search your contacts'**
+  String get contactSearchHint;
+
+  /// Button that sends the picked phone contact
+  ///
+  /// In en, this message translates to:
+  /// **'Send contact'**
+  String get contactSend;
+
+  /// Title shown when contacts permission is missing
+  ///
+  /// In en, this message translates to:
+  /// **'Allow access to your contacts'**
+  String get contactAccessTitle;
+
+  /// Body shown when contacts permission is missing
+  ///
+  /// In en, this message translates to:
+  /// **'SIS asks for your contacts only when you open this list. Nothing is uploaded until you send a contact.'**
+  String get contactAccessBody;
+
+  /// Button that asks for contacts permission
+  ///
+  /// In en, this message translates to:
+  /// **'Allow access'**
+  String get contactAllowAccess;
+
+  /// Empty state of the contacts list
+  ///
+  /// In en, this message translates to:
+  /// **'No contacts with a phone number'**
+  String get contactEmpty;
+
+  /// Empty search result on the contacts list
+  ///
+  /// In en, this message translates to:
+  /// **'No contact matches your search'**
+  String get contactNoMatch;
+
+  /// Chat list preview of a contact message
+  ///
+  /// In en, this message translates to:
+  /// **'👤 Contact: {name}'**
+  String contactPreviewLine(String name);
+
+  /// Note under the Send contact button: when the contacts permission is asked
+  ///
+  /// In en, this message translates to:
+  /// **'Contacts permission is asked only when you open this list'**
+  String get contactPermNote;
+
+  /// Auto-download page: section title
+  ///
+  /// In en, this message translates to:
+  /// **'Media auto-download'**
+  String get autoDownloadSection;
+
+  /// Auto-download preset
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get autoDownloadEnable;
+
+  /// Auto-download preset
+  ///
+  /// In en, this message translates to:
+  /// **'Enable only on Wi-Fi'**
+  String get autoDownloadWifiOnly;
+
+  /// Auto-download preset
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get autoDownloadDisabled;
+
+  /// Auto-download page: section title
+  ///
+  /// In en, this message translates to:
+  /// **'Choose what downloads'**
+  String get autoDownloadChoose;
+
+  /// Auto-download row
+  ///
+  /// In en, this message translates to:
+  /// **'When using mobile data'**
+  String get autoDownloadMobile;
+
+  /// Auto-download row
+  ///
+  /// In en, this message translates to:
+  /// **'When connected on Wi-Fi'**
+  String get autoDownloadWifi;
+
+  /// Auto-download row
+  ///
+  /// In en, this message translates to:
+  /// **'When roaming'**
+  String get autoDownloadRoaming;
+
+  /// Media kind
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get autoDownloadPhotos;
+
+  /// Media kind
+  ///
+  /// In en, this message translates to:
+  /// **'Audio'**
+  String get autoDownloadAudio;
+
+  /// Media kind
+  ///
+  /// In en, this message translates to:
+  /// **'Videos'**
+  String get autoDownloadVideos;
+
+  /// Media kind
+  ///
+  /// In en, this message translates to:
+  /// **'Documents'**
+  String get autoDownloadDocuments;
+
+  /// Auto-download row value: every kind is on
+  ///
+  /// In en, this message translates to:
+  /// **'All media'**
+  String get autoDownloadAllMedia;
+
+  /// Auto-download row value: nothing is on
+  ///
+  /// In en, this message translates to:
+  /// **'No media'**
+  String get autoDownloadNoMedia;
+
+  /// Auto-download dialog button
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get autoDownloadCancel;
+
+  /// Auto-download dialog button
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get autoDownloadOk;
+
+  /// File bubble sub line before download
+  ///
+  /// In en, this message translates to:
+  /// **'{size} · Tap to download'**
+  String fileTapToDownload(String size);
+
+  /// Notice after picking files over the limit
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 file is over 50 MB and was not sent.} other{{count} files are over 50 MB and were not sent.}}'**
+  String fileTooBig(int count);
+
+  /// Notice when a file cannot be opened
+  ///
+  /// In en, this message translates to:
+  /// **'No app on this phone can open this file.'**
+  String get fileCannotOpen;
+
+  /// Accessibility label on a photo waiting for a tap
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to download the photo'**
+  String get filePhotoTapToDownload;
+
+  /// Title of the page that lists the picked videos before sending
+  ///
+  /// In en, this message translates to:
+  /// **'Videos'**
+  String get videoReviewTitle;
+
+  /// Button sending the picked videos
+  ///
+  /// In en, this message translates to:
+  /// **'Send ({count})'**
+  String videoSendCount(int count);
+
+  /// Label on a video bubble while it is being shrunk
+  ///
+  /// In en, this message translates to:
+  /// **'Compressing {percent}%'**
+  String videoCompressing(int percent);
+
+  /// Label on a video bubble while it uploads
+  ///
+  /// In en, this message translates to:
+  /// **'Sending {percent}%'**
+  String videoSending(int percent);
+
+  /// Label on a video bubble that is waiting for the connection
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for network'**
+  String get videoWaitingNetwork;
+
+  /// Label on a video bubble queued behind another send
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting…'**
+  String get videoWaiting;
+
+  /// Accessibility label of the x that stops shrinking a video
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get videoCancelSend;
+
+  /// Notice after picking videos over the limit
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 video is over 5 minutes and was not added.} other{{count} videos are over 5 minutes and were not added.}}'**
+  String videoTooLong(int count);
+
+  /// Notice when a shrunk video is still over the size limit
+  ///
+  /// In en, this message translates to:
+  /// **'This video is too large to send.'**
+  String get videoTooBig;
+
+  /// Notice when shrinking a video failed
+  ///
+  /// In en, this message translates to:
+  /// **'This video could not be prepared.'**
+  String get videoFailed;
+
+  /// Button in the video player that opens the share sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get videoShare;
+
+  /// Accessibility label of the player's close button
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get videoClose;
+
+  /// Accessibility label of the player's sound button when sound is on
+  ///
+  /// In en, this message translates to:
+  /// **'Mute'**
+  String get videoMute;
+
+  /// Accessibility label of the player's sound button when muted
+  ///
+  /// In en, this message translates to:
+  /// **'Unmute'**
+  String get videoUnmute;
+
+  /// Accessibility label of the play button
+  ///
+  /// In en, this message translates to:
+  /// **'Play'**
+  String get videoPlay;
+
+  /// Accessibility label of the pause button
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get videoPause;
+
+  /// Notice when the player cannot open a video
+  ///
+  /// In en, this message translates to:
+  /// **'This video cannot be played.'**
+  String get videoCannotPlay;
+
+  /// Accessibility label of a video tile on the review page
+  ///
+  /// In en, this message translates to:
+  /// **'Select video'**
+  String get videoSelectLabel;
+
+  /// Empty video grid
+  ///
+  /// In en, this message translates to:
+  /// **'No videos yet'**
+  String get videoGridEmpty;
+
+  /// Title of the video library permission prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Pick videos right here'**
+  String get videoAccessTitle;
+
+  /// Explains the video library permission prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Allow access so your videos show up here – nothing is uploaded until you send it.'**
+  String get videoAccessBody;
+
+  /// Button that asks for video library access
+  ///
+  /// In en, this message translates to:
+  /// **'Allow videos'**
+  String get videoAllow;
+
+  /// Button that opens the phone's own video picker instead of the grid
+  ///
+  /// In en, this message translates to:
+  /// **'Use the phone\'s picker'**
+  String get videoUsePhonePicker;
+
+  /// Notice in the video grid
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load more videos.'**
+  String get videoLoadMoreFailed;
+
+  /// Chat list preview of a voice message
+  ///
+  /// In en, this message translates to:
+  /// **'🎤 Voice message'**
+  String get voicePreviewLine;
+
+  /// Notice when the button was released too early
+  ///
+  /// In en, this message translates to:
+  /// **'Hold to record, release to send'**
+  String get voiceHoldHint;
+
+  /// Notice when the microphone is refused
+  ///
+  /// In en, this message translates to:
+  /// **'Allow the microphone in Settings to record.'**
+  String get voiceMicDenied;
+
+  /// Notice when recording cannot start
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start recording.'**
+  String get voiceMicFailed;
+
+  /// Notice when dictation cannot start
+  ///
+  /// In en, this message translates to:
+  /// **'Dictation is not available for this language on this phone.'**
+  String get voiceDictationUnavailable;
+
+  /// Hint while recording
+  ///
+  /// In en, this message translates to:
+  /// **'Slide to cancel'**
+  String get voiceSlideToCancel;
+
+  /// Cancel button while a recording is locked
+  ///
+  /// In en, this message translates to:
+  /// **'CANCEL'**
+  String get voiceCancel;
+
+  /// Shows the transcript under a voice message
+  ///
+  /// In en, this message translates to:
+  /// **'Show text'**
+  String get voiceShowText;
+
+  /// Hides the transcript under a voice message
+  ///
+  /// In en, this message translates to:
+  /// **'Hide text'**
+  String get voiceHideText;
+
+  /// Notice when a voice message will not play
+  ///
+  /// In en, this message translates to:
+  /// **'This voice message cannot be played.'**
+  String get voiceCannotPlay;
+
+  /// Accessibility label of the composer button in voice mode
+  ///
+  /// In en, this message translates to:
+  /// **'Record a voice message'**
+  String get voiceButtonVoice;
+
+  /// Accessibility label of the composer button in dictation mode
+  ///
+  /// In en, this message translates to:
+  /// **'Dictate text'**
+  String get voiceButtonDictation;
+
+  /// Accessibility label of the send button while a recording is locked
+  ///
+  /// In en, this message translates to:
+  /// **'Send voice message'**
+  String get voiceSend;
+
+  /// Chat list preview of a sticker message
+  ///
+  /// In en, this message translates to:
+  /// **'😀 Sticker'**
+  String get stickerPreviewLine;
+
+  /// Chat list preview of a shared sticker album
+  ///
+  /// In en, this message translates to:
+  /// **'📂 Sticker album'**
+  String get stickerAlbumPreviewLine;
+
+  /// Tooltip of the sticker button beside the message box
+  ///
+  /// In en, this message translates to:
+  /// **'Stickers'**
+  String get stickerButtonTooltip;
+
+  /// Tooltip of the button that brings the keyboard back
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard'**
+  String get stickerKeyboardTooltip;
+
+  /// Sticker panel tab
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get stickerTabRecent;
+
+  /// Sticker panel tab
+  ///
+  /// In en, this message translates to:
+  /// **'Favourites'**
+  String get stickerTabFavourites;
+
+  /// Sticker panel tab
+  ///
+  /// In en, this message translates to:
+  /// **'SIS starter'**
+  String get stickerTabStarter;
+
+  /// Sticker panel tab
+  ///
+  /// In en, this message translates to:
+  /// **'My stickers'**
+  String get stickerTabMine;
+
+  /// Sticker panel tab
+  ///
+  /// In en, this message translates to:
+  /// **'+ New'**
+  String get stickerTabNew;
+
+  /// Empty Recent tab
+  ///
+  /// In en, this message translates to:
+  /// **'Stickers you send show up here.'**
+  String get stickerEmptyRecent;
+
+  /// Empty Favourites tab
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press a sticker in a chat to add it to your favourites.'**
+  String get stickerEmptyFavourites;
+
+  /// Empty album
+  ///
+  /// In en, this message translates to:
+  /// **'This album is empty.'**
+  String get stickerEmptyAlbum;
+
+  /// My stickers tab with no album
+  ///
+  /// In en, this message translates to:
+  /// **'No albums yet. Make one to keep your stickers.'**
+  String get stickerNoAlbums;
+
+  /// Screen-reader label of a sticker
+  ///
+  /// In en, this message translates to:
+  /// **'Sticker'**
+  String get stickerLabel;
+
+  /// Shown in place of a sticker that did not load
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this sticker.'**
+  String get stickerLoadFailed;
+
+  /// Message menu: keep a received sticker
+  ///
+  /// In en, this message translates to:
+  /// **'Add to favourites'**
+  String get messageActionStickerFavourite;
+
+  /// Message menu: put a received sticker in an album
+  ///
+  /// In en, this message translates to:
+  /// **'Add to album'**
+  String get messageActionStickerAlbum;
+
+  /// Notice after adding a sticker to favourites
+  ///
+  /// In en, this message translates to:
+  /// **'Added to favourites.'**
+  String get stickerAddedFavourite;
+
+  /// Notice after adding a sticker to an album
+  ///
+  /// In en, this message translates to:
+  /// **'Added to {name}.'**
+  String stickerAddedAlbum(String name);
+
+  /// Title of the album picker
+  ///
+  /// In en, this message translates to:
+  /// **'Add to album'**
+  String get stickerPickAlbumTitle;
+
+  /// Row and title for making an album
+  ///
+  /// In en, this message translates to:
+  /// **'New album'**
+  String get stickerNewAlbum;
+
+  /// Hint of the album name field
+  ///
+  /// In en, this message translates to:
+  /// **'Album name'**
+  String get stickerAlbumNameHint;
+
+  /// Button that makes the album
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get stickerAlbumCreate;
+
+  /// Title of the rename card
+  ///
+  /// In en, this message translates to:
+  /// **'Rename album'**
+  String get stickerAlbumRenameTitle;
+
+  /// Title of the albums page
+  ///
+  /// In en, this message translates to:
+  /// **'My albums'**
+  String get stickerAlbumsTitle;
+
+  /// How many are used of the limit
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {max}'**
+  String stickerAlbumsCount(int count, int max);
+
+  /// Album menu: send the album card to this chat
+  ///
+  /// In en, this message translates to:
+  /// **'Share album'**
+  String get stickerAlbumShare;
+
+  /// Album menu
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get stickerAlbumRename;
+
+  /// Album menu
+  ///
+  /// In en, this message translates to:
+  /// **'Delete album'**
+  String get stickerAlbumDelete;
+
+  /// Title of the delete-album confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this album?'**
+  String get stickerAlbumDeleteTitle;
+
+  /// Body of the delete-album confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'The album is deleted for you only. Stickers in chats stay.'**
+  String get stickerAlbumDeleteBody;
+
+  /// Confirm button of the delete-album confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get stickerDelete;
+
+  /// Cancel button of the sticker cards
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get stickerCancel;
+
+  /// Notice after sharing an album
+  ///
+  /// In en, this message translates to:
+  /// **'Album shared.'**
+  String get stickerAlbumShared;
+
+  /// Size line of an album card
+  ///
+  /// In en, this message translates to:
+  /// **'{count} stickers'**
+  String stickerAlbumStickers(int count);
+
+  /// Button on a shared album card
+  ///
+  /// In en, this message translates to:
+  /// **'Add album'**
+  String get stickerAlbumAdd;
+
+  /// Button on a shared album card
+  ///
+  /// In en, this message translates to:
+  /// **'Add to favourites'**
+  String get stickerAlbumAddFavourites;
+
+  /// Notice after adding a shared album
+  ///
+  /// In en, this message translates to:
+  /// **'Album added.'**
+  String get stickerAlbumAdded;
+
+  /// Notice after adding a shared album to favourites
+  ///
+  /// In en, this message translates to:
+  /// **'Added to your favourites.'**
+  String get stickerAlbumFavouritesAdded;
+
+  /// Notice when a shared album was deleted
+  ///
+  /// In en, this message translates to:
+  /// **'This album is no longer available.'**
+  String get stickerAlbumGone;
+
+  /// Sticker menu inside an album
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from album'**
+  String get stickerRemoveFromAlbum;
+
+  /// Sticker menu inside favourites
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from favourites'**
+  String get stickerRemoveFavourite;
+
+  /// Notice at the album limit
+  ///
+  /// In en, this message translates to:
+  /// **'You can have up to {max} albums.'**
+  String stickerLimitAlbums(int max);
+
+  /// Notice at the per-album limit
+  ///
+  /// In en, this message translates to:
+  /// **'An album holds up to {max} stickers.'**
+  String stickerLimitInAlbum(int max);
+
+  /// Notice at the favourites limit
+  ///
+  /// In en, this message translates to:
+  /// **'You can keep up to {max} favourites.'**
+  String stickerLimitFavourites(int max);
+
+  /// Title of the card that starts making a sticker
+  ///
+  /// In en, this message translates to:
+  /// **'Create sticker'**
+  String get stickerCreateTitle;
+
+  /// Button that starts making a sticker from a photo
+  ///
+  /// In en, this message translates to:
+  /// **'Use a photo'**
+  String get makerUsePhoto;
+
+  /// Button that closes the create-sticker card
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get makerCancel;
+
+  /// Title of the cut-out step
+  ///
+  /// In en, this message translates to:
+  /// **'Cut-out'**
+  String get makerCutoutTitle;
+
+  /// Choice: keep the whole picture
+  ///
+  /// In en, this message translates to:
+  /// **'Whole image'**
+  String get makerWhole;
+
+  /// Choice: keep only the subject
+  ///
+  /// In en, this message translates to:
+  /// **'Cut-out'**
+  String get makerCut;
+
+  /// Brush that erases parts
+  ///
+  /// In en, this message translates to:
+  /// **'Erase'**
+  String get makerErase;
+
+  /// Brush that brings parts back
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get makerRestore;
+
+  /// Undo the last stroke
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get makerUndo;
+
+  /// Forget all brush strokes
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get makerReset;
+
+  /// Hint under the cut-out brush
+  ///
+  /// In en, this message translates to:
+  /// **'Paint to erase or bring back parts'**
+  String get makerBrushHint;
+
+  /// Title of the sticker editor
+  ///
+  /// In en, this message translates to:
+  /// **'Edit sticker'**
+  String get makerEditTitle;
+
+  /// Hint on the sticker editor
+  ///
+  /// In en, this message translates to:
+  /// **'Add text or draw on your sticker'**
+  String get makerEditHint;
+
+  /// Button to go to the save step
+  ///
+  /// In en, this message translates to:
+  /// **'Save to album'**
+  String get makerToAlbum;
+
+  /// Title of the text step
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get makerTextTitle;
+
+  /// Placeholder of the sticker text field
+  ///
+  /// In en, this message translates to:
+  /// **'Type your text'**
+  String get makerTextHint;
+
+  /// Label of the text size slider
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get makerSize;
+
+  /// Plain font choice
+  ///
+  /// In en, this message translates to:
+  /// **'Sans'**
+  String get makerFontSans;
+
+  /// Serif font choice
+  ///
+  /// In en, this message translates to:
+  /// **'Serif'**
+  String get makerFontSerif;
+
+  /// Handwriting font choice
+  ///
+  /// In en, this message translates to:
+  /// **'Hand'**
+  String get makerFontHand;
+
+  /// Title of the draw step
+  ///
+  /// In en, this message translates to:
+  /// **'Draw'**
+  String get makerDrawTitle;
+
+  /// Thin pen
+  ///
+  /// In en, this message translates to:
+  /// **'Thin'**
+  String get makerThin;
+
+  /// Medium pen
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get makerMedium;
+
+  /// Thick pen
+  ///
+  /// In en, this message translates to:
+  /// **'Thick'**
+  String get makerThick;
+
+  /// Title of the save step
+  ///
+  /// In en, this message translates to:
+  /// **'Save sticker'**
+  String get makerSaveTitle;
+
+  /// Shown on an album that is full
+  ///
+  /// In en, this message translates to:
+  /// **'Full'**
+  String get makerFull;
+
+  /// Shown on the new-album row at the album limit
+  ///
+  /// In en, this message translates to:
+  /// **'Limit reached'**
+  String get makerLimitReached;
+
+  /// Option to also favourite the new sticker
+  ///
+  /// In en, this message translates to:
+  /// **'Also add to favourites'**
+  String get makerAlsoFavourite;
+
+  /// Button that saves the sticker
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get makerSave;
+
+  /// Button after the sticker was saved
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get makerDone;
+
+  /// Notice when saving failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the sticker. Try again.'**
+  String get makerSaveFailed;
+
+  /// Label above the album list
+  ///
+  /// In en, this message translates to:
+  /// **'Save to album ({count}/{max})'**
+  String makerSaveToCount(int count, int max);
+
+  /// Used count of an album or of the favourites
+  ///
+  /// In en, this message translates to:
+  /// **'{count}/{max}'**
+  String makerCountOf(int count, int max);
+
+  /// Confirmation after saving
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to {name}'**
+  String makerSavedTo(String name);
+
+  /// Title of the full-page photo picker of the sticker maker
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a photo'**
+  String get makerGalleryTitle;
+
+  /// Label above the newest photos in the sticker maker picker
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get makerRecent;
+
+  /// Close button of the video player card
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get videoPlayerClose;
+
+  /// iPhone name of the close button of the video player card
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get videoPlayerDone;
+
+  /// Copy-link button of the video player card
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get videoPlayerCopy;
+
+  /// Notice after copying the video link
+  ///
+  /// In en, this message translates to:
+  /// **'Link copied'**
+  String get videoPlayerCopied;
+
+  /// Button that opens the video in its own app or site
+  ///
+  /// In en, this message translates to:
+  /// **'{site, select, youtube{Open in YouTube} instagram{Open in Instagram} tiktok{Open in TikTok} x{Open in X} other{Open in browser}}'**
+  String videoOpenIn(String site);
+
+  /// Line inside the video player
+  ///
+  /// In en, this message translates to:
+  /// **'{site} sees your IP address and device while you watch. SIS deletes its cookies when you close.'**
+  String videoPlayerPrivacy(String site);
+
+  /// Reason shown when the site refuses a video
+  ///
+  /// In en, this message translates to:
+  /// **'This video is private.'**
+  String get videoRefusedPrivate;
+
+  /// Reason shown when the site refuses a video
+  ///
+  /// In en, this message translates to:
+  /// **'This video was deleted.'**
+  String get videoRefusedDeleted;
+
+  /// Reason shown when the site refuses a video
+  ///
+  /// In en, this message translates to:
+  /// **'This video is not available in your region.'**
+  String get videoRefusedRegion;
+
+  /// Reason shown when the site refuses a video
+  ///
+  /// In en, this message translates to:
+  /// **'This video needs a sign-in to watch.'**
+  String get videoRefusedLogin;
+
+  /// Reason shown when the site refuses a video
+  ///
+  /// In en, this message translates to:
+  /// **'This video could not be loaded.'**
+  String get videoRefusedOther;
+
+  /// Second line under the refusal reason
+  ///
+  /// In en, this message translates to:
+  /// **'It cannot play inside SIS.'**
+  String get videoRefusedMore;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'I don’t know that command.'**
+  String get adminUnk;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'That command needs an email address.'**
+  String get adminNoem;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'That email address doesn’t look right.'**
+  String get adminBad;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Commands:'**
+  String get adminHelpHeader;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Add an iPhone tester'**
+  String get adminHelpIos;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Add an Android tester'**
+  String get adminHelpAnd;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Remove a tester'**
+  String get adminHelpRm;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Count and list testers'**
+  String get adminHelpList;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Added {email} to the allowlist. Apple will email the invite. Tell them to sign in with the same email.'**
+  String adminIosOk(String email);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Sending the invite to Apple…'**
+  String get adminP1;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Apple is slow. Trying again (2 of 3)…'**
+  String get adminP2;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Apple accepted. The invite email is on its way.'**
+  String get adminP3;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Apple step failed for {email}: {reason}. The allowlist row is saved; type the command again to retry.'**
+  String adminFail(String email, String reason);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Added {email} to the allowlist. One step by hand: add this email to Play Console > Internal testing > Testers > Bacanaks.'**
+  String adminAndOk(String email);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to forward'**
+  String get adminFwdTitle;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Hi! You can test SIS on Android now.\n1. Open this link and accept the invite: {link}\n2. Install SIS from Google Play.\n3. Sign in with this email: {email}'**
+  String adminFwdBody(String email, String link);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get adminCopy;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get adminCopied;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get adminShare;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this tester?'**
+  String get adminConfTitle;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'{email} loses access to SIS.'**
+  String adminConfBody(String email);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get adminConfNo;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get adminConfYes;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Removed'**
+  String get adminConfDone;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get adminConfCancelled;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Removed {email} from the allowlist. Now remove it by hand in Play: Play Console > Internal testing > Testers > Bacanaks > delete this email.'**
+  String adminRmOk(String email);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled. Nothing was removed.'**
+  String get adminCanOk;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'{email} is not on the tester list.'**
+  String adminNoList(String email);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Removing {email} from the TestFlight group…'**
+  String adminR1(String email);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Apple is slow. Trying again (2 of 3)…'**
+  String get adminR2;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Removed from TestFlight.'**
+  String get adminR3;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Apple step failed for {email}: {reason}. The allowlist row is already removed; type the command again to retry.'**
+  String adminFailRm(String email, String reason);
+
+  /// Admin chat: why the Apple step failed
+  ///
+  /// In en, this message translates to:
+  /// **'Apple did not answer in time'**
+  String get adminReasonTimeout;
+
+  /// Admin chat: why the Apple step failed
+  ///
+  /// In en, this message translates to:
+  /// **'Apple refused the request'**
+  String get adminReasonRejected;
+
+  /// Admin chat: why the Apple step failed
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub could not start the job'**
+  String get adminReasonDispatch;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Testers: {count}'**
+  String adminListHeader(int count);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'iPhone ({count})'**
+  String adminListIos(int count);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Android ({count})'**
+  String adminListAnd(int count);
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Too many commands. Wait a minute and try again.'**
+  String get adminRate;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled: this card is no longer valid.'**
+  String get adminKeep;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Nothing was changed.'**
+  String get adminErr;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'The Play opt-in link is not set yet. Ask the owner to set it, then type the command again.'**
+  String get adminNoLink;
+
+  /// Admin chat reply text
+  ///
+  /// In en, this message translates to:
+  /// **'Other ({count})'**
+  String adminListOther(int count);
+
+  /// Find people page title
+  ///
+  /// In en, this message translates to:
+  /// **'Find people'**
+  String get findPeopleTitle;
+
+  /// Find people page subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'From your contacts'**
+  String get findPeopleSub;
+
+  /// Section header: contacts who are members
+  ///
+  /// In en, this message translates to:
+  /// **'On SIS'**
+  String get findOnSis;
+
+  /// Section header: contacts who are not members
+  ///
+  /// In en, this message translates to:
+  /// **'Not on SIS yet'**
+  String get findNotOnSis;
+
+  /// Line under a contact who is not a member
+  ///
+  /// In en, this message translates to:
+  /// **'Not on SIS'**
+  String get findNotOnSisSub;
+
+  /// Button that opens a chat with a contact who is a member
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get findMessage;
+
+  /// Greyed button; invite comes later
+  ///
+  /// In en, this message translates to:
+  /// **'Invite'**
+  String get findInvite;
+
+  /// Disclosure title, shown before contacts are read
+  ///
+  /// In en, this message translates to:
+  /// **'Find people from your contacts'**
+  String get findDiscTitle;
+
+  /// Disclosure body
+  ///
+  /// In en, this message translates to:
+  /// **'SIS sends the email addresses in your contacts, in coded (hashed) form, to the SIS server to show which of your contacts use SIS. This happens each time you open Find people. The codes are not stored; SIS only keeps a note of which members you found. Names and phone numbers stay on your phone.'**
+  String get findDiscBody;
+
+  /// Disclosure accept button
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get findContinue;
+
+  /// Disclosure and permission decline button
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get findNotNow;
+
+  /// Contacts permission screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Find your friends on SIS'**
+  String get findAskTitle;
+
+  /// Contacts permission screen body
+  ///
+  /// In en, this message translates to:
+  /// **'SIS can look at your phone contacts to show who is already here.'**
+  String get findAskBody;
+
+  /// Button that asks for contacts permission
+  ///
+  /// In en, this message translates to:
+  /// **'Allow contacts'**
+  String get findAllow;
+
+  /// Shown when the server search limit is reached
+  ///
+  /// In en, this message translates to:
+  /// **'Try again later.'**
+  String get findLater;
+
+  /// Shown when the phone has no contacts
+  ///
+  /// In en, this message translates to:
+  /// **'No contacts found'**
+  String get findEmpty;
 }
 
 class _AppLocalizationsDelegate

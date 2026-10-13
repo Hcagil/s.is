@@ -1,4 +1,5 @@
 import Flutter
+import GoogleMaps
 import UIKit
 import UserNotifications
 
@@ -9,6 +10,10 @@ import UserNotifications
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     excludeSupportFromBackup()
+    // Google Maps starts only with a key; with none, Dart uses OpenStreetMap and never builds a GoogleMap.
+    if let mapsKey = Bundle.main.object(forInfoDictionaryKey: "MapsApiKey") as? String, !mapsKey.isEmpty, !mapsKey.hasPrefix("$(") {
+      GMSServices.provideAPIKey(mapsKey)
+    }
     registerMessageActions()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
@@ -118,6 +123,10 @@ import UserNotifications
     // of the one MainActivity.kt serves on Android).
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ExternalPickerPlugin") {
       ExternalPickerPlugin.register(with: registrar)
+    }
+    // Share into SIS: hands what the Share Extension left in the App Group to Dart.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ShareIntakePlugin") {
+      ShareIntakePlugin.register(with: registrar)
     }
     // Reading a chat removes that chat's delivered pushes: the system drew
     // them (APNs), so the Flutter notifications plugin cannot see them. They

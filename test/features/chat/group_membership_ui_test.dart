@@ -19,6 +19,7 @@ import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
+import 'package:sis/features/chat/domain/group_settings.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/chat/presentation/profile_pages.dart';
@@ -29,6 +30,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
 const bob = Member(userId: 'ub', displayName: 'Bob Stone', tag: 'bobby');
@@ -54,10 +56,15 @@ Message m(String id, String from, int minute, String body) => Message(
 );
 
 class World {
-  World({bool admin = true}) {
+  World({bool admin = true, GroupSettings settings = const GroupSettings()}) {
     chat
-      ..conversationsResult = const Ok([
-        Conversation(id: 'g1', title: 'Club', lastMessage: 'yo'),
+      ..conversationsResult = Ok([
+        Conversation(
+          id: 'g1',
+          title: 'Club',
+          lastMessage: 'yo',
+          settings: settings,
+        ),
       ])
       ..membersResult = const Ok([bob, cem, dee])
       ..reachable.addAll([bob, cem, dee, hol])
@@ -91,6 +98,7 @@ class World {
 
   Widget app() => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(config),
       authRepositoryProvider.overrideWithValue(
         FakeAuth(session: true, member: me),
@@ -211,8 +219,11 @@ void main() {
     });
 
     testWidgets('an ordinary member sees the admin marked but no admin '
-        'action at all', (t) async {
-      final w = World(admin: false);
+        'action at all while members adding is off', (t) async {
+      final w = World(
+        admin: false,
+        settings: const GroupSettings(membersCanAdd: false),
+      );
       await clubMembers(t, w);
       expect(textOf(byKey('group-member-ub')), contains('Admin'));
       expect(byKey('add-members'), findsNothing);
@@ -221,6 +232,18 @@ void main() {
         expect(byKey('toggle-admin-$id'), findsNothing, reason: id);
       }
       expect(byKey('leave-group'), findsOneWidget, reason: 'anyone may leave');
+      await drain(t);
+    });
+
+    testWidgets('with members adding on, an ordinary member gets add, '
+        'still no remove or admin toggles', (t) async {
+      final w = World(admin: false);
+      await clubMembers(t, w);
+      expect(byKey('add-members'), findsOneWidget);
+      for (final id in ['u1', 'ub', 'u3', 'uh']) {
+        expect(byKey('remove-member-$id'), findsNothing, reason: id);
+        expect(byKey('toggle-admin-$id'), findsNothing, reason: id);
+      }
       await drain(t);
     });
 
@@ -272,37 +295,28 @@ void main() {
       await drain(t);
     });
 
-    testWidgets('adding: only people not already in, and the "Show old '
-        'messages?" choice reaches the server', (t) async {
-      final w = World();
-      await clubMembers(t, w);
-      await tapKey(t, 'add-members');
-      expect(find.text('Show old messages?'), findsOneWidget);
-      expect(byKey('add-member-ud'), findsOneWidget);
-      expect(byKey('add-member-ub'), findsNothing, reason: 'already in');
-      await tapKey(t, 'add-member-ud');
-      // The choice starts one way; flip it, and the call must say the other.
-      final choice = find.ancestor(
-        of: find.text('Show old messages?'),
-        matching: find.byType(SisSwitchTile),
-      );
-      expect(choice, findsOneWidget);
-      final before = t.widget<SisSwitchTile>(choice).value;
-      await t.tap(find.text('Show old messages?'));
-      await settle(t);
-      expect(t.widget<SisSwitchTile>(choice).value, !before);
-      await tapKey(t, 'add-members-confirm');
-      expect(w.chat.groupWrites, ['add:g1:ud:${!before}']);
-      // And the other way round, in a second add.
-      await tapKey(t, 'add-members');
-      expect(byKey('add-member-ud'), findsNothing, reason: 'dee is in now');
-      await drain(t);
-    });
+    for (final history in [true, false]) {
+      testWidgets('adding: only people not already in; no per-add history '
+          'question, the call carries the group switch ($history)', (t) async {
+        final w = World(settings: GroupSettings(newMembersSeeHistory: history));
+        await clubMembers(t, w);
+        await tapKey(t, 'add-members');
+        expect(find.text('Show old messages?'), findsNothing);
+        expect(byKey('add-member-ud'), findsOneWidget);
+        expect(byKey('add-member-ub'), findsNothing, reason: 'already in');
+        await tapKey(t, 'add-member-ud');
+        await tapKey(t, 'add-members-confirm');
+        expect(w.chat.groupWrites, ['add:g1:ud:$history']);
+        await tapKey(t, 'add-members');
+        expect(byKey('add-member-ud'), findsNothing, reason: 'dee is in now');
+        await drain(t);
+      });
+    }
   });
 
   // 0.30.10: adding members is a full page (add-members-page) with search,
-  // chips and "Add (N)"; it keeps the nobody-left message and the
-  // "Show old messages?" switch.
+  // chips and "Add (N)"; it keeps the nobody-left message. Since Update 2
+  // the group's "new members see history" switch decides, not a per-add one.
   group('the add members page (0.30.10)', () {
     const eve = Member(userId: 'ue', displayName: 'Eve Long', tag: 'eve');
 
@@ -380,6 +394,139 @@ void main() {
       await t.pump(const Duration(milliseconds: 500));
       expect(byKey('add-members-page'), findsNothing);
       expect(w.chat.groupWrites, isEmpty);
+      await drain(t);
+    });
+  });
+
+  group('add members: earlier messages switch', () {
+    for (final history in [true, false]) {
+      testWidgets('admin sees switch with value $history', (t) async {
+        final w = World(settings: GroupSettings(newMembersSeeHistory: history));
+        await clubMembers(t, w);
+        await tapKey(t, 'add-members');
+        expect(byKey('add-members-history'), findsOneWidget);
+        expect(byKey('add-members-history-note'), findsNothing);
+        expect(find.text('Show earlier messages'), findsOneWidget);
+        expect(find.text('New member sees history'), findsOneWidget);
+        final switchTile = t.widget<SisSwitchTile>(
+          byKey('add-members-history'),
+        );
+        expect(switchTile.value, history);
+        await drain(t);
+      });
+
+      testWidgets(
+        'admin taps switch flips value and confirm sends ${!history}',
+        (t) async {
+          final w = World(
+            settings: GroupSettings(newMembersSeeHistory: history),
+          );
+          await clubMembers(t, w);
+          await tapKey(t, 'add-members');
+          await t.ensureVisible(byKey('add-members-history'));
+          await t.pump();
+          await t.tap(byKey('add-members-history'));
+          await t.pump(); // one pump
+          final switchTile = t.widget<SisSwitchTile>(
+            byKey('add-members-history'),
+          );
+          expect(switchTile.value, !history);
+          await settle(t);
+          await tapKey(t, 'add-member-ud');
+          await tapKey(t, 'add-members-confirm');
+          expect(w.chat.groupWrites, ['add:g1:ud:${!history}']);
+          await drain(t);
+        },
+      );
+
+      testWidgets('admin does not touch switch, confirm sends $history', (
+        t,
+      ) async {
+        final w = World(settings: GroupSettings(newMembersSeeHistory: history));
+        await clubMembers(t, w);
+        await tapKey(t, 'add-members');
+        await tapKey(t, 'add-member-ud');
+        await tapKey(t, 'add-members-confirm');
+        expect(w.chat.groupWrites, ['add:g1:ud:$history']);
+        expect(find.text('Added to the group'), findsOneWidget);
+        expect(byKey('add-members-page'), findsNothing);
+        await drain(t);
+      });
+
+      testWidgets('non-admin sees note, no switch, sends $history', (t) async {
+        final w = World(
+          admin: false,
+          settings: GroupSettings(newMembersSeeHistory: history),
+        );
+        await clubMembers(t, w);
+        await tapKey(t, 'add-members');
+        expect(byKey('add-members-history'), findsNothing);
+        expect(byKey('add-members-history-note'), findsOneWidget);
+        expect(
+          find.text(
+            'Group admin sets whether new members see earlier messages',
+          ),
+          findsOneWidget,
+        );
+        await tapKey(t, 'add-member-ud');
+        await tapKey(t, 'add-members-confirm');
+        expect(w.chat.groupWrites, ['add:g1:ud:$history']);
+        await drain(t);
+      });
+
+      testWidgets('failure: admin, denied, page stays, no success text', (
+        t,
+      ) async {
+        final w = World(settings: GroupSettings(newMembersSeeHistory: history));
+        w.chat.addResult = const Err(DeniedFailure());
+        await clubMembers(t, w);
+        await tapKey(t, 'add-members');
+        await tapKey(t, 'add-member-ud');
+        await tapKey(t, 'add-members-confirm');
+        expect(w.chat.groupWrites, ['add:g1:ud:$history']);
+        expect(find.text('Added to the group'), findsNothing);
+        expect(byKey('add-members-page'), findsOneWidget);
+        await drain(t);
+      });
+
+      testWidgets('Turkish: the admin switch texts', (t) async {
+        t.platformDispatcher.localesTestValue = const [Locale('tr')];
+        addTearDown(t.platformDispatcher.clearLocalesTestValue);
+        final w = World(settings: GroupSettings(newMembersSeeHistory: history));
+        await clubMembers(t, w);
+        await tapKey(t, 'add-members');
+        expect(find.text('Önceki mesajları göster'), findsOneWidget);
+        expect(find.text('Yeni üye geçmişi görür'), findsOneWidget);
+        await drain(t);
+      });
+
+      testWidgets('Turkish: the non-admin note', (t) async {
+        t.platformDispatcher.localesTestValue = const [Locale('tr')];
+        addTearDown(t.platformDispatcher.clearLocalesTestValue);
+        final w = World(
+          admin: false,
+          settings: GroupSettings(newMembersSeeHistory: history),
+        );
+        await clubMembers(t, w);
+        await tapKey(t, 'add-members');
+        expect(
+          find.text(
+            'Yeni üyeler önceki mesajları görecekler mi, grup yöneticisi '
+            'belirler',
+          ),
+          findsOneWidget,
+        );
+        await drain(t);
+      });
+    }
+
+    testWidgets('nobody addable: no switch or note', (t) async {
+      final w = World()..chat.membersResult = const Ok([bob, cem]);
+      await clubMembers(t, w);
+      await tapKey(t, 'add-members');
+      expect(byKey('add-members-empty'), findsOneWidget);
+      expect(byKey('add-members-history'), findsNothing);
+      expect(byKey('add-members-history-note'), findsNothing);
       await drain(t);
     });
   });

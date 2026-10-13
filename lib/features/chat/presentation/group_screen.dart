@@ -1,7 +1,7 @@
 part of 'profile_pages.dart';
 
-/// A group's page: its members, photos and links. Any member may change or
-/// remove its picture, the same as a member-editable group name would be.
+/// A group's page: its members, photos and links. Admins may always change or
+/// remove its picture; other members only while the group's switch allows it.
 class GroupScreen extends ConsumerStatefulWidget {
   const GroupScreen({
     super.key,
@@ -70,6 +70,11 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
         .where((c) => c.id == conversationId)
         .firstOrNull
         ?.avatarPath;
+    listenGroupGone(context, ref, conversationId);
+    final amAdmin = ref.watch(amGroupAdminProvider(conversationId));
+    final canSetPicture =
+        amAdmin ||
+        ref.watch(groupSettingsProvider(conversationId)).membersCanSetAvatar;
     final theme = Theme.of(context);
     return DefaultTabController(
       length: 3,
@@ -100,11 +105,13 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                           avatarPath: avatarPath,
                         ),
                       ),
-                      AvatarEditBadge(
-                        key: const ValueKey('group-avatar-edit'),
-                        busy: _busy,
-                        onTap: (picture) => _changeAvatar(avatarPath, picture),
-                      ),
+                      if (canSetPicture)
+                        AvatarEditBadge(
+                          key: const ValueKey('group-avatar-edit'),
+                          busy: _busy,
+                          onTap: (picture) =>
+                              _changeAvatar(avatarPath, picture),
+                        ),
                     ],
                   ),
                   SizedBox(
@@ -129,7 +136,10 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                     ),
                   MuteTile(kind: MuteKind.conversation, target: conversationId),
                   ChatAlertTiles(conversationId: conversationId),
-                  const _GroupSettings(),
+                  _GroupSettings(
+                    conversationId: conversationId,
+                    amAdmin: amAdmin,
+                  ),
                   const SizedBox(height: 12),
                   TabBar(
                     tabs: [
@@ -164,15 +174,18 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
   }
 }
 
-/// The group's settings as they are today: any member may change the
-/// picture, only admins add people, and whether a new member sees earlier
-/// messages is chosen per addition. Greyed (not changeable) until the real
-/// settings arrive.
-class _GroupSettings extends StatelessWidget {
-  const _GroupSettings();
+/// The group's switches. An admin flips them (the new value shows at
+/// once, and goes back with a plain line if the server refuses); everyone
+/// else sees the real values greyed.
+class _GroupSettings extends ConsumerWidget {
+  const _GroupSettings({required this.conversationId, required this.amAdmin});
+
+  final String conversationId;
+  final bool amAdmin;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(groupSettingsProvider(conversationId));
     final l = AppLocalizations.of(context);
     final t = SisBrand.of(context);
     return Column(
@@ -188,47 +201,142 @@ class _GroupSettings extends StatelessWidget {
             ),
           ),
         ),
-        _GreySwitchRow(name: 'pickswitch', title: l.groupPickSwitch, on: true),
-        _GreySwitchRow(name: 'addsw', title: l.groupAddSwitch, on: false),
-        _GreySwitchRow(name: 'histsw', title: l.groupHistSwitch, on: false),
-        GreyOption(
-          name: 'p_who',
-          label: l.groupPinWho,
-          child: SisSettingsRow(
-            icon: Icons.push_pin_outlined,
-            title: l.groupPinWho,
-          ),
+        _SettingRow(
+          name: 'pickswitch',
+          title: l.groupPickSwitch,
+          on: s.membersCanSetAvatar,
+          amAdmin: amAdmin,
+          onChanged: (v) => _set(context, ref, membersCanSetAvatar: v),
+        ),
+        _SettingRow(
+          name: 'addsw',
+          title: l.groupAddSwitch,
+          on: s.membersCanAdd,
+          amAdmin: amAdmin,
+          onChanged: (v) => _set(context, ref, membersCanAdd: v),
+        ),
+        _SettingRow(
+          name: 'histsw',
+          title: l.groupHistSwitch,
+          on: s.newMembersSeeHistory,
+          amAdmin: amAdmin,
+          onChanged: (v) => _set(context, ref, newMembersSeeHistory: v),
+        ),
+        Builder(
+          builder: (rowContext) {
+            final row = SisSettingsRow(
+              key: const ValueKey('setting-membersCanPin'),
+              icon: Icons.push_pin_outlined,
+              title: l.groupPinWho,
+              value: s.membersCanPin ? l.groupPinAll : l.groupPinAdmins,
+              onTap: amAdmin
+                  ? () => _pickPinWho(rowContext, ref, s.membersCanPin)
+                  : null,
+            );
+            return amAdmin
+                ? row
+                : GreyOption(name: 'p_who', label: l.groupPinWho, child: row);
+          },
         ),
       ],
     );
   }
+
+  /// An admin picks who may pin messages: a small card under the row with
+  /// the two choices. The new value shows at once; a refusal puts it back
+  /// with a plain line.
+  Future<void> _pickPinWho(
+    BuildContext context,
+    WidgetRef ref,
+    bool current,
+  ) async {
+    final box = context.findRenderObject() as RenderBox;
+    final anchor = box.localToGlobal(Offset.zero) & box.size;
+    final l = AppLocalizations.of(context);
+    final all = await showMenuCard<bool>(
+      context,
+      anchor: anchor,
+      cardKey: const ValueKey('pin-who-card'),
+      actions: [
+        MenuCardAction(
+          value: true,
+          keyId: 'pin-all',
+          icon: current ? Icons.check : Icons.group_outlined,
+          label: l.groupPinAll,
+        ),
+        MenuCardAction(
+          value: false,
+          keyId: 'pin-admins',
+          icon: current ? Icons.admin_panel_settings_outlined : Icons.check,
+          label: l.groupPinAdmins,
+        ),
+      ],
+    );
+    if (all == null || all == current || !context.mounted) return;
+    final result = await ref
+        .read(pinControllerProvider)
+        .setMembersCanPin(conversationId, all);
+    if (!context.mounted) return;
+    if (result case Err(:final failure)) {
+      showSisNotice(context, failure.message, isError: true);
+    }
+  }
+
+  Future<void> _set(
+    BuildContext context,
+    WidgetRef ref, {
+    bool? membersCanSetAvatar,
+    bool? membersCanAdd,
+    bool? newMembersSeeHistory,
+  }) async {
+    final result = await ref
+        .read(groupControllerProvider)
+        .setSettings(
+          conversationId,
+          membersCanSetAvatar: membersCanSetAvatar,
+          membersCanAdd: membersCanAdd,
+          newMembersSeeHistory: newMembersSeeHistory,
+        );
+    if (!context.mounted) return;
+    if (result case Err(:final failure)) {
+      showSisNotice(context, failure.message, isError: true);
+    }
+  }
 }
 
-class _GreySwitchRow extends StatelessWidget {
-  const _GreySwitchRow({
+class _SettingRow extends StatelessWidget {
+  const _SettingRow({
     required this.name,
     required this.title,
     required this.on,
+    required this.amAdmin,
+    required this.onChanged,
   });
 
   final String name;
   final String title;
   final bool on;
+  final bool amAdmin;
+  final ValueChanged<bool> onChanged;
 
   @override
-  Widget build(BuildContext context) => GreyOption(
-    name: name,
-    label: title,
-    child: Padding(
+  Widget build(BuildContext context) {
+    final row = Padding(
       padding: SisTokens.settingsRowPadding,
       child: Row(
         children: [
           Expanded(
             child: Text(title, style: Theme.of(context).textTheme.bodyLarge),
           ),
-          SisSwitch(value: on, onChanged: null),
+          SisSwitch(
+            key: ValueKey('setting-$name'),
+            value: on,
+            onChanged: amAdmin ? onChanged : null,
+          ),
         ],
       ),
-    ),
-  );
+    );
+    if (amAdmin) return row;
+    return GreyOption(name: name, label: title, child: row);
+  }
 }

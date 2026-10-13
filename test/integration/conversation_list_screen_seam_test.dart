@@ -26,6 +26,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
+import '../support/video_fakes.dart';
 
 /// The home screen wired exactly as `main.dart` wires it, over a real
 /// [SupabaseChatRepository] pointed at a server that will never answer.
@@ -104,6 +105,7 @@ void main() {
 
       final container = ProviderContainer(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(
             const RuntimeConfig(
               supabaseUrl: _url,
@@ -219,6 +221,7 @@ void main() {
       addTearDown(() => chat.dispose());
       final c = ProviderContainer(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(
             const RuntimeConfig(
               supabaseUrl: _url,

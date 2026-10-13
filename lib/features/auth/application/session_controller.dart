@@ -34,6 +34,9 @@ const sessionRetryDelays = [
   Duration(seconds: 60),
 ];
 
+/// How often an open app asks whether another phone has replaced this one.
+const replacedCheckEvery = Duration(seconds: 10);
+
 /// Who is signed in: the allowed member's user id, or null.
 ///
 /// Every provider that holds one account's data watches this, so switching
@@ -81,6 +84,9 @@ class SessionController extends AsyncNotifier<SessionState> {
   bool? _lastSignedIn; // the auth stream replays the current session
   LastSession? _marker; // what the file holds for the current account
   Timer? _retryTimer;
+  Timer? _watch;
+  // A stored marker for this account exists: this phone was signed in before.
+  bool _hadSession = false;
   int _attempt = 0;
 
   @override
@@ -103,6 +109,12 @@ class SessionController extends AsyncNotifier<SessionState> {
     );
     ref.onDispose(sub.cancel);
     ref.onDispose(() => _retryTimer?.cancel());
+    // Notice a replacement while the app stays open.
+    _watch = Timer.periodic(
+      replacedCheckEvery,
+      (_) => unawaited(_checkReplaced()),
+    );
+    ref.onDispose(() => _watch?.cancel());
     final rev = ++_revision;
     if (repo.hasSession) {
       final fast = await _fromMarker(repo);
@@ -154,6 +166,7 @@ class SessionController extends AsyncNotifier<SessionState> {
     final uid = repo.userId;
     final sid = repo.sessionId;
     if (uid == null) return null;
+    _hadSession = marker.userId == uid;
     if (marker.userId != uid) {
       // Another account signed in: the old account's marker is gone for good.
       await _wipeMarker();
@@ -181,7 +194,7 @@ class SessionController extends AsyncNotifier<SessionState> {
       case Err(:final failure):
         return SessionError(failure.message);
       case Ok(value: false):
-        return const Denied();
+        return _hadSession ? Replaced(userId: repo.userId) : const Denied();
       case Ok(value: true):
         return switch (await repo.currentMember()) {
           Ok(:final value) => Allowed(value),
@@ -194,7 +207,7 @@ class SessionController extends AsyncNotifier<SessionState> {
   Future<void> _settle(AuthRepository repo, SessionState s) async {
     if (s is Allowed) {
       await _writeConfirmed(repo, s.member);
-    } else if (s is Denied || s is SignedOut) {
+    } else if (s is Denied || s is SignedOut || s is Replaced) {
       await _wipeMarker();
     }
   }
@@ -236,10 +249,7 @@ class SessionController extends AsyncNotifier<SessionState> {
           if (ref.mounted && rev == _revision) unawaited(_confirm(repo, from));
         });
       case Ok(value: false):
-        // Assigned before any await: the lock lands in this very frame.
-        state = const AsyncData(Denied());
-        _attempt = 0;
-        await _wipeMarker();
+        await _replaced();
       case Ok(value: true):
         _attempt = 0;
         state = AsyncData(Allowed(from.member, onboarded: from.onboarded));
@@ -258,10 +268,57 @@ class SessionController extends AsyncNotifier<SessionState> {
   /// app returns to the foreground.
   void recheck() {
     final s = state.value;
-    if (s is Allowed && !s.confirmed && ref.mounted) {
+    if (!ref.mounted || s is! Allowed) return;
+    if (s.confirmed) {
+      unawaited(_checkReplaced());
+    } else {
       _attempt = 0;
       unawaited(_confirm(ref.read(authRepositoryProvider), s));
     }
+  }
+
+  /// Asks the server whether this phone still holds the active session. Only
+  /// a settled `Ok(false)` means replaced; an error (offline) changes nothing.
+  Future<void> _checkReplaced() async {
+    final s = state.value;
+    // An unconfirmed session is already being checked by _confirm.
+    if (!ref.mounted || s is! Allowed || !s.confirmed) return;
+    final rev = _revision;
+    final answer = await ref.read(authRepositoryProvider).activateSession();
+    if (!ref.mounted || rev != _revision || state.value is! Allowed) return;
+    if (answer case Ok(value: false)) await _replaced();
+  }
+
+  /// Another phone holds the session. The state is assigned before any await,
+  /// so the lock lands in this very frame; the screen layer then stops push
+  /// and calls [finishReplaced].
+  Future<void> _replaced() async {
+    _revision++;
+    _retryTimer?.cancel();
+    // The local sign-out must not look like a new answer from the stream.
+    _lastSignedIn = false;
+    _attempt = 0;
+    state = AsyncData(
+      Replaced(userId: ref.read(authRepositoryProvider).userId),
+    );
+    await _wipeMarker();
+  }
+
+  /// Ends this phone's own session after a replacement (best effort); the
+  /// state stays [Replaced].
+  Future<void> finishReplaced() async {
+    _lastSignedIn = false; // the stream's sign-out must not replace Replaced
+    try {
+      await ref.read(authRepositoryProvider).signOut();
+    } catch (_) {}
+  }
+
+  /// Records how many unsent messages were deleted, so the replaced screen
+  /// can say so. Kept in the state: the store is empty when the screen reads.
+  void noteUnsentDeleted(int count) {
+    final s = state.value;
+    if (!ref.mounted || s is! Replaced || count <= 0) return;
+    state = AsyncData(Replaced(userId: s.userId, unsentDeleted: count));
   }
 
   /// The profile says the first-run screen is done: the marker may now stand
@@ -292,9 +349,17 @@ class SessionController extends AsyncNotifier<SessionState> {
     unawaited(_settle(repo, next));
   }
 
-  Future<void> signIn() async {
+  Future<void> signIn() => _signIn((repo) => repo.signInWithGoogle());
+
+  Future<void> signInWithApple() => _signIn((repo) => repo.signInWithApple());
+
+  Future<void> _signIn(
+    Future<Result<void>> Function(AuthRepository repo) method,
+  ) async {
+    _hadSession = false;
+    final replaced = state.value is Replaced ? state.value as Replaced : null;
     state = const AsyncData(SessionLoading());
-    final r = await ref.read(authRepositoryProvider).signInWithGoogle();
+    final r = await method(ref.read(authRepositoryProvider));
     if (!ref.mounted) return;
     if (r is Err) {
       final f = r.failure;
@@ -302,9 +367,16 @@ class SessionController extends AsyncNotifier<SessionState> {
         state = const AsyncData(Denied());
         return;
       }
+      if (f is HiddenEmailFailure) {
+        state = AsyncData(SignedOut(reason: f.message, hiddenEmail: true));
+        return;
+      }
+      final canceled = f is ProviderFailure && f.userCanceled;
+      // Backing out of sign-in must not turn a replaced phone into a plain
+      // signed-out one: that would delete its unsent messages.
       state = AsyncData(
-        f is ProviderFailure && f.userCanceled
-            ? SignedOut(reason: f.message)
+        canceled
+            ? (replaced ?? SignedOut(reason: f.message))
             : SessionError(f.message),
       );
     }

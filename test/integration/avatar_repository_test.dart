@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
+import 'package:sis/features/chat/data/supabase_group_settings_repository.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/profile/data/supabase_profile_repository.dart';
@@ -162,6 +163,15 @@ T _ok<T>(Result<T> r) {
 Failure _err<T>(Result<T> r) {
   if (r case Ok(:final value)) fail('expected Err, got Ok($value)');
   return (r as Err<T>).failure;
+}
+
+/// A new group lets only admins change its picture; its [admin] opens it to
+/// members, as the group page's switch does.
+Future<void> _membersMaySetPicture(SupabaseClient admin, String group) async {
+  _ok(
+    await SupabaseGroupSettingsRepository(admin)
+        .setSettings(group, membersCanSetAvatar: true),
+  );
 }
 
 void main() {
@@ -336,7 +346,7 @@ void main() {
     _ok(await profiles.removeAvatar(kept));
   });
 
-  test('group picture: any member sets it -> members read it, a non-member '
+  test('group picture: any member (members may) sets it -> members read it, a non-member '
       'is refused -> another member replaces it (new path, old gone) -> a '
       'non-member cannot set it -> removed', () async {
     final aviChat = SupabaseChatRepository(avi);
@@ -348,6 +358,7 @@ void main() {
         memberIds: [beaId],
       ),
     );
+    await _membersMaySetPicture(avi, group);
     Future<Conversation> rowFor(SupabaseChatRepository r) async =>
         _ok(await r.conversations()).singleWhere((c) => c.id == group);
 
@@ -413,6 +424,7 @@ void main() {
         memberIds: [beaId],
       ),
     );
+    await _membersMaySetPicture(avi, group);
     Future<String?> current() async =>
         _ok(await aviChat.conversations())
             .singleWhere((c) => c.id == group)

@@ -11,6 +11,10 @@ class StatusScreen extends StatelessWidget {
     required this.denied,
     this.reason,
     required this.onPressed,
+    this.replaced = false,
+    this.unsentDeleted = 0,
+    this.onSignInApple,
+    this.appleButton,
   });
 
   /// Signed in with Google but not on the allowlist.
@@ -37,17 +41,55 @@ class StatusScreen extends StatelessWidget {
          onPressed: onRetry,
        );
 
+  /// This phone was replaced by another one; one button signs in again.
+  const StatusScreen.replaced({
+    Key? key,
+    required Future<void> Function() onSignIn,
+    int unsentDeleted = 0,
+    Future<void> Function()? onSignInApple,
+    Widget Function(String text, VoidCallback onPressed)? appleButton,
+  }) : this._(
+         key: key,
+         icon: Icons.smartphone_outlined,
+         denied: false,
+         replaced: true,
+         onPressed: onSignIn,
+         unsentDeleted: unsentDeleted,
+         onSignInApple: onSignInApple,
+         appleButton: appleButton,
+       );
+
   final IconData icon;
   final bool denied;
+  final bool replaced;
+  final int unsentDeleted;
   final String? reason;
   final Future<void> Function() onPressed;
+
+  /// The replaced screen's Apple choice; shown on iPhone only.
+  final Future<void> Function()? onSignInApple;
+
+  /// Builds the Apple button (text, onPressed); supplied by the app.
+  final Widget Function(String text, VoidCallback onPressed)? appleButton;
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final title = denied ? l.statusDeniedTitle : l.statusConnectTitle;
-    final message = denied ? l.statusDeniedBody : reason!;
-    final actionLabel = denied ? l.settingsSignOut : l.commonTryAgain;
+    final title = replaced
+        ? l.replacedTitle
+        : denied
+        ? l.statusDeniedTitle
+        : l.statusConnectTitle;
+    final message = replaced
+        ? l.replacedBody
+        : denied
+        ? l.statusDeniedBody
+        : reason!;
+    final actionLabel = replaced
+        ? l.replacedSignIn
+        : denied
+        ? l.settingsSignOut
+        : l.commonTryAgain;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -61,11 +103,26 @@ class StatusScreen extends StatelessWidget {
                 Text(title, style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 8),
                 Text(message, textAlign: TextAlign.center),
+                if (replaced && unsentDeleted > 0) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    l.replacedUnsentDeleted(unsentDeleted),
+                    key: const ValueKey('replaced-unsent'),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
                 const SizedBox(height: 24),
                 FilledButton(
                   onPressed: () => onPressed(),
                   child: Text(actionLabel),
                 ),
+                if (replaced &&
+                    onSignInApple != null &&
+                    appleButton != null &&
+                    Theme.of(context).platform == TargetPlatform.iOS) ...[
+                  const SizedBox(height: 12),
+                  appleButton!(l.signInWithApple, () => onSignInApple!()),
+                ],
               ],
             ),
           ),

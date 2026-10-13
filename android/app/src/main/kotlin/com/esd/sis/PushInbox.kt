@@ -98,6 +98,34 @@ object PushInbox {
         return result.toString()
     }
 
+    /** [raw] with the picture file name [file] stored on the line of [messageId] in chat [conversationId] (key "i"), as JSON text; null when that line is not there (the member already read the chat), so a late picture never brings a cleared chat back. */
+    fun setImage(raw: String?, conversationId: String, messageId: String, file: String): String? {
+        val chats = parse(raw)
+        val lines = find(chats, conversationId)?.getJSONArray("l") ?: return null
+        for (i in 0 until lines.length()) {
+            val line = lines.getJSONObject(i)
+            if (line.optString("m") == messageId) {
+                line.put("i", file)
+                return chats.toString()
+            }
+        }
+        return null
+    }
+
+    /** Every picture file name ("i") any stored line of [raw] still points at. */
+    fun images(raw: String?): Set<String> {
+        val chats = parse(raw)
+        val names = mutableSetOf<String>()
+        for (c in 0 until chats.length()) {
+            val lines = chats.getJSONObject(c).getJSONArray("l")
+            for (i in 0 until lines.length()) {
+                val name = lines.getJSONObject(i).optString("i")
+                if (name.isNotEmpty()) names.add(name)
+            }
+        }
+        return names
+    }
+
     /** '1 new message' / 'N new messages', plus ' from K chats' for several chats; '' when empty. */
     fun summary(chats: JSONArray): String {
         if (chats.length() == 0) return ""

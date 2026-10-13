@@ -15,6 +15,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/reach.dart';
+import '../support/service_key.dart';
+import '../support/video_fakes.dart';
 
 /// The seam ReactionsController <-> SupabaseReactionRepository <-> the local
 /// stack, wired as main.dart wires it (reactionRepositoryProvider overridden
@@ -30,18 +32,21 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
 
 Future<SupabaseClient> _signedIn(String email) async {
+  await setLocalTestPassword(_url, email, localTestPassword);
   final client = SupabaseClient(
     _url,
     _key,
     authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
   );
   try {
-    await client.auth.signInWithPassword(email: email, password: _password);
+    await client.auth.signInWithPassword(
+      email: email,
+      password: localTestPassword,
+    );
   } on AuthException {
-    await client.auth.signUp(email: email, password: _password);
+    await client.auth.signUp(email: email, password: localTestPassword);
   }
   expect(client.auth.currentUser, isNotNull, reason: 'sign-in failed');
   expect(await client.rpc('activate_session'), isTrue);
@@ -79,6 +84,7 @@ void main() {
   Future<ProviderContainer> opened(SupabaseClient client, String id) async {
     final c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(ChatFake()),
         reactionRepositoryProvider.overrideWithValue(
           SupabaseReactionRepository(client),

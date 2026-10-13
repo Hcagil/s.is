@@ -1,7 +1,7 @@
 // The message card and keyboard rules, driven through the real message
 // screen. Written from the contract only:
 //  * a long-press on a message opens the `message-menu` card (rows
-//    `menu-<action>`, pin a grey `grey-pin` row) and closes the keyboard;
+//    `menu-<action>`, pin included) and closes the keyboard;
 //    a tap opens no card (Update 1 slice 7); left swipe = reply;
 //  * a tap on empty space only closes the keyboard; scrolling does not;
 //    send and the paperclip keep it open (0.30.10: the paperclip opens the
@@ -29,6 +29,8 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import '../../support/fakes.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
+
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = 'u2';
@@ -74,6 +76,7 @@ Future<ProviderContainer> pump(
   final container = await settled(
     ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         linkOpenerProvider.overrideWithValue(opener ?? LinkOpenerFake()),
@@ -159,14 +162,9 @@ void main() {
         'delete-for-me',
         'delete-for-everyone',
       ]);
-      // Pin is designed but not built: a grey row that does nothing.
-      expect(find.byKey(const ValueKey('grey-pin')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('grey-pin')));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      expect(find.byKey(const ValueKey('reply-bar')), findsNothing);
-      expect(find.byKey(const ValueKey('edit-bar')), findsNothing);
-      expect(find.byType(AlertDialog), findsNothing);
+      // Pin is a real row now; the grey placeholder is gone.
+      expect(find.byKey(const ValueKey('menu-pin')), findsOneWidget);
+      expect(find.byKey(const ValueKey('grey-pin')), findsNothing);
     });
 
     testWidgets('somebody else\'s text: no edit, delete (for me) stays', (

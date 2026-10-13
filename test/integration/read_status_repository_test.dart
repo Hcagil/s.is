@@ -35,7 +35,6 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
 SupabaseClient _client([String url = _url]) => SupabaseClient(
   url,
   _key,
@@ -43,11 +42,15 @@ SupabaseClient _client([String url = _url]) => SupabaseClient(
 );
 
 Future<SupabaseClient> _signIn(String email) async {
+  await setLocalTestPassword(_url, email, localTestPassword);
   final client = _client();
   try {
-    await client.auth.signInWithPassword(email: email, password: _password);
+    await client.auth.signInWithPassword(
+      email: email,
+      password: localTestPassword,
+    );
   } on AuthException {
-    await client.auth.signUp(email: email, password: _password);
+    await client.auth.signUp(email: email, password: localTestPassword);
   }
   expect(client.auth.currentUser, isNotNull, reason: 'sign-in failed');
   return client;
@@ -529,7 +532,7 @@ void main() {
       await ensureUninvitedUser(
         _url,
         'stranger-reads@integration.test',
-        _password,
+        localTestPassword,
       );
       final stranger = await _signIn('stranger-reads@integration.test');
       extra.add(stranger);

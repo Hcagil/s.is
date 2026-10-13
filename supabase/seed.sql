@@ -159,7 +159,35 @@
 --                  test/integration/signup_gate_test.dart
 --     (the sign-up hook admits gate-invited and refuses the bot address on
 --      its reserved domain although it is allowlisted)
+--   pina/pinb      test/integration/pins_seam_test.dart
+--     (pina pins the pina-pinb chat and a message in it through the UI;
+--      the rows are read back from the database, and pinb sees the pin)
+--   dc-ash/dc-bea/dc-cyd test/integration/delete_chat_seam_test.dart
+--     (each deletes a 1:1 or a group through the controller; the others
+--      check what is left for them on the server)
+--   ct-sana/ct-theo/ct-uma test/integration/contact_share_seam_test.dart
+--     (sana sends a contact through the controller and theo reads it back;
+--      uma is not a member and is refused)
+--   fl-sana/fl-theo/fl-uma test/integration/file_messages_seam_test.dart
+--     (sana sends files through the queue, theo downloads them; uma is not
+--      a member and is refused)
+--   vp-ada/vp-ben test/integration/video_player_seam_test.dart
+--     (ada sends video link cards; ben's screen, wired as main.dart wires
+--      it, plays them and remembers a refusal per message)
 insert into app_private.allowlist(email) values
+  ('vp-ada@integration.test'),
+  ('vp-ben@integration.test'),
+  ('fl-sana@integration.test'),
+  ('fl-theo@integration.test'),
+  ('fl-uma@integration.test'),
+  ('ct-sana@integration.test'),
+  ('ct-theo@integration.test'),
+  ('ct-uma@integration.test'),
+  ('dc-ash@integration.test'),
+  ('dc-bea@integration.test'),
+  ('dc-cyd@integration.test'),
+  ('pina@integration.test'),
+  ('pinb@integration.test'),
   ('ann@integration.test'),
   ('bob@integration.test'),
   ('carol@integration.test'),
@@ -275,6 +303,16 @@ insert into app_private.allowlist(email) values
   ('csz@integration.test'),
   ('sda@integration.test'),
   ('sdb@integration.test'),
+  ('shr-a@integration.test'),
+  ('shr-b@integration.test'),
   ('gate-invited@integration.test'),
+  -- one phone at a time (test/integration/one_phone_seam_test.dart)
+  ('one-phone@integration.test'),
+  ('one-phone-friend@integration.test'),
+  -- find people from contacts (test/integration/find_by_contacts_seam_test.dart):
+  -- asli finds bora; cem spends the hourly budget
+  ('fc-asli@mail.test'),
+  ('fc-bora@mail.test'),
+  ('fc-cem@mail.test'),
   ('sis-destek-bot@example.com')
 on conflict do nothing;

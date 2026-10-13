@@ -2,4 +2,6 @@
 <paths>
     <!-- Camera photos waiting to be processed and sent (MainActivity.takePhoto). -->
     <cache-path name="captures" path="captures/" />
+    <!-- Notification pictures (NotificationPicture.kt): the small picture of a photo or video message, read by the system UI through a granted URI. -->
+    <cache-path name="notif" path="notif/" />
 </paths>

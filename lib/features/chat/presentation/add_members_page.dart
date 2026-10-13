@@ -30,7 +30,7 @@ Future<void> showAddMembersPage(
 );
 
 /// Full-screen add-members page (admins only): search, ticked people as chips,
-/// the "Show old messages?" switch and an Add button.
+/// the admin-only "Show earlier messages" switch and an Add button.
 class AddMembersPage extends ConsumerStatefulWidget {
   /// Creates the page for [conversationId].
   const AddMembersPage(
@@ -56,8 +56,9 @@ class AddMembersPage extends ConsumerStatefulWidget {
 class _AddMembersPageState extends ConsumerState<AddMembersPage> {
   final _search = TextEditingController();
   final _chosen = <Member>[];
-  bool _withHistory = false;
   bool _busy = false;
+  bool?
+  _withHistory; // null = untouched by the admin, follows the group setting
 
   @override
   void dispose() {
@@ -80,7 +81,11 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
     final result = await ref.read(groupControllerProvider).addMembers(
       widget.conversationId,
       [for (final m in _chosen) m.userId],
-      withHistory: _withHistory,
+      withHistory:
+          _withHistory ??
+          ref
+              .read(groupSettingsProvider(widget.conversationId))
+              .newMembersSeeHistory,
     );
     if (!mounted) return;
     setState(() => _busy = false);
@@ -97,6 +102,10 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
+    final amAdmin = ref.watch(amGroupAdminProvider(widget.conversationId));
+    final groupHistory = ref
+        .watch(groupSettingsProvider(widget.conversationId))
+        .newMembersSeeHistory;
     final choices = ref
         .watch(yourPeopleProvider)
         .whenData(
@@ -182,14 +191,27 @@ class _AddMembersPageState extends ConsumerState<AddMembersPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SisSwitchTile(
-                    key: const ValueKey('add-members-history'),
-                    title: l.addMembersOldTitle,
-                    subtitle: l.addMembersOldHint,
-                    value: _withHistory,
-                    onChanged: (v) => setState(() => _withHistory = v),
-                  ),
-                  const SizedBox(height: 8),
+                  if (amAdmin) ...[
+                    SisSwitchTile(
+                      key: const ValueKey('add-members-history'),
+                      title: l.addMembersOldTitle,
+                      subtitle: l.addMembersOldHint,
+                      value: _withHistory ?? groupHistory,
+                      onChanged: (v) => setState(() => _withHistory = v),
+                    ),
+                    const SizedBox(height: 8),
+                  ] else
+                    Padding(
+                      key: const ValueKey('add-members-history-note'),
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        l.addMembersAdminDecides,
+                        style: TextStyle(
+                          color: scheme.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(

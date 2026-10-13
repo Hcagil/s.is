@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -20,6 +21,7 @@ import 'package:sis/features/chat/domain/external_picker.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
+import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/picture_cropper.dart';
@@ -80,6 +82,20 @@ class FakeAuth implements AuthRepository {
       changes.add(true);
     }
     return signInResult;
+  }
+
+  /// What [signInWithApple] answers; Ok also brings the session up, like Google.
+  Result<void> appleResult = const Ok(null);
+  int appleCalls = 0;
+
+  @override
+  Future<Result<void>> signInWithApple() async {
+    appleCalls++;
+    if (appleResult is Ok) {
+      session = true;
+      changes.add(true);
+    }
+    return appleResult;
   }
 
   @override
@@ -337,10 +353,12 @@ class FakeChat implements ChatRepository {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) async {
     sent.add(body);
     sentIds.add(id);
     sentReplyTo.add(replyTo);
+    sentPreviews.add(preview);
     // Like the database: the row is stored under the id the phone chose.
     return sendResult ??
         Ok(
@@ -351,8 +369,38 @@ class FakeChat implements ChatRepository {
             body: body.trim(),
             createdAt: DateTime.now(),
             replyTo: replyTo,
+            linkPreview: _storeLinkCard(preview),
           ),
         );
+  }
+
+  /// The link card handed to every send, in order (null: sent without one).
+  final sentPreviews = <LinkPreviewDraft?>[];
+
+  /// When true, uploading a card picture fails, as a full bucket would.
+  bool linkImageUploadFails = false;
+
+  /// Like the repository: the picture is stored at the card's path; a failed
+  /// upload sends the card without its picture.
+  LinkPreview? _storeLinkCard(LinkPreviewDraft? preview) {
+    if (preview == null) return null;
+    final path = preview.preview.imagePath;
+    final image = preview.image;
+    if (path == null || image == null) return preview.preview;
+    if (linkImageUploadFails) return preview.preview.withImagePath(null);
+    storedObjects.add(path);
+    objectBytes[path] = image;
+    return preview.preview;
+  }
+
+  /// Every path [linkImageBytes] was asked for, in order.
+  final linkImageRequests = <String>[];
+
+  @override
+  Future<Result<Uint8List>> linkImageBytes(String imagePath) async {
+    linkImageRequests.add(imagePath);
+    if (!storedObjects.contains(imagePath)) return const Err(DeniedFailure());
+    return Ok(objectBytes[imagePath]!);
   }
 
   @override
@@ -846,6 +894,8 @@ class ChatFake implements ChatRepository {
             hasLeft: c.hasLeft,
             isSystem: c.isSystem,
             senders: c.senders,
+            // Archive state is the server's, untouched by a new message.
+            archived: c.archived,
           ),
     ];
     rows.sort((a, b) {
@@ -1084,10 +1134,17 @@ class ChatFake implements ChatRepository {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) async {
     await _tick('send:$conversationId');
     sent.add((conversationId: conversationId, body: body, replyTo: replyTo));
     sentIds.add(id);
+    sentPreviews.add(preview);
+    final path = preview?.preview.imagePath;
+    if (path != null && preview?.image != null) {
+      storedObjects.add(path);
+      objectBytes[path] = preview!.image!;
+    }
     // Like the database: the row is stored under the id the phone chose.
     return sendResult ??
         Ok(
@@ -1098,8 +1155,19 @@ class ChatFake implements ChatRepository {
             body: body.trim(),
             createdAt: DateTime.now(),
             replyTo: replyTo,
+            linkPreview: preview?.preview,
           ),
         );
+  }
+
+  /// The link card handed to every send, in order (null: sent without one).
+  final sentPreviews = <LinkPreviewDraft?>[];
+
+  @override
+  Future<Result<Uint8List>> linkImageBytes(String imagePath) async {
+    await _tick('linkImageBytes:$imagePath');
+    if (!storedObjects.contains(imagePath)) return const Err(DeniedFailure());
+    return Ok(objectBytes[imagePath]!);
   }
 
   /// When set, incoming() reports a connection that cannot be established.
@@ -3657,6 +3725,64 @@ class ContactsFake implements ContactsRepository {
   Result<void>? removeResult;
   Result<Set<String>>? idsResult;
 
+  /// find_by_contacts, as docs/SECURITY.md and the step-16 contract state it:
+  /// matches a [directory] member whose [Member.email] hashes (SHA-256 hex
+  /// of lower(btrim)) to a sent hash, never the caller, never more than once
+  /// per hash; the email never comes back. [contactsBudget] calls succeed,
+  /// then every call is [SearchLimitFailure]. More than 2000 hashes, or one
+  /// that is not 64 lower-case hex characters, is refused like 22023.
+  int contactsBudget = 3;
+  Result<List<ContactMatch>>? contactsResult;
+
+  /// Every list of hashes sent, in call order.
+  final contactCalls = <List<String>>[];
+
+  Completer<void>? _contacts;
+  void holdContacts() => _contacts = Completer<void>();
+  void releaseContacts() {
+    _contacts?.complete();
+    _contacts = null;
+  }
+
+  @override
+  Future<Result<List<ContactMatch>>> findByContacts(List<String> hashes) async {
+    contactCalls.add(List.of(hashes));
+    await _tick('contacts:${hashes.length}');
+    final held = _contacts;
+    if (held != null) await held.future;
+    if (contactsResult case final forced?) return forced;
+    if (contactCalls.length > contactsBudget) {
+      return const Err(SearchLimitFailure());
+    }
+    final hex = RegExp(r'^[0-9a-f]{64}$');
+    if (hashes.length > 2000 || !hashes.every(hex.hasMatch)) {
+      return const Err(ProviderFailure('Something went wrong'));
+    }
+    final wanted = hashes.toSet();
+    final out = <ContactMatch>[];
+    for (final m in directory.values) {
+      final email = m.email;
+      if (m.userId == me || email == null) continue;
+      final h = sha256
+          .convert(utf8.encode(email.trim().toLowerCase()))
+          .toString();
+      if (!wanted.contains(h)) continue;
+      found.add(m.userId);
+      out.add(
+        ContactMatch(
+          member: Member(
+            userId: m.userId,
+            displayName: m.displayName,
+            tag: m.tag,
+            avatarPath: m.avatarPath,
+          ),
+          hash: h,
+        ),
+      );
+    }
+    return Ok(out);
+  }
+
   /// Called after the server state changed (a save or a removal), so a world
   /// can re-derive what `profiles_public()` would now return.
   void Function()? onChanged;
@@ -3752,6 +3878,14 @@ Message withoutPreview(Message m) => Message(
   editedAt: m.editedAt,
   replyTo: m.replyTo,
   forwarded: m.forwarded,
+  poll: m.poll,
+  contact: m.contact,
+  file: m.file,
+  location: m.location,
+  stickerId: m.stickerId,
+  albumCard: m.albumCard,
+  albumId: m.albumId,
+  linkPreview: m.linkPreview,
   sending: m.sending,
 );
 

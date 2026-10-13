@@ -25,11 +25,17 @@ lib/
     data/                 repository implementations — the ONLY layer importing
                           an SDK. tool/check_pattern.sh holds the list and is
                           the authority: supabase_flutter, supabase,
-                          google_sign_in, in_app_update, package_info_plus,
+                          google_sign_in, sign_in_with_apple, in_app_update,
+                          package_info_plus,
                           flutter_secure_storage, flutter_local_notifications,
                           firebase_messaging, firebase_core,
                           shared_preferences, web_socket_channel,
-                          path_provider, photo_manager, url_launcher, http
+                          path_provider, photo_manager, imcodec, flutter_contacts, url_launcher, http,
+                          connectivity_plus, file_picker, open_filex,
+                          light_compressor_v2, video_player, share_plus,
+                          google_maps_flutter, flutter_map, latlong2,
+                          geolocator, record, speech_to_text, webview_flutter,
+                          webview_flutter_android, webview_flutter_wkwebview
     application/          Riverpod Notifiers: state machines; import domain only
     presentation/         widgets: watch state, call notifiers, render
 ```
@@ -38,6 +44,10 @@ Features in v0.1: `auth`, `update`, `home`. v0.2 adds `chat`; v0.3 adds groups
 inside `chat`.
 
 ### Layer rules (mechanically checked)
+
+A provider whose type is a widget lives in `presentation/`.
+A widget that an SDK owns (the Sign in with Apple button) is built by a
+plain function in `data/`; `app/` passes it to the screen as a builder.
 
 1. `presentation/` never imports `supabase_flutter`, `google_sign_in`,
    `in_app_update`, or any `data/` file.

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import 'chat_text_scale.dart';
+import 'chat_wallpaper.dart';
 
 /// Two sample bubbles that follow the chosen theme and chat text size live.
 class ChatPreview extends StatelessWidget {
@@ -11,18 +12,25 @@ class ChatPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    return Padding(
-      key: const ValueKey('chat-preview'),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: ChatTextScale(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 8,
-          children: [
-            _Bubble(text: l.previewTheirs, mine: false),
-            _Bubble(text: l.previewMine, mine: true),
-          ],
-        ),
+    return ClipRect(
+      child: Stack(
+        key: const ValueKey('chat-preview'),
+        children: [
+          const Positioned.fill(child: ChatWallpaper()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: ChatTextScale(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 8,
+                children: [
+                  _Bubble(text: l.previewTheirs, mine: false),
+                  _Bubble(text: l.previewMine, mine: true),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -44,7 +52,7 @@ class _Bubble extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(t.bubbleRadius),
-            gradient: mine ? t.gradient : null,
+            gradient: mine ? t.mineGradient : null,
             color: mine ? null : t.theirs,
             border: mine ? null : Border.all(color: t.line),
           ),

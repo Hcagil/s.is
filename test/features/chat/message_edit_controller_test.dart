@@ -18,6 +18,7 @@ import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -44,6 +45,7 @@ class _SignedIn extends SessionController {
 
 ProviderContainer scope(ChatFake chat) => ProviderContainer.test(
   overrides: [
+    ...videoOverrides(),
     chatRepositoryProvider.overrideWithValue(chat),
     presenceRepositoryProvider.overrideWithValue(PresenceFake()),
     attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),

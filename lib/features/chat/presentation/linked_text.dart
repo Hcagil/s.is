@@ -8,6 +8,7 @@ class _LinkedText extends ConsumerStatefulWidget {
     required this.style,
     required this.linkColor,
     this.highlightQuery,
+    this.shorten,
   });
 
   final String text;
@@ -17,6 +18,10 @@ class _LinkedText extends ConsumerStatefulWidget {
   /// The active in-chat search query, if any: every match is highlighted,
   /// not just the current hit (see `_Bubble.isCurrentHit` for that).
   final String? highlightQuery;
+
+  /// The link whose text shows shortened (domain and the start of the path):
+  /// the link a card is shown for. Tapping it still opens the full link.
+  final Uri? shorten;
 
   @override
   ConsumerState<_LinkedText> createState() => _LinkedTextState();
@@ -110,7 +115,9 @@ class _LinkedTextState extends ConsumerState<_LinkedText> {
       _taps.add(tap);
       spans.add(
         TextSpan(
-          text: s.text,
+          text: widget.shorten?.toString() == link.toString()
+              ? shortLink(link)
+              : s.text,
           recognizer: tap,
           style: TextStyle(
             color: widget.linkColor,

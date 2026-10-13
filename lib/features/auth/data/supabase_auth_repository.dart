@@ -4,6 +4,7 @@ import 'dart:math' show Random;
 
 import 'package:crypto/crypto.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/failure.dart';
@@ -47,21 +48,24 @@ final class SupabaseAuthRepository implements AuthRepository {
   @override
   String? get userId => _client.auth.currentUser?.id;
 
+  static Map<String, Object?>? _claimsOf(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      return jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      ) as Map<String, Object?>;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   String? get sessionId {
     final token = _client.auth.currentSession?.accessToken;
     if (token == null) return null;
-    try {
-      final parts = token.split('.');
-      if (parts.length != 3) return null;
-      final claims = jsonDecode(
-        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
-      ) as Map<String, Object?>;
-      final id = claims['session_id'];
-      return id is String ? id : null;
-    } catch (_) {
-      return null;
-    }
+    final id = _claimsOf(token)?['session_id'];
+    return id is String ? id : null;
   }
 
   @override
@@ -151,6 +155,63 @@ final class SupabaseAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> signInWithApple() async {
+    // A fresh nonce per attempt: Apple gets its SHA-256, Supabase the raw value.
+    final random = Random.secure();
+    final rawNonce = base64UrlEncode(
+      List<int>.generate(32, (_) => random.nextInt(256)),
+    ).replaceAll('=', '');
+    final AuthorizationCredentialAppleID credential;
+    try {
+      credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [AppleIDAuthorizationScopes.email],
+        nonce: sha256.convert(utf8.encode(rawNonce)).toString(),
+      );
+    } on SignInWithAppleAuthorizationException catch (e) {
+      log('Apple sign-in failed: ${e.code.name}', name: 'sis.auth');
+      final canceled = e.code == AuthorizationErrorCode.canceled;
+      return Err(
+        ProviderFailure(
+          canceled ? signInCanceledMessage : signInFailedMessage,
+          userCanceled: canceled,
+        ),
+      );
+    } catch (e) {
+      log('Apple sign-in failed: ${e.runtimeType}', name: 'sis.auth');
+      return const Err(ProviderFailure(signInFailedMessage));
+    }
+    final idToken = credential.identityToken;
+    if (idToken == null) {
+      log('Apple sign-in returned no ID token', name: 'sis.auth');
+      return const Err(ProviderFailure(signInFailedMessage));
+    }
+    // A hidden email is refused here, before anything reaches the server (the
+    // sign-up hook refuses it too).
+    final email = _claimsOf(idToken)?['email'];
+    if (email is String &&
+        email.toLowerCase().endsWith('@privaterelay.appleid.com')) {
+      return const Err(HiddenEmailFailure());
+    }
+    try {
+      await _client.auth.signInWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: idToken,
+        nonce: rawNonce,
+      );
+      return const Ok(null);
+    } on AuthRetryableFetchException catch (e) {
+      return Err(readableFailure(e));
+    } on AuthException catch (e) {
+      log(
+        'Supabase rejected the Apple token: ${e.statusCode}',
+        name: 'sis.auth',
+      );
+      if (e.statusCode == '403') return const Err(DeniedFailure());
+      return const Err(ProviderFailure(signInFailedMessage));
+    }
+  }
+
+  @override
   Future<Result<bool>> activateSession() async {
     try {
       return Ok(await _client.rpc('activate_session') == true);
@@ -189,8 +250,9 @@ final class SupabaseAuthRepository implements AuthRepository {
     try {
       await _google.signOut();
     } catch (_) {}
+    // Local scope: a global sign-out would also end the phone that replaced this one.
     try {
-      await _client.auth.signOut();
+      await _client.auth.signOut(scope: SignOutScope.local);
     } catch (_) {
       // gotrue rethrows network errors before clearing the stored session;
       // make sure this device forgets it regardless.

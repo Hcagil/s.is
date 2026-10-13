@@ -21,6 +21,11 @@ select plan(36);
 -- direct chats; ada+cid have a chat whose only message vanished; ada+ben a
 -- group with no messages at all. eli is allowlisted and active but in no
 -- conversation. fay has a session but is not allowlisted (no app access).
+-- Plans depend on table statistics: start from empty chat tables so rows
+-- left by other runs (integration tests) cannot change the planner's choice.
+-- TRUNCATE is transactional; the rollback at the end restores them.
+truncate public.conversations, public.conversation_members, public.messages cascade;
+
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000b001', 'ada@qi.test', now(), '{"full_name":"Ada"}'),
   ('00000000-0000-0000-0000-00000000b002', 'ben@qi.test', now(), '{"full_name":"Ben"}'),

@@ -42,6 +42,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 
 import '../support/fakes.dart';
 import '../support/push_platform.dart';
+import '../support/video_fakes.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -83,6 +84,7 @@ Widget app({
   bool signedIn = true,
 }) => ProviderScope(
   overrides: [
+    ...videoOverrides(),
     runtimeConfigProvider.overrideWithValue(config),
     authRepositoryProvider.overrideWithValue(
       FakeAuth(session: signedIn, member: me),

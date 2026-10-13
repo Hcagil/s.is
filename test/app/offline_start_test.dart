@@ -41,6 +41,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 
 import '../support/fakes.dart';
 import '../support/l10n.dart';
+import '../support/video_fakes.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -103,6 +104,7 @@ class _ThrowingList extends ConversationListController {
 Widget _app(FakeAuth a, {ProfileFake? p, List<Override> more = const []}) =>
     ProviderScope(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(config),
         authRepositoryProvider.overrideWithValue(a),
         updateRepositoryProvider.overrideWithValue(FakeUpdate()),
@@ -170,6 +172,7 @@ void main() {
         await t.pumpWidget(
           ProviderScope(
             overrides: [
+              ...videoOverrides(),
               runtimeConfigProvider.overrideWithValue(config),
               authRepositoryProvider.overrideWithValue(FakeAuth(session: true)),
               updateRepositoryProvider.overrideWithValue(FakeUpdate()),
@@ -195,6 +198,7 @@ void main() {
       await t.pumpWidget(
         ProviderScope(
           overrides: [
+            ...videoOverrides(),
             chatRepositoryProvider.overrideWithValue(FakeChat()),
             conversationListProvider.overrideWith(_ThrowingList.new),
           ],
@@ -213,6 +217,7 @@ void main() {
       final a = FakeAuth(session: true);
       final c = ProviderContainer.test(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(config),
           authRepositoryProvider.overrideWithValue(a),
         ],

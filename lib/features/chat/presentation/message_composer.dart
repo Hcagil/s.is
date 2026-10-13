@@ -14,6 +14,10 @@ class _ComposerState extends ConsumerState<_Composer>
   bool _sending = false;
   double _lastInset = 0;
   final _attachKey = GlobalKey();
+  final _voiceGesture = VoiceGesture();
+
+  /// Whether the sticker panel is open in place of the keyboard.
+  bool _panel = false;
 
   /// This composer's conversation is fixed for its whole lifetime: opening
   /// a different one always pushes a new [MessageScreen] (see
@@ -30,6 +34,9 @@ class _ComposerState extends ConsumerState<_Composer>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _focus.addListener(() {
+      if (_focus.hasFocus && _panel) setState(() => _panel = false);
+    });
     final id = ref.read(openConversationProvider);
     _conversationId = id;
     if (id == null) return;
@@ -53,7 +60,11 @@ class _ComposerState extends ConsumerState<_Composer>
     _applyDraft(drafts.draftFor(id));
     final failure = drafts.consumeFailure(id);
     if (failure != null && mounted) {
-      showSisNotice(context, failure.message, isError: true);
+      showSisNotice(
+        context,
+        _videoFailureText(context, failure),
+        isError: true,
+      );
     }
   }
 
@@ -73,6 +84,17 @@ class _ComposerState extends ConsumerState<_Composer>
     _applyingDraft = false;
   }
 
+  /// Swaps the keyboard and the sticker panel: opening the panel hides the
+  /// keyboard, closing it brings the keyboard back.
+  void _toggleStickers() {
+    if (_panel) {
+      _focus.requestFocus();
+      return;
+    }
+    _focus.unfocus();
+    setState(() => _panel = true);
+  }
+
   /// The system back gesture closes the keyboard but leaves the field
   /// focused; releasing the focus when the keyboard goes away keeps the
   /// focus and the platform input state in step, so the next back leaves
@@ -90,6 +112,7 @@ class _ComposerState extends ConsumerState<_Composer>
     WidgetsBinding.instance.removeObserver(this);
     _focus.dispose();
     _controller.dispose();
+    _voiceGesture.dispose();
     super.dispose();
   }
 
@@ -114,10 +137,16 @@ class _ComposerState extends ConsumerState<_Composer>
     // in flight. It also ends this conversation's draft and the reply
     // target -- a failure comes back through draftsProvider (see the
     // listener in build()).
+    final preview = ref.read(composerLinkProvider.notifier).takeForSend(body);
     _controller.clear();
     ref
         .read(sendQueueProvider.notifier)
-        .enqueue(id, body: body, replyTo: ref.read(replyingToProvider));
+        .enqueue(
+          id,
+          body: body,
+          replyTo: ref.read(replyingToProvider),
+          preview: preview,
+        );
   }
 
   Future<void> _saveEdit(Message editing, String body) async {
@@ -137,6 +166,117 @@ class _ComposerState extends ConsumerState<_Composer>
     }
   }
 
+  /// Picks one phone contact and sends it as a contact card. Backing out of
+  /// the picker sends nothing; a refused send shows its reason.
+  Future<void> _sendContact() async {
+    final picked = await showContactPicker(context);
+    if (picked == null || !mounted) return;
+    final result = await ref
+        .read(messagesProvider.notifier)
+        .sendContact(picked);
+    if (result case Err(:final failure) when mounted) {
+      showSisNotice(context, failure.message, isError: true);
+    }
+  }
+
+  /// Opens the Share location page; the place it returns is queued like a
+  /// message, so the card shows at once and goes out by itself, waiting
+  /// offline. Backing out sends nothing.
+  Future<void> _sendLocation() async {
+    final id = _conversationId;
+    if (id == null) return;
+    final place = await showLocationShare(context);
+    if (place == null || !mounted) return;
+    ref.read(sendQueueProvider.notifier).enqueueLocation(id, place);
+  }
+
+  /// Opens the phone's file chooser (several files allowed) and queues each
+  /// picked file like a message: the pending bubble shows at once and the
+  /// file sends by itself, waiting offline. Files over 50 MB are skipped with
+  /// one notice. Backing out sends nothing.
+  Future<void> _sendFiles() async {
+    final id = _conversationId;
+    if (id == null) return;
+    final pick = await ref.read(deviceFilesProvider).pick();
+    if (!mounted) return;
+    final queue = ref.read(sendQueueProvider.notifier);
+    // Only the first file answers the reply target; enqueueFile spends it.
+    for (final file in pick.files) {
+      queue.enqueueFile(id, file, replyTo: ref.read(replyingToProvider));
+    }
+    if (pick.tooBig > 0) {
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).fileTooBig(pick.tooBig),
+        isError: true,
+      );
+    }
+  }
+
+  /// Opens the phone's video chooser (several allowed), shows the picked
+  /// videos on the review page, and queues each selected one: the bubble shows
+  /// at once, the video is shrunk and sent by itself, waiting offline. Videos
+  /// over 5 minutes are skipped with one notice. Backing out sends nothing and
+  /// the picked copies are deleted. With the in-app grid (iPhone) the ticked
+  /// videos are the selection; otherwise the phone's own chooser and the
+  /// review page are used.
+  Future<void> _sendVideos() async {
+    final id = _conversationId;
+    if (id == null) return;
+    final device = ref.read(deviceVideosProvider);
+    // The in-app grid (iPhone) is itself the selection and has already
+    // copied the ticked videos; the phone's picker needs the review page.
+    var viaGrid = false;
+    var pick = const VideoPick();
+    if (ref.read(videoGridEnabledProvider)) {
+      final grid = await showVideoGrid(context);
+      if (!mounted) {
+        if (grid != null && !grid.phonePicker) {
+          for (final video in grid.pick.videos) {
+            await device.discard(video);
+          }
+        }
+        return;
+      }
+      if (grid == null) return;
+      if (!grid.phonePicker) {
+        pick = grid.pick;
+        viaGrid = true;
+      }
+    }
+    if (!viaGrid) pick = await device.pick();
+    if (!mounted) {
+      for (final video in pick.videos) {
+        await device.discard(video);
+      }
+      return;
+    }
+    if (pick.tooLong > 0) {
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).videoTooLong(pick.tooLong),
+        isError: true,
+      );
+    }
+    if (pick.videos.isEmpty) return;
+    final chosen = viaGrid
+        ? pick.videos
+        : await showVideoReview(context, pick.videos) ?? const [];
+    for (final video in pick.videos) {
+      if (!chosen.contains(video)) await device.discard(video);
+    }
+    if (!mounted) {
+      for (final video in chosen) {
+        await device.discard(video);
+      }
+      return;
+    }
+    final queue = ref.read(sendQueueProvider.notifier);
+    for (final video in chosen) {
+      queue.enqueueVideo(id, video, replyTo: ref.read(replyingToProvider));
+    }
+  }
+
   /// Picks one or more images (the paperclip's photo grid: recent photos,
   /// the camera tile, or "Gallery"), previews them with a caption box, and
   /// sends them -- the caption goes with the first one, the rest with none,
@@ -146,8 +286,14 @@ class _ComposerState extends ConsumerState<_Composer>
     final box = _attachKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) return;
     final anchor = box.localToGlobal(Offset.zero) & box.size;
-    final photo = await showAttachMenu(context, anchor: anchor);
-    if (!photo || !mounted) return;
+    final choice = await showAttachMenu(context, anchor: anchor);
+    if (!mounted) return;
+    if (choice == 'poll') return _sendPoll();
+    if (choice == 'contact') return _sendContact();
+    if (choice == 'location') return _sendLocation();
+    if (choice == 'file') return _sendFiles();
+    if (choice == 'video') return _sendVideos();
+    if (choice != 'photo') return;
     final picked = await showAttachmentSheet(context);
     if (picked.images.isEmpty || !mounted) return;
     final reviewed = await showAttachmentPreview(
@@ -177,6 +323,20 @@ class _ComposerState extends ConsumerState<_Composer>
     }
   }
 
+  /// Opens the new-poll page and sends what it returns; backing out sends
+  /// nothing.
+  Future<void> _sendPoll() async {
+    final draft = await Navigator.of(context).push<PollDraft>(
+      MaterialPageRoute(builder: (_) => const PollCreatePage()),
+    );
+    if (draft == null || !mounted) return;
+    final result = await ref.read(messagesProvider.notifier).sendPoll(draft);
+    if (!mounted) return;
+    if (result case Err(:final failure)) {
+      showSisNotice(context, failure.message, isError: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
@@ -194,7 +354,7 @@ class _ComposerState extends ConsumerState<_Composer>
     final isSystem =
         id != null &&
         (ref.watch(conversationListProvider).value ?? const [])
-                .where((c) => c.id == id)
+                .where((c) => c.id == id && !c.isAdminChat)
                 .firstOrNull
                 ?.isSystem ==
             true;
@@ -273,145 +433,174 @@ class _ComposerState extends ConsumerState<_Composer>
         _restoreDraft(id);
       });
     }
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: Theme.of(context).colorScheme.outline),
-        ),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        6,
-        8,
-        10,
-        _isIos(context) ? 4 + _composerBottomInset(context) : 12,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (editing != null)
-            _EditBar(editing)
-          else if (replying != null)
-            _ReplyBar(replying),
-          Row(
-            children: [
-              KeyedSubtree(
-                key: _attachKey,
-                child: IconButton(
-                  key: const ValueKey('composer-attach'),
-                  onPressed: _sending ? null : _attach,
-                  icon: const Icon(Icons.attach_file_rounded),
-                  tooltip: l.composerSendPhoto,
-                ),
-              ),
-              GreyOption(
-                name: 'c_btn',
-                child: const _GreyGlyph(Icons.emoji_emotions_outlined),
-              ),
-              Expanded(
-                child: TextField(
-                  key: const ValueKey('composer-field'),
-                  controller: _controller,
-                  maxLength: maxMessageLength,
-                  minLines: 1,
-                  maxLines: 4,
-                  focusNode: _focus,
-                  // Messages, captions and edits all start with a capital; the
-                  // keyboard's own setting still decides (nothing is forced).
-                  textCapitalization: TextCapitalization.sentences,
-                  textInputAction: TextInputAction.send,
-                  // A non-null onEditingComplete replaces Flutter's default,
-                  // which unfocuses the field on the send action and so
-                  // closes the keyboard.
-                  onEditingComplete: _send,
-                  // Throttled, and silent when the member does not share typing.
-                  onChanged: (text) {
-                    if (text.isNotEmpty) {
-                      ref.read(typingProvider.notifier).signalTyping();
-                    }
-                    if (id == null || _applyingDraft) return;
-                    if (ref.read(editingProvider) != null) return;
-                    ref.read(draftsProvider.notifier).setText(id, text);
-                  },
-                  decoration: InputDecoration(
-                    hintText: l.commonMessage,
-                    counterText: '',
-                  ),
-                ),
-              ),
-              ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _controller,
-                builder: (context, value, _) =>
-                    (value.text.isNotEmpty || editing != null)
-                    ? const SizedBox.shrink()
-                    : GreyOption(
-                        name: 'v_dict',
-                        child: const _GreyGlyph(Icons.keyboard_voice_outlined),
-                      ),
-              ),
-              const SizedBox(width: 8),
-              ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _controller,
-                builder: (context, value, _) =>
-                    (value.text.isNotEmpty || editing != null)
-                    ? IconButton.filled(
-                        key: const ValueKey('composer-send'),
-                        onPressed: _sending
-                            ? null
-                            : () {
-                                _send();
-                                _focus.requestFocus();
-                              },
-                        icon: const Icon(Icons.arrow_upward_rounded),
-                      )
-                    : GreyOption(name: 'v_rec', child: const _GreyRecGlyph()),
-              ),
-            ],
+    return PopScope(
+      canPop: !_panel,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _panel = false);
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border: Border(
+            top: BorderSide(color: Theme.of(context).colorScheme.outline),
           ),
-        ],
+        ),
+        padding: EdgeInsets.fromLTRB(
+          6,
+          8,
+          10,
+          _isIos(context) ? 4 + _composerBottomInset(context) : 12,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (editing == null) const LinkStrip(),
+            if (editing != null)
+              _EditBar(editing)
+            else if (replying != null)
+              _ReplyBar(replying),
+            ListenableBuilder(
+              listenable: _voiceGesture,
+              builder: (context, _) {
+                final recording =
+                    ref.watch(
+                      voiceCaptureProvider.select(
+                        (s) => s.phase != VoicePhase.idle,
+                      ),
+                    ) ||
+                    _voiceGesture.exit != VoiceExit.none;
+                return Stack(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Opacity(
+                            opacity: recording ? 0 : 1,
+                            child: IgnorePointer(
+                              ignoring: recording,
+                              child: Row(
+                                children: [
+                                  KeyedSubtree(
+                                    key: _attachKey,
+                                    child: IconButton(
+                                      key: const ValueKey('composer-attach'),
+                                      onPressed: _sending ? null : _attach,
+                                      icon: const Icon(
+                                        Icons.attach_file_rounded,
+                                      ),
+                                      tooltip: l.composerSendPhoto,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: TextField(
+                                      key: const ValueKey('composer-field'),
+                                      controller: _controller,
+                                      maxLength: maxMessageLength,
+                                      minLines: 1,
+                                      maxLines: 4,
+                                      focusNode: _focus,
+                                      // Messages, captions and edits all start with a capital; the
+                                      // keyboard's own setting still decides (nothing is forced).
+                                      textCapitalization:
+                                          TextCapitalization.sentences,
+                                      textInputAction: TextInputAction.send,
+                                      // A non-null onEditingComplete replaces Flutter's default,
+                                      // which unfocuses the field on the send action and so
+                                      // closes the keyboard.
+                                      onEditingComplete: _send,
+                                      // Throttled, and silent when the member does not share typing.
+                                      onChanged: (text) {
+                                        if (text.isNotEmpty) {
+                                          ref
+                                              .read(typingProvider.notifier)
+                                              .signalTyping();
+                                        }
+                                        if (id == null || _applyingDraft) {
+                                          return;
+                                        }
+                                        if (ref.read(editingProvider) != null) {
+                                          return;
+                                        }
+                                        ref
+                                            .read(composerLinkProvider.notifier)
+                                            .onTextChanged(text);
+                                        ref
+                                            .read(draftsProvider.notifier)
+                                            .setText(id, text);
+                                      },
+                                      decoration: InputDecoration(
+                                        hintText: l.commonMessage,
+                                        counterText: '',
+                                        suffixIcon: IconButton(
+                                          key: const ValueKey(
+                                            'composer-stickers',
+                                          ),
+                                          onPressed: id == null
+                                              ? null
+                                              : _toggleStickers,
+                                          icon: Icon(
+                                            _panel
+                                                ? Icons.keyboard_alt_outlined
+                                                : Icons.sticky_note_2_outlined,
+                                          ),
+                                          tooltip: _panel
+                                              ? l.stickerKeyboardTooltip
+                                              : l.stickerButtonTooltip,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: _controller,
+                          builder: (context, value, _) =>
+                              (!recording &&
+                                  (value.text.isNotEmpty || editing != null))
+                              ? IconButton.filled(
+                                  key: const ValueKey('composer-send'),
+                                  onPressed: _sending
+                                      ? null
+                                      : () {
+                                          _send();
+                                          _focus.requestFocus();
+                                        },
+                                  icon: const Icon(Icons.arrow_upward_rounded),
+                                )
+                              : (id == null
+                                    ? const SizedBox(width: 48, height: 48)
+                                    : VoiceRecordButton(
+                                        conversationId: id,
+                                        gesture: _voiceGesture,
+                                      )),
+                        ),
+                      ],
+                    ),
+                    if (recording && id != null)
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        right: 56,
+                        child: VoiceRecordBar(
+                          gesture: _voiceGesture,
+                          conversationId: id,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+            if (_panel && id != null) StickerPanel(conversationId: id),
+          ],
+        ),
       ),
     );
   }
-}
-
-/// A greyed composer icon: no tap target and no handler; the surrounding
-/// GreyOption supplies the dimmed look.
-class _GreyGlyph extends StatelessWidget {
-  const _GreyGlyph(this.icon);
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 40,
-    height: 40,
-    child: Icon(icon, color: Theme.of(context).colorScheme.onSurfaceVariant),
-  );
-}
-
-/// The greyed mic: the filled send button's look (brand gradient disc),
-/// with no handler.
-class _GreyRecGlyph extends StatelessWidget {
-  const _GreyRecGlyph();
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 48,
-    height: 48,
-    child: Center(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: SisBrand.of(context).gradient,
-        ),
-        child: const SizedBox(
-          width: 40,
-          height: 40,
-          child: Icon(Icons.mic_rounded, color: Colors.white),
-        ),
-      ),
-    ),
-  );
 }
 
 /// What the composer is answering, with a way to stop.
@@ -537,6 +726,25 @@ String quoteText(AppLocalizations l, Message? message) => switch (message) {
   null => l.quoteOriginal,
   Message(isDeleted: true) => l.quoteDeleted,
   Message(:final body) when body.isNotEmpty => body,
+  Message(:final file?) =>
+    file.isVoice
+        ? l.voicePreviewLine
+        : file.isVideo
+        ? videoPreview
+        : file.name,
+  Message(stickerId: final _?) => l.stickerPreviewLine,
+  Message(albumCard: true) => l.stickerAlbumPreviewLine,
   Message(hasAttachment: true) => l.quotePhoto,
   _ => l.commonMessage,
 };
+
+/// The words for a failed send; the video failures are translated here, any
+/// other failure keeps its own message.
+String _videoFailureText(BuildContext context, Failure failure) {
+  final l = AppLocalizations.of(context);
+  return switch (failure) {
+    VideoTooBigFailure() => l.videoTooBig,
+    VideoFailedFailure() => l.videoFailed,
+    _ => failure.message,
+  };
+}

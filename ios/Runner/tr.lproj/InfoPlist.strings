@@ -1,0 +1,14 @@
+/* Kişiler izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
+"NSContactsUsageDescription" = "SIS, rehberinizden bir kişiyi seçip sohbette gönderebilmeniz ve Kişi bul sayfasını açtığınızda rehberinizdeki hangi kişilerin SIS kullandığını gösterebilmek için kişilerinize erişir. Bunun için kişilerin e-posta adresleri kodlanmış (hash) biçimde gönderilir, yalnızca SIS üyeleriyle karşılaştırılır ve saklanmaz.";
+
+/* Fotoğraf kitaplığı izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
+"NSPhotoLibraryUsageDescription" = "Fotoğrafların ve videoların sohbette burada yüklensin diye erişime izin ver. Sen gönderene kadar hiçbir şey gönderilmez. Yalnızca birkaçına izin verebilirsin.";
+
+/* Konum izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
+"NSLocationWhenInUseUsageDescription" = "Bulunduğun yeri sohbette paylaşabilmen için erişime izin ver. Konumun yalnızca sen göndermeyi seçtiğinde okunur.";
+
+/* Mikrofon izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
+"NSMicrophoneUsageDescription" = "Sesli mesaj kaydedebilmen ve yazıyı sesle yazdırabilmen için mikrofona izin ver. Ses yalnızca sesli mesajı gönderdiğinde gönderilir.";
+
+/* Konuşma tanıma izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
+"NSSpeechRecognitionUsageDescription" = "Sesini mesaj kutusunda yazıya çevirebilmek için konuşma tanımaya izin ver. Telefonunda çalışır.";

@@ -29,6 +29,8 @@ import '../support/reach.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../support/video_fakes.dart';
+
 /// The message screen mounted exactly as `main.dart` wires it, over a real
 /// [SupabaseChatRepository] and a real [FileAttachmentCache] on a temporary
 /// directory.
@@ -182,6 +184,7 @@ void main() {
   /// photo picker are fakes.
   ProviderContainer containerFor(AttachmentCache cache) => ProviderContainer(
     overrides: [
+      ...videoOverrides(),
       authRepositoryProvider.overrideWithValue(
         FakeAuth(session: true, member: xenaMember),
       ),

@@ -23,6 +23,7 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/delivery.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
+import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
@@ -34,6 +35,8 @@ import '../support/fakes.dart';
 import '../support/reach.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
+
+import '../support/video_fakes.dart';
 
 /// A text message shown the moment it is sent (2026-09-28), on the sender's
 /// own MessageScreen over the real [SupabaseChatRepository]: the server's
@@ -105,14 +108,24 @@ class _Relay implements ChatRepository {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) async {
     ids.add(id);
-    final r = await (sendVia ?? real.send)(
-      id: id,
-      conversationId: conversationId,
-      body: body,
-      replyTo: replyTo,
-    );
+    final via = sendVia;
+    final r = via == null
+        ? await real.send(
+            id: id,
+            conversationId: conversationId,
+            body: body,
+            replyTo: replyTo,
+            preview: preview,
+          )
+        : await via(
+            id: id,
+            conversationId: conversationId,
+            body: body,
+            replyTo: replyTo,
+          );
     answers.add(r);
     return r;
   }
@@ -206,6 +219,10 @@ class _Relay implements ChatRepository {
       real.forward(m, ids);
   @override
   Future<Result<Uri>> attachmentUrl(String path) => real.attachmentUrl(path);
+  @override
+  Future<Result<Uint8List>> linkImageBytes(String path) =>
+      real.linkImageBytes(path);
+
   @override
   Future<Result<Uint8List>> attachmentBytes(String path) =>
       real.attachmentBytes(path);
@@ -325,6 +342,7 @@ void main() {
   Future<ProviderContainer> mount(WidgetTester t, _Relay relay) async {
     final c = ProviderContainer(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(relay),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),

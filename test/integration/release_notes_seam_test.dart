@@ -27,6 +27,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/dead_host.dart';
 import '../support/fakes.dart';
 import '../support/service_key.dart';
+import '../support/video_fakes.dart';
 
 /// The What's new connection as main.dart mounts it: SisApp, the real
 /// SupabaseReleaseNotesDelivery over a signed-in client, the real chat
@@ -36,6 +37,12 @@ import '../support/service_key.dart';
 /// the list without a manual refresh, that the real repository marks it as
 /// the system chat (no composer), and that a failed start neither blocks
 /// the app nor loses the note for the next one.
+///
+/// An insert into release_notes already posts the note to every member (the
+/// step 14 broadcast); the app's call is the backstop for a member it missed.
+/// So the notes here are [missed] ones -- inserted empty, which the broadcast
+/// neither posts nor records, then given their text -- and only the app's own
+/// call can deliver them.
 ///
 /// Builds are numbered from the clock so a rerun without a reset still asks
 /// for newer builds than wynn was last served. Requires
@@ -115,6 +122,16 @@ void main() {
     return rows.length;
   }
 
+  /// A note the broadcast never posted: empty on insert, text added after.
+  Future<void> missed(int build, String text) async {
+    await note(build, '');
+    await service
+        .from('release_notes')
+        .update({'note': text})
+        .eq('build', build);
+    expect(await delivered(text), 0, reason: 'the broadcast posted it');
+  }
+
   Future<Object?> stored() async =>
       (await SharedPreferences.getInstance()).get(prefKey);
 
@@ -171,6 +188,7 @@ void main() {
   /// unless a test takes the network away from this one connection).
   Widget app({SupabaseClient? deliveryClient}) => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(
         const RuntimeConfig(
           supabaseUrl: _url,
@@ -215,7 +233,7 @@ void main() {
     'list by itself, and it opens read-only',
     (t) async {
       final b = base + 1;
-      await note(b, 'wynn note $b');
+      await missed(b, 'wynn note $b');
       installed(b);
       SharedPreferences.setMockInitialValues({});
 
@@ -262,7 +280,7 @@ void main() {
     'next start delivers the note once',
     (t) async {
       final b = base + 2;
-      await note(b, 'wynn note $b');
+      await missed(b, 'wynn note $b');
       installed(b);
       SharedPreferences.setMockInitialValues({prefKey: base + 1});
       final dead = (await t.runAsync(() => deadButSignedIn(wynn)))!;

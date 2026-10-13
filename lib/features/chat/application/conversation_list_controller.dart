@@ -33,6 +33,8 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     ref.watch(currentUserIdProvider);
     final ownerId = ref.read(currentUserIdProvider);
     final gen = ++_gen;
+    _hidden
+        .clear(); // a new build is a new owner: nothing of theirs stays hidden
     ref.onDispose(() => unawaited(_live?.cancel()));
     // Riverpod 3 ALWAYS carries a previous value into a new AsyncLoading (or
     // a later AsyncError) via copyWithPrevious -- including one assigned
@@ -285,7 +287,12 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       Ok(:final value) => value,
       Err(:final failure) => throw failure,
     };
-    return list;
+    // A chat the member just deleted (undo still possible, or the delete is
+    // on its way to the server) stays off the list until [forget].
+    return [
+      for (final c in list)
+        if (!_hidden.contains(c.id)) c,
+    ];
   }
 
   /// Unread here means received on this device: report it delivered, once per
@@ -398,6 +405,48 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     _snapshotDebounce = Timer(const Duration(seconds: 2), _saveCurrentIfData);
   }
 
+  /// Chats taken off the list for a delete that can still be undone, or that
+  /// is on its way to the server. Kept out of every re-read until [forget].
+  final _hidden = <String>{};
+
+  /// Takes [ids] off the list in this frame. Nothing reaches the server.
+  void hideLocally(Iterable<String> ids) {
+    _hidden.addAll(ids);
+    final list = state.value;
+    if (list == null) return;
+    state = AsyncData([
+      for (final c in list)
+        if (!_hidden.contains(c.id)) c,
+    ]);
+    _scheduleSnapshotSave();
+  }
+
+  /// Undo: puts [chats] back on the list, newest message first.
+  void restoreLocally(List<Conversation> chats) {
+    _hidden.removeAll([for (final c in chats) c.id]);
+    final list = state.value;
+    if (list == null) return;
+    final next = [
+      ...list,
+      for (final c in chats)
+        if (!list.any((x) => x.id == c.id)) c,
+    ];
+    // Conversations with no messages yet sort last.
+    next.sort((a, b) {
+      final at = a.lastMessageAt, bt = b.lastMessageAt;
+      if (at == null && bt == null) return 0;
+      if (at == null) return 1;
+      if (bt == null) return -1;
+      return bt.compareTo(at);
+    });
+    state = AsyncData(next);
+    _scheduleSnapshotSave();
+  }
+
+  /// Stops keeping [ids] off the list: their delete reached the server (or
+  /// failed), so the next read tells the truth.
+  void forget(Iterable<String> ids) => _hidden.removeAll(ids);
+
   /// Opens the 1:1 conversation with [otherUserId], creating it if needed.
   Future<Result<String>> startWith(String otherUserId) async {
     final result = await ref
@@ -440,5 +489,108 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       await reloadQuietly();
     }
     return result;
+  }
+
+  /// [conversationId]'s settings as the list shows them now, or null when it
+  /// is not listed.
+  GroupSettings? settingsOf(String conversationId) =>
+      (state.value ?? const <Conversation>[])
+          .where((c) => c.id == conversationId)
+          .firstOrNull
+          ?.settings;
+
+  /// Archives or unarchives [conversationId] for the signed-in member. The
+  /// list changes at once (the swipe never waits on the network); a refusal
+  /// puts the chat back and returns the [Err]. An archived chat stays
+  /// archived when new messages arrive: [Conversation.withPreview] keeps the
+  /// flag. Archiving also unpins the chat (the server does the same), and a
+  /// refusal restores both.
+  Future<Result<void>> setArchived(String conversationId, bool archived) async {
+    final before = state.value
+        ?.where((c) => c.id == conversationId)
+        .firstOrNull;
+    void put(Conversation Function(Conversation c) change) {
+      final list = state.value;
+      if (list == null) return;
+      state = AsyncData([
+        for (final c in list)
+          if (c.id == conversationId) change(c) else c,
+      ]);
+      _scheduleSnapshotSave();
+    }
+
+    put(
+      (c) => archived
+          ? c.withArchived(true).withPinned(false)
+          : c.withArchived(false),
+    );
+    final result = await ref
+        .read(chatArchiveRepositoryProvider)
+        .setArchived(conversationId, archived);
+    if (result is Err && ref.mounted && before != null) put((_) => before);
+    return result;
+  }
+
+  /// Pins or unpins [conversationId] for the signed-in member. The list
+  /// changes at once (a tap never waits on the network); the sixth pin is
+  /// refused before anything changes, with [PinLimitFailure], and a refusal
+  /// from the server puts the chat back and returns the [Err].
+  Future<Result<void>> setPinned(String conversationId, bool pinned) async {
+    final current = state.value;
+    if (pinned &&
+        current != null &&
+        !current.any((c) => c.id == conversationId && c.pinned) &&
+        current.where((c) => c.pinned).length >= maxPinnedChats) {
+      return const Err(PinLimitFailure());
+    }
+
+    void mark(bool value) {
+      final list = state.value;
+      if (list == null) return;
+      state = AsyncData([
+        for (final c in list)
+          if (c.id == conversationId) c.withPinned(value) else c,
+      ]);
+      _scheduleSnapshotSave();
+    }
+
+    mark(pinned);
+    final result = await ref
+        .read(chatPinRepositoryProvider)
+        .setChatPinned(conversationId, pinned);
+    if (result is Err && ref.mounted) mark(!pinned);
+    return result;
+  }
+
+  /// Shows [messageId] (null: none) as [conversationId]'s pinned message at
+  /// once, without a server call; the usual refreshes re-read the list.
+  void applyPinnedMessage(String conversationId, String? messageId) {
+    final list = state.value;
+    if (list == null) return;
+    state = AsyncData([
+      for (final c in list)
+        if (c.id == conversationId) c.withPinnedMessage(messageId) else c,
+    ]);
+    _scheduleSnapshotSave();
+  }
+
+  /// [conversationId]'s pinned message id as the list shows it now, or null.
+  String? pinnedMessageOf(String conversationId) =>
+      (state.value ?? const <Conversation>[])
+          .where((c) => c.id == conversationId)
+          .firstOrNull
+          ?.pinnedMessageId;
+
+  /// Shows [next] as [conversationId]'s settings at once, without a server
+  /// call: a switch flips the same frame. The list is re-read from the
+  /// server by the usual refreshes.
+  void applySettings(String conversationId, GroupSettings next) {
+    final list = state.value;
+    if (list == null) return;
+    state = AsyncData([
+      for (final c in list)
+        if (c.id == conversationId) c.withSettings(next) else c,
+    ]);
+    _scheduleSnapshotSave();
   }
 }

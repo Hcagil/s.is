@@ -40,6 +40,12 @@ JSON:API bodies, 201 on create, 204 on delete, a 404 / 409 / 500 carrying an
           distribution", another profile or certificate; 404 is fine; any
           failure exits 1 after trying everything; prints ids and ages, never
           names or content. Ages are checked under TZ=JST-9.
+  ensure  [--cert-id CERT_ID] BUNDLE_ID PROFILE_NAME BASE_PROFILE_NAME: the App ID
+          (created when missing, exact identifier) and an ACTIVE profile carrying
+          group.com.esd.sis; a good one is left alone. Otherwise, only once the App
+          ID has APP_GROUPS: the certificate looked up through the base profile
+          (or --cert-id) and printed, then the old profile deleted, then one
+          create retried once; the created profile must carry the group.
   release is gone: it is a usage error.
   never   prints the private key or the bearer token.
 
@@ -124,6 +130,9 @@ class Fake(http.server.BaseHTTPRequestHandler):
         st["requests"][-1]["t"] = time.time()
         key = (self.command, url.path)
         forced = st["fail"].get(key) or st["fail"].get((self.command, url.path.rsplit("/", 1)[0]))
+        if not forced and st.get("fail_next", {}).get(key):  # fails this many more times, then answers
+            st["fail_next"][key] -= 1
+            forced = 500
         if forced == "drop":  # the connection dies mid-request: no status line at all
             self.close_connection = True
             self.connection.shutdown(socket.SHUT_RDWR)
@@ -174,11 +183,50 @@ class Fake(http.server.BaseHTTPRequestHandler):
             return self.reply(200, {"data": sub})
         if key == ("POST", "/v1/betaAppReviewSubmissions"):
             return self.reply(201, {"data": {"type": "betaAppReviewSubmissions", "id": "SUB-2"}})
+        bundles = st.get("bundles", BUNDLES)
         if key == ("GET", "/v1/bundleIds"):
             f = urllib.parse.parse_qs(url.query).get("filter[identifier]", [""])[0]
             data = [{"type": "bundleIds", "id": i, "attributes": {"identifier": v, "platform": "IOS"}}
-                    for i, v in BUNDLES.items() if f in v]
-            return self.reply(200, {"data": data, "links": {"self": self.path}, "meta": {"paging": {"total": len(data)}}})
+                    for i, v in bundles.items() if f in v]
+            body = {"data": data, "links": {"self": self.path}, "meta": {"paging": {"total": len(data)}}}
+            if "bundleIdCapabilities" in q.get("include", [""])[0]:
+                for d in data:
+                    caps = [{"type": "bundleIdCapabilities", "id": "%s_%s" % (d["id"], c)} for c in st["caps"].get(d["id"], [])]
+                    d["relationships"] = {"bundleIdCapabilities": {"data": caps}}
+                body["included"] = [{"type": "bundleIdCapabilities", "id": "%s_%s" % (d["id"], c),
+                                     "attributes": {"capabilityType": c}} for d in data for c in st["caps"].get(d["id"], [])]
+            return self.reply(200, body)
+        m = re.fullmatch(r"/v1/bundleIds/([^/]+)/bundleIdCapabilities", url.path)
+        if self.command == "GET" and m:
+            if m.group(1) not in bundles:
+                return self.error(404)
+            return self.reply(200, {"data": [{"type": "bundleIdCapabilities", "id": "%s_%s" % (m.group(1), c),
+                                              "attributes": {"capabilityType": c}} for c in st["caps"].get(m.group(1), [])]})
+        if key == ("POST", "/v1/bundleIds"):
+            a = (raw and json.loads(raw) or {}).get("data", {}).get("attributes", {})
+            if not re.fullmatch(r"[A-Za-z0-9 ]+", a.get("name") or ""):
+                # Apple's answer seen on GitHub to the name "SIS com.esd.sis.notify".
+                return self.reply(409, {"errors": [{"status": "409", "code": "ENTITY_ERROR.ATTRIBUTE.INVALID",
+                                                    "detail": "Please choose a name containing only alphanumeric characters and spaces."}]})
+            if a.get("identifier") in bundles.values():
+                return self.reply(409, {"errors": [{"status": "409", "code": "ENTITY_ERROR.ATTRIBUTE.INVALID",
+                                                    "detail": "An App ID with Identifier is not available."}]})
+            bid = "BID-NEW%d" % len(bundles)
+            st.setdefault("bundles", dict(BUNDLES))[bid] = a.get("identifier")
+            return self.reply(201, {"data": {"type": "bundleIds", "id": bid, "attributes": a}})
+        if key == ("POST", "/v1/bundleIdCapabilities"):
+            # Enabling a capability: 201 and it is on; already on is Apple's 409.
+            d = (raw and json.loads(raw) or {}).get("data", {})
+            bid = d.get("relationships", {}).get("bundleId", {}).get("data", {}).get("id")
+            cap = d.get("attributes", {}).get("capabilityType")
+            if bid not in bundles or not cap:
+                return self.error(404 if bid not in bundles else 409)
+            if cap in st["caps"].get(bid, []):
+                return self.reply(409, {"errors": [{"status": "409", "code": "ENTITY_ERROR.RELATIONSHIP.INVALID",
+                                                    "detail": "The capability is already enabled."}]})
+            st["caps"].setdefault(bid, []).append(cap)
+            return self.reply(201, {"data": {"type": "bundleIdCapabilities", "id": "%s_%s" % (bid, cap),
+                                             "attributes": {"capabilityType": cap}}})
         if key == ("POST", "/v1/certificates"):
             return self.reply(201, {"data": {"type": "certificates", "id": "CERT-1", "attributes": {
                 "certificateType": "DISTRIBUTION", "name": "Apple Distribution: Şirket",
@@ -196,7 +244,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
             data = [{"type": "profiles", "id": i, "attributes": attrs({
                 "name": n, "createdDate": c, "profileState": "ACTIVE", "profileType": "IOS_APP_STORE",
                 "uuid": "UUID-" + i, "profileContent": CONTENT_MARK}, st["pattrs"].get(i))}
-                for i, n, c, _ in st["profiles"] if f in n.lower()]
+                for i, n, c, _ in st["profiles"] if f in n.lower() and "/v1/profiles/" + i not in st["gone"]]
             return self.reply(200, {"data": data[:lim], "links": {"self": self.path}, "meta": {"paging": {"total": len(data)}}})
         m = re.fullmatch(r"/v1/profiles/([^/]+)/certificates", url.path)
         if self.command == "GET" and m:
@@ -252,7 +300,7 @@ class AscSigningTest(unittest.TestCase):
                           "version": "412", "builds": ["VALID"], "locs": [("L-DE", "de-DE"), ("L-EN", "en-US")],
                           "groups": [("G-INT", "bacanaks", True), ("G-EXT", "bacanaks", False), ("G-OTHER", "other", True),
                                      ("G-OLD", "bacanaks-old", False), ("G-FR", "Friends", False)],
-                          "review": False, "profiles": [], "gone": set(), "pattrs": {}, "cattrs": {}}
+                          "review": False, "profiles": [], "gone": set(), "pattrs": {}, "cattrs": {}, "caps": {}}
 
     def prog(self, code):
         return ("import sys; sys.path.insert(0, %r); import asc_signing as a; a.API = sys.argv[1]; " % os.path.dirname(TOOL)) + code
@@ -1005,6 +1053,323 @@ class AscSigningTest(unittest.TestCase):
             self.assertNotEqual(p.returncode, 0, "%s accepted" % args)
             self.assertFalse(self.reqs(), "%s made a request" % args)
             self.assertIn("fetch PROFILE_NAME OUT_DIR", p.stdout + p.stderr, "%s does not show the usage" % args)
+
+    # ---- ensure: the share App ID and profiles, replaced only when they lack the App Group ----
+    GROUPED = base64.b64encode(PROFILE_BYTES + b"<key>com.apple.security.application-groups</key><array>"
+                               b"<string>group.com.esd.sis</string></array>").decode()
+    UNGROUPED = base64.b64encode(PROFILE_BYTES + b"<key>aps-environment</key>").decode()
+    SHARE, BASE = "sis ci distribution share", "sis ci distribution"
+
+    def ensure_state(self, share_profile="ungrouped", base=True, base_certs=("C-D",), caps=("APP_GROUPS",),
+                     share_bundle=True, created=None):
+        """The team: the app's base profile P-D (grouped), the share profile P-S (missing / grouped / ungrouped),
+        bundle ids; APP_GROUPS on the share App ID per caps. POST /v1/profiles answers with created content."""
+        st = self.srv.state
+        profiles = []
+        if base:
+            profiles.append(("P-D", self.BASE, self.ago(240), "ACTIVE", list(base_certs), self.until(300)))
+        if share_profile:
+            profiles.append(("P-S", self.SHARE, self.ago(100), "ACTIVE", ["C-D"], self.until(300)))
+        self.identity(profiles)
+        if base:
+            st["pattrs"]["P-D"]["profileContent"] = self.GROUPED
+        if share_profile:
+            st["pattrs"]["P-S"]["profileContent"] = self.GROUPED if share_profile == "grouped" else self.UNGROUPED
+        # Partial-match neighbours first: filter[identifier]=com.esd.sis returns them before the app.
+        st["bundles"] = {"BID-WIDGET": "com.esd.sis.widget", "BID-OTHER": "com.other.app"}
+        if share_bundle:
+            st["bundles"]["BID-SHARE"] = "com.esd.sis.share"
+            st["caps"]["BID-SHARE"] = list(caps)
+        st["bundles"]["BID-APP"] = "com.esd.sis"
+        st["caps"]["BID-APP"] = ["APP_GROUPS", "PUSH_NOTIFICATIONS"]
+        st["prof_b64"] = created or self.GROUPED
+
+    def ensure(self, *extra):
+        return self.tool("ensure", *extra, "com.esd.sis.share", self.SHARE, self.BASE, TZ="JST-9")
+
+    def deletes(self):
+        return [r["path"] for r in self.reqs("DELETE")]
+
+    def posts(self, path="/v1/profiles"):
+        return [r for r in self.reqs("POST") if r["path"] == path]
+
+    def cap_calls(self):
+        return [r for r in self.reqs() if "bundleIdCapabilities" in r["path"] + json.dumps(r["query"])]
+
+    def cert_lookups(self):
+        return [r for r in self.reqs("GET") if re.fullmatch(r"/v1/(profiles/[^/]+/)?certificates", r["path"])]
+
+    def test_ensure_no_base_profile(self):
+        self.ensure_state(base=False)
+        p = self.ensure()
+        self.assertNotEqual(p.returncode, 0, "ensure passed with no base profile: %s" % p.stdout)
+        self.assertEqual(self.deletes(), [], "a profile was deleted with no base profile to copy the certificate from")
+        self.assertEqual(self.posts(), [])
+
+    def test_ensure_no_distribution_certificate(self):
+        for certs, over in (((), {}), (("C-X",), {"C-X": {"certificateType": "DEVELOPMENT"}})):
+            self.setUp()
+            self.ensure_state(base_certs=certs)
+            for c, a in over.items():
+                self.srv.state["cattrs"][c].update(a)
+            p = self.ensure()
+            self.assertNotEqual(p.returncode, 0, "ensure passed with base certificates %s" % (certs,))
+            self.assertEqual(self.deletes(), [], "a profile was deleted with no distribution certificate (%s)" % (certs,))
+            self.assertEqual(self.posts(), [])
+
+    def test_ensure_good_profile_is_left_alone(self):
+        self.ensure_state(share_profile="grouped")
+        p = self.ensure()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), [], "a good profile was deleted")
+        self.assertEqual(self.reqs("POST"), [], "a good profile caused a create")
+        self.assertEqual(self.cap_calls(), [], "a good profile caused a capability call")
+
+    def test_ensure_app_profile_not_confused_with_share_profile(self):
+        # filter[name] matches partially: "sis ci distribution" also returns "sis ci distribution share".
+        self.ensure_state(share_profile="grouped")
+        self.srv.state["pattrs"]["P-D"]["profileContent"] = self.UNGROUPED
+        p = self.tool("ensure", "com.esd.sis", self.BASE, self.BASE)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), ["/v1/profiles/P-D"],
+                         "the app's own profile lacks the group; the share profile was taken for it, or deleted")
+        self.assertEqual(self.posts()[0]["body"]["data"]["relationships"]["bundleId"]["data"]["id"], "BID-APP")
+
+    def test_ensure_capability_missing_changes_nothing(self):
+        for caps in ((), ("PUSH_NOTIFICATIONS",)):
+            self.setUp()
+            self.ensure_state(share_profile="ungrouped", caps=caps)
+            p = self.ensure()
+            self.assertNotEqual(p.returncode, 0, "capabilities %s: a profile without the App Group passed" % (caps,))
+            self.assertIn("Nothing was changed", p.stdout + p.stderr)
+            self.assertEqual(self.deletes(), [], "capabilities %s: the profile was deleted before the App ID can carry the group" % (caps,))
+            self.assertEqual(self.cert_lookups(), [], "capabilities %s: certificates looked up" % (caps,))
+            self.assertEqual(self.reqs("POST"), [], "capabilities %s: something was created" % (caps,))
+
+    def test_ensure_replaces_ungrouped_profile_in_order(self):
+        self.ensure_state(share_profile="ungrouped")
+        p = self.ensure()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertRegex(p.stdout, r"(?m)^SIGNING_CERTIFICATE_ID=C-D\b")
+        self.assertEqual(self.deletes(), ["/v1/profiles/P-S"], "only the share profile may go, and no certificate")
+        seq = [("cert", r["t"]) for r in self.cert_lookups()] + [("delete", r["t"]) for r in self.reqs("DELETE")] \
+            + [("post", r["t"]) for r in self.posts()]
+        kinds = [k for k, _ in sorted(seq, key=lambda x: x[1])]
+        self.assertEqual([k for i, k in enumerate(kinds) if k not in kinds[:i]], ["cert", "delete", "post"], kinds)
+        body = self.posts()[0]["body"]["data"]
+        self.assertEqual(body["attributes"].get("name"), self.SHARE)
+        self.assertEqual(body["attributes"].get("profileType"), "IOS_APP_STORE")
+        self.assertEqual(body["relationships"]["bundleId"]["data"]["id"], "BID-SHARE")
+        self.assertEqual([c["id"] for c in body["relationships"]["certificates"]["data"]], ["C-D"])
+
+    def test_ensure_invalid_profile_with_group_is_replaced(self):
+        # Apple invalidates a profile when its App ID changes; its content still names the group.
+        self.ensure_state(share_profile="grouped")
+        self.srv.state["pattrs"]["P-S"]["profileState"] = "INVALID"
+        p = self.ensure()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), ["/v1/profiles/P-S"], "an INVALID profile was kept")
+        self.assertEqual(len(self.posts()), 1)
+
+    def test_ensure_missing_profile_is_created_without_delete(self):
+        self.ensure_state(share_profile=None)
+        p = self.ensure()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), [])
+        self.assertEqual(len(self.posts()), 1)
+        self.assertEqual(self.posts()[0]["body"]["data"]["relationships"]["bundleId"]["data"]["id"], "BID-SHARE")
+
+    def test_ensure_cert_id_skips_lookup(self):
+        self.ensure_state(share_profile="ungrouped", base=False)
+        p = self.ensure("--cert-id", "C-GIVEN")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.cert_lookups(), [], "--cert-id still looked the certificate up")
+        self.assertFalse([r for r in self.reqs("GET") if r["query"].get("filter[name]") == [self.BASE]],
+                         "--cert-id still looked the base profile up")
+        self.assertEqual([c["id"] for c in self.posts()[0]["body"]["data"]["relationships"]["certificates"]["data"]],
+                         ["C-GIVEN"])
+
+    def test_ensure_retries_the_create_once(self):
+        self.ensure_state(share_profile="ungrouped")
+        self.srv.state["fail_next"] = {("POST", "/v1/profiles"): 1}
+        p = self.ensure()
+        self.assertEqual(p.returncode, 0, "one failed create was not retried: %s" % (p.stdout + p.stderr))
+        self.assertEqual(len(self.posts()), 2)
+        self.setUp()
+        self.ensure_state(share_profile="ungrouped")
+        self.srv.state["fail_next"] = {("POST", "/v1/profiles"): 5}
+        p = self.ensure()
+        self.assertNotEqual(p.returncode, 0, "two failed creates passed")
+        self.assertEqual(len(self.posts()), 2, "the create must be tried exactly twice")
+        # The profile is gone now: the certificate id is printed for a --cert-id recovery run.
+        self.assertRegex(p.stdout, r"(?m)^SIGNING_CERTIFICATE_ID=C-D\b")
+        self.assertNotIn("Traceback", p.stderr)
+
+    def test_ensure_created_profile_without_group_fails(self):
+        self.ensure_state(share_profile="ungrouped", created=self.UNGROUPED)
+        p = self.ensure()
+        self.assertNotEqual(p.returncode, 0, "a created profile without the App Group passed")
+
+    def test_ensure_creates_missing_app_id(self):
+        self.ensure_state(share_profile=None, share_bundle=False)
+        p = self.ensure()
+        made = self.posts("/v1/bundleIds")
+        self.assertEqual(len(made), 1, "the missing App ID was not created: %s" % (p.stdout + p.stderr))
+        a = made[0]["body"]["data"]["attributes"]
+        self.assertEqual(a.get("identifier"), "com.esd.sis.share")
+        self.assertEqual(a.get("platform"), "IOS")
+        self.assertEqual(self.deletes(), [])
+
+    def test_ensure_existing_app_id_not_recreated(self):
+        # filter[identifier] matches partially: com.esd.sis is not com.esd.sis.share.
+        self.ensure_state(share_profile="grouped")
+        self.ensure()
+        self.assertEqual(self.posts("/v1/bundleIds"), [])
+        self.srv.state["requests"].clear()
+        self.srv.state["bundles"].pop("BID-SHARE")
+        self.srv.state["profiles"] = []
+        p = self.ensure()
+        self.assertEqual(len(self.posts("/v1/bundleIds")), 1,
+                         "com.esd.sis.widget / com.esd.sis taken for com.esd.sis.share: %s" % (p.stdout + p.stderr))
+
+    # ---- ensure --no-group: the notification extension's profile carries no App Group ----
+    def ensure_ng(self):
+        return self.tool("ensure", "--no-group", "com.esd.sis.share", self.SHARE, self.BASE, TZ="JST-9")
+
+    def test_ensure_no_group_keeps_ungrouped_profile(self):
+        self.ensure_state(share_profile="ungrouped", caps=())
+        p = self.ensure_ng()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), [], "--no-group deleted a good profile for lacking the group")
+        self.assertEqual(self.reqs("POST"), [], "--no-group recreated a good profile")
+
+    def test_ensure_no_group_creates_missing_profile_without_app_groups(self):
+        self.ensure_state(share_profile=None, caps=(), created=self.UNGROUPED)
+        p = self.ensure_ng()
+        self.assertEqual(p.returncode, 0, "--no-group refused a profile without the group: %s" % (p.stdout + p.stderr))
+        self.assertNotIn("Nothing was changed", p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), [])
+        self.assertEqual(len(self.posts()), 1, "the missing profile was not created")
+        body = self.posts()[0]["body"]["data"]
+        self.assertEqual(body["attributes"].get("name"), self.SHARE)
+        self.assertEqual(body["relationships"]["bundleId"]["data"]["id"], "BID-SHARE")
+
+    def test_ensure_no_group_replaces_invalid_profile(self):
+        self.ensure_state(share_profile="ungrouped", caps=(), created=self.UNGROUPED)
+        self.srv.state["pattrs"]["P-S"]["profileState"] = "INVALID"
+        p = self.ensure_ng()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), ["/v1/profiles/P-S"], "an INVALID profile was kept under --no-group")
+        self.assertEqual(len(self.posts()), 1)
+
+    def test_ensure_no_group_creates_missing_app_id(self):
+        self.ensure_state(share_profile=None, share_bundle=False, created=self.UNGROUPED)
+        p = self.ensure_ng()
+        self.assertEqual(len(self.posts("/v1/bundleIds")), 1, "the missing App ID was not created: %s" % (p.stdout + p.stderr))
+        self.assertEqual(self.posts("/v1/bundleIds")[0]["body"]["data"]["attributes"].get("identifier"), "com.esd.sis.share")
+
+    def test_ensure_group_is_still_the_default(self):
+        # The same team as test_ensure_no_group_keeps_ungrouped_profile, without the flag: refused, nothing changed.
+        self.ensure_state(share_profile="ungrouped", caps=())
+        p = self.ensure()
+        self.assertNotEqual(p.returncode, 0, "without --no-group a profile lacking the group passed")
+        self.assertEqual(self.deletes(), [])
+        self.assertEqual(self.reqs("POST"), [])
+
+    def test_ensure_notify_app_id_name_is_alphanumeric(self):
+        # Apple refuses App ID names with anything but letters, digits and spaces (409 seen on GitHub).
+        for flags in (["--no-group"], []):
+            self.setUp()
+            self.ensure_state(share_profile=None, share_bundle=False, created=self.UNGROUPED)
+            p = self.tool("ensure", *flags, "com.esd.sis.notify", self.SHARE, self.BASE, TZ="JST-9")
+            made = self.posts("/v1/bundleIds")
+            self.assertEqual(len(made), 1, "%s: the notify App ID was not created: %s" % (flags, p.stdout + p.stderr))
+            a = made[0]["body"]["data"]["attributes"]
+            self.assertRegex(a.get("name") or "", r"\ASIS [A-Za-z0-9 ]*\Z", "%s: App ID name %r" % (flags, a.get("name")))
+            self.assertEqual(a.get("identifier"), "com.esd.sis.notify")
+            self.assertNotIn("alphanumeric", p.stdout + p.stderr)
+
+    def test_ensure_no_group_bad_usage(self):
+        for args in (["ensure", "--no-group"], ["ensure", "--no-group", "com.esd.sis.share", self.SHARE]):
+            self.setUp()
+            p = self.tool(*args)
+            self.assertNotEqual(p.returncode, 0, "%s accepted" % args)
+            self.assertFalse(self.reqs(), "%s made a request" % args)
+
+    def test_ensure_bad_usage(self):
+        for args in (["ensure"], ["ensure", "com.esd.sis.share", self.SHARE], ["ensure", "--cert-id"],
+                     ["ensure", "--cert-id", "X", "com.esd.sis.share", self.SHARE]):
+            self.setUp()
+            p = self.tool(*args)
+            self.assertNotEqual(p.returncode, 0, "%s accepted" % args)
+            self.assertFalse(self.reqs(), "%s made a request" % args)
+
+    # ---- ensure --signin: the app's App ID and profile also carry Sign in with Apple ----
+    SIGNIN = b"<key>com.apple.developer.applesignin</key><array><string>Default</string></array>"
+    GROUPED_SIGNIN = base64.b64encode(PROFILE_BYTES + b"<key>com.apple.security.application-groups</key><array>"
+                                      b"<string>group.com.esd.sis</string></array>" + SIGNIN).decode()
+
+    def signin_state(self, has_cap=False, content=None, created=None):
+        """As production runs it: ensure --signin com.esd.sis with the base profile as its own target (P-D)."""
+        self.ensure_state(share_profile=None)
+        st = self.srv.state
+        st["caps"]["BID-APP"] = ["APP_GROUPS", "PUSH_NOTIFICATIONS"] + (["APPLE_ID_AUTH"] if has_cap else [])
+        st["pattrs"]["P-D"]["profileContent"] = content or self.GROUPED
+        st["prof_b64"] = created or self.GROUPED_SIGNIN
+
+    def ensure_si(self):
+        return self.tool("ensure", "--signin", "com.esd.sis", self.BASE, self.BASE, TZ="JST-9")
+
+    def cap_posts(self):
+        return self.posts("/v1/bundleIdCapabilities")
+
+    def test_signin_enables_apple_id_auth_when_missing(self):
+        self.signin_state(has_cap=False)
+        p = self.ensure_si()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        posts = self.cap_posts()
+        self.assertEqual(len(posts), 1, "APPLE_ID_AUTH was not enabled (once)")
+        d = posts[0]["body"]["data"]
+        self.assertEqual(d.get("type"), "bundleIdCapabilities")
+        self.assertEqual(d["attributes"].get("capabilityType"), "APPLE_ID_AUTH")
+        self.assertEqual(d["relationships"]["bundleId"]["data"]["id"], "BID-APP",
+                         "the capability went to another App ID (partial match)")
+        self.assertIn("APPLE_ID_AUTH", self.srv.state["caps"]["BID-APP"])
+        self.assertLess(posts[0]["t"], self.posts()[0]["t"], "the profile was created before the App ID had the capability")
+
+    def test_signin_capability_present_is_not_posted_again(self):
+        self.signin_state(has_cap=True, content=self.GROUPED_SIGNIN)
+        p = self.ensure_si()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.cap_posts(), [], "APPLE_ID_AUTH posted although enabled")
+        self.assertEqual(self.deletes(), [], "a profile with the entitlement was deleted")
+        self.assertEqual(self.posts(), [], "a profile with the entitlement was recreated")
+
+    def test_signin_profile_without_entitlement_is_stale_and_replaced(self):
+        self.signin_state(has_cap=True, content=self.GROUPED)
+        p = self.ensure_si()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.deletes(), ["/v1/profiles/P-D"], "the profile without Sign in with Apple was kept")
+        self.assertEqual(len(self.posts()), 1)
+        body = self.posts()[0]["body"]["data"]
+        self.assertEqual(body["attributes"].get("name"), self.BASE)
+        self.assertEqual(body["relationships"]["bundleId"]["data"]["id"], "BID-APP")
+        self.assertEqual([c["id"] for c in body["relationships"]["certificates"]["data"]], ["C-D"],
+                         "the certificate was not taken from the profile before it was deleted")
+        self.assertRegex(p.stdout, r"(?m)^SIGNING_CERTIFICATE_ID=C-D\b")
+
+    def test_signin_new_profile_still_without_entitlement_fails(self):
+        self.signin_state(has_cap=False, content=self.GROUPED, created=self.GROUPED)
+        p = self.ensure_si()
+        self.assertNotEqual(p.returncode, 0, "a created profile without Sign in with Apple passed")
+        self.assertNotIn("Traceback", p.stderr)
+
+    def test_without_signin_the_entitlement_is_not_required(self):
+        self.signin_state(has_cap=False, content=self.GROUPED)
+        p = self.tool("ensure", "com.esd.sis", self.BASE, self.BASE, TZ="JST-9")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.cap_posts(), [], "APPLE_ID_AUTH enabled without --signin")
+        self.assertEqual(self.deletes(), [], "without --signin a grouped profile was replaced")
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

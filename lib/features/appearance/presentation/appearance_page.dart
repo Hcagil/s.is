@@ -3,14 +3,18 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/grey_option.dart';
 import '../../../app/settings_row.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/appearance_controller.dart';
 import '../domain/appearance_settings.dart';
+import '../domain/custom_theme.dart';
 import 'appearance_labels.dart';
 import 'chat_preview.dart';
+import 'custom_theme_actions.dart';
+import 'new_theme_card.dart';
+import 'theme_editor_page.dart';
+import 'wallpaper_page.dart';
 
 class AppearancePage extends ConsumerWidget {
   const AppearancePage({super.key});
@@ -47,7 +51,11 @@ class AppearancePage extends ConsumerWidget {
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
                   for (final id in AppThemeId.values)
-                    _ThemeTile(id: id, selected: look.themeId == id),
+                    _ThemeTile(
+                      id: id,
+                      selected:
+                          look.customThemeId == null && look.themeId == id,
+                    ),
                 ],
               ),
             ),
@@ -61,35 +69,22 @@ class AppearancePage extends ConsumerWidget {
                 ),
               ),
             ),
-            GreyOption(
-              name: 'custom',
-              label: l.appearanceMyThemes,
-              child: SisSettingsRow(
+            for (final c in look.customThemes)
+              _CustomThemeRow(theme: c, selected: look.customThemeId == c.id),
+            Builder(
+              builder: (rowContext) => SisSettingsRow(
+                key: const ValueKey('appearance-new-theme'),
                 icon: Icons.add_rounded,
                 title: l.appearanceNewTheme,
+                onTap: () => _newTheme(rowContext),
               ),
             ),
-            GreyOption(
-              name: 'wallpaper',
-              label: l.appearanceWallpaper,
-              child: SisSettingsRow(
-                icon: Icons.wallpaper_outlined,
-                title: l.appearanceWallpaper,
-              ),
-            ),
-            GreyOption(
-              name: 'dimblur',
-              child: Column(
-                children: [
-                  ListTile(
-                    title: Text(l.appearanceDim),
-                    subtitle: Slider(value: 0.3, onChanged: null),
-                  ),
-                  ListTile(
-                    title: Text(l.appearanceBlur),
-                    subtitle: Slider(value: 0, onChanged: null),
-                  ),
-                ],
+            SisSettingsRow(
+              key: const ValueKey('appearance-wallpaper'),
+              icon: Icons.wallpaper_outlined,
+              title: l.appearanceWallpaper,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const WallpaperPage()),
               ),
             ),
             Padding(
@@ -105,6 +100,17 @@ class AppearancePage extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Asks for a name, then opens the editor for the new theme.
+Future<void> _newTheme(BuildContext context) async {
+  final box = context.findRenderObject() as RenderBox;
+  final anchor = box.localToGlobal(Offset.zero) & box.size;
+  final name = await showNewThemeCard(context, anchor);
+  if (name == null || !context.mounted) return;
+  await Navigator.of(
+    context,
+  ).push(MaterialPageRoute<void>(builder: (_) => ThemeEditorPage(name: name)));
 }
 
 class _ThemeTile extends ConsumerWidget {
@@ -125,6 +131,12 @@ class _ThemeTile extends ConsumerWidget {
         key: ValueKey('theme-${id.name}'),
         borderRadius: BorderRadius.circular(16),
         onTap: () => ref.read(appearanceProvider.notifier).setTheme(id),
+        onLongPress: () => duplicateBuiltInTheme(
+          ref,
+          AppLocalizations.of(context),
+          Theme.of(context).brightness,
+          id,
+        ),
         child: Container(
           padding: EdgeInsets.all(8),
           decoration: BoxDecoration(
@@ -183,6 +195,71 @@ class _ThemeTile extends ConsumerWidget {
                   ),
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomThemeRow extends ConsumerWidget {
+  const _CustomThemeRow({required this.theme, required this.selected});
+
+  final CustomTheme theme;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = SisBrand.of(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          key: ValueKey('custom-theme-${theme.id}'),
+          onTap: () =>
+              ref.read(appearanceProvider.notifier).selectCustomTheme(theme.id),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: SisTokens.settingsRowPadding,
+              child: Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(theme.accent),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      theme.name,
+                      style: Theme.of(context).textTheme.bodyLarge,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                  if (selected) Icon(Icons.check_rounded, color: t.brand),
+                  Builder(
+                    builder: (ctx) => IconButton(
+                      key: ValueKey('custom-theme-menu-${theme.id}'),
+                      tooltip: AppLocalizations.of(ctx).appearanceThemeMenu,
+                      icon: Icon(Icons.more_vert_rounded, color: t.muted),
+                      onPressed: () {
+                        final box = ctx.findRenderObject() as RenderBox;
+                        final anchor =
+                            box.localToGlobal(Offset.zero) & box.size;
+                        openCustomThemeMenu(ctx, ref, theme, anchor);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

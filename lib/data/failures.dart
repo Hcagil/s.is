@@ -20,7 +20,11 @@ const genericMessage = 'Something went wrong. Try again.';
 
 /// The one place an SDK error becomes words a member reads. The raw error goes to the device log, never to the screen.
 Failure readableFailure(Object e) {
-  log('$e', name: 'sis.data', error: e);
+  // A ClientException carries the request URL, which can hold the Maps key (the Geocoding and Static Maps APIs only take it as ?key=). Mask it before it reaches the log.
+  log(
+    '$e'.replaceAll(RegExp(r'key=[^&\s,)]+'), 'key=<hidden>'),
+    name: 'sis.data',
+  );
 
   final retryable = switch (e) {
     IOException() || TimeoutException() || ClientException() => true,

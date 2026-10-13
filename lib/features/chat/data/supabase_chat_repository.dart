@@ -16,8 +16,18 @@ import '../domain/conversation.dart';
 import '../domain/group_colors.dart';
 import '../domain/group_event.dart';
 import '../domain/group_member.dart';
+import '../domain/file_attachment.dart';
+import '../domain/group_settings.dart';
+import '../domain/link_preview.dart';
 import '../domain/message.dart';
+import '../domain/poll.dart';
 import '../domain/read_marks.dart';
+import '../domain/shared_contact.dart';
+import '../domain/shared_location.dart';
+import '../domain/sticker.dart';
+import '../domain/video.dart';
+import '../domain/voice.dart';
+import 'link_image_shrink.dart';
 
 /// [ChatRepository] backed by Supabase Postgres and Realtime.
 ///
@@ -104,17 +114,38 @@ final class SupabaseChatRepository implements ChatRepository {
         // side's row.
         _client
             .from('conversation_members')
-            .select('conversation_id, user_id, left_at, color_slot')
+            .select('conversation_id, user_id, left_at, color_slot, role')
             .retriedOnce(),
         // Titles distinguish a group from a 1:1; RLS scopes this to the
         // caller's own conversations, same as the membership rows.
         _client
             .from('conversations')
-            .select('id, title, avatar_path, system')
+            .select(
+              'id, title, avatar_path, system, admin_chat, members_can_set_avatar, '
+              'members_can_add, new_members_see_history, '
+              'members_can_pin, pinned_message_id',
+            )
             .retriedOnce(),
+        // The chats this member archived (row-level security scopes it to
+        // their own rows).
+        _client.from('chat_archives').select('conversation_id').retriedOnce(),
+        // The chats this member pinned (own rows only, same scoping).
+        _client.from('chat_pins').select('conversation_id').retriedOnce(),
+        // The chats this member deleted for themselves (own rows only). A hidden chat with nothing readable left is not listed.
+        _client.from('chat_hides').select('conversation_id').retriedOnce(),
       ]);
       final memberRows = firstStage[0];
       final conversationRows = firstStage[1];
+      final archivedIds = {
+        for (final row in firstStage[2]) row['conversation_id'] as String,
+      };
+      final pinnedIds = {
+        for (final row in firstStage[3]) row['conversation_id'] as String,
+      };
+
+      final hiddenIds = {
+        for (final row in firstStage[4]) row['conversation_id'] as String,
+      };
       final titleById = {
         for (final row in conversationRows)
           row['id'] as String: row['title'] as String?,
@@ -123,9 +154,26 @@ final class SupabaseChatRepository implements ChatRepository {
         for (final row in conversationRows)
           row['id'] as String: row['avatar_path'] as String?,
       };
+      final pinnedMessageById = {
+        for (final row in conversationRows)
+          row['id'] as String: row['pinned_message_id'] as String?,
+      };
       final systemById = {
         for (final row in conversationRows)
           row['id'] as String: row['system'] == true,
+      };
+      final adminChatById = {
+        for (final row in conversationRows)
+          row['id'] as String: row['admin_chat'] == true,
+      };
+      final settingsById = {
+        for (final row in conversationRows)
+          row['id'] as String: GroupSettings(
+            membersCanSetAvatar: row['members_can_set_avatar'] == true,
+            membersCanAdd: row['members_can_add'] == true,
+            newMembersSeeHistory: row['new_members_see_history'] != false,
+            membersCanPin: row['members_can_pin'] != false,
+          ),
       };
 
       final otherByConversation = <String, String>{};
@@ -139,6 +187,9 @@ final class SupabaseChatRepository implements ChatRepository {
       // (left_at null) always wins over a past one, and among only-past
       // rows the most recent left_at wins.
       final myLeftAtByConversation = <String, DateTime?>{};
+
+      // Groups where the caller is a CURRENT admin (their current row has role 'admin').
+      final adminOf = <String>{};
       for (final row in memberRows) {
         final userId = row['user_id'] as String;
         final conversationId = row['conversation_id'] as String;
@@ -153,6 +204,9 @@ final class SupabaseChatRepository implements ChatRepository {
             ? null
             : DateTime.parse(row['left_at'] as String);
         final known = myLeftAtByConversation[conversationId];
+        if (leftAt == null && row['role'] == 'admin') {
+          adminOf.add(conversationId);
+        }
         final knownIsCurrent =
             myLeftAtByConversation.containsKey(conversationId) && known == null;
         if (knownIsCurrent) continue; // a current row already wins outright
@@ -185,7 +239,7 @@ final class SupabaseChatRepository implements ChatRepository {
         _client
             .from('conversation_previews')
             .select(
-              'conversation_id, body, created_at, attachment_path, sender_id, deleted',
+              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name, attachment_duration_ms, location_lat, attachment_mime, sticker_id, sticker_album, admin_msg',
             )
             .retriedOnce(),
         // Only conversations with something unread come back.
@@ -209,6 +263,27 @@ final class SupabaseChatRepository implements ChatRepository {
             // would read as "no messages" while hiding a real one.
             body: row['deleted'] != null
                 ? 'This message was deleted'
+                : row['sticker_id'] != null
+                ? stickerPreviewText
+                : row['sticker_album'] == true
+                ? stickerAlbumPreviewText
+                : row['poll'] == true
+                ? pollPreview(row['body'] as String)
+                : row['location_lat'] != null
+                ? locationPreviewText
+                : row['contact'] == true
+                ? contactPreview(row['body'] as String)
+                : row['attachment_mime'] == voiceMime &&
+                      row['attachment_duration_ms'] != null
+                ? voicePreview
+                : row['attachment_duration_ms'] != null
+                ? videoPreview
+                : row['attachment_name'] != null
+                ? filePreview(row['attachment_name'] as String)
+                : adminChatById[row['conversation_id']] == true
+                ? (row['admin_msg'] == null
+                      ? (row['body'] as String).split('\n').first
+                      : adminPreviewPrefix + jsonEncode(row['admin_msg']))
                 : (row['body'] as String).isNotEmpty
                 ? row['body'] as String
                 : (row['attachment_path'] == null ? '' : 'Photo'),
@@ -240,6 +315,12 @@ final class SupabaseChatRepository implements ChatRepository {
             avatarPath: avatarPathById[id],
             hasLeft: myLeftAtByConversation[id] != null,
             isSystem: systemById[id] ?? false,
+            isAdminChat: adminChatById[id] ?? false,
+            settings: settingsById[id] ?? const GroupSettings(),
+            archived: archivedIds.contains(id),
+            pinned: pinnedIds.contains(id),
+            pinnedMessageId: pinnedMessageById[id],
+            isAdmin: adminOf.contains(id),
             senders: titleById[id] == null
                 ? const {}
                 : {
@@ -250,6 +331,11 @@ final class SupabaseChatRepository implements ChatRepository {
                   },
           ),
       ];
+      // A chat the member deleted for themselves stays off the list until
+      // something readable arrives in it again.
+      conversations.removeWhere(
+        (c) => hiddenIds.contains(c.id) && c.lastMessageAt == null,
+      );
       // Conversations with no messages yet sort last.
       conversations.sort((a, b) {
         final at = a.lastMessageAt, bt = b.lastMessageAt;
@@ -265,13 +351,13 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, link_preview, admin_msg';
 
   /// The columns of a page read (open chat): no photo preview -- those arrive
   /// separately, see [attachmentPreviews], so the first paint never waits on
   /// them.
   static const _pageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, link_preview, admin_msg';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -491,6 +577,7 @@ final class SupabaseChatRepository implements ChatRepository {
           .select(_messageColumns)
           .eq('conversation_id', conversationId)
           .not('attachment_path', 'is', null)
+          .filter('attachment_name', 'is', null)
           // Newest first with a cap: what is lost is the oldest.
           .order('created_at', ascending: false)
           .limit(_historyLimit)
@@ -579,6 +666,7 @@ final class SupabaseChatRepository implements ChatRepository {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) async {
     final me = _uid;
     if (me == null) return const Err(DeniedFailure());
@@ -592,6 +680,7 @@ final class SupabaseChatRepository implements ChatRepository {
       // the Realtime echo to display it. id comes from the caller
       // (randomMessageId) so a retried send after a lost answer is
       // idempotent -- see the unique_violation branch below.
+      final card = await _uploadLinkPicture(preview);
       final row = await _client
           .from('messages')
           .insert({
@@ -600,11 +689,27 @@ final class SupabaseChatRepository implements ChatRepository {
             'sender_id': me,
             'body': trimmed,
             'reply_to': ?replyTo,
+            if (card != null) 'link_preview': card.toJson(),
           })
           .select(_messageColumns)
           .single();
       return Ok(_toMessage(row));
     } on PostgrestException catch (e) {
+      if (e.code == 'LNKP1' && preview != null) {
+        // The server refused the card: send the text with the card minus its
+        // picture, or with no card if it had no picture. A card never blocks
+        // the text, and the second call cannot loop.
+        final hadPicture = preview.preview.imagePath != null;
+        return send(
+          id: id,
+          conversationId: conversationId,
+          body: body,
+          replyTo: replyTo,
+          preview: hadPicture
+              ? LinkPreviewDraft(preview: preview.preview.withImagePath(null))
+              : null,
+        );
+      }
       if (e.code == '23505') {
         // This id is already stored: an earlier attempt's insert reached
         // the server but its answer was lost. Read it back and accept it
@@ -814,6 +919,7 @@ final class SupabaseChatRepository implements ChatRepository {
             image.bytes,
             fileOptions: FileOptions(contentType: image.contentType),
           );
+      await _uploadNotificationPicture(path, image.bytes);
 
       final row = await _client
           .from('messages')
@@ -836,6 +942,27 @@ final class SupabaseChatRepository implements ChatRepository {
     }
   }
 
+  /// The small picture a notification shows for this photo, stored next to it as `<path>.t` (the name a video's thumbnail has) BEFORE the message row exists, so the push the insert triggers can find it. Best effort: a photo without one is simply announced as text.
+  Future<void> _uploadNotificationPicture(String path, Uint8List bytes) async {
+    try {
+      final small = await shrinkLinkImage(bytes, width: 480, maxBytes: 65536);
+      if (small == null) return;
+      await _client.storage
+          .from('attachments')
+          .uploadBinary(
+            '$path.t',
+            small,
+            fileOptions: const FileOptions(contentType: 'image/jpeg'),
+          );
+    } catch (e) {
+      log(
+        'sendImage: notification picture not stored: ${e.runtimeType}',
+        name: 'sis.data',
+        level: 900,
+      );
+    }
+  }
+
   @override
   Future<Result<Uint8List>> attachmentBytes(String attachmentPath) async {
     final cached = await _cache.read(attachmentPath);
@@ -851,6 +978,62 @@ final class SupabaseChatRepository implements ChatRepository {
     } catch (e) {
       return Err(_asFailure(e));
     }
+  }
+
+  @override
+  Future<Result<Uint8List>> linkImageBytes(String imagePath) async {
+    final cached = await _cache.read(imagePath);
+    if (cached != null) return Ok(cached);
+    try {
+      final bytes = await _client.storage
+          .from('link-previews')
+          .download(imagePath);
+      await _cache.write(imagePath, bytes);
+      return Ok(bytes);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  /// Uploads the card picture (if any). A failed upload drops the picture,
+  /// never the card; a 409 stays only if the object is our own picture.
+  Future<LinkPreview?> _uploadLinkPicture(LinkPreviewDraft? draft) async {
+    if (draft == null) return null;
+    final path = draft.preview.imagePath;
+    final bytes = draft.image;
+    if (path == null || bytes == null) {
+      return draft.preview.withImagePath(null);
+    }
+    try {
+      await _client.storage
+          .from('link-previews')
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: const FileOptions(contentType: 'image/jpeg'),
+          );
+    } on StorageException catch (e) {
+      // A 409 (a retried send) is ours only if the object at the path is our
+      // own picture; someone else's object there means no picture, because
+      // the server accepts a picture only from the sender who uploaded it.
+      if (e.statusCode != '409') return draft.preview.withImagePath(null);
+      try {
+        final there = await _client.storage
+            .from('link-previews')
+            .download(path);
+        var same = there.length == bytes.length;
+        for (var i = 0; same && i < there.length; i++) {
+          same = there[i] == bytes[i];
+        }
+        if (!same) return draft.preview.withImagePath(null);
+      } catch (_) {
+        return draft.preview.withImagePath(null);
+      }
+    } catch (_) {
+      return draft.preview.withImagePath(null);
+    }
+    await _cache.write(path, bytes);
+    return draft.preview;
   }
 
   @override
@@ -997,6 +1180,19 @@ final class SupabaseChatRepository implements ChatRepository {
     if (me == null) return const Err(DeniedFailure());
     try {
       for (final target in conversationIds) {
+        if (message.stickerId case final sticker?) {
+          // A sticker is a message of its own kind: the server function copies nothing, it only checks the sender may read the sticker.
+          await _client.rpc(
+            'send_sticker',
+            params: {
+              'p_conversation': target,
+              'p_id': randomMessageId(),
+              'p_sticker': sticker,
+              'p_forwarded': true,
+            },
+          );
+          continue;
+        }
         String? path;
         final source = message.attachmentPath;
         if (source != null) {
@@ -1007,6 +1203,19 @@ final class SupabaseChatRepository implements ChatRepository {
               '$target/${DateTime.now().microsecondsSinceEpoch}'
               '-${me.substring(0, 8)}.$ext';
           await _client.storage.from('attachments').copy(source, path);
+          if (message.file?.isVideo ?? false) {
+            // The video's thumbnail travels with it.
+            await _client.storage
+                .from('attachments')
+                .copy('$source.t', '$path.t');
+          } else if (message.file == null) {
+            // A photo's small notification picture travels with it too; an old photo has none, which is fine.
+            try {
+              await _client.storage
+                  .from('attachments')
+                  .copy('$source.t', '$path.t');
+            } catch (_) {}
+          }
         }
         await _client.from('messages').insert({
           'conversation_id': target,
@@ -1016,6 +1225,14 @@ final class SupabaseChatRepository implements ChatRepository {
           if (message.attachmentPreview case final preview?)
             'attachment_preview': base64Encode(preview),
           'forwarded': true,
+          if (message.file case final file?) ...{
+            'attachment_name': file.name,
+            'attachment_mime': file.mime,
+            'attachment_size': file.size,
+            'attachment_duration_ms': ?file.durationMs,
+            'attachment_waveform': ?file.waveform,
+            'voice_transcript': ?file.transcript,
+          },
         });
       }
       return const Ok(null);
@@ -1040,6 +1257,8 @@ final class SupabaseChatRepository implements ChatRepository {
         try {
           final removed = await _client.storage.from('attachments').remove([
             path,
+            // The small picture next to a photo or video (removing a name that does not exist is harmless).
+            '$path.t',
           ]);
           if (removed.isEmpty) {
             log(
@@ -1155,7 +1374,30 @@ final class SupabaseChatRepository implements ChatRepository {
     attachmentPath: row['attachment_path'] as String?,
     attachmentPreview: _preview(row['attachment_preview']),
     replyTo: row['reply_to'] as String?,
+    linkPreview: LinkPreview.fromJson(row['link_preview']),
+    adminMsg: row['admin_msg'] as Map<String, dynamic>?,
     forwarded: row['forwarded'] as bool? ?? false,
+    poll: row['poll'] as bool? ?? false,
+    contact: row['contact'] as bool? ?? false,
+    stickerId: row['sticker_id'] as String?,
+    albumCard: row['sticker_album'] as bool? ?? false,
+    albumId: row['sticker_album_id'] as String?,
+    location: SharedLocation.fromRow(
+      lat: (row['location_lat'] as num?)?.toDouble(),
+      lng: (row['location_lng'] as num?)?.toDouble(),
+      body: row['body'] as String,
+    ),
+    file: switch (row['attachment_name']) {
+      final String name => AttachedFile(
+        name: stripHiddenChars(name),
+        mime: row['attachment_mime'] as String? ?? 'application/octet-stream',
+        size: (row['attachment_size'] as num?)?.toInt() ?? 0,
+        durationMs: (row['attachment_duration_ms'] as num?)?.toInt(),
+        waveform: row['attachment_waveform'] as String?,
+        transcript: row['voice_transcript'] as String?,
+      ),
+      _ => null,
+    },
     editedAt: switch (row['edited_at']) {
       final String at => DateTime.parse(at).toLocal(),
       _ => null,

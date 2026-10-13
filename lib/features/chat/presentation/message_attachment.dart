@@ -72,9 +72,20 @@ class _Attachment extends ConsumerWidget {
     Widget sized(Widget child) => box == null
         ? child
         : SizedBox(width: box.width, height: box.height, child: child);
+    final gate = path == null || message.localImage != null
+        ? null
+        : ref.watch(photoGateProvider(path));
+    // false: auto-download says no and the member has not tapped yet. While
+    // the phone's copy is still being looked for nothing downloads either.
+    final gated = gate?.value == false;
+    final waiting = gate != null && !gate.hasValue && !gate.hasError;
     return GestureDetector(
       key: ValueKey('attachment-${path ?? message.id}'),
-      onTap: path == null ? null : () => _view(context, ref, path),
+      onTap: path == null
+          ? null
+          : gated
+          ? () => ref.read(photoApprovalsProvider.notifier).approve(path)
+          : () => _view(context, ref, path),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
         child: ConstrainedBox(
@@ -94,6 +105,17 @@ class _Attachment extends ConsumerWidget {
                 ),
                 if (path == null) const SisLoadingLogo(size: 40),
               ],
+            ),
+            (_, final String _) when gated || waiting => Semantics(
+              button: gated,
+              label: gated
+                  ? AppLocalizations.of(context).filePhotoTapToDownload
+                  : null,
+              child: Stack(
+                key: ValueKey('attachment-download-${message.id}'),
+                alignment: Alignment.center,
+                children: [_previewBox(box), if (gated) _ring(spinning: false)],
+              ),
             ),
             (_, final String path) => switch (ref.watch(
               attachmentBytesProvider(path),
@@ -121,33 +143,79 @@ class _Attachment extends ConsumerWidget {
               // The preview that came with the message, blurred, until the
               // photo is here. Its box is the photo's own (see _photoBox);
               // a preview that is not a PNG keeps the old fixed size.
-              _ => switch (message.attachmentPreview) {
-                final Uint8List preview => SizedBox(
-                  height: box?.height ?? 180,
-                  width: box?.width ?? 240,
-                  child: ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                    child: Image.memory(
-                      preview,
-                      key: const ValueKey('attachment-preview'),
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
-                      // Valid base64 can still be a broken image: then just
-                      // wait for the photo.
-                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                    ),
-                  ),
-                ),
-                null => const SizedBox(
-                  height: 120,
-                  width: 180,
-                  child: Center(child: SisLoadingLogo(size: 40)),
-                ),
-              },
+              _ => _withRing(
+                _previewBox(box),
+                spinning: ref.watch(photoApprovalsProvider).contains(path),
+              ),
             },
             _ => const SizedBox.shrink(),
           },
         ),
+      ),
+    );
+  }
+
+  Widget _previewBox(Size? box) {
+    return switch (message.attachmentPreview) {
+      final Uint8List preview => SizedBox(
+        height: box?.height ?? 180,
+        width: box?.width ?? 240,
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Image.memory(
+            preview,
+            key: const ValueKey('attachment-preview'),
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            // Valid base64 can still be a broken image: then just
+            // wait for the photo.
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          ),
+        ),
+      ),
+      null => const SizedBox(
+        height: 120,
+        width: 180,
+        child: Center(child: SisLoadingLogo(size: 40)),
+      ),
+    };
+  }
+
+  Widget _withRing(Widget child, {required bool spinning}) {
+    return spinning
+        ? Stack(
+            alignment: Alignment.center,
+            children: [child, _ring(spinning: true)],
+          )
+        : child;
+  }
+
+  Widget _ring({required bool spinning}) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: const BoxDecoration(
+        color: Color(0x73000000),
+        shape: BoxShape.circle,
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox.expand(
+            child: Padding(
+              padding: const EdgeInsets.all(3),
+              child: SisProgressRing(
+                value: spinning ? null : 0.75,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const Icon(
+            Icons.arrow_downward_rounded,
+            size: 20,
+            color: Colors.white,
+          ),
+        ],
       ),
     );
   }

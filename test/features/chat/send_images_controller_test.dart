@@ -17,6 +17,7 @@ import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 
@@ -43,6 +44,7 @@ Future<ProviderContainer> scope(ChatFake chat, {bool open = true}) async {
   final c = await settled(
     ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         sessionControllerProvider.overrideWith(_SignedIn.new),

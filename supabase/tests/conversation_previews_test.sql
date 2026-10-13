@@ -125,11 +125,14 @@ select has_column('public', 'conversation_previews', 'deleted',
                   'conversation_previews exposes deleted, for a placeholder row');
 -- Appended, not inserted: `create or replace view` cannot reorder columns, so
 -- a migration that put it anywhere else would not apply to an existing view.
-select is((select attname::text from pg_attribute
-            where attrelid = 'public.conversation_previews'::regclass
-              and attnum > 0 and not attisdropped
-            order by attnum desc limit 1),
-          'deleted', 'deleted is now the last column, appended after sender_id');
+-- Later columns append after it in turn (poll, 20261011120000_polls; then
+-- contact, 20261012120000_contact_messages; then attachment_name,
+-- 20261013120000_file_messages; then attachment_duration_ms,
+-- 20261014120000_video_messages).
+select is((select count(*) from pg_attribute
+            where attrelid = 'public.conversation_previews'::regclass and attnum > 0 and not attisdropped
+              and attname = any(array['contact', 'attachment_name', 'attachment_duration_ms', 'location_lat', 'attachment_mime'])), 5::bigint,
+          'conversation_previews has contact, attachment_name, attachment_duration_ms, location_lat and attachment_mime');
 
 select * from finish();
 rollback;

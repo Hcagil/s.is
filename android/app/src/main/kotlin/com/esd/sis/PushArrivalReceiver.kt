@@ -28,6 +28,9 @@ class PushArrivalReceiver : BroadcastReceiver() {
         private val executor = Executors.newSingleThreadExecutor()
         private val queued = AtomicInteger(0)
 
+        // Downloads of notification pictures (InstantPush.attachPicture), off the draw thread so a slow download never delays the next message's text.
+        private val pictureExecutor = Executors.newCachedThreadPool()
+
         // ponytail: past 15 queued pushes the 300 ms pacing sleep is skipped, so a burst cannot hold goAsync past the ~10 s receiver limit; raise only if the limit is measured higher.
         const val PACE_CAP = 15
     }
@@ -49,14 +52,26 @@ class PushArrivalReceiver : BroadcastReceiver() {
             val depth = queued.incrementAndGet()
             val pending = goAsync() // null when called directly (unit tests): draw inline
             val work = Runnable {
+                var handedOff = false
                 try {
                     val drawn = InstantPush.show(context, extras, postSummaryNow = queued.get() <= 1, paced = depth <= PACE_CAP)
                     if (prefs.contains(key)) prefs.edit().putString(key, if (drawn) "$head,n" else head).apply()
+                    // The picture of a photo or video is fetched on its own thread, so the next push is not held up behind a download; the receiver stays open until that thread is done.
+                    if (drawn && pending != null && InstantPush.wantsPicture(extras)) {
+                        pictureExecutor.execute {
+                            try {
+                                InstantPush.attachPicture(context, extras)
+                            } finally {
+                                pending.finish()
+                            }
+                        }
+                        handedOff = true
+                    }
                 } catch (e: Exception) {
                     // A measurement must never break push delivery.
                 } finally {
                     queued.decrementAndGet()
-                    pending?.finish()
+                    if (!handedOff) pending?.finish()
                 }
             }
             if (pending == null) {

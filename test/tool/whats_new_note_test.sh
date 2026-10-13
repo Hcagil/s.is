@@ -13,9 +13,11 @@
 #   - no previous release -> only the released commit itself;
 #   - only PRs whose author is OWNER, MEMBER or COLLABORATOR count (anyone else
 #     could edit a merged PR's body and have it sent to every member as SIS);
-#   - the joined note is cut to 3980 characters, then a non-empty note gets a
-#     first line "Version $VERSION" (scope's version name) (room under the 4000-char
-#     release_notes check and TestFlight limit); an empty note gets no prefix;
+#   - the joined EN ("For users:") and TR ("Kullanıcılar için:") texts are each
+#     cut to 1900 characters (never bytes: LC_ALL=C.UTF-8 in the step), then a
+#     non-empty note is "Version $VERSION\n" + EN, plus "\n---\nSürüm $VERSION\n"
+#     + TR when there is TR text (room under the 4000-char release_notes check
+#     and TestFlight limit); an empty note gets no prefix;
 #   - a failing `gh api` pull read fails the run block, and the step is
 #     continue-on-error so that failure never blocks the release;
 #   - each PR is read from the REST endpoint repos/$GITHUB_REPOSITORY/pulls/N
@@ -54,6 +56,19 @@ grep -q '^ *continue-on-error: true *$' <<<"$note_keys" \
 grep -q '^ *VERSION: \${{ needs\.scope\.outputs\.name }} *$' <<<"$note_keys" \
   || { echo "FAIL: the note step must get VERSION: \${{ needs.scope.outputs.name }} (the version line)"; exit 1; }
 grep -q '^ *id: note *$' <<<"$note_keys" || { echo "FAIL: the note step must be id: note (publish reads steps.note.outputs.b64)"; exit 1; }
+# Inserting the row announces the release to every member, so the note step runs
+# only after the Play upload succeeded: it comes after the upload step, the
+# upload may not continue on error, and the note step has no `if:` that would
+# run it after a failure (always(), failure(), !cancelled()).
+upload_line=$(grep -n '^ *- name: Upload to Play internal track *$' "$workflow" | cut -d: -f1)
+note_line=$(grep -n '^ *- name: Store the What.s new note for this build *$' "$workflow" | cut -d: -f1)
+[[ -n $upload_line && -n $note_line && $note_line -gt $upload_line ]] \
+  || { echo "FAIL: the note step must come after 'Upload to Play internal track' (a failed upload never announces)"; exit 1; }
+upload_keys=$(awk -v s="$upload_line" -v e="$note_line" 'NR > s && NR < e' "$workflow")
+! grep -q '^ *continue-on-error:' <<<"$upload_keys" \
+  || { echo "FAIL: the Play upload must not continue on error: the note would announce a build that is not there"; exit 1; }
+! grep -q '^ *if:' <<<"$note_keys" \
+  || { echo "FAIL: the note step must not carry an if: that could run it after a failed upload"; exit 1; }
 # publish's outputs map hands the note on.
 grep -q '^      note_b64: \${{ steps\.note\.outputs\.b64 }}$' <<<"$(awk '$0 == "  publish:" { j = 1; next } j && /^  [A-Za-z0-9_-]+:/ { exit } j && /^    outputs:$/ { o = 1; next }
      o && !/^      / { o = 0 } o' "$workflow")" \
@@ -225,17 +240,35 @@ run_step v0.26.0+178 || fail "step exited non-zero"
 [ ! -s "$tmp/calls" ] || fail "an insert was made from non-collaborator PRs only"
 for pr in 10 11 12; do echo OWNER > "$tmp/prs/$pr.assoc"; done
 
-# 5 a joined note over 3980 characters is cut to 3980, then gets the version line
-long=$(printf 'x%.0s' $(seq 3000))
-printf 'For users: %s\n' "$long" > "$tmp/prs/10"
-printf 'For users: %s\n' "$long" > "$tmp/prs/12"
+# 5 EN ("For users:") and TR ("Kullanıcılar için:") texts are each cut to their
+# first 1900 characters, separately; stored as "Version X\n" + EN, then
+# "\n---\nSürüm X\n" + TR. The step runs under LC_ALL=C here, so only the
+# step's own LC_ALL=C.UTF-8 makes the cut count characters, not bytes.
+en_a=$(printf 'a%.0s' $(seq 1000)); en_b=$(printf 'b%.0s' $(seq 1500))
+printf 'For users: %s\n' "$en_a" > "$tmp/prs/10"
+printf 'For users: %s\n' "$en_b" > "$tmp/prs/12"
 printf 'Nothing.\n' > "$tmp/prs/11"
-run_step v0.26.0+178 || fail "step exited non-zero on a long note"
+LC_ALL=C run_step v0.26.0+178 || fail "step exited non-zero on a long note"
 stored=$(note_of; printf .); stored=${stored%.}
-both=$(printf '%s\n%s' "$long" "$long")
-[ "$stored" = "$V"$'\n'"${both:0:3980}" ] || fail "long note is not the version line + the first 3980 characters"
+en_both=$(printf '%s\n%s' "$en_a" "$en_b")
+[ "$stored" = "$V"$'\n'"${en_both:0:1900}" ] || fail "long note is not the version line + the first 1900 EN characters"
 [ "${#stored}" -le 4000 ] || fail "long note stored as ${#stored} characters, over the 4000 check"
 same_note
+
+# 5b a long Turkish text of multi-byte letters keeps exactly 1900 letters,
+# never splits a letter, stays valid UTF-8, and is cut apart from the EN text.
+tr_a=T$(printf 'ş%.0s' $(seq 1199)); tr_b=$(printf 'ıİğüöç%.0s' $(seq 200))
+printf 'For users: %s\nKullanıcılar için: %s\n' "$en_a" "$tr_a" > "$tmp/prs/10"
+printf 'For users: %s\nKullanıcılar için: %s\n' "$en_b" "$tr_b" > "$tmp/prs/12"
+LC_ALL=C run_step v0.26.0+178 || fail "step exited non-zero on a long Turkish note"
+stored=$(note_of; printf .); stored=${stored%.}
+iconv -f UTF-8 -t UTF-8 <<<"$stored" >/dev/null 2>&1 || fail "long Turkish note is not valid UTF-8 (a letter was split)"
+tr_both=$(printf '%s\n%s' "$tr_a" "$tr_b")
+[ "$stored" = "$V"$'\n'"${en_both:0:1900}"$'\n---\nSürüm 1.2.3\n'"${tr_both:0:1900}" ] \
+  || fail "long Turkish note is not Version + 1900 EN chars + --- + Sürüm + 1900 TR letters"
+[ "${#stored}" -le 4000 ] || fail "bilingual note stored as ${#stored} characters, over the 4000 check"
+same_note
+printf 'Nothing.\n' > "$tmp/prs/12"
 
 # 6 a failing gh api read fails the run block, and stores nothing
 printf 'For users: Fine.\n' > "$tmp/prs/10"

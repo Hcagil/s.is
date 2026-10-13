@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -12,6 +14,15 @@ val releaseSigningValues = mapOf(
     "ANDROID_UPLOAD_KEY_PASSWORD" to System.getenv("ANDROID_UPLOAD_KEY_PASSWORD"),
 )
 val missingReleaseSigningValues = releaseSigningValues.filterValues { it.isNullOrBlank() }.keys
+
+// Google Maps key for the manifest: env (CI), else the git-ignored .private/maps.properties, else empty. An empty key never fails a build; the app then falls back to OpenStreetMap.
+val mapsApiKey: String =
+    System.getenv("MAPS_API_KEY_ANDROID")?.takeIf { it.isNotBlank() }
+        ?: rootProject.file("../.private/maps.properties").takeIf { it.exists() }?.let { file ->
+            Properties().apply { file.inputStream().use { load(it) } }
+                .getProperty("MAPS_API_KEY_ANDROID")?.trim()
+        }
+        ?: ""
 val releaseBuildRequested = gradle.startParameter.taskNames.any {
     it.contains("release", ignoreCase = true)
 }
@@ -49,6 +60,7 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     signingConfigs {
@@ -87,6 +99,8 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    // Sticker maker background removal (ML Kit subject segmentation, beta). The model is downloaded by Google Play services; needs minSdk 24 (Flutter's default).
+    implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
     testImplementation("junit:junit:4.13.2")
     // android.jar's org.json is a stub in JVM unit tests; this is the real one.
     testImplementation("org.json:json:20240303")

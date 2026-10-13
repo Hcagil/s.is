@@ -21,6 +21,7 @@ import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
+import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
@@ -36,6 +37,7 @@ import '../support/session_claim.dart';
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Unread counts through the real stack: [SupabaseChatRepository.markRead]
 /// and `conversations().unread` against the real RPCs, and the seam the
@@ -106,6 +108,8 @@ class _AccountAuth implements AuthRepository {
   Stream<bool> get signedInChanges => const Stream.empty();
   @override
   Future<Result<void>> signInWithGoogle() async => const Ok(null);
+  @override
+  Future<Result<void>> signInWithApple() async => const Ok(null);
   @override
   Future<Result<bool>> activateSession() async =>
       Ok(await client.rpc('activate_session') as bool);
@@ -186,11 +190,13 @@ class _MarkReadDown implements ChatRepository {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) => live.send(
     id: id,
     conversationId: conversationId,
     body: body,
     replyTo: replyTo,
+    preview: preview,
   );
   @override
   Future<Result<void>> forward(Message message, List<String> ids) =>
@@ -221,6 +227,10 @@ class _MarkReadDown implements ChatRepository {
   );
   @override
   Future<Result<Uri>> attachmentUrl(String path) => live.attachmentUrl(path);
+  @override
+  Future<Result<Uint8List>> linkImageBytes(String path) =>
+      live.linkImageBytes(path);
+
   @override
   Future<Result<Uint8List>> attachmentBytes(String path) =>
       live.attachmentBytes(path);
@@ -267,6 +277,7 @@ List<Override> _production(
   String name, {
   ChatRepository? chat,
 }) => [
+  ...videoOverrides(),
   runtimeConfigProvider.overrideWithValue(
     const RuntimeConfig(
       supabaseUrl: _url,

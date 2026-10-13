@@ -18,8 +18,8 @@ final class _NoBadge implements AppBadge {
   Future<void> set(int count) async {}
 }
 
-/// Keeps the app-icon number equal to the server's unread total (muted chats
-/// and people left out), for whoever is signed in; a signed-out phone shows
+/// Keeps the app-icon number equal to the server's unread total (muted and archived
+/// chats and muted people left out), for whoever is signed in; a signed-out phone shows
 /// none.
 ///
 /// Off the user path: the read is debounced and nothing waits on it. It runs
@@ -28,14 +28,14 @@ final class _NoBadge implements AppBadge {
 /// function is called, which the app does on every return to the screen --
 /// so the number is corrected the moment the app is opened, never left stale.
 /// A failed read leaves the number as it was. A session still restoring, or
-/// one that failed, is not a sign-out and sets nothing; a signed-out or
-/// denied member gets 0.
+/// one that failed, is not a sign-out and sets nothing; a signed-out,
+/// denied or replaced member gets 0.
 final badgeSyncProvider = Provider<void Function()>((ref) {
   final me = ref.watch(currentUserIdProvider);
   if (me == null) {
     final noAccess = ref.watch(
       sessionControllerProvider.select(
-        (s) => s.value is SignedOut || s.value is Denied,
+        (s) => s.value is SignedOut || s.value is Denied || s.value is Replaced,
       ),
     );
     if (noAccess) {
@@ -62,7 +62,7 @@ final badgeSyncProvider = Provider<void Function()>((ref) {
 
   ref.listen(
     conversationListProvider.select(
-      (l) => l.value?.fold<int>(0, (a, c) => a + c.unread),
+      (l) => l.value?.fold<int>(0, (a, c) => c.archived ? a : a + c.unread),
     ),
     (_, _) => schedule(),
     fireImmediately: true,

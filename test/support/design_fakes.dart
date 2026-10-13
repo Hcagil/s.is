@@ -23,6 +23,7 @@ import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
+import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
@@ -33,6 +34,8 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/domain/profile_repository.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 import 'package:sis/features/update/domain/update_repository.dart';
+
+import 'video_fakes.dart';
 
 import 'fakes.dart'
     show
@@ -54,6 +57,7 @@ class DesignAuth implements AuthRepository {
   bool session;
   Result<void> signInResult;
   int signInCalls = 0;
+  int appleCalls = 0;
   final _changes = StreamController<bool>.broadcast();
 
   @override
@@ -70,6 +74,13 @@ class DesignAuth implements AuthRepository {
       _changes.add(true);
     }
     return signInResult;
+  }
+
+  @override
+  Future<Result<void>> signInWithApple() async {
+    appleCalls++;
+    await Future<void>.delayed(Duration.zero);
+    return const Ok(null);
   }
 
   @override
@@ -221,6 +232,7 @@ class DesignChat implements ChatRepository {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) async => Ok(
     Message(
       id: id,
@@ -263,6 +275,10 @@ class DesignChat implements ChatRepository {
   @override
   Future<Result<Uri>> attachmentUrl(String attachmentPath) async =>
       const Err(NetworkFailure('not in this test'));
+  @override
+  Future<Result<Uint8List>> linkImageBytes(String imagePath) async =>
+      const Err(NetworkFailure('not in this test'));
+
   @override
   Future<Result<Uint8List>> attachmentBytes(String attachmentPath) async =>
       const Err(NetworkFailure('not in this test'));
@@ -457,6 +473,7 @@ Widget designApp({
   List<Override> extra = const [],
 }) => ProviderScope(
   overrides: [
+    ...videoOverrides(),
     ...extra,
     runtimeConfigProvider.overrideWithValue(
       const RuntimeConfig(

@@ -31,6 +31,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/reach.dart';
 import '../support/service_key.dart';
+import '../support/video_fakes.dart';
 
 const _url = String.fromEnvironment(
   'SUPABASE_TEST_URL',
@@ -364,10 +365,16 @@ void main() {
     final g = await newGroup([hol]);
     await say(gia, g, 'hello');
     final holC = ProviderContainer.test(
-      overrides: [chatRepositoryProvider.overrideWithValue(hol.repo)],
+      overrides: [
+        ...videoOverrides(),
+        chatRepositoryProvider.overrideWithValue(hol.repo),
+      ],
     );
     final giaC = ProviderContainer.test(
-      overrides: [chatRepositoryProvider.overrideWithValue(gia.repo)],
+      overrides: [
+        ...videoOverrides(),
+        chatRepositoryProvider.overrideWithValue(gia.repo),
+      ],
     );
     holC.listen(conversationListProvider, (_, _) {});
     await holC.read(conversationListProvider.future);
@@ -410,7 +417,10 @@ void main() {
     expect(await currentAdmins(g), {gia.id}, reason: 'fixture');
 
     final giaC = ProviderContainer.test(
-      overrides: [chatRepositoryProvider.overrideWithValue(gia.repo)],
+      overrides: [
+        ...videoOverrides(),
+        chatRepositoryProvider.overrideWithValue(gia.repo),
+      ],
     );
     final r = await giaC.read(groupControllerProvider).leave(g);
     giaC.dispose();

@@ -1,0 +1,14 @@
+/* The contacts prompt (iPhone asks once, then Settings). */
+"NSContactsUsageDescription" = "SIS uses your contacts so you can pick one to send in a chat, and, when you open Find people, to show which of your contacts use SIS. For that, your contacts' email addresses are sent in coded (hashed) form, checked against SIS members and not stored.";
+
+/* The photo library prompt (iPhone asks once, then Settings). */
+"NSPhotoLibraryUsageDescription" = "Allow access so your photos and videos load right here in the chat. Nothing is uploaded until you send it. You can allow just a few.";
+
+/* The location prompt (iPhone asks once, then Settings). */
+"NSLocationWhenInUseUsageDescription" = "Allow access so you can share where you are in a chat. Your location is only read when you choose to send it.";
+
+/* The microphone prompt (iPhone asks once, then Settings). */
+"NSMicrophoneUsageDescription" = "Allow microphone access to record voice messages and to dictate text. Audio is only sent when you send the voice message.";
+
+/* The speech recognition prompt (iPhone asks once, then Settings). */
+"NSSpeechRecognitionUsageDescription" = "Allow speech recognition to turn your voice into text in the message box. It runs on your phone.";

@@ -2,11 +2,15 @@ package com.esd.sis
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.speech.SpeechRecognizer
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -18,6 +22,9 @@ import java.util.concurrent.Executors
 
 private const val CHANNEL = "sis/external_picker"
 private const val TONE_CHANNEL = "sis/tone_picker"
+private const val NETWORK_CHANNEL = "sis/network"
+private const val SPEECH_CHANNEL = "sis/speech"
+private const val SHARE_CHANNEL = "sis/share_intake"
 private const val REQUEST_TONE = 9103
 private const val REQUEST_ATTACHMENTS = 9101
 private const val REQUEST_PICTURE = 9102
@@ -43,6 +50,12 @@ class MainActivity : FlutterActivity() {
     // scale and JPEG compression for up to 10 photos; on the main thread
     // that risks freezing the UI or an ANR.
     private val pickExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val stickerCutout by lazy { StickerCutout(this) }
+    private val shareReader by lazy { ShareIntakeReader(this) }
+    private var shareChannel: MethodChannel? = null
+    private var pendingShare: Map<String, Any?>? = null
+    private var shareParsing = false
+    private val shareWaiters = mutableListOf<MethodChannel.Result>()
 
     override fun onDestroy() {
         pickExecutor.shutdown()
@@ -58,6 +71,8 @@ class MainActivity : FlutterActivity() {
                     "pickProfilePicture" -> startPick(multiple = false, requestCode = REQUEST_PICTURE, result = result)
                     "takePhoto" -> takePhoto(result)
                     "cropPicture" -> cropPicture(call, result)
+                    "cutoutSupported" -> result.success(stickerCutout.supported())
+                    "cutoutMask" -> cutoutMask(call, result)
                     else -> result.notImplemented()
                 }
             }
@@ -69,7 +84,84 @@ class MainActivity : FlutterActivity() {
                 }
                 pickTone((call.arguments as? Map<*, *>)?.get("current") as? String, result)
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NETWORK_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "isRoaming") result.success(isRoaming()) else result.notImplemented()
+            }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SPEECH_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "onDeviceAvailable") result.success(onDeviceSpeechAvailable()) else result.notImplemented()
+            }
+        shareChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARE_CHANNEL).also {
+            it.setMethodCallHandler { call, result -> if (call.method == "take") takeShare(result) else result.notImplemented() }
+        }
+        shareReader.cleanStale()
+        handleShare(intent)
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleShare(intent)
+    }
+
+    // Dart asks for the share that started or reached the app. A parse still
+    // running is waited for; nothing waiting answers null. A share is handed
+    // over once: it is cleared as it is taken.
+    private fun takeShare(result: MethodChannel.Result) {
+        val ready = pendingShare
+        when {
+            ready != null -> { pendingShare = null; result.success(ready) }
+            shareParsing -> shareWaiters.add(result)
+            else -> result.success(null)
+        }
+    }
+
+    // Copies a share intent's files into the cache off the main thread, then
+    // hands them to a waiting Dart ask or tells Dart they arrived. A launch from
+    // history must not replay an old share.
+    private fun handleShare(intent: Intent?) {
+        if (intent == null || !shareReader.isShare(intent)) return
+        if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
+        val copy = Intent(intent)
+        intent.action = null // consumed: a recreate must not read it again
+        shareParsing = true
+        pickExecutor.execute {
+            val parsed = try { shareReader.read(copy) } catch (e: Exception) { null }
+            runOnUiThread {
+                shareParsing = false
+                if (parsed == null) {
+                    shareWaiters.forEach { it.success(null) }
+                } else if (shareWaiters.isNotEmpty()) {
+                    shareWaiters.removeAt(0).success(parsed)
+                    shareWaiters.forEach { it.success(null) }
+                } else {
+                    pendingShare = parsed
+                    shareChannel?.invokeMethod("arrived", null)
+                }
+                shareWaiters.clear()
+            }
+        }
+    }
+
+    // True when the active network is cellular and the carrier marks it as
+    // roaming (connectivity_plus cannot tell). Needs only ACCESS_NETWORK_STATE,
+    // which the connectivity_plus plugin's manifest already declares.
+    private fun isRoaming(): Boolean {
+        val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+        val network = manager.activeNetwork ?: return false
+        val caps = manager.getNetworkCapabilities(network) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) &&
+            !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING)
+    }
+
+    // True only when this phone can recognise speech WITHOUT a server (the
+    // Android 12+ on-device recogniser). speech_to_text silently falls back to
+    // the network recogniser otherwise, so Dart asks first (docs/DECISIONS.md,
+    // voice messages).
+    private fun onDeviceSpeechAvailable(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(this)
 
     // The phone's own notification-sound chooser. A null uri in the reply
     // means the system default; a null reply means the member cancelled.
@@ -265,5 +357,12 @@ class MainActivity : FlutterActivity() {
                 runOnUiThread { result.error("crop_failed", "Could not crop the photo.", null) }
             }
         }
+    }
+
+    // Background-removal mask for a sticker photo; ML Kit calls back on its own thread, so hop to the UI thread to reply. Null reply = no mask (the caller keeps the whole image).
+    private fun cutoutMask(call: MethodCall, result: MethodChannel.Result) {
+        val bytes = (call.arguments as? Map<*, *>)?.get("bytes") as? ByteArray
+        if (bytes == null) { result.error("bad_args", "Missing photo bytes.", null); return }
+        pickExecutor.execute { stickerCutout.mask(bytes) { mask -> runOnUiThread { result.success(mask) } } }
     }
 }

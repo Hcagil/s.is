@@ -10,13 +10,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
 import '../../../app/delivery_tick.dart';
-import '../../../app/grey_option.dart';
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../app/theme.dart';
 import '../../../core/failure.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../appearance/presentation/chat_text_scale.dart';
+import '../../appearance/presentation/chat_wallpaper.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../../notifications/application/push_controller.dart';
@@ -26,27 +26,55 @@ import '../../update/presentation/whats_new_card.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
 import '../application/group_controller.dart';
+import '../application/link_preview_controller.dart';
 import '../domain/conversation.dart';
 import '../domain/delivery.dart';
 import '../domain/emoji.dart';
 import '../domain/group_member.dart';
 import '../domain/highlight.dart';
+import '../domain/link_preview.dart';
 import '../domain/links.dart';
 import '../domain/message.dart';
 import '../domain/png_size.dart';
+import '../domain/poll.dart';
 import '../domain/reaction.dart';
 import '../domain/timeline.dart';
+import '../domain/video.dart';
 import '../domain/read_marks.dart';
+import '../domain/sticker.dart';
 import 'attachment_preview_page.dart';
 import 'attachment_sheet.dart';
 import 'chat_search_bar.dart';
+import 'contact_card.dart';
+import 'contact_picker_page.dart';
+import 'file_card.dart';
+import 'link_card.dart';
+import 'link_strip.dart';
+import 'voice_bubble.dart';
+import 'voice_gesture.dart';
+import 'voice_record_bar.dart';
+import 'voice_record_button.dart';
+import 'location_card.dart';
+import 'location_share_page.dart';
 import 'group_event_line.dart';
+import 'group_gone_guard.dart';
+import 'sticker_album_card.dart';
+import 'sticker_message.dart';
+import 'sticker_panel.dart';
+import 'starter_album_page.dart';
 import 'swipeable_message.dart';
+import 'video_card.dart';
+import 'video_grid_page.dart';
+import 'video_review_page.dart';
+import 'admin_reply_bubble.dart';
 import 'message_actions.dart';
 import 'member_name.dart';
 import 'message_menu_card.dart';
 import 'person_avatar.dart';
+import 'poll_card.dart';
+import 'poll_create_page.dart';
 import 'photo_viewer.dart';
+import 'pinned_bar.dart';
 import 'profile_pages.dart';
 import 'readers_card.dart';
 
@@ -416,6 +444,46 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     );
   }
 
+  /// A tap on a sticker: a starter sticker opens the starter album, any other
+  /// opens the small save card (add to favourites / to an album).
+  Future<void> _tapSticker(Message message, {required bool mine}) async {
+    final id = message.stickerId!;
+    if (isStarterSticker(id)) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              StarterAlbumPage(conversationId: message.conversationId),
+        ),
+      );
+      return;
+    }
+    final anchor = _bubbleRect(message.id);
+    if (anchor == null) return;
+    final l = AppLocalizations.of(context);
+    final picked = await showMenuCard<MessageAction>(
+      context,
+      anchor: anchor,
+      alignEnd: mine,
+      cardKey: const ValueKey('sticker-save-menu'),
+      actions: [
+        MenuCardAction<MessageAction>(
+          value: MessageAction.stickerFavourite,
+          keyId: 'sticker-favourite',
+          icon: Icons.favorite_border,
+          label: l.messageActionStickerFavourite,
+        ),
+        MenuCardAction<MessageAction>(
+          value: MessageAction.stickerAlbum,
+          keyId: 'sticker-album',
+          icon: Icons.collections_bookmark_outlined,
+          label: l.messageActionStickerAlbum,
+        ),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    await runMessageAction(context, ref, message, picked);
+  }
+
   /// Sets or clears (null) the member's reaction on [messageId] and closes the
   /// tap extras; a refusal shows a notice (this screen outlives the bar).
   Future<void> _react(String messageId, String? emoji) async {
@@ -492,6 +560,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       chatSearchProvider.select((s) => s.current?.id),
     );
     final conversationId = ref.watch(openConversationProvider);
+    listenGroupGone(context, ref, conversationId);
     // Not given by the caller (a tapped notification opens this screen before
     // the list is known): taken from the list as soon as it has the chat.
     final listed = ref.watch(
@@ -508,6 +577,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
             : conversationLabel(AppLocalizations.of(context), listed));
     final isGroup = widget.group || (listed?.isGroup ?? false);
     final isSystem = listed?.isSystem ?? false;
+    final isAdminChat = listed?.isAdminChat ?? false;
     final otherUserId = widget.otherUserId ?? listed?.other?.userId;
     final status = _status(ref, AppLocalizations.of(context), otherUserId);
     // The group's own roster names every sender, current or departed --
@@ -518,12 +588,23 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
         ? ref.watch(groupRosterProvider(conversationId)).value ??
               const <GroupMember>[]
         : const <GroupMember>[];
+    final myMember = switch (ref.watch(sessionControllerProvider).value) {
+      Allowed(:final member) => member,
+      _ => null,
+    };
     final names = {
       for (final m in roster)
         m.member.userId: nameOrMember(
           AppLocalizations.of(context),
           m.member.displayName,
         ),
+      // A 1:1 has no roster: name the two people for "X pinned a message".
+      if (!isGroup && myMember != null)
+        myMember.userId: nameOrMember(
+          AppLocalizations.of(context),
+          myMember.displayName,
+        ),
+      if (!isGroup && otherUserId != null && title != null) otherUserId: title,
     };
     final departedSenderIds = {
       for (final m in roster)
@@ -585,7 +666,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                   if (id == null) return;
                   final system =
                       (ref.read(conversationListProvider).value ?? const [])
-                          .where((c) => c.id == id)
+                          .where((c) => c.id == id && !c.isAdminChat)
                           .firstOrNull
                           ?.isSystem ==
                       true;
@@ -681,6 +762,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
           bottom: !_isIos(context),
           child: Column(
             children: [
+              if (conversationId != null)
+                PinnedBar(
+                  conversationId: conversationId,
+                  onTap: (m) => unawaited(_goToHit(m)),
+                ),
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
@@ -689,10 +775,14 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
+                        const Positioned.fill(child: ChatWallpaper()),
                         switch (messages) {
                           AsyncData() when timeline.isEmpty => Center(
                             child: Text(
                               AppLocalizations.of(context).messageEmpty,
+                              style: TextStyle(
+                                color: SisBrand.of(context).onChat,
+                              ),
                             ),
                           ),
                           _
@@ -729,7 +819,13 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                   );
                                 }
                                 final message = (entry as MessageEntry).message;
-                                if (isSystem) {
+                                if (isAdminChat && message.adminMsg != null) {
+                                  return AdminReplyBubble(
+                                    key: _keyFor(message.id),
+                                    message: message,
+                                  );
+                                }
+                                if (isSystem && !isAdminChat) {
                                   return WhatsNewCard(
                                     key: _keyFor(message.id),
                                     body: message.body,
@@ -772,6 +868,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                   // A tap shows the "Seen by" pill and the reactions bar; a long press opens the action card. The system chat takes neither.
                                   onTap: isSystem
                                       ? null
+                                      : message.stickerId != null &&
+                                            !message.isDeleted
+                                      ? () => unawaited(
+                                          _tapSticker(message, mine: mine),
+                                        )
                                       : () => ref
                                             .read(
                                               tappedMessageProvider.notifier,
@@ -897,7 +998,14 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                   ),
                 ),
               ),
-              if (isSystem) const UpToDateMark(),
+              if (isSystem && !isAdminChat)
+                UpToDateMark(
+                  newestBody: ref
+                      .watch(messagesProvider)
+                      .value
+                      ?.lastOrNull
+                      ?.body,
+                ),
               const _Composer(),
             ],
           ),

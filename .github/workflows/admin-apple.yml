@@ -1,0 +1,116 @@
+# Admin Apple
+# Adds or removes one TestFlight tester for the admin chat. The repository is
+# public, so the tester email never appears in an input, an argument or a log:
+# it is fetched from the edge function after the job is claimed and masked at
+# once, and asc_signing.py prints only the HTTP status and Apple's error code.
+# The workflow proves itself to the edge function with GitHub's OIDC token
+# (audience sis-admin-apple); the function checks the repository id, this
+# workflow file on main, ref main and the event workflow_dispatch.
+name: Admin Apple
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'uuid of the admin job'
+        required: true
+        type: string
+permissions:
+  id-token: write
+  contents: read
+concurrency:
+  group: admin-apple
+  cancel-in-progress: false
+jobs:
+  tester:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Run the job
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          TF_GROUPS: ${{ vars.TESTFLIGHT_GROUPS }}
+        shell: bash
+        run: |
+          set -eu -o pipefail
+          printf '%s' "$JOB_ID" | grep -Eqi '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' || { echo 'job_id is not a uuid' >&2; exit 1; }
+
+          # Called as a plain statement before every report call: inside $(...) the
+          # mask line would be captured and tok lost.
+          fresh_token() {
+            tok=$(curl -sS --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sis-admin-apple" | jq -r .value)
+            echo "::add-mask::$tok"
+          }
+
+          report() {
+            curl -sS --fail -X POST -H "Authorization: Bearer $tok" -H 'content-type: application/json' -d "$1" "$SUPABASE_URL/functions/v1/admin-apple-report"
+          }
+
+          fresh_token
+          resp=$(report "$(jq -nc --arg j "$JOB_ID" '{action:"claim",job_id:$j}')") || { echo 'claim refused' >&2; exit 1; }
+          EMAIL=$(printf '%s' "$resp" | jq -r .email)
+          echo "::add-mask::$EMAIL"
+          KIND=$(printf '%s' "$resp" | jq -r .kind)
+          unset resp
+
+          finish() {
+            local ok=$1
+            local reason=$2
+            fresh_token || return 0
+            report "$(jq -nc --arg j "$JOB_ID" --argjson ok "$ok" --arg r "$reason" '{action:"finish",job_id:$j,ok:$ok,reason:$r}')" >/dev/null || true
+          }
+
+          # A crash is reported as a failure.
+          ended=0
+          trap 'if [ "$ended" != 1 ]; then finish false timeout || true; fi' EXIT
+
+          if [ "$KIND" != "add" ] && [ "$KIND" != "remove" ]; then
+            echo 'invalid job kind' >&2
+            exit 1
+          fi
+          if [ -z "$EMAIL" ] || [ "$EMAIL" = "null" ]; then
+            echo 'email is empty or null' >&2
+            exit 1
+          fi
+          if [ -z "$KEY" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER_ID" ]; then
+            echo 'An App Store Connect secret is empty (KEY, KEY_ID or ISSUER_ID)' >&2
+            exit 1
+          fi
+          dir="$RUNNER_TEMP/asc"
+          mkdir -m 700 "$dir"
+          (umask 077; printf '%s\n' "$KEY" > "$dir/AuthKey_$KEY_ID.p8")
+          export API_PRIVATE_KEYS_DIR="$dir"
+
+          for attempt in 1 2 3; do
+            if [ "$attempt" = 2 ]; then
+              sleep 5
+              fresh_token || true
+              report "$(jq -nc --arg j "$JOB_ID" '{action:"progress",job_id:$j,attempt:2}')" >/dev/null || true
+            elif [ "$attempt" = 3 ]; then
+              sleep 20
+            fi
+            rc=0
+            TESTER_EMAIL="$EMAIL" python3 tool/asc_signing.py tester "$KIND" "${TF_GROUPS:-bacanaks}" || rc=$?
+            [ "$rc" = 75 ] || break
+          done
+
+          if [ "$rc" = 0 ]; then
+            finish true ok
+          elif [ "$rc" = 75 ]; then
+            finish false timeout
+          else
+            finish false rejected
+          fi
+          ended=1
+          exit $rc
+      - name: Remove the App Store Connect key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"

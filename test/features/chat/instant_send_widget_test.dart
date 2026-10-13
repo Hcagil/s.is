@@ -32,6 +32,8 @@ import '../../support/sis_ui.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../../support/video_fakes.dart';
+
 const bob = Member(userId: 'u2', displayName: 'Bob');
 const failure = NetworkFailure('Could not reach SIS just now');
 
@@ -54,6 +56,7 @@ late ProviderContainer _c;
 Future<ProviderContainer> scope(HeldSendChat chat) async => _c = await settled(
   ProviderContainer.test(
     overrides: [
+      ...videoOverrides(),
       chatRepositoryProvider.overrideWithValue(chat),
       presenceRepositoryProvider.overrideWithValue(PresenceFake()),
       attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),

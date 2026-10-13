@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/reach.dart';
 import '../support/service_key.dart';
+import '../support/video_fakes.dart';
 
 /// Messages strictly per chat (0.30.7), against the real stack: the REAL
 /// MessagesController on the REAL SupabaseChatRepository, real PostgREST and
@@ -143,7 +144,10 @@ void main() {
   });
 
   ProviderContainer container() => ProviderContainer.test(
-    overrides: [chatRepositoryProvider.overrideWithValue(mira)],
+    overrides: [
+      ...videoOverrides(),
+      chatRepositoryProvider.overrideWithValue(mira),
+    ],
   );
 
   /// Every value messagesProvider takes from now on.

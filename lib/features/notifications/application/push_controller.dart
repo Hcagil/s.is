@@ -39,7 +39,7 @@ final pushInboxOwnerProvider = Provider<void>((ref) {
     switch (next.value) {
       case Allowed(:final member):
         unawaited(source.forUser(member.userId));
-      case SignedOut() || Denied():
+      case SignedOut() || Denied() || Replaced():
         unawaited(source.forUser(null));
       case _:
     }
@@ -53,6 +53,8 @@ final pushRegistrationProvider = NotifierProvider<PushRegistration, String?>(
 );
 
 class PushRegistration extends Notifier<String?> {
+  Future<void>? _forgetting;
+
   @override
   String? build() {
     // Before anything is registered: what a previous member left must be
@@ -83,6 +85,10 @@ class PushRegistration extends Notifier<String?> {
   /// A failed registration is not shown anywhere: it is retried on the next
   /// start and on the next token refresh.
   Future<void> _register(String token) async {
+    // A late forget must land before this registration, not delete it.
+    try {
+      await _forgetting;
+    } catch (_) {}
     if (!ref.mounted) return;
     final r = await ref.read(pushRegistryProvider).register(token);
     if (r is Ok && ref.mounted) state = token;
@@ -93,7 +99,9 @@ class PushRegistration extends Notifier<String?> {
   ///
   /// Best effort -- if it fails, the server still sends nothing to a device
   /// whose session has ended.
-  Future<void> forget() async {
+  Future<void> forget() => _forgetting = _forget();
+
+  Future<void> _forget() async {
     final source = ref.read(pushSourceProvider);
     final token = state ?? await source.token();
     if (token != null) await ref.read(pushRegistryProvider).forget(token);

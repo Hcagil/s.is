@@ -26,6 +26,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Tags, names and onboarding through the real stack.
 ///
@@ -440,6 +441,7 @@ void main() {
 
     Widget app() => ProviderScope(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(
           const RuntimeConfig(
             supabaseUrl: _url,

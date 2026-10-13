@@ -24,6 +24,8 @@ import '../support/reach.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../support/video_fakes.dart';
+
 /// Two members' message screens, mounted at once over the real repository,
 /// exercising the seam a unit test cannot: A deletes her own message through
 /// the actual swipe -> action row -> confirm flow, and B's OPEN screen must
@@ -123,6 +125,7 @@ void main() {
   ProviderContainer containerFor(SupabaseClient client, Member member) =>
       ProviderContainer(
         overrides: [
+          ...videoOverrides(),
           chatRepositoryProvider.overrideWithValue(
             SupabaseChatRepository(client),
           ),

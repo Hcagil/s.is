@@ -35,6 +35,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 import '../profile/avatar_widgets_test.dart'
     show expectInitials, expectPicture, green, red, settle, tapKey;
 
@@ -127,6 +128,7 @@ class World {
 
   Widget app() => ProviderScope(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(config),
       authRepositoryProvider.overrideWithValue(
         FakeAuth(session: true, member: me),

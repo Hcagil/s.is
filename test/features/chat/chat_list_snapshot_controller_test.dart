@@ -26,6 +26,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
+import '../../support/archive_fakes.dart';
 import '../../support/fakes.dart';
 
 const alice = Member(userId: 'u-a', displayName: 'Alice');
@@ -172,6 +173,7 @@ void main() {
   late Directory dir;
   late DiskStore store;
   late ListChat chat;
+  late ChatArchiveFake archive;
   late List<AsyncValue<List<Conversation>>> states;
 
   /// The home screen's hold on the list: open while a member is signed in.
@@ -184,6 +186,7 @@ void main() {
       ..byOwner[alice.userId] = aList
       ..byOwner[bora.userId] = bList;
     states = [];
+    archive = ChatArchiveFake();
   });
 
   tearDown(() async {
@@ -227,6 +230,7 @@ void main() {
         pushSourceProvider.overrideWithValue(PushSourceFake()),
         sessionControllerProvider.overrideWith(() => _Session(initial)),
         chatListSnapshotStoreProvider.overrideWithValue(store),
+        chatArchiveRepositoryProvider.overrideWithValue(archive),
       ],
     );
     if (mountEraser) c.listen(chatListSnapshotOwnerProvider, (_, _) {});
@@ -333,6 +337,34 @@ void main() {
       await until(() => idsOf(list(next)).isNotEmpty, 'the stored list');
       expect(idsOf(list(next)), aIds);
       expect(chat.calls.last.gate.isCompleted, isFalse, reason: 'shown early');
+    });
+  });
+
+  group('archived state survives a cold start', () {
+    test('an archived chat is saved archived and shown archived from the phone on the next start', () async {
+      final c = await aliceLoaded();
+      final r = await c
+          .read(conversationListProvider.notifier)
+          .setArchived('a-1', true);
+      expect(r, isA<Ok<void>>());
+      expect(archive.calls.map((e) => (e.key, e.value)).toList(), [
+        ('a-1', true),
+      ]);
+      await pastDebounce();
+      expect(store.raw, contains('"archived":true'));
+      // Next app run: the server is held; the stored list shows first.
+      states.clear();
+      chat.holding = true;
+      final next = app(const Allowed(alice));
+      await until(() => idsOf(list(next)).isNotEmpty, 'the stored list');
+      final shown = {for (final x in list(next).value!) x.id: x.archived};
+      expect(shown['a-1'], isTrue, reason: 'archive lost on cold start');
+      expect(shown['a-2'], isFalse);
+      expect(
+        chat.calls.last.gate.isCompleted,
+        isFalse,
+        reason: 'shown from the phone',
+      );
     });
   });
 

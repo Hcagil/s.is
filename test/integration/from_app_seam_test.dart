@@ -40,6 +40,8 @@ import '../support/reach.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
+import '../support/video_fakes.dart';
+
 /// "From an app" on the real stack. The platform (the other app, reached
 /// through Android's chooser) is the only fake: an [ExternalPickerFake] at
 /// externalPickerProvider, exactly where main.dart mounts
@@ -135,6 +137,8 @@ class _AccountAuth implements AuthRepository {
   @override
   Future<Result<void>> signInWithGoogle() async => const Ok(null);
   @override
+  Future<Result<void>> signInWithApple() async => const Ok(null);
+  @override
   Future<Result<bool>> activateSession() async =>
       Ok(await client.rpc('activate_session') as bool);
   @override
@@ -220,6 +224,7 @@ void main() {
       final cache = AttachmentCacheFake();
       final container = ProviderContainer(
         overrides: [
+          ...videoOverrides(),
           authRepositoryProvider.overrideWithValue(
             FakeAuth(session: true, member: xena),
           ),
@@ -409,6 +414,7 @@ void main() {
         await t.pumpWidget(
           ProviderScope(
             overrides: [
+              ...videoOverrides(),
               runtimeConfigProvider.overrideWithValue(
                 const RuntimeConfig(
                   supabaseUrl: _url,

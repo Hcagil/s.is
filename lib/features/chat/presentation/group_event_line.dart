@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../domain/group_event.dart';
 
-/// An admin-only line: "X left" / "X was removed" / "X was added". Read
+/// A group line: "X left" / "X was removed" / "X was added" (admins only) or
+/// "X changed the group picture" or "X pinned a message" (everyone). Read
 /// from group_events (chatTimelineProvider), which the server already
 /// scopes to a current admin -- nothing here decides visibility itself.
 ///
@@ -27,14 +29,19 @@ class GroupEventLine extends StatelessWidget {
       GroupEventKind.left => l.eventLeft(subject),
       GroupEventKind.removed => l.eventRemoved(subject),
       GroupEventKind.added => l.eventAdded(subject),
+      GroupEventKind.picture => l.eventPictureChanged(subject),
+      GroupEventKind.pinned => l.eventPinned(subject),
     };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Center(
         child: Text(
           text,
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color:
+                SisBrand.of(context).onChat ??
+                Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );

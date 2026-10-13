@@ -44,3 +44,6 @@ skill-updates/
 
 # iOS Firebase client config: restored from the GOOGLE_SERVICE_INFO_PLIST secret.
 /ios/Runner/GoogleService-Info.plist
+
+# iOS Google Maps key: written from the MAPS_API_KEY_IOS secret.
+/ios/Flutter/Secrets.xcconfig

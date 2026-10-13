@@ -205,7 +205,8 @@ select is(pg_get_function_result('public.read_marks(uuid)'::regprocedure),
           'TABLE(user_id uuid, shares boolean, read_at timestamp with time zone, delivered_at timestamp with time zone)',
           'read_marks returns (user_id, shares, read_at, delivered_at)');
 select set_eq($$select schemaname || '.' || tablename from pg_publication_tables where pubname = 'supabase_realtime'$$,
-              array['public.messages', 'public.message_reactions'],
+              array['public.messages', 'public.message_reactions',
+                    'public.polls', 'public.poll_options'],
               'no table was added to the Realtime publication');
 select policies_are('realtime', 'messages', array['realtime_receive', 'realtime_send'],
                     'realtime.messages still has exactly the receive and send policies');

@@ -363,12 +363,9 @@ void main() {
   });
 
   group('grey options', () {
-    const where = {
-      'grey-custom': 'settings-appearance',
-      'grey-wallpaper': 'settings-appearance',
-      'grey-dimblur': 'settings-appearance',
-      'grey-att_auto': null, // on the settings page itself
-    };
+    // grey key -> settings row that opens its page (null: the settings page
+    // itself). Empty now that Media auto-download is live; kept for the next.
+    const where = <String, String?>{};
 
     for (final MapEntry(key: grey, value: page) in where.entries) {
       for (final lang in [AppLanguage.en, AppLanguage.tr]) {
@@ -429,6 +426,26 @@ void main() {
           semantics.dispose();
         });
       }
+    }
+
+    for (final lang in [AppLanguage.en, AppLanguage.tr]) {
+      testWidgets(
+        'new theme row (${lang.name}): enabled, opens the name card',
+        (t) async {
+          final semantics = t.ensureSemantics();
+          await pumpApp(t, initial: AppearanceSettings(language: lang));
+          await openSettings(t);
+          await tapKey(t, 'settings-appearance');
+          final f = byKey('appearance-new-theme');
+          await reveal(t, f);
+          expect(f, findsOneWidget);
+          expect(t.getSemantics(f), isSemantics(hasTapAction: true));
+          await t.tap(f);
+          await t.pumpAndSettle();
+          expect(byKey('new-theme-card'), findsOneWidget);
+          semantics.dispose();
+        },
+      );
     }
   });
 

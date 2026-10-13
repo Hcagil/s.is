@@ -145,6 +145,11 @@ insert into public.conversation_members(conversation_id, user_id) values
   ('c2700000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000a2701'),
   ('c2700000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000a2702');
 
+-- This file tests deliver_release_notes, the backstop, on its own. The
+-- broadcast trigger (20261023120000) would already post every note inserted
+-- below; release_note_broadcast_test.sql covers it and how the two meet.
+alter table public.release_notes disable trigger release_notes_broadcast;
+
 -- Notes under test only: the seeds would make "latest" depend on them.
 delete from public.release_notes;
 insert into public.release_notes(build, note) values

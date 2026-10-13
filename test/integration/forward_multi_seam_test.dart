@@ -22,6 +22,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
 import '../support/service_key.dart';
+import '../support/video_fakes.dart';
 
 /// The Forward picker's multi-select over the real repository: reid opens
 /// his chat with beth, forwards one message through the actual tap -> card
@@ -144,6 +145,7 @@ void main() {
 
     final container = ProviderContainer(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(reid),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),

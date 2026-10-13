@@ -19,6 +19,7 @@ import 'package:sis/features/auth/domain/auth_repository.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
+import 'package:sis/features/chat/data/supabase_group_settings_repository.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/presentation/person_avatar.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
@@ -33,6 +34,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../support/session_claim.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Setting a picture through the crop screen, on the real stack: the whole
 /// app as main.dart mounts it, with only the platform pieces faked where
@@ -121,6 +123,8 @@ class _AccountAuth implements AuthRepository {
   @override
   Future<Result<void>> signInWithGoogle() async => const Ok(null);
   @override
+  Future<Result<void>> signInWithApple() async => const Ok(null);
+  @override
   Future<Result<bool>> activateSession() async =>
       Ok(await client.rpc('activate_session') as bool);
   @override
@@ -159,6 +163,13 @@ void main() {
         aClient,
       ).startGroupConversation(title: 'crop seam', memberIds: [_uid(bClient)]),
       'the group',
+    );
+    // A new group lets only admins change its picture; its admin opens it to
+    // members, so ece (who did not create it) may set it below.
+    _ok(
+      await SupabaseGroupSettingsRepository(aClient)
+          .setSettings(groupId, membersCanSetAvatar: true),
+      'members may set the picture',
     );
     // A message puts it at the top of ece's long list, on screen.
     _ok(
@@ -242,6 +253,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(
             const RuntimeConfig(
               supabaseUrl: _url,
@@ -253,6 +265,9 @@ void main() {
           updateRepositoryProvider.overrideWithValue(FakeUpdate()),
           chatRepositoryProvider.overrideWithValue(
             SupabaseChatRepository(client, cache: cache),
+          ),
+          groupSettingsRepositoryProvider.overrideWithValue(
+            SupabaseGroupSettingsRepository(client),
           ),
           attachmentCacheProvider.overrideWithValue(cache),
           presenceRepositoryProvider.overrideWithValue(

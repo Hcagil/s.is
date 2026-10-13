@@ -37,6 +37,7 @@ import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/message.dart';
 
 import '../../support/fakes.dart';
+import '../../support/video_fakes.dart';
 
 const _me = Member(userId: 'me', displayName: 'Maya');
 
@@ -81,6 +82,7 @@ void main() {
   ProviderContainer make({bool listen = true}) {
     final container = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
         sessionControllerProvider.overrideWith(_In.new),
       ],

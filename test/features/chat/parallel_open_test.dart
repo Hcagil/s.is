@@ -37,11 +37,14 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
+import 'package:sis/features/chat/domain/link_preview.dart';
 
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
+
+import '../../support/video_fakes.dart';
 
 const maya = Member(userId: 'u1', displayName: 'Maya');
 final _t0 = DateTime.utc(2026, 10, 1, 12);
@@ -119,6 +122,7 @@ class _Server extends ChatFake {
     required String conversationId,
     required String body,
     String? replyTo,
+    LinkPreviewDraft? preview,
   }) async {
     if (sendGate case final gate?) await gate.future;
     return super.send(
@@ -126,6 +130,7 @@ class _Server extends ChatFake {
       conversationId: conversationId,
       body: body,
       replyTo: replyTo,
+      preview: preview,
     );
   }
 
@@ -230,6 +235,7 @@ void main() {
     states = [];
     c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(server),
         sessionControllerProvider.overrideWith(_In.new),
       ],
@@ -683,6 +689,7 @@ void main() {
     final s = _Server()..seed([m('a1', 1, conv: 'cA'), m('b1', 1, conv: 'cB')]);
     final container = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(s),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         sessionControllerProvider.overrideWith(_In.new),

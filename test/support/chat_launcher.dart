@@ -11,6 +11,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/l10n/app_localizations.dart';
 import 'package:sis/app/theme.dart';
@@ -25,8 +26,11 @@ import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
+import 'contact_fakes.dart';
 import 'fakes.dart';
+import 'poll_fakes.dart';
 import 'reaction_fakes.dart';
+import 'video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bob = Member(userId: 'u2', displayName: 'Bob');
@@ -90,7 +94,13 @@ Future<ProviderContainer> pumpLauncher(
   List<Message>? messages,
   ChatFake? chat,
   ReactionFake? reactions,
+  PollFake? polls,
+  FakePhoneBook? phoneBook,
+  FakeContactShare? contacts,
+  Locale? locale,
   bool tap = true,
+  List<Override> overrides = const [],
+  TextDirection? direction,
 }) async {
   phoneView(tester);
   final repo =
@@ -106,15 +116,22 @@ Future<ProviderContainer> pumpLauncher(
   final container = await settled(
     ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(repo),
         reactionRepositoryProvider.overrideWithValue(
           reactions ?? ReactionFake(),
         ),
+        pollRepositoryProvider.overrideWithValue(polls ?? PollFake()),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
         sessionControllerProvider.overrideWith(SignedInForTests.new),
         pushSourceProvider.overrideWithValue(PushSourceFake()),
         pushRegistryProvider.overrideWithValue(PushRegistryFake()),
+        phoneBookProvider.overrideWithValue(phoneBook ?? FakePhoneBook()),
+        contactShareRepositoryProvider.overrideWithValue(
+          contacts ?? FakeContactShare(),
+        ),
+        ...overrides,
       ],
     ),
   );
@@ -125,7 +142,13 @@ Future<ProviderContainer> pumpLauncher(
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
+        locale: locale,
         theme: sisTheme(Brightness.light),
+        // No shipped locale is RTL: force the direction to test mirroring.
+        builder: direction == null
+            ? null
+            : (context, child) =>
+                  Directionality(textDirection: direction, child: child!),
         home: Consumer(
           builder: (context, ref, _) => Scaffold(
             body: Center(
@@ -157,12 +180,22 @@ Future<ProviderContainer> openChat(
   WidgetTester tester, {
   List<Message>? messages,
   ReactionFake? reactions,
+  PollFake? polls,
+  FakePhoneBook? phoneBook,
+  FakeContactShare? contacts,
+  Locale? locale,
+  List<Override> overrides = const [],
 }) async {
   final c = await pumpLauncher(
     tester,
     (context, ref) => openConversation(context, ref, 'c1', title: 'Bob'),
     messages: messages,
     reactions: reactions,
+    polls: polls,
+    phoneBook: phoneBook,
+    contacts: contacts,
+    locale: locale,
+    overrides: overrides,
   );
   expect(find.byType(MessageScreen), findsOneWidget, reason: 'never opened');
   return c;

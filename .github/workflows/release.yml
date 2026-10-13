@@ -29,6 +29,21 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 2
+      # A re-run (attempt 2 or more) must never deploy an older commit: it may only
+      # publish when its commit is main's tip right now. A first attempt always runs.
+      # A re-run of the CI run this follows starts a fresh Release (attempt 1) with
+      # the old commit, so the CI run's attempt counts too.
+      - name: Refuse a commit that is not the tip of main
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          WF_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          tip=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY" refs/heads/main | cut -f1)
+          if { [ "$RUN_ATTEMPT" -gt 1 ] || [ "${WF_ATTEMPT:-1}" -gt 1 ]; } && { [ -z "$tip" ] || [ "$tip" != "$HEAD_SHA" ]; }; then
+            echo 'This commit is not the tip of main: nothing is deployed.' >&2
+            exit 1
+          fi
       # Changes that cannot affect the artefact or the database do not publish
       # a build: publishing for them burns a versionCode.
       # ponytail: diffs the last commit only. Squash merges make that one change
@@ -68,6 +83,17 @@ jobs:
       # which a later merge may already have moved past.
       SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
+      - name: Refuse a commit that is not the tip of main
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          WF_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          tip=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY" refs/heads/main | cut -f1)
+          if { [ "$RUN_ATTEMPT" -gt 1 ] || [ "${WF_ATTEMPT:-1}" -gt 1 ]; } && { [ -z "$tip" ] || [ "$tip" != "$HEAD_SHA" ]; }; then
+            echo 'This commit is not the tip of main: nothing is deployed.' >&2
+            exit 1
+          fi
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
@@ -89,14 +115,17 @@ jobs:
           ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
           ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
           ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          # Optional: empty means the app uses OpenStreetMap; the build never fails on it.
+          MAPS_API_KEY_ANDROID: ${{ secrets.MAPS_API_KEY_ANDROID }}
         run: |
           docker compose run --rm -T \
-            -e ANDROID_UPLOAD_KEYSTORE -e ANDROID_UPLOAD_KEY_ALIAS -e ANDROID_UPLOAD_STORE_PASSWORD -e ANDROID_UPLOAD_KEY_PASSWORD \
+            -e ANDROID_UPLOAD_KEYSTORE -e ANDROID_UPLOAD_KEY_ALIAS -e ANDROID_UPLOAD_STORE_PASSWORD -e ANDROID_UPLOAD_KEY_PASSWORD -e MAPS_API_KEY_ANDROID \
             flutter flutter build appbundle --release \
               --build-number=${{ needs.scope.outputs.code }} --build-name=${{ needs.scope.outputs.name }} \
               --dart-define=SUPABASE_URL=${{ vars.SUPABASE_URL }} \
               --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ vars.SUPABASE_PUBLISHABLE_KEY }} \
-              --dart-define=GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }}
+              --dart-define=GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }} \
+              --dart-define=MAPS_API_KEY="$MAPS_API_KEY_ANDROID"
       - name: Install Supabase CLI
         uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
         with: { version: 2.117.0 }
@@ -106,12 +135,44 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      # The push sender, and notification-action, the endpoint its notification
+      # buttons call (the push carries a signed token instead of a session).
+      # Deployed before the trigger learns its URL, so the
+      # trigger never calls a function that is not there yet. No JWT: the
+      # database trigger holds none; push_targets() makes a forged call
+      # harmless (docs/DECISIONS.md, 2026-09-24).
+      # admin-apple dispatches the Apple tester job; admin-apple-report takes its
+      # result, authenticated by GitHub's OIDC token.
+      - name: Deploy the push sender
+        run: |
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" FCM_SERVICE_ACCOUNT="$FCM_SERVICE_ACCOUNT" GITHUB_REPOSITORY_ID="$REPO_ID"
+          supabase functions deploy notification-action --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+          supabase functions deploy notify-on-message --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+          supabase functions deploy admin-apple --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+          supabase functions deploy admin-apple-report --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+          supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/notify-on-message', 'notify_on_message_url') where not exists (select 1 from vault.secrets where name = 'notify_on_message_url')"
+          supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/admin-apple', 'admin_apple_url') where not exists (select 1 from vault.secrets where name = 'admin_apple_url')"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          FCM_SERVICE_ACCOUNT: ${{ secrets.FCM_SERVICE_ACCOUNT }}
+          REPO_ID: ${{ github.repository_id }}
+      - name: Upload to Play internal track
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.esd.sis
+          releaseFiles: build/app/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
       # The "What's new" note for this build: the `For users:` line of every PR
       # merged since the previous release (docs/DECISIONS.md, 2026-09-30). The
       # app fetches it on its first start of this build. No such line, no row,
       # so nothing is delivered. The text goes to SQL base64-encoded: PR bodies
       # are untrusted input. An existing row is left alone so an edit made in
-      # the dashboard survives a re-run.
+      # the dashboard survives a re-run. A Turkish part follows after a line
+      # "---": every "Kullanıcılar için:" line under "Sürüm <version>"; the app
+      # shows the part in its own language.
       - name: Store the What's new note for this build
         id: note
         continue-on-error: true
@@ -122,45 +183,26 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -o pipefail
+          export LC_ALL=C.UTF-8  # ${note:0:N} counts characters, never splits a Turkish letter
           prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
           if [ -n "$prev" ]; then range="$prev..$SHA"; else range="$SHA^..$SHA"; fi
-          note=$(git log --reverse --format=%s "$range" \
+          bodies=$(git log --reverse --format=%s "$range" \
             | sed -n 's/.*(#\([0-9][0-9]*\))$/\1/p' \
             | while read -r pr; do
                 echo "PR #$pr" >&2
-                gh api "repos/${GITHUB_REPOSITORY}/pulls/$pr" --jq 'select(.author_association | IN("OWNER","MEMBER","COLLABORATOR")) | .body' </dev/null | tr -d '\r' | sed -n 's/^For users: *//p' || exit 1
-              done | sed '/^[[:space:]]*$/d')
-          note=${note:0:3980}
+                gh api "repos/${GITHUB_REPOSITORY}/pulls/$pr" --jq 'select(.author_association | IN("OWNER","MEMBER","COLLABORATOR")) | .body' </dev/null | tr -d '\r' || exit 1
+              done)
+          note=$(printf '%s\n' "$bodies" | sed -n 's/^For users: *//p' | sed '/^[[:space:]]*$/d')
+          note_tr=$(printf '%s\n' "$bodies" | sed -n 's/^Kullanıcılar için: *//p' | sed '/^[[:space:]]*$/d')
+          note=${note:0:1900}
+          note_tr=${note_tr:0:1900}
           echo "Note: $note"
           if [ -z "$note" ]; then echo "No user-facing change in $range"; exit 0; fi
           note="Version $VERSION"$'\n'"$note"
+          if [ -n "$note_tr" ]; then note="$note"$'\n---\n'"Sürüm $VERSION"$'\n'"$note_tr"; fi
           b64=$(printf '%s' "$note" | base64 -w0)
           echo "b64=$b64" >> "$GITHUB_OUTPUT"
           supabase db query --linked "insert into public.release_notes(build, note) values ($BUILD, convert_from(decode('$b64', 'base64'), 'utf8')) on conflict (build) do nothing"
-      # The push sender, and notification-action, the endpoint its notification
-      # buttons call (the push carries a signed token instead of a session).
-      # Deployed before the trigger learns its URL, so the
-      # trigger never calls a function that is not there yet. No JWT: the
-      # database trigger holds none; push_targets() makes a forged call
-      # harmless (docs/DECISIONS.md, 2026-09-24).
-      - name: Deploy the push sender
-        run: |
-          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" FCM_SERVICE_ACCOUNT="$FCM_SERVICE_ACCOUNT"
-          supabase functions deploy notification-action --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
-          supabase functions deploy notify-on-message --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
-          supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/notify-on-message', 'notify_on_message_url') where not exists (select 1 from vault.secrets where name = 'notify_on_message_url')"
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-          FCM_SERVICE_ACCOUNT: ${{ secrets.FCM_SERVICE_ACCOUNT }}
-      - name: Upload to Play internal track
-        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.esd.sis
-          releaseFiles: build/app/outputs/bundle/release/app-release.aab
-          track: internal
-          status: completed
       - name: Tag and publish release notes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -212,6 +254,17 @@ jobs:
       KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
       ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
     steps:
+      - name: Refuse a commit that is not the tip of main
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          WF_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          tip=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY" refs/heads/main | cut -f1)
+          if { [ "$RUN_ATTEMPT" -gt 1 ] || [ "${WF_ATTEMPT:-1}" -gt 1 ]; } && { [ -z "$tip" ] || [ "$tip" != "$HEAD_SHA" ]; }; then
+            echo 'This commit is not the tip of main: nothing is deployed.' >&2
+            exit 1
+          fi
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.workflow_run.head_sha }}

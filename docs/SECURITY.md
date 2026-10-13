@@ -85,7 +85,7 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     changes of members whose time in the group overlapped hers.
   - `messages` inserts: `authenticated` may insert exactly `id,
     conversation_id, sender_id, body, attachment_path, attachment_preview,
-    reply_to, forwarded`; `created_at`, `deleted`, `deleted_at` and
+    reply_to, forwarded, link_preview`; `created_at`, `deleted`, `deleted_at` and
     `edited_at` stay server-assigned, and there is no UPDATE or DELETE
     privilege (edits and deletes go through `edit_message` /
     `delete_message`). The `id` is proposed by the phone (a random v4 UUID),
@@ -105,12 +105,41 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     bucket, keyed `<conversation_id>/<file>`. The storage policies ask the same
     membership question the table policies ask, so there is one access rule and
     not two that can drift.
+  - `messages.link_preview` (a link card) is validated by the
+    `messages_link_preview_guard` trigger (security invoker, errcode LNKP1):
+    fixed keys, text without control, invisible or markup characters, an
+    http(s) url that appears in the body, plain text messages only; an edit
+    or a delete for everyone drops the card. Its picture sits in the private
+    `link-previews` bucket as `<conversation_id>/<message_id>.jpg`, and the
+    card may name only that path, only if the sender uploaded it (unique per
+    message). The read policy copies `attachments`: the uploader before the
+    message exists, then only through a readable message whose card names the
+    picture. The sender's phone reads the page: redirects are followed by hand
+    (at most 5, never https to http), and the page, every hop and the picture
+    must resolve to public addresses only (loopback, private, link-local,
+    CGNAT, ULA, multicast, documentation and special ranges, and the IPv4
+    inside NAT64 and 6to4 addresses, are refused). A failed, empty or slow
+    (3 s) lookup refuses. The connection goes to the exact address that was
+    checked (a custom connection factory), and for https the certificate is
+    checked against the original host name, so a DNS answer that changes
+    afterwards cannot redirect it. The whole fetch is capped at 9 s, the
+    page at 300000 bytes, the picture at 3000000 bytes and 16 megapixels
+    (checked before decoding). Readers see the site only if they tap the card.
+    The card's url must appear in the body as a whole link (after the start,
+    whitespace, a bracket or a quote; before whitespace, the end or closing
+    punctuation), not inside a longer word or address. Addresses of the form
+    `::a.b.c.d` are refused like `::` and `::1`; an international host name is
+    looked up and checked in its ASCII (punycode) form; each resolved address
+    is tried in turn (3 s each) and the TLS handshake has its own 5 s limit.
+    The video player loads only the official embed of YouTube, Instagram,
+    TikTok or X in a sandboxed web view, and only after the tap (see
+    `docs/DECISIONS.md`, 2026-10-11).
   - `profiles` rows are readable only for an allowlisted account that is the
     caller, shares a conversation with the caller, or is a contact the
     caller saved; a tag find alone does not open the row (`find_by_tag`
     returns its own single row). **Reach** (`app_private.can_reach`) is those
     three plus someone the caller found by exact tag (`app_private.tag_finds`,
-    written by `find_by_tag`, cleared when the found member changes their
+    written by `find_by_tag` and `find_by_contacts`, cleared when the found member changes their
     tag); it gates contacts insert, `start_*`, `last_seen_of` and the
     `everyone` picture. Clients may select
     every column except `avatar_object` (the real picture path) and
@@ -121,7 +150,8 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     (security definer, repeats the row rule, masks the path).
   - `contacts(owner_id, contact_id)`: one-way, owner-only read/insert/delete;
     inserting requires the contact be allowlisted and reachable.
-  - `find_by_tag(tag)` is the one deliberate way to reach a stranger: exact
+  - `find_by_contacts(hashes)` is the second deliberate way to reach a stranger: the phone sends SHA-256 hex hashes of its contacts' lower-cased, trimmed emails (at most 2000 per call, each exactly 64 lower-case hex characters, else 22023); the server hashes the allowlisted emails of confirmed, not deleted, not banned, non-bot accounts per call and returns only those that match (the 4 `find_by_tag` columns plus the matched hash, never an email), and records each in `tag_finds` so Message works. Refused for the bot (42501). At most 3 calls per hour and 10 per 24 hours per member (`app_private.tag_lookups` kind `contacts`, serialised by an advisory lock, row written before any lookup work), `RLMT1` beyond. Nothing else is stored: no hashes, no contact data. Known limit: an email hash can be guessed, so a member could test email lists; bounded by the app gate, the caps above and allowlisted targets only.
+  - `find_by_tag(tag)` is the one deliberate way to reach a stranger by name: exact
     match on the stored tag after folding (case, Turkish/Latin letters, a
     leading @), never prefix or wildcard; at most 20 calls per 10 minutes per
     member (`app_private.tag_lookups`, serialised by an advisory lock),
@@ -150,6 +180,7 @@ Postgres Row Level Security is the only authority. The client is untrusted.
   bodies, so it exists solely for the notifier and must never be granted
   wider. It wraps `app_private.push_targets_for_message`, which keeps
   `app_private` unreachable from the API.
+- The owner row (`app_private.owners`) is set once by the owner with the SQL Editor; never by the app, CI or a migration.
 
 ### Helpers and the access gate
 
@@ -270,7 +301,7 @@ of **the Play App Signing certificate** and of the upload certificate. A
 missing registration surfaces as a Credential Manager cancellation after
 account selection; the app shows that reason rather than returning silently.
 
-**Sign-up gate (before user created hook).** Google is the only provider. The
+**Sign-up gate (before user created hook).** Google and Apple (iPhone) are the only providers. The
 hosted email provider is off (since 2026-10-05; Anonymous sign-ins off,
 "Allow new users to sign up" on, so Google sign-up still works); the local stack keeps email on, with confirmations off, for the
 integration fixtures only. Supabase Auth runs `app_private.before_user_created`
@@ -331,6 +362,10 @@ process because `google_sign_in` takes it once, at initialize. Android sends
 no nonce: nothing shows that Play services embeds it, and a mismatch would
 break the production sign-in. Revisit with a device test.
 
+**Sign in with Apple (iPhone only).** Native flow: the `sign_in_with_apple` package (8.2.0, `data/` only) gives an Apple identity token, which goes to `auth.signInWithIdToken(provider: apple)`. Android has no Apple button. Each attempt makes a fresh random 32-byte nonce (`Random.secure`); Apple gets its SHA-256 hex, Supabase the raw value, and "Skip nonce checks" stays off for the Apple provider. In Supabase the Apple provider needs the bundle ID `com.esd.sis` in Client IDs (the native flow accepts any listed client ID as the token audience). The Apple secret key (which Apple makes the owner rotate every 6 months) is only for the web OAuth flow, which SIS does not use. The App ID `com.esd.sis` carries the Sign in with Apple capability and `Runner.entitlements` the `com.apple.developer.applesignin` entitlement; `tool/asc_signing.py ensure --signin` turns the capability on through the App Store Connect API and replaces a profile that lacks it, and CI fails the build if the signed app has no such entitlement.
+
+One person, one account: Supabase automatically links identities with the same verified email, so the same address through Google and Apple is one user. The allowlist applies exactly as for Google, through the same hook: an uninvited address gets the same not-invited screen and nothing is stored. A hidden email (`@privaterelay.appleid.com`, what Apple's "Hide My Email" gives) is refused twice: on the phone before any request is sent (the member stays on the sign-in screen and reads "SIS needs your real email address. In Apple's sign-in choose Share My Email and try again."), and by the hook as a server backstop, because a relay address is on no allowlist and cannot be matched to a Google account. A real Apple email that matches an existing member links to that member without the hook running. Both sign-in ways end in `activate_session()`, so one-phone-at-a-time applies to Apple unchanged, including the sign-in buttons on the "You signed in on another phone" screen.
+
 ### System account
 
 `00000000-0000-0000-0000-00000000515e` authors the "What's new" messages: it has no email, is on no allowlist and is banned, so it cannot sign in. Never delete it: `messages.sender_id` cascades and every system message would go with it.
@@ -341,7 +376,7 @@ break the production sign-in. Revisit with a device test.
 
 - Confinement: a trigger on `conversation_members` admits the bot only to its Debug chat and to the 1:1 with a listed tester, always as `member`. It is never an admin and never auto-promoted (`leave_group`, `promote_on_member_deleted` and the admin guard skip it). Removing a contact deletes the bot's membership at once, so its history there is unreadable. Listing the tester again re-adds the bot, with history from that moment only.
 - OFF: `has_app_access()` is false while `enabled` is false, which stops every policy and RPC at the next statement, even with a live token.
-- Refused for the bot outright (even when ON): `find_by_tag`, `set_group_avatar`, `deliver_release_notes`, `register_device_token` (so it never gets push), profile edits, contacts, attachment upload, avatar paths, and the Realtime receive and send policies (`presence:members` is project-wide).
+- Refused for the bot outright (even when ON): `find_by_tag`, `find_by_contacts`, `set_group_avatar`, `deliver_release_notes`, `register_device_token` (so it never gets push), profile edits, contacts, attachment upload, avatar paths, and the Realtime receive and send policies (`presence:members` is project-wide).
 - Rate limits, error code `RLMT2`: 20 messages per 10 minutes, 200 per 24 hours, 10 chats started per 24 hours by the bot itself (a listed tester starting a 1:1 with the bot does not count against it). Text only.
 - It acts through `tool/sis_bot.sh` with its own refresh token in `.private/sis_bot.json` (mode 600, rotated on every run, locked) and never holds the service key. Revoke with `tool/sis_bot.sh revoke` (global sign-out) or, owner-run, `tool/sis_bot_admin.sh revoke` (OFF plus every session deleted).
 - The admin tool takes the service key only from a file named by `SIS_SERVICE_KEY_FILE` (mode 600, owned by you, else exit 2), never from an environment variable and never from the repo; the Management API token likewise from `SUPABASE_ACCESS_TOKEN_FILE`. Run it in your own terminal, never through Claude Code `!`, and never export the key in the shell that starts Claude Code. Every run is an authentication in the owner's account and is reported.
@@ -399,6 +434,10 @@ signs a short-lived action token into the push and `notification-action`
 - A request over 20000 bytes or a reply over 4000 characters is refused (400)
   before the database; every refused ticket is 403, a missing token 400.
 - Lock-screen Reply: decided 2026-10-06 (owner). Reply requires an unlocked phone on Android 12+ (the system enforces it, `setAuthenticationRequired`) and iOS. On Android 11 and older (API below 31) the system cannot enforce it, so a notification drawn natively (`InstantPush`) omits Reply whenever the phone has a secure lock (`KeyguardManager.isDeviceSecure`), locked or not; the check is made when the notification is drawn, so a lock set afterwards applies from the next one. Mark as read stays on every version. Limit: on those versions a phone with a PIN, pattern or password loses Reply in the shade too, because the app cannot tell when the phone locks; a phone with no secure lock (no PIN, pattern or password) keeps Reply below API 31. As a second guard, `NotificationActionReceiver` refuses a Reply on API below 31 while `KeyguardManager.isDeviceLocked` is true (nothing is sent, the "not sent" line shows), which covers a notification drawn by an older build or before a lock was set (finding L1) (the screen-off and user-present broadcasts cannot be declared in the manifest, and a lock-screen-only version of the notification does not hold when the user shows all content on the lock screen). Native `InstantPush` is the only drawer of chat notifications on Android; the Dart handler only keeps the delivery receipt. Therefore, on Android 12+, Reply is behind the unlock for every push, high-priority ones included; there is no Dart-drawn Reply and no `sis.reply_offered` preference. The Android receiver draws on one background thread under `goAsync`, so pacing never blocks the main thread. iOS buttons are drawn by `AppDelegate.swift` (Reply carries `.authenticationRequired`); the Dart side adds no iOS buttons.
+
+### Notification picture link
+
+A photo or video push carries a signed link (600 s) to the small `.t` picture. It is a bearer link: whoever holds it can read that one picture until it expires, without an active session. This is an accepted exception to the active-session rule: the link goes only to recipients `push_targets` chose, is never logged, and deleting the message removes the `.t` object, which ends the link. Both phones fetch it only over https, only from the host of the push's own action link (our Supabase host), without following redirects, and only while a member is signed in (Android).
 
 ### Group name colour slot (finding L1)
 

@@ -9,9 +9,12 @@
 # token rotating on every run and the old one refused after the reuse
 # interval; two parallel runs; exit 2 (usage, mode 644, foreign owner), 3 (missing file,
 # busy lock, superseded by a second sign-in, revoked), 4 (unlisted chat,
-# unlisted user, OFF), 5 (rate limited); revoke; the sign-up hook refusing a
+# unlisted user, OFF), 5 (rate limited); two parallel first sends to
+# one user, and in one group, giving one AI line and one intro record; the
+# bot's first Debug message carrying the line and its second not; revoke; the sign-up hook refusing a
 # public sign-up of the bot address; and probes with the bot's REAL JWT of
-# storage, avatars, profile update, add_members, set_admin and Realtime.
+# storage, avatars, profile update, add_members, set_admin and Realtime; admin
+# rename (trim, 1-80 characters, exact quotes/backslashes, no bot -> exit 1).
 # While the tools run, a poller checks that no token or key is in any argv and
 # that sis_bot.sh keeps its temp files in one mode-700 directory it removes.
 set -euo pipefail
@@ -190,16 +193,20 @@ check "read prints Debug's message as JSON lines" \
   bash -c "grep -q 'hello from ann' '$BOX/out' && grep -v '^\$' '$BOX/out' | jq -e . >/dev/null"
 t1=$(jq -r .refresh_token "$STATE")
 check "each run rotates the refresh token" test "$t0" != "$t1"
+INTRO='Merhaba, ben SIS Destek, bir yapay zekâ asistanıyım. Mesajlarımı yapay zekâ yazar.'
 expect_exit 0 "send to Debug" "$BOT" send "$DEBUG" "hello from the bot"
-check "the message is in Debug, from the bot" \
-  test "$(sql "select count(*) from public.messages where conversation_id = '$DEBUG' and sender_id = '$BOT_ID' and body = 'hello from the bot'")" = 1
+check "the message is in Debug, from the bot, after the AI line (the bot's first in Debug)" \
+  test "$(sql "select count(*) from public.messages where conversation_id = '$DEBUG' and sender_id = '$BOT_ID'
+              and body = '$INTRO' || E'\\n\\n' || 'hello from the bot'")" = 1
 expect_exit 0 "send from stdin" bash -c "printf 'piped body' | '$BOT' send '$DEBUG' -"
-check "the stdin body arrived" \
+check "the stdin body arrived unchanged (the bot's second in Debug)" \
   test "$(sql "select count(*) from public.messages where sender_id = '$BOT_ID' and body = 'piped body'")" = 1
+check "one group intro record for (bot, Debug)" \
+  test "$(sql "select count(*) from app_private.bot_group_intro_sent where bot_id = '$BOT_ID' and conversation_id = '$DEBUG'")" = 1
 expect_exit 0 "start a 1:1 with a listed contact by id" "$BOT" start "$DAN" "hi dan"
-check "the 1:1 with dan exists with the greeting" \
+check "the 1:1 with dan exists with the greeting, after the AI line (first message to dan)" \
   test "$(sql "select count(*) from public.messages m join public.conversations c on c.id = m.conversation_id
-              where m.sender_id = '$BOT_ID' and m.body = 'hi dan' and c.direct_key like '%$DAN%'")" = 1
+              where m.sender_id = '$BOT_ID' and m.body = '$INTRO' || E'\\n\\n' || 'hi dan' and c.direct_key like '%$DAN%'")" = 1
 BOB_TAG=$(sql "select tag from public.profiles where user_id = '$BOB'")
 expect_exit 0 "start a 1:1 with a listed contact by @tag" "$BOT" start "@$BOB_TAG" "hi bob"
 
@@ -299,6 +306,112 @@ else
   bad "probe: Realtime: $(grep -E 'Expected|Actual|reason|Failed|Error' "$BOX/rt" | head -8 | tr '\n' ' ')"
 fi
 
+# 12a two parallel first sends to one user: exactly one AI line, one record -------------
+# eve starts a 1:1 with the bot; the bot then sends twice at once with its REAL JWT.
+# A psql session holds the 1:1's row FOR UPDATE, so each insert runs its BEFORE
+# triggers and then waits on the foreign-key check: both decide "first message
+# or not" before either commits. Both must be seen waiting, or it was no race.
+sql "insert into app_private.allowlist(email) values ('eve@$DOM')" >/dev/null
+EVE=$(create_user "eve@$DOM" Eve)
+sql "insert into app_private.bot_contacts(bot_id, contact_id) values ('$BOT_ID', '$EVE');
+     delete from app_private.bot_actions where bot_id = '$BOT_ID'" >/dev/null
+EVE_JWT=$(token_for "eve@$DOM")
+EB=$(rpc "$EVE_JWT" start_direct_conversation "{\"other_user\":\"$BOT_ID\"}" | jq -r .)
+[[ $EB =~ ^[0-9a-f-]{36}$ ]] || { echo "fixture 1:1 with eve failed: $EB"; exit 1; }
+bot_post() {  # body -> HTTP code in $BOX/par_<body>
+  curl -sS -o /dev/null -w '%{http_code}' -X POST "$SIS_URL/rest/v1/messages" -H "apikey: $SIS_ANON_KEY" \
+    -H "Authorization: Bearer $BOT_JWT" -H 'content-type: application/json' \
+    -d "{\"conversation_id\":\"$EB\",\"sender_id\":\"$BOT_ID\",\"body\":\"$1\"}" >"$BOX/par_$1"
+}
+sql "select 1 from public.conversations where id = '$EB' for update; select pg_sleep(4)" >/dev/null & holder=$!
+sleep 1
+bot_post race1 & pa=$!; bot_post race2 & pb=$!
+sleep 2
+waiting=$(sql "select count(*) from pg_stat_activity where wait_event_type = 'Lock'
+               and query ilike '%insert into%messages%' and query not ilike '%pg_stat_activity%'")
+wait "$pa" || true; wait "$pb" || true; wait "$holder" || true
+check "both parallel first sends were in flight at once ($waiting waiting)" test "$waiting" = 2
+check "both parallel first sends succeed ($(cat "$BOX/par_race1"), $(cat "$BOX/par_race2"))" \
+  test "$(cat "$BOX/par_race1")$(cat "$BOX/par_race2")" = 201201
+check "exactly one of them carries the AI line" \
+  test "$(sql "select count(*) from public.messages where conversation_id = '$EB' and sender_id = '$BOT_ID'
+              and body in ('$INTRO' || E'\\n\\n' || 'race1', '$INTRO' || E'\\n\\n' || 'race2')")" = 1
+check "and the other is stored unchanged" \
+  test "$(sql "select count(*) from public.messages where conversation_id = '$EB' and sender_id = '$BOT_ID'
+              and body in ('race1', 'race2')")" = 1
+check "one intro record for (bot, eve)" \
+  test "$(sql "select count(*) from app_private.bot_intro_sent where bot_id = '$BOT_ID' and user_id = '$EVE'")" = 1
+
+# 12a2 two parallel first sends in one group: exactly one AI line, one record ------------
+# A fresh group (ann, bob) becomes the bot's Debug for this case; same lock as 12a.
+G3=$(rpc "$ANN_JWT" start_group_conversation "{\"title\":\"Race\",\"members\":[\"$BOB\"]}" | jq -r .)
+[[ $G3 =~ ^[0-9a-f-]{36}$ ]] || { echo "fixture race group failed: $G3"; exit 1; }
+sql "update app_private.bot_accounts set debug_conversation = '$G3' where user_id = '$BOT_ID';
+     insert into public.conversation_members(conversation_id, user_id, role, history_from, joined_at)
+     values ('$G3', '$BOT_ID', 'member', now(), now());
+     delete from app_private.bot_actions where bot_id = '$BOT_ID'" >/dev/null
+EB=$G3
+sql "select 1 from public.conversations where id = '$G3' for update; select pg_sleep(4)" >/dev/null & holder=$!
+sleep 1
+bot_post grace1 & pa=$!; bot_post grace2 & pb=$!
+sleep 2
+waiting=$(sql "select count(*) from pg_stat_activity where wait_event_type = 'Lock'
+               and query ilike '%insert into%messages%' and query not ilike '%pg_stat_activity%'")
+wait "$pa" || true; wait "$pb" || true; wait "$holder" || true
+check "group: both parallel first sends were in flight at once ($waiting waiting)" test "$waiting" = 2
+check "group: both parallel first sends succeed ($(cat "$BOX/par_grace1"), $(cat "$BOX/par_grace2"))" \
+  test "$(cat "$BOX/par_grace1")$(cat "$BOX/par_grace2")" = 201201
+check "group: exactly one of them carries the AI line" \
+  test "$(sql "select count(*) from public.messages where conversation_id = '$G3' and sender_id = '$BOT_ID'
+              and body in ('$INTRO' || E'\\n\\n' || 'grace1', '$INTRO' || E'\\n\\n' || 'grace2')")" = 1
+check "group: and the other is stored unchanged" \
+  test "$(sql "select count(*) from public.messages where conversation_id = '$G3' and sender_id = '$BOT_ID'
+              and body in ('grace1', 'grace2')")" = 1
+check "group: one intro record for (bot, race group)" \
+  test "$(sql "select count(*) from app_private.bot_group_intro_sent where bot_id = '$BOT_ID' and conversation_id = '$G3'")" = 1
+sql "update app_private.bot_accounts set debug_conversation = '$DEBUG' where user_id = '$BOT_ID'" >/dev/null
+
+# 12b admin rename: trims, 1-80 characters, stored exactly; the bot still cannot --------
+name_is() { test "$(sql "select display_name from public.profiles where user_id = '$BOT_ID'")" = "$1"; }
+expect_exit 0 "admin rename" "$ADMIN" rename "  SIS Yardım  "
+check "rename prints only 'renamed'" bash -c "test \"\$(cat '$BOX/out')\" = renamed && test ! -s '$BOX/err'"
+check "rename trims and stores the name" name_is "SIS Yardım"
+q="O'Brien \\ back\\\\slash \"x\""
+expect_exit 0 "admin rename with quotes and backslashes" "$ADMIN" rename "$q"
+check "quotes and backslashes are stored exactly" \
+  test "$(docker exec -i "$DB" psql -U postgres -XAtq -c "select encode(convert_to(display_name, 'UTF8'), 'hex') from public.profiles where user_id = '$BOT_ID'")" \
+       = "$(printf '%s' "$q" | od -An -tx1 | tr -d ' \n')"
+n80=$(printf 'ş%.0s' $(seq 80))
+expect_exit 0 "admin rename to 80 characters (multi-byte)" "$ADMIN" rename "$n80"
+check "the 80-character name is stored" name_is "$n80"
+expect_exit 0 "admin rename to 1 character" "$ADMIN" rename " Z "
+check "the 1-character name is stored" name_is "Z"
+too_long() {  # NAME args...: exit 1, the length message, the name unchanged
+  local name=$1; shift
+  expect_exit 1 "admin rename refuses $name" "$ADMIN" rename "$@"
+  check "admin rename refuses $name: says 1 to 80 characters" \
+    grep -qF "the name must be 1 to 80 characters" "$BOX/err" "$BOX/out"
+  check "admin rename refuses $name: the name is unchanged" name_is "Z"
+}
+too_long "81 characters" "${n80}x"
+too_long "an empty name" ""
+too_long "a blank name" "   "
+too_long "a missing name"
+expect_exit 0 "admin rename back" "$ADMIN" rename "SIS Destek"
+# return=minimal: return=representation needs a table-wide SELECT grant and is
+# refused for everyone, so it would pass even with the bot guard gone.
+self_rename() {  # jwt user name -> http code
+  curl -sS -o "$BOX/body" -w '%{http_code}' -X PATCH "$SIS_URL/rest/v1/profiles?user_id=eq.$2" \
+    -H "apikey: $SIS_ANON_KEY" -H "Authorization: Bearer $1" -H 'content-type: application/json' \
+    -H 'Prefer: return=minimal' -d "{\"display_name\":\"$3\"}"
+}
+c=$(self_rename "$ANN_JWT" "$ANN" "Ann Renamed")
+check "control: a human renames itself with the same request (HTTP $c)" \
+  test "$(sql "select display_name from public.profiles where user_id = '$ANN'")" = "Ann Renamed"
+self_rename "$ANN_JWT" "$ANN" "Ann" >/dev/null
+c=$(self_rename "$BOT_JWT" "$BOT_ID" "Evil after rename")
+check "probe: after an admin rename the bot still cannot rename itself (HTTP $c)" name_is "SIS Destek"
+
 # 13 admin mint gives the tool a session again; revoke ends it ------------------------------
 watch 0 "admin mint" "$SKEY" "$ADMIN" mint
 expect_exit 0 "the tool works on the new session" "$BOT" status
@@ -317,6 +430,9 @@ check "and removed every bot session" test "$(sql "select count(*) from auth.ses
 expect_exit 0 "admin delete" "$ADMIN" delete
 check "the bot user is gone" test "$(sql "select count(*) from auth.users where email = 'sis-destek-bot@example.com'")" = 0
 check "and its bot rows with it" test "$(sql "select count(*) from app_private.bot_accounts")" = 0
+
+expect_exit 1 "admin rename with no bot" "$ADMIN" rename "Nobody"
+check "it says rename changed 0 rows" grep -qF "rename changed 0 rows" "$BOX/err" "$BOX/out"
 
 echo "# passed $PASS, failed $FAIL"
 [ "$FAIL" = 0 ]

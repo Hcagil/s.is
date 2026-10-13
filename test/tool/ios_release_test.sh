@@ -20,7 +20,8 @@
 #     `tool/asc_signing.py distribute com.esd.sis BUILD GROUPS NOTE` with the
 #     groups from vars.TESTFLIGHT_GROUPS through env (empty = bacanaks) and the
 #     note decoded from publish's note_b64, byte for byte; its steps are exactly
-#     the key, distribute and the key removal: it revokes nothing (Apple checks
+#     the tip-of-main check, the key, distribute and the key removal: it
+#     revokes nothing (Apple checks
 #     a build's signature again in beta review, up to about 48 hours later:
 #     ITMS-90721 / ITMS-90035), reads no certificate or profile id and no ios
 #     output;
@@ -39,7 +40,8 @@
 #     required;
 #   - checkout does not persist the token; no ${{ inputs|vars|secrets }} is
 #     pasted into any run: text (they reach steps through env:);
-#   - the steps, exactly in this order: checkout, Flutter, Firebase config,
+#   - the steps, exactly in this order: the tip-of-main check (only when
+#     uploading), checkout, Flutter, Firebase config,
 #     pub get, config-only build, the key, the archive, the ad-hoc signature,
 #     the certificate import, the export, the explicit requirement, the
 #     signature check, the push check, validate, upload, signing material
@@ -235,8 +237,8 @@ grep -qE '^ *TF_GROUPS: \$\{\{ vars\.TESTFLIGHT_GROUPS \}\}$' "$tmp/distribute" 
 grep -qE '^ *NOTE_B64: \$\{\{ needs\.publish\.outputs\.note_b64 \}\}$' "$tmp/distribute" || fail "the note must come from publish's note_b64"
 grep -qE '^ *BUILD: \$\{\{ needs\.scope\.outputs\.code \}\}$' "$tmp/distribute" || fail "the build number must be scope's code"
 mapfile -t dsteps < <(sed -n 's/^      - name: //p' "$tmp/distribute")
-[ "$(printf '%s\n' "${dsteps[@]}")" = "$(printf '%s\n' "Write the App Store Connect key" "Distribute the build to the TestFlight groups" "Remove the App Store Connect key")" ] \
-  || fail "distribute must be exactly the key, distribute and the key removal (nothing revoked): ${dsteps[*]}"
+[ "$(printf '%s\n' "${dsteps[@]}")" = "$(printf '%s\n' "Refuse a commit that is not the tip of main" "Write the App Store Connect key" "Distribute the build to the TestFlight groups" "Remove the App Store Connect key")" ] \
+  || fail "distribute must be exactly the tip check, the key, distribute and the key removal (nothing revoked): ${dsteps[*]}"
 dgate() { awk -v n="      - name: $1" '$0 == n { f = 1; next } f && (/^ *run:/ || /^ *- /) { exit } f' "$tmp/distribute" | sed -n 's/^ *if: *//p'; }
 [ "$(dgate "Remove the App Store Connect key")" = 'always()' ] || fail "distribute key removal must be if: always()"
 for s in "${dsteps[@]}"; do
@@ -304,11 +306,21 @@ grep -qxF '          KEY_PEM: ${{ secrets.IOS_DISTRIBUTION_KEY }}' <<<"$(step_ke
 for f in "$ipa_wf" "$release" "$ci"; do
   grep -nE 'asc_signing\.py +(create|delete|cleanup|release|revoke)' "$f" && fail "$f creates, cleans up or revokes signing material"
 done
-[ "$(grep -oE 'asc_signing\.py +[a-z]+ +"[^"]*"' "$ipa_wf")" = 'asc_signing.py fetch "sis ci distribution"' ] \
-  || fail "ios-ipa must call asc_signing.py only to fetch \"sis ci distribution\": $(grep -n 'asc_signing' "$ipa_wf")"
+# ensure only makes the share App ID / profiles if missing (test/tool/asc_signing_test.py); exact calls, exact order. The app profile must carry Sign in with Apple (--signin).
+# The notification extension's profile carries no App Group (--no-group).
+want_asc='asc_signing.py ensure --signin com.esd.sis "sis ci distribution" "sis ci distribution"
+asc_signing.py ensure com.esd.sis.share "sis ci distribution share" "sis ci distribution"
+asc_signing.py ensure --no-group com.esd.sis.notify "sis ci distribution notify" "sis ci distribution"
+asc_signing.py fetch "sis ci distribution" "$dir"
+asc_signing.py fetch "sis ci distribution share" "$dir/share"
+asc_signing.py fetch "sis ci distribution notify" "$dir/notify"'
+[ "$(grep -oE 'asc_signing\.py .*' "$ipa_wf")" = "$want_asc" ] \
+  || fail "ios-ipa must call asc_signing.py only to ensure then fetch the three profiles: $(grep -n 'asc_signing' "$ipa_wf")"
+[ "$(step_run "$ipa_wf" "Import the signing certificate" /dev/stdout | grep -c 'asc_signing\.py')" -eq 6 ] \
+  || fail "the asc_signing.py calls are not all in the import step"
 # Step order, exactly the contract's; the gates on validate, upload and cleanup.
 mapfile -t steps < <(sed -n 's/^      - name: //p' "$ipa_wf")
-want_steps=("Check out source" "Install Flutter" "Restore Firebase config" "Resolve dependencies"
+want_steps=("Refuse a commit that is not the tip of main" "Check out source" "Install Flutter" "Restore Firebase config" "Restore Maps key" "Resolve dependencies"
   "Configure the Xcode build" "Write the App Store Connect key" "Archive (signed)"
   "Sign the archive with its entitlements" "Import the signing certificate"
   "Export for App Store Connect"
@@ -326,6 +338,7 @@ done
 [ "$(pos "Write the App Store Connect key")" -lt "$(pos "Import the signing certificate")" ] || fail "the certificate import runs before the API key exists"
 gate() { step_keys "$ipa_wf" "$1" | sed -n 's/^ *if: *//p' | sed 's/^\${{ *//; s/ *}}$//'; }
 [ "$(gate "Upload to TestFlight")" = inputs.upload ] || fail "upload is not gated on inputs.upload: [$(gate "Upload to TestFlight")]"
+[ "$(gate "Refuse a commit that is not the tip of main")" = inputs.upload ] || fail "the tip check must run only when uploading: [$(gate "Refuse a commit that is not the tip of main")]"
 [ "$(gate "Validate with App Store Connect")" = '!inputs.upload' ] || fail "validate must run only when not uploading: [$(gate "Validate with App Store Connect")]"
 [ "$(gate "Remove the signing material")" = 'always()' ] || fail "the signing material removal must run even after a failure (if: always())"
 step_run "$ipa_wf" "Remove the signing material" "$tmp/rm.sh"
@@ -337,7 +350,7 @@ grep -nE '^ *id: cert$' "$ipa_wf" && fail "ios-ipa.yml has a step id cert"
 [ "$(gate "Remove the App Store Connect key")" = 'always()' ] || fail "key removal must run even after a failure (if: always())"
 [ "${steps[-1]}" = "Remove the App Store Connect key" ] || fail "key removal is not the last step (last: ${steps[-1]})"
 for s in "${want_steps[@]}"; do
-  case "$s" in "Upload to TestFlight"|"Validate with App Store Connect"|"Remove the signing material"|"Remove the App Store Connect key") continue ;; esac
+  case "$s" in "Refuse a commit that is not the tip of main"|"Upload to TestFlight"|"Validate with App Store Connect"|"Remove the signing material"|"Remove the App Store Connect key") continue ;; esac
   [ -z "$(gate "$s")" ] || fail "'$s' is gated [$(gate "$s")]: every other step must run on every call"
 done
 for s in "${want_steps[@]}"; do
@@ -419,8 +432,9 @@ run() {
 }
 fresh() {
   rm -rf "$tmp/job" "$tmp/rt" "$tmp/home"
-  mkdir -p "$tmp/job/ios/Runner" "$tmp/job/tool" "$tmp/rt" "$tmp/home"
+  mkdir -p "$tmp/job/ios/Runner" "$tmp/job/ios/ShareExtension" "$tmp/job/ios/Flutter" "$tmp/job/tool" "$tmp/rt" "$tmp/home"
   cp ios/Runner/Runner.entitlements "$tmp/job/ios/Runner/"
+  cp ios/ShareExtension/ShareExtension.entitlements "$tmp/job/ios/ShareExtension/"
   ln -s "$stubs" "$tmp/job/tool/asc_signing.py"
   : > "$tmp/github_env"; : > "$tmp/github_output"; : > "$tmp/calls"; : > "$tmp/all-out"
   upload_outcome=skipped
@@ -439,7 +453,8 @@ run_job() {
   local s g ok=1 rc
   failed_step= ran=() upload_outcome=skipped
   for s in "${steps[@]}"; do
-    case "$s" in "Check out source"|"Install Flutter"|"Resolve dependencies") continue ;; esac
+    # The tip check is run, with its gate, by test/tool/admin_apple_workflow_test.sh (R1c, R1d).
+    case "$s" in "Refuse a commit that is not the tip of main"|"Check out source"|"Install Flutter"|"Resolve dependencies") continue ;; esac
     g=$(gate "$s")
     case "$g" in
       "") [ "$ok" = 1 ] || continue ;;
@@ -474,6 +489,10 @@ run "Restore Firebase config" GOOGLE_SERVICE_INFO_PLIST="$plist" || fail "Fireba
 [ "$(cat "$tmp/job/ios/Runner/GoogleService-Info.plist")" = "$plist" ] || fail "GoogleService-Info.plist is not the secret"
 fresh
 if run "Restore Firebase config" GOOGLE_SERVICE_INFO_PLIST=; then fail "an empty GOOGLE_SERVICE_INFO_PLIST did not fail"; fi
+# The Maps key is optional: it lands in ios/Flutter/Secrets.xcconfig, which the Xcode build includes; empty still builds.
+run "Restore Maps key" MAPS_API_KEY_IOS=mk-123 || fail "Maps key step failed"
+[ "$(cat "$tmp/job/ios/Flutter/Secrets.xcconfig")" = "MAPS_API_KEY_IOS=mk-123" ] || fail "the Maps key did not reach Secrets.xcconfig"
+run "Restore Maps key" MAPS_API_KEY_IOS= || fail "an empty Maps key failed the build"
 [ ! -e "$tmp/job/ios/Runner/GoogleService-Info.plist" ] || fail "an empty plist was written"
 
 # 7 the key: 700/600 under umask 022, exact content, never printed, path in GITHUB_ENV.
@@ -509,9 +528,18 @@ for f in --config-only --release --no-codesign --build-number=4242 --build-name=
 done
 grep -q 'build ipa' "$tmp/calls" && fail "flutter build ipa cannot sign this app"
 # One long-lived identity: the only App Store Connect call of the whole job.
+# ensure (idempotent: makes the share / notify App ID and profile if missing) then fetch, all three profiles.
+asc_calls='asc ensure --signin | com.esd.sis | sis ci distribution | sis ci distribution
+asc ensure com.esd.sis.share | sis ci distribution share | sis ci distribution
+asc ensure --no-group | com.esd.sis.notify | sis ci distribution notify | sis ci distribution
+asc fetch sis ci distribution
+asc fetch sis ci distribution share
+asc fetch sis ci distribution notify'
+# only_fetch <case> [partial]: partial = the job stopped part way, so a prefix of those calls, in order.
 only_fetch() {
-  [ "$(grep '^asc' "$tmp/calls")" = 'asc fetch sis ci distribution' ] \
-    || fail "$1: the job must only fetch \"sis ci distribution\" (no create, cleanup, delete, revoke): [$(grep '^asc' "$tmp/calls")]"
+  local c; c=$(grep '^asc' "$tmp/calls")
+  { [ "$c" = "$asc_calls" ] || { [ -n "${2:-}" ] && [ -n "$c" ] && [ "${asc_calls:0:${#c}}" = "$c" ]; }; } \
+    || fail "$1: the job must only ensure and fetch the three profiles (no create, cleanup, delete, revoke): [$(grep '^asc' "$tmp/calls")]"
 }
 only_fetch "a pull request"
 for v in SIGNING_IDENTITY SIGNING_PROFILE_UUID; do
@@ -521,11 +549,17 @@ done
 [ "$(grep '^curl ' "$tmp/calls")" = "curl $wwdr_url" ] || fail "the intermediate is not fetched once from $wwdr_url: $(grep '^curl' "$tmp/calls")"
 sha1=$(sed -n 's/^SIGNING_IDENTITY=//p' "$tmp/github_env")
 uuid=$(sed -n 's/^SIGNING_PROFILE_UUID=//p' "$tmp/github_env")
-python3 - "$tmp/export-options.plist" "$sha1" "$uuid" <<'EOF' || fail "ExportOptions.plist is wrong"
+share_uuid=$(sed -n 's/^SHARE_PROFILE_UUID=//p' "$tmp/github_env")
+[ -n "$share_uuid" ] && [ "$share_uuid" != "$uuid" ] || fail "SHARE_PROFILE_UUID is not the share profile's own: [$share_uuid]"
+notify_uuid=$(sed -n 's/^NOTIFY_PROFILE_UUID=//p' "$tmp/github_env")
+[ -n "$notify_uuid" ] && [ "$notify_uuid" != "$uuid" ] && [ "$notify_uuid" != "$share_uuid" ] \
+  || fail "NOTIFY_PROFILE_UUID is not the notify profile's own: [$notify_uuid]"
+python3 - "$tmp/export-options.plist" "$sha1" "$uuid" "$share_uuid" "$notify_uuid" <<'EOF' || fail "ExportOptions.plist is wrong"
 import plistlib, sys
 d = plistlib.load(open(sys.argv[1], "rb"))
 want = {"method": "app-store-connect", "signingStyle": "manual", "teamID": "TEAM123",
-        "signingCertificate": sys.argv[2], "provisioningProfiles": {"com.esd.sis": sys.argv[3]}}
+        "signingCertificate": sys.argv[2], "provisioningProfiles": {"com.esd.sis": sys.argv[3], "com.esd.sis.share": sys.argv[4],
+                                 "com.esd.sis.notify": sys.argv[5]}}
 bad = {k: d.get(k) for k in want if d.get(k) != want[k]}
 if bad or len(sys.argv[2]) != 40: print("ExportOptions:", bad, file=sys.stderr); sys.exit(1)
 EOF
@@ -534,7 +568,7 @@ grep -q '^altool upload' "$tmp/calls" && fail "a pull request uploaded to TestFl
 grep -qx 'security delete-keychain' "$tmp/calls" || fail "the temporary keychain was not deleted"
 cleaned
 # What the check printed: every code object with an Apple Distribution authority.
-for o in Runner.app Flutter.framework App.framework objective_c.framework; do
+for o in Runner.app ShareExtension.appex Flutter.framework App.framework objective_c.framework; do
   grep -q "^$o: Apple Distribution: " "$tmp/out" || fail "the signature check does not show $o signed for distribution"
 done
 
@@ -566,7 +600,7 @@ leaked "$tmp/out" && fail "the import printed the distribution key"
 [ "$(stat -c %a "$tmp/rt/sign/key.pem")" = 600 ] || fail "key.pem mode $(stat -c %a "$tmp/rt/sign/key.pem"), want 600"
 [ "$(stat -c %a "$tmp/rt/sign")" = 700 ] || fail "\$RUNNER_TEMP/sign mode $(stat -c %a "$tmp/rt/sign"), want 700"
 [ "$(cat "$tmp/rt/sign/key.pem")" = "$dist_key_text" ] || fail "key.pem is not the secret"
-[ "$(grep '^asc' "$tmp/calls")" = 'asc fetch sis ci distribution' ] || fail "the import does not fetch \"sis ci distribution\": $(grep '^asc' "$tmp/calls")"
+[ "$(grep '^asc' "$tmp/calls")" = "$asc_calls" ] || fail "the import does not ensure and fetch both profiles \"sis ci distribution\": $(grep '^asc' "$tmp/calls")"
 # A wrong key, a non-key, an empty secret: the import fails before anything is
 # signed or imported, and prints nothing of the key.
 for case in wrong notakey empty; do
@@ -579,7 +613,7 @@ for case in wrong notakey empty; do
   run_job false KEY_PEM="$k"
   [ "$failed_step" = "Import the signing certificate" ] || fail "IOS_DISTRIBUTION_KEY $case: the import did not fail (failed: '${failed_step:-none}')"
   grep -qE '^(xcodebuild export|altool)' "$tmp/calls" && fail "IOS_DISTRIBUTION_KEY $case: the job went on to export or altool"
-  [ -z "$(grep '^asc' "$tmp/calls" | grep -v '^asc fetch sis ci distribution$')" ] \
+  [ -z "$(grep '^asc' "$tmp/calls" | grep -vxF "$asc_calls")" ] \
     || fail "IOS_DISTRIBUTION_KEY $case: App Store Connect was called for more than the fetch: $(grep '^asc' "$tmp/calls")"
   cleaned
 done
@@ -598,7 +632,7 @@ run_job true STUB_ASC_FAIL=fetch
 [ "$failed_step" = "Import the signing certificate" ] || fail "an expired certificate did not fail the import (failed: '${failed_step:-none}')"
 grep -q 'the signing certificate expired' "$tmp/out" || fail "the fetch failure is not shown"
 grep -q '^altool' "$tmp/calls" && fail "the job went on to altool after a failure"
-only_fetch "an expired certificate"
+only_fetch "an expired certificate" partial
 cleaned
 # The downloaded intermediate did not issue the certificate: the step says so, nothing is imported.
 fresh
@@ -607,7 +641,7 @@ run_job true STUB_URLS="{\"$wwdr_url\": \"$tmp/ca/fake.cer\"}"
 grep -q 'the downloaded WWDR intermediate did not issue the signing certificate' "$tmp/out" \
   || fail "a wrong WWDR intermediate failed without saying so: $(sed -n '/^--- Import the signing/,/^---/p' "$tmp/out")"
 grep -q "^curl $wwdr_url$" "$tmp/calls" || fail "the wrong-issuer case never fetched the intermediate"
-only_fetch "a wrong intermediate"
+only_fetch "a wrong intermediate" partial
 cleaned
 fresh
 run_job true STUB_EXPORT_FAIL=1
@@ -656,26 +690,41 @@ if sig_case Flutter.framework tamper; then fail "a framework changed after the a
 grep -q "sealed resource is missing or invalid" "$tmp/out" || fail "the check did not fail on the broken seal: $(cat "$tmp/out")"
 
 # 12 the push entitlement on its own: production passes; everything else fails.
-mkipa() { # <aps-environment | unset | unsigned>: $RUNNER_TEMP/export/sis.ipa
+mkipa() { # <aps-environment | unset | unsigned> [lacks: app | appex | signin]: $RUNNER_TEMP/export/sis.ipa
   rm -rf "$tmp/rt/export" "$tmp/rt/ipa"; mkdir -p "$tmp/rt/export"
-  python3 - "$tmp/rt/export/sis.ipa" "$1" <<'EOF'
+  python3 - "$tmp/rt/export/sis.ipa" "$1" "${2:-}" <<'EOF'
 import io, json, plistlib, sys, zipfile
 z = zipfile.ZipFile(sys.argv[1], "w")
-z.writestr("Payload/Runner.app/Info.plist", plistlib.dumps({"CFBundleIdentifier": "com.esd.sis"}))
-if sys.argv[2] != "unsigned":
-    ents = {"application-identifier": "TEAM123.com.esd.sis"}
-    if sys.argv[2] != "unset": ents["aps-environment"] = sys.argv[2]
-    z.writestr("Payload/Runner.app/_CodeSignature/stub.json", json.dumps({"identifier": "com.esd.sis", "adhoc": True,
+group = {"com.apple.security.application-groups": ["group.com.esd.sis"]}
+for obj, ident in (("Runner.app", "com.esd.sis"), ("Runner.app/PlugIns/ShareExtension.appex", "com.esd.sis.share")):
+    z.writestr("Payload/%s/Info.plist" % obj, plistlib.dumps({"CFBundleIdentifier": ident}))
+    if sys.argv[2] == "unsigned":
+        continue
+    ents = {"application-identifier": "TEAM123." + ident}
+    if sys.argv[3] != obj.split(".")[-1]: ents.update(group)
+    if obj == "Runner.app" and sys.argv[2] != "unset": ents["aps-environment"] = sys.argv[2]
+    if obj == "Runner.app" and sys.argv[3] != "signin": ents["com.apple.developer.applesignin"] = ["Default"]
+    z.writestr("Payload/%s/_CodeSignature/stub.json" % obj, json.dumps({"identifier": ident, "adhoc": True,
                "leaf": None, "entitlements": ents, "dr": None, "seal": {}}))
 EOF
 }
 fresh; mkipa production
-run "Check the push entitlement" || fail "a production-signed app failed the push check"
+run "Check the push entitlement" || fail "a production-signed app failed the push check: $(cat "$tmp/out")"
 grep -qx 'aps-environment: production' "$tmp/out" || fail "the check does not report the value"
 for bad in development unset unsigned; do
   fresh; mkipa "$bad"
   if run "Check the push entitlement"; then fail "aps-environment '$bad' passed the push check"; fi
 done
+# The share App Group (group.com.esd.sis) on the app and on the extension, each.
+for lacks in app appex; do
+  fresh; mkipa production "$lacks"
+  if run "Check the push entitlement"; then fail "the push check passed with no App Group on the $lacks"; fi
+  grep -q "has no App Group entitlement" "$tmp/out" || fail "a missing App Group on the $lacks is not named: $(cat "$tmp/out")"
+done
+# Sign in with Apple on the app: without it the iPhone button fails at Apple.
+fresh; mkipa production signin
+if run "Check the push entitlement"; then fail "the push check passed with no Sign in with Apple on the app"; fi
+grep -q "Runner.app has no Sign in with Apple entitlement" "$tmp/out" || fail "a missing Sign in with Apple is not named: $(cat "$tmp/out")"
 fresh
 if run "Check the push entitlement"; then fail "the push check passed with no exported .ipa"; fi
 
@@ -702,6 +751,8 @@ run_dist() { # [VAR=value ...]: sets $failed_step, $ran
   local s rc ok=1
   failed_step= ran=()
   for s in "${dsteps[@]}"; do
+    # run, with its env, by test/tool/admin_apple_workflow_test.sh (R1c)
+    [ "$s" = "Refuse a commit that is not the tip of main" ] && continue
     [ "$ok" = 1 ] || [ "$(dgate "$s")" = 'always()' ] || continue
     ran+=("$s"); rc=0
     RUN_WF=$release run "$s" KEY="$key_text" BUILD=4242 "$@" || rc=$?

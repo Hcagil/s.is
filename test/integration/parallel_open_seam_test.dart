@@ -13,6 +13,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Opening a chat with the join and the read in parallel (0.30.12), against
 /// the real stack: the REAL MessagesController on the REAL
@@ -154,6 +155,7 @@ void main() {
     if (after != null) wire.after = () => after(client);
     final c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(
           SupabaseChatRepository(client),
         ),

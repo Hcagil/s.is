@@ -24,6 +24,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// Two accounts, one after the other, on ONE client — one phone.
 ///
@@ -94,6 +95,9 @@ class PasswordAuth implements AuthRepository {
       return Err(ProviderFailure(e.message));
     }
   }
+
+  @override
+  Future<Result<void>> signInWithApple() => signInWithGoogle();
 
   @override
   bool get hasSession => real.hasSession;
@@ -180,6 +184,7 @@ void main() {
     auth = PasswordAuth(phone!);
     c = ProviderContainer.test(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(
           const RuntimeConfig(
             supabaseUrl: _url,

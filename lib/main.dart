@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/sis_app.dart';
@@ -16,21 +17,64 @@ import 'core/runtime_config.dart';
 import 'core/startup_failure.dart';
 import 'core/startup_marks.dart';
 import 'features/appearance/application/appearance_controller.dart';
+import 'features/appearance/data/picker_wallpaper_photos.dart';
 import 'features/appearance/data/shared_prefs_appearance_store.dart';
+import 'features/autodownload/application/auto_download_controller.dart';
+import 'features/autodownload/data/connectivity_network_probe.dart';
+import 'features/autodownload/data/shared_prefs_auto_download_store.dart';
 import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/file_last_session_store.dart';
 import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
+import 'features/chat/application/link_preview_controller.dart';
+import 'features/chat/application/share_controller.dart';
 import 'features/chat/data/external_picker_channel.dart';
+import 'features/chat/data/file_video_importer.dart';
+import 'features/chat/data/method_channel_share_intake.dart';
 import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/file_chat_list_snapshot_store.dart';
+import 'features/chat/data/flutter_device_files.dart';
+import 'features/chat/data/flutter_device_videos.dart';
+import 'features/chat/data/geolocator_device_location.dart';
+import 'features/chat/data/maps_backend.dart';
+import 'features/chat/data/flutter_phone_book.dart';
+import 'features/chat/data/http_link_preview_fetcher.dart';
+import 'features/chat/data/imcodec_sticker_encoder.dart';
+import 'features/chat/data/link_image_shrink.dart';
 import 'features/chat/data/native_picture_cropper.dart';
+import 'features/chat/data/native_sticker_cutter.dart';
+import 'features/chat/data/no_voice_transcriber.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
+import 'features/chat/data/photo_manager_video_gallery.dart';
+import 'features/chat/data/record_voice_recorder.dart';
+import 'features/chat/data/share_plus_text_sharer.dart';
+import 'features/chat/data/share_plus_video_sharer.dart';
+import 'features/chat/data/shared_prefs_contacts_disclosure_store.dart';
+import 'features/chat/data/shared_prefs_played_voice_store.dart';
+import 'features/chat/data/shared_prefs_recent_sticker_store.dart';
+import 'features/chat/data/shared_prefs_send_queue_store.dart';
+import 'features/chat/data/speech_dictation.dart';
+import 'features/chat/data/supabase_admin_chat_repository.dart';
+import 'features/chat/data/supabase_chat_archive_repository.dart';
+import 'features/chat/data/supabase_chat_delete_repository.dart';
+import 'features/chat/data/supabase_chat_file_repository.dart';
+import 'features/chat/data/supabase_chat_pin_repository.dart';
+import 'features/chat/data/supabase_group_settings_repository.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
+import 'features/chat/data/supabase_location_share_repository.dart';
+import 'features/chat/data/url_launcher_maps_opener.dart';
+import 'features/chat/data/supabase_poll_repository.dart';
 import 'features/chat/data/supabase_reaction_repository.dart';
+import 'features/chat/data/supabase_sticker_repository.dart';
 import 'features/chat/data/supabase_contacts_repository.dart';
+import 'features/chat/data/supabase_contact_share_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
+import 'features/chat/data/video_player_playback.dart';
+import 'features/chat/data/webview_video_embed.dart';
+import 'features/chat/presentation/map_providers.dart';
+import 'features/chat/presentation/video_player_page.dart';
+import 'features/chat/presentation/video_player_sheet.dart';
 import 'features/notifications/application/alert_controller.dart';
 import 'features/notifications/application/badge_controller.dart';
 import 'features/notifications/application/notification_settings_controller.dart';
@@ -96,6 +140,12 @@ Future<void> main() async {
       ], await rootBundle.loadString('assets/fonts/OFL-$font.txt'));
     }
   });
+  // The starter stickers are Noto Emoji images: Apache 2.0, credit included.
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'Noto Emoji images',
+    ], await rootBundle.loadString('assets/stickers/NOTO-EMOJI-LICENSE.txt'));
+  });
   final config = RuntimeConfig.fromEnvironment();
   // Read before runApp (like the session marker), so the first frame already
   // has the member's theme, font, text size and language: no flash.
@@ -103,6 +153,19 @@ Future<void> main() async {
   final appearanceOverrides = [
     appearanceStoreProvider.overrideWithValue(appearanceStore),
     initialAppearanceProvider.overrideWithValue(await appearanceStore.load()),
+    wallpaperPhotosProvider.overrideWithValue(
+      const PickerWallpaperPhotos(ExternalPickerChannel()),
+    ),
+  ];
+  // Same reason: the member's auto-download choices are known at the first
+  // frame, so a photo's gate never flickers.
+  const autoDownloadStore = SharedPrefsAutoDownloadStore();
+  final autoDownloadOverrides = [
+    autoDownloadStoreProvider.overrideWithValue(autoDownloadStore),
+    initialAutoDownloadProvider.overrideWithValue(
+      await autoDownloadStore.load(),
+    ),
+    networkProbeProvider.overrideWithValue(ConnectivityNetworkProbe()),
   ];
   if (!config.isComplete) {
     runApp(
@@ -126,34 +189,128 @@ Future<void> main() async {
     // A failed setup is logged by _setUpPush and surfaces in each waiting call.
     pushReady.future.ignore();
     final client = Supabase.instance.client;
+    final maps = MapsBackend(
+      apiKey: config.mapsApiKey,
+      client: http.Client(),
+      languageCode:
+          WidgetsBinding.instance.platformDispatcher.locale.languageCode,
+    );
     final attachmentCache = FileAttachmentCache();
+    final deviceFiles = FlutterDeviceFiles();
     StartupMarks.mark('run-app');
     runApp(
       ProviderScope(
         overrides: [
           ...appearanceOverrides,
+          ...autoDownloadOverrides,
           runtimeConfigProvider.overrideWithValue(config),
           ...platformOverrides(defaultTargetPlatform, client, config),
           chatRepositoryProvider.overrideWithValue(
             SupabaseChatRepository(client, cache: attachmentCache),
           ),
+          groupSettingsRepositoryProvider.overrideWithValue(
+            SupabaseGroupSettingsRepository(client),
+          ),
+          chatArchiveRepositoryProvider.overrideWithValue(
+            SupabaseChatArchiveRepository(client),
+          ),
+          chatPinRepositoryProvider.overrideWithValue(
+            SupabaseChatPinRepository(client),
+          ),
+          chatDeleteRepositoryProvider.overrideWithValue(
+            SupabaseChatDeleteRepository(client),
+          ),
           reactionRepositoryProvider.overrideWithValue(
             SupabaseReactionRepository(client),
+          ),
+          adminChatRepositoryProvider.overrideWithValue(
+            SupabaseAdminChatRepository(client),
+          ),
+          pollRepositoryProvider.overrideWithValue(
+            SupabasePollRepository(client),
+          ),
+          contactsDisclosureStoreProvider.overrideWithValue(
+            SharedPrefsContactsDisclosureStore(
+              () => client.auth.currentUser?.id,
+            ),
           ),
           contactsRepositoryProvider.overrideWithValue(
             SupabaseContactsRepository(client),
           ),
+          contactShareRepositoryProvider.overrideWithValue(
+            SupabaseContactShareRepository(client),
+          ),
+          phoneBookProvider.overrideWithValue(const FlutterPhoneBook()),
+          chatFileRepositoryProvider.overrideWithValue(
+            SupabaseChatFileRepository(client),
+          ),
+          deviceFilesProvider.overrideWithValue(deviceFiles),
+          deviceVideosProvider.overrideWithValue(
+            FlutterDeviceVideos(deviceFiles),
+          ),
+          videoPlaybackFactoryProvider.overrideWithValue(
+            const VideoPlayerPlaybackFactory(),
+          ),
+          textSharerProvider.overrideWithValue(const SharePlusTextSharer()),
+          videoSharerProvider.overrideWithValue(const SharePlusVideoSharer()),
+          voiceRecorderProvider.overrideWith((ref) {
+            final recorder = RecordVoiceRecorder();
+            ref.onDispose(recorder.dispose);
+            return recorder;
+          }),
+          voiceTranscriberProvider.overrideWithValue(
+            const NoVoiceTranscriber(),
+          ),
+          dictationProvider.overrideWithValue(SpeechDictation()),
+          voicePlaybackFactoryProvider.overrideWithValue(
+            const VoicePlayerPlaybackFactory(),
+          ),
+          playedVoiceStoreProvider.overrideWithValue(
+            const SharedPrefsPlayedVoiceStore(),
+          ),
+          sendQueueStoreProvider.overrideWithValue(
+            const SharedPrefsSendQueueStore(),
+          ),
+          stickerRepositoryProvider.overrideWithValue(
+            SupabaseStickerRepository(client),
+          ),
+          recentStickerStoreProvider.overrideWithValue(
+            const SharedPrefsRecentStickerStore(),
+          ),
+          videoSurfaceProvider.overrideWithValue(videoSurface),
+          videoEmbedViewProvider.overrideWithValue(webViewVideoEmbed),
+          locationShareRepositoryProvider.overrideWithValue(
+            SupabaseLocationShareRepository(client),
+          ),
+          deviceLocationProvider.overrideWithValue(
+            const GeolocatorDeviceLocation(),
+          ),
+          placeSearchProvider.overrideWithValue(maps.placeSearch),
+          mapsOpenerProvider.overrideWithValue(const UrlLauncherMapsOpener()),
+          mapViewProvider.overrideWithValue(maps.mapView),
+          mapPreviewProvider.overrideWithValue(maps.mapPreview),
           attachmentCacheProvider.overrideWithValue(attachmentCache),
           chatListSnapshotStoreProvider.overrideWithValue(
             FileChatListSnapshotStore(),
           ),
           lastSessionStoreProvider.overrideWithValue(FileLastSessionStore()),
           galleryProvider.overrideWithValue(const PhotoManagerGallery()),
+          videoGalleryProvider.overrideWithValue(
+            PhotoManagerVideoGallery(deviceFiles),
+          ),
           externalPickerProvider.overrideWithValue(
             const ExternalPickerChannel(),
           ),
+          shareIntakeProvider.overrideWithValue(MethodChannelShareIntake()),
+          sharedVideoImporterProvider.overrideWithValue(
+            FileVideoImporter(deviceFiles),
+          ),
           pictureCropperProvider.overrideWithValue(
             const NativePictureCropper(),
+          ),
+          stickerCutterProvider.overrideWithValue(const NativeStickerCutter()),
+          stickerEncoderProvider.overrideWithValue(
+            const ImcodecStickerEncoder(),
           ),
           presenceRepositoryProvider.overrideWithValue(
             SupabasePresenceRepository(client),
@@ -162,6 +319,12 @@ Future<void> main() async {
             SupabaseProfileRepository(client),
           ),
           linkOpenerProvider.overrideWithValue(const UrlLauncherLinkOpener()),
+          linkPreviewFetcherProvider.overrideWithValue(
+            HttpLinkPreviewFetcher(
+              linkPreviewHttpClient(),
+              shrink: shrinkLinkImage,
+            ),
+          ),
           pushSourceProvider.overrideWithValue(
             DeferredPushSource(pushReady.future),
           ),

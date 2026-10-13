@@ -1,10 +1,13 @@
+import 'dart:async' show unawaited;
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/services.dart'
     show MethodChannel, MissingPluginException, PlatformException;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/notification_inbox.dart';
@@ -132,6 +135,8 @@ final class LocalPushDisplay {
     // written, so every push was dropped as no_owner.
     if (userId == null) {
       await prefs.remove(_ownerKey);
+      // Not awaited: file work must never hold up the owner change.
+      unawaited(_clearPictures());
     } else {
       await prefs.setString(_ownerKey, userId);
     }
@@ -140,6 +145,14 @@ final class LocalPushDisplay {
     } catch (e) {
       await PushReceiptLog.add('error', error: e, label: 'forUser cancelAll');
     }
+  }
+
+  /// Empties the notification picture cache (cacheDir/notif, see NotificationPicture.kt); best effort.
+  static Future<void> _clearPictures() async {
+    try {
+      final dir = Directory('${(await getTemporaryDirectory()).path}/notif');
+      if (await dir.exists()) await dir.delete(recursive: true);
+    } catch (_) {}
   }
 
   /// Whether Android lets SIS draw notifications at all (the Android 13+

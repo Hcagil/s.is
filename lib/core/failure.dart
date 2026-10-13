@@ -24,12 +24,106 @@ final class DeniedFailure extends Failure {
   String get message => 'Not allowed';
 }
 
+/// A server search limit hit ('RLMT1'); the screen shows its own line.
+final class SearchLimitFailure extends Failure {
+  const SearchLimitFailure();
+
+  @override
+  String get message => 'Too many searches, try again later.';
+}
+
+/// A sticker limit hit on the server: 'STKA1' (10 albums), 'STKA2' (50 stickers in an album) or 'STKF1' (200 favourites); the screen shows its own translated line.
+final class StickerLimitFailure extends Failure {
+  const StickerLimitFailure(this.code);
+
+  /// The server's error code: STKA1, STKA2 or STKF1.
+  final String code;
+
+  @override
+  String get message => 'Sticker limit reached.';
+}
+
+/// The picture could not be turned into a sticker, or the upload failed to start.
+final class StickerMakeFailure extends Failure {
+  const StickerMakeFailure();
+
+  @override
+  String get message => 'Could not make the sticker.';
+}
+
+/// Pinning a sixth chat; the screen shows its own translated line.
+final class PinLimitFailure extends Failure {
+  const PinLimitFailure();
+
+  @override
+  String get message => 'You can pin up to 5 chats.';
+}
+
+/// Voting in a poll that has been closed; the screen shows its own translated line.
+final class PollClosedFailure extends Failure {
+  const PollClosedFailure();
+
+  @override
+  String get message => 'This poll is closed.';
+}
+
+/// A video still over the 50 MiB limit after it was shrunk; the screen shows its own translated line.
+final class VideoTooBigFailure extends Failure {
+  const VideoTooBigFailure();
+
+  @override
+  String get message => 'This video is too large to send.';
+}
+
+/// Shrinking the video failed; the screen shows its own translated line.
+final class VideoFailedFailure extends Failure {
+  const VideoFailedFailure();
+
+  @override
+  String get message => 'This video could not be prepared.';
+}
+
+/// The member cancelled the shrinking; never shown.
+final class VideoCancelledFailure extends Failure {
+  const VideoCancelledFailure();
+
+  @override
+  String get message => 'Cancelled.';
+}
+
+/// Location permission was refused; the screen shows its own translated line. [forever] is true when only the phone settings can change it.
+final class LocationDeniedFailure extends Failure {
+  const LocationDeniedFailure({this.forever = false});
+
+  final bool forever;
+
+  @override
+  String get message => 'Location is turned off for SIS.';
+}
+
+/// Location is switched off on the phone or no position arrived in time; the screen shows its own translated line.
+final class LocationUnavailableFailure extends Failure {
+  const LocationUnavailableFailure();
+
+  @override
+  String get message => 'Could not find where you are.';
+}
+
 final class ProviderFailure extends Failure {
   const ProviderFailure(this.message, {this.userCanceled = false});
 
   @override
   final String message;
   final bool userCanceled;
+}
+
+/// Apple gave a hidden (private relay) email; SIS needs the real one. The sign-in screen shows its own translated line.
+final class HiddenEmailFailure extends Failure {
+  const HiddenEmailFailure();
+
+  @override
+  String get message =>
+      "SIS needs your real email address. In Apple's sign-in choose Share My Email and try again.";
 }
 
 /// Words for any error a screen shows: a Failure's own message, never a raw

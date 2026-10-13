@@ -1,7 +1,7 @@
 // Sends in the unconfirmed window of a cold start (0.30.15): a message typed
 // while the session is still Allowed(confirmed: false) is queued and sent as
-// usual -- RLS on messages decides -- but a Denied answer drops every queued
-// send for good, and a refused insert (42501, non-retryable) is never
+// usual -- RLS on messages decides -- but a Replaced answer stops every
+// queued send, and a refused insert (42501, non-retryable) is never
 // retried. The real SessionController runs over the cold-start fakes.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +15,7 @@ import 'package:sis/features/chat/domain/message.dart';
 
 import '../../support/held_send_chat.dart';
 import '../../support/last_session_fakes.dart';
+import '../../support/video_fakes.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -39,6 +40,7 @@ Future<(ColdAuth, HeldSendChat)> start(WidgetTester t) async {
   final chat = HeldSendChat();
   c = ProviderContainer(
     overrides: [
+      ...videoOverrides(),
       runtimeConfigProvider.overrideWithValue(config),
       authRepositoryProvider.overrideWithValue(auth),
       lastSessionStoreProvider.overrideWithValue(
@@ -73,8 +75,10 @@ void main() {
     await end(t);
   });
 
-  testWidgets('Denied drops the queue; the in-flight send failing afterwards '
-      'is never retried', (t) async {
+  // A marker is stored (the unconfirmed window needs one), so a clear "not
+  // allowed" now means Replaced, and nothing is sent from a replaced phone.
+  testWidgets('Replaced: the in-flight send failing afterwards is never '
+      'retried', (t) async {
     final (auth, chat) = await start(t);
     final q = c.read(sendQueueProvider.notifier);
     q.enqueue('c1', body: 'one');
@@ -86,9 +90,7 @@ void main() {
 
     auth.last.deny();
     await hop(t);
-    expect(c.read(sessionControllerProvider).value, isA<Denied>());
-    expect(queued('c1'), isEmpty, reason: 'a revoked member kept a queue');
-    expect(queued('c2'), isEmpty);
+    expect(c.read(sessionControllerProvider).value, isA<Replaced>());
 
     for (var i = 0; i < chat.asked.length; i++) {
       if (!chat.asked[i].answer.isCompleted) chat.fail(i, offline);
@@ -99,9 +101,8 @@ void main() {
     expect(
       chat.asked,
       hasLength(askedBefore),
-      reason: 'a dropped send retried',
+      reason: 'a replaced phone retried a send',
     );
-    expect(queued('c1'), isEmpty);
     await end(t);
   });
 

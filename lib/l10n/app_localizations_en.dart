@@ -128,6 +128,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatArchive => 'Archive';
 
   @override
+  String get chatUnarchive => 'Unarchive';
+
+  @override
+  String get archivedChatsTitle => 'Archived chats';
+
+  @override
+  String archivedChatsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count chats',
+      one: '1 chat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get archivedChatsHint =>
+      'Archived chats stay archived when a new message arrives. No sound, no push, no badge.';
+
+  @override
+  String get archivedChatsEmpty => 'No archived chats';
+
+  @override
   String get chatMutedLabel => 'Muted';
 
   @override
@@ -162,6 +186,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get groupDeleteForAll => 'Delete group for everyone';
+
+  @override
+  String groupDeleteTitle(String name) {
+    return 'Delete $name for everyone?';
+  }
+
+  @override
+  String get groupDeleteBody =>
+      'All messages and photos in this group are gone for everyone. This cannot be undone.';
+
+  @override
+  String get groupDeletedNotice => 'Group deleted';
 
   @override
   String get groupLeave => 'Leave group';
@@ -214,6 +250,62 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachLocation => 'Location';
 
   @override
+  String get locationShareTitle => 'Share location';
+
+  @override
+  String get locationShareCurrent => 'Share current location';
+
+  @override
+  String get locationShareCurrentSub => 'Sends where you are now';
+
+  @override
+  String locationShareAccuracy(int meters) {
+    return 'Accurate to about $meters m';
+  }
+
+  @override
+  String get locationPickTitle => 'Pick a place';
+
+  @override
+  String get locationPickSub => 'Move the pin on the map';
+
+  @override
+  String get locationPermNote =>
+      'Location permission is asked only when you tap Share';
+
+  @override
+  String get locationSearchHint => 'Search a place';
+
+  @override
+  String get locationSendThis => 'Send this place';
+
+  @override
+  String get locationDenied =>
+      'Location is turned off for SIS. Turn it on in the phone settings, or pick a place on the map.';
+
+  @override
+  String get locationUnavailable =>
+      'Could not find your position. Check that location is on.';
+
+  @override
+  String get locationPreviewLine => '📍 Location';
+
+  @override
+  String get locationOpenTitle => 'Open in Maps?';
+
+  @override
+  String get locationOpen => 'Open';
+
+  @override
+  String get locationCancel => 'Cancel';
+
+  @override
+  String get locationOpenFailed => 'No maps app could open this place.';
+
+  @override
+  String get locationNoResults => 'No places found';
+
+  @override
   String get attachContact => 'Contact';
 
   @override
@@ -221,6 +313,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get signInWithApple => 'Sign in with Apple';
+
+  @override
+  String get signInHiddenEmail =>
+      'SIS needs your real email address. In Apple\'s sign-in choose Share My Email and try again.';
 
   @override
   String get findFromContacts => 'Find people from contacts';
@@ -243,6 +339,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get whatsNewUpToDate => 'You\'re up to date';
 
   @override
+  String get whatsNewInstalled => 'Installed (your version)';
+
+  @override
   String get messageActionReply => 'Reply';
 
   @override
@@ -256,6 +355,38 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get messageActionPin => 'Pin message';
+
+  @override
+  String get messageActionUnpin => 'Unpin message';
+
+  @override
+  String get chatMenuUnpin => 'Unpin chat';
+
+  @override
+  String get chatPinLimit => 'You can pin up to 5 chats.';
+
+  @override
+  String eventPinned(String name) {
+    return '$name pinned a message';
+  }
+
+  @override
+  String get pinnedBarTitle => 'Pinned message';
+
+  @override
+  String get pinnedBarPhoto => 'Photo';
+
+  @override
+  String get groupPinAll => 'All members';
+
+  @override
+  String get groupPinAdmins => 'Admins only';
+
+  @override
+  String get listPinnedHeader => 'Pinned';
+
+  @override
+  String get listChatsHeader => 'Chats';
 
   @override
   String get messageActionDeleteForMe => 'Delete for me';
@@ -537,6 +668,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get composerCancelReply => 'Cancel reply';
 
   @override
+  String get composerLinkRemove => 'Send as a plain link';
+
+  @override
+  String get linkCardOpen => 'Open link';
+
+  @override
   String get composerEditing => 'Editing message';
 
   @override
@@ -624,10 +761,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Everyone in your people list is already in this group.';
 
   @override
-  String get addMembersOldTitle => 'Show old messages?';
+  String get addMembersOldTitle => 'Show earlier messages';
 
   @override
-  String get addMembersOldHint => 'Off shows only messages sent from now on.';
+  String get addMembersOldHint => 'New member sees history';
+
+  @override
+  String get addMembersAdminDecides =>
+      'Group admin sets whether new members see earlier messages';
 
   @override
   String get addMembersAdding => 'Adding…';
@@ -690,6 +831,61 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String forwardSendCount(int count) {
     return 'Send ($count)';
+  }
+
+  @override
+  String get shareTitle => 'Share to';
+
+  @override
+  String sharePhotos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos to share',
+      one: '1 photo to share',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareVideos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count videos to share',
+      one: '1 video to share',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareItems(int count) {
+    return '$count items to share';
+  }
+
+  @override
+  String get shareSending => 'Sending…';
+
+  @override
+  String shareDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Sent to $count chats',
+      one: 'Sent to 1 chat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareUnreadable(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos could not be read and were not sent.',
+      one: '1 photo could not be read and was not sent.',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -778,6 +974,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String eventRemoved(String name) {
     return '$name was removed';
+  }
+
+  @override
+  String eventPictureChanged(String name) {
+    return '$name changed the group picture';
   }
 
   @override
@@ -954,6 +1155,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'This Google account is not currently approved for SIS.';
 
   @override
+  String get replacedTitle => 'You signed in on another phone';
+
+  @override
+  String get replacedBody =>
+      'SIS works on one phone at a time. Sign in again to use it here; the other phone will be signed out.';
+
+  @override
+  String get replacedSignIn => 'Sign in';
+
+  @override
+  String replacedUnsentDeleted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count unsent messages were deleted from this phone.',
+      one: '1 unsent message was deleted from this phone.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get statusConnectTitle => 'Could not connect';
 
   @override
@@ -1009,4 +1231,1052 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get statusStartBootstrap => 'SIS could not start. Please try again.';
+
+  @override
+  String get appearanceRename => 'Rename';
+
+  @override
+  String get appearanceDuplicate => 'Duplicate';
+
+  @override
+  String get appearanceDelete => 'Delete';
+
+  @override
+  String get appearanceCancel => 'Cancel';
+
+  @override
+  String get appearanceRenameTitle => 'Rename theme';
+
+  @override
+  String get appearanceThemeName => 'Theme name';
+
+  @override
+  String get appearanceThemeMenu => 'Theme options';
+
+  @override
+  String appearanceCopyName(String name) {
+    return '$name copy';
+  }
+
+  @override
+  String get appearanceCreateTheme => 'Create a new theme';
+
+  @override
+  String get appearanceCreate => 'Create';
+
+  @override
+  String get appearanceNameEmpty => 'Name cannot be empty';
+
+  @override
+  String get appearanceThemePlaceholder => 'My theme';
+
+  @override
+  String get themeTabAccent => 'Accent Color';
+
+  @override
+  String get themeTabBackground => 'Background';
+
+  @override
+  String get themeTabMyMessages => 'My Messages';
+
+  @override
+  String get themePickAccent => 'Pick an accent color';
+
+  @override
+  String get themePickBackground => 'Pick background color';
+
+  @override
+  String get themePickMine => 'Pick my message bubble color';
+
+  @override
+  String get themeLowContrast =>
+      'Accent may be hard to read. Consider a darker shade.';
+
+  @override
+  String get themeModeLabel => 'Appearance mode';
+
+  @override
+  String get themeModeLight => 'Light';
+
+  @override
+  String get themeModeDark => 'Dark';
+
+  @override
+  String get themeModeAuto => 'Auto';
+
+  @override
+  String get themeReset => 'Reset to default';
+
+  @override
+  String themeSwatch(String hex) {
+    return 'Colour $hex';
+  }
+
+  @override
+  String get wallpaperColour => 'Colour';
+
+  @override
+  String get wallpaperGradient => 'Gradient';
+
+  @override
+  String get wallpaperPicture => 'Picture';
+
+  @override
+  String get wallpaperChoosePhoto => 'Choose photo';
+
+  @override
+  String get wallpaperPickFailed =>
+      'That photo could not be used. Try another.';
+
+  @override
+  String get wallpaperReset => 'Reset Chat Backgrounds';
+
+  @override
+  String get wallpaperResetInfo =>
+      'Remove all uploaded chat backgrounds and restore the pre-installed ones.';
+
+  @override
+  String get wallpaperResetTitle => 'Reset chat backgrounds';
+
+  @override
+  String get wallpaperResetConfirm =>
+      'Are you sure you want to reset all chat backgrounds?';
+
+  @override
+  String get wallpaperResetAction => 'Reset';
+
+  @override
+  String get chatSelPin => 'Pin';
+
+  @override
+  String get chatSelMarkRead => 'Mark as read';
+
+  @override
+  String get chatDeleteAction => 'Delete';
+
+  @override
+  String get chatDeleteCancel => 'Cancel';
+
+  @override
+  String get chatDeleteUndo => 'Undo';
+
+  @override
+  String get chatDeleteChat => 'Delete Chat';
+
+  @override
+  String chatDeleteSure(String name) {
+    return 'Are you sure you want to delete the chat with **$name**?';
+  }
+
+  @override
+  String chatDeleteAlso(String name) {
+    return 'Also delete for $name';
+  }
+
+  @override
+  String get chatDeletedUndo => 'Chat deleted';
+
+  @override
+  String get chatLeaveGroupTitle => 'Leave Group';
+
+  @override
+  String chatDeleteLeaveSure(String name) {
+    return 'Are you sure you want to delete and leave the group **$name**?';
+  }
+
+  @override
+  String get chatDeleteGroupForAll => 'Delete the group for all members';
+
+  @override
+  String get chatGroupLeftUndo => 'You left the group.';
+
+  @override
+  String get chatGroupDeletedUndo => 'Group deleted.';
+
+  @override
+  String chatDeleteFewTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Delete $count chats',
+      one: 'Delete 1 chat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatDeleteFewSure =>
+      'Are you sure you want to delete selected chats?';
+
+  @override
+  String get chatDeleteBothSides => 'Delete for both sides where possible';
+
+  @override
+  String get chatsDeletedUndo => 'Chats deleted.';
+
+  @override
+  String get pollNewTitle => 'New poll';
+
+  @override
+  String get pollQuestionLabel => 'Question';
+
+  @override
+  String get pollQuestionHint => 'Ask a question';
+
+  @override
+  String get pollOptionsLabel => 'Options';
+
+  @override
+  String get pollOptionHint => 'Option';
+
+  @override
+  String get pollAddOption => 'Add option';
+
+  @override
+  String get pollOptionsMax => 'You have added the maximum number of options.';
+
+  @override
+  String get pollMultipleTitle => 'Allow several answers';
+
+  @override
+  String get pollAnonymousTitle => 'Anonymous votes';
+
+  @override
+  String get pollAnonymousSubtitle => 'Nobody sees who voted for what';
+
+  @override
+  String get pollSend => 'Send poll';
+
+  @override
+  String get pollDiscardTitle => 'Discard poll?';
+
+  @override
+  String get pollDiscardBody => 'Are you sure you want to discard this poll?';
+
+  @override
+  String get pollDiscardConfirm => 'Discard';
+
+  @override
+  String get pollDiscardCancel => 'Cancel';
+
+  @override
+  String get pollTypeAnonymous => 'Anonymous poll';
+
+  @override
+  String get pollTypePublic => 'Poll';
+
+  @override
+  String get pollTypeClosed => 'Final results';
+
+  @override
+  String pollVotes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count votes',
+      one: '1 vote',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pollNoVotes => 'No votes';
+
+  @override
+  String get pollVoteButton => 'Vote';
+
+  @override
+  String pollViewVotes(int count) {
+    return 'View votes ($count)';
+  }
+
+  @override
+  String get pollResultsTitle => 'Poll results';
+
+  @override
+  String pollOptionVoters(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count votes',
+      one: '1 vote',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get messageActionRetractVote => 'Retract vote';
+
+  @override
+  String get messageActionStopPoll => 'Stop poll';
+
+  @override
+  String get pollStopTitle => 'Stop poll?';
+
+  @override
+  String get pollStopBody =>
+      'If you stop this poll now, nobody will be able to vote in it anymore. This action cannot be undone.';
+
+  @override
+  String get pollStopConfirm => 'Stop';
+
+  @override
+  String get pollStopCancel => 'Cancel';
+
+  @override
+  String get pollClosedNotice => 'This poll is closed.';
+
+  @override
+  String pollPreviewLine(String question) {
+    return '📊 Poll: $question';
+  }
+
+  @override
+  String get contactPickerTitle => 'Send a contact';
+
+  @override
+  String get contactSearchHint => 'Search your contacts';
+
+  @override
+  String get contactSend => 'Send contact';
+
+  @override
+  String get contactAccessTitle => 'Allow access to your contacts';
+
+  @override
+  String get contactAccessBody =>
+      'SIS asks for your contacts only when you open this list. Nothing is uploaded until you send a contact.';
+
+  @override
+  String get contactAllowAccess => 'Allow access';
+
+  @override
+  String get contactEmpty => 'No contacts with a phone number';
+
+  @override
+  String get contactNoMatch => 'No contact matches your search';
+
+  @override
+  String contactPreviewLine(String name) {
+    return '👤 Contact: $name';
+  }
+
+  @override
+  String get contactPermNote =>
+      'Contacts permission is asked only when you open this list';
+
+  @override
+  String get autoDownloadSection => 'Media auto-download';
+
+  @override
+  String get autoDownloadEnable => 'Enable';
+
+  @override
+  String get autoDownloadWifiOnly => 'Enable only on Wi-Fi';
+
+  @override
+  String get autoDownloadDisabled => 'Disabled';
+
+  @override
+  String get autoDownloadChoose => 'Choose what downloads';
+
+  @override
+  String get autoDownloadMobile => 'When using mobile data';
+
+  @override
+  String get autoDownloadWifi => 'When connected on Wi-Fi';
+
+  @override
+  String get autoDownloadRoaming => 'When roaming';
+
+  @override
+  String get autoDownloadPhotos => 'Photos';
+
+  @override
+  String get autoDownloadAudio => 'Audio';
+
+  @override
+  String get autoDownloadVideos => 'Videos';
+
+  @override
+  String get autoDownloadDocuments => 'Documents';
+
+  @override
+  String get autoDownloadAllMedia => 'All media';
+
+  @override
+  String get autoDownloadNoMedia => 'No media';
+
+  @override
+  String get autoDownloadCancel => 'Cancel';
+
+  @override
+  String get autoDownloadOk => 'OK';
+
+  @override
+  String fileTapToDownload(String size) {
+    return '$size · Tap to download';
+  }
+
+  @override
+  String fileTooBig(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count files are over 50 MB and were not sent.',
+      one: '1 file is over 50 MB and was not sent.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fileCannotOpen => 'No app on this phone can open this file.';
+
+  @override
+  String get filePhotoTapToDownload => 'Tap to download the photo';
+
+  @override
+  String get videoReviewTitle => 'Videos';
+
+  @override
+  String videoSendCount(int count) {
+    return 'Send ($count)';
+  }
+
+  @override
+  String videoCompressing(int percent) {
+    return 'Compressing $percent%';
+  }
+
+  @override
+  String videoSending(int percent) {
+    return 'Sending $percent%';
+  }
+
+  @override
+  String get videoWaitingNetwork => 'Waiting for network';
+
+  @override
+  String get videoWaiting => 'Waiting…';
+
+  @override
+  String get videoCancelSend => 'Cancel';
+
+  @override
+  String videoTooLong(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count videos are over 5 minutes and were not added.',
+      one: '1 video is over 5 minutes and was not added.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get videoTooBig => 'This video is too large to send.';
+
+  @override
+  String get videoFailed => 'This video could not be prepared.';
+
+  @override
+  String get videoShare => 'Share';
+
+  @override
+  String get videoClose => 'Close';
+
+  @override
+  String get videoMute => 'Mute';
+
+  @override
+  String get videoUnmute => 'Unmute';
+
+  @override
+  String get videoPlay => 'Play';
+
+  @override
+  String get videoPause => 'Pause';
+
+  @override
+  String get videoCannotPlay => 'This video cannot be played.';
+
+  @override
+  String get videoSelectLabel => 'Select video';
+
+  @override
+  String get videoGridEmpty => 'No videos yet';
+
+  @override
+  String get videoAccessTitle => 'Pick videos right here';
+
+  @override
+  String get videoAccessBody =>
+      'Allow access so your videos show up here – nothing is uploaded until you send it.';
+
+  @override
+  String get videoAllow => 'Allow videos';
+
+  @override
+  String get videoUsePhonePicker => 'Use the phone\'s picker';
+
+  @override
+  String get videoLoadMoreFailed => 'Could not load more videos.';
+
+  @override
+  String get voicePreviewLine => '🎤 Voice message';
+
+  @override
+  String get voiceHoldHint => 'Hold to record, release to send';
+
+  @override
+  String get voiceMicDenied => 'Allow the microphone in Settings to record.';
+
+  @override
+  String get voiceMicFailed => 'Could not start recording.';
+
+  @override
+  String get voiceDictationUnavailable =>
+      'Dictation is not available for this language on this phone.';
+
+  @override
+  String get voiceSlideToCancel => 'Slide to cancel';
+
+  @override
+  String get voiceCancel => 'CANCEL';
+
+  @override
+  String get voiceShowText => 'Show text';
+
+  @override
+  String get voiceHideText => 'Hide text';
+
+  @override
+  String get voiceCannotPlay => 'This voice message cannot be played.';
+
+  @override
+  String get voiceButtonVoice => 'Record a voice message';
+
+  @override
+  String get voiceButtonDictation => 'Dictate text';
+
+  @override
+  String get voiceSend => 'Send voice message';
+
+  @override
+  String get stickerPreviewLine => '😀 Sticker';
+
+  @override
+  String get stickerAlbumPreviewLine => '📂 Sticker album';
+
+  @override
+  String get stickerButtonTooltip => 'Stickers';
+
+  @override
+  String get stickerKeyboardTooltip => 'Keyboard';
+
+  @override
+  String get stickerTabRecent => 'Recent';
+
+  @override
+  String get stickerTabFavourites => 'Favourites';
+
+  @override
+  String get stickerTabStarter => 'SIS starter';
+
+  @override
+  String get stickerTabMine => 'My stickers';
+
+  @override
+  String get stickerTabNew => '+ New';
+
+  @override
+  String get stickerEmptyRecent => 'Stickers you send show up here.';
+
+  @override
+  String get stickerEmptyFavourites =>
+      'Long-press a sticker in a chat to add it to your favourites.';
+
+  @override
+  String get stickerEmptyAlbum => 'This album is empty.';
+
+  @override
+  String get stickerNoAlbums =>
+      'No albums yet. Make one to keep your stickers.';
+
+  @override
+  String get stickerLabel => 'Sticker';
+
+  @override
+  String get stickerLoadFailed => 'Could not load this sticker.';
+
+  @override
+  String get messageActionStickerFavourite => 'Add to favourites';
+
+  @override
+  String get messageActionStickerAlbum => 'Add to album';
+
+  @override
+  String get stickerAddedFavourite => 'Added to favourites.';
+
+  @override
+  String stickerAddedAlbum(String name) {
+    return 'Added to $name.';
+  }
+
+  @override
+  String get stickerPickAlbumTitle => 'Add to album';
+
+  @override
+  String get stickerNewAlbum => 'New album';
+
+  @override
+  String get stickerAlbumNameHint => 'Album name';
+
+  @override
+  String get stickerAlbumCreate => 'Create';
+
+  @override
+  String get stickerAlbumRenameTitle => 'Rename album';
+
+  @override
+  String get stickerAlbumsTitle => 'My albums';
+
+  @override
+  String stickerAlbumsCount(int count, int max) {
+    return '$count of $max';
+  }
+
+  @override
+  String get stickerAlbumShare => 'Share album';
+
+  @override
+  String get stickerAlbumRename => 'Rename';
+
+  @override
+  String get stickerAlbumDelete => 'Delete album';
+
+  @override
+  String get stickerAlbumDeleteTitle => 'Delete this album?';
+
+  @override
+  String get stickerAlbumDeleteBody =>
+      'The album is deleted for you only. Stickers in chats stay.';
+
+  @override
+  String get stickerDelete => 'Delete';
+
+  @override
+  String get stickerCancel => 'Cancel';
+
+  @override
+  String get stickerAlbumShared => 'Album shared.';
+
+  @override
+  String stickerAlbumStickers(int count) {
+    return '$count stickers';
+  }
+
+  @override
+  String get stickerAlbumAdd => 'Add album';
+
+  @override
+  String get stickerAlbumAddFavourites => 'Add to favourites';
+
+  @override
+  String get stickerAlbumAdded => 'Album added.';
+
+  @override
+  String get stickerAlbumFavouritesAdded => 'Added to your favourites.';
+
+  @override
+  String get stickerAlbumGone => 'This album is no longer available.';
+
+  @override
+  String get stickerRemoveFromAlbum => 'Remove from album';
+
+  @override
+  String get stickerRemoveFavourite => 'Remove from favourites';
+
+  @override
+  String stickerLimitAlbums(int max) {
+    return 'You can have up to $max albums.';
+  }
+
+  @override
+  String stickerLimitInAlbum(int max) {
+    return 'An album holds up to $max stickers.';
+  }
+
+  @override
+  String stickerLimitFavourites(int max) {
+    return 'You can keep up to $max favourites.';
+  }
+
+  @override
+  String get stickerCreateTitle => 'Create sticker';
+
+  @override
+  String get makerUsePhoto => 'Use a photo';
+
+  @override
+  String get makerCancel => 'Cancel';
+
+  @override
+  String get makerCutoutTitle => 'Cut-out';
+
+  @override
+  String get makerWhole => 'Whole image';
+
+  @override
+  String get makerCut => 'Cut-out';
+
+  @override
+  String get makerErase => 'Erase';
+
+  @override
+  String get makerRestore => 'Restore';
+
+  @override
+  String get makerUndo => 'Undo';
+
+  @override
+  String get makerReset => 'Reset';
+
+  @override
+  String get makerBrushHint => 'Paint to erase or bring back parts';
+
+  @override
+  String get makerEditTitle => 'Edit sticker';
+
+  @override
+  String get makerEditHint => 'Add text or draw on your sticker';
+
+  @override
+  String get makerToAlbum => 'Save to album';
+
+  @override
+  String get makerTextTitle => 'Text';
+
+  @override
+  String get makerTextHint => 'Type your text';
+
+  @override
+  String get makerSize => 'Size';
+
+  @override
+  String get makerFontSans => 'Sans';
+
+  @override
+  String get makerFontSerif => 'Serif';
+
+  @override
+  String get makerFontHand => 'Hand';
+
+  @override
+  String get makerDrawTitle => 'Draw';
+
+  @override
+  String get makerThin => 'Thin';
+
+  @override
+  String get makerMedium => 'Medium';
+
+  @override
+  String get makerThick => 'Thick';
+
+  @override
+  String get makerSaveTitle => 'Save sticker';
+
+  @override
+  String get makerFull => 'Full';
+
+  @override
+  String get makerLimitReached => 'Limit reached';
+
+  @override
+  String get makerAlsoFavourite => 'Also add to favourites';
+
+  @override
+  String get makerSave => 'Save';
+
+  @override
+  String get makerDone => 'Done';
+
+  @override
+  String get makerSaveFailed => 'Could not save the sticker. Try again.';
+
+  @override
+  String makerSaveToCount(int count, int max) {
+    return 'Save to album ($count/$max)';
+  }
+
+  @override
+  String makerCountOf(int count, int max) {
+    return '$count/$max';
+  }
+
+  @override
+  String makerSavedTo(String name) {
+    return 'Saved to $name';
+  }
+
+  @override
+  String get makerGalleryTitle => 'Choose a photo';
+
+  @override
+  String get makerRecent => 'Recent';
+
+  @override
+  String get videoPlayerClose => 'Close';
+
+  @override
+  String get videoPlayerDone => 'Done';
+
+  @override
+  String get videoPlayerCopy => 'Copy link';
+
+  @override
+  String get videoPlayerCopied => 'Link copied';
+
+  @override
+  String videoOpenIn(String site) {
+    String _temp0 = intl.Intl.selectLogic(site, {
+      'youtube': 'Open in YouTube',
+      'instagram': 'Open in Instagram',
+      'tiktok': 'Open in TikTok',
+      'x': 'Open in X',
+      'other': 'Open in browser',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String videoPlayerPrivacy(String site) {
+    return '$site sees your IP address and device while you watch. SIS deletes its cookies when you close.';
+  }
+
+  @override
+  String get videoRefusedPrivate => 'This video is private.';
+
+  @override
+  String get videoRefusedDeleted => 'This video was deleted.';
+
+  @override
+  String get videoRefusedRegion =>
+      'This video is not available in your region.';
+
+  @override
+  String get videoRefusedLogin => 'This video needs a sign-in to watch.';
+
+  @override
+  String get videoRefusedOther => 'This video could not be loaded.';
+
+  @override
+  String get videoRefusedMore => 'It cannot play inside SIS.';
+
+  @override
+  String get adminUnk => 'I don’t know that command.';
+
+  @override
+  String get adminNoem => 'That command needs an email address.';
+
+  @override
+  String get adminBad => 'That email address doesn’t look right.';
+
+  @override
+  String get adminHelpHeader => 'Commands:';
+
+  @override
+  String get adminHelpIos => 'Add an iPhone tester';
+
+  @override
+  String get adminHelpAnd => 'Add an Android tester';
+
+  @override
+  String get adminHelpRm => 'Remove a tester';
+
+  @override
+  String get adminHelpList => 'Count and list testers';
+
+  @override
+  String adminIosOk(String email) {
+    return 'Added $email to the allowlist. Apple will email the invite. Tell them to sign in with the same email.';
+  }
+
+  @override
+  String get adminP1 => 'Sending the invite to Apple…';
+
+  @override
+  String get adminP2 => 'Apple is slow. Trying again (2 of 3)…';
+
+  @override
+  String get adminP3 => 'Apple accepted. The invite email is on its way.';
+
+  @override
+  String adminFail(String email, String reason) {
+    return 'Apple step failed for $email: $reason. The allowlist row is saved; type the command again to retry.';
+  }
+
+  @override
+  String adminAndOk(String email) {
+    return 'Added $email to the allowlist. One step by hand: add this email to Play Console > Internal testing > Testers > Bacanaks.';
+  }
+
+  @override
+  String get adminFwdTitle => 'Ready to forward';
+
+  @override
+  String adminFwdBody(String email, String link) {
+    return 'Hi! You can test SIS on Android now.\n1. Open this link and accept the invite: $link\n2. Install SIS from Google Play.\n3. Sign in with this email: $email';
+  }
+
+  @override
+  String get adminCopy => 'Copy';
+
+  @override
+  String get adminCopied => 'Copied';
+
+  @override
+  String get adminShare => 'Share';
+
+  @override
+  String get adminConfTitle => 'Remove this tester?';
+
+  @override
+  String adminConfBody(String email) {
+    return '$email loses access to SIS.';
+  }
+
+  @override
+  String get adminConfNo => 'Cancel';
+
+  @override
+  String get adminConfYes => 'Remove';
+
+  @override
+  String get adminConfDone => 'Removed';
+
+  @override
+  String get adminConfCancelled => 'Cancelled';
+
+  @override
+  String adminRmOk(String email) {
+    return 'Removed $email from the allowlist. Now remove it by hand in Play: Play Console > Internal testing > Testers > Bacanaks > delete this email.';
+  }
+
+  @override
+  String get adminCanOk => 'Cancelled. Nothing was removed.';
+
+  @override
+  String adminNoList(String email) {
+    return '$email is not on the tester list.';
+  }
+
+  @override
+  String adminR1(String email) {
+    return 'Removing $email from the TestFlight group…';
+  }
+
+  @override
+  String get adminR2 => 'Apple is slow. Trying again (2 of 3)…';
+
+  @override
+  String get adminR3 => 'Removed from TestFlight.';
+
+  @override
+  String adminFailRm(String email, String reason) {
+    return 'Apple step failed for $email: $reason. The allowlist row is already removed; type the command again to retry.';
+  }
+
+  @override
+  String get adminReasonTimeout => 'Apple did not answer in time';
+
+  @override
+  String get adminReasonRejected => 'Apple refused the request';
+
+  @override
+  String get adminReasonDispatch => 'GitHub could not start the job';
+
+  @override
+  String adminListHeader(int count) {
+    return 'Testers: $count';
+  }
+
+  @override
+  String adminListIos(int count) {
+    return 'iPhone ($count)';
+  }
+
+  @override
+  String adminListAnd(int count) {
+    return 'Android ($count)';
+  }
+
+  @override
+  String get adminRate => 'Too many commands. Wait a minute and try again.';
+
+  @override
+  String get adminKeep => 'Cancelled: this card is no longer valid.';
+
+  @override
+  String get adminErr => 'Something went wrong. Nothing was changed.';
+
+  @override
+  String get adminNoLink =>
+      'The Play opt-in link is not set yet. Ask the owner to set it, then type the command again.';
+
+  @override
+  String adminListOther(int count) {
+    return 'Other ($count)';
+  }
+
+  @override
+  String get findPeopleTitle => 'Find people';
+
+  @override
+  String get findPeopleSub => 'From your contacts';
+
+  @override
+  String get findOnSis => 'On SIS';
+
+  @override
+  String get findNotOnSis => 'Not on SIS yet';
+
+  @override
+  String get findNotOnSisSub => 'Not on SIS';
+
+  @override
+  String get findMessage => 'Message';
+
+  @override
+  String get findInvite => 'Invite';
+
+  @override
+  String get findDiscTitle => 'Find people from your contacts';
+
+  @override
+  String get findDiscBody =>
+      'SIS sends the email addresses in your contacts, in coded (hashed) form, to the SIS server to show which of your contacts use SIS. This happens each time you open Find people. The codes are not stored; SIS only keeps a note of which members you found. Names and phone numbers stay on your phone.';
+
+  @override
+  String get findContinue => 'Continue';
+
+  @override
+  String get findNotNow => 'Not now';
+
+  @override
+  String get findAskTitle => 'Find your friends on SIS';
+
+  @override
+  String get findAskBody =>
+      'SIS can look at your phone contacts to show who is already here.';
+
+  @override
+  String get findAllow => 'Allow contacts';
+
+  @override
+  String get findLater => 'Try again later.';
+
+  @override
+  String get findEmpty => 'No contacts found';
 }

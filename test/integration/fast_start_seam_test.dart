@@ -31,6 +31,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/reach.dart';
+import '../support/video_fakes.dart';
 
 /// The app opening faster (v0.21.4, docs/DECISIONS.md 2026-09-28) against the
 /// real local stack: the REAL [SupabaseChatRepository] and
@@ -40,7 +41,7 @@ import '../support/reach.dart';
 /// records when each request started and finished.
 ///
 /// The unit tests prove the order of calls against fakes. Only this proves
-/// that `conversations()` really sends its five reads as two groups, that
+/// that `conversations()` really sends its eight reads as two groups, that
 /// running them together returns what running them one by one returns, and
 /// that with a slow connection opening the app costs the longer of the
 /// profile and the list, not both added up.
@@ -346,8 +347,7 @@ void main() {
       expect(answered, isNot(asked), reason: 'the answers were not reordered');
     });
 
-    test('sends its five reads as two groups: members and conversations, '
-        'then names, previews and unread counts', () async {
+    test('sends its eight reads as two groups: members, conversations, archives, pins and hides, then names, previews and unread counts', () async {
       const delay = Duration(milliseconds: 300);
       wire.delay = delay;
       final clock = Stopwatch()..start();
@@ -357,24 +357,39 @@ void main() {
 
       final reqs = wire.rest;
       expect([for (final r in reqs) r.table]..sort(), [
+        'chat_archives',
+        'chat_hides',
+        'chat_pins',
         'conversation_members',
         'conversation_previews',
         'conversations',
         'profiles_public',
         'unread_counts',
-      ], reason: 'not the same five reads');
+      ], reason: 'not the same eight reads');
       _Req one(String t) => reqs.singleWhere((r) => r.table == t);
-      final first = [one('conversation_members'), one('conversations')];
+      final first = [
+        one('conversation_members'),
+        one('conversations'),
+        one('chat_archives'),
+        one('chat_pins'),
+        one('chat_hides'),
+      ];
       final second = [
         one('profiles_public'),
         one('conversation_previews'),
         one('unread_counts'),
       ];
-      expect(
-        first[0].overlaps(first[1]),
-        isTrue,
-        reason: 'members and conversations one after the other: $reqs',
-      );
+      for (final a in first) {
+        for (final b in first) {
+          if (a != b) {
+            expect(
+              a.overlaps(b),
+              isTrue,
+              reason: 'first group not together: $reqs',
+            );
+          }
+        }
+      }
       for (final a in second) {
         for (final b in second) {
           if (a != b) {
@@ -389,7 +404,7 @@ void main() {
           );
         }
       }
-      expect(wire.maxInFlight, 3);
+      expect(wire.maxInFlight, 5);
       expect(took, greaterThanOrEqualTo(delay * 2));
       expect(
         took,
@@ -403,6 +418,9 @@ void main() {
       final list = _ok(await SupabaseChatRepository(finn).conversations());
       expect(list, isEmpty);
       expect([for (final r in finnWire.rest) r.table]..sort(), [
+        'chat_archives',
+        'chat_hides',
+        'chat_pins',
         'conversation_members',
         'conversations',
       ]);
@@ -418,6 +436,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          ...videoOverrides(),
           runtimeConfigProvider.overrideWithValue(
             const RuntimeConfig(
               supabaseUrl: _url,
@@ -530,6 +549,7 @@ void main() {
     /// directory: path_provider has no platform side in a test).
     ProviderContainer app(FileChatListSnapshotStore store) => ProviderContainer(
       overrides: [
+        ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(
           const RuntimeConfig(
             supabaseUrl: _url,

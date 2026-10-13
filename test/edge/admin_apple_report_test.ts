@@ -10,6 +10,12 @@
 // else 400. finish: ok boolean else 400; reason rejected / dispatch, anything
 // else timeout. An RPC error -> 500 failed, logging only error.code. Never
 // sends pushes, never logs bodies.
+// Before any fetch the token must have three parts and a header with alg
+// RS256 and a kid, else 403 with no fetch. The JWKS is cached at module level
+// for 10 minutes; an unknown kid refetches at most once a minute; a failed
+// refetch keeps the old cache; a failed first fetch is 502 jwks, not cached.
+// The tests run in order: the first two need the module cache still empty.
+// Date.now is shifted (clock) to cross the 1-minute and 10-minute marks.
 //
 // Run (the local stack must be up):
 //   docker run --rm --add-host host.docker.internal:host-gateway \
@@ -29,16 +35,24 @@ Deno.env.set('SUPABASE_URL', apiUrl);
 Deno.env.set('SUPABASE_SERVICE_ROLE_KEY', serviceKey);
 Deno.env.set('GITHUB_REPOSITORY_ID', repoId);
 
+// --- a movable clock: real time plus an offset the tests can advance ---------
+const realNow = Date.now.bind(Date);
+let clockOffset = 0;
+Date.now = () => realNow() + clockOffset;
+
 // --- keys and tokens, made at run time ---------------------------------------
 const rsa = { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' };
 const key = await crypto.subtle.generateKey(rsa, true, ['sign', 'verify']);
 const other = await crypto.subtle.generateKey(rsa, true, ['sign', 'verify']);
 const jwk = { ...(await crypto.subtle.exportKey('jwk', key.publicKey)), kid: 'qa-kid', alg: 'RS256', use: 'sig' };
+const jwk2 = { ...(await crypto.subtle.exportKey('jwk', other.publicKey)), kid: 'qa-kid-2', alg: 'RS256', use: 'sig' };
+let served: Record<string, unknown>[] = [jwk];
 const b64url = (b: Uint8Array | string) =>
   btoa(String.fromCharCode(...(typeof b === 'string' ? new TextEncoder().encode(b) : b)))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 let runSeq = 7_000_000 + Math.floor(Math.random() * 1_000_000);
-async function oidc(over: Record<string, unknown> = {}, signer = key.privateKey) {
+async function oidc(over: Record<string, unknown> = {}, signer = key.privateKey,
+  header: Record<string, unknown> = { alg: 'RS256', typ: 'JWT', kid: 'qa-kid' }) {
   const now = Math.floor(Date.now() / 1000);
   const claims = {
     iss: OIDC_ISSUER, aud: 'sis-admin-apple', repository_id: repoId,
@@ -46,7 +60,7 @@ async function oidc(over: Record<string, unknown> = {}, signer = key.privateKey)
     ref: 'refs/heads/main', event_name: 'workflow_dispatch', run_id: String(++runSeq),
     iat: now - 5, nbf: now - 5, exp: now + 300, ...over,
   };
-  const head = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: 'qa-kid' }));
+  const head = b64url(JSON.stringify(header));
   const body = b64url(JSON.stringify(claims));
   const sig = new Uint8Array(await crypto.subtle.sign(rsa, signer, new TextEncoder().encode(`${head}.${body}`)));
   return `${head}.${body}.${b64url(sig)}`;
@@ -61,9 +75,9 @@ globalThis.fetch = (input: Request | URL | string, init?: RequestInit) => {
   fetched.push(url);
   if (url === OIDC_JWKS_URL) {
     // A 503 that still carries a valid key set: only the status says it failed.
-    if (jwksDown === 'status') return Promise.resolve(new Response(JSON.stringify({ keys: [jwk] }), { status: 503 }));
+    if (jwksDown === 'status') return Promise.resolve(new Response(JSON.stringify({ keys: served }), { status: 503 }));
     if (jwksDown === 'drop') return Promise.reject(new TypeError('error sending request: connection reset'));
-    return Promise.resolve(new Response(JSON.stringify({ keys: [jwk] }), { status: 200 }));
+    return Promise.resolve(new Response(JSON.stringify({ keys: served }), { status: 200 }));
   }
   return realFetch(input, init);
 };
@@ -134,15 +148,47 @@ async function claimed(kind = 'add') {
 
 const opts = { sanitizeOps: false, sanitizeResources: false };
 
-// First: before any JWKS was ever fetched (a cache must not hide this).
+const jwksFetches = () => fetched.filter((u) => u === OIDC_JWKS_URL).length;
+
+// First, with the module cache empty: a malformed token never reaches a fetch.
+Deno.test({ ...opts, name: 'a malformed token -> 403 not_permitted before any fetch', fn: async () => {
+  const j = await job();
+  const good = await oidc();
+  const [, body, sig] = good.split('.');
+  const bad: [string, string][] = [
+    ['two parts', `${good.split('.')[0]}.${body}`],
+    ['four parts', `${good}.x`],
+    ['header not JSON', `${b64url('not json')}.${body}.${sig}`],
+    ['alg none', await oidc({}, key.privateKey, { alg: 'none', kid: 'qa-kid' })],
+    ['alg HS256', await oidc({}, key.privateKey, { alg: 'HS256', kid: 'qa-kid' })],
+    ['alg RS512', await oidc({}, key.privateKey, { alg: 'RS512', kid: 'qa-kid' })],
+    ['no kid', await oidc({}, key.privateKey, { alg: 'RS256', typ: 'JWT' })],
+    ['kid not a string', await oidc({}, key.privateKey, { alg: 'RS256', kid: 7 })],
+  ];
+  const fetchedBy: string[] = [];
+  for (const [name, t] of bad) {
+    const before = jwksFetches();
+    const r = await call({ action: 'claim', job_id: j.id }, t);
+    assertEquals(r.status, 403, `${name}: ${r.text}`);
+    assertEquals(r.json, { error: 'not_permitted' }, name);
+    if (jwksFetches() > before) fetchedBy.push(name);
+  }
+  assertEquals(fetchedBy, [], 'these malformed tokens caused a JWKS fetch');
+  assertEquals(fetched.length, 0, 'nor any other fetch');
+  assertEquals((await row(j.id)).state, 'pending');
+} });
+
+// Still before any successful fetch: a failure is 502 and is not cached.
 Deno.test({ ...opts, name: 'the JWKS unreachable -> 502 jwks, nothing claimed', fn: async () => {
   try {
     const j = await job();
-    for (const mode of ['status', 'drop'] as const) {
+    for (const mode of ['status', 'drop', 'status'] as const) {
       jwksDown = mode;
+      const before = jwksFetches();
       const r = await call({ action: 'claim', job_id: j.id }, await oidc());
       assertEquals(r.status, 502, `${mode}: ${r.text}`);
       assertEquals(r.json, { error: 'jwks' });
+      assertEquals(jwksFetches(), before + 1, `${mode}: a failed fetch is not cached, each call tries again`);
     }
     assertEquals((await row(j.id)).state, 'pending');
   } finally {
@@ -169,6 +215,10 @@ Deno.test({ ...opts, name: 'any token failure -> 403 not_permitted, no detail, t
   const bad: [string, string | null][] = [
     ['no token', null],
     ['not a JWT', 'garbage'],
+    // Three parts with an empty payload passes the pre-fetch shape check
+    // (the contract asks only for three parts and the header), so it is
+    // refused here, after the JWKS, rather than in the no-fetch test.
+    ['an empty payload', (await oidc()).replace(/\.[^.]*\./, '..')],
     ['another key', await oidc({}, other.privateKey)],
     ['expired', await oidc({ exp: Math.floor(Date.now() / 1000) - 10 })],
     ['other repository', await oidc({ repository_id: '424243' })],
@@ -274,6 +324,61 @@ Deno.test({ ...opts, name: 'an RPC error -> 500 failed, and the log holds the co
   const lines = logged.slice(before).join('\n');
   assert(!lines.includes(j.id), `the log names the job: ${lines}`);
   assert(!/message|hint|details|function/i.test(lines), `the log holds more than the code: ${lines}`);
+} });
+
+const unknownJob = () => ({ action: 'claim', job_id: crypto.randomUUID() });
+
+Deno.test({ ...opts, name: 'the JWKS is cached for 10 minutes', fn: async () => {
+  const before = jwksFetches();
+  assert(before >= 1, 'an earlier test fetched it');
+  for (let i = 0; i < 3; i++) {
+    clockOffset += 2 * 60_000; // up to 6 minutes later: still cached
+    assertEquals((await call(unknownJob(), await oidc())).status, 409);
+  }
+  assertEquals(jwksFetches(), before, 'no fetch while the cache is fresh');
+  clockOffset += 5 * 60_000; // past 10 minutes since the last fetch
+  assertEquals((await call(unknownJob(), await oidc())).status, 409);
+  assertEquals(jwksFetches(), before + 1, 'an expired cache is fetched again');
+  assertEquals((await call(unknownJob(), await oidc())).status, 409);
+  assertEquals(jwksFetches(), before + 1, 'and cached again');
+} });
+
+Deno.test({ ...opts, name: 'an unknown kid refetches, at most once a minute (a rotated key works)', fn: async () => {
+  clockOffset += 61_000;
+  served = [jwk, jwk2];
+  const before = jwksFetches();
+  const r = await call(unknownJob(), await oidc({}, other.privateKey, { alg: 'RS256', typ: 'JWT', kid: 'qa-kid-2' }));
+  assertEquals(r.status, 409, `a new kid is fetched and verifies: ${r.text}`);
+  assertEquals(jwksFetches(), before + 1);
+  for (let i = 0; i < 3; i++) {
+    const u = await call(unknownJob(), await oidc({}, key.privateKey, { alg: 'RS256', typ: 'JWT', kid: `qa-kid-x${i}` }));
+    assertEquals(u.status, 403, u.text);
+    assertEquals(u.json, { error: 'not_permitted' });
+  }
+  assertEquals(jwksFetches(), before + 1, 'no second refetch within the minute');
+  clockOffset += 61_000;
+  assertEquals((await call(unknownJob(), await oidc({}, key.privateKey, { alg: 'RS256', typ: 'JWT', kid: 'qa-kid-y' }))).status, 403);
+  assertEquals(jwksFetches(), before + 2, 'a minute later an unknown kid may refetch once more');
+} });
+
+Deno.test({ ...opts, name: 'a failed refetch keeps the old cache', fn: async () => {
+  clockOffset += 61_000;
+  const before = jwksFetches();
+  try {
+    for (const mode of ['drop', 'status'] as const) {
+      jwksDown = mode;
+      const u = await call(unknownJob(), await oidc({}, key.privateKey, { alg: 'RS256', typ: 'JWT', kid: `qa-kid-z-${mode}` }));
+      assert(u.status !== 200, u.text);
+      clockOffset += 61_000;
+    }
+    assert(jwksFetches() > before, 'the unknown kid did try a refetch');
+    const ok = await call(unknownJob(), await oidc());
+    assertEquals(ok.status, 409, `the cached key still verifies while GitHub is down: ${ok.text}`);
+    const ok2 = await call(unknownJob(), await oidc({}, other.privateKey, { alg: 'RS256', typ: 'JWT', kid: 'qa-kid-2' }));
+    assertEquals(ok2.status, 409, `so does the other cached key: ${ok2.text}`);
+  } finally {
+    jwksDown = false;
+  }
 } });
 
 Deno.test({ ...opts, name: 'nothing logged ever holds an email, a token or a body; only JWKS and the job RPCs were fetched', fn: () => {

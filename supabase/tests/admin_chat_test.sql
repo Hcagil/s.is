@@ -1,5 +1,5 @@
 begin;
-select * from no_plan();
+select plan(158);
 
 -- Admin chat, slice 1 (step 15): the owner types tester commands into a
 -- private chat; the server parses them and answers from a fixed account.

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui';
 
@@ -13,21 +12,17 @@ import 'package:sis/features/chat/presentation/admin_reply_bubble.dart';
 
 const Member _member = Member(userId: 'u-d', displayName: 'Deniz');
 
-Conversation _adminConv() => Conversation(
-      id: 'c-1',
-      title: 'Admin',
-      other: _member,
-      isAdminChat: true,
-    );
+Conversation _adminConv() =>
+    Conversation(id: 'c-1', title: 'Admin', other: _member, isAdminChat: true);
 
 Message _adminMsg() => Message(
-      id: 'm-1',
-      conversationId: 'c-1',
-      senderId: 'u-d',
-      body: 'Hello',
-      createdAt: DateTime.utc(2026, 10, 7, 9),
-      adminMsg: const {'k': 'unk', 'help': true},
-    );
+  id: 'm-1',
+  conversationId: 'c-1',
+  senderId: 'u-d',
+  body: 'Hello',
+  createdAt: DateTime.utc(2026, 10, 7, 9),
+  adminMsg: const {'k': 'unk', 'help': true},
+);
 
 void main() {
   test('adminPreviewPrefix is correct', () {
@@ -154,20 +149,17 @@ void main() {
 
     test('rate', () {
       final result = adminPreviewLine(l, {'k': 'rate'});
-      expect(result,
-          equals("Too many commands. Wait a minute and try again."));
+      expect(result, equals("Too many commands. Wait a minute and try again."));
     });
 
     test('err with help', () {
       final result = adminPreviewLine(l, {'k': 'err', 'help': true});
-      expect(result,
-          equals("Something went wrong. Nothing was changed."));
+      expect(result, equals("Something went wrong. Nothing was changed."));
     });
 
     test('keep', () {
       final result = adminPreviewLine(l, {'k': 'keep'});
-      expect(result,
-          equals("Cancelled: this card is no longer valid."));
+      expect(result, equals("Cancelled: this card is no longer valid."));
     });
 
     test('canOk', () {
@@ -176,8 +168,13 @@ void main() {
     });
 
     test('list', () {
-      final result = adminPreviewLine(l,
-          {'k': 'list', 'n': 3, 'ios': ['a@mail.test'], 'and': ['b@mail.test'], 'oth': ['c@mail.test']});
+      final result = adminPreviewLine(l, {
+        'k': 'list',
+        'n': 3,
+        'ios': ['a@mail.test'],
+        'and': ['b@mail.test'],
+        'oth': ['c@mail.test'],
+      });
       expect(result, equals("Testers: 3"));
     });
 
@@ -192,9 +189,12 @@ void main() {
     });
 
     test('nolist with help', () {
-      final result = adminPreviewLine(l, {'k': 'nolist', 'e': 't***@m***.test', 'help': true});
-      expect(result,
-          equals("t***@m***.test is not on the tester list."));
+      final result = adminPreviewLine(l, {
+        'k': 'nolist',
+        'e': 't***@m***.test',
+        'help': true,
+      });
+      expect(result, equals("t***@m***.test is not on the tester list."));
     });
 
     test('unknown k does not throw', () {
@@ -214,13 +214,20 @@ void main() {
 
     test('rate', () {
       final result = adminPreviewLine(l, {'k': 'rate'});
-      expect(result,
-          equals("Çok fazla komut. Bir dakika bekle ve tekrar dene."));
+      expect(
+        result,
+        equals("Çok fazla komut. Bir dakika bekle ve tekrar dene."),
+      );
     });
 
     test('list', () {
-      final result = adminPreviewLine(l,
-          {'k': 'list', 'n': 2, 'ios': [], 'and': [], 'oth': []});
+      final result = adminPreviewLine(l, {
+        'k': 'list',
+        'n': 2,
+        'ios': [],
+        'and': [],
+        'oth': [],
+      });
       expect(result, equals("Test kullanıcıları: 2"));
     });
 

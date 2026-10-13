@@ -20,15 +20,20 @@ import '../../support/video_fakes.dart';
 const me = Member(userId: 'u1', displayName: 'Maya');
 const bot = '00000000-0000-0000-0000-00000000ad41';
 
-Message row(String id, {String from = bot, Map<String, dynamic>? admin, int minutesAgo = 5, String body = ''}) =>
-    Message(
-      id: id,
-      conversationId: 'c1',
-      senderId: from,
-      body: body,
-      createdAt: DateTime.now().subtract(Duration(minutes: minutesAgo)),
-      adminMsg: admin,
-    );
+Message row(
+  String id, {
+  String from = bot,
+  Map<String, dynamic>? admin,
+  int minutesAgo = 5,
+  String body = '',
+}) => Message(
+  id: id,
+  conversationId: 'c1',
+  senderId: from,
+  body: body,
+  createdAt: DateTime.now().subtract(Duration(minutes: minutesAgo)),
+  adminMsg: admin,
+);
 
 /// The same row after a server UPDATE: same id and time, new admin_msg.
 Message updated(Message m, Map<String, dynamic> admin) => Message(
@@ -77,7 +82,8 @@ void serverUpdate(ChatFake chat, Message next) {
   rows[rows.indexWhere((m) => m.id == next.id)] = next;
 }
 
-List<Message> shown(ProviderContainer c) => c.read(messagesProvider).requireValue;
+List<Message> shown(ProviderContainer c) =>
+    c.read(messagesProvider).requireValue;
 
 void main() {
   const conf = {'k': 'conf', 'e': 'r***@m***.test'};
@@ -86,7 +92,12 @@ void main() {
     final card = row('card', admin: conf, minutesAgo: 3);
     final chat = ChatFake(self: me.userId)
       ..history['c1'] = [
-        row('cmd', from: me.userId, body: '/removetester rob@mail.test', minutesAgo: 4),
+        row(
+          'cmd',
+          from: me.userId,
+          body: '/removetester rob@mail.test',
+          minutesAgo: 4,
+        ),
         card,
         row('after', from: me.userId, body: 'ok', minutesAgo: 1),
       ];
@@ -99,24 +110,37 @@ void main() {
     expect(shown(c)[1].adminMsg, {...conf, 'st': 'done'});
   });
 
-  test('a card that arrived live, then is answered, stays one message', () async {
-    final chat = ChatFake(self: me.userId)
-      ..history['c1'] = [row('cmd', from: me.userId, body: '/removetester rob@mail.test', minutesAgo: 4)];
-    final c = await open(chat);
-    final card = row('card', admin: conf, minutesAgo: 0);
-    chat.deliver(card);
-    await settle();
-    expect(shown(c).map((m) => m.id), ['cmd', 'card']);
+  test(
+    'a card that arrived live, then is answered, stays one message',
+    () async {
+      final chat = ChatFake(self: me.userId)
+        ..history['c1'] = [
+          row(
+            'cmd',
+            from: me.userId,
+            body: '/removetester rob@mail.test',
+            minutesAgo: 4,
+          ),
+        ];
+      final c = await open(chat);
+      final card = row('card', admin: conf, minutesAgo: 0);
+      chat.deliver(card);
+      await settle();
+      expect(shown(c).map((m) => m.id), ['cmd', 'card']);
 
-    serverUpdate(chat, updated(card, {...conf, 'st': 'cancelled'}));
-    await settle();
+      serverUpdate(chat, updated(card, {...conf, 'st': 'cancelled'}));
+      await settle();
 
-    expect(shown(c).map((m) => m.id), ['cmd', 'card']);
-    expect(shown(c).last.adminMsg?['st'], 'cancelled');
-  });
+      expect(shown(c).map((m) => m.id), ['cmd', 'card']);
+      expect(shown(c).last.adminMsg?['st'], 'cancelled');
+    },
+  );
 
   test('the progress line edited p1 -> p2 -> p3 is one message showing the last step', () async {
-    final chat = ChatFake(self: me.userId)..history['c1'] = [row('p', admin: {'k': 'p1'})];
+    final chat = ChatFake(self: me.userId)
+      ..history['c1'] = [
+        row('p', admin: {'k': 'p1'}),
+      ];
     final c = await open(chat);
     for (final k in ['p2', 'p3']) {
       serverUpdate(chat, updated(chat.history['c1']!.single, {'k': k}));
@@ -144,7 +168,11 @@ void main() {
     final chat = ChatFake(self: me.userId)..history['c1'] = rows;
     final c = await open(chat);
     final card = rows[30];
-    expect(shown(c).map((m) => m.id), isNot(contains('m30')), reason: 'fixture: the card is beyond the first page');
+    expect(
+      shown(c).map((m) => m.id),
+      isNot(contains('m30')),
+      reason: 'fixture: the card is beyond the first page',
+    );
     await c.read(messagesProvider.notifier).jumpToAround(card);
     await settle();
     expect(shown(c).map((m) => m.id), contains('m30'));

@@ -16,7 +16,6 @@ import 'package:sis/features/chat/domain/admin_chat_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/text_sharer.dart';
 import 'package:sis/features/chat/presentation/admin_reply_bubble.dart';
-import 'package:sis/l10n/app_localizations.dart';
 
 import '../../support/l10n.dart';
 
@@ -66,7 +65,9 @@ Future<(RecordingSharer, RecordingAdminRepo)> pump(
       child: localizedApp(
         locale: locale,
         home: Scaffold(
-          body: SingleChildScrollView(child: AdminReplyBubble(message: adminMsg(m))),
+          body: SingleChildScrollView(
+            child: AdminReplyBubble(message: adminMsg(m)),
+          ),
         ),
       ),
     ),
@@ -88,7 +89,10 @@ void main() {
   const link = 'https://play.test/optin';
   const email = 'pat@mail.test';
 
-  for (final (locale, l) in [(const Locale('en'), l10nEn), (const Locale('tr'), l10nTr)]) {
+  for (final (locale, l) in [
+    (const Locale('en'), l10nEn),
+    (const Locale('tr'), l10nTr),
+  ]) {
     group('${locale.languageCode}:', () {
       testWidgets('single-line kinds read their own words', (tester) async {
         final cases = <Map<String, dynamic>, String>{
@@ -104,7 +108,9 @@ void main() {
           {'k': 'iosOk', 'e': 'i***@m***.test'}: l.adminIosOk('i***@m***.test'),
           {'k': 'andOk', 'e': 'p***@m***.test'}: l.adminAndOk('p***@m***.test'),
           {'k': 'rmOk', 'e': 'r***@m***.test'}: l.adminRmOk('r***@m***.test'),
-          {'k': 'nolist', 'e': 'z***@m***.test', 'help': true}: l.adminNoList('z***@m***.test'),
+          {'k': 'nolist', 'e': 'z***@m***.test', 'help': true}: l.adminNoList(
+            'z***@m***.test',
+          ),
         };
         for (final MapEntry(key: m, value: want) in cases.entries) {
           await pump(tester, m, locale: locale);
@@ -112,17 +118,27 @@ void main() {
         }
       });
 
-      testWidgets('help:true adds the command list; a plain reply has none', (tester) async {
+      testWidgets('help:true adds the command list; a plain reply has none', (
+        tester,
+      ) async {
         await pump(tester, {'k': 'unk', 'help': true}, locale: locale);
         final withHelp = screenText(tester);
-        for (final line in [l.adminHelpHeader, l.adminHelpIos, l.adminHelpAnd, l.adminHelpRm, l.adminHelpList]) {
+        for (final line in [
+          l.adminHelpHeader,
+          l.adminHelpIos,
+          l.adminHelpAnd,
+          l.adminHelpRm,
+          l.adminHelpList,
+        ]) {
           expect(withHelp, contains(line));
         }
         await pump(tester, {'k': 'canOk'}, locale: locale);
         expect(screenText(tester), isNot(contains(l.adminHelpHeader)));
       });
 
-      testWidgets('list shows the counts and every full email, by platform', (tester) async {
+      testWidgets('list shows the counts and every full email, by platform', (
+        tester,
+      ) async {
         await pump(tester, {
           'k': 'list',
           'n': 4,
@@ -135,7 +151,12 @@ void main() {
         expect(s, contains(l.adminListIos(1)));
         expect(s, contains(l.adminListAnd(2)));
         expect(s, contains(l.adminListOther(1)));
-        for (final e in ['ivy@mail.test', 'pat@mail.test', 'rob@mail.test', 'zed@mail.test']) {
+        for (final e in [
+          'ivy@mail.test',
+          'pat@mail.test',
+          'rob@mail.test',
+          'zed@mail.test',
+        ]) {
           expect(s, contains(e));
         }
       });
@@ -143,8 +164,14 @@ void main() {
   }
 
   group('forward card', () {
-    testWidgets('Share hands the invite (link and email) to the share sheet', (tester) async {
-      final (sharer, repo) = await pump(tester, {'k': 'fwd', 'e': email, 'l': link});
+    testWidgets('Share hands the invite (link and email) to the share sheet', (
+      tester,
+    ) async {
+      final (sharer, repo) = await pump(tester, {
+        'k': 'fwd',
+        'e': email,
+        'l': link,
+      });
       expect(screenText(tester), contains(l10nEn.adminFwdTitle));
       await tester.tap(find.text(l10nEn.adminShare));
       await tester.pumpAndSettle();
@@ -153,35 +180,53 @@ void main() {
     });
 
     testWidgets('Share in Turkish shares the Turkish invite', (tester) async {
-      final (sharer, _) = await pump(tester, {'k': 'fwd', 'e': email, 'l': link}, locale: const Locale('tr'));
+      final (sharer, _) = await pump(tester, {
+        'k': 'fwd',
+        'e': email,
+        'l': link,
+      }, locale: const Locale('tr'));
       await tester.tap(find.text(l10nTr.adminShare));
       await tester.pumpAndSettle();
       expect(sharer.shared, [l10nTr.adminFwdBody(email, link)]);
     });
 
-    testWidgets('Copy puts the same invite on the clipboard, and does not share', (tester) async {
-      final copied = <String>[];
-      final messenger = tester.binding.defaultBinaryMessenger;
-      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
-        if (call.method == 'Clipboard.setData') {
-          copied.add((call.arguments as Map)['text'] as String);
-        }
-        return null;
-      });
-      addTearDown(() => messenger.setMockMethodCallHandler(SystemChannels.platform, null));
-      final (sharer, _) = await pump(tester, {'k': 'fwd', 'e': email, 'l': link});
-      await tester.tap(find.text(l10nEn.adminCopy));
-      await tester.pump();
-      expect(copied, [l10nEn.adminFwdBody(email, link)]);
-      expect(sharer.shared, isEmpty);
-      await tester.pumpAndSettle(const Duration(seconds: 5));
-    });
+    testWidgets(
+      'Copy puts the same invite on the clipboard, and does not share',
+      (tester) async {
+        final copied = <String>[];
+        final messenger = tester.binding.defaultBinaryMessenger;
+        messenger.setMockMethodCallHandler(SystemChannels.platform, (
+          call,
+        ) async {
+          if (call.method == 'Clipboard.setData') {
+            copied.add((call.arguments as Map)['text'] as String);
+          }
+          return null;
+        });
+        addTearDown(
+          () =>
+              messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+        );
+        final (sharer, _) = await pump(tester, {
+          'k': 'fwd',
+          'e': email,
+          'l': link,
+        });
+        await tester.tap(find.text(l10nEn.adminCopy));
+        await tester.pump();
+        expect(copied, [l10nEn.adminFwdBody(email, link)]);
+        expect(sharer.shared, isEmpty);
+        await tester.pumpAndSettle(const Duration(seconds: 5));
+      },
+    );
   });
 
   group('confirm card', () {
     final conf = {'k': 'conf', 'e': 'r***@m***.test'};
 
-    testWidgets('shows the question, the masked address and both buttons', (tester) async {
+    testWidgets('shows the question, the masked address and both buttons', (
+      tester,
+    ) async {
       await pump(tester, conf);
       final s = screenText(tester);
       expect(s, contains(l10nEn.adminConfTitle));
@@ -190,7 +235,9 @@ void main() {
       expect(find.text(l10nEn.adminConfNo), findsOneWidget);
     });
 
-    testWidgets('Remove answers yes for this card, through the repository', (tester) async {
+    testWidgets('Remove answers yes for this card, through the repository', (
+      tester,
+    ) async {
       final (sharer, repo) = await pump(tester, conf);
       await tester.tap(find.text(l10nEn.adminConfYes));
       await tester.pumpAndSettle();
@@ -212,28 +259,42 @@ void main() {
       expect(repo.calls, [('card-1', true)]);
     });
 
-    testWidgets('a refused answer (not the owner) does not throw', (tester) async {
-      final (_, repo) = await pump(tester, conf, repo: RecordingAdminRepo(const Err(DeniedFailure())));
+    testWidgets('a refused answer (not the owner) does not throw', (
+      tester,
+    ) async {
+      final (_, repo) = await pump(
+        tester,
+        conf,
+        repo: RecordingAdminRepo(const Err(DeniedFailure())),
+      );
       await tester.tap(find.text(l10nEn.adminConfYes));
       await tester.pumpAndSettle();
       expect(repo.calls, [('card-1', true)]);
       expect(tester.takeException(), isNull);
-      await tester.pump(const Duration(seconds: 30)); // let the refusal notice time out
+      await tester.pump(
+        const Duration(seconds: 30),
+      ); // let the refusal notice time out
     });
 
-    testWidgets('a late answer: the tap is sent at once, the card stays up until it lands', (tester) async {
-      final slow = RecordingAdminRepo()..gate = Completer<Result<void>>();
-      await pump(tester, conf, repo: slow);
-      await tester.tap(find.text(l10nEn.adminConfYes));
-      await tester.pump();
-      expect(slow.calls, [('card-1', true)]);
-      expect(screenText(tester), contains(l10nEn.adminConfTitle));
-      slow.gate!.complete(const Ok(null));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'a late answer: the tap is sent at once, the card stays up until it lands',
+      (tester) async {
+        final slow = RecordingAdminRepo()..gate = Completer<Result<void>>();
+        await pump(tester, conf, repo: slow);
+        await tester.tap(find.text(l10nEn.adminConfYes));
+        await tester.pump();
+        expect(slow.calls, [('card-1', true)]);
+        expect(screenText(tester), contains(l10nEn.adminConfTitle));
+        slow.gate!.complete(const Ok(null));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
 
-    for (final (st, word) in [('done', l10nEn.adminConfDone), ('cancelled', l10nEn.adminConfCancelled)]) {
+    for (final (st, word) in [
+      ('done', l10nEn.adminConfDone),
+      ('cancelled', l10nEn.adminConfCancelled),
+    ]) {
       testWidgets('st=$st shows "$word"', (tester) async {
         await pump(tester, {...conf, 'st': st});
         expect(screenText(tester), contains(word));

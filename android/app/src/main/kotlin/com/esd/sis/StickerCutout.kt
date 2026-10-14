@@ -19,8 +19,14 @@ private const val SIDE = 512
 // model is unbundled: Google Play services downloads it, and a request made
 // before the download finishes fails -- the caller then keeps the whole image.
 class StickerCutout(private val context: Context) {
-    // False on a phone without Google Play services (no model can be had).
-    fun supported(): Boolean =
+    // Fallback to the bundled model when Google Play services is not available.
+    private val onnx by lazy { OnnxCutout(context) }
+    private val fallbackExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    // Always true: without Google Play services the bundled model is used.
+    fun supported(): Boolean = true
+
+    private fun playServices(): Boolean =
         GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
 
     // Asks Google Play services to install the segmentation model now, so it is
@@ -29,6 +35,7 @@ class StickerCutout(private val context: Context) {
     // API: ModuleInstallClient (developers.google.com/android/guides/module-install-apis);
     // SubjectSegmenter implements OptionalModuleApi.
     fun requestModel() {
+        if (!playServices()) return
         try {
             val seg = SubjectSegmentation.getClient(
                 SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build()
@@ -56,14 +63,29 @@ class StickerCutout(private val context: Context) {
             scaled = small
             // createScaledBitmap hands back the same object when no scaling is needed.
             if (small !== decoded) decoded.recycle()
+            if (!playServices()) {
+                val out = onnx.mask(small)
+                small.recycle()
+                onDone(out)
+                return
+            }
             val seg = SubjectSegmentation.getClient(
                 SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build()
             )
             segmenter = seg
             fun finish(bytes: ByteArray?) {
                 seg.close()
-                small.recycle()
-                onDone(bytes)
+                if (bytes != null) {
+                    small.recycle()
+                    onDone(bytes)
+                    return
+                }
+                // ML Kit calls back on the main thread; the model must not run there.
+                fallbackExecutor.execute {
+                    val out = onnx.mask(small)
+                    small.recycle()
+                    onDone(out)
+                }
             }
             seg.process(InputImage.fromBitmap(small, 0))
                 .addOnSuccessListener { result ->

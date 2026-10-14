@@ -13,7 +13,7 @@ downloaded at runtime.
 | sha256 `u2netp.onnx` | `54569ac4932453abd7e64c2611ef66411fbc58dedb4b2e10251159bb63bfdb4c` |
 | Converted on | 2026-10-14 |
 | Command | `./tool/cutout_model/convert.sh` (docker, python:3.11-slim, PyTorch CPU, opset 17, input `input` 1x3x320x320, outputs `d0`..`d6`; `d0` is the final map, already through a sigmoid) |
-| Runtime | `flutter_onnxruntime` 1.9.0 (MIT) over ONNX Runtime 1.28.0 (MIT) |
+| Runtime | `com.microsoft.onnxruntime:onnxruntime-android` 1.28.0 (MIT, Maven Central), Android only |
 
 The ONNX file is not byte-reproducible across torch versions; the `.pth`
 checksum is what the script checks.

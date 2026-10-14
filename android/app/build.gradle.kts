@@ -103,6 +103,8 @@ dependencies {
     // ModuleInstallClient (explicit model install), per developers.google.com/android/guides/module-install-apis.
     implementation("com.google.android.gms:play-services-base:18.11.0")
     implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
+    // Fallback cut-out for phones without Google Play services (microG): U2-NetP run by ONNX Runtime, MIT (Maven Central, verified 1.28.0).
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.28.0")
     testImplementation("junit:junit:4.13.2")
     // android.jar's org.json is a stub in JVM unit tests; this is the real one.
     testImplementation("org.json:json:20240303")

@@ -539,8 +539,6 @@
   "@settingsShowRead": {"description": "Privacy switch for read receipts"},
   "settingsShowReadHint": "While this is off, you can't see when others read yours.",
   "@settingsShowReadHint": {"description": "Explains the read receipts switch"},
-  "settingsCutoutOnPhone": "Sticker cut-outs are made on your phone. Your photos are not sent anywhere for it.",
-  "@settingsCutoutOnPhone": {"description": "Note at the bottom of the privacy page: the sticker cut-out runs on the device"},
   "settingsAvatarVisibility": "Profile picture visibility",
   "@settingsAvatarVisibility": {"description": "Heading above the profile picture audience options"},
   "settingsAvatarEveryone": "Everyone",

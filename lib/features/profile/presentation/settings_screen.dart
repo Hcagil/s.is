@@ -385,16 +385,6 @@ class PrivacyScreen extends ConsumerWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              l.settingsCutoutOnPhone,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
         ],
       );
     },

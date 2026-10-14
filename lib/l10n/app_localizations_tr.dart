@@ -498,10 +498,6 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bu kapalıyken başkalarının senin mesajlarını ne zaman okuduğunu göremezsin.';
 
   @override
-  String get settingsCutoutOnPhone =>
-      'Çıkartma kesme işlemi telefonunda yapılır. Fotoğrafların bunun için hiçbir yere gönderilmez.';
-
-  @override
   String get settingsAvatarVisibility => 'Profil fotoğrafını kimler görsün';
 
   @override

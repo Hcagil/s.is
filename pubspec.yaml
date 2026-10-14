@@ -75,10 +75,6 @@ flutter:
     - assets/fonts/OFL-manrope.txt
     - assets/fonts/OFL-sora.txt
     - assets/stickers/
-    - assets/models/u2netp.tflite
-    - assets/models/U2NET-LICENSE.txt
-    - assets/models/LITERT-LICENSE.txt
-    - assets/models/LITERT-THIRD-PARTY-NOTICES.txt
   fonts:
     - family: Manrope
       fonts:

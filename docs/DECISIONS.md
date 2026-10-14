@@ -2108,3 +2108,15 @@ Nothing contacts the site before that tap.
   8. key backup;
   9. bot and system chats, and switching off the plain-text server paths;
   10. report and block.
+
+## 2026-10-14 — Private Chats engine: our own binding, Olm version 1, pinned Rust
+
+**SIS calls vodozemac 0.11.1 through its own thin flutter_rust_bridge 2.13.0 binding (Cargokit), and one-to-one sessions use Olm version 1.** Version 1 is vodozemac's default and the Matrix `m.olm.v1.curve25519-aes-sha2` scheme, the one covered by the 2022 Least Authority audit; version 2 sits behind an experimental feature and is not in the Matrix spec.
+
+- Message types keep vodozemac's numbering: 0 = pre-key (opens a session), 1 = normal. There is no mapping layer.
+- The iPhone notification extension reaches the same crate through a plain C function and a cbindgen header, because flutter_rust_bridge needs the Flutter engine and the extension has none.
+- Rust is pinned to 1.99.0 in `rust/rust-toolchain.toml`; the vendored Cargokit reads that file instead of installing today's stable, so builds can be reproduced. The rustup installer in the Docker image is pinned and checked by SHA-256.
+- Release builds log only warnings from Rust, so a later debug line cannot leak plain text into device logs.
+- The binding lives in `lib/data/crypto/`, and only `data/` layers may import `flutter_rust_bridge` (`tool/check_pattern.sh`).
+
+**Reason.** Apache-2.0 keeps SIS closed source (the existing Flutter binding is AGPL), and the audited, spec-defined version is the safe default. **Consequence.** Each session stores its version, so moving to version 2 later affects only new sessions. The crate licences must be shown in the app before a public release.

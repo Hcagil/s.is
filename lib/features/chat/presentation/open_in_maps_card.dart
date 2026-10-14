@@ -15,6 +15,7 @@ Future<bool?> confirmOpenInMaps(BuildContext context, {required String place}) {
     context,
     anchor: anchor,
     highlightAnchor: false,
+    keepFocus: true,
     cardKey: const ValueKey('open-maps-card'),
     child: Builder(
       builder: (card) {

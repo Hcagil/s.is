@@ -2067,3 +2067,44 @@ Nothing contacts the site before that tap.
 - CI turns the Sign in with Apple capability on for `com.esd.sis` through the App Store Connect API and replaces a profile that lacks the entitlement.
 
 **Reason.** Rule 4.8, and iPhone users without a Google account. **Consequence.** The Supabase Apple provider must be enabled with the bundle ID as Client ID before the iPhone build can sign in.
+
+## 2026-10-13 — Private Chats: end-to-end encryption with vodozemac
+
+**SIS messages become end-to-end encrypted: locked on the sender's phone, unlocked only on the receivers' phones.** The engine is Matrix's `vodozemac` (Olm for one-to-one sessions, Megolm for groups). It is Apache-2.0, externally audited by Least Authority, and it runs behind our own `flutter_rust_bridge` binding. SIS stays closed source.
+
+- Not chosen: `libsignal` is AGPL, which would force SIS to be open source, and Signal does not support it outside Signal. Writing our own ratchet is ruled out: Matrix retired its older `libolm` over flaws (CVE-2024-45191/45192).
+- The server still sees metadata: who talks to whom and when, group members, message size and type, and read marks. The privacy notice says so.
+- Groups: the app makes random Megolm group keys and rotates them when members change. No person ever chooses a group key.
+- Search moves onto the phone, on a new on-phone message store. Notification text and pictures are unlocked on the phone, including in the iPhone notification extension. Link cards, polls, media, voice and location travel inside the encrypted message; the server can still count poll votes.
+- Bot chats (the Debug group and the tester one-to-one chats) stay unencrypted. They carry a label and need the tester's OK, with the warning "This chat is not end-to-end encrypted: an AI and the developer read it. Please don't write passwords or private things here." System chats (What's new, Admin) stay unencrypted as well.
+- Messages sent before encryption are not re-encrypted. They are kept and marked "sent before encryption", and the group switch that shows old messages to new members keeps working for them. Deleting them is a separate, later decision.
+- Key backup:
+  - The same kind of phone restores the key automatically, from iCloud Keychain or Android Block Store.
+  - Between iPhone and Android, the key is split in two: one half in the user's Google Drive app-data folder, the other on our server. Neither Google nor SIS can open it alone. The user does nothing.
+  - Optional extras:
+    - a QR code scanned from the old phone;
+    - a spare key shown as a QR code;
+    - a PIN or passphrase layer, off by default, that cannot be recovered. "Forgot" means setting a new one while a phone still holds the key.
+  - A PIN kept on our server is ruled out: without a hardware vault with a try limit (Signal SVR), a short PIN falls to offline guessing.
+- An optional app lock (fingerprint, face or screen lock) is separate from the encryption key and off by default.
+- Report and block users are built in. The reporter's phone sends the reported messages, only with the reporter's OK (App Store 1.2, Play user-generated content policy).
+- Finding people by email is removed completely.
+
+**Reason.** The owner wants nobody but the people in a chat to read it, including SIS, Supabase, Google and Apple.
+
+**Consequences.**
+- A user who loses every phone, cannot reach the Google Drive half and kept no spare key loses their encrypted history. A hijacked Google account can open that user's backup; the owner accepted this for zero-action restore. A user who signs in only with Apple and moves to Android needs one QR scan.
+- Every phone change shows contacts a "security code changed" notice, and a screen compares the codes by QR.
+- Once Private Chats ships, the owner raises the minimum supported build by hand, so older builds must update. This replaces the earlier rule that the minimum is never raised, for this release only. Nothing raises it automatically.
+- Before the first encrypted TestFlight build, the iPhone export answer (`ITSAppUsesNonExemptEncryption`) is re-answered. Before any release beyond friend testers, a Turkish lawyer checks law 5809 Art. 39 and OTT authorisation.
+- It is built in steps, each tested with the friend testers:
+  1. the on-phone store and search;
+  2. the engine and the binding (Android, iPhone, the notification extension);
+  3. the key directory;
+  4. one-to-one text and notifications;
+  5. groups;
+  6. media and attachments;
+  7. security codes;
+  8. key backup;
+  9. bot and system chats, and switching off the plain-text server paths;
+  10. report and block.

@@ -203,7 +203,8 @@ PY
   attachments)
     [[ $1 =~ $UUID_RE ]] || die 2 "not a message id"
     # RLS decides: the storage policy gives the bot only what it may read as a member.
-    call GET "/rest/v1/messages?select=attachment_path,attachment_name,attachment_mime,attachment_duration_ms&id=eq.$1&deleted=eq.false"
+    call POST /rest/v1/rpc/bot_ids '{}'   # access probe: refused while the bot is OFF
+    call GET "/rest/v1/messages?select=attachment_path,attachment_name,attachment_mime,attachment_duration_ms&id=eq.$1&deleted=is.null"
     ACCESS="$ACCESS" URL="$URL" ANON="$ANON" python3 - "$TMP" "$1" "$ROOT/.private/bot-attachments" <<'PY'
 import json, os, re, sys, urllib.error, urllib.parse, urllib.request
 ACCESS, URL, ANON = os.environ["ACCESS"], os.environ["URL"], os.environ["ANON"]
@@ -235,9 +236,14 @@ for cand in (os.path.splitext(name or "")[1], os.path.splitext(path)[1],
         ext = cand.lower()
         break
 out = os.path.join(sys.argv[3], sys.argv[2])
+os.makedirs(sys.argv[3], mode=0o700, exist_ok=True)
+os.chmod(sys.argv[3], 0o700)
 os.makedirs(out, mode=0o700, exist_ok=True)
+os.chmod(out, 0o700)
 dest = os.path.join(out, "1" + ext)
-with os.fdopen(os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+os.fchmod(fd, 0o600)
+with os.fdopen(fd, "wb") as f:
     f.write(data)
 print(os.path.abspath(dest))
 PY

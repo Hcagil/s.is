@@ -36,6 +36,13 @@ class VideoPhone {
   int thumbNulls = 0; // how many getThumb calls answer null before bytes come
   final calls = <MethodCall>[];
 
+  /// What getFullFile answers per asset id: a real file path, or null for a
+  /// video that lives only in iCloud. Unlisted ids answer null.
+  final origins = <String, String?>{};
+
+  /// Ids whose getFullFile answers with a platform error.
+  final originThrows = <String>{};
+
   List<MethodCall> named(String m) =>
       calls.where((c) => c.method == m).toList();
 
@@ -100,6 +107,11 @@ class VideoPhone {
           if (c.id == args['id']) return _asset(c);
         }
         return null;
+      case 'getFullFile':
+        if (originThrows.contains(args['id'])) {
+          throw PlatformException(code: 'iCloud', message: 'download failed');
+        }
+        return origins[args['id']];
       case 'getThumb':
         if (thumbNulls > 0) {
           thumbNulls--;
@@ -107,7 +119,7 @@ class VideoPhone {
         }
         return Uint8List.fromList([1, 2, 3]);
       default:
-        return null; // getFullFile, clearFileCache, openSetting, presentLimited ...
+        return null; // clearFileCache, openSetting, presentLimited ...
     }
   }
 }
@@ -338,6 +350,58 @@ void main() {
       final pick = await gallery().prepare([]);
       expect(pick.videos, isEmpty);
       expect(pick.tooLong, 0);
+    });
+
+    test('an id that does not resolve counts 1 failed', () async {
+      final pick = await gallery().prepare([
+        GalleryVideo(id: 'gone', durationMs: 1000),
+      ]);
+      expect(pick.failed, 1);
+      expect(pick.tooLong, 0);
+      expect(pick.videos, isEmpty);
+    });
+
+    test('two unresolved ids count 2 failed', () async {
+      final pick = await gallery().prepare([
+        GalleryVideo(id: 'gone1', durationMs: 1000),
+        GalleryVideo(id: 'gone2', durationMs: 1000),
+      ]);
+      expect(pick.failed, 2);
+    });
+
+    test('a too-long video counts only in tooLong', () async {
+      phone.clips = [Clip('long', 302, 1)];
+      final pick = await gallery().prepare([
+        GalleryVideo(id: 'long', durationMs: 302000),
+      ]);
+      expect(pick.tooLong, 1);
+      expect(pick.failed, 0);
+    });
+
+    test('too long and unresolved are counted apart', () async {
+      phone.clips = [Clip('l1', 400, 1)];
+      final pick = await gallery().prepare([
+        GalleryVideo(id: 'l1', durationMs: 400000),
+        GalleryVideo(id: 'gone', durationMs: 1000),
+      ]);
+      expect(pick.tooLong, 1);
+      expect(pick.failed, 1);
+      expect(pick.videos, isEmpty);
+    });
+
+    // A file read that errors (iCloud download failed) is a video that
+    // could not be read: it must be counted, never swallowed. On this test
+    // host photo_manager's originFile throws before the channel (it asserts
+    // the platform), so the error arrives either way.
+    test('an asset whose file read throws counts 1 failed', () async {
+      phone.clips = [Clip('cloud', 10, 1)];
+      phone.originThrows.add('cloud');
+      final pick = await gallery().prepare([
+        GalleryVideo(id: 'cloud', durationMs: 10000),
+      ]);
+      expect(pick.failed, 1);
+      expect(pick.tooLong, 0);
+      expect(pick.videos, isEmpty);
     });
   });
 

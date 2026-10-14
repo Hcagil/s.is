@@ -81,10 +81,7 @@ class _OsmMapViewState extends State<OsmMapView> {
     final target = widget.spec.target;
     if (target != oldWidget.spec.target) {
       // Keep the member's own zoom; spec.zoom is only the starting zoom.
-      _controller.move(
-        LatLng(target.lat, target.lng),
-        _controller.camera.zoom,
-      );
+      _controller.move(LatLng(target.lat, target.lng), _controller.camera.zoom);
     }
   }
 

@@ -103,6 +103,9 @@ jobs:
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter dart format --output=none --set-exit-if-changed lib test
       - name: Analyze
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter analyze
+      # test/data/crypto runs against the real Rust library; RustLib.init() loads it from rust/target/release.
+      - name: Build the Rust library for the Dart tests
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo build --release --manifest-path rust/Cargo.toml
       # A non-UTC zone on purpose: the container defaults to UTC, where a test
       # of local-time formatting passes whether or not the code converts to
       # local time at all. POSIX form, so no tzdata is needed.

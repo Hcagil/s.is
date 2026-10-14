@@ -36,50 +36,52 @@ class _ModeCard extends ConsumerWidget {
           borderRadius: BorderRadius.circular(22),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 10,
-                  ),
-                  child: Text(
-                    l.appearanceModeTitle,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                for (final m in AppearanceMode.values)
-                  _ModeOption(
-                    mode: m,
-                    selected: look.mode == m,
-                    onTap: () =>
-                        ref.read(appearanceProvider.notifier).setMode(m),
-                  ),
-                const SizedBox(height: 12),
-                Container(
-                  key: const ValueKey('appearance-mode-note'),
-                  margin: const EdgeInsets.fromLTRB(20, 6, 20, 4),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 9,
-                  ),
-                  decoration: BoxDecoration(
-                    color: t.background,
-                    border: Border.all(color: t.line),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _getNoteText(look, l),
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      height: 1.4,
-                      color: t.muted,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                    child: Text(
+                      l.appearanceModeTitle,
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
-                ),
-              ],
+                  for (final m in AppearanceMode.values)
+                    _ModeOption(
+                      mode: m,
+                      selected: look.mode == m,
+                      onTap: () =>
+                          ref.read(appearanceProvider.notifier).setMode(m),
+                    ),
+                  const SizedBox(height: 12),
+                  Container(
+                    key: const ValueKey('appearance-mode-note'),
+                    margin: const EdgeInsets.fromLTRB(20, 6, 20, 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: t.background,
+                      border: Border.all(color: t.line),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _getNoteText(look, l),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.4,
+                        color: t.muted,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

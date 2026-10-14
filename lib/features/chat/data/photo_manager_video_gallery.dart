@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:light_compressor_v2/light_compressor_v2.dart' as lc;
+import 'package:path/path.dart' as p;
 import 'package:photo_manager/photo_manager.dart';
 
 import '../domain/file_attachment.dart';
@@ -97,9 +98,7 @@ final class PhotoManagerVideoGallery implements VideoGallery {
             compressor: _lc,
             name: safeFileName(await e.titleAsync),
             bytes: file.openRead(),
-            extension: file.path.contains('.')
-                ? file.path.substring(file.path.lastIndexOf('.') + 1)
-                : null,
+            extension: p.extension(file.path).replaceFirst('.', ''),
           );
           final source = result.source;
           if (source != null) {

@@ -249,11 +249,12 @@ jobs:
             -configuration Debug -destination "id=$udid" CODE_SIGNING_ALLOWED=NO
       # The video copy and its real AVFoundation read, on a booted simulator.
       - name: Video prep integration test (simulator)
+        timeout-minutes: 15
         run: |
           devices=$(xcrun simctl list devices available)
           udid=$(grep -m1 -E '^ +iPhone' <<<"$devices" | grep -oE '[0-9A-F-]{36}')
           test -n "$udid"
-          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
           flutter test integration_test/video_source_prep_ios_test.dart -d "$udid"
 
   # Signing proof on the pull request: the same signed archive + export the

@@ -1289,6 +1289,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get themePickMine => 'Pick my message bubble color';
 
   @override
+  String get themeMineFollow => 'Follow accent';
+
+  @override
+  String get themeMineFollowHint => 'The bubble follows your accent color.';
+
+  @override
+  String get themeMineFixedHint =>
+      'This color stays when you change the accent.';
+
+  @override
   String get themeLowContrast =>
       'Accent may be hard to read. Consider a darker shade.';
 

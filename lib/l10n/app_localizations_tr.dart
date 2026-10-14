@@ -1278,6 +1278,16 @@ class AppLocalizationsTr extends AppLocalizations {
   String get themePickMine => 'Mesaj balonumun rengini seçin';
 
   @override
+  String get themeMineFollow => 'Vurgu rengini kullan';
+
+  @override
+  String get themeMineFollowHint => 'Balon, vurgu renginizi izler.';
+
+  @override
+  String get themeMineFixedHint =>
+      'Bu renk, vurguyu değiştirseniz de sabit kalır.';
+
+  @override
   String get themeLowContrast =>
       'Bu vurgu rengi zor okunabilir. Daha koyu bir ton seçin.';
 

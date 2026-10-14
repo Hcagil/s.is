@@ -147,7 +147,16 @@ class RustBuilder {
   CargoBuildOptions? get _buildOptions =>
       environment.crateOptions.cargo[environment.configuration];
 
-  String get _toolchain => _buildOptions?.toolchain.name ?? 'stable';
+  // The crate's rust-toolchain.toml pins the compiler; honour it, else fall back to cargokit.yaml / stable.
+  String get _toolchain {
+    final file = File(path.join(environment.manifestDir, 'rust-toolchain.toml'));
+    if (file.existsSync()) {
+      final m = RegExp(r'^\s*channel\s*=\s*"([^"]+)"', multiLine: true)
+          .firstMatch(file.readAsStringSync());
+      if (m != null) return m.group(1)!;
+    }
+    return _buildOptions?.toolchain.name ?? 'stable';
+  }
   String get _effectiveToolchain => _resolvedToolchain ?? _toolchain;
 
   /// Returns the path of directory containing build artifacts.

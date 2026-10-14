@@ -245,14 +245,16 @@ jobs:
       # The iPhone notification extension will call the same Rust crate from Swift (C header from cbindgen).
       # This compiles and links a Swift probe against the crate for the simulator.
       - name: Swift calls the Rust crate (notification extension route)
+        timeout-minutes: 15
+        working-directory: rust
         run: |
           rustup target add aarch64-apple-ios-sim
-          cargo build --release --manifest-path rust/Cargo.toml --target aarch64-apple-ios-sim
+          cargo build --release --target aarch64-apple-ios-sim
           mkdir -p "$RUNNER_TEMP/probe"
           printf 'import Foundation\nexit(sis_olm_selftest())\n' > "$RUNNER_TEMP/probe/main.swift"
           xcrun --sdk iphonesimulator swiftc -target arm64-apple-ios15.0-simulator \
-            -import-objc-header rust/include/sis_crypto.h \
-            "$RUNNER_TEMP/probe/main.swift" rust/target/aarch64-apple-ios-sim/release/librust_lib_sis.a \
+            -import-objc-header include/sis_crypto.h \
+            "$RUNNER_TEMP/probe/main.swift" target/aarch64-apple-ios-sim/release/librust_lib_sis.a \
             -framework Security -o "$RUNNER_TEMP/probe/probe"
       # ios/RunnerTests: the Swift channel handlers against real ImageIO/PhotosUI,
       # hosted in the app on a simulator (whichever iPhone this Xcode ships).

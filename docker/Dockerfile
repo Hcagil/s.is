@@ -51,7 +51,12 @@ ENV RUSTUP_HOME=/home/ubuntu/.rustup \
     CARGO_HOME=/home/ubuntu/.cargo
 ENV PATH=/home/ubuntu/.cargo/bin:${PATH}
 # Rust for the encryption engine (rust/): pinned toolchain, Android targets, and the flutter_rust_bridge code generator at the same version as the Dart package.
-RUN curl -fsSL --retry 5 https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain "${RUST_VERSION}" \
+ARG RUSTUP_VERSION=1.28.2
+ARG RUSTUP_INIT_SHA256=20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c
+RUN curl -fsSL --retry 5 -o /tmp/rustup-init "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu/rustup-init" \
+    && echo "${RUSTUP_INIT_SHA256}  /tmp/rustup-init" | sha256sum -c - \
+    && chmod +x /tmp/rustup-init \
+    && /tmp/rustup-init -y --profile minimal --default-toolchain "${RUST_VERSION}" \
     -c rustfmt -t aarch64-linux-android -t armv7-linux-androideabi -t x86_64-linux-android \
     && cargo install flutter_rust_bridge_codegen --version "${FRB_VERSION}" --locked \
     && cargo install cbindgen --version 0.29.4 --locked

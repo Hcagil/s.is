@@ -114,5 +114,11 @@ impl OlmSession {
 
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
-    flutter_rust_bridge::setup_default_user_utils();
+    // Trace logs only in debug builds; release keeps Warn so nothing sensitive reaches logcat/oslog.
+    flutter_rust_bridge::setup_log_to_console(if cfg!(debug_assertions) {
+        log::LevelFilter::Trace
+    } else {
+        log::LevelFilter::Warn
+    });
+    flutter_rust_bridge::setup_backtrace();
 }

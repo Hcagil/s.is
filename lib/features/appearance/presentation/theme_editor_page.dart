@@ -193,7 +193,7 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
                               child: Tooltip(
                                 message: l.themeMineFollow,
                                 child: InkWell(
-                                  key: const ValueKey('swatch-mine-follow'),
+                                  key: const ValueKey('mine-follow'),
                                   borderRadius: BorderRadius.circular(12),
                                   onTap: () => setState(() => _mine = null),
                                   child: Container(

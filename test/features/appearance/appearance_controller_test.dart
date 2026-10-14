@@ -71,6 +71,11 @@ final List<Setter> setters = [
     call: (c) => c.setLanguage(AppLanguage.tr),
     expected: const AppearanceSettings(language: AppLanguage.tr),
   ),
+  (
+    name: 'setMode',
+    call: (c) => c.setMode(AppearanceMode.dark),
+    expected: const AppearanceSettings(mode: AppearanceMode.dark),
+  ),
 ];
 
 void main() {

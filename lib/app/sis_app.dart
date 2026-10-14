@@ -63,11 +63,16 @@ class SisApp extends ConsumerWidget {
         AppLanguage.en => const Locale('en'),
         AppLanguage.tr => const Locale('tr'),
       },
-      // A custom theme can fix light or dark; everything else follows the phone.
+      // A custom theme can fix light or dark and keeps it; every other theme
+      // follows the member's choice (default: the phone).
       themeMode: switch (custom?.mode) {
         CustomThemeMode.light => ThemeMode.light,
         CustomThemeMode.dark => ThemeMode.dark,
-        _ => ThemeMode.system,
+        _ => switch (look.mode) {
+          AppearanceMode.system => ThemeMode.system,
+          AppearanceMode.light => ThemeMode.light,
+          AppearanceMode.dark => ThemeMode.dark,
+        },
       },
       theme: sisTheme(
         Brightness.light,

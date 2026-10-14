@@ -39,3 +39,14 @@ String languageLabel(AppLocalizations l, AppLanguage v) {
       return l.languageTurkish;
   }
 }
+
+String appearanceModeLabel(AppLocalizations l, AppearanceMode m) {
+  switch (m) {
+    case AppearanceMode.system:
+      return l.appearanceModeFollow;
+    case AppearanceMode.light:
+      return l.appearanceModeLight;
+    case AppearanceMode.dark:
+      return l.appearanceModeDark;
+  }
+}

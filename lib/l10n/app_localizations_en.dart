@@ -694,6 +694,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get messageActionDeletePhoto => 'Delete this photo';
+
+  @override
   String get messageDeleteAlbumTitle => 'Delete this album?';
 
   @override

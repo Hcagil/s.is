@@ -295,6 +295,34 @@ final class Message {
     sending: sending,
   );
 
+  /// A copy of this message carrying [group] as its [photoGroup] (null takes it out of any album).
+  Message withPhotoGroup(String? group) => Message(
+    id: id,
+    conversationId: conversationId,
+    senderId: senderId,
+    body: body,
+    createdAt: createdAt,
+    attachmentPath: attachmentPath,
+    attachmentPreview: attachmentPreview,
+    localImage: localImage,
+    stickerId: stickerId,
+    albumCard: albumCard,
+    albumId: albumId,
+    photoGroup: group,
+    linkPreview: linkPreview,
+    adminMsg: adminMsg,
+    deletion: deletion,
+    deletedBy: deletedBy,
+    editedAt: editedAt,
+    replyTo: replyTo,
+    forwarded: forwarded,
+    poll: poll,
+    contact: contact,
+    location: location,
+    file: file,
+    sending: sending,
+  );
+
   /// Whether [userId] wrote this message; decides which side it is drawn on.
   bool isFrom(String userId) => senderId == userId;
 

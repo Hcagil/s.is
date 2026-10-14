@@ -657,6 +657,8 @@
   "@quotePhoto": {"description": "A quoted message that is only a photo"},
   "quotePhotos": "📷 {count} photos",
   "@quotePhotos": {"description": "A quoted photo album", "placeholders": {"count": {"type": "int"}}},
+  "messageActionDeletePhoto": "Delete this photo",
+  "@messageActionDeletePhoto": {"description": "Photo viewer menu, a photo of an album: delete it for everyone (the album's other photos stay)"},
   "messageDeleteAlbumTitle": "Delete this album?",
   "@messageDeleteAlbumTitle": {"description": "Delete confirm card title for a whole photo album"},
   "listNoMessages": "No messages yet",

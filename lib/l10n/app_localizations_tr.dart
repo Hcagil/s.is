@@ -691,6 +691,9 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String get messageActionDeletePhoto => 'Bu fotoğrafı sil';
+
+  @override
   String get messageDeleteAlbumTitle => 'Bu albüm silinsin mi?';
 
   @override

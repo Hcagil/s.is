@@ -370,7 +370,13 @@ Future<bool> showMessageMenu(
           value: a,
           keyId: swipeActionKeyId(a),
           icon: swipeActionIcon(a),
-          label: swipeActionLabel(AppLocalizations.of(context), a),
+          // One photo of an album, deleted from the viewer: say so.
+          label:
+              photoViewer &&
+                  message.photoGroup != null &&
+                  a == MessageAction.deleteForEveryone
+              ? AppLocalizations.of(context).messageActionDeletePhoto
+              : swipeActionLabel(AppLocalizations.of(context), a),
           destructive:
               a == MessageAction.deleteForMe ||
               a == MessageAction.deleteForEveryone,

@@ -213,6 +213,7 @@
   "quoteDeleted": "Bu mesaj silindi",
   "quotePhoto": "📷 Fotoğraf",
   "quotePhotos": "📷 {count} fotoğraf",
+  "messageActionDeletePhoto": "Bu fotoğrafı sil",
   "messageDeleteAlbumTitle": "Bu albüm silinsin mi?",
   "listNoMessages": "Henüz mesaj yok",
   "listYouPrefix": "Sen: {message}",

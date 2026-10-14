@@ -1376,6 +1376,12 @@ abstract class AppLocalizations {
   /// **'📷 {count} photos'**
   String quotePhotos(int count);
 
+  /// Photo viewer menu, a photo of an album: delete it for everyone (the album's other photos stay)
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this photo'**
+  String get messageActionDeletePhoto;
+
   /// Delete confirm card title for a whole photo album
   ///
   /// In en, this message translates to:

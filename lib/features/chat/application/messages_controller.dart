@@ -748,14 +748,46 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     }
   }
 
+  /// The bubble shown from the phone while [image] uploads.
+  Message _pendingPhoto(
+    String conversationId,
+    PickedImage image,
+    String body,
+    String id,
+  ) => Message(
+    id: id,
+    conversationId: conversationId,
+    senderId: _me ?? '',
+    body: body.trim(),
+    createdAt: DateTime.now(),
+    localImage: image.bytes,
+    attachmentPreview: image.preview,
+    photoGroup: image.photoGroup,
+  );
+
+  /// Takes the messages with these ids out of the shown list (pending
+  /// bubbles of photos that will not be sent).
+  void _dropMessages(Set<String> ids) {
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData([
+      for (final m in current)
+        if (!ids.contains(m.id)) m,
+    ]);
+  }
+
   /// Sends [chosen], picked in the attachment sheet's own grid, with an
   /// optional [body].
+  ///
+  /// [shown] is the pending bubble of this photo when the caller (see
+  /// [sendImages]) has already put it in the list; then none is added here.
   ///
   /// Returns null when [chosen] is null -- the member backed out of the
   /// sheet, which is not a failure, and the composer must not report one.
   Future<Result<Message>?> sendImage({
     String body = '',
     PickedImage? chosen,
+    Message? shown,
   }) async {
     final conversationId = ref.read(openConversationProvider);
     if (conversationId == null) return const Err(DeniedFailure());
@@ -764,18 +796,18 @@ class MessagesController extends AsyncNotifier<List<Message>> {
 
     // Shown at once from the phone while it uploads; replaced by the stored
     // message, or taken away again if the upload fails.
-    final pending = Message(
-      id: 'pending-${DateTime.now().microsecondsSinceEpoch}',
-      conversationId: conversationId,
-      senderId: _me ?? '',
-      body: body.trim(),
-      createdAt: DateTime.now(),
-      localImage: image.bytes,
-      attachmentPreview: image.preview,
-      photoGroup: image.photoGroup,
-    );
-    returnToLive(); // no-op unless jumped; see _onQueueChanged
-    _append(pending);
+    final pending =
+        shown ??
+        _pendingPhoto(
+          conversationId,
+          image,
+          body,
+          'pending-${DateTime.now().microsecondsSinceEpoch}',
+        );
+    if (shown == null) {
+      returnToLive(); // no-op unless jumped; see _onQueueChanged
+      _append(pending);
+    }
     final result = await ref
         .read(chatRepositoryProvider)
         .sendImage(
@@ -920,34 +952,52 @@ class MessagesController extends AsyncNotifier<List<Message>> {
 
   /// Sends [images] to the open conversation, one message per photo, in
   /// order -- [body] as the caption of the first only, the rest with none.
-  /// Stops at the first [Err] and returns it; otherwise returns [Ok(null)]
-  /// once every image has been sent. An empty [images] sends nothing and
+  /// Photos picked together become albums of at most 10 sharing a group id
+  /// (a lone leftover photo stays a plain photo); an album's pending
+  /// bubbles all show at once, before the first upload, and each turns
+  /// into its stored photo in turn.
+  /// Stops at the first [Err] and returns it, taking the bubbles of the
+  /// photos not sent off the screen; otherwise returns [Ok(null)] once
+  /// every image has been sent. An empty [images] sends nothing and
   /// returns [Ok(null)] at once.
   Future<Result<void>> sendImages(
     List<PickedImage> images, {
     String body = '',
   }) async {
-    // Photos picked together become albums of at most 10, each with its own group id; a lone leftover photo stays a plain photo. The caption goes on the first photo only.
-    final groups = <String>[
-      for (var i = 0; i < images.length; i += 10) randomMessageId(),
-    ];
-    for (var i = 0; i < images.length; i++) {
-      final start = i - i % 10;
-      final result = await sendImage(
-        body: i == 0 ? body : '',
-        chosen: images.length - start > 1
-            ? images[i].inGroup(groups[start ~/ 10])
-            : images[i],
-      );
-      switch (result) {
-        case null:
-          // sendImage only answers null for a null `chosen`; images[i] is
-          // never null, so this never happens -- kept for exhaustiveness.
-          break;
-        case Ok():
-          break;
-        case Err(:final failure):
+    if (images.isEmpty) return const Ok(null);
+    final conversationId = ref.read(openConversationProvider);
+    if (conversationId == null) return const Err(DeniedFailure());
+    for (var start = 0; start < images.length; start += 10) {
+      final end = start + 10 < images.length ? start + 10 : images.length;
+      final group = end - start > 1 ? randomMessageId() : null;
+      final chunk = [
+        for (var i = start; i < end; i++)
+          group == null ? images[i] : images[i].inGroup(group),
+      ];
+      final stamp = DateTime.now().microsecondsSinceEpoch;
+      final shown = [
+        for (var k = 0; k < chunk.length; k++)
+          _pendingPhoto(
+            conversationId,
+            chunk[k],
+            start + k == 0 ? body : '',
+            'pending-$stamp-$k',
+          ),
+      ];
+      returnToLive(); // no-op unless jumped; see _onQueueChanged
+      shown.forEach(_append);
+      for (var k = 0; k < chunk.length; k++) {
+        final result = await sendImage(
+          body: start + k == 0 ? body : '',
+          chosen: chunk[k],
+          shown: shown[k],
+        );
+        if (result case Err(:final failure)) {
+          if (ref.mounted) {
+            _dropMessages({for (final m in shown.skip(k + 1)) m.id});
+          }
           return Err(failure);
+        }
       }
     }
     return const Ok(null);
@@ -959,7 +1009,9 @@ class MessagesController extends AsyncNotifier<List<Message>> {
 
   /// Sends a copy of [message] to each of [conversationIds]; the chat list
   /// then shows them. With [album], every photo of the album [message]
-  /// belongs to is sent, in order, keeping their shared group.
+  /// belongs to is sent, in order, as a new album of its own in each
+  /// target chat (a fresh group id per target, never the original); a
+  /// single photo is forwarded without any group.
   Future<Result<void>> forward(
     Message message,
     List<String> conversationIds, {
@@ -969,10 +1021,15 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         ? albumOf(state.value ?? const <Message>[], message)
         : [message];
     Result<void> result = const Ok(null);
-    for (final photo in photos) {
-      result = await ref
-          .read(chatRepositoryProvider)
-          .forward(photo, conversationIds);
+    for (final target in conversationIds) {
+      final group = photos.length > 1 ? randomMessageId() : null;
+      for (final photo in photos) {
+        result = await ref.read(chatRepositoryProvider).forward(
+          photo.photoGroup == null ? photo : photo.withPhotoGroup(group),
+          [target],
+        );
+        if (result is Err) break;
+      }
       if (result is Err) break;
     }
     if (result is Ok && ref.mounted) {

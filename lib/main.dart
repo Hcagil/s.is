@@ -146,6 +146,18 @@ Future<void> main() async {
       'Noto Emoji images',
     ], await rootBundle.loadString('assets/stickers/NOTO-EMOJI-LICENSE.txt'));
   });
+  // The bundled cut-out model (U2-NetP) and the LiteRT runtime, both Apache 2.0.
+  LicenseRegistry.addLicense(() async* {
+    for (final (name, file) in [
+      ('U2-NetP cut-out model', 'U2NET-LICENSE'),
+      ('LiteRT', 'LITERT-LICENSE'),
+      ('LiteRT third-party notices', 'LITERT-THIRD-PARTY-NOTICES'),
+    ]) {
+      yield LicenseEntryWithLineBreaks([
+        name,
+      ], await rootBundle.loadString('assets/models/$file.txt'));
+    }
+  });
   final config = RuntimeConfig.fromEnvironment();
   // Read before runApp (like the session marker), so the first frame already
   // has the member's theme, font, text size and language: no flash.

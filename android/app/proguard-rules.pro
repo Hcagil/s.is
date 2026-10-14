@@ -9,3 +9,6 @@
 
 # Release optimisation stays off, as it was before these rules existed.
 -dontoptimize
+
+# LiteRT (bundled cut-out model): its JNI code looks Java classes up by name.
+-keep class org.tensorflow.lite.** { *; }

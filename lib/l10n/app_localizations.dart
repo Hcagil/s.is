@@ -1022,6 +1022,12 @@ abstract class AppLocalizations {
   /// **'While this is off, you can\'t see when others read yours.'**
   String get settingsShowReadHint;
 
+  /// Note at the bottom of the privacy page: the sticker cut-out runs on the device
+  ///
+  /// In en, this message translates to:
+  /// **'Sticker cut-outs are made on your phone. Your photos are not sent anywhere for it.'**
+  String get settingsCutoutOnPhone;
+
   /// Heading above the profile picture audience options
   ///
   /// In en, this message translates to:

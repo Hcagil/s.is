@@ -103,6 +103,8 @@ dependencies {
     // ModuleInstallClient (explicit model install), per developers.google.com/android/guides/module-install-apis.
     implementation("com.google.android.gms:play-services-base:18.11.0")
     implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
+    // Fallback cut-out for phones without Google Play services (microG): U2-NetP run by the standalone LiteRT runtime (not the Play-services variant), Apache 2.0, Google Maven 2.3.0.
+    implementation("com.google.ai.edge.litert:litert:2.3.0")
     testImplementation("junit:junit:4.13.2")
     // android.jar's org.json is a stub in JVM unit tests; this is the real one.
     testImplementation("org.json:json:20240303")

@@ -146,12 +146,11 @@ Future<void> main() async {
       'Noto Emoji images',
     ], await rootBundle.loadString('assets/stickers/NOTO-EMOJI-LICENSE.txt'));
   });
-  // The bundled cut-out model (U2-NetP, Apache 2.0) and ONNX Runtime (MIT).
+  // The bundled cut-out model (U2-NetP) and the LiteRT runtime, both Apache 2.0.
   LicenseRegistry.addLicense(() async* {
     for (final (name, file) in [
       ('U2-NetP cut-out model', 'U2NET-LICENSE'),
-      ('ONNX Runtime', 'ONNXRUNTIME-LICENSE'),
-      ('ONNX Runtime third-party notices', 'ONNXRUNTIME-THIRD-PARTY-NOTICES'),
+      ('LiteRT', 'LITERT-LICENSE'),
     ]) {
       yield LicenseEntryWithLineBreaks([
         name,

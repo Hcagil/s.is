@@ -20,7 +20,7 @@ private const val SIDE = 512
 // before the download finishes fails -- the caller then keeps the whole image.
 class StickerCutout(private val context: Context) {
     // Fallback to the bundled model when Google Play services is not available.
-    private val onnx by lazy { OnnxCutout(context) }
+    private val liteRt by lazy { LiteRtCutout(context) }
     private val fallbackExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     // Always true: without Google Play services the bundled model is used.
@@ -64,7 +64,7 @@ class StickerCutout(private val context: Context) {
             // createScaledBitmap hands back the same object when no scaling is needed.
             if (small !== decoded) decoded.recycle()
             if (!playServices()) {
-                val out = onnx.mask(small)
+                val out = liteRt.mask(small)
                 small.recycle()
                 onDone(out)
                 return
@@ -82,7 +82,7 @@ class StickerCutout(private val context: Context) {
                 }
                 // ML Kit calls back on the main thread; the model must not run there.
                 fallbackExecutor.execute {
-                    val out = onnx.mask(small)
+                    val out = liteRt.mask(small)
                     small.recycle()
                     onDone(out)
                 }

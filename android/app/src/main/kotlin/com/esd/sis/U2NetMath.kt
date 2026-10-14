@@ -19,7 +19,7 @@ object U2NetMath {
      * Converts ARGB pixel data to normalized float tensor.
      *
      * @param argb input pixels, size MODEL_SIDE*MODEL_SIDE
-     * @return float tensor in CHW order, size 3*MODEL_SIDE*MODEL_SIDE
+     * @return float tensor in NHWC order (interleaved R,G,B per pixel), size 3*MODEL_SIDE*MODEL_SIDE
      */
     fun input(argb: IntArray): FloatArray {
         require(argb.size == MODEL_SIDE * MODEL_SIDE)
@@ -31,9 +31,9 @@ object U2NetMath {
             val r = (p shr 16) and 0xFF
             val g = (p shr 8) and 0xFF
             val b = p and 0xFF
-            result[i] = (r / 255f - mean[0]) / std[0]
-            result[MODEL_SIDE * MODEL_SIDE + i] = (g / 255f - mean[1]) / std[1]
-            result[2 * MODEL_SIDE * MODEL_SIDE + i] = (b / 255f - mean[2]) / std[2]
+            result[3 * i] = (r / 255f - mean[0]) / std[0]
+            result[3 * i + 1] = (g / 255f - mean[1]) / std[1]
+            result[3 * i + 2] = (b / 255f - mean[2]) / std[2]
         }
         return result
     }

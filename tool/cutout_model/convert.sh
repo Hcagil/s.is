@@ -33,9 +33,18 @@ if [ "$pth_sha" != "$EXPECTED_PTH_SHA256" ]; then
   exit 1
 fi
 
-mkdir -p assets/models
-cp "$WORK/u2netp.onnx" assets/models/u2netp.onnx
-onnx_sha=$(sha256sum assets/models/u2netp.onnx | cut -d' ' -f1)
+onnx_sha=$(sha256sum "$WORK/u2netp.onnx" | cut -d' ' -f1)
 echo "pth_sha=$pth_sha"
 echo "onnx_sha=$onnx_sha"
+# Stage 2: ONNX -> TFLite (onnx2tf, versions pinned below; the model is trimmed to output d0 and checked against ONNX Runtime).
+docker run --rm -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -e HOME=/w -v "$WORK:/w" -v "$PWD/tool/cutout_model/to_tflite.py:/to_tflite.py:ro" -w /w python:3.11-slim sh -c 'apt-get update -qq >&2 && apt-get install -y -qq libgl1 libglib2.0-0 >&2 && pip install -q onnx2tf==1.29.24 tensorflow-cpu==2.19.0 tf_keras==2.19.0 onnx==1.19.1 onnxruntime==1.23.0 ai-edge-litert==2.1.0 numpy==1.26.4 onnxsim==0.4.36 psutil onnx_graphsurgeon sng4onnx >&2 && pip freeze > /w/tflite-freeze.txt; rc=0; python /to_tflite.py || rc=$?; chown -R "$HOST_UID:$HOST_GID" /w; exit $rc'
+cp "$WORK/tflite-freeze.txt" tool/cutout_model/tflite-freeze.txt
+mkdir -p assets/models
+cp "$WORK/u2netp.tflite" assets/models/u2netp.tflite
+tflite_sha=$(sha256sum assets/models/u2netp.tflite | cut -d' ' -f1)
+echo "tflite_sha=$tflite_sha"
+tflite_fp16_sha=$(sha256sum "$WORK/u2netp_fp16.tflite" | cut -d' ' -f1)
+echo "tflite_fp16_sha=$tflite_fp16_sha"
+echo "tflite_fp16_bytes=$(stat -c %s "$WORK/u2netp_fp16.tflite")"
+echo "tflite_fp32_bytes=$(stat -c %s assets/models/u2netp.tflite)"
 echo "date=$(date -u +%F)"

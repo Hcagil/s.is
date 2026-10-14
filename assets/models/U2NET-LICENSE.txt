@@ -1,6 +1,6 @@
 U-2-Net (U2-NetP) -- https://github.com/xuebinqin/U-2-Net, licence below (Apache 2.0, repo commit ac7e1c8).
-The bundled u2netp.onnx is the official u2netp.pth weights converted to ONNX by SIS
-(PyTorch export, no retraining). Conversion and checksums: tool/cutout_model/PROVENANCE.md.
+The bundled u2netp.tflite is the official u2netp.pth weights converted to ONNX and then to TFLite by SIS
+(PyTorch export, onnx2tf, no retraining). Conversion and checksums: tool/cutout_model/PROVENANCE.md.
 
                                  Apache License
                            Version 2.0, January 2004

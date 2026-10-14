@@ -1677,6 +1677,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoTooBig => 'This video is too large to send.';
 
   @override
+  String videoPickFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count videos could not be sent. Please try again.',
+      one: 'This video could not be sent. Please try again.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get videoFailed => 'This video could not be prepared.';
 
   @override

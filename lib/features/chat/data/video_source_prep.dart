@@ -11,15 +11,20 @@ import '../domain/video.dart';
 /// and size, rejects it when it is over [maxVideoMs], and saves its jpeg
 /// thumbnail. Never throws. Returns the usable [VideoSource]; or `tooLong`
 /// true when it is too long; or neither when it cannot be read. The folder is
-/// deleted in both failing cases.
+/// deleted in both failing cases. [extension] (no dot) is kept on the copy.
 Future<({VideoSource? source, bool tooLong})> prepareVideoSource({
   required DeviceFiles files,
   required lc.LightCompressor compressor,
   required String name,
   required Stream<List<int>> bytes,
+  String? extension,
 }) async {
   final id = randomMessageId();
-  final dest = File(await files.pathFor(id, 'source'));
+  // iOS reads the media type from the extension, so the copy keeps it.
+  final ext = (extension == null || extension.isEmpty)
+      ? (Platform.isIOS ? 'mov' : 'mp4')
+      : extension.toLowerCase();
+  final dest = File(await files.pathFor(id, 'source.$ext'));
   try {
     await dest.parent.create(recursive: true);
     final sink = dest.openWrite();

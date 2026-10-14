@@ -508,6 +508,7 @@
   "videoCancelSend": "İptal",
   "videoTooLong": "{count, plural, =1{1 video 5 dakikadan uzun olduğu için eklenmedi.} other{{count} video 5 dakikadan uzun olduğu için eklenmedi.}}",
   "videoTooBig": "Bu video gönderilemeyecek kadar büyük.",
+  "videoPickFailed": "{count, plural, =1{Bu video gönderilemedi. Tekrar dene.} other{{count} video gönderilemedi. Tekrar dene.}}",
   "videoFailed": "Bu video hazırlanamadı.",
   "videoShare": "Paylaş",
   "videoClose": "Kapat",

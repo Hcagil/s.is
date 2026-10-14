@@ -62,11 +62,15 @@ final class PhotoManagerVideoGallery implements VideoGallery {
   @override
   Future<VideoPick> prepare(List<GalleryVideo> chosen) async {
     var tooLong = 0;
+    var failed = 0;
     final videos = <VideoSource>[];
     try {
       for (final v in chosen) {
         final e = await AssetEntity.fromId(v.id);
-        if (e == null) continue;
+        if (e == null) {
+          failed++;
+          continue;
+        }
         // A clearly too-long file is not copied at all; the exact check
         // (the length read from the file itself) is in prepareVideoSource.
         if (e.duration > maxVideoMs ~/ 1000 + 1) {
@@ -74,18 +78,26 @@ final class PhotoManagerVideoGallery implements VideoGallery {
           continue;
         }
         final file = await e.originFile;
-        if (file == null) continue;
+        if (file == null) {
+          failed++;
+          continue;
+        }
         final result = await prepareVideoSource(
           files: _files,
           compressor: _lc,
           name: safeFileName(await e.titleAsync),
           bytes: file.openRead(),
+          extension: file.path.contains('.')
+              ? file.path.substring(file.path.lastIndexOf('.') + 1)
+              : null,
         );
         final source = result.source;
         if (source != null) {
           videos.add(source);
         } else if (result.tooLong) {
           tooLong++;
+        } else {
+          failed++;
         }
       }
     } catch (e) {
@@ -98,6 +110,6 @@ final class PhotoManagerVideoGallery implements VideoGallery {
         await PhotoManager.clearFileCache();
       } catch (_) {}
     }
-    return VideoPick(videos: videos, tooLong: tooLong);
+    return VideoPick(videos: videos, tooLong: tooLong, failed: failed);
   }
 }

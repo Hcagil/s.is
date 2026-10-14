@@ -9,6 +9,7 @@
 #   tool/sis_bot.sh revoke                         sign this session out everywhere, delete the file
 #   tool/sis_bot.sh edit <message_id> <text|->    change one of the bot's own messages (within 6 hours)
 #   tool/sis_bot.sh delete <message_id>           delete one of the bot's own messages for everyone
+#   tool/sis_bot.sh attachments <message_id>      save that message's image into .private/bot-attachments/<id>/ (prints the paths)
 #
 # Exit codes: 1 other error, 2 usage or unsafe state file, 3 session lost or
 # superseded (the owner runs the admin tool's `mint`), 4 not permitted (not
@@ -26,8 +27,8 @@ UUID_RE='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F
 
 die() { echo "$2" >&2; exit "$1"; }
 cmd=${1:-}; [ $# -gt 0 ] && shift
-case "$cmd" in read|send|start|status|revoke|edit|delete) ;;
-  *) die 2 "usage: tool/sis_bot.sh read [--since ISO] | send <conversation_id> [text|-] | start <user_id|@tag> [text|-] | status | revoke | edit <message_id> <text|-> | delete <message_id>" ;;
+case "$cmd" in read|send|start|status|revoke|edit|delete|attachments) ;;
+  *) die 2 "usage: tool/sis_bot.sh read [--since ISO] | send <conversation_id> [text|-] | start <user_id|@tag> [text|-] | status | revoke | edit <message_id> <text|-> | delete <message_id> | attachments <message_id>" ;;
 esac
 
 # Body text from the first remaining argument or stdin ('-' or missing).
@@ -50,6 +51,7 @@ case "$cmd" in
          if [ $# -ge 2 ]; then TEXT=$(body_arg "$2"); fi ;;
   edit) [ $# -ge 2 ] && [ -n "$2" ] || die 2 "edit needs a message id and the new text (or - for stdin)"; TEXT=$(body_arg "$2") ;;
   delete) [ $# -ge 1 ] || die 2 "delete needs a message id" ;;
+  attachments) [ $# -ge 1 ] || die 2 "attachments needs a message id" ;;
 esac
 
 # 2. One run at a time.
@@ -133,7 +135,7 @@ case "$cmd" in
     call POST /rest/v1/rpc/bot_ids '{}'   # access probe: refused while the bot is OFF
     call GET "/rest/v1/profiles?select=user_id,display_name"
     names=$(cat "$TMP")
-    q="/rest/v1/messages?select=id,conversation_id,sender_id,body,created_at,reply_to,deleted&order=created_at.asc&limit=500"
+    q="/rest/v1/messages?select=id,conversation_id,sender_id,body,created_at,reply_to,deleted,attachment_path,attachment_mime,attachment_duration_ms&order=created_at.asc&limit=500"
     [ -z "$since" ] || q="$q&created_at=gt.$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))' "$since")"
     call GET "$q"
     NAMES="$names" python3 - "$TMP" "$WORK/convs" >"$WORK/out" <<'PY'
@@ -143,11 +145,13 @@ convs = []
 for m in json.load(open(sys.argv[1])):
     if m.get("deleted"):
         continue
+    img = bool(m.get("attachment_path")) and m.get("attachment_duration_ms") is None and (m.get("attachment_mime") is None or m["attachment_mime"].startswith("image/"))
+    body = (m["body"] + "\n" if m["body"] else "") + "[image " + m["id"] + "]" if img else m["body"]
     if m["conversation_id"] not in convs:
         convs.append(m["conversation_id"])
     print(json.dumps({"id": m["id"], "conversation_id": m["conversation_id"],
                       "sender_id": m["sender_id"], "sender_name": names.get(m["sender_id"]),
-                      "body": m["body"], "created_at": m["created_at"], "reply_to": m["reply_to"]},
+                      "body": body, "created_at": m["created_at"], "reply_to": m["reply_to"]},
                      ensure_ascii=False))
 open(sys.argv[2], "w").write("\n".join(convs))
 PY
@@ -194,5 +198,48 @@ PY
     [[ $1 =~ $UUID_RE ]] || die 2 "not a message id"
     call POST /rest/v1/rpc/delete_message "{\"message\":\"$1\"}"
     echo "deleted $1"
+    ;;
+
+  attachments)
+    [[ $1 =~ $UUID_RE ]] || die 2 "not a message id"
+    # RLS decides: the storage policy gives the bot only what it may read as a member.
+    call GET "/rest/v1/messages?select=attachment_path,attachment_name,attachment_mime,attachment_duration_ms&id=eq.$1&deleted=eq.false"
+    ACCESS="$ACCESS" URL="$URL" ANON="$ANON" python3 - "$TMP" "$1" "$ROOT/.private/bot-attachments" <<'PY'
+import json, os, re, sys, urllib.error, urllib.parse, urllib.request
+ACCESS, URL, ANON = os.environ["ACCESS"], os.environ["URL"], os.environ["ANON"]
+def fail(msg):
+    sys.stderr.write(msg + "\n")
+    sys.exit(1)
+rows = json.load(open(sys.argv[1]))
+if not rows:
+    fail("no such message (or not readable)")
+row = rows[0]
+path, name, mime = row.get("attachment_path"), row.get("attachment_name"), row.get("attachment_mime")
+if not path or row.get("attachment_duration_ms") is not None or (mime and not mime.startswith("image/")):
+    fail("that message has no image")
+req = urllib.request.Request(URL + "/storage/v1/object/authenticated/attachments/" + urllib.parse.quote(path))
+req.add_header("apikey", ANON)
+req.add_header("Authorization", "Bearer " + ACCESS)
+try:
+    data = urllib.request.urlopen(req, timeout=60).read()
+except urllib.error.HTTPError as e:
+    fail("download failed (http %d)" % e.code)
+except (urllib.error.URLError, OSError):
+    fail("network error")
+ext = ""
+for cand in (os.path.splitext(name or "")[1], os.path.splitext(path)[1],
+             {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}.get(mime or ""),
+             ".jpg" if data[:3] == b"\xff\xd8\xff" else ".png" if data[:4] == b"\x89PNG" else
+             ".webp" if data[:4] == b"RIFF" and data[8:12] == b"WEBP" else ".gif" if data[:4] == b"GIF8" else ""):
+    if cand and re.fullmatch(r"\.[A-Za-z0-9]{1,5}", cand):
+        ext = cand.lower()
+        break
+out = os.path.join(sys.argv[3], sys.argv[2])
+os.makedirs(out, mode=0o700, exist_ok=True)
+dest = os.path.join(out, "1" + ext)
+with os.fdopen(os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+    f.write(data)
+print(os.path.abspath(dest))
+PY
     ;;
 esac

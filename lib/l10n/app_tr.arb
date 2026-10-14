@@ -690,5 +690,14 @@
   "findAskBody": "SIS, kimlerin zaten burada olduğunu göstermek için rehberine bakabilir.",
   "findAllow": "Rehbere izin ver",
   "findLater": "Daha sonra tekrar dene.",
-  "findEmpty": "Kişi bulunamadı"
+  "findEmpty": "Kişi bulunamadı",
+  "appearanceModeTitle": "Açık veya koyu",
+  "appearanceModeFollow": "Sistem varsayılanı",
+  "appearanceModeFollowHint": "Telefonunuzun Açık veya Koyu ayarına uyar",
+  "appearanceModeLight": "Açık",
+  "appearanceModeDark": "Koyu",
+  "appearanceModeNoteBuiltIn": "Temanız kendi renklerini korur; bu yalnızca açık ya da koyu sürümünü seçer.",
+  "appearanceModeNoteFollows": "“{name}” bu seçimi izler.",
+  "appearanceModeNoteAlwaysLight": "“{name}” her zaman açıktır. Burada ne seçerseniz seçin açık kalır.",
+  "appearanceModeNoteAlwaysDark": "“{name}” her zaman koyudur. Burada ne seçerseniz seçin koyu kalır."
 }

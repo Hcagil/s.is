@@ -2290,4 +2290,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get findEmpty => 'No contacts found';
+
+  @override
+  String get appearanceModeTitle => 'Light or dark';
+
+  @override
+  String get appearanceModeFollow => 'Follow phone';
+
+  @override
+  String get appearanceModeFollowHint =>
+      'Matches your phone’s Light or Dark setting';
+
+  @override
+  String get appearanceModeLight => 'Light';
+
+  @override
+  String get appearanceModeDark => 'Dark';
+
+  @override
+  String get appearanceModeNoteBuiltIn =>
+      'Your theme keeps its own colours; this only picks the light or dark version.';
+
+  @override
+  String appearanceModeNoteFollows(String name) {
+    return '“$name” follows this choice.';
+  }
+
+  @override
+  String appearanceModeNoteAlwaysLight(String name) {
+    return '“$name” is always light. It stays light whatever you choose here.';
+  }
+
+  @override
+  String appearanceModeNoteAlwaysDark(String name) {
+    return '“$name” is always dark. It stays dark whatever you choose here.';
+  }
 }

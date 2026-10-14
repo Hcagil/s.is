@@ -2266,4 +2266,39 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get findEmpty => 'Kişi bulunamadı';
+
+  @override
+  String get appearanceModeTitle => 'Açık veya koyu';
+
+  @override
+  String get appearanceModeFollow => 'Sistem varsayılanı';
+
+  @override
+  String get appearanceModeFollowHint =>
+      'Telefonunuzun Açık veya Koyu ayarına uyar';
+
+  @override
+  String get appearanceModeLight => 'Açık';
+
+  @override
+  String get appearanceModeDark => 'Koyu';
+
+  @override
+  String get appearanceModeNoteBuiltIn =>
+      'Temanız kendi renklerini korur; bu yalnızca açık ya da koyu sürümünü seçer.';
+
+  @override
+  String appearanceModeNoteFollows(String name) {
+    return '“$name” bu seçimi izler.';
+  }
+
+  @override
+  String appearanceModeNoteAlwaysLight(String name) {
+    return '“$name” her zaman açıktır. Burada ne seçerseniz seçin açık kalır.';
+  }
+
+  @override
+  String appearanceModeNoteAlwaysDark(String name) {
+    return '“$name” her zaman koyudur. Burada ne seçerseniz seçin koyu kalır.';
+  }
 }

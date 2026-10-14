@@ -4051,6 +4051,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No contacts found'**
   String get findEmpty;
+
+  /// Appearance row name and title of its choice card
+  ///
+  /// In en, this message translates to:
+  /// **'Light or dark'**
+  String get appearanceModeTitle;
+
+  /// Light or dark option: match the phone setting
+  ///
+  /// In en, this message translates to:
+  /// **'Follow phone'**
+  String get appearanceModeFollow;
+
+  /// Small line under the Follow phone option
+  ///
+  /// In en, this message translates to:
+  /// **'Matches your phone’s Light or Dark setting'**
+  String get appearanceModeFollowHint;
+
+  /// Light or dark option
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get appearanceModeLight;
+
+  /// Light or dark option
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get appearanceModeDark;
+
+  /// Note on the light or dark card when a built-in theme is active
+  ///
+  /// In en, this message translates to:
+  /// **'Your theme keeps its own colours; this only picks the light or dark version.'**
+  String get appearanceModeNoteBuiltIn;
+
+  /// Note on the light or dark card for an automatic custom theme
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” follows this choice.'**
+  String appearanceModeNoteFollows(String name);
+
+  /// Note on the light or dark card for a custom theme fixed to light
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” is always light. It stays light whatever you choose here.'**
+  String appearanceModeNoteAlwaysLight(String name);
+
+  /// Note on the light or dark card for a custom theme fixed to dark
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” is always dark. It stays dark whatever you choose here.'**
+  String appearanceModeNoteAlwaysDark(String name);
 }
 
 class _AppLocalizationsDelegate

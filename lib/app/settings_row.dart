@@ -37,7 +37,17 @@ class SisSettingsRow extends StatelessWidget {
                 const SizedBox(width: 16),
                 Expanded(child: Text(title, style: style)),
                 if (value != null)
-                  Text(value!, style: style?.copyWith(color: t.muted)),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.sizeOf(context).width * 0.5,
+                    ),
+                    child: Text(
+                      value!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: style?.copyWith(color: t.muted),
+                    ),
+                  ),
                 const SizedBox(width: 4),
                 Icon(Icons.chevron_right, color: t.muted),
               ],

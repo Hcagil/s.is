@@ -822,6 +822,15 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     // (a failed send) is removed after.
     if (result case Ok(:final value)) {
       _append(value);
+      // The phone's own copy stays on the stored entry to the end, even when
+      // the stored row was not paired with its pending bubble above.
+      final stored = state.value;
+      final at = stored?.indexWhere((m) => m.id == value.id) ?? -1;
+      if (stored != null && at >= 0 && stored[at].localImage == null) {
+        state = AsyncData(
+          [...stored]..[at] = stored[at].withLocalImage(pending.localImage),
+        );
+      }
       if (ref.mounted) ref.read(replyingToProvider.notifier).clear();
     }
     final current = state.value;

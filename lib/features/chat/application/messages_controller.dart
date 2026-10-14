@@ -1021,16 +1021,28 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         ? albumOf(state.value ?? const <Message>[], message)
         : [message];
     Result<void> result = const Ok(null);
-    for (final target in conversationIds) {
-      final group = photos.length > 1 ? randomMessageId() : null;
-      for (final photo in photos) {
-        result = await ref.read(chatRepositoryProvider).forward(
-          photo.photoGroup == null ? photo : photo.withPhotoGroup(group),
-          [target],
-        );
+    if (photos.length < 2) {
+      // One message (a lone photo leaves any album): one call for all targets.
+      final one = photos.first;
+      result = await ref
+          .read(chatRepositoryProvider)
+          .forward(
+            one.photoGroup == null ? one : one.withPhotoGroup(null),
+            conversationIds,
+          );
+    } else {
+      // An album: every target gets its own fresh group id.
+      for (final target in conversationIds) {
+        final group = randomMessageId();
+        for (final photo in photos) {
+          result = await ref.read(chatRepositoryProvider).forward(
+            photo.withPhotoGroup(group),
+            [target],
+          );
+          if (result is Err) break;
+        }
         if (result is Err) break;
       }
-      if (result is Err) break;
     }
     if (result is Ok && ref.mounted) {
       unawaited(ref.read(conversationListProvider.notifier).reloadQuietly());

@@ -30,7 +30,7 @@ import '../support/video_fakes.dart';
 /// one group per album, the caption on its first photo, a NEW group for each
 /// forward target, no group on a plain forward.
 ///
-/// Uses priya, quinlan and kai (supabase/seed.sql), on the random local test
+/// Uses priya, quinlan and vp-ada (supabase/seed.sql), on the random local test
 /// password (support/service_key.dart); run with --concurrency=1.
 const _url = String.fromEnvironment(
   'SUPABASE_TEST_URL',
@@ -93,7 +93,7 @@ void main() {
   setUpAll(() async {
     reidClient = await _signedIn('priya@integration.test');
     bethClient = await _signedIn('quinlan@integration.test');
-    coraClient = await _signedIn('kai@integration.test');
+    coraClient = await _signedIn('vp-ada@integration.test');
     reid = SupabaseChatRepository(reidClient);
     beth = SupabaseChatRepository(bethClient);
     cora = SupabaseChatRepository(coraClient);

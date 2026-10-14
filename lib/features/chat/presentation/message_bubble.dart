@@ -307,7 +307,8 @@ class _Bubble extends StatelessWidget {
                           ),
                         ],
                       )
-                    : _Attachment(message),
+                    // Centred: a wide caption makes the bubble wider than the photo.
+                    : Align(child: _Attachment(message)),
               // An image may be sent without a caption, so an empty body must
               // render nothing at all rather than an empty line. A deleted
               // message never shows a time, but (defensively) may still carry

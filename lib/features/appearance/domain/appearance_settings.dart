@@ -18,6 +18,10 @@ enum TextSize {
 /// Language choice; system means the phone's current language.
 enum AppLanguage { system, en, tr }
 
+/// Light or dark for every theme that does not fix its own; system means the
+/// phone's setting.
+enum AppearanceMode { system, light, dark }
+
 const _keep = Object();
 
 /// The member's appearance choices.
@@ -31,6 +35,7 @@ final class AppearanceSettings {
     this.customThemes = const <CustomTheme>[],
     this.customThemeId,
     this.wallpaper = Wallpaper.none,
+    this.mode = AppearanceMode.system,
   });
 
   final AppThemeId themeId;
@@ -48,6 +53,9 @@ final class AppearanceSettings {
   /// The member's own wallpaper; none means the theme's own look.
   final Wallpaper wallpaper;
 
+  /// Light or dark for all themes except a custom theme that fixes its own.
+  final AppearanceMode mode;
+
   AppearanceSettings copyWith({
     AppThemeId? themeId,
     bool? systemFont,
@@ -57,6 +65,7 @@ final class AppearanceSettings {
     List<CustomTheme>? customThemes,
     Object? customThemeId = _keep,
     Wallpaper? wallpaper,
+    AppearanceMode? mode,
   }) {
     return AppearanceSettings(
       themeId: themeId ?? this.themeId,
@@ -69,6 +78,7 @@ final class AppearanceSettings {
           ? this.customThemeId
           : customThemeId as String?,
       wallpaper: wallpaper ?? this.wallpaper,
+      mode: mode ?? this.mode,
     );
   }
 
@@ -107,7 +117,8 @@ final class AppearanceSettings {
       other.language == language &&
       _sameThemes(other.customThemes, customThemes) &&
       other.customThemeId == customThemeId &&
-      other.wallpaper == wallpaper;
+      other.wallpaper == wallpaper &&
+      other.mode == mode;
 
   @override
   int get hashCode => Object.hash(
@@ -119,6 +130,7 @@ final class AppearanceSettings {
     Object.hashAll(customThemes),
     customThemeId,
     wallpaper,
+    mode,
   );
 }
 

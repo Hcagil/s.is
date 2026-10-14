@@ -258,6 +258,13 @@ class _ComposerState extends ConsumerState<_Composer>
         isError: true,
       );
     }
+    if (pick.failed > 0) {
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).videoPickFailed(pick.failed),
+        isError: true,
+      );
+    }
     if (pick.videos.isEmpty) return;
     final chosen = viaGrid
         ? pick.videos

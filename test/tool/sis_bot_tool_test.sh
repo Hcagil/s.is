@@ -14,7 +14,10 @@
 # bot's first Debug message carrying the line and its second not; revoke; the sign-up hook refusing a
 # public sign-up of the bot address; and probes with the bot's REAL JWT of
 # storage, avatars, profile update, add_members, set_admin and Realtime; admin
-# rename (trim, 1-80 characters, exact quotes/backslashes, no bot -> exit 1).
+# rename (trim, 1-80 characters, exact quotes/backslashes, no bot -> exit 1);
+# edit and delete of the bot's own messages (stdin, 4000 characters; exit 2 on a
+# bad uuid or empty text; 4 on another user's, a >6 h old (edit) or a deleted
+# message and when OFF; 3 when superseded; no token in any output).
 # While the tools run, a poller checks that no token or key is in any argv and
 # that sis_bot.sh keeps its temp files in one mode-700 directory it removes.
 set -euo pipefail
@@ -228,6 +231,72 @@ check "the refused send left no log row" \
   test "$(sql "select count(*) from app_private.bot_actions where bot_id = '$BOT_ID' and kind = 'send'")" = 20
 sql "delete from app_private.bot_actions where bot_id = '$BOT_ID'" >/dev/null
 
+# 7b edit and delete own messages (2, 4, never a token) -------------------------------
+mid() { sql "select id from public.messages where sender_id = '$BOT_ID' and body = '$1'"; }
+body_of() { sql "select body from public.messages where id = '$1'"; }
+gone() { test "$(sql "select deleted_at is not null from public.messages where id = '$1'")" = t; }
+# no_token NAME: no refresh token (old or current) and nothing JWT-shaped in the last output
+no_token() {
+  check "$1: no token in the output" bash -c "! grep -qF -e '$2' -e \"\$(jq -r .refresh_token '$STATE')\" '$BOX/out' '$BOX/err' \
+    && ! grep -qE 'eyJ[A-Za-z0-9_-]{8,}\\.' '$BOX/out' '$BOX/err'"
+}
+expect_exit 0 "send a message to edit" "$BOT" send "$DEBUG" "to be edited"
+M1=$(mid 'to be edited')
+t=$(jq -r .refresh_token "$STATE")
+watch 0 "edit own message" "$t" "$BOT" edit "$M1" "edited body"
+same_out() { test "$(cat "$BOX/out")" = "$1"; }
+check "edit prints 'edited <id>'" same_out "edited $M1"
+no_token "edit" "$t"
+check "the body is replaced" test "$(body_of "$M1")" = "edited body"
+expect_exit 0 "edit from stdin" bash -c "printf 'piped\nedit' | '$BOT' edit '$M1' -"
+check "the stdin body arrived unchanged" test "$(body_of "$M1")" = $'piped\nedit'
+n4000=$(printf 'ş%.0s' $(seq 4000))
+expect_exit 0 "edit to 4000 characters (multi-byte, stdin)" bash -c "printf '%s' '$n4000' | '$BOT' edit '$M1' -"
+check "the 4000-character body is stored" test "$(sql "select char_length(body) from public.messages where id = '$M1'")" = 4000
+expect_exit 0 "edit back" "$BOT" edit "$M1" "edited body"
+# open_stdin cmd...: cmd with a stdin that stays open and silent, killed after
+# 10 s, so a command that waits on stdin when it should not shows as exit 124.
+open_stdin() { timeout 10 "$@" < <(sleep 30); }
+expect_exit 2 "edit with empty text (stdin left unread)" open_stdin "$BOT" edit "$M1" ""
+expect_exit 2 "edit with empty stdin" bash -c "printf '' | '$BOT' edit '$M1' -"
+expect_exit 2 "edit with no text (stdin left unread)" open_stdin "$BOT" edit "$M1"
+expect_exit 2 "edit with no id" open_stdin "$BOT" edit
+expect_exit 2 "edit a bad uuid" "$BOT" edit "not-a-uuid" "x"
+expect_exit 2 "delete a bad uuid" "$BOT" delete "1234"
+expect_exit 2 "delete with no id" open_stdin "$BOT" delete
+check "the refused edits left the body alone" test "$(body_of "$M1")" = "edited body"
+ANN_MSG=$(sql "select id from public.messages where sender_id = '$ANN' and body = 'hello from ann'")
+t=$(jq -r .refresh_token "$STATE")
+watch 4 "edit another user's message" "$t" "$BOT" edit "$ANN_MSG" "hijacked"
+no_token "edit refused" "$t"
+expect_exit 4 "delete another user's message" "$BOT" delete "$ANN_MSG"
+check "ann's message is unchanged and not deleted" \
+  test "$(sql "select body || '|' || (deleted_at is null) from public.messages where id = '$ANN_MSG'")" = "hello from ann|true"
+# older than 6 h: edit refused, a 5 h old one still editable
+expect_exit 0 "send a message to age" "$BOT" send "$DEBUG" "aged seven"
+expect_exit 0 "send another to age" "$BOT" send "$DEBUG" "aged five"
+M7=$(mid 'aged seven'); M5=$(mid 'aged five')
+sql "update public.messages set created_at = now() - interval '7 hours' where id = '$M7';
+     update public.messages set created_at = now() - interval '5 hours' where id = '$M5'" >/dev/null
+expect_exit 4 "edit a message older than 6 h" "$BOT" edit "$M7" "too late"
+check "the old message is unchanged" test "$(body_of "$M7")" = "aged seven"
+expect_exit 0 "control: edit a 5 h old message" "$BOT" edit "$M5" "still in time"
+check "the 5 h old message is edited" test "$(body_of "$M5")" = "still in time"
+t=$(jq -r .refresh_token "$STATE")
+watch 0 "delete own message" "$t" "$BOT" delete "$M1"
+check "delete prints 'deleted <id>'" same_out "deleted $M1"
+no_token "delete" "$t"
+check "the message is deleted" gone "$M1"
+expect_exit 4 "delete an already deleted message" "$BOT" delete "$M1"
+expect_exit 4 "edit a deleted message" "$BOT" edit "$M1" "zombie"
+expect_exit 0 "admin off (edit/delete)" "$ADMIN" off
+expect_exit 4 "OFF: edit own message" "$BOT" edit "$M5" "while off"
+expect_exit 4 "OFF: delete own message" "$BOT" delete "$M5"
+expect_exit 0 "admin on (edit/delete)" "$ADMIN" on
+check "OFF left the message as it was" \
+  test "$(sql "select body || '|' || (deleted_at is null) from public.messages where id = '$M5'")" = "still in time|true"
+sql "delete from app_private.bot_actions where bot_id = '$BOT_ID'" >/dev/null
+
 # 8 usage and unsafe file (2) ------------------------------------------------------------
 expect_exit 2 "no command" "$BOT"
 expect_exit 2 "send without a conversation" "$BOT" send
@@ -270,6 +339,8 @@ mv "$BOX/saved.json" "$STATE"
 BOT_JWT=$(token_for sis-destek-bot@example.com)
 watch 3 "superseded by a second bot sign-in" "$(jq -r .refresh_token "$STATE")" "$BOT" status
 check "the advice names the admin mint" grep -q 'mint' "$BOX/err" "$BOX/out"
+expect_exit 3 "superseded: edit" "$BOT" edit "$ANN" "x"
+expect_exit 3 "superseded: delete" "$BOT" delete "$ANN"
 
 # 12 probes with the bot's REAL JWT ---------------------------------------------------------
 check "probe: the bot's JWT has app access" test "$(rpc "$BOT_JWT" bot_ids '{}' | jq -r '.[0]')" = "$BOT_ID"

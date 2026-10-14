@@ -115,7 +115,14 @@ Future<T?> showFloatingCard<T>(
         delegate: _CardLayout(
           anchor,
           alignEnd,
-          MediaQuery.viewPaddingOf(dialog),
+          // The keyboard counts as unusable room too, so a card with a text
+          // field stays above it.
+          MediaQuery.viewPaddingOf(dialog).copyWith(
+            bottom: math.max(
+              MediaQuery.viewPaddingOf(dialog).bottom,
+              MediaQuery.viewInsetsOf(dialog).bottom,
+            ),
+          ),
           below,
         ),
         child: GestureDetector(

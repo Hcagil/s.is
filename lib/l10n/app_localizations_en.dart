@@ -1677,6 +1677,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoTooBig => 'This video is too large to send.';
 
   @override
+  String videoPickFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count videos could not be sent. Please try again.',
+      one: 'This video could not be sent. Please try again.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get videoFailed => 'This video could not be prepared.';
 
   @override
@@ -1944,6 +1955,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get makerBrushHint => 'Paint to erase or bring back parts';
+
+  @override
+  String get makerCutoutPreparing => 'Removing background…';
+
+  @override
+  String get makerCutoutUnavailable =>
+      'Couldn\'t remove the background right now. Your image stays as it is.';
+
+  @override
+  String get makerCutoutNoSupport =>
+      'This phone can\'t remove backgrounds. Your image stays as it is.';
 
   @override
   String get makerEditTitle => 'Edit sticker';
@@ -2279,4 +2301,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get findEmpty => 'No contacts found';
+
+  @override
+  String get appearanceModeTitle => 'Light or dark';
+
+  @override
+  String get appearanceModeFollow => 'Follow phone';
+
+  @override
+  String get appearanceModeFollowHint =>
+      'Matches your phone’s Light or Dark setting';
+
+  @override
+  String get appearanceModeLight => 'Light';
+
+  @override
+  String get appearanceModeDark => 'Dark';
+
+  @override
+  String get appearanceModeNoteBuiltIn =>
+      'Your theme keeps its own colours; this only picks the light or dark version.';
+
+  @override
+  String appearanceModeNoteFollows(String name) {
+    return '“$name” follows this choice.';
+  }
+
+  @override
+  String appearanceModeNoteAlwaysLight(String name) {
+    return '“$name” is always light. It stays light whatever you choose here.';
+  }
+
+  @override
+  String appearanceModeNoteAlwaysDark(String name) {
+    return '“$name” is always dark. It stays dark whatever you choose here.';
+  }
 }

@@ -54,6 +54,10 @@ class AppearanceController extends Notifier<AppearanceSettings> {
   Future<void> setLanguage(AppLanguage language) =>
       _update(state.copyWith(language: language));
 
+  /// Sets light, dark, or follow the phone.
+  Future<void> setMode(AppearanceMode mode) =>
+      _update(state.copyWith(mode: mode));
+
   /// Makes a custom theme, selects it and returns its id.
   Future<String> createCustomTheme({
     required String name,

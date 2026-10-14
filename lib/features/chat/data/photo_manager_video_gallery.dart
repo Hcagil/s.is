@@ -1,7 +1,9 @@
 import 'dart:developer';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:light_compressor_v2/light_compressor_v2.dart' as lc;
+import 'package:path/path.dart' as p;
 import 'package:photo_manager/photo_manager.dart';
 
 import '../domain/file_attachment.dart';
@@ -16,11 +18,19 @@ import 'video_source_prep.dart';
 /// (ARCHITECTURE rule 4): verified on a device. Videos only.
 final class PhotoManagerVideoGallery implements VideoGallery {
   /// Creates the video gallery; [compressor] is replaceable for tests.
-  PhotoManagerVideoGallery(this._files, {lc.LightCompressor? compressor})
-    : _lc = compressor ?? lc.LightCompressor();
+  PhotoManagerVideoGallery(
+    this._files, {
+    lc.LightCompressor? compressor,
+    Future<File?> Function(AssetEntity)? originFile,
+  }) : _lc = compressor ?? lc.LightCompressor(),
+       _originFile = originFile ?? ((e) => e.originFile);
 
   final DeviceFiles _files;
   final lc.LightCompressor _lc;
+
+  /// Resolves an asset's file; replaceable because photo_manager asserts the
+  /// platform, so tests cannot reach the real call off a phone.
+  final Future<File?> Function(AssetEntity) _originFile;
 
   @override
   Future<GalleryAccess> requestAccess() =>
@@ -62,42 +72,55 @@ final class PhotoManagerVideoGallery implements VideoGallery {
   @override
   Future<VideoPick> prepare(List<GalleryVideo> chosen) async {
     var tooLong = 0;
+    var failed = 0;
     final videos = <VideoSource>[];
     try {
       for (final v in chosen) {
-        final e = await AssetEntity.fromId(v.id);
-        if (e == null) continue;
-        // A clearly too-long file is not copied at all; the exact check
-        // (the length read from the file itself) is in prepareVideoSource.
-        if (e.duration > maxVideoMs ~/ 1000 + 1) {
-          tooLong++;
-          continue;
-        }
-        final file = await e.originFile;
-        if (file == null) continue;
-        final result = await prepareVideoSource(
-          files: _files,
-          compressor: _lc,
-          name: safeFileName(await e.titleAsync),
-          bytes: file.openRead(),
-        );
-        final source = result.source;
-        if (source != null) {
-          videos.add(source);
-        } else if (result.tooLong) {
-          tooLong++;
+        try {
+          final e = await AssetEntity.fromId(v.id);
+          if (e == null) {
+            failed++;
+            continue;
+          }
+          // A clearly too-long file is not copied at all; the exact check
+          // (the length read from the file itself) is in prepareVideoSource.
+          if (e.duration > maxVideoMs ~/ 1000 + 1) {
+            tooLong++;
+            continue;
+          }
+          final file = await _originFile(e);
+          if (file == null) {
+            failed++;
+            continue;
+          }
+          final result = await prepareVideoSource(
+            files: _files,
+            compressor: _lc,
+            name: safeFileName(await e.titleAsync),
+            bytes: file.openRead(),
+            extension: p.extension(file.path).replaceFirst('.', ''),
+          );
+          final source = result.source;
+          if (source != null) {
+            videos.add(source);
+          } else if (result.tooLong) {
+            tooLong++;
+          } else {
+            failed++;
+          }
+        } catch (err) {
+          failed++;
+          log(
+            'Preparing a gallery video failed: ${err.runtimeType}',
+            name: 'sis.video',
+          );
         }
       }
-    } catch (e) {
-      log(
-        'Preparing gallery videos failed: ${e.runtimeType}',
-        name: 'sis.video',
-      );
     } finally {
       try {
         await PhotoManager.clearFileCache();
       } catch (_) {}
     }
-    return VideoPick(videos: videos, tooLong: tooLong);
+    return VideoPick(videos: videos, tooLong: tooLong, failed: failed);
   }
 }

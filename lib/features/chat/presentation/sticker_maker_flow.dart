@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/notice.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/chat_controllers.dart';
 import 'message_menu_card.dart';
@@ -61,6 +62,10 @@ Future<void> openStickerMaker(BuildContext context, WidgetRef ref) async {
   await startStickerMaker(context, ref);
 }
 
+/// How long the cut-out may take (the model download included) before the whole photo is kept.
+@visibleForTesting
+const stickerCutoutTimeout = Duration(seconds: 20);
+
 /// Gallery, square crop, then the cut-out step (or the editor when this
 /// phone cannot cut out). The cut-out arrives later and is swapped in.
 Future<void> startStickerMaker(
@@ -90,16 +95,30 @@ Future<void> startStickerMaker(
   if (supported) {
     draft.cutOut = true;
     unawaited(
-      cutter.mask(jpeg).then((m) async {
-        if (draft.closed) return;
-        if (m == null) {
-          // The member just sees the whole image; once in the log is enough.
-          debugPrint('sis.sticker cut-out unavailable, showing whole image');
-          draft.setCutOut(false);
-        } else {
-          await draft.setMask(m);
-        }
-      }),
+      cutter
+          .mask(jpeg)
+          .timeout(stickerCutoutTimeout, onTimeout: () => null)
+          .then((m) async {
+            if (draft.closed) return;
+            if (m == null) {
+              if (context.mounted) {
+                showSisNotice(
+                  context,
+                  AppLocalizations.of(context).makerCutoutUnavailable,
+                  isError: true,
+                );
+              }
+              draft.setCutOut(false);
+            } else {
+              await draft.setMask(m);
+            }
+          }),
+    );
+  } else {
+    showSisNotice(
+      context,
+      AppLocalizations.of(context).makerCutoutNoSupport,
+      isError: true,
     );
   }
   final route = stickerMakerRoute(

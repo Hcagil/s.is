@@ -18,6 +18,7 @@ final class SharedPrefsAppearanceStore implements AppearanceStore {
   static const _customThemesKey = 'sis.appearance.custom_themes';
   static const _customThemeIdKey = 'sis.appearance.custom_theme_id';
   static const _wallpaperKey = 'sis.appearance.wallpaper';
+  static const _modeKey = 'sis.appearance.mode';
 
   @override
   Future<AppearanceSettings> load() async {
@@ -44,6 +45,9 @@ final class SharedPrefsAppearanceStore implements AppearanceStore {
         language:
             AppLanguage.values.asNameMap()[prefs.getString(_languageKey)] ??
             d.language,
+        mode:
+            AppearanceMode.values.asNameMap()[prefs.getString(_modeKey)] ??
+            d.mode,
         customThemes: customThemes,
         customThemeId: customThemeId,
         wallpaper: _wallpaper(prefs.getString(_wallpaperKey)),
@@ -61,6 +65,7 @@ final class SharedPrefsAppearanceStore implements AppearanceStore {
     await prefs.setString(_chatSizeKey, settings.chatTextSize.name);
     await prefs.setString(_appSizeKey, settings.appTextSize.name);
     await prefs.setString(_languageKey, settings.language.name);
+    await prefs.setString(_modeKey, settings.mode.name);
     if (settings.customThemes.isNotEmpty) {
       await prefs.setString(
         _customThemesKey,

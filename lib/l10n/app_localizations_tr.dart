@@ -1654,6 +1654,17 @@ class AppLocalizationsTr extends AppLocalizations {
   String get videoTooBig => 'Bu video gönderilemeyecek kadar büyük.';
 
   @override
+  String videoPickFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count video gönderilemedi. Tekrar dene.',
+      one: 'Bu video gönderilemedi. Tekrar dene.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get videoFailed => 'Bu video hazırlanamadı.';
 
   @override
@@ -1921,6 +1932,17 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get makerBrushHint => 'Silmek ya da geri getirmek için boya';
+
+  @override
+  String get makerCutoutPreparing => 'Arka plan kaldırılıyor…';
+
+  @override
+  String get makerCutoutUnavailable =>
+      'Arka plan şu an kaldırılamadı. Görselin olduğu gibi kaldı.';
+
+  @override
+  String get makerCutoutNoSupport =>
+      'Bu telefon arka planı kaldıramıyor. Görselin olduğu gibi kaldı.';
 
   @override
   String get makerEditTitle => 'Çıkartmayı düzenle';
@@ -2255,4 +2277,39 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get findEmpty => 'Kişi bulunamadı';
+
+  @override
+  String get appearanceModeTitle => 'Açık veya koyu';
+
+  @override
+  String get appearanceModeFollow => 'Sistem varsayılanı';
+
+  @override
+  String get appearanceModeFollowHint =>
+      'Telefonunuzun Açık veya Koyu ayarına uyar';
+
+  @override
+  String get appearanceModeLight => 'Açık';
+
+  @override
+  String get appearanceModeDark => 'Koyu';
+
+  @override
+  String get appearanceModeNoteBuiltIn =>
+      'Temanız kendi renklerini korur; bu yalnızca açık ya da koyu sürümünü seçer.';
+
+  @override
+  String appearanceModeNoteFollows(String name) {
+    return '“$name” bu seçimi izler.';
+  }
+
+  @override
+  String appearanceModeNoteAlwaysLight(String name) {
+    return '“$name” her zaman açıktır. Burada ne seçerseniz seçin açık kalır.';
+  }
+
+  @override
+  String appearanceModeNoteAlwaysDark(String name) {
+    return '“$name” her zaman koyudur. Burada ne seçerseniz seçin koyu kalır.';
+  }
 }

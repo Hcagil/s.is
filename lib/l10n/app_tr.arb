@@ -508,6 +508,7 @@
   "videoCancelSend": "İptal",
   "videoTooLong": "{count, plural, =1{1 video 5 dakikadan uzun olduğu için eklenmedi.} other{{count} video 5 dakikadan uzun olduğu için eklenmedi.}}",
   "videoTooBig": "Bu video gönderilemeyecek kadar büyük.",
+  "videoPickFailed": "{count, plural, =1{Bu video gönderilemedi. Tekrar dene.} other{{count} video gönderilemedi. Tekrar dene.}}",
   "videoFailed": "Bu video hazırlanamadı.",
   "videoShare": "Paylaş",
   "videoClose": "Kapat",
@@ -592,6 +593,9 @@
   "makerUndo": "Geri al",
   "makerReset": "Sıfırla",
   "makerBrushHint": "Silmek ya da geri getirmek için boya",
+  "makerCutoutPreparing": "Arka plan kaldırılıyor…",
+  "makerCutoutUnavailable": "Arka plan şu an kaldırılamadı. Görselin olduğu gibi kaldı.",
+  "makerCutoutNoSupport": "Bu telefon arka planı kaldıramıyor. Görselin olduğu gibi kaldı.",
   "makerEditTitle": "Çıkartmayı düzenle",
   "makerEditHint": "Çıkartmana yazı ekle ya da çiz",
   "makerToAlbum": "Albüme kaydet",
@@ -687,5 +691,14 @@
   "findAskBody": "SIS, kimlerin zaten burada olduğunu göstermek için rehberine bakabilir.",
   "findAllow": "Rehbere izin ver",
   "findLater": "Daha sonra tekrar dene.",
-  "findEmpty": "Kişi bulunamadı"
+  "findEmpty": "Kişi bulunamadı",
+  "appearanceModeTitle": "Açık veya koyu",
+  "appearanceModeFollow": "Sistem varsayılanı",
+  "appearanceModeFollowHint": "Telefonunuzun Açık veya Koyu ayarına uyar",
+  "appearanceModeLight": "Açık",
+  "appearanceModeDark": "Koyu",
+  "appearanceModeNoteBuiltIn": "Temanız kendi renklerini korur; bu yalnızca açık ya da koyu sürümünü seçer.",
+  "appearanceModeNoteFollows": "“{name}” bu seçimi izler.",
+  "appearanceModeNoteAlwaysLight": "“{name}” her zaman açıktır. Burada ne seçerseniz seçin açık kalır.",
+  "appearanceModeNoteAlwaysDark": "“{name}” her zaman koyudur. Burada ne seçerseniz seçin koyu kalır."
 }

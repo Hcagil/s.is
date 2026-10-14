@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
+import com.google.android.gms.common.moduleinstall.ModuleInstall
+import com.google.android.gms.common.moduleinstall.ModuleInstallRequest
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenter
@@ -20,6 +22,24 @@ class StickerCutout(private val context: Context) {
     // False on a phone without Google Play services (no model can be had).
     fun supported(): Boolean =
         GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
+
+    // Asks Google Play services to install the segmentation model now, so it is
+    // (nearly) ready by the time mask() runs. Fire and forget: errors are ignored,
+    // the Dart timeout handles a model that never arrives.
+    // API: ModuleInstallClient (developers.google.com/android/guides/module-install-apis);
+    // SubjectSegmenter implements OptionalModuleApi.
+    fun requestModel() {
+        try {
+            val seg = SubjectSegmentation.getClient(
+                SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build()
+            )
+            ModuleInstall.getClient(context)
+                .installModules(ModuleInstallRequest.newBuilder().addApi(seg).build())
+                .addOnCompleteListener { seg.close() }
+        } catch (e: Throwable) {
+            // Best effort only.
+        }
+    }
 
     // [onDone] gets 512*512 foreground-confidence bytes (0..255, row-major), or
     // null on any failure or when no subject was found. Called exactly once.

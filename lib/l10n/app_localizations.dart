@@ -2954,6 +2954,12 @@ abstract class AppLocalizations {
   /// **'This video is too large to send.'**
   String get videoTooBig;
 
+  /// Notice after picked videos could not be read or copied
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{This video could not be sent. Please try again.} other{{count} videos could not be sent. Please try again.}}'**
+  String videoPickFailed(int count);
+
   /// Notice when shrinking a video failed
   ///
   /// In en, this message translates to:
@@ -3457,6 +3463,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Paint to erase or bring back parts'**
   String get makerBrushHint;
+
+  /// Shown while background removal is being prepared
+  ///
+  /// In en, this message translates to:
+  /// **'Removing background…'**
+  String get makerCutoutPreparing;
+
+  /// Notice when background removal failed or timed out
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t remove the background right now. Your image stays as it is.'**
+  String get makerCutoutUnavailable;
+
+  /// Notice when the phone has no background removal
+  ///
+  /// In en, this message translates to:
+  /// **'This phone can\'t remove backgrounds. Your image stays as it is.'**
+  String get makerCutoutNoSupport;
 
   /// Title of the sticker editor
   ///
@@ -4033,6 +4057,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No contacts found'**
   String get findEmpty;
+
+  /// Appearance row name and title of its choice card
+  ///
+  /// In en, this message translates to:
+  /// **'Light or dark'**
+  String get appearanceModeTitle;
+
+  /// Light or dark option: match the phone setting
+  ///
+  /// In en, this message translates to:
+  /// **'Follow phone'**
+  String get appearanceModeFollow;
+
+  /// Small line under the Follow phone option
+  ///
+  /// In en, this message translates to:
+  /// **'Matches your phone’s Light or Dark setting'**
+  String get appearanceModeFollowHint;
+
+  /// Light or dark option
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get appearanceModeLight;
+
+  /// Light or dark option
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get appearanceModeDark;
+
+  /// Note on the light or dark card when a built-in theme is active
+  ///
+  /// In en, this message translates to:
+  /// **'Your theme keeps its own colours; this only picks the light or dark version.'**
+  String get appearanceModeNoteBuiltIn;
+
+  /// Note on the light or dark card for an automatic custom theme
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” follows this choice.'**
+  String appearanceModeNoteFollows(String name);
+
+  /// Note on the light or dark card for a custom theme fixed to light
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” is always light. It stays light whatever you choose here.'**
+  String appearanceModeNoteAlwaysLight(String name);
+
+  /// Note on the light or dark card for a custom theme fixed to dark
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” is always dark. It stays dark whatever you choose here.'**
+  String appearanceModeNoteAlwaysDark(String name);
 }
 
 class _AppLocalizationsDelegate

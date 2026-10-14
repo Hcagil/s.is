@@ -35,6 +35,10 @@ docker compose run --rm supabase db lint --level error
 The image's entrypoint is already `supabase`, so the command is
 `run --rm supabase start`, not `run --rm supabase supabase start`.
 
+Bot tools: `tool/sis_bot.sh` (usage in its header). `tool/sis_bot_watch.sh` checks the bot inbox hourly and
+appends tester messages to `.private/tester-inbox.md`; start it under the Claude Code background Monitor tool
+(command `tool/sis_bot_watch.sh`), which turns each printed line into a notification.
+
 `start`, not `db start`: the integration tests need the API, auth and Realtime
 services, not only Postgres. They are skipped by the ordinary `flutter test`
 and run explicitly, after a probe that waits for Realtime to actually deliver:

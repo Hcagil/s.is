@@ -10,6 +10,7 @@ import '../application/appearance_controller.dart';
 import '../domain/appearance_settings.dart';
 import '../domain/custom_theme.dart';
 import 'appearance_labels.dart';
+import 'appearance_mode_card.dart';
 import 'chat_preview.dart';
 import 'custom_theme_actions.dart';
 import 'new_theme_card.dart';
@@ -29,6 +30,13 @@ class AppearancePage extends ConsumerWidget {
       body: SafeArea(
         child: ListView(
           children: [
+            SisSettingsRow(
+              key: const ValueKey('appearance-mode'),
+              icon: Icons.contrast_rounded,
+              title: l.appearanceModeTitle,
+              value: appearanceModeLabel(l, look.mode),
+              onTap: () => showAppearanceModeCard(context),
+            ),
             const ChatPreview(),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),

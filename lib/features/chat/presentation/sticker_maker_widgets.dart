@@ -171,6 +171,7 @@ class MakerSegments extends StatelessWidget {
     required this.selected,
     required this.onChanged,
     this.keyPrefix = 'maker-seg',
+    this.enabled = true,
   });
 
   /// The segment labels.
@@ -184,6 +185,9 @@ class MakerSegments extends StatelessWidget {
 
   /// Prefix of the label keys.
   final String keyPrefix;
+
+  /// Whether the segments can be tapped; false greys them out.
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -202,7 +206,7 @@ class MakerSegments extends StatelessWidget {
           ),
       ],
       selected: {selected},
-      onSelectionChanged: (s) => onChanged(s.first),
+      onSelectionChanged: enabled ? (s) => onChanged(s.first) : null,
     );
   }
 }

@@ -90,13 +90,16 @@ final class VideoSource {
 /// What the video chooser returned.
 final class VideoPick {
   /// Creates a video pick with the given properties.
-  const VideoPick({this.videos = const [], this.tooLong = 0});
+  const VideoPick({this.videos = const [], this.tooLong = 0, this.failed = 0});
 
   /// The list of picked videos that are within duration limits.
   final List<VideoSource> videos;
 
   /// The number of picked videos that exceeded [maxVideoMs].
   final int tooLong;
+
+  /// The number of picked videos that could not be read or copied.
+  final int failed;
 }
 
 /// The boundary for picking and shrinking videos on the device. Never throws.

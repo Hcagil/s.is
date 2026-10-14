@@ -30,6 +30,7 @@ import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/application/link_preview_controller.dart';
 import 'features/chat/application/share_controller.dart';
 import 'features/chat/data/external_picker_channel.dart';
+import 'features/chat/data/fallback_sticker_cutter.dart';
 import 'features/chat/data/file_video_importer.dart';
 import 'features/chat/data/method_channel_share_intake.dart';
 import 'features/chat/data/file_attachment_cache.dart';
@@ -44,6 +45,7 @@ import 'features/chat/data/imcodec_sticker_encoder.dart';
 import 'features/chat/data/link_image_shrink.dart';
 import 'features/chat/data/native_picture_cropper.dart';
 import 'features/chat/data/native_sticker_cutter.dart';
+import 'features/chat/data/onnx_sticker_cutter.dart';
 import 'features/chat/data/no_voice_transcriber.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
 import 'features/chat/data/photo_manager_video_gallery.dart';
@@ -145,6 +147,18 @@ Future<void> main() async {
     yield LicenseEntryWithLineBreaks([
       'Noto Emoji images',
     ], await rootBundle.loadString('assets/stickers/NOTO-EMOJI-LICENSE.txt'));
+  });
+  // The bundled cut-out model (U2-NetP, Apache 2.0) and ONNX Runtime (MIT).
+  LicenseRegistry.addLicense(() async* {
+    for (final (name, file) in [
+      ('U2-NetP cut-out model', 'U2NET-LICENSE'),
+      ('ONNX Runtime', 'ONNXRUNTIME-LICENSE'),
+      ('ONNX Runtime third-party notices', 'ONNXRUNTIME-THIRD-PARTY-NOTICES'),
+    ]) {
+      yield LicenseEntryWithLineBreaks([
+        name,
+      ], await rootBundle.loadString('assets/models/$file.txt'));
+    }
   });
   final config = RuntimeConfig.fromEnvironment();
   // Read before runApp (like the session marker), so the first frame already
@@ -308,7 +322,14 @@ Future<void> main() async {
           pictureCropperProvider.overrideWithValue(
             const NativePictureCropper(),
           ),
-          stickerCutterProvider.overrideWithValue(const NativeStickerCutter()),
+          stickerCutterProvider.overrideWithValue(
+            // The platform cut-out first; the bundled model only when it is
+            // unavailable (e.g. a phone without Google Play services).
+            FallbackStickerCutter(
+              const NativeStickerCutter(),
+              OnnxStickerCutter(),
+            ),
+          ),
           stickerEncoderProvider.overrideWithValue(
             const ImcodecStickerEncoder(),
           ),

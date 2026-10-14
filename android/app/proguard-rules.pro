@@ -9,3 +9,6 @@
 
 # Release optimisation stays off, as it was before these rules existed.
 -dontoptimize
+
+# flutter_onnxruntime (bundled cut-out model) needs its Java classes kept.
+-keep class ai.onnxruntime.** { *; }

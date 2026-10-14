@@ -30,7 +30,7 @@ lib/
                           flutter_secure_storage, flutter_local_notifications,
                           firebase_messaging, firebase_core,
                           shared_preferences, web_socket_channel,
-                          path_provider, photo_manager, imcodec, flutter_contacts, url_launcher, http,
+                          path_provider, photo_manager, imcodec, flutter_onnxruntime, flutter_contacts, url_launcher, http,
                           connectivity_plus, file_picker, open_filex,
                           light_compressor_v2, video_player, share_plus,
                           google_maps_flutter, flutter_map, latlong2,

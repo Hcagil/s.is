@@ -502,6 +502,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'While this is off, you can\'t see when others read yours.';
 
   @override
+  String get settingsCutoutOnPhone =>
+      'Sticker cut-outs are made on your phone. Your photos are not sent anywhere for it.';
+
+  @override
   String get settingsAvatarVisibility => 'Profile picture visibility';
 
   @override

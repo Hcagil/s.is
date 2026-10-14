@@ -301,6 +301,8 @@ class _ComposerState extends ConsumerState<_Composer>
     if (choice == 'file') return _sendFiles();
     if (choice == 'video') return _sendVideos();
     if (choice != 'photo') return;
+    // Close the keyboard while the photo grid and caption page are open.
+    _focus.unfocus();
     final picked = await showAttachmentSheet(context);
     if (picked.images.isEmpty || !mounted) return;
     final reviewed = await showAttachmentPreview(

@@ -4,8 +4,9 @@
 //    `menu-<action>`, pin included) and closes the keyboard;
 //    a tap opens no card (Update 1 slice 7); left swipe = reply;
 //  * a tap on empty space only closes the keyboard; scrolling does not;
-//    send and the paperclip keep it open (0.30.10: the paperclip opens the
-//    photo grid with requestFocus false);
+//    send keeps it open; the paperclip's Photo grid closes it, and the
+//    caption page then opens with it still closed (owner report, reverses
+//    0.30.10);
 //  * a photo, a link or a quote keeps its own tap;
 //  * the photo viewer's `viewer-menu` offers Reply, Forward and both deletes
 //    exists only when the viewer was given onMenu, and closes the viewer when
@@ -21,11 +22,13 @@ import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/chat/presentation/photo_viewer.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
+import '../../support/attach_flow.dart';
 import '../../support/fakes.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
@@ -62,6 +65,7 @@ Future<ProviderContainer> pump(
   WidgetTester tester,
   List<Message> messages, {
   LinkOpenerFake? opener,
+  GalleryFake? gallery,
 }) async {
   final chat =
       ChatFake(self: me.userId, latency: const Duration(milliseconds: 5))
@@ -80,7 +84,7 @@ Future<ProviderContainer> pump(
         chatRepositoryProvider.overrideWithValue(chat),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         linkOpenerProvider.overrideWithValue(opener ?? LinkOpenerFake()),
-        galleryProvider.overrideWithValue(GalleryFake()),
+        galleryProvider.overrideWithValue(gallery ?? GalleryFake()),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
         sessionControllerProvider.overrideWith(_SignedIn.new),
       ],
@@ -283,18 +287,46 @@ void main() {
       expect(keyboardUp(tester), isTrue);
     });
 
-    testWidgets('the paperclip leaves it up', (tester) async {
-      await pump(tester, [msg('m1', from: bob)]);
+    testWidgets('the paperclip Photo grid closes it, the caption page '
+        'keeps it closed', (tester) async {
+      await pump(tester, [
+        msg('m1', from: bob),
+      ], gallery: GalleryFake(photos: [GalleryPhoto('p1')]));
       await raiseKeyboard(tester);
-      await tester.tap(find.byKey(const ValueKey('composer-attach')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('attach-photo')));
-      await tester.pumpAndSettle();
+      await openGrid(tester);
 
-      // The paperclip's Photo tile opens the photo grid.
+      // The paperclip's Photo tile opens the photo grid, keyboard down.
       expect(find.text('Recent photos'), findsOneWidget);
       expect(find.byKey(const ValueKey('sheet-from-app')), findsOneWidget);
-      expect(keyboardUp(tester), isTrue);
+      expect(keyboardUp(tester), isFalse);
+
+      await tick(tester, ['p1']);
+      await sendTicked(tester);
+      await tester.pumpAndSettle();
+
+      expect(key('preview-page'), findsOneWidget);
+      // The composer sits offstage under the preview route.
+      final composerText = tester.widget<EditableText>(
+        find.descendant(
+          of: find.byKey(const ValueKey('composer-field'), skipOffstage: false),
+          matching: find.byType(EditableText, skipOffstage: false),
+        ),
+      );
+      expect(composerText.focusNode.hasFocus, isFalse, reason: 'composer');
+      final caption = tester.widget<EditableText>(
+        find.descendant(
+          of: key('preview-caption'),
+          matching: find.byType(EditableText),
+          matchRoot: true,
+        ),
+      );
+      expect(caption.focusNode.hasFocus, isFalse, reason: 'caption focused');
+      expect(
+        FocusManager.instance.primaryFocus?.context
+            ?.findAncestorWidgetOfExactType<EditableText>(),
+        isNull,
+        reason: 'some text field holds focus',
+      );
     });
   });
 

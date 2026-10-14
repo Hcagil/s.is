@@ -24,7 +24,8 @@ lib/
     domain/               immutable models + repository interfaces (pure Dart)
     data/                 repository implementations — the ONLY layer importing
                           an SDK. tool/check_pattern.sh holds the list and is
-                          the authority: supabase_flutter, supabase,
+                          the authority: flutter_rust_bridge (the encryption
+                          engine binding, lib/data/crypto), supabase_flutter, supabase,
                           google_sign_in, sign_in_with_apple, in_app_update,
                           package_info_plus,
                           flutter_secure_storage, flutter_local_notifications,

@@ -155,4 +155,13 @@ clean 'the same raw-text pattern outside features/*/data' data/helper.dart <<'EO
 Failure f(Object e) => NetworkFailure('$e');
 EOF
 
+# The encryption binding (flutter_rust_bridge) is an SDK: data/ only.
+frb="import 'package:flutter_rust_bridge/flutter_rust_bridge.dart';"
+violation 'flutter_rust_bridge in presentation/' features/demo/presentation/frb.dart <<<"$frb"
+violation 'flutter_rust_bridge in application/' features/demo/application/frb.dart <<<"$frb"
+violation 'flutter_rust_bridge in domain/' features/demo/domain/frb.dart <<<"$frb"
+violation 'flutter_rust_bridge in core/' core/frb.dart <<<"$frb"
+clean 'flutter_rust_bridge in shared data/' data/crypto/rust/frb.dart <<<"$frb"
+clean 'flutter_rust_bridge in a feature data/' features/demo/data/frb.dart <<<"$frb"
+
 echo "PASS"

@@ -112,6 +112,7 @@ Future<ProviderContainer> pump(
 
 Finder get composer => find.byKey(const ValueKey('composer-field'));
 Finder get menu => find.byKey(const ValueKey('message-menu'));
+Finder get attach => find.byKey(const ValueKey('attach-menu'));
 
 bool keyboardUp(WidgetTester tester) => tester
     .widget<EditableText>(
@@ -792,5 +793,127 @@ void main() {
     final text = height('hi');
     expect(height('\u{1F600}'), greaterThan(text * 1.5));
     expect(height('hi \u{1F600}'), text, reason: 'mixed stays text size');
+  });
+
+  // fix/tester-findings: the attach menu opens over a raised keyboard and
+  // leaves it up, so its lifted highlight sits on the real paperclip.
+  group('the paperclip with the keyboard up', () {
+    const keyboard = 300.0;
+
+    /// A keyboard that behaves like a phone's: up while the composer has
+    /// focus, gone a frame after it loses it (moving the composer down).
+    void realKeyboard(WidgetTester tester) {
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(400, 800);
+      addTearDown(tester.view.reset);
+      final node = tester
+          .widget<EditableText>(
+            find.descendant(of: composer, matching: find.byType(EditableText)),
+          )
+          .focusNode;
+      void follow() => tester.view.viewInsets = node.hasFocus
+          ? const FakeViewPadding(bottom: keyboard)
+          : FakeViewPadding.zero;
+      node.addListener(follow);
+      addTearDown(() => node.removeListener(follow));
+    }
+
+    /// The bounds of every lifted (shadowed) shape the open card paints.
+    List<Rect> lifted(WidgetTester tester) {
+      final out = <Rect>[];
+      for (final e
+          in find
+              .ancestor(of: attach, matching: find.byType(CustomPaint))
+              .evaluate()) {
+        expect(
+          e.renderObject,
+          paints..everything((m, args) {
+            if (m == #drawShadow) out.add((args.first as Path).getBounds());
+            return true;
+          }),
+        );
+      }
+      return out;
+    }
+
+    final clip = find.byKey(const ValueKey('composer-attach'));
+
+    testWidgets('the attach menu leaves the composer focused, open and '
+        'closed', (tester) async {
+      await pump(tester, [msg('m1', from: bob)]);
+      realKeyboard(tester);
+      await raiseKeyboard(tester);
+      await tester.tap(clip);
+      await tester.pumpAndSettle();
+      expect(attach, findsOneWidget);
+      expect(keyboardUp(tester), isTrue, reason: 'while open');
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(attach, findsNothing);
+      expect(keyboardUp(tester), isTrue, reason: 'after close');
+    });
+
+    testWidgets('the lifted highlight sits on the paperclip', (tester) async {
+      await pump(tester, [msg('m1', from: bob)]);
+      realKeyboard(tester);
+      await raiseKeyboard(tester);
+      final before = tester.getRect(clip);
+      expect(before.bottom, lessThan(800 - keyboard), reason: 'above keys');
+
+      await tester.tap(clip);
+      await tester.pumpAndSettle();
+      final now = tester.getRect(clip);
+      expect(now, before, reason: 'the paperclip did not move');
+      final shapes = lifted(tester);
+      expect(
+        shapes.where((r) => (r.center - now.center).distance < 1),
+        isNotEmpty,
+        reason: 'no lifted shape centred on the paperclip $now: $shapes',
+      );
+    });
+  });
+
+  // fix/tester-findings: a photo with a caption wider than the photo sits
+  // centred in its bubble.
+  testWidgets('a photo under a wide caption is centred in its bubble', (
+    tester,
+  ) async {
+    await pump(tester, [
+      msg(
+        'p1',
+        from: bob,
+        attachment: 'c1/1.png',
+        body: 'a caption that runs a good deal wider than the photo above it',
+      ),
+    ]);
+    final photo = tester.getRect(
+      find.byKey(const ValueKey('attachment-c1/1.png')),
+    );
+    final caption = tester.getRect(
+      find.textContaining('a caption that', findRichText: true),
+    );
+    expect(caption.width, greaterThan(photo.width), reason: 'precondition');
+    expect(
+      photo.center.dx,
+      moreOrLessEquals(caption.center.dx, epsilon: 1),
+      reason: 'photo $photo is not centred over the caption $caption',
+    );
+  });
+
+  testWidgets('a photo-only bubble is unchanged: the photo at its start', (
+    tester,
+  ) async {
+    await pump(tester, [
+      msg('p2', from: bob, attachment: 'c1/2.png', body: ''),
+    ]);
+    final photo = tester.getRect(
+      find.byKey(const ValueKey('attachment-c1/2.png')),
+    );
+    final bubble = tester.getRect(message('p2'));
+    // Measured on the bubble before the centring fix (968253c^).
+    expect(photo.left - bubble.left, moreOrLessEquals(12, epsilon: 0.5));
+    expect(photo.center.dx, lessThan(bubble.center.dx - 8), reason: 'start');
   });
 }

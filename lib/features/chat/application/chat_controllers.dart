@@ -50,6 +50,7 @@ import '../domain/sticker.dart';
 import '../domain/sticker_maker.dart';
 import '../domain/sticker_repository.dart';
 import '../domain/text_sharer.dart';
+import '../domain/timeline.dart';
 import '../domain/video.dart';
 import '../domain/video_gallery.dart';
 import '../domain/voice.dart';

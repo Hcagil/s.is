@@ -1370,6 +1370,18 @@ abstract class AppLocalizations {
   /// **'📷 Photo'**
   String get quotePhoto;
 
+  /// A quoted photo album
+  ///
+  /// In en, this message translates to:
+  /// **'📷 {count} photos'**
+  String quotePhotos(int count);
+
+  /// Delete confirm card title for a whole photo album
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this album?'**
+  String get messageDeleteAlbumTitle;
+
   /// Preview line of a conversation with no messages
   ///
   /// In en, this message translates to:

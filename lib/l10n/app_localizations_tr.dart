@@ -686,6 +686,14 @@ class AppLocalizationsTr extends AppLocalizations {
   String get quotePhoto => '📷 Fotoğraf';
 
   @override
+  String quotePhotos(int count) {
+    return '📷 $count fotoğraf';
+  }
+
+  @override
+  String get messageDeleteAlbumTitle => 'Bu albüm silinsin mi?';
+
+  @override
   String get listNoMessages => 'Henüz mesaj yok';
 
   @override

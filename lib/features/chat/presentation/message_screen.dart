@@ -42,6 +42,7 @@ import '../domain/timeline.dart';
 import '../domain/video.dart';
 import '../domain/read_marks.dart';
 import '../domain/sticker.dart';
+import 'album_layout.dart';
 import 'attachment_preview_page.dart';
 import 'attachment_sheet.dart';
 import 'chat_search_bar.dart';
@@ -84,6 +85,7 @@ part 'seen_by_pill.dart';
 part 'reactions_bar.dart';
 part 'message_body_with_time.dart';
 part 'message_attachment.dart';
+part 'album_grid.dart';
 part 'message_composer.dart';
 part 'linked_text.dart';
 part 'jump_to_latest.dart';
@@ -818,7 +820,8 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                     key: ValueKey('event-${entry.event.id}'),
                                   );
                                 }
-                                final message = (entry as MessageEntry).message;
+                                final messageEntry = entry as MessageEntry;
+                                final message = messageEntry.message;
                                 if (isAdminChat && message.adminMsg != null) {
                                   return AdminReplyBubble(
                                     key: _keyFor(message.id),
@@ -928,6 +931,10 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                         highlightQuery: searchQuery,
                                         isCurrentHit:
                                             message.id == currentHitId,
+                                        album: messageEntry.album,
+                                        quotedCount: quoted == null
+                                            ? 0
+                                            : albumOf(value, quoted).length,
                                       );
                                       final tapped = ref.watch(
                                         tappedMessageProvider.select(

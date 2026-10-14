@@ -772,6 +772,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       createdAt: DateTime.now(),
       localImage: image.bytes,
       attachmentPreview: image.preview,
+      photoGroup: image.photoGroup,
     );
     returnToLive(); // no-op unless jumped; see _onQueueChanged
     _append(pending);
@@ -926,10 +927,17 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     List<PickedImage> images, {
     String body = '',
   }) async {
+    // Photos picked together become albums of at most 10, each with its own group id; a lone leftover photo stays a plain photo. The caption goes on the first photo only.
+    final groups = <String>[
+      for (var i = 0; i < images.length; i += 10) randomMessageId(),
+    ];
     for (var i = 0; i < images.length; i++) {
+      final start = i - i % 10;
       final result = await sendImage(
         body: i == 0 ? body : '',
-        chosen: images[i],
+        chosen: images.length - start > 1
+            ? images[i].inGroup(groups[start ~/ 10])
+            : images[i],
       );
       switch (result) {
         case null:
@@ -950,14 +958,23 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       ref.read(chatRepositoryProvider).attachmentUrl(path);
 
   /// Sends a copy of [message] to each of [conversationIds]; the chat list
-  /// then shows them.
+  /// then shows them. With [album], every photo of the album [message]
+  /// belongs to is sent, in order, keeping their shared group.
   Future<Result<void>> forward(
     Message message,
-    List<String> conversationIds,
-  ) async {
-    final result = await ref
-        .read(chatRepositoryProvider)
-        .forward(message, conversationIds);
+    List<String> conversationIds, {
+    bool album = false,
+  }) async {
+    final photos = album
+        ? albumOf(state.value ?? const <Message>[], message)
+        : [message];
+    Result<void> result = const Ok(null);
+    for (final photo in photos) {
+      result = await ref
+          .read(chatRepositoryProvider)
+          .forward(photo, conversationIds);
+      if (result is Err) break;
+    }
     if (result is Ok && ref.mounted) {
       unawaited(ref.read(conversationListProvider.notifier).reloadQuietly());
     }
@@ -971,6 +988,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     Message message, {
     required List<String> conversationIds,
     List<String> personIds = const [],
+    bool album = false,
   }) async {
     final ids = [...conversationIds];
     for (final person in personIds) {
@@ -984,7 +1002,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
           return Err(failure);
       }
     }
-    return forward(message, ids);
+    return forward(message, ids, album: album);
   }
 
   /// Replaces the shown messages with a window around [anchor] (oldest

@@ -24,8 +24,9 @@ Future<({VideoSource? source, bool tooLong})> prepareVideoSource({
   final ext = (extension == null || extension.isEmpty)
       ? (Platform.isIOS ? 'mov' : 'mp4')
       : extension.toLowerCase();
-  final dest = File(await files.pathFor(id, 'source.$ext'));
+  File? dest;
   try {
+    dest = File(await files.pathFor(id, 'source.$ext'));
     await dest.parent.create(recursive: true);
     final sink = dest.openWrite();
     await sink.addStream(bytes);
@@ -65,7 +66,7 @@ Future<({VideoSource? source, bool tooLong})> prepareVideoSource({
   } catch (e) {
     log('Preparing a picked video failed: ${e.runtimeType}', name: 'sis.video');
     try {
-      await dest.parent.delete(recursive: true);
+      await dest?.parent.delete(recursive: true);
     } catch (_) {}
     return (source: null, tooLong: false);
   }

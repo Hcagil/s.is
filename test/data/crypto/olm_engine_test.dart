@@ -10,9 +10,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/data/crypto/rust/api/olm.dart';
 import 'package:sis/data/crypto/rust/frb_generated.dart';
 
-// OlmCiphertext.messageType as the binding's contract states it.
-const normalType = 0;
-const preKeyType = 1;
+// OlmCiphertext.messageType: vodozemac/Matrix numbering (0 pre-key, 1 normal).
+const normalType = 1;
+const preKeyType = 0;
 
 /// A fresh A→B session: A opened it with B's one-time key, B accepted the
 /// first ("hi") message.

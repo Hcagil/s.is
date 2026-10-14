@@ -2954,6 +2954,12 @@ abstract class AppLocalizations {
   /// **'This video is too large to send.'**
   String get videoTooBig;
 
+  /// Notice after picked videos could not be read or copied
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{This video could not be sent. Please try again.} other{{count} videos could not be sent. Please try again.}}'**
+  String videoPickFailed(int count);
+
   /// Notice when shrinking a video failed
   ///
   /// In en, this message translates to:

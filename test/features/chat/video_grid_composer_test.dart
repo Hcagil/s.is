@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/app/notice.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
@@ -472,6 +474,95 @@ void main() {
         container.read(sendQueueProvider).values.expand((m) => m),
         isEmpty,
       );
+    });
+  });
+
+  group('VideoGridComposer failed videos (iPhone fix)', () {
+    // Opens the grid, ticks one tile, sends, and answers prepare with [pick].
+    Future<ProviderContainer> pickThroughGrid(
+      WidgetTester t,
+      VideoPick pick,
+    ) async {
+      final g = VideoGalleryFake(videos: galleryVideos(3));
+      final container = await pumpVideoChat(
+        t,
+        world(),
+        videos: DeviceVideosFake(),
+        extra: [
+          videoGalleryProvider.overrideWithValue(g),
+          videoGridEnabledProvider.overrideWithValue(true),
+        ],
+      );
+      await frames(t);
+      await t.tap(byKey('composer-attach'));
+      await frames(t);
+      await t.tap(byKey('attach-video'));
+      await frames(t);
+      await t.tap(byKey('video-grid-v0'));
+      await frames(t);
+      await t.tap(byKey('video-send'));
+      await frames(t);
+      g.prepares.single.answer.complete(pick);
+      await frames(t);
+      return container;
+    }
+
+    SisNotice notice(WidgetTester t) =>
+        t.widget<SisNotice>(find.byType(SisNotice));
+
+    testWidgets('failed 1, no videos: error notice, nothing enqueued', (
+      t,
+    ) async {
+      final container = await pickThroughGrid(t, const VideoPick(failed: 1));
+
+      expect(find.byType(SisNotice), findsOneWidget);
+      expect(notice(t).message, l10nEn.videoPickFailed(1));
+      expect(notice(t).isError, isTrue);
+      expect(find.text(l10nEn.videoPickFailed(1)), findsOneWidget);
+      expect(
+        container.read(sendQueueProvider).values.expand((m) => m),
+        isEmpty,
+      );
+      expect(find.byKey(const Key('video-send')), findsNothing);
+      await noticeGone(t);
+    });
+
+    testWidgets('failed 2, no videos: plural notice', (t) async {
+      await pickThroughGrid(t, const VideoPick(failed: 2));
+
+      expect(notice(t).message, l10nEn.videoPickFailed(2));
+      expect(notice(t).isError, isTrue);
+      await noticeGone(t);
+    });
+
+    testWidgets('1 good + 1 failed: notice and the good one is sent', (
+      t,
+    ) async {
+      await pickThroughGrid(
+        t,
+        VideoPick(videos: [videoSource('a')], failed: 1),
+      );
+
+      expect(find.byKey(const Key('video-a')), findsOneWidget);
+      expect(notice(t).message, l10nEn.videoPickFailed(1));
+      expect(notice(t).isError, isTrue);
+      await noticeGone(t);
+    });
+
+    testWidgets('failed 0, good video: no notice', (t) async {
+      await pickThroughGrid(t, VideoPick(videos: [videoSource('a')]));
+
+      expect(find.byKey(const Key('video-a')), findsOneWidget);
+      expect(find.byType(SisNotice), findsNothing);
+    });
+
+    testWidgets('failed 0, too long 1: only the tooLong notice', (t) async {
+      await pickThroughGrid(t, const VideoPick(tooLong: 1));
+
+      expect(find.text(l10nEn.videoTooLong(1)), findsOneWidget);
+      expect(find.text(l10nEn.videoPickFailed(1)), findsNothing);
+      expect(find.byType(SisNotice), findsOneWidget);
+      await noticeGone(t);
     });
   });
 }

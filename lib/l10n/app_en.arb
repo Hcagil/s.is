@@ -1214,6 +1214,8 @@
   "videoTooLong": "{count, plural, =1{1 video is over 5 minutes and was not added.} other{{count} videos are over 5 minutes and were not added.}}",
   "@videoTooLong": {"description": "Notice after picking videos over the limit", "placeholders": {"count": {"type": "int"}}},
   "videoTooBig": "This video is too large to send.",
+  "videoPickFailed": "{count, plural, =1{This video could not be sent. Please try again.} other{{count} videos could not be sent. Please try again.}}",
+  "@videoPickFailed": {"description": "Notice after picked videos could not be read or copied", "placeholders": {"count": {"type": "int"}}},
   "@videoTooBig": {"description": "Notice when a shrunk video is still over the size limit"},
   "videoFailed": "This video could not be prepared.",
   "@videoFailed": {"description": "Notice when shrinking a video failed"},

@@ -44,5 +44,16 @@ RUN sdkmanager \
     'platforms;android-35' \
     'platforms;android-36'
 RUN flutter config --no-analytics && flutter precache --android
+
+ARG RUST_VERSION=1.99.0
+ARG FRB_VERSION=2.13.0
+ENV RUSTUP_HOME=/home/ubuntu/.rustup \
+    CARGO_HOME=/home/ubuntu/.cargo
+ENV PATH=/home/ubuntu/.cargo/bin:${PATH}
+# Rust for the encryption engine (rust/): pinned toolchain, Android targets, and the flutter_rust_bridge code generator at the same version as the Dart package.
+RUN curl -fsSL --retry 5 https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain "${RUST_VERSION}" \
+    -c rustfmt -t aarch64-linux-android -t armv7-linux-androideabi -t x86_64-linux-android \
+    && cargo install flutter_rust_bridge_codegen --version "${FRB_VERSION}" --locked \
+    && cargo install cbindgen --version 0.29.4 --locked
 WORKDIR /workspace
 CMD ["flutter", "doctor", "-v"]

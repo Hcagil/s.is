@@ -30,8 +30,8 @@ import '../support/video_fakes.dart';
 /// one group per album, the caption on its first photo, a NEW group for each
 /// forward target, no group on a plain forward.
 ///
-/// Uses reid, beth and cora (supabase/seed.sql; password sign-in exists only
-/// locally); run with --concurrency=1 like the rest of the suite.
+/// Uses priya, quinlan and kai (supabase/seed.sql), on the random local test
+/// password (support/service_key.dart); run with --concurrency=1.
 const _url = String.fromEnvironment(
   'SUPABASE_TEST_URL',
   defaultValue: 'http://host.docker.internal:54321',
@@ -91,9 +91,9 @@ void main() {
   late String g3; // reid+beth+cora group: a second forward target
 
   setUpAll(() async {
-    reidClient = await _signedIn('reid@integration.test');
-    bethClient = await _signedIn('beth@integration.test');
-    coraClient = await _signedIn('cora@integration.test');
+    reidClient = await _signedIn('priya@integration.test');
+    bethClient = await _signedIn('quinlan@integration.test');
+    coraClient = await _signedIn('kai@integration.test');
     reid = SupabaseChatRepository(reidClient);
     beth = SupabaseChatRepository(bethClient);
     cora = SupabaseChatRepository(coraClient);

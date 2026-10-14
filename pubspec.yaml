@@ -78,6 +78,7 @@ flutter:
     - assets/models/u2netp.tflite
     - assets/models/U2NET-LICENSE.txt
     - assets/models/LITERT-LICENSE.txt
+    - assets/models/LITERT-THIRD-PARTY-NOTICES.txt
   fonts:
     - family: Manrope
       fonts:

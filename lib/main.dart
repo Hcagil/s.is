@@ -151,6 +151,7 @@ Future<void> main() async {
     for (final (name, file) in [
       ('U2-NetP cut-out model', 'U2NET-LICENSE'),
       ('LiteRT', 'LITERT-LICENSE'),
+      ('LiteRT third-party notices', 'LITERT-THIRD-PARTY-NOTICES'),
     ]) {
       yield LicenseEntryWithLineBreaks([
         name,

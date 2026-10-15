@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/runtime_config.dart';
@@ -14,7 +15,8 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/core/failure.dart';
-import 'package:sis/features/chat/data/file_chat_list_snapshot_store.dart';
+import 'package:sis/features/chat/data/store/drift_chat_list_snapshot_store.dart';
+import 'package:sis/features/chat/data/store/store_key.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
@@ -26,6 +28,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
+import '../support/drift_stores.dart';
 import '../support/video_fakes.dart';
 
 /// The home screen wired exactly as `main.dart` wires it, over a real
@@ -177,13 +180,15 @@ void main() {
     late String cleoId;
     final storedTitle = 'stored group ${DateTime.now().microsecondsSinceEpoch}';
 
-    setUp(() => dir = Directory.systemTemp.createTempSync('chat-list-seam-'));
+    late String key;
+    setUp(() async {
+      dir = Directory.systemTemp.createTempSync('chat-list-seam-');
+      FlutterSecureStorage.setMockInitialValues({});
+      key = await const StoreKey().loadOrCreate();
+    });
     tearDown(() {
       if (dir.existsSync()) dir.deleteSync(recursive: true);
     });
-
-    FileChatListSnapshotStore store() =>
-        FileChatListSnapshotStore(root: () async => dir);
 
     /// No offline strip of any past version (0.30.16, 0.30.17): slice 4
     /// removed them; the stored list alone shows the state.
@@ -213,9 +218,10 @@ void main() {
             .eq('user_id', cleoId),
       );
       await t.runAsync(
-        () => store().save(cleoId, [
-          Conversation(id: 'stored-1', title: storedTitle, lastMessage: 'hi'),
-        ]),
+        () => DriftChatListSnapshotStore(driftStore(cleoId, dir, key)).save(
+          cleoId,
+          [Conversation(id: 'stored-1', title: storedTitle, lastMessage: 'hi')],
+        ),
       );
       final chat = (await t.runAsync(() => chatClient(live)))!;
       addTearDown(() => chat.dispose());
@@ -245,7 +251,7 @@ void main() {
           presenceRepositoryProvider.overrideWithValue(
             SupabasePresenceRepository(live),
           ),
-          chatListSnapshotStoreProvider.overrideWithValue(store()),
+          ...driftStoreOverrides(dir, key),
         ],
       );
       addTearDown(c.dispose);

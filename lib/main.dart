@@ -311,12 +311,14 @@ Future<void> main() async {
           // (and the file's owner check wipes the old rows).
           messageStoreProvider.overrideWith((ref) {
             const key = StoreKey();
-            return DriftMessageStore(
+            final store = DriftMessageStore(
               ownerId: ref.watch(currentUserIdProvider) ?? '',
               file: storeFile,
               key: key.loadOrCreate,
               deleteKey: key.delete,
             );
+            ref.onDispose(store.close);
+            return store;
           }),
           chatListSnapshotStoreProvider.overrideWith(
             (ref) => DriftChatListSnapshotStore(

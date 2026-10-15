@@ -413,10 +413,15 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     final from = sync?.contiguousFrom;
     final to = sync?.newestAt;
     if (from == null || to == null) return null;
-    final rows = await store.around(conversationId, anchor.id);
+    const each = 50;
+    final rows = await store.around(conversationId, anchor.id, each: each);
     if (rows.isEmpty ||
         rows.first.createdAt.isBefore(from) ||
         rows.last.createdAt.isAfter(to)) {
+      return null;
+    }
+    // A window cut short at contiguousFrom is not covered unless the chat starts there.
+    if (!sync!.complete && rows.indexWhere((m) => m.id == anchor.id) < each) {
       return null;
     }
     return rows;

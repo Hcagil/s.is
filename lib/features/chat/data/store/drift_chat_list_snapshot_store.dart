@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 
 import '../../domain/chat_list_snapshot_store.dart';
 import '../../domain/conversation.dart';
+import '../file_chat_list_snapshot_store.dart';
 import 'drift_message_store.dart';
 import 'store_database.dart';
 
@@ -13,6 +14,9 @@ class DriftChatListSnapshotStore implements ChatListSnapshotStore {
   DriftChatListSnapshotStore(this._store);
 
   final DriftMessageStore _store;
+
+  /// Plain-file chat_list.json for the Android push code (InstantPush.avatarFor): picture paths only, no message text.
+  final _feed = FileChatListSnapshotStore(stripPreviews: true);
 
   @override
   Future<List<Conversation>?> load(String ownerId) {
@@ -40,9 +44,9 @@ class DriftChatListSnapshotStore implements ChatListSnapshotStore {
   }
 
   @override
-  Future<void> save(String ownerId, List<Conversation> conversations) {
-    if (ownerId != _store.ownerId) return Future.value();
-    return _store.run(null, (db) async {
+  Future<void> save(String ownerId, List<Conversation> conversations) async {
+    if (ownerId != _store.ownerId) return;
+    await _store.run(null, (db) async {
       await db.transaction(() async {
         await db.delete(db.conversations).go();
         final inserts = <ConversationsCompanion>[];
@@ -68,11 +72,13 @@ class DriftChatListSnapshotStore implements ChatListSnapshotStore {
         });
       });
     });
+    await _feed.save(ownerId, conversations);
   }
 
   @override
-  Future<void> clear() {
-    return _store.run(null, (db) async {
+  Future<void> clear() async {
+    await _feed.clear();
+    await _store.run(null, (db) async {
       await db.transaction(() async {
         await db.delete(db.conversations).go();
         await (db.delete(

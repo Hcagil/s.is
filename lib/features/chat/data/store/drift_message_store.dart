@@ -24,6 +24,10 @@ final class DriftMessageStore implements MessageStore {
   final Future<String> Function() _key;
   final Future<void> Function() _deleteKey;
   Future<StoreDatabase>? _db;
+  bool _closed = false;
+
+  /// The database file once known; if another instance's clear() deleted it, this one is stale and closes itself.
+  File? _path;
 
   /// Operations running now (registered synchronously when they start).
   final _inflight = <Future<void>>{};
@@ -59,11 +63,19 @@ final class DriftMessageStore implements MessageStore {
     T fallback,
     Future<T> Function(StoreDatabase db) body,
   ) async {
+    if (_closed || ownerId.isEmpty) return fallback;
     final opened = _open();
     final done = Completer<void>();
     _inflight.add(done.future);
     try {
-      return await body(await opened);
+      final db = await opened;
+      if (!(_path?.existsSync() ?? true)) {
+        // The file is gone (another instance erased it): never serve or write on this stale connection.
+        _closed = true;
+        unawaited(close());
+        return fallback;
+      }
+      return await body(db);
     } catch (_) {
       return fallback;
     } finally {
@@ -164,6 +176,7 @@ final class DriftMessageStore implements MessageStore {
     final file = await _file();
     await file.parent.create(recursive: true);
     final key = await _key();
+    _path = file;
 
     Future<StoreDatabase> attempt() async {
       final db = StoreDatabase(
@@ -334,6 +347,7 @@ final class DriftMessageStore implements MessageStore {
   /// abandoned in the database isolate; work started later waits for the clear.
   @override
   Future<void> clear() {
+    _closed = true;
     final running = _inflight.toList();
     final pending = _db;
     _db = null;
@@ -365,6 +379,17 @@ final class DriftMessageStore implements MessageStore {
     } catch (_) {}
   }
 
+  /// Closes this instance (user changed): waits for running work, closes the database, deletes nothing.
+  Future<void> close() async {
+    _closed = true;
+    final pending = _db;
+    _db = null;
+    await Future.wait(_inflight.toList());
+    try {
+      if (pending != null) await (await pending).close();
+    } catch (_) {}
+  }
+
   @override
   Future<ChangeCursor?> cursor() => _run<ChangeCursor?>(null, (db) async {
     final row = await (db.select(
@@ -378,6 +403,20 @@ final class DriftMessageStore implements MessageStore {
     final b = value.substring(i + 1);
     return ChangeCursor(DateTime.fromMicrosecondsSinceEpoch(int.parse(a)), b);
   });
+
+  @override
+  Future<Set<String>> conversationIds() =>
+      _run<Set<String>>(const {}, (db) async {
+        final rows = await db
+            .customSelect(
+              'SELECT conversation_id AS id FROM messages '
+              'UNION SELECT conversation_id FROM sync_state '
+              'UNION SELECT id FROM conversations',
+              readsFrom: {db.messages, db.syncStates, db.conversations},
+            )
+            .get();
+        return {for (final r in rows) r.read<String>('id')};
+      });
 
   @override
   Future<void> saveCursor(ChangeCursor c) => _run<void>(null, (db) async {

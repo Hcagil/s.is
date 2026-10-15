@@ -204,9 +204,14 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       for (final c in state.value ?? const <Conversation>[]) c.id,
       ..._hidden,
     };
-    for (final id in before.difference(now)) {
-      unawaited(store.deleteConversation(id));
-    }
+    // Stored chats too: one deleted on the server while the app was closed was never in memory.
+    unawaited(
+      store.conversationIds().then((stored) {
+        for (final id in {...before, ...stored}.difference(now)) {
+          unawaited(store.deleteConversation(id));
+        }
+      }),
+    );
   }
 
   /// Moves [message] into its conversation's preview. A message for a

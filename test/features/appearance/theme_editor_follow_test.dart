@@ -50,7 +50,7 @@ Matcher darker(int argb) {
 SisBrand tokens(WidgetTester t) => SisBrand.of(t.element(byKey(tile)));
 
 bool selected(WidgetTester t) =>
-    containsSemantics(isSelected: true)
+    isSemantics(isSelected: true)
         .matches(t.getSemantics(byKey(tile)), <dynamic, dynamic>{});
 
 String hex(int argb) =>
@@ -193,7 +193,7 @@ void main() {
       await openMine(t);
       expect(
         t.getSemantics(byKey(tile)),
-        containsSemantics(isButton: true, isSelected: true, label: followEn),
+        isSemantics(isButton: true, isSelected: true, label: followEn),
       );
       // The tooltip sits on the tile (wrapping it or inside it).
       expect(find.byTooltip(followEn), findsOneWidget);
@@ -205,7 +205,7 @@ void main() {
       await t.pumpAndSettle();
       expect(
         t.getSemantics(byKey(tile)),
-        containsSemantics(isButton: true, isSelected: false, label: followEn),
+        isSemantics(isButton: true, isSelected: false, label: followEn),
       );
       h.dispose();
     });
@@ -244,7 +244,7 @@ void main() {
       await openMine(t);
       expect(
         t.getSemantics(byKey(tile)),
-        containsSemantics(label: 'Vurgu rengini kullan'),
+        isSemantics(label: 'Vurgu rengini kullan'),
       );
       expect(find.byTooltip('Vurgu rengini kullan'), findsOneWidget);
       expect(find.text('Balon, vurgu renginizi izler.'), findsOneWidget);

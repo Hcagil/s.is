@@ -48,6 +48,12 @@ android {
     // Robolectric tests draw notifications with the app's own icon and colour.
     testOptions.unitTests.isIncludeAndroidResources = true
 
+    // Robolectric fetches android-all jars; Maven Central rate-limits (HTTP 429), so use Google's mirror.
+    testOptions.unitTests.all {
+        it.systemProperty("robolectric.dependency.repo.id", "google-maven-central-mirror")
+        it.systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2")
+    }
+
     defaultConfig {
         applicationId = "com.esd.sis"
         // You can update the following values to match your application needs.

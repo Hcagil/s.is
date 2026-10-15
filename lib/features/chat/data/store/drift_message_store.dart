@@ -1,0 +1,373 @@
+import 'dart:io';
+import 'dart:math' as math;
+
+import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
+import 'package:sqlite3/sqlite3.dart' show Database;
+
+import '../../domain/message.dart';
+import '../../domain/message_store.dart';
+import 'message_row_mapper.dart';
+import 'store_database.dart';
+
+/// The on-phone message store, one encrypted SQLite file; every method best-effort, never throws.
+final class DriftMessageStore implements MessageStore {
+  DriftMessageStore({
+    required this.ownerId,
+    required this._file,
+    required this._key,
+    required this._deleteKey,
+  });
+  final String ownerId;
+  final Future<File> Function() _file;
+  final Future<String> Function() _key;
+  final Future<void> Function() _deleteKey;
+  Future<StoreDatabase>? _db;
+
+  Future<StoreDatabase> _open() => _db ??= _create();
+
+  /// Runs [body] on the open database for a sibling store (the chat list
+  /// snapshot); any failure returns [fallback].
+  Future<T> run<T>(T fallback, Future<T> Function(StoreDatabase db) body) =>
+      _run(fallback, body);
+
+  /// Runs [body] on the open database; any failure returns [fallback].
+  Future<T> _run<T>(
+    T fallback,
+    Future<T> Function(StoreDatabase db) body,
+  ) async {
+    try {
+      return await body(await _open());
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  @override
+  Future<List<Message>> newest(String conversationId, {int limit = 50}) =>
+      _run(const [], (db) async {
+        final rows =
+            await (db.select(db.messages)
+                  ..where((t) => t.conversationId.equals(conversationId))
+                  ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
+                  ..limit(limit))
+                .get();
+        return [for (final r in rows.reversed) messageFromRow(r)];
+      });
+
+  @override
+  Future<List<Message>> older(
+    String conversationId,
+    DateTime before, {
+    int limit = 50,
+  }) => _run(const [], (db) async {
+    final rows =
+        await (db.select(db.messages)
+              ..where(
+                (t) =>
+                    t.conversationId.equals(conversationId) &
+                    t.createdAt.isSmallerThanValue(
+                      before.microsecondsSinceEpoch,
+                    ),
+              )
+              ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
+              ..limit(limit))
+            .get();
+    return [for (final r in rows.reversed) messageFromRow(r)];
+  });
+
+  @override
+  Future<List<Message>> around(
+    String conversationId,
+    String messageId, {
+    int each = 50,
+  }) => _run(const [], (db) async {
+    final centre =
+        await (db.select(db.messages)..where(
+              (t) =>
+                  t.id.equals(messageId) &
+                  t.conversationId.equals(conversationId),
+            ))
+            .getSingleOrNull();
+    if (centre == null) return const [];
+    final before =
+        await (db.select(db.messages)
+              ..where(
+                (t) =>
+                    t.conversationId.equals(conversationId) &
+                    t.createdAt.isSmallerThanValue(centre.createdAt),
+              )
+              ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
+              ..limit(each))
+            .get();
+    final after =
+        await (db.select(db.messages)
+              ..where(
+                (t) =>
+                    t.conversationId.equals(conversationId) &
+                    t.createdAt.isBiggerThanValue(centre.createdAt),
+              )
+              ..orderBy([(t) => OrderingTerm.asc(t.createdAt)])
+              ..limit(each))
+            .get();
+    return [
+      for (final r in before.reversed) messageFromRow(r),
+      messageFromRow(centre),
+      for (final r in after) messageFromRow(r),
+    ];
+  });
+
+  @override
+  Future<void> upsertAll(List<Message> messages) =>
+      _run<void>(null, (db) async {
+        final stored = [
+          for (final m in messages)
+            if (!m.isPending) messageToCompanion(m),
+        ];
+        await db.batch((b) {
+          for (final c in stored) {
+            b.insert(db.messages, c, onConflict: DoUpdate((_) => c));
+          }
+        });
+      });
+
+  Future<StoreDatabase> _create() async {
+    final file = await _file();
+    await file.parent.create(recursive: true);
+    final key = await _key();
+
+    Future<StoreDatabase> attempt() async {
+      final db = StoreDatabase(
+        NativeDatabase.createInBackground(file, setup: _keyed(key)),
+      );
+      var ok = false;
+      try {
+        final owner = await (db.select(
+          db.meta,
+        )..where((t) => t.key.equals('owner_id'))).getSingleOrNull();
+        if (owner == null) {
+          await db
+              .into(db.meta)
+              .insert(MetaCompanion.insert(key: 'owner_id', value: ownerId));
+        } else if (owner.value != ownerId) {
+          throw StateError('other owner');
+        }
+        ok = true;
+        return db;
+      } finally {
+        if (!ok) await db.close();
+      }
+    }
+
+    try {
+      return await attempt();
+    } catch (_) {
+      /* wrong key, other owner, or corrupt: start again from nothing */
+      await _deleteFiles(file);
+      return attempt();
+    }
+  }
+
+  @override
+  Future<void> reconcilePage(
+    String conversationId,
+    List<Message> page, {
+    required bool reachedStart,
+  }) => _run<void>(
+    null,
+    (db) => db.transaction(() async {
+      final ids = [for (final m in page) m.id];
+      final oldest = page.isEmpty
+          ? null
+          : page.first.createdAt.microsecondsSinceEpoch;
+      // Stored rows the server no longer returns for the range this page covers.
+      await (db.delete(db.messages)..where((t) {
+            final stale =
+                t.conversationId.equals(conversationId) & t.id.isNotIn(ids);
+            return reachedStart || oldest == null
+                ? stale
+                : stale & t.createdAt.isBiggerOrEqualValue(oldest);
+          }))
+          .go();
+      for (final m in page) {
+        // one upsert per row, same as upsertAll
+        final c = messageToCompanion(m);
+        await db.into(db.messages).insert(c, onConflict: DoUpdate((_) => c));
+      }
+      if (oldest == null) {
+        if (reachedStart) {
+          await db
+              .into(db.syncStates)
+              .insertOnConflictUpdate(
+                SyncStatesCompanion.insert(
+                  conversationId: conversationId,
+                  complete: const Value(true),
+                ),
+              );
+        }
+        return;
+      }
+      final newest = page.last.createdAt.microsecondsSinceEpoch;
+      final prev =
+          await (db.select(db.syncStates)
+                ..where((t) => t.conversationId.equals(conversationId)))
+              .getSingleOrNull();
+      // The old contiguous block still joins this page when it reaches up to the page's oldest row.
+      final joined =
+          prev != null &&
+          prev.newestAt != null &&
+          prev.contiguousFrom != null &&
+          prev.newestAt! >= oldest;
+      final from = reachedStart
+          ? oldest
+          : (joined ? math.min(prev.contiguousFrom!, oldest) : oldest);
+      final complete = reachedStart || (joined && prev.complete);
+      await db
+          .into(db.syncStates)
+          .insertOnConflictUpdate(
+            SyncStatesCompanion.insert(
+              conversationId: conversationId,
+              newestAt: Value(newest),
+              contiguousFrom: Value(from),
+              complete: Value(complete),
+            ),
+          );
+    }),
+  );
+
+  @override
+  Future<StoredSync?> syncState(String conversationId) =>
+      _run<StoredSync?>(null, (db) async {
+        final r =
+            await (db.select(db.syncStates)
+                  ..where((t) => t.conversationId.equals(conversationId)))
+                .getSingleOrNull();
+        if (r == null) return null;
+        DateTime? at(int? v) =>
+            v == null ? null : DateTime.fromMicrosecondsSinceEpoch(v);
+        return StoredSync(
+          newestAt: at(r.newestAt),
+          contiguousFrom: at(r.contiguousFrom),
+          complete: r.complete,
+        );
+      });
+
+  @override
+  Future<void> remove(String messageId) => _run<void>(null, (db) async {
+    await (db.delete(db.messages)..where((t) => t.id.equals(messageId))).go();
+  });
+
+  @override
+  Future<void> deleteConversation(String conversationId) => _run<void>(
+    null,
+    (db) => db.transaction(() async {
+      await (db.delete(
+        db.messages,
+      )..where((t) => t.conversationId.equals(conversationId))).go();
+      await (db.delete(
+        db.syncStates,
+      )..where((t) => t.conversationId.equals(conversationId))).go();
+      await (db.delete(
+        db.conversations,
+      )..where((t) => t.id.equals(conversationId))).go();
+    }),
+  );
+
+  @override
+  Future<List<Message>> search(
+    String query, {
+    String? conversationId,
+    int limit = 100,
+  }) async {
+    if (!isSearchable(query)) return const [];
+    // A quoted FTS5 phrase: the trigram index matches it anywhere inside a word.
+    final phrase = '"${foldSearch(query.trim()).replaceAll('"', '""')}"';
+    return _run<List<Message>>(const [], (db) async {
+      final rows = await db
+          .customSelect(
+            'SELECT m.* FROM messages_fts f JOIN messages m ON m.rowid = f.rowid '
+            'WHERE messages_fts MATCH ? AND m.deleted IS NULL'
+            '${conversationId == null ? '' : ' AND m.conversation_id = ?'} '
+            'ORDER BY m.created_at DESC LIMIT ?',
+            variables: [
+              Variable.withString(phrase),
+              if (conversationId != null) Variable.withString(conversationId),
+              Variable.withInt(limit),
+            ],
+            readsFrom: {db.messages},
+          )
+          .get();
+      return [for (final r in rows) messageFromRow(db.messages.map(r.data))];
+    });
+  }
+
+  @override
+  Future<void> clear() async {
+    final pending = _db;
+    _db = null;
+    try {
+      if (pending != null) await (await pending).close();
+    } catch (_) {}
+    try {
+      await _deleteFiles(await _file());
+    } catch (_) {}
+    try {
+      await _deleteKey();
+    } catch (_) {}
+  }
+
+  @override
+  Future<ChangeCursor?> cursor() async {
+    try {
+      final db = await _open();
+      final row = await (db.select(
+        db.meta,
+      )..where((t) => t.key.equals('change_cursor'))).getSingleOrNull();
+      if (row == null) return null;
+      final value = row.value;
+      final i = value.indexOf('|');
+      if (i < 0) return null;
+      final a = value.substring(0, i);
+      final b = value.substring(i + 1);
+      return ChangeCursor(DateTime.fromMicrosecondsSinceEpoch(int.parse(a)), b);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> saveCursor(ChangeCursor c) async {
+    try {
+      final db = await _open();
+      await db
+          .into(db.meta)
+          .insertOnConflictUpdate(
+            MetaCompanion.insert(
+              key: 'change_cursor',
+              value: '${c.updatedAt.microsecondsSinceEpoch}|${c.id}',
+            ),
+          );
+    } catch (_) {}
+  }
+}
+
+/// A plain SQLite would ignore PRAGMA key and store everything unencrypted,
+/// so refuse to run without the cipher build.
+void Function(Database) _keyed(String key) {
+  return (raw) {
+    raw.execute("PRAGMA key = \"x'$key'\";");
+    if (raw.select('PRAGMA cipher;').isEmpty) {
+      throw StateError('SQLite3 Multiple Ciphers is not loaded');
+    }
+  };
+}
+
+Future<void> _deleteFiles(File file) async {
+  for (final path in [file.path, '${file.path}-wal', '${file.path}-shm']) {
+    try {
+      await File(path).delete();
+    } catch (_) {
+      // Already gone.
+    }
+  }
+}

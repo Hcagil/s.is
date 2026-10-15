@@ -689,6 +689,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quotePhoto => '📷 Photo';
 
   @override
+  String quotePhotos(int count) {
+    return '📷 $count photos';
+  }
+
+  @override
+  String get messageActionDeletePhoto => 'Delete this photo';
+
+  @override
+  String get messageDeleteAlbumTitle => 'Delete this album?';
+
+  @override
   String get listNoMessages => 'No messages yet';
 
   @override

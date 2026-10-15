@@ -13,6 +13,7 @@ import '../application/group_controller.dart';
 import '../application/pin_controller.dart';
 import '../domain/group_member.dart';
 import '../domain/message.dart';
+import '../domain/timeline.dart';
 import 'forward_page.dart';
 import 'message_menu_card.dart';
 import 'sticker_albums.dart';
@@ -26,12 +27,17 @@ import 'swipeable_message.dart';
 /// The two delete actions ask for a confirmation card first; pin and unpin
 /// go to the server at once (the bar changes first and goes back, with a
 /// notice, if refused).
+///
+/// A photo of an album acts on the whole album (reply is anchored on the
+/// first photo, forward and both deletes cover every photo) unless
+/// [singlePhoto] is set, which the photo viewer's menu does.
 Future<bool> runMessageAction(
   BuildContext context,
   WidgetRef ref,
   Message message,
-  MessageAction action,
-) async {
+  MessageAction action, {
+  bool singlePhoto = false,
+}) async {
   switch (action) {
     case MessageAction.reply:
       ref.read(editingProvider.notifier).clear();
@@ -42,7 +48,7 @@ Future<bool> runMessageAction(
       ref.read(editingProvider.notifier).start(message);
       return false;
     case MessageAction.forward:
-      await showForwardPage(context, ref, message);
+      await showForwardPage(context, ref, message, album: !singlePhoto);
       return false;
     case MessageAction.copy:
       await Clipboard.setData(ClipboardData(text: message.body));
@@ -109,15 +115,31 @@ Future<bool> runMessageAction(
   if (!context.mounted) return false;
 
   final forEveryone = action == MessageAction.deleteForEveryone;
-  final confirmed = await _confirmDelete(context, forEveryone: forEveryone);
+  final photos = singlePhoto
+      ? [message]
+      : [
+          for (final m in albumOf(
+            ref.read(messagesProvider).value ?? const <Message>[],
+            message,
+          ))
+            if (!m.isPending) m,
+        ];
+  final confirmed = await _confirmDelete(
+    context,
+    forEveryone: forEveryone,
+    album: photos.length > 1,
+  );
   if (confirmed != true || !context.mounted) return false;
 
   final notifier = ref.read(messagesProvider.notifier);
-  final r = await (forEveryone
-      ? notifier.deleteForEveryone(message)
-      : notifier.hideForMe(message));
-  if (r case Err(:final failure) when context.mounted) {
-    showSisNotice(context, failure.message, isError: true);
+  for (final photo in photos) {
+    final r = await (forEveryone
+        ? notifier.deleteForEveryone(photo)
+        : notifier.hideForMe(photo));
+    if (r case Err(:final failure) when context.mounted) {
+      showSisNotice(context, failure.message, isError: true);
+      break;
+    }
   }
   return true;
 }
@@ -127,6 +149,7 @@ Future<bool> runMessageAction(
 Future<bool?> _confirmDelete(
   BuildContext context, {
   required bool forEveryone,
+  bool album = false,
 }) {
   final anchor = Rect.fromCenter(
     center: MediaQuery.sizeOf(context).center(Offset.zero),
@@ -149,7 +172,7 @@ Future<bool?> _confirmDelete(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                l.messageDeleteTitle,
+                album ? l.messageDeleteAlbumTitle : l.messageDeleteTitle,
                 style: Theme.of(card).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
@@ -347,7 +370,13 @@ Future<bool> showMessageMenu(
           value: a,
           keyId: swipeActionKeyId(a),
           icon: swipeActionIcon(a),
-          label: swipeActionLabel(AppLocalizations.of(context), a),
+          // One photo of an album, deleted from the viewer: say so.
+          label:
+              photoViewer &&
+                  message.photoGroup != null &&
+                  a == MessageAction.deleteForEveryone
+              ? AppLocalizations.of(context).messageActionDeletePhoto
+              : swipeActionLabel(AppLocalizations.of(context), a),
           destructive:
               a == MessageAction.deleteForMe ||
               a == MessageAction.deleteForEveryone,
@@ -355,5 +384,11 @@ Future<bool> showMessageMenu(
     ],
   );
   if (action == null || !context.mounted) return false;
-  return runMessageAction(context, ref, message, action);
+  return runMessageAction(
+    context,
+    ref,
+    message,
+    action,
+    singlePhoto: photoViewer,
+  );
 }

@@ -656,7 +656,14 @@ class _ReplyBar extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  quoteText(l, message),
+                  quoteText(
+                    l,
+                    message,
+                    albumCount: albumOf(
+                      ref.watch(messagesProvider).value ?? const [],
+                      message,
+                    ).length,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -731,21 +738,24 @@ class _EditBar extends ConsumerWidget {
 }
 
 /// A quoted message in one line: its text, "Photo", or what became of it.
-String quoteText(AppLocalizations l, Message? message) => switch (message) {
-  null => l.quoteOriginal,
-  Message(isDeleted: true) => l.quoteDeleted,
-  Message(:final body) when body.isNotEmpty => body,
-  Message(:final file?) =>
-    file.isVoice
-        ? l.voicePreviewLine
-        : file.isVideo
-        ? videoPreview
-        : file.name,
-  Message(stickerId: final _?) => l.stickerPreviewLine,
-  Message(albumCard: true) => l.stickerAlbumPreviewLine,
-  Message(hasAttachment: true) => l.quotePhoto,
-  _ => l.commonMessage,
-};
+String quoteText(AppLocalizations l, Message? message, {int albumCount = 0}) =>
+    switch (message) {
+      null => l.quoteOriginal,
+      Message(isDeleted: true) => l.quoteDeleted,
+      Message(hasAttachment: true, file: null) when albumCount > 1 =>
+        l.quotePhotos(albumCount),
+      Message(:final body) when body.isNotEmpty => body,
+      Message(:final file?) =>
+        file.isVoice
+            ? l.voicePreviewLine
+            : file.isVideo
+            ? videoPreview
+            : file.name,
+      Message(stickerId: final _?) => l.stickerPreviewLine,
+      Message(albumCard: true) => l.stickerAlbumPreviewLine,
+      Message(hasAttachment: true) => l.quotePhoto,
+      _ => l.commonMessage,
+    };
 
 /// The words for a failed send; the video failures are translated here, any
 /// other failure keeps its own message.

@@ -361,8 +361,15 @@ void main() {
         [shot(1).bytes, shot(2).bytes, shot(3).bytes],
         reason: 'the batch stops at the refused photo',
       );
+      // Picked together, the two stored photos are one album (photo albums).
       expect(find.byKey(const ValueKey('message-img-1')), findsOneWidget);
-      expect(find.byKey(const ValueKey('message-img-2')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('album-img-1')),
+          matching: find.byType(RawImage),
+        ),
+        findsNWidgets(2),
+      );
       final shown = notices(tester);
       expect(shown, hasLength(1));
       expect(shown.single.isError, isTrue);

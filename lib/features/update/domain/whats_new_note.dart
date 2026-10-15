@@ -3,6 +3,7 @@ final class WhatsNewNote {
   const WhatsNewNote({
     required this.text,
     this.version,
+    this.build,
     this.bullets = const [],
   });
 
@@ -11,6 +12,9 @@ final class WhatsNewNote {
 
   /// e.g. '0.31', or null when the note has no version line.
   final String? version;
+
+  /// The build number of a "0.31.0 (216)" line, null for older notes.
+  final int? build;
 
   final List<String> bullets;
 
@@ -21,6 +25,7 @@ final class WhatsNewNote {
 /// Never throws. Reads [body] line by line (split on \n, trim each line, '\r' ignored, empty lines dropped).
 /// The FIRST non-empty line is the version line if it matches (case-insensitive) the RegExp
 ///   r'^(?:v|version\s+)?(\d+\.\d+(?:\.\d+)?)$'
+/// An optional ' (216)' suffix is the build number.
 /// (so '0.31', 'v0.31', 'Version 0.31', 'version 1.2.3' all give version = group 1).
 /// Every remaining non-empty line is a bullet, with ONE leading marker removed if present:
 /// one of '-', '*', '•', '–' followed by optional spaces (use RegExp(r'^[-*•–]\s*') ), then trimmed;
@@ -44,12 +49,13 @@ WhatsNewNote parseWhatsNewNote(String body, {String lang = 'en'}) {
   }
 
   final versionRx = RegExp(
-    r'^(?:v|version\s+|sürüm\s+)?(\d+\.\d+(?:\.\d+)?)$',
+    r'^(?:v|version\s+|sürüm\s+)?(\d+\.\d+(?:\.\d+)?)(?:\s*\((\d+)\))?$',
     caseSensitive: false,
   );
   final bulletRx = RegExp(r'^[-*•–]\s*');
 
   String? version;
+  int? build;
   final bullets = <String>[];
 
   final firstLine = lines[0];
@@ -57,6 +63,7 @@ WhatsNewNote parseWhatsNewNote(String body, {String lang = 'en'}) {
 
   if (versionMatch != null) {
     version = versionMatch.group(1)!;
+    build = int.tryParse(versionMatch.group(2) ?? '');
     for (int i = 1; i < lines.length; i++) {
       final line = lines[i];
       final bulletLine = line.replaceAll(bulletRx, '').trim();
@@ -66,7 +73,12 @@ WhatsNewNote parseWhatsNewNote(String body, {String lang = 'en'}) {
     }
   }
 
-  return WhatsNewNote(text: body, version: version, bullets: bullets);
+  return WhatsNewNote(
+    text: body,
+    version: version,
+    build: build,
+    bullets: bullets,
+  );
 }
 
 /// True when version name [a] (e.g. '0.31' or '0.30.17') is higher than [b].

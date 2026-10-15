@@ -246,7 +246,7 @@ select set_eq(
   $$values ('id'),('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
            ('reply_to'),('forwarded'),('attachment_name'),('attachment_mime'),('attachment_size'),
            ('attachment_duration_ms'),('attachment_waveform'),('voice_transcript'),
-           ('link_preview')$$,
+           ('link_preview'),('photo_group')$$,
   'authenticated may still insert only these twelve columns -- never deleted or deleted_at '
   '(reply_to and forwarded since 20260924150000; the three file columns since 20261013120000; the duration since 20261014120000)');
 select is((select count(*) from information_schema.column_privileges

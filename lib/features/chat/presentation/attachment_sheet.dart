@@ -47,6 +47,7 @@ Future<String?> showAttachMenu(BuildContext context, {required Rect anchor}) =>
     showFloatingCard<String>(
       context,
       anchor: anchor,
+      keepFocus: true,
       cardKey: const ValueKey('attach-menu'),
       child: const _AttachMenu(),
     );

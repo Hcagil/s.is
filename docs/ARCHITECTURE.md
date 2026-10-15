@@ -36,7 +36,8 @@ lib/
                           light_compressor_v2, video_player, share_plus,
                           google_maps_flutter, flutter_map, latlong2,
                           geolocator, record, speech_to_text, webview_flutter,
-                          webview_flutter_android, webview_flutter_wkwebview
+                          webview_flutter_android, webview_flutter_wkwebview,
+                          drift, sqlite3, path_provider_foundation (the on-phone message store)
     application/          Riverpod Notifiers: state machines; import domain only
     presentation/         widgets: watch state, call notifiers, render
 ```
@@ -85,6 +86,17 @@ scanning `catch` blocks under every `data/` directory and rule 6 by scanning
 `NetworkFailure(` arguments under every feature's `data/`; it runs in CI
 and blocks the merge on any violation. Violations are fixed by rewriting the
 offending code to the pattern, not by exempting it.
+
+### Photo albums
+
+Photos picked together (2 to 10; more are split into albums of 10) are sent as
+separate messages sharing `photo_group`. The grouping is pure `domain/`
+(`buildTimeline` folds them into one `MessageEntry` with an `album` list;
+`albumOf` finds the album of a photo); `presentation/` draws the entry as one
+bubble (`album_layout.dart` has the tile geometry, `album_grid.dart` the
+widgets). Reactions, reply, forward and delete act on the whole album, anchored
+on its first photo; only the photo viewer's menu acts on one photo. This is
+not the sticker `albumId`/`albumCard`.
 
 ### Errors
 

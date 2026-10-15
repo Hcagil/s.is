@@ -441,4 +441,63 @@ void main() {
       });
     }
   });
+
+  // fix/tester-findings: the version line carries the build, "(216)"; the
+  // card shows it and still compares only the version. The installed build
+  // here is 100 (see pump), unlike every note's build.
+  group('WhatsNewCard: build number', () {
+    const built =
+        'Version 0.31.0 (216)\n- Chats load faster\n---\n'
+        'Sürüm 0.31.0 (216)\n- Sohbetler hızlı açılır';
+    Finder line(String s) =>
+        find.byWidgetPredicate((w) => w is Text && w.data?.toUpperCase() == s);
+
+    testWidgets('English: VERSION 0.31.0 (216)', (t) async {
+      await pump(t, const UpdateIdle(), card(built, isNewest: false));
+      expect(line('VERSION 0.31.0 (216)'), findsOneWidget);
+    });
+
+    testWidgets('Turkish: SÜRÜM 0.31.0 (216)', (t) async {
+      await pump(
+        t,
+        const UpdateIdle(),
+        card(built, isNewest: false),
+        locale: const Locale('tr'),
+      );
+      expect(line('SÜRÜM 0.31.0 (216)'), findsOneWidget);
+    });
+
+    testWidgets('no build: the plain version, no brackets', (t) async {
+      await pump(
+        t,
+        const UpdateIdle(),
+        card('Version 0.31.0\n- a', isNewest: false),
+      );
+      expect(line('VERSION 0.31.0'), findsOneWidget);
+      expect(find.textContaining('('), findsNothing);
+    });
+
+    testWidgets('installed mark matches the version, not the build', (t) async {
+      await pump(
+        t,
+        const UpdateIdle(),
+        card(built, isNewest: true),
+        installed: '0.31.0',
+      );
+      expect(installedMark, findsOneWidget);
+      expect(updateNow, findsNothing, reason: 'same version, other build');
+    });
+
+    testWidgets('a newer version with a lower build still offers the store', (
+      t,
+    ) async {
+      await pump(
+        t,
+        const UpdateIdle(),
+        card('Version 0.31.0 (50)\n- a', isNewest: true),
+        installed: '0.30.17',
+      );
+      expect(updateNow, findsOneWidget);
+    });
+  });
 }

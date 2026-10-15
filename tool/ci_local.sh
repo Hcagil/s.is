@@ -74,7 +74,7 @@ integration() {
 }
 
 job_android() {
-  step "Prepare cache directories" mkdir -p .ci-cache/pub .ci-cache/gradle || return 1
+  step "Prepare cache directories" mkdir -p .ci-cache/pub .ci-cache/gradle .ci-cache/m2 || return 1
   step "Build development image" "${CI[@]}" build || return 1
   step "Resolve dependencies" "${CI[@]}" run --rm flutter flutter pub get || return 1
   step "Layer rules" layer_rules || return 1

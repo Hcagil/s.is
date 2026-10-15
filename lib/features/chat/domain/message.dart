@@ -100,6 +100,7 @@ final class Message {
     this.stickerId,
     this.albumCard = false,
     this.albumId,
+    this.photoGroup,
     this.linkPreview,
     this.adminMsg,
     this.sending = false,
@@ -153,6 +154,9 @@ final class Message {
 
   /// The shared album's id, null when the album was deleted afterwards.
   final String? albumId;
+
+  /// Photos picked together share one id; 2 or more in a row from one sender are drawn as one album bubble. Null for every other message. Not the sticker [albumId].
+  final String? photoGroup;
 
   /// The link card this text message carries (title, picture, site), or null.
   /// Old messages, and messages sent before the preview was ready, have none.
@@ -247,6 +251,7 @@ final class Message {
     stickerId: stickerId,
     albumCard: albumCard,
     albumId: albumId,
+    photoGroup: photoGroup,
     linkPreview: linkPreview,
     adminMsg: adminMsg,
     deletion: deletion,
@@ -274,9 +279,38 @@ final class Message {
     stickerId: stickerId,
     albumCard: albumCard,
     albumId: albumId,
+    photoGroup: photoGroup,
     linkPreview: linkPreview,
     adminMsg: adminMsg,
     localImage: localImage,
+    deletion: deletion,
+    deletedBy: deletedBy,
+    editedAt: editedAt,
+    replyTo: replyTo,
+    forwarded: forwarded,
+    poll: poll,
+    contact: contact,
+    location: location,
+    file: file,
+    sending: sending,
+  );
+
+  /// A copy of this message carrying [group] as its [photoGroup] (null takes it out of any album).
+  Message withPhotoGroup(String? group) => Message(
+    id: id,
+    conversationId: conversationId,
+    senderId: senderId,
+    body: body,
+    createdAt: createdAt,
+    attachmentPath: attachmentPath,
+    attachmentPreview: attachmentPreview,
+    localImage: localImage,
+    stickerId: stickerId,
+    albumCard: albumCard,
+    albumId: albumId,
+    photoGroup: group,
+    linkPreview: linkPreview,
+    adminMsg: adminMsg,
     deletion: deletion,
     deletedBy: deletedBy,
     editedAt: editedAt,
@@ -299,6 +333,7 @@ final class Message {
     stickerId: stickerId,
     albumCard: albumCard,
     albumId: albumId,
+    photoGroup: photoGroup,
     linkPreview: linkPreview,
     adminMsg: adminMsg,
     conversationId: conversationId,

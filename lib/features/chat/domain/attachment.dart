@@ -7,6 +7,7 @@ final class PickedImage {
     required this.contentType,
     required this.extension,
     this.preview,
+    this.photoGroup,
   });
 
   final Uint8List bytes;
@@ -18,6 +19,18 @@ final class PickedImage {
   /// A tiny version (about 24 px wide), sent with the message so a receiver
   /// sees a blurred preview at once. Null when one could not be made.
   final Uint8List? preview;
+
+  /// Shared by the photos picked together and sent as one album (see Message.photoGroup); null for a single photo.
+  final String? photoGroup;
+
+  /// A copy of this image tied to the album [group].
+  PickedImage inGroup(String group) => PickedImage(
+    bytes: bytes,
+    contentType: contentType,
+    extension: extension,
+    preview: preview,
+    photoGroup: group,
+  );
 }
 
 /// Photos already on this phone, keyed by storage path, so a photo is

@@ -577,6 +577,7 @@ class FakeChat implements ChatRepository {
         attachmentPath: path,
         attachmentPreview: image.preview,
         replyTo: replyTo,
+        photoGroup: image.photoGroup,
       ),
     );
   }
@@ -1369,6 +1370,7 @@ class ChatFake implements ChatRepository {
         attachmentPath: path,
         attachmentPreview: image.preview,
         replyTo: replyTo,
+        photoGroup: image.photoGroup,
       ),
     );
   }
@@ -3885,6 +3887,7 @@ Message withoutPreview(Message m) => Message(
   stickerId: m.stickerId,
   albumCard: m.albumCard,
   albumId: m.albumId,
+  photoGroup: m.photoGroup,
   linkPreview: m.linkPreview,
   sending: m.sending,
 );

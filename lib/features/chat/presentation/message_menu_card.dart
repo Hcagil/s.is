@@ -76,6 +76,7 @@ Future<T?> showMenuCard<T>(
 /// always below it with [below]), and is always fully on screen. The rest of
 /// the screen is dimmed; with [highlightAnchor] the anchor itself stays bright
 /// and lifted (corners rounded by [anchorRadius]), so the card never hides it.
+/// [keepFocus] leaves the focus where it was, so an open keyboard stays open.
 /// [alignEnd] lines the card's right edge up with the anchor's, instead of its
 /// left edge. It does no async work: it is on screen on the first frame after
 /// the call, with only a 120 ms fade and scale.
@@ -88,7 +89,9 @@ Future<T?> showFloatingCard<T>(
   bool highlightAnchor = true,
   bool below = false,
   double anchorRadius = 14,
+  bool keepFocus = false,
 }) => showGeneralDialog<T>(
+  requestFocus: !keepFocus,
   context: context,
   barrierLabel: AppLocalizations.of(context).menuClose,
   barrierColor: Colors.transparent,

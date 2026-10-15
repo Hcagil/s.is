@@ -689,6 +689,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quotePhoto => '📷 Photo';
 
   @override
+  String quotePhotos(int count) {
+    return '📷 $count photos';
+  }
+
+  @override
+  String get messageActionDeletePhoto => 'Delete this photo';
+
+  @override
+  String get messageDeleteAlbumTitle => 'Delete this album?';
+
+  @override
   String get listNoMessages => 'No messages yet';
 
   @override
@@ -1287,6 +1298,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get themePickMine => 'Pick my message bubble color';
+
+  @override
+  String get themeMineFollow => 'Follow accent';
+
+  @override
+  String get themeMineFollowHint => 'The bubble follows your accent color.';
+
+  @override
+  String get themeMineFixedHint =>
+      'This color stays when you change the accent.';
 
   @override
   String get themeLowContrast =>

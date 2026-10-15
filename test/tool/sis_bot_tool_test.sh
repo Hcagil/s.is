@@ -17,7 +17,11 @@
 # rename (trim, 1-80 characters, exact quotes/backslashes, no bot -> exit 1);
 # edit and delete of the bot's own messages (stdin, 4000 characters; exit 2 on a
 # bad uuid or empty text; 4 on another user's, a >6 h old (edit) or a deleted
-# message and when OFF; 3 when superseded; no token in any output).
+# message and when OFF; 3 when superseded; no token in any output); attachments
+# (a photo or image file of Debug saved byte-identical at 700/600 with its
+# extension from name, path, mime or bytes, only the path printed; exit 1 for
+# another chat, an unknown id, a video, a non-image file, text only and a gone
+# object, writing nothing; 2 bad uuid; 4 OFF) and read's [image <id>] marker.
 # While the tools run, a poller checks that no token or key is in any argv and
 # that sis_bot.sh keeps its temp files in one mode-700 directory it removes.
 set -euo pipefail
@@ -295,6 +299,95 @@ expect_exit 4 "OFF: delete own message" "$BOT" delete "$M5"
 expect_exit 0 "admin on (edit/delete)" "$ADMIN" on
 check "OFF left the message as it was" \
   test "$(sql "select body || '|' || (deleted_at is null) from public.messages where id = '$M5'")" = "still in time|true"
+sql "delete from app_private.bot_actions where bot_id = '$BOT_ID'" >/dev/null
+
+# 7c attachments: the bot downloads an image of a chat it is in -------------------
+# ann uploads and posts (as the app does); the bot fetches with its own session.
+# Fixture bytes start with the real magic of their type, then random bytes.
+# The bucket takes only images and application/octet-stream (files, videos).
+sql "delete from app_private.bot_actions where bot_id = '$BOT_ID'" >/dev/null
+ATT="$BOX/.private/bot-attachments"
+FIX="$BOX/fix"; mkdir -p "$FIX"
+mkbytes() { { printf '%b' "$2"; head -c 4000 /dev/urandom; } >"$FIX/$1"; }
+mkbytes jpg '\xff\xd8\xff\xe0\x00\x10JFIF\x00'; mkbytes png '\x89PNG\r\n\x1a\n'
+mkbytes gif 'GIF89a'; mkbytes pdf '%PDF-1.4\n'; mkbytes mp4 '\x00\x00\x00\x18ftypmp42'
+newkey() { printf '%s/%s%s' "$1" "$(cat /proc/sys/kernel/random/uuid)" "${2:-}"; }
+# post CONV KEY CTYPE FIXTURE BODY [FILE-COLUMNS-JSON] -> the message id
+post() {
+  local c; c=$(curl -sS -o "$BOX/body" -w '%{http_code}' -X POST "$SIS_URL/storage/v1/object/attachments/$2" \
+    -H "apikey: $SIS_ANON_KEY" -H "Authorization: Bearer $ANN_JWT" -H "content-type: $3" --data-binary @"$FIX/$4")
+  [ "$c" = 200 ] || { echo "fixture upload $2 failed: $c $(cat "$BOX/body")" >&2; exit 1; }
+  curl -fsS -o /dev/null -X POST "$SIS_URL/rest/v1/messages" -H "apikey: $SIS_ANON_KEY" \
+    -H "Authorization: Bearer $ANN_JWT" -H 'content-type: application/json' \
+    -d "{\"conversation_id\":\"$1\",\"sender_id\":\"$ANN\",\"body\":\"$5\",\"attachment_path\":\"$2\"${6:+,$6}}" \
+    || { echo "fixture message $2 failed" >&2; exit 1; }
+  sql "select id from public.messages where attachment_path = '$2'"
+}
+filecols() { printf '"attachment_name":"%s","attachment_mime":"%s","attachment_size":%s%s' \
+  "$1" "$2" "$(stat -c %s "$FIX/$3")" "${4:+,\"attachment_duration_ms\":$4}"; }
+P1=$(post "$DEBUG" "$(newkey "$DEBUG" .jpg)" image/jpeg jpg "")                  # a photo, ext from the path
+P2=$(post "$DEBUG" "$(newkey "$DEBUG")" image/png png "look at this")            # with text, ext from the bytes
+P3=$(post "$DEBUG" "$(newkey "$DEBUG" .jpg)" image/gif gif "" "$(filecols holiday.gif image/gif gif)")   # name beats path
+P4=$(post "$DEBUG" "$(newkey "$DEBUG" .jpeg)" image/png png "" "$(filecols screenshot image/png png)")   # no ext in name: path beats mime
+P5=$(post "$DEBUG" "$(newkey "$DEBUG")" image/webp png "" "$(filecols screenshot image/webp png)")      # mime beats the bytes
+P6=$(post "$DEBUG" "$(newkey "$DEBUG" .jpg)" image/jpeg jpg "")                  # fetched while OFF
+P7=$(post "$DEBUG" "$(newkey "$DEBUG" .jpg)" image/jpeg jpg "")                  # its object deleted
+V1=$(post "$DEBUG" "$(newkey "$DEBUG" .mp4)" application/octet-stream mp4 "" "$(filecols clip.mp4 video/mp4 mp4 1500)")
+F1=$(post "$DEBUG" "$(newkey "$DEBUG" .pdf)" application/octet-stream pdf "" "$(filecols notes.pdf application/pdf pdf)")
+X1=$(post "$G2" "$(newkey "$G2" .jpg)" image/jpeg jpg "")                        # a chat the bot is not in
+curl -fsS -o /dev/null -X POST "$SIS_URL/rest/v1/messages" -H "apikey: $SIS_ANON_KEY" -H "Authorization: Bearer $ANN_JWT" \
+  -H 'content-type: application/json' -d "{\"conversation_id\":\"$DEBUG\",\"sender_id\":\"$ANN\",\"body\":\"text only 7c\"}"
+T1=$(sql "select id from public.messages where body = 'text only 7c'")
+# the object behind P7 goes away (test setup, service key), the message stays
+curl -fsS -o /dev/null -X DELETE "$SIS_URL/storage/v1/object/attachments/$(sql "select attachment_path from public.messages where id = '$P7'")" \
+  -H "apikey: $SKEY" -H "Authorization: Bearer $SKEY"
+# got ID EXT FIXTURE: the printed path (absolute, or relative as the contract
+# writes it) is <ATT>/<id>/1<ext>, byte-identical, dir 700, file 600
+got() {
+  local f="$ATT/$1/1$2" o; o=$(cat "$BOX/out")
+  check "attachments $1: prints only its path ($o)" bash -c "[ '$o' = '$f' ] || [ '$o' = '${f#"$BOX/"}' ]"
+  check "attachments $1: 1$2 is byte-identical" cmp -s "$f" "$FIX/$3"
+  check "attachments $1: the directory is mode 700" test "$(stat -c %a "$ATT/$1" 2>/dev/null)" = 700
+  check "attachments $1: the file is mode 600" test "$(stat -c %a "$f" 2>/dev/null)" = 600
+  check "attachments $1: one file in its directory" test "$(ls -A "$ATT/$1" 2>/dev/null | wc -l)" = 1
+}
+refusal() {  # WANT-EXIT ID TEXT NAME: the exit, the message, nothing written
+  expect_exit "$1" "attachments refuses $4" "$BOT" attachments "$2"
+  [ -z "$3" ] || check "attachments refuses $4: says '$3'" grep -qiF "$3" "$BOX/err" "$BOX/out"
+  check "attachments refuses $4: nothing written" test ! -e "$ATT/$2"
+}
+old_umask=$(umask); umask 022   # modes must not come from the caller's umask
+t=$(jq -r .refresh_token "$STATE")
+watch 0 "attachments of a photo in Debug" "$t" "$BOT" attachments "$P1"
+got "$P1" .jpg jpg
+no_token "attachments" "$t"
+check "attachments: no URL in the output" bash -c "! grep -qiE 'https?://|/storage/' '$BOX/out' '$BOX/err'"
+expect_exit 0 "attachments of a photo with text" "$BOT" attachments "$P2"; got "$P2" .png png
+expect_exit 0 "attachments of an image file (name holiday.gif, path .jpg)" "$BOT" attachments "$P3"; got "$P3" .gif gif
+expect_exit 0 "attachments of an image file (no ext in name, path .jpeg, mime image/png)" "$BOT" attachments "$P4"; got "$P4" .jpeg png
+expect_exit 0 "attachments of an image file (no ext anywhere, mime image/webp)" "$BOT" attachments "$P5"; got "$P5" .webp png
+umask "$old_umask"
+refusal 1 "$X1" "no such message" "a photo in a chat the bot is not in"
+refusal 1 "$(cat /proc/sys/kernel/random/uuid)" "no such message" "an unknown message id"
+refusal 1 "$V1" "no image" "a video message"
+refusal 1 "$F1" "no image" "a non-image file"
+refusal 1 "$T1" "no image" "a text-only message"
+refusal 1 "$P7" "download failed (http " "a photo whose object is gone"
+expect_exit 2 "attachments refuses a bad uuid" "$BOT" attachments "not-a-uuid"
+check "the bad uuid wrote nothing" test ! -e "$ATT/not-a-uuid"
+expect_exit 2 "attachments with no id" open_stdin "$BOT" attachments
+expect_exit 0 "admin off (attachments)" "$ADMIN" off
+refusal 4 "$P6" "" "while the bot is OFF"
+expect_exit 0 "admin on (attachments)" "$ADMIN" on
+# read shows an image as [image <id>], after the text when there is text
+expect_exit 0 "read after the images" "$BOT" read
+has_body() { jq -se --arg b "$1" '[.[] | .. | strings | select(. == $b)] | length > 0' "$BOX/out" >/dev/null 2>&1; }
+check "read: a photo without text is '[image <id>]'" has_body "[image $P1]"
+check "read: a photo with text is '<text>\\n[image <id>]'" has_body $'look at this\n'"[image $P2]"
+check "read: an image file is '[image <id>]' too" has_body "[image $P3]"
+check "read: a video gets no image marker" bash -c "! grep -qF '[image $V1]' '$BOX/out'"
+check "read: a non-image file gets no image marker" bash -c "! grep -qF '[image $F1]' '$BOX/out'"
+check "read: a text-only message is unchanged" has_body "text only 7c"
 sql "delete from app_private.bot_actions where bot_id = '$BOT_ID'" >/dev/null
 
 # 8 usage and unsafe file (2) ------------------------------------------------------------

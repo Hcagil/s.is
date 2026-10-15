@@ -146,6 +146,16 @@ Future<void> main() async {
       'Noto Emoji images',
     ], await rootBundle.loadString('assets/stickers/NOTO-EMOJI-LICENSE.txt'));
   });
+  // The on-phone message store is encrypted with SQLite3 Multiple Ciphers
+  // (MIT, plus ISC and BSD parts).
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(
+      ['SQLite3 Multiple Ciphers'],
+      await rootBundle.loadString(
+        'assets/licenses/SQLITE3-MULTIPLE-CIPHERS-LICENSE.txt',
+      ),
+    );
+  });
   final config = RuntimeConfig.fromEnvironment();
   // Read before runApp (like the session marker), so the first frame already
   // has the member's theme, font, text size and language: no flash.

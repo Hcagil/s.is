@@ -686,6 +686,17 @@ class AppLocalizationsTr extends AppLocalizations {
   String get quotePhoto => '📷 Fotoğraf';
 
   @override
+  String quotePhotos(int count) {
+    return '📷 $count fotoğraf';
+  }
+
+  @override
+  String get messageActionDeletePhoto => 'Bu fotoğrafı sil';
+
+  @override
+  String get messageDeleteAlbumTitle => 'Bu albüm silinsin mi?';
+
+  @override
   String get listNoMessages => 'Henüz mesaj yok';
 
   @override
@@ -1276,6 +1287,16 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get themePickMine => 'Mesaj balonumun rengini seçin';
+
+  @override
+  String get themeMineFollow => 'Vurgu rengini kullan';
+
+  @override
+  String get themeMineFollowHint => 'Balon, vurgu renginizi izler.';
+
+  @override
+  String get themeMineFixedHint =>
+      'Bu renk, vurguyu değiştirseniz de sabit kalır.';
 
   @override
   String get themeLowContrast =>

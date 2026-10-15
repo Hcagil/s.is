@@ -4,14 +4,23 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// The key that encrypts the on-phone message database: 32 random bytes as 64 hex characters, made once and kept in the platform's secure storage (Keystore / Keychain).
 final class StoreKey {
-  const StoreKey({this._storage = const FlutterSecureStorage()});
+  const StoreKey({
+    this._storage = const FlutterSecureStorage(
+      // This device only: the key must never travel in an iCloud or Finder
+      // backup together with the database file.
+      iOptions: IOSOptions(
+        accessibility: KeychainAccessibility.first_unlock_this_device,
+      ),
+    ),
+  });
   final FlutterSecureStorage _storage;
   static const _name = 'sis.store.key';
+  static final _hex64 = RegExp(r'^[0-9a-f]{64}$');
 
   /// The saved key, or a new one saved first.
   Future<String> loadOrCreate() async {
     final key = await _storage.read(key: _name);
-    if (key != null && key.length == 64) {
+    if (key != null && _hex64.hasMatch(key)) {
       return key;
     }
 

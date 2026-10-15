@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -24,7 +25,17 @@ final class DriftMessageStore implements MessageStore {
   final Future<void> Function() _deleteKey;
   Future<StoreDatabase>? _db;
 
-  Future<StoreDatabase> _open() => _db ??= _create();
+  /// Operations running now (registered synchronously when they start).
+  final _inflight = <Future<void>>{};
+
+  /// The clear in progress or last finished; new work waits for it.
+  Future<void>? _clearing;
+
+  Future<StoreDatabase> _open() {
+    final clearing = _clearing;
+    if (clearing == null) return _db ??= _create();
+    return clearing.then((_) => _db ??= _create());
+  }
 
   /// Runs [body] on the open database for a sibling store (the chat list
   /// snapshot); any failure returns [fallback].
@@ -36,10 +47,16 @@ final class DriftMessageStore implements MessageStore {
     T fallback,
     Future<T> Function(StoreDatabase db) body,
   ) async {
+    final opened = _open();
+    final done = Completer<void>();
+    _inflight.add(done.future);
     try {
-      return await body(await _open());
+      return await body(await opened);
     } catch (_) {
       return fallback;
+    } finally {
+      done.complete();
+      _inflight.remove(done.future);
     }
   }
 
@@ -301,10 +318,30 @@ final class DriftMessageStore implements MessageStore {
     });
   }
 
+  /// Waits for the work already running before closing, so no transaction is
+  /// abandoned in the database isolate; work started later waits for the clear.
   @override
-  Future<void> clear() async {
+  Future<void> clear() {
+    final running = _inflight.toList();
     final pending = _db;
     _db = null;
+    final previous = _clearing;
+    return _clearing = _clearOnce(previous, running, pending);
+  }
+
+  Future<void> _clearOnce(
+    Future<void>? previous,
+    List<Future<void>> running,
+    Future<StoreDatabase>? pending,
+  ) async {
+    if (previous != null) {
+      await previous;
+      // A database opened while the earlier clear ran is closed too.
+      running = _inflight.toList();
+      pending = _db;
+      _db = null;
+    }
+    await Future.wait(running);
     try {
       if (pending != null) await (await pending).close();
     } catch (_) {}
@@ -317,38 +354,30 @@ final class DriftMessageStore implements MessageStore {
   }
 
   @override
-  Future<ChangeCursor?> cursor() async {
-    try {
-      final db = await _open();
-      final row = await (db.select(
-        db.meta,
-      )..where((t) => t.key.equals('change_cursor'))).getSingleOrNull();
-      if (row == null) return null;
-      final value = row.value;
-      final i = value.indexOf('|');
-      if (i < 0) return null;
-      final a = value.substring(0, i);
-      final b = value.substring(i + 1);
-      return ChangeCursor(DateTime.fromMicrosecondsSinceEpoch(int.parse(a)), b);
-    } catch (_) {
-      return null;
-    }
-  }
+  Future<ChangeCursor?> cursor() => _run<ChangeCursor?>(null, (db) async {
+    final row = await (db.select(
+      db.meta,
+    )..where((t) => t.key.equals('change_cursor'))).getSingleOrNull();
+    if (row == null) return null;
+    final value = row.value;
+    final i = value.indexOf('|');
+    if (i < 0) return null;
+    final a = value.substring(0, i);
+    final b = value.substring(i + 1);
+    return ChangeCursor(DateTime.fromMicrosecondsSinceEpoch(int.parse(a)), b);
+  });
 
   @override
-  Future<void> saveCursor(ChangeCursor c) async {
-    try {
-      final db = await _open();
-      await db
-          .into(db.meta)
-          .insertOnConflictUpdate(
-            MetaCompanion.insert(
-              key: 'change_cursor',
-              value: '${c.updatedAt.microsecondsSinceEpoch}|${c.id}',
-            ),
-          );
-    } catch (_) {}
-  }
+  Future<void> saveCursor(ChangeCursor c) => _run<void>(null, (db) async {
+    await db
+        .into(db.meta)
+        .insertOnConflictUpdate(
+          MetaCompanion.insert(
+            key: 'change_cursor',
+            value: '${c.updatedAt.microsecondsSinceEpoch}|${c.id}',
+          ),
+        );
+  });
 }
 
 /// A plain SQLite would ignore PRAGMA key and store everything unencrypted,
@@ -363,7 +392,12 @@ void Function(Database) _keyed(String key) {
 }
 
 Future<void> _deleteFiles(File file) async {
-  for (final path in [file.path, '${file.path}-wal', '${file.path}-shm']) {
+  for (final path in [
+    file.path,
+    '${file.path}-wal',
+    '${file.path}-shm',
+    '${file.path}-journal',
+  ]) {
     try {
       await File(path).delete();
     } catch (_) {

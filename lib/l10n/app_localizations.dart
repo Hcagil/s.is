@@ -2336,6 +2336,24 @@ abstract class AppLocalizations {
   /// **'Pick my message bubble color'**
   String get themePickMine;
 
+  /// Tooltip and label of the tile that makes my bubble follow the accent
+  ///
+  /// In en, this message translates to:
+  /// **'Follow accent'**
+  String get themeMineFollow;
+
+  /// Hint under my-messages swatches while following the accent
+  ///
+  /// In en, this message translates to:
+  /// **'The bubble follows your accent color.'**
+  String get themeMineFollowHint;
+
+  /// Hint under my-messages swatches while a fixed color is picked
+  ///
+  /// In en, this message translates to:
+  /// **'This color stays when you change the accent.'**
+  String get themeMineFixedHint;
+
   /// Theme editor warning
   ///
   /// In en, this message translates to:

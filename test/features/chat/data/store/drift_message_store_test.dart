@@ -625,6 +625,16 @@ void main() {
       expect(await h.shm.exists(), isFalse);
     });
 
+    test('also deletes a leftover -journal file', () async {
+      final s = store();
+      await s.upsertAll([msg('a')]);
+      final journal = File('${h.file.path}-journal');
+      await journal.writeAsBytes([1, 2, 3]);
+      await s.clear();
+      expect(await h.file.exists(), isFalse);
+      expect(await journal.exists(), isFalse);
+    });
+
     test('clear racing writes and reads never throws', () async {
       final s = store();
       await s.upsertAll([msg('a')]);

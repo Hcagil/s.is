@@ -351,13 +351,13 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, link_preview, admin_msg';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, photo_group, link_preview, admin_msg';
 
   /// The columns of a page read (open chat): no photo preview -- those arrive
   /// separately, see [attachmentPreviews], so the first paint never waits on
   /// them.
   static const _pageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, link_preview, admin_msg';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, photo_group, link_preview, admin_msg';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -929,6 +929,7 @@ final class SupabaseChatRepository implements ChatRepository {
             'body': body.trim(),
             'attachment_path': path,
             'reply_to': ?replyTo,
+            'photo_group': ?image.photoGroup,
             if (image.preview case final preview?)
               'attachment_preview': base64Encode(preview),
           })
@@ -1225,6 +1226,7 @@ final class SupabaseChatRepository implements ChatRepository {
           if (message.attachmentPreview case final preview?)
             'attachment_preview': base64Encode(preview),
           'forwarded': true,
+          'photo_group': ?message.photoGroup,
           if (message.file case final file?) ...{
             'attachment_name': file.name,
             'attachment_mime': file.mime,
@@ -1382,6 +1384,7 @@ final class SupabaseChatRepository implements ChatRepository {
     stickerId: row['sticker_id'] as String?,
     albumCard: row['sticker_album'] as bool? ?? false,
     albumId: row['sticker_album_id'] as String?,
+    photoGroup: row['photo_group'] as String?,
     location: SharedLocation.fromRow(
       lat: (row['location_lat'] as num?)?.toDouble(),
       lng: (row['location_lng'] as num?)?.toDouble(),

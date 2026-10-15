@@ -12,6 +12,7 @@ class ThemeSwatchRow extends StatelessWidget {
     required this.colours,
     required this.selected,
     required this.onPick,
+    this.leading,
   });
 
   /// Key prefix of the swatches, e.g. `accent`.
@@ -19,6 +20,9 @@ class ThemeSwatchRow extends StatelessWidget {
   final List<int> colours;
   final int? selected;
   final ValueChanged<int> onPick;
+
+  /// Optional tile shown before the swatches.
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +36,7 @@ class ThemeSwatchRow extends StatelessWidget {
         child: Row(
           spacing: 8,
           children: [
+            ?leading,
             for (final c in colours)
               Semantics(
                 button: true,

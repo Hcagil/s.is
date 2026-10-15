@@ -62,7 +62,11 @@ class WhatsNewCard extends ConsumerWidget {
               if (note.isStructured)
                 Text(
                   AppLocalizations.of(context)
-                      .whatsNewVersion(note.version!)
+                      .whatsNewVersion(
+                        note.build == null
+                            ? note.version!
+                            : '${note.version} (${note.build})',
+                      )
                       .toUpperCase(),
                   style: TextStyle(
                     color: isNewest ? t.brand : t.muted,

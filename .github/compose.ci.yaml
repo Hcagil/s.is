@@ -4,3 +4,4 @@ services:
       - .:/workspace
       - ./.ci-cache/pub:/home/ubuntu/.pub-cache
       - ./.ci-cache/gradle:/home/ubuntu/.gradle
+      - ./.ci-cache/m2:/home/ubuntu/.m2

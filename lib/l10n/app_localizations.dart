@@ -1370,6 +1370,24 @@ abstract class AppLocalizations {
   /// **'📷 Photo'**
   String get quotePhoto;
 
+  /// A quoted photo album
+  ///
+  /// In en, this message translates to:
+  /// **'📷 {count} photos'**
+  String quotePhotos(int count);
+
+  /// Photo viewer menu, a photo of an album: delete it for everyone (the album's other photos stay)
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this photo'**
+  String get messageActionDeletePhoto;
+
+  /// Delete confirm card title for a whole photo album
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this album?'**
+  String get messageDeleteAlbumTitle;
+
   /// Preview line of a conversation with no messages
   ///
   /// In en, this message translates to:
@@ -2317,6 +2335,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pick my message bubble color'**
   String get themePickMine;
+
+  /// Tooltip and label of the tile that makes my bubble follow the accent
+  ///
+  /// In en, this message translates to:
+  /// **'Follow accent'**
+  String get themeMineFollow;
+
+  /// Hint under my-messages swatches while following the accent
+  ///
+  /// In en, this message translates to:
+  /// **'The bubble follows your accent color.'**
+  String get themeMineFollowHint;
+
+  /// Hint under my-messages swatches while a fixed color is picked
+  ///
+  /// In en, this message translates to:
+  /// **'This color stays when you change the accent.'**
+  String get themeMineFixedHint;
 
   /// Theme editor warning
   ///

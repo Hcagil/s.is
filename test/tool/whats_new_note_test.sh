@@ -15,7 +15,7 @@
 #     could edit a merged PR's body and have it sent to every member as SIS);
 #   - the joined EN ("For users:") and TR ("Kullanıcılar için:") texts are each
 #     cut to 1900 characters (never bytes: LC_ALL=C.UTF-8 in the step), then a
-#     non-empty note is "Version $VERSION\n" + EN, plus "\n---\nSürüm $VERSION\n"
+#     non-empty note is "Version $VERSION ($BUILD)\n" + EN, plus "\n---\nSürüm $VERSION ($BUILD)\n"
 #     + TR when there is TR text (room under the 4000-char release_notes check
 #     and TestFlight limit); an empty note gets no prefix;
 #   - a failing `gh api` pull read fails the run block, and the step is
@@ -155,7 +155,7 @@ g commit -q --allow-empty -m 'chore: tidy (#11)'
 g commit -q --allow-empty -m 'docs: no pull request here'
 g commit -q --allow-empty -m 'fix: faster start (#12)'
 head_sha=$(g rev-parse HEAD)
-V='Version 1.2.3'
+V='Version 1.2.3 (179)' # BUILD=179 in run_step
 
 printf 'For users: Old news.\n' > "$tmp/prs/9"
 printf '## Summary\r\nSound.\r\n\r\nFor users: You can pick a sound.\r\n' > "$tmp/prs/10"
@@ -241,8 +241,8 @@ run_step v0.26.0+178 || fail "step exited non-zero"
 for pr in 10 11 12; do echo OWNER > "$tmp/prs/$pr.assoc"; done
 
 # 5 EN ("For users:") and TR ("Kullanıcılar için:") texts are each cut to their
-# first 1900 characters, separately; stored as "Version X\n" + EN, then
-# "\n---\nSürüm X\n" + TR. The step runs under LC_ALL=C here, so only the
+# first 1900 characters, separately; stored as "Version X (B)\n" + EN, then
+# "\n---\nSürüm X (B)\n" + TR. The step runs under LC_ALL=C here, so only the
 # step's own LC_ALL=C.UTF-8 makes the cut count characters, not bytes.
 en_a=$(printf 'a%.0s' $(seq 1000)); en_b=$(printf 'b%.0s' $(seq 1500))
 printf 'For users: %s\n' "$en_a" > "$tmp/prs/10"
@@ -264,7 +264,7 @@ LC_ALL=C run_step v0.26.0+178 || fail "step exited non-zero on a long Turkish no
 stored=$(note_of; printf .); stored=${stored%.}
 iconv -f UTF-8 -t UTF-8 <<<"$stored" >/dev/null 2>&1 || fail "long Turkish note is not valid UTF-8 (a letter was split)"
 tr_both=$(printf '%s\n%s' "$tr_a" "$tr_b")
-[ "$stored" = "$V"$'\n'"${en_both:0:1900}"$'\n---\nSürüm 1.2.3\n'"${tr_both:0:1900}" ] \
+[ "$stored" = "$V"$'\n'"${en_both:0:1900}"$'\n---\nSürüm 1.2.3 (179)\n'"${tr_both:0:1900}" ] \
   || fail "long Turkish note is not Version + 1900 EN chars + --- + Sürüm + 1900 TR letters"
 [ "${#stored}" -le 4000 ] || fail "bilingual note stored as ${#stored} characters, over the 4000 check"
 same_note

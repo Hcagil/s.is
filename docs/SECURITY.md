@@ -85,7 +85,7 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     changes of members whose time in the group overlapped hers.
   - `messages` inserts: `authenticated` may insert exactly `id,
     conversation_id, sender_id, body, attachment_path, attachment_preview,
-    reply_to, forwarded, link_preview`; `created_at`, `deleted`, `deleted_at` and
+    reply_to, forwarded, link_preview, photo_group`; `created_at`, `deleted`, `deleted_at` and
     `edited_at` stay server-assigned, and there is no UPDATE or DELETE
     privilege (edits and deletes go through `edit_message` /
     `delete_message`). The `id` is proposed by the phone (a random v4 UUID),
@@ -98,6 +98,15 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     the retried message is a reply, the same reply target);
     otherwise the send fails. Accepted leftover risk: a member who already
     knows a message id learns whether that message exists.
+  - `messages.photo_group` (a uuid, null for every message but the photos of
+    an album) is only a grouping label: each photo is its own message with
+    its own access rule, so knowing or guessing a group id reveals nothing.
+    It is insert-only like the other columns (no UPDATE privilege), and the
+    `messages_photo_group_check` constraint allows it only on a stored photo
+    (an image, not a file or video; a message deleted for everyone may keep
+    the value). The app folds photos into one bubble only when they share the
+    group AND the sender, so a member cannot pull another member's photos
+    into their own album. Nothing filters on it, so it has no index.
   - Drafts and queued unsent messages live in the app's memory only; if they
     are ever stored on the phone (not stored as of v0.24.0; the chat list is — see Secrets), they are
     personal data under the on-phone storage posture.

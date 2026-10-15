@@ -234,6 +234,19 @@ same "after exit 3 the next check delivers" \
   "$(printf 'watch: bot session lost or busy (exit 3)\nJon: after the outage')" "$(cat "$BOX/out")"
 same "and the marker moves" "$(ts $((base+14)))" "$(cat "$SEEN")"
 
+# 9b image markers from read pass through unchanged ---------------------------------
+I15=33333333-0000-4000-8000-000000000015; I16=33333333-0000-4000-8000-000000000016
+msg "$I15" "$CONV" "$TESTER" Kim "[image $I15]" $((base+15))
+msg "$I16" "$CONV" "$TESTER" Kim $'look at this\n'"[image $I16]" $((base+16))
+run 3 "" 100
+same "image markers are printed as read gives them" \
+  "$(printf 'Kim: [image %s]\nKim: look at this [image %s]' "$I15" "$I16")" "$(cat "$BOX/out")"
+WANT+=$'\n'$(entry "$(ts $((base+14)))" Jon "$CONV" "after the outage")  # section 9's
+WANT+=$'\n'$(entry "$(ts $((base+15)))" Kim "$CONV" "[image $I15]")
+WANT+=$'\n'$(entry "$(ts $((base+16)))" Kim "$CONV" $'look at this\n'"[image $I16]")
+same "and appended unchanged" "$WANT" "$(inbox_view)"
+same "the marker is the newest" "$(ts $((base+16)))" "$(cat "$SEEN")"
+
 # 10 backoff: after exit 5 the next sleep doubles ---------------------------------------
 run 9 $'0\n5\n0\n0' 2
 gap() { grep ' read ' "$FAKE/calls" | awk -v a="$1" -v b="$2" 'NR==a {x=$1} NR==b {y=$1} END {printf "%.1f", y-x}'; }

@@ -12,9 +12,14 @@ sealed class TimelineEntry {
 }
 
 final class MessageEntry extends TimelineEntry {
-  const MessageEntry(this.message);
+  const MessageEntry(this.message, [this.album = const []]);
 
   final Message message;
+
+  /// For a photo album: all its photos, oldest first, [message] being the first. Empty for any other message.
+  final List<Message> album;
+
+  bool get isAlbum => album.length >= 2;
 
   @override
   DateTime get at => message.createdAt;
@@ -34,14 +39,55 @@ final class EventEntry extends TimelineEntry {
 /// everyone else), sorted by time. Stable for equal timestamps -- a message
 /// keeps its place ahead of an event sharing its exact instant, and events
 /// keep their relative order among themselves.
+///
+/// Two or more consecutive photos from one sender sharing a photoGroup are
+/// folded into one [MessageEntry] carrying the whole album.
 List<TimelineEntry> buildTimeline(
   List<Message> messages,
   List<GroupEvent> events,
 ) {
+  var i = 0;
+  final folded = <MessageEntry>[];
+  while (i < messages.length) {
+    final m = messages[i];
+    if (m.photoGroup == null || m.isDeleted || !m.hasAttachment) {
+      folded.add(MessageEntry(m));
+      i++;
+      continue;
+    }
+    var j = i + 1;
+    while (j < messages.length &&
+        messages[j].photoGroup == m.photoGroup &&
+        messages[j].senderId == m.senderId &&
+        !messages[j].isDeleted &&
+        messages[j].hasAttachment) {
+      j++;
+    }
+    final run = messages.sublist(i, j);
+    folded.add(
+      run.length >= 2 ? MessageEntry(run.first, run) : MessageEntry(m),
+    );
+    i = j;
+  }
   final entries = <TimelineEntry>[
-    for (final m in messages) MessageEntry(m),
+    ...folded,
     for (final e in events) EventEntry(e),
   ];
   entries.sort((a, b) => a.at.compareTo(b.at));
   return entries;
+}
+
+/// The photos of the album [m] belongs to, oldest first -- [m] itself when it is not part of one. Matches on the shared photoGroup and the sender, ignoring photos deleted for everyone.
+List<Message> albumOf(List<Message> messages, Message m) {
+  final group = m.photoGroup;
+  if (group == null) return [m];
+  final run = [
+    for (final x in messages)
+      if (x.photoGroup == group &&
+          x.senderId == m.senderId &&
+          !x.isDeleted &&
+          x.hasAttachment)
+        x,
+  ];
+  return run.length >= 2 ? run : [m];
 }

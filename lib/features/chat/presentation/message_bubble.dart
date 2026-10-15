@@ -13,10 +13,18 @@ class _Bubble extends StatelessWidget {
     this.quotedName,
     this.highlightQuery,
     this.isCurrentHit = false,
+    this.album = const [],
+    this.quotedCount = 0,
   });
 
   final Message message;
   final bool mine;
+
+  /// The photos of an album this bubble draws as one grid, oldest first ([message] is the first); empty for any other message.
+  final List<Message> album;
+
+  /// How many photos the quoted message stands for (an album's size); 0 or 1 for a single message.
+  final int quotedCount;
 
   /// The delivery tick of your own message (sending, sent, delivered,
   /// read); null on someone else's message.
@@ -242,7 +250,11 @@ class _Bubble extends StatelessWidget {
                             ),
                           ),
                         Text(
-                          quoteText(AppLocalizations.of(context), quoted),
+                          quoteText(
+                            AppLocalizations.of(context),
+                            quoted,
+                            albumCount: quotedCount,
+                          ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -278,7 +290,23 @@ class _Bubble extends StatelessWidget {
                   ),
                 ),
               if (message.hasAttachment && message.file == null)
-                _boxless
+                album.length >= 2
+                    ? _AlbumGrid(
+                        album,
+                        radius: _boxless ? brand.bubbleRadius : 6,
+                        time: _boxless
+                            ? _TimeTick(
+                                message: message,
+                                timeText: clockTime(album.last.createdAt),
+                                timeStyle: TextStyle(
+                                  fontSize: SisTokens.timeFontSize,
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
+                                delivery: delivery,
+                              )
+                            : null,
+                      )
+                    : _boxless
                     ? Stack(
                         children: [
                           _Attachment(message, radius: brand.bubbleRadius),
@@ -307,7 +335,8 @@ class _Bubble extends StatelessWidget {
                           ),
                         ],
                       )
-                    : _Attachment(message),
+                    // Centred: a wide caption makes the bubble wider than the photo.
+                    : Align(child: _Attachment(message)),
               // An image may be sent without a caption, so an empty body must
               // render nothing at all rather than an empty line. A deleted
               // message never shows a time, but (defensively) may still carry

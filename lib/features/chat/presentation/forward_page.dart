@@ -17,11 +17,13 @@ import 'picker_widgets.dart';
 
 /// Opens the forward page for [message], then forwards it to everything the
 /// member ticked. People without a chat yet get one created on send.
+/// With [album], the whole photo album [message] belongs to is forwarded.
 Future<void> showForwardPage(
   BuildContext context,
   WidgetRef ref,
-  Message message,
-) async {
+  Message message, {
+  bool album = false,
+}) async {
   final chosen = await Navigator.of(context)
       .push<({List<String> chatIds, List<String> personIds})>(
         MaterialPageRoute(
@@ -42,6 +44,7 @@ Future<void> showForwardPage(
         message,
         conversationIds: chosen.chatIds,
         personIds: chosen.personIds,
+        album: album,
       );
   if (!context.mounted) return;
   final total = chosen.chatIds.length + chosen.personIds.length;

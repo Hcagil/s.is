@@ -178,11 +178,63 @@ class _ThemeEditorPageState extends ConsumerState<ThemeEditorPage> {
                         selected: _background,
                         onPick: (c) => setState(() => _background = c),
                       ),
-                      _ => ThemeSwatchRow(
-                        group: 'mine',
-                        colours: _mines,
-                        selected: _mine,
-                        onPick: (c) => setState(() => _mine = c),
+                      _ => Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ThemeSwatchRow(
+                            group: 'mine',
+                            colours: _mines,
+                            selected: _mine,
+                            onPick: (c) => setState(() => _mine = c),
+                            leading: Semantics(
+                              button: true,
+                              selected: _mine == null,
+                              label: l.themeMineFollow,
+                              child: Tooltip(
+                                message: l.themeMineFollow,
+                                child: InkWell(
+                                  key: const ValueKey('mine-follow'),
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () => setState(() => _mine = null),
+                                  child: Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: Color(_deep),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: _mine == null ? t.brand : t.line,
+                                        width: 2,
+                                      ),
+                                      boxShadow: _mine == null
+                                          ? [
+                                              BoxShadow(
+                                                color: t.glow,
+                                                spreadRadius: 2,
+                                              ),
+                                            ]
+                                          : null,
+                                    ),
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.water_drop_outlined,
+                                        size: 20,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _mine == null
+                                ? l.themeMineFollowHint
+                                : l.themeMineFixedHint,
+                            style: TextStyle(fontSize: 12, color: t.muted),
+                          ),
+                        ],
                       ),
                     },
                     if (_tab == 0 && accentHardToRead(_accent, chat.toARGB32()))

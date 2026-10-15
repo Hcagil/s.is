@@ -33,7 +33,11 @@ import 'features/chat/data/external_picker_channel.dart';
 import 'features/chat/data/file_video_importer.dart';
 import 'features/chat/data/method_channel_share_intake.dart';
 import 'features/chat/data/file_attachment_cache.dart';
-import 'features/chat/data/file_chat_list_snapshot_store.dart';
+import 'features/chat/data/store/drift_chat_list_snapshot_store.dart';
+import 'features/chat/data/store/drift_message_store.dart';
+import 'features/chat/data/store/legacy_chat_list.dart';
+import 'features/chat/data/store/store_key.dart';
+import 'features/chat/data/store/store_location.dart';
 import 'features/chat/data/flutter_device_files.dart';
 import 'features/chat/data/flutter_device_videos.dart';
 import 'features/chat/data/geolocator_device_location.dart';
@@ -207,6 +211,8 @@ Future<void> main() async {
     );
     final attachmentCache = FileAttachmentCache();
     final deviceFiles = FlutterDeviceFiles();
+    // The chat list used to live in chat_list.json; now it is in the store.
+    unawaited(deleteLegacyChatList());
     StartupMarks.mark('run-app');
     runApp(
       ProviderScope(
@@ -300,8 +306,22 @@ Future<void> main() async {
           mapViewProvider.overrideWithValue(maps.mapView),
           mapPreviewProvider.overrideWithValue(maps.mapPreview),
           attachmentCacheProvider.overrideWithValue(attachmentCache),
-          chatListSnapshotStoreProvider.overrideWithValue(
-            FileChatListSnapshotStore(),
+          // One encrypted database per signed-in account: the provider
+          // watches the user id, so another account gets a fresh instance
+          // (and the file's owner check wipes the old rows).
+          messageStoreProvider.overrideWith((ref) {
+            const key = StoreKey();
+            return DriftMessageStore(
+              ownerId: ref.watch(currentUserIdProvider) ?? '',
+              file: storeFile,
+              key: key.loadOrCreate,
+              deleteKey: key.delete,
+            );
+          }),
+          chatListSnapshotStoreProvider.overrideWith(
+            (ref) => DriftChatListSnapshotStore(
+              ref.watch(messageStoreProvider) as DriftMessageStore,
+            ),
           ),
           lastSessionStoreProvider.overrideWithValue(FileLastSessionStore()),
           galleryProvider.overrideWithValue(const PhotoManagerGallery()),

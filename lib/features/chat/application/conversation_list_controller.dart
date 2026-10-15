@@ -110,6 +110,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
               final sub = value.listen(
                 (message) {
                   if (!loaded) {
+                    _persist(message);
                     buffered.add(message);
                   } else {
                     _apply(message);
@@ -180,10 +181,39 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     }
   }
 
+  /// Writes a live [message] to the on-phone store (best effort), so chats
+  /// that are not open stay current; a legacy `vanished` row leaves it.
+  void _persist(Message message) {
+    final store = _storeOf(ref);
+    if (store == null) return;
+    unawaited(
+      message.deletion == MessageDeletion.vanished
+          ? store.remove(message.id)
+          : store.upsertAll([message]),
+    );
+  }
+
+  /// Chats that were on the list (or taken off it for a delete) but are not in
+  /// the server's [list] any more: their stored messages are erased from the
+  /// phone. A group the member left is still in the server list, so it stays.
+  void _purgeGone(List<Conversation> list) {
+    final store = _storeOf(ref);
+    if (store == null) return;
+    final now = {for (final c in list) c.id};
+    final before = {
+      for (final c in state.value ?? const <Conversation>[]) c.id,
+      ..._hidden,
+    };
+    for (final id in before.difference(now)) {
+      unawaited(store.deleteConversation(id));
+    }
+  }
+
   /// Moves [message] into its conversation's preview. A message for a
   /// conversation the list has never seen means someone started one with
   /// this member, so the list is re-read rather than guessed at.
   void _apply(Message message) {
+    _persist(message);
     final current = state.value;
     if (current == null) return;
     // A deletion can change which message a conversation previews, and the
@@ -287,6 +317,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       Ok(:final value) => value,
       Err(:final failure) => throw failure,
     };
+    _purgeGone(list);
     // A chat the member just deleted (undo still possible, or the delete is
     // on its way to the server) stays off the list until [forget].
     return [

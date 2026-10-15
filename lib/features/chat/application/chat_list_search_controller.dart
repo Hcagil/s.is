@@ -54,11 +54,27 @@ class ChatListSearchController extends Notifier<ChatListSearchState> {
     }
     final generation = ++_generation;
     _debounce = Timer(const Duration(milliseconds: 300), () async {
+      // The phone first: instant, and the only source once every chat is
+      // fully stored; before that the server stays the fallback for older hits.
+      final store = _storeOf(ref);
+      var local = const <Message>[];
+      if (store != null) {
+        local = await store.search(query);
+        final complete = await _allStored(store);
+        if (!ref.mounted || generation != _generation) return;
+        if (local.isNotEmpty || complete) {
+          state = ChatListSearchState(query: query, results: local);
+        }
+        if (complete) return;
+      }
       final result = await ref.read(chatRepositoryProvider).search(query);
       if (!ref.mounted || generation != _generation) return;
       switch (result) {
         case Ok(:final value):
-          state = ChatListSearchState(query: query, results: value);
+          state = ChatListSearchState(
+            query: query,
+            results: _merged(local, value),
+          );
         case Err(:final failure):
           // The list stays usable: only the failure is new, not the results.
           state = ChatListSearchState(
@@ -68,6 +84,26 @@ class ChatListSearchController extends Notifier<ChatListSearchState> {
           );
       }
     });
+  }
+
+  /// True when every conversation on the list has its whole history stored.
+  Future<bool> _allStored(MessageStore store) async {
+    final chats = ref.read(conversationListProvider).value;
+    if (chats == null || chats.isEmpty) return false;
+    for (final c in chats) {
+      if (!((await store.syncState(c.id))?.complete ?? false)) return false;
+    }
+    return true;
+  }
+
+  /// [local] and [server] merged by message id, newest first.
+  static List<Message> _merged(List<Message> local, List<Message> server) {
+    final seen = {for (final m in local) m.id};
+    return [
+      ...local,
+      for (final m in server)
+        if (seen.add(m.id)) m,
+    ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   /// Clears the search box: back to the plain conversation list.

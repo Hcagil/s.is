@@ -33,8 +33,20 @@ final class DriftMessageStore implements MessageStore {
 
   Future<StoreDatabase> _open() {
     final clearing = _clearing;
-    if (clearing == null) return _db ??= _create();
-    return clearing.then((_) => _db ??= _create());
+    if (clearing == null) return _openCached();
+    return clearing.then((_) => _openCached());
+  }
+
+  /// The cached open; one that failed is forgotten so the next call tries again.
+  Future<StoreDatabase> _openCached() {
+    final opening = _db ??= _create();
+    opening.then<void>(
+      (_) {},
+      onError: (Object _) {
+        if (identical(_db, opening)) _db = null;
+      },
+    );
+    return opening;
   }
 
   /// Runs [body] on the open database for a sibling store (the chat list

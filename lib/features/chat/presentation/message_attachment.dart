@@ -14,11 +14,19 @@ class _Attachment extends ConsumerWidget {
   final double radius;
 
   /// The open conversation's photos, oldest first, and this one's place.
-  void _view(BuildContext context, WidgetRef ref, String path) {
-    final paths = [
-      for (final m in ref.read(messagesProvider).value ?? const <Message>[])
-        if (m.attachmentPath != null) m.attachmentPath!,
-    ];
+  /// [within] limits the viewer to those photos (an album's own).
+  void _view(
+    BuildContext context,
+    WidgetRef ref,
+    String path, {
+    List<String>? within,
+  }) {
+    final paths =
+        within ??
+        [
+          for (final m in ref.read(messagesProvider).value ?? const <Message>[])
+            if (m.attachmentPath != null) m.attachmentPath!,
+        ];
     final index = paths.indexOf(path);
     if (index < 0) return;
     openPhotoViewer(

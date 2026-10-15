@@ -85,6 +85,17 @@ scanning `catch` blocks under every `data/` directory and rule 6 by scanning
 and blocks the merge on any violation. Violations are fixed by rewriting the
 offending code to the pattern, not by exempting it.
 
+### Photo albums
+
+Photos picked together (2 to 10; more are split into albums of 10) are sent as
+separate messages sharing `photo_group`. The grouping is pure `domain/`
+(`buildTimeline` folds them into one `MessageEntry` with an `album` list;
+`albumOf` finds the album of a photo); `presentation/` draws the entry as one
+bubble (`album_layout.dart` has the tile geometry, `album_grid.dart` the
+widgets). Reactions, reply, forward and delete act on the whole album, anchored
+on its first photo; only the photo viewer's menu acts on one photo. This is
+not the sticker `albumId`/`albumCard`.
+
 ### Errors
 
 Repositories return `Result<T>` with typed `Failure`s

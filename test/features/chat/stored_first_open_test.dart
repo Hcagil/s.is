@@ -115,7 +115,7 @@ void main() {
       final firstRows = states.indexWhere((s) => s.value?.isNotEmpty ?? false);
       final before = states.take(firstRows).toList();
       expect(
-        before.where((s) => s is AsyncData<List<Message>>),
+        before.whereType<AsyncData<List<Message>>>(),
         isEmpty,
         reason: 'a data state came before the stored rows: $before',
       );

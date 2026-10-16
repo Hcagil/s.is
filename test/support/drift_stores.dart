@@ -31,14 +31,16 @@ List<Override> driftStoreOverrides(
   String key, {
   Future<File> Function()? file,
 }) => [
-  messageStoreProvider.overrideWith(
-    (ref) => driftStore(
+  messageStoreProvider.overrideWith((ref) {
+    final store = driftStore(
       ref.watch(currentUserIdProvider) ?? '',
       dir,
       key,
       file: file,
-    ),
-  ),
+    );
+    ref.onDispose(store.close);
+    return store;
+  }),
   chatListSnapshotStoreProvider.overrideWith(
     (ref) => DriftChatListSnapshotStore(
       ref.watch(messageStoreProvider) as DriftMessageStore,

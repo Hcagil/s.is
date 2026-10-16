@@ -271,9 +271,11 @@ void main() {
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         pushSourceProvider.overrideWithValue(PushSourceFake()),
         sessionControllerProvider.overrideWith(() => _Session(initial)),
-        messageStoreProvider.overrideWith(
-          (ref) => store.messages(ref.watch(currentUserIdProvider) ?? ''),
-        ),
+        messageStoreProvider.overrideWith((ref) {
+          final s = store.messages(ref.watch(currentUserIdProvider) ?? '');
+          ref.onDispose(s.close);
+          return s;
+        }),
         chatListSnapshotStoreProvider.overrideWith(
           (ref) =>
               store.over(ref.watch(messageStoreProvider) as DriftMessageStore),

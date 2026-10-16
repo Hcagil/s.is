@@ -53,6 +53,8 @@ void main() {
   setUp(() async {
     h = await StoreHarness.create();
     real = h.open(owner: 'me', key: await h.newKey());
+    // Before the temp dir goes: fire-and-forget writes may still be running.
+    addTearDown(real.close);
     store = SpyStore(real);
     chat = ChatFake(latency: const Duration(milliseconds: 2));
     c = ProviderContainer.test(
@@ -83,6 +85,45 @@ void main() {
       chat.releaseMessages();
       await eventually(() => shown().contains('n80'), reason: 'server page');
       expect(shown().last, 'n80');
+    });
+
+    test('a cold open with stored rows never shows an empty list before '
+        'the stored rows', () async {
+      await real.upsertAll(_rows(0, 80));
+      chat.history['c1'] = _rows(0, 80);
+      chat.holdMessages();
+      final states = <AsyncValue<List<Message>>>[];
+      // As the app does it: the chat is opened, then its screen mounts and
+      // listens. Every state the screen is handed is recorded.
+      // A fresh app: nothing has built messagesProvider before this open.
+      final app = ProviderContainer.test(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(chat),
+          messageStoreProvider.overrideWithValue(store),
+        ],
+      );
+      app.read(openConversationProvider.notifier).open('c1');
+      app.listen(
+        messagesProvider,
+        (_, next) => states.add(next),
+        fireImmediately: true,
+      );
+      await eventually(
+        () => states.any((s) => s.value?.isNotEmpty ?? false),
+        reason: 'stored rows',
+      );
+      final firstRows = states.indexWhere((s) => s.value?.isNotEmpty ?? false);
+      final before = states.take(firstRows).toList();
+      expect(
+        before.where((s) => s is AsyncData<List<Message>>),
+        isEmpty,
+        reason: 'a data state came before the stored rows: $before',
+      );
+      // A loading state carrying [] is fine: the message screen shows its
+      // "no messages" text only for AsyncData with an empty timeline.
+      expect(before, everyElement(isA<AsyncLoading<List<Message>>>()));
+      chat.releaseMessages();
+      await app.read(messagesProvider.future);
     });
 
     test('offline with stored rows shows them, with no error', () async {

@@ -44,6 +44,8 @@ void main() {
   setUp(() async {
     h = await StoreHarness.create();
     real = h.open(owner: 'me', key: await h.newKey());
+    // Before the temp dir goes: fire-and-forget writes may still be running.
+    addTearDown(real.close);
     store = SpyStore(real);
     chat = ChatFake(latency: const Duration(milliseconds: 2));
     c = ProviderContainer.test(

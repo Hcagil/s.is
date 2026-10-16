@@ -13,6 +13,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -136,6 +137,7 @@ void main() {
                 ? ref.watch(currentUserIdProvider) ?? ''
                 : 'ann';
             final s = realStore(owner);
+            ref.onDispose(s.close);
             built.add(s);
             log.add('build:$owner');
             return _LoggedStore(s, log);
@@ -291,6 +293,151 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 100));
       expectNoFiles("owner ''");
       expect(await keys(), isEmpty, reason: "owner '' made a key");
+    });
+  });
+
+  group('round 2: conversationIds and close', () {
+    test('conversationIds: every chat with messages, a sync state or a list '
+        'row; a deleted one is gone', () async {
+      final s = realStore('ann');
+      expect(await s.conversationIds(), isEmpty, reason: 'fresh store');
+      await s.upsertAll([msg('m1', conv: 'c1', t: 1)]);
+      await s.reconcilePage('c2', const [], reachedStart: true);
+      await DriftChatListSnapshotStore(s)
+          .save('ann', const [Conversation(id: 'c3')]);
+      expect(await s.conversationIds(), {'c1', 'c2', 'c3'});
+      await s.deleteConversation('c1');
+      expect(await s.conversationIds(), isNot(contains('c1')));
+    });
+
+    test('an instance whose file another instance erased serves and writes '
+        'nothing', () async {
+      final a = realStore('ann');
+      await a.upsertAll([msg('m1', t: 1)]);
+      await realStore('ann').clear(); // another instance erases the file
+      expectNoFiles('fixture: erased');
+      expect(await a.newest('c1'), isEmpty, reason: 'stale rows served');
+      await a.upsertAll([msg('m2', t: 2)]);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expectNoFiles('stale instance wrote');
+    });
+
+    test('close ends the instance and deletes nothing; later calls write '
+        'nothing', () async {
+      final s = realStore('ann');
+      await s.upsertAll([msg('m1', t: 1)]);
+      final keyBefore = await keys();
+      await s.close();
+      expect(h.file.existsSync(), isTrue, reason: 'close deletes nothing');
+      expect(await keys(), keyBefore, reason: 'close keeps the key');
+      expect(await s.newest('c1'), isEmpty, reason: 'closed: fallback');
+      await s.upsertAll([msg('m2', t: 2)]);
+
+      final again = realStore('ann');
+      expect(ids(await again.newest('c1')), [
+        'm1',
+      ], reason: 'm1 kept; m2 written after close must not be');
+    });
+  });
+
+  group('round 2 (N1): the Android feed at sign-out', () {
+    const pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+    TestDefaultBinaryMessenger messenger() =>
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    late List<String> log;
+    late ProviderContainer c;
+    Completer<void>? annFile;
+
+    File feed() => File('${h.dir.path}/chat_list.json');
+    File feedPart() => File('${h.dir.path}/chat_list.json.part');
+
+    setUp(() {
+      annFile = null;
+      messenger().setMockMethodCallHandler(
+        pathChannel,
+        (call) async =>
+            call.method == 'getApplicationSupportDirectory' ? h.dir.path : null,
+      );
+      addTearDown(
+        () => messenger().setMockMethodCallHandler(pathChannel, null),
+      );
+      log = [];
+      c = ProviderContainer.test(
+        overrides: [
+          ...videoOverrides(),
+          chatRepositoryProvider.overrideWithValue(ChatFake()),
+          presenceRepositoryProvider.overrideWithValue(PresenceFake()),
+          pushSourceProvider.overrideWithValue(PushSourceFake()),
+          sessionControllerProvider.overrideWith(
+            () => _Session(const Allowed(_ann)),
+          ),
+          messageStoreProvider.overrideWith((ref) {
+            final owner = ref.watch(currentUserIdProvider) ?? '';
+            final s = DriftMessageStore(
+              ownerId: owner,
+              file: () async {
+                // Instance A's first database step can be held open.
+                final gate = owner == 'ann' ? annFile : null;
+                if (gate != null) await gate.future;
+                return h.file;
+              },
+              key: const StoreKey().loadOrCreate,
+              deleteKey: const StoreKey().delete,
+            );
+            ref.onDispose(s.close);
+            return _LoggedStore(s, log);
+          }),
+          chatListSnapshotStoreProvider.overrideWith(
+            (ref) => _LoggedSnapshot(
+              DriftChatListSnapshotStore(
+                (ref.watch(messageStoreProvider) as SpyStore).inner
+                    as DriftMessageStore,
+              ),
+              log,
+            ),
+          ),
+        ],
+      );
+      c.listen(chatListSnapshotOwnerProvider, (_, _) {});
+    });
+
+    Future<void> signedIn() async {
+      await c.read(sessionControllerProvider.future);
+      await eventually(() => c.read(currentUserIdProvider) == 'ann');
+    }
+
+    void signOut() => (c.read(sessionControllerProvider.notifier) as _Session)
+        .set(const SignedOut());
+
+    test('plain: after sign-out no feed file remains', () async {
+      await signedIn();
+      await c.read(chatListSnapshotStoreProvider).save('ann', const [
+        Conversation(id: 'c1', avatarPath: 'groups/c1.jpg'),
+      ]);
+      expect(feed().existsSync(), isTrue, reason: 'fixture: feed written');
+      signOut();
+      await eventually(() => log.contains('store.cleared'));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(feed().existsSync(), isFalse);
+      expect(feedPart().existsSync(), isFalse);
+    });
+
+    test('a save held at its database step on the old instance, finishing '
+        'after the sign-out erase, leaves no feed file', () async {
+      annFile = Completer<void>();
+      await signedIn();
+      final saving = c.read(chatListSnapshotStoreProvider).save('ann', const [
+        Conversation(id: 'c1', avatarPath: 'groups/c1.jpg'),
+      ]);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      signOut();
+      await eventually(() => log.contains('store.cleared'));
+      annFile!.complete();
+      await saving;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(feed().existsSync(), isFalse, reason: 'feed re-written');
+      expect(feedPart().existsSync(), isFalse, reason: 'feed .part left');
+      expectNoFiles('database after the late save');
     });
   });
 }

@@ -109,6 +109,9 @@ class SpyStore implements MessageStore {
   }
 
   @override
+  Future<Set<String>> conversationIds() => inner.conversationIds();
+
+  @override
   Future<ChangeCursor?> cursor() => inner.cursor();
 
   @override

@@ -73,9 +73,6 @@ integration() {
     flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration
 }
 
-# retry cmd...: the sqlite3 build hook downloads from github.com; a timeout there is not a code failure. Files already fetched stay in .dart_tool, so a retry resumes.
-retry() { local i; for i in 1 2 3; do "$@" && return 0; echo "attempt $i failed" >&2; sleep 5; done; return 1; }
-
 job_android() {
   step "Prepare cache directories" mkdir -p .ci-cache/pub .ci-cache/gradle .ci-cache/m2 || return 1
   step "Build development image" "${CI[@]}" build || return 1
@@ -84,10 +81,10 @@ job_android() {
   step "Check formatting" "${CI[@]}" run --rm flutter dart format --output=none --set-exit-if-changed lib test || return 1
   step "Analyze" "${CI[@]}" run --rm flutter flutter analyze || return 1
   step "Build the Rust library for the Dart tests" "${CI[@]}" run --rm flutter cargo build --release --manifest-path rust/Cargo.toml || return 1
-  step "Test" retry "${CI[@]}" run --rm -e TZ=JST-9 flutter flutter test || return 1
+  step "Test" "${CI[@]}" run --rm -e TZ=JST-9 flutter flutter test || return 1
   step "Firebase config present" test -f android/app/google-services.json || return 1
   step "Android unit tests" "${CI[@]}" run --rm flutter sh -c 'flutter build apk --config-only && cd android && ./gradlew --no-daemon :app:testDebugUnitTest' || return 1
-  step "Build release bundle" retry bundle
+  step "Build release bundle" bundle
 }
 
 job_database() {

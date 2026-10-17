@@ -340,6 +340,92 @@ void main() {
     });
   });
 
+  // Fix round 2 contract: an erase on ANY instance wins over an open that
+  // began before it; nothing is left and nothing is served afterwards.
+  group('fix round 2: an open across an erase', () {
+    /// A store whose open is held at [where] ('file' or 'key') until [gate]
+    /// completes; [failFirstKey] makes the first key read throw.
+    DriftMessageStore held(
+      Completer<void> gate,
+      String where, {
+      bool failFirstKey = false,
+    }) {
+      var keyCalls = 0;
+      var armed = !failFirstKey;
+      return DriftMessageStore(
+        ownerId: 'ann',
+        file: () async {
+          if (armed && where == 'file') await gate.future;
+          return h.file;
+        },
+        key: () async {
+          keyCalls++;
+          if (failFirstKey && keyCalls == 1) {
+            armed = true;
+            throw StateError('keystore locked');
+          }
+          if (armed && where == 'key') await gate.future;
+          return const StoreKey().loadOrCreate();
+        },
+        deleteKey: const StoreKey().delete,
+      );
+    }
+
+    for (final where in ['file', 'key']) {
+      for (final retry in [false, true]) {
+        for (final eraser in ['another instance', 'the same instance']) {
+          for (final part in ['no file and no rows', 'no key']) {
+            final what = retry
+                ? 'the retry after a failed first open'
+                : 'the first open';
+            test('$what held at its $where step, an erase on $eraser, then '
+                'released: $part', () async {
+              await realStore('ann').upsertAll([msg('m0', t: 0)]); // a file
+              final gate = Completer<void>();
+              final a = held(gate, where, failFirstKey: retry);
+              if (retry) {
+                expect(await a.newest('c1'), isEmpty, reason: 'failed open');
+              }
+              final writing = a.upsertAll([msg('m1', t: 1)]);
+              final reading = a.newest('c1');
+              await Future<void>.delayed(const Duration(milliseconds: 50));
+              final erase = eraser == 'another instance'
+                  ? realStore('ann').clear()
+                  : a.clear();
+              if (eraser == 'another instance') {
+                await erase; // the erase has fully finished before the release
+              } else {
+                // The instance's own erase may wait for its open; release it.
+                await Future<void>.delayed(const Duration(milliseconds: 50));
+              }
+              gate.complete();
+              await erase;
+              await writing;
+              expect(await reading, isEmpty, reason: 'in-flight read served');
+              expect(await a.newest('c1'), isEmpty, reason: 'rows served');
+              await a.upsertAll([msg('m2', t: 2)]);
+              await Future<void>.delayed(const Duration(milliseconds: 200));
+              if (part == 'no key') {
+                expect(await keys(), isEmpty, reason: 'key re-created');
+              } else {
+                expectNoFiles('open across the erase');
+              }
+            });
+          }
+        }
+      }
+    }
+
+    test('erasures rises on every clear, on any instance', () async {
+      final a = realStore('ann');
+      final before = a.erasures;
+      await realStore('ann').clear();
+      expect(a.erasures, before + 1, reason: 'process-wide');
+      await a.clear();
+      expect(realStore('bob').erasures, before + 2);
+    });
+  });
+
   group('round 2 (N1): the Android feed at sign-out', () {
     const pathChannel = MethodChannel('plugins.flutter.io/path_provider');
     TestDefaultBinaryMessenger messenger() =>
@@ -347,12 +433,14 @@ void main() {
     late List<String> log;
     late ProviderContainer c;
     Completer<void>? annFile;
+    var follow = true;
 
     File feed() => File('${h.dir.path}/chat_list.json');
     File feedPart() => File('${h.dir.path}/chat_list.json.part');
 
     setUp(() {
       annFile = null;
+      follow = true;
       messenger().setMockMethodCallHandler(
         pathChannel,
         (call) async =>
@@ -372,7 +460,10 @@ void main() {
             () => _Session(const Allowed(_ann)),
           ),
           messageStoreProvider.overrideWith((ref) {
-            final owner = ref.watch(currentUserIdProvider) ?? '';
+            // follow: false keeps one instance until it is invalidated.
+            final owner = follow
+                ? ref.watch(currentUserIdProvider) ?? ''
+                : 'ann';
             final s = DriftMessageStore(
               ownerId: owner,
               file: () async {
@@ -439,5 +530,55 @@ void main() {
       expect(feedPart().existsSync(), isFalse, reason: 'feed .part left');
       expectNoFiles('database after the late save');
     });
+
+    // Security re-gate 3: the REAL sign-out order (feed clear, delete rows,
+    // store.clear) through the providers. A transaction held open on the same
+    // store makes the save S wait inside the database (after it began), and
+    // the delete-rows step queues behind S; S finishes before store.clear().
+    for (final how in ['store follows the user', 'one store instance']) {
+      test(
+        're-gate 3 ($how): a save held inside the database at sign-out, finishing '
+        'before store.clear, leaves no feed file once sign-out completes',
+        () async {
+          follow = how == 'store follows the user';
+          await signedIn();
+          final snap = c.read(chatListSnapshotStoreProvider);
+          final inner =
+              (c.read(messageStoreProvider) as SpyStore).inner
+                  as DriftMessageStore;
+          await snap.load('ann'); // the store is open
+          final gate = Completer<void>();
+          final entered = Completer<void>();
+          final holding = inner.run<void>(
+            null,
+            (db) => db.transaction(() async {
+              entered.complete();
+              await gate.future;
+            }),
+          );
+          await entered.future;
+          final saving = snap.save('ann', const [
+            Conversation(id: 'c1', avatarPath: 'groups/c1.jpg'),
+          ]);
+          unawaited(saving.then((_) => log.add('S.done')));
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          signOut();
+          await eventually(() => log.contains('snapshot.clear'));
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          gate.complete();
+          await holding;
+          await saving;
+          await eventually(() => log.contains('store.cleared'));
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          expect(
+            feed().existsSync(),
+            isFalse,
+            reason: 'feed re-written after sign-out ($log)',
+          );
+          expect(feedPart().existsSync(), isFalse, reason: 'feed .part left');
+          expectNoFiles('database after sign-out');
+        },
+      );
+    }
   });
 }

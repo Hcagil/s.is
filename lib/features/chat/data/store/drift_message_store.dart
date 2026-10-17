@@ -30,7 +30,7 @@ final class DriftMessageStore implements MessageStore {
   static int _erasures = 0;
   int? _seen;
 
-  /// The process-wide erase count; a sibling store compares it before and after its own work.
+  /// The process-wide erase count (every clear() on any instance raises it).
   int get erasures => _erasures;
 
   /// Operations running now (registered synchronously when they start).
@@ -176,6 +176,15 @@ final class DriftMessageStore implements MessageStore {
         });
       });
 
+  /// An erase since this open began wins: remove the file and key it may have re-created.
+  Future<Never> _lostToErase(File file) async {
+    await _deleteFiles(file);
+    try {
+      await _deleteKey();
+    } catch (_) {}
+    throw StateError('erased while opening');
+  }
+
   Future<StoreDatabase> _create() async {
     final seen = _seen ??= _erasures;
     final file = await _file();
@@ -212,14 +221,13 @@ final class DriftMessageStore implements MessageStore {
       /* wrong key, other owner, or corrupt: start again from nothing */
       await _deleteFiles(file);
       // An erase that came meanwhile must not be answered by a new file.
-      if (seen != _erasures) throw StateError('erased while opening');
+      if (seen != _erasures) await _lostToErase(file);
       db = await attempt();
     }
     if (seen != _erasures) {
       // A clear() ran while this was opening: the erase wins, remove what was just made.
       await db.close();
-      await _deleteFiles(file);
-      throw StateError('erased while opening');
+      await _lostToErase(file);
     }
     return db;
   }

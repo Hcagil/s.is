@@ -209,15 +209,19 @@ final chatListSnapshotOwnerProvider = Provider<void>((ref) {
   _onSessionEnd(ref, () async {
     // In this order and in ONE routine: the snapshot clear must be queued
     // before the message store clear, or it would re-create the file.
-    try {
-      await ref.read(chatListSnapshotStoreProvider).clear();
-    } catch (_) {
-      // No snapshot store configured (most tests) or the clear failed: the
-      // message store is erased all the same.
-    }
+    await _clearSnapshot(ref);
     await _eraseMessageStore(ref);
   });
 });
+
+Future<void> _clearSnapshot(Ref ref) async {
+  try {
+    await ref.read(chatListSnapshotStoreProvider).clear();
+  } catch (_) {
+    // No snapshot store configured (most tests) or the clear failed: the
+    // message store is erased all the same.
+  }
+}
 
 /// The on-phone message database (encrypted). Overridden in main.dart with a
 /// provider that watches [currentUserIdProvider], so each account gets its own
@@ -243,6 +247,9 @@ Future<void> _eraseMessageStore(Ref ref) async {
   final store = _storeOf(ref);
   if (store == null) return;
   await store.clear();
+  // Again, after the store closed and before a fresh one is built: a list
+  // save that finished before store.clear() may have re-written the feed.
+  await _clearSnapshot(ref);
   if (ref.mounted) ref.invalidate(messageStoreProvider);
 }
 

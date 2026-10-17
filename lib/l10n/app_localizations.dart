@@ -2201,8 +2201,8 @@ abstract class AppLocalizations {
   /// Body of the blocking update screen
   ///
   /// In en, this message translates to:
-  /// **'This version ({installed}) is no longer supported (minimum {minimum}).'**
-  String updateRequiredBody(int installed, int minimum);
+  /// **'This version is no longer supported. Please update to keep using SIS.'**
+  String get updateRequiredBody;
 
   /// Button on the blocking update screen
   ///

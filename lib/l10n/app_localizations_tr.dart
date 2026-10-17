@@ -1214,9 +1214,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get updateRequiredTitle => 'Güncelleme gerekli';
 
   @override
-  String updateRequiredBody(int installed, int minimum) {
-    return 'Bu sürüm ($installed) artık desteklenmiyor (en az $minimum).';
-  }
+  String get updateRequiredBody =>
+      'Bu sürüm artık desteklenmiyor. SIS\'i kullanmaya devam etmek için lütfen güncelleyin.';
 
   @override
   String get updateNow => 'Şimdi güncelle';

@@ -350,7 +350,7 @@
   "updateReady": "Yüklemeye hazır",
   "updateRestart": "Yeniden başlat",
   "updateRequiredTitle": "Güncelleme gerekli",
-  "updateRequiredBody": "Bu sürüm ({installed}) artık desteklenmiyor (en az {minimum}).",
+  "updateRequiredBody": "Bu sürüm artık desteklenmiyor. SIS'i kullanmaya devam etmek için lütfen güncelleyin.",
   "updateNow": "Şimdi güncelle",
   "licencesCount": "{count} lisans",
   "commonConversation": "Sohbet",

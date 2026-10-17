@@ -967,6 +967,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     // so the photo never leaves the screen. Whatever pending is left over
     // (a failed send) is removed after.
     if (result case Ok(:final value)) {
+      _persist([value]);
       _append(value);
       // The phone's own copy stays on the stored entry to the end, even when
       // the stored row was not paired with its pending bubble above.

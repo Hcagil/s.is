@@ -7,8 +7,9 @@
 # tool/asc_signing.py (test/tool/ios_release_stubs.py).
 #
 #   release.yml
-#   - `scope` computes the version once: code = run_number + 100, name = the
-#     pubspec version without any +build; outputs code and name;
+#   - `scope` computes the version once: code = run_number + 100, name =
+#     yy.m.<commit count> (UTC date, full history: fetch-depth 0); outputs
+#     code and name;
 #   - `publish` needs scope only, reads the version from scope and computes
 #     none of its own; only `distribute` needs `ios` (Play never waits on
 #     Apple), and nothing needs `distribute`;
@@ -187,13 +188,22 @@ grep -qE '^ *id: v$' <<<"$(step_keys "$release" "Compute version")" || fail "Com
 step_run "$release" "Compute version" "$tmp/version.sh"
 sed -i 's/\${{ github\.run_number }}/77/g' "$tmp/version.sh"
 grep -q '\${{' "$tmp/version.sh" && fail "Compute version reads an unexpected expression: $(cat "$tmp/version.sh")"
-mkdir -p "$tmp/v"
-for case in "0.30.0|0.30.0" "1.2.3+45|1.2.3"; do
-  printf 'name: sis\nversion: %s\n' "${case%%|*}" > "$tmp/v/pubspec.yaml"
+grep -qE '^ *fetch-depth: 0$' "$tmp/scope" || fail "scope checkout lacks fetch-depth: 0 (the commit count needs full history)"
+# Fixture: a git repo with exactly 3 commits, and a date pinned through a
+# stand-in that runs the real date at a fixed instant. Run under TZ=JST-9 so a
+# dropped -u moves 2026-10-31 22:30 UTC into November.
+mkdir -p "$tmp/v" "$tmp/vbin"
+git -C "$tmp/v" init -q
+for i in 1 2 3; do git -C "$tmp/v" -c user.name=t -c user.email=t@sis.test -c commit.gpgsign=false commit -q --allow-empty -m "c$i"; done
+realdate=$(command -v date)
+for case in "1793485800|26.10.3" "1804248000|27.3.3"; do
+  printf '#!/bin/sh\nexec %s -d @%s "$@"\n' "$realdate" "${case%%|*}" > "$tmp/vbin/date"; chmod +x "$tmp/vbin/date"
   : > "$tmp/v/out"
-  (cd "$tmp/v" && GITHUB_OUTPUT="$tmp/v/out" bash -e "$tmp/version.sh") > "$tmp/out" 2>&1 || fail "Compute version failed"
+  (cd "$tmp/v" && PATH="$tmp/vbin:$PATH" TZ=JST-9 GITHUB_OUTPUT="$tmp/v/out" bash -e "$tmp/version.sh") > "$tmp/out" 2>&1 || fail "Compute version failed"
+  got=$(sed -n 's/^name=//p' "$tmp/v/out")
+  [[ $got =~ ^[0-9]{2}\.[0-9]{1,2}\.[0-9]+$ ]] || fail "name [$got] is not yy.m.count"
   [ "$(sort "$tmp/v/out")" = "$(printf 'code=177\nname=%s' "${case#*|}")" ] \
-    || fail "version ${case%%|*} at run 77 gave [$(tr '\n' ' ' < "$tmp/v/out")], want code=177 name=${case#*|}"
+    || fail "at @${case%%|*}, 3 commits, run 77 gave [$(tr '\n' ' ' < "$tmp/v/out")], want code=177 name=${case#*|}"
 done
 
 # 2 publish: needs scope only, uses scope's version, computes none itself.

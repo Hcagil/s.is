@@ -28,6 +28,7 @@ import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/profile/presentation/settings_screen.dart';
 import 'package:sis/features/update/application/update_controller.dart';
+import 'package:sis/features/update/presentation/update_required_screen.dart';
 import 'package:sis/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sis/main.dart' as entry;
@@ -405,9 +406,41 @@ void main() {
     });
   });
 
+  // Seam: the real UpdateController over FakeUpdate, mounted by SisApp as in
+  // production; the blocking screen never shows the build numbers.
+  group('update required', () {
+    for (final l in const [Locale('en'), Locale('tr')]) {
+      testWidgets('blocks without a build number (${l.languageCode})', (
+        t,
+      ) async {
+        t.platformDispatcher.localesTestValue = [l];
+        addTearDown(t.platformDispatcher.clearLocalesTestValue);
+        await t.pumpWidget(
+          ProviderScope(
+            overrides: overrides(
+              update: FakeUpdate(
+                installed: 316,
+                version: '26.10.220',
+                min: const Ok(320),
+              ),
+            ),
+            child: const SisApp(),
+          ),
+        );
+        await t.pumpAndSettle();
+        expect(find.byType(UpdateRequiredScreen), findsOneWidget);
+        expect(find.textContaining('316'), findsNothing);
+        expect(find.textContaining('320'), findsNothing);
+      });
+    }
+  });
+
   group('about page', () {
     testWidgets('shows the brand and the running version', (t) async {
-      await pumpApp(t, update: FakeUpdate(installed: 217, version: '1.4.2'));
+      await pumpApp(
+        t,
+        update: FakeUpdate(installed: 317, version: '26.10.220'),
+      );
       await openPage(t, 'settings-about');
 
       expect(appBarTitle('About'), findsOneWidget);
@@ -417,11 +450,35 @@ void main() {
       expect(
         find.descendant(
           of: byKey('about-version'),
-          matching: find.text('Version 1.4.2 (217)'),
+          matching: find.text('Version 26.10.220'),
           matchRoot: true,
         ),
         findsOneWidget,
       );
+      // The build number (versionCode) never shows.
+      expect(find.textContaining('317'), findsNothing);
+      expect(find.textContaining('('), findsNothing);
+    });
+
+    testWidgets('Turkish: Sürüm <name>, no build number', (t) async {
+      t.platformDispatcher.localesTestValue = [const Locale('tr')];
+      addTearDown(t.platformDispatcher.clearLocalesTestValue);
+      await pumpApp(
+        t,
+        update: FakeUpdate(installed: 317, version: '26.10.220'),
+      );
+      await openPage(t, 'settings-about');
+
+      expect(
+        find.descendant(
+          of: byKey('about-version'),
+          matching: find.text('Sürüm 26.10.220'),
+          matchRoot: true,
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('317'), findsNothing);
+      expect(find.textContaining('('), findsNothing);
     });
 
     testWidgets('lists the bundled font licences that main.dart registers', (

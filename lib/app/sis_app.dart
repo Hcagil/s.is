@@ -126,6 +126,10 @@ class _AllowedGate extends ConsumerWidget {
     // reached, so the two round trips race instead of running one after the
     // other. Its value is unused here; HomeScreen reads it once shown.
     ref.listen(conversationListProvider, (_, _) {});
+    // The language the app shows (Settings choice, or the phone's), told to the server for the SIS Destek bot.
+    ref.watch(
+      appLanguageSyncProvider(Localizations.localeOf(context).languageCode),
+    );
     return switch (ref.watch(ownProfileProvider)) {
       AsyncData(:final value) when !value.onboardingDone => OnboardingScreen(
         profile: value,

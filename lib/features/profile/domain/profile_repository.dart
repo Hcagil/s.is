@@ -37,6 +37,10 @@ abstract interface class ProfileRepository {
   /// [previousPath] from storage.
   Future<Result<OwnProfile>> removeAvatar(String previousPath);
 
+  /// Tells the server which language the app shows ('en' or 'tr'), so the SIS Destek
+  /// bot can write its automatic lines in it. Any other value is refused with an Err.
+  Future<Result<void>> setAppLanguage(String code);
+
   /// Whether [tag] is free for this member (their own current tag counts as
   /// free). Advisory: the server's unique index is the authority.
   Future<Result<bool>> isTagAvailable(String tag);

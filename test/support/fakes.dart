@@ -2785,6 +2785,22 @@ class ProfileFake implements ProfileRepository {
     return Ok(profile);
   }
 
+  /// Codes passed to [setAppLanguage], in order (kept out of [calls]).
+  final appLanguages = <String>[];
+
+  /// Forces the [setAppLanguage] outcome; left null it answers like the
+  /// server: 'en' and 'tr' are stored, anything else is refused.
+  Result<void>? appLanguageResult;
+
+  @override
+  Future<Result<void>> setAppLanguage(String code) async {
+    appLanguages.add(code);
+    if (latency > Duration.zero) await Future<void>.delayed(latency);
+    if (appLanguageResult case final forced?) return forced;
+    if (code != 'en' && code != 'tr') return const Err(DeniedFailure());
+    return const Ok(null);
+  }
+
   @override
   Future<Result<bool>> isTagAvailable(String tag) async {
     final answer =

@@ -442,9 +442,9 @@ void main() {
     }
   });
 
-  // fix/tester-findings: the version line carries the build, "(216)"; the
-  // card shows it and still compares only the version. The installed build
-  // here is 100 (see pump), unlike every note's build.
+  // The stored note's version line carries the build, "(216)" (kept on
+  // purpose); the card shows only the version and compares only the version.
+  // The installed build here is 100 (see pump), unlike every note's build.
   group('WhatsNewCard: build number', () {
     const built =
         'Version 0.31.0 (216)\n- Chats load faster\n---\n'
@@ -452,19 +452,23 @@ void main() {
     Finder line(String s) =>
         find.byWidgetPredicate((w) => w is Text && w.data?.toUpperCase() == s);
 
-    testWidgets('English: VERSION 0.31.0 (216)', (t) async {
+    testWidgets('English: VERSION 0.31.0, the build hidden', (t) async {
       await pump(t, const UpdateIdle(), card(built, isNewest: false));
-      expect(line('VERSION 0.31.0 (216)'), findsOneWidget);
+      expect(line('VERSION 0.31.0'), findsOneWidget);
+      expect(find.textContaining('216'), findsNothing);
+      expect(find.textContaining('('), findsNothing);
     });
 
-    testWidgets('Turkish: SÜRÜM 0.31.0 (216)', (t) async {
+    testWidgets('Turkish: SÜRÜM 0.31.0, the build hidden', (t) async {
       await pump(
         t,
         const UpdateIdle(),
         card(built, isNewest: false),
         locale: const Locale('tr'),
       );
-      expect(line('SÜRÜM 0.31.0 (216)'), findsOneWidget);
+      expect(line('SÜRÜM 0.31.0'), findsOneWidget);
+      expect(find.textContaining('216'), findsNothing);
+      expect(find.textContaining('('), findsNothing);
     });
 
     testWidgets('no build: the plain version, no brackets', (t) async {
@@ -498,6 +502,22 @@ void main() {
         installed: '0.30.17',
       );
       expect(updateNow, findsOneWidget);
+    });
+
+    testWidgets('a year.month.count name: VERSION 26.10.220 only', (t) async {
+      await pump(
+        t,
+        const UpdateIdle(),
+        card('Version 26.10.220 (316)\n- a', isNewest: true),
+        installed: '0.31.0',
+      );
+      expect(line('VERSION 26.10.220'), findsOneWidget);
+      expect(find.textContaining('316'), findsNothing);
+      expect(
+        updateNow,
+        findsOneWidget,
+        reason: '26.10.220 is newer than 0.31.0',
+      );
     });
   });
 }

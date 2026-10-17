@@ -455,9 +455,7 @@ class AboutScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l = AppLocalizations.of(context);
     final version = ref.watch(installedVersionProvider).value;
-    final label = version == null
-        ? ''
-        : l.settingsVersion(version.name, version.build);
+    final label = version == null ? '' : l.settingsVersion(version.name);
     return Scaffold(
       appBar: AppBar(title: Text(l.settingsAbout)),
       body: SafeArea(

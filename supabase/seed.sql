@@ -319,5 +319,9 @@ insert into app_private.allowlist(email) values
   ('cf-ann@mail.test'),
   ('cf-bob@mail.test'),
   ('cf-fay@mail.test'),
+  -- app language (test/integration/app_language_repository_test.dart): ana and
+  -- ben each set their own; neither can touch the other's
+  ('al-ana@mail.test'),
+  ('al-ben@mail.test'),
   ('sis-destek-bot@example.com')
 on conflict do nothing;

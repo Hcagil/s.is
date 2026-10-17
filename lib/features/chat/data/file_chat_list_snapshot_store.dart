@@ -28,6 +28,9 @@ final class FileChatListSnapshotStore implements ChatListSnapshotStore {
   /// must not resurrect what clear() just erased.
   static int _epoch = 0;
 
+  /// The current erase count, for a caller that must give up a write begun before a clear().
+  int get epoch => _epoch;
+
   Future<File> _file() async => File('${(await _root()).path}/chat_list.json');
 
   @override

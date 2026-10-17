@@ -41,11 +41,17 @@
 #   - checkout does not persist the token; no ${{ inputs|vars|secrets }} is
 #     pasted into any run: text (they reach steps through env:);
 #   - the steps, exactly in this order: the tip-of-main check (only when
-#     uploading), checkout, Flutter, Firebase config,
+#     uploading), checkout, Flutter, Rust, the sqlite3 library cache, Firebase config,
 #     pub get, config-only build, the key, the archive, the ad-hoc signature,
 #     the certificate import, the export, the explicit requirement, the
 #     signature check, the push check, validate, upload, signing material
 #     removal, key removal;
+#   - Rust: the channel read from rust/rust-toolchain.toml (never written in
+#     the workflow), `rustup toolchain install <channel> --profile minimal
+#     --target aarch64-apple-ios`; no channel in the file fails the step and
+#     installs nothing;
+#   - the sqlite3 cache: actions/cache on .dart_tool/hooks_runner/shared/sqlite3,
+#     key sqlite3-hook-<runner os>-<hash of pubspec.lock>;
 #   - one long-lived certificate signs every build: no step creates, cleans up,
 #     deletes or revokes anything in App Store Connect (the only asc_signing.py
 #     call is `fetch "sis ci distribution"`); no workflow or job outputs, no
@@ -320,7 +326,7 @@ asc_signing.py fetch "sis ci distribution notify" "$dir/notify"'
   || fail "the asc_signing.py calls are not all in the import step"
 # Step order, exactly the contract's; the gates on validate, upload and cleanup.
 mapfile -t steps < <(sed -n 's/^      - name: //p' "$ipa_wf")
-want_steps=("Refuse a commit that is not the tip of main" "Check out source" "Install Flutter" "Restore Firebase config" "Restore Maps key" "Resolve dependencies"
+want_steps=("Refuse a commit that is not the tip of main" "Check out source" "Install Flutter" "Install Rust" "Restore the sqlite3 library cache" "Restore Firebase config" "Restore Maps key" "Resolve dependencies"
   "Configure the Xcode build" "Write the App Store Connect key" "Archive (signed)"
   "Sign the archive with its entitlements" "Import the signing certificate"
   "Export for App Store Connect"
@@ -369,11 +375,10 @@ export REAL_OPENSSL STUB_REJECTS="$tmp/rejects" STUB_CALLS="$tmp/calls" STUB_ROO
 mkdir -p "$tmp/bin" "$tmp/ca"
 stubs="$PWD/test/tool/ios_release_stubs.py"
 for t in codesign security xcodebuild xcrun plutil curl openssl; do ln -s "$stubs" "$tmp/bin/$t"; done
-cat > "$tmp/bin/flutter" <<'EOF'
-#!/usr/bin/env bash
-echo "flutter $*" >> "$STUB_CALLS"
-EOF
-chmod +x "$tmp/bin/flutter"
+for t in flutter rustup; do
+  printf '#!/usr/bin/env bash\necho "%s $*" >> "$STUB_CALLS"\n' "$t" > "$tmp/bin/$t"
+  chmod +x "$tmp/bin/$t"
+done
 # A root (the system trusts it; never imported) and the intermediate that
 # issues the certificate; the intermediate is served at the certificate's AIA URL.
 "$REAL_OPENSSL" req -x509 -newkey rsa:2048 -nodes -keyout "$tmp/ca/root.key" -out "$tmp/ca/root.pem" \
@@ -432,7 +437,8 @@ run() {
 }
 fresh() {
   rm -rf "$tmp/job" "$tmp/rt" "$tmp/home"
-  mkdir -p "$tmp/job/ios/Runner" "$tmp/job/ios/ShareExtension" "$tmp/job/ios/Flutter" "$tmp/job/tool" "$tmp/rt" "$tmp/home"
+  mkdir -p "$tmp/job/ios/Runner" "$tmp/job/ios/ShareExtension" "$tmp/job/ios/Flutter" "$tmp/job/tool" "$tmp/job/rust" "$tmp/rt" "$tmp/home"
+  cp rust/rust-toolchain.toml "$tmp/job/rust/"
   cp ios/Runner/Runner.entitlements "$tmp/job/ios/Runner/"
   cp ios/ShareExtension/ShareExtension.entitlements "$tmp/job/ios/ShareExtension/"
   ln -s "$stubs" "$tmp/job/tool/asc_signing.py"
@@ -443,7 +449,7 @@ leaked() { grep -qE 'SECRETSECRET|TAILLINE|BEGIN [A-Z ]*PRIVATE KEY' "$1" || gre
 plist_get() { python3 -c 'import plistlib,sys; print(plistlib.load(open(sys.argv[1],"rb")).get(sys.argv[2], ""))' "$1" "$2"; }
 
 # run_job UPLOAD [VAR=value ...]: every step the stand-ins model (all but
-# checkout, Flutter install and pub get), in the workflow's own order, with
+# checkout, Flutter install, the sqlite3 cache (an action) and pub get), in the workflow's own order, with
 # GitHub's gates: after a failure only always() steps run; `!inputs.upload`
 # and `inputs.upload` follow UPLOAD. Sets $failed_step (empty = all passed)
 # and $ran; every step's output is checked for the key. $upload_outcome
@@ -454,7 +460,7 @@ run_job() {
   failed_step= ran=() upload_outcome=skipped
   for s in "${steps[@]}"; do
     # The tip check is run, with its gate, by test/tool/admin_apple_workflow_test.sh (R1c, R1d).
-    case "$s" in "Refuse a commit that is not the tip of main"|"Check out source"|"Install Flutter"|"Resolve dependencies") continue ;; esac
+    case "$s" in "Refuse a commit that is not the tip of main"|"Check out source"|"Install Flutter"|"Restore the sqlite3 library cache"|"Resolve dependencies") continue ;; esac
     g=$(gate "$s")
     case "$g" in
       "") [ "$ok" = 1 ] || continue ;;
@@ -527,6 +533,10 @@ for f in --config-only --release --no-codesign --build-number=4242 --build-name=
   grep -q -- " $f\( \|$\)" "$tmp/calls" || fail "flutter build lacks $f: $(cat "$tmp/calls")"
 done
 grep -q 'build ipa' "$tmp/calls" && fail "flutter build ipa cannot sign this app"
+channel=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust/rust-toolchain.toml)
+[ -n "$channel" ] || fail "rust/rust-toolchain.toml names no channel"
+[ "$(grep '^rustup' "$tmp/calls")" = "rustup toolchain install $channel --profile minimal --target aarch64-apple-ios" ] \
+  || fail "Rust is not the pinned channel $channel for aarch64-apple-ios: [$(grep '^rustup' "$tmp/calls")]"
 # One long-lived identity: the only App Store Connect call of the whole job.
 # ensure (idempotent: makes the share / notify App ID and profile if missing) then fetch, all three profiles.
 asc_calls='asc ensure --signin | com.esd.sis | sis ci distribution | sis ci distribution
@@ -571,6 +581,23 @@ cleaned
 for o in Runner.app ShareExtension.appex Flutter.framework App.framework objective_c.framework; do
   grep -q "^$o: Apple Distribution: " "$tmp/out" || fail "the signature check does not show $o signed for distribution"
 done
+
+# 8b Rust: the channel comes from rust/rust-toolchain.toml, not the workflow; none fails.
+fresh
+printf '[toolchain]\nchannel = "7.7.7"\nprofile = "minimal"\n' > "$tmp/job/rust/rust-toolchain.toml"
+run "Install Rust" || fail "Install Rust failed"
+[ "$(cat "$tmp/calls")" = "rustup toolchain install 7.7.7 --profile minimal --target aarch64-apple-ios" ] \
+  || fail "Install Rust does not take its channel from rust/rust-toolchain.toml: [$(cat "$tmp/calls")]"
+fresh
+printf '[toolchain]\nprofile = "minimal"\n' > "$tmp/job/rust/rust-toolchain.toml"
+if run "Install Rust"; then fail "Install Rust passed with no channel in rust/rust-toolchain.toml"; fi
+[ ! -s "$tmp/calls" ] || fail "Install Rust ran rustup with no channel: [$(cat "$tmp/calls")]"
+# The sqlite3 cache: the hook's download directory, keyed on the OS and the lock file.
+cache_keys=$(step_keys "$ipa_wf" "Restore the sqlite3 library cache")
+grep -qE '^ *uses: actions/cache@' <<<"$cache_keys" || fail "the sqlite3 cache step is not actions/cache: $cache_keys"
+grep -qxE ' *path: \.dart_tool/hooks_runner/shared/sqlite3' <<<"$cache_keys" || fail "the sqlite3 cache has the wrong path: $cache_keys"
+grep -qxF "          key: sqlite3-hook-\${{ runner.os }}-\${{ hashFiles('pubspec.lock') }}" <<<"$cache_keys" \
+  || fail "the sqlite3 cache key is not sqlite3-hook-<os>-<pubspec.lock hash>: $cache_keys"
 
 # 9 the release run: uploads, never validates separately; nothing revoked, local material removed.
 fresh

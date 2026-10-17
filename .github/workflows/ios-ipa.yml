@@ -87,6 +87,18 @@ jobs:
           test -n "$version"
           git clone --depth 1 --branch "$version" https://github.com/flutter/flutter.git "$HOME/flutter"
           echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+      # The Cargokit build of the encryption engine (rust/) needs the pinned compiler and the device target; installed up front so a download failure stops here.
+      - name: Install Rust
+        run: |
+          channel=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust/rust-toolchain.toml)
+          test -n "$channel"
+          rustup toolchain install "$channel" --profile minimal --target aarch64-apple-ios
+      # The sqlite3 build hook downloads a prebuilt library (hash-checked) from github.com; keep it between runs.
+      - name: Restore the sqlite3 library cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .dart_tool/hooks_runner/shared/sqlite3
+          key: sqlite3-hook-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
       - name: Restore Firebase config
         env:
           GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}

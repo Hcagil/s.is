@@ -50,6 +50,11 @@ class _LoggedSnapshot implements ChatListSnapshotStore {
   _LoggedSnapshot(this.inner, this.log);
   final ChatListSnapshotStore inner;
   final List<String> log;
+
+  /// When set, the next clear waits here after the feed file is gone and
+  /// before it returns, so work can be started between the two sign-out
+  /// steps.
+  Completer<void>? holdAfterClear;
   @override
   Future<List<Conversation>?> load(String ownerId) => inner.load(ownerId);
   @override
@@ -59,6 +64,9 @@ class _LoggedSnapshot implements ChatListSnapshotStore {
   Future<void> clear() async {
     log.add('snapshot.clear');
     await inner.clear();
+    final hold = holdAfterClear;
+    holdAfterClear = null;
+    if (hold != null) await hold.future;
     log.add('snapshot.cleared');
   }
 }
@@ -186,6 +194,11 @@ void main() {
         expect(snap, isNonNegative, reason: 'snapshot cleared');
         expect(storeClear, greaterThan(snap), reason: 'snapshot first');
         expect(log.indexOf('snapshot.cleared'), lessThan(storeClear));
+        expect(
+          log.lastIndexOf('snapshot.cleared'),
+          greaterThan(log.indexOf('store.cleared')),
+          reason: 'feed cleared again after the store ($log)',
+        );
         expectNoFiles(name);
         expect(await keys(), isEmpty, reason: 'key deleted');
       });
@@ -530,6 +543,108 @@ void main() {
       expect(feedPart().existsSync(), isFalse, reason: 'feed .part left');
       expectNoFiles('database after the late save');
     });
+
+    // A save that STARTS after the first feed clear finished and before
+    // store.clear(): the store is still open, so it writes rows and the feed;
+    // only the trailing feed clear can remove it.
+    for (final how in ['store follows the user', 'one store instance']) {
+      test(
+        'a save starting between the first feed clear and store.clear ($how) '
+        'leaves no feed file once sign-out completes',
+        () async {
+          follow = how == 'store follows the user';
+          await signedIn();
+          final snap = c.read(chatListSnapshotStoreProvider) as _LoggedSnapshot;
+          await snap.load('ann'); // the store is open
+          final hold = snap.holdAfterClear = Completer<void>();
+          signOut();
+          await eventually(() => log.contains('snapshot.clear'));
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          expect(log, isNot(contains('store.clear')), reason: 'held: $log');
+
+          await snap.save('ann', const [
+            Conversation(id: 'c1', avatarPath: 'groups/c1.jpg'),
+          ]);
+          log.add('S.done');
+          if (!follow) {
+            expect(
+              feed().existsSync(),
+              isTrue,
+              reason: 'fixture: the save landed between the clears',
+            );
+          }
+          hold.complete();
+          await eventually(() => log.contains('store.cleared'));
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          expect(
+            feed().existsSync(),
+            isFalse,
+            reason: 'feed re-written after sign-out ($log)',
+          );
+          expect(feedPart().existsSync(), isFalse, reason: 'feed .part left');
+          expectNoFiles('database after sign-out');
+        },
+      );
+    }
+
+    // Security re-gate 4: wired as main.dart (the store follows the user). S
+    // is held inside X's transaction while the WHOLE routine runs on the new
+    // owner-'' instance E (feed clear, E.clear(), trailing feed clear,
+    // invalidate); S is released only after that.
+    test(
+      "re-gate 4: a save held inside the old instance's transaction across "
+      'the whole sign-out routine on the new instance leaves no feed file',
+      () async {
+        follow = true;
+        await signedIn();
+        final snap = c.read(chatListSnapshotStoreProvider);
+        final inner =
+            (c.read(messageStoreProvider) as SpyStore).inner
+                as DriftMessageStore;
+        await snap.load('ann'); // the store is open
+        final gate = Completer<void>();
+        final entered = Completer<void>();
+        final holding = inner.run<void>(
+          null,
+          (db) => db.transaction(() async {
+            entered.complete();
+            await gate.future;
+          }),
+        );
+        await entered.future;
+        final saving = snap.save('ann', const [
+          Conversation(id: 'c1', avatarPath: 'groups/c1.jpg'),
+        ]);
+        unawaited(saving.then((_) => log.add('S.done')));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        signOut();
+        await eventually(() => log.contains('store.cleared'));
+        await eventually(
+          () =>
+              log.lastIndexOf('snapshot.cleared') >
+              log.indexOf('store.cleared'),
+          reason: 'the trailing feed clear ($log)',
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        log.add('routine.done');
+        gate.complete();
+        await holding;
+        await saving;
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        expect(
+          log.indexOf('S.done'),
+          greaterThan(log.indexOf('routine.done')),
+          reason: 'fixture: S finished only after the routine ($log)',
+        );
+        expect(
+          feed().existsSync(),
+          isFalse,
+          reason: 'feed re-written after sign-out ($log)',
+        );
+        expect(feedPart().existsSync(), isFalse, reason: 'feed .part left');
+        expectNoFiles('database after sign-out');
+      },
+    );
 
     // Security re-gate 3: the REAL sign-out order (feed clear, delete rows,
     // store.clear) through the providers. A transaction held open on the same

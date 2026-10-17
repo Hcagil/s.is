@@ -595,7 +595,7 @@ void main() {
       chat.answerAll();
       await pastDebounce();
 
-      final cleared = store.log.lastIndexOf('clear');
+      final cleared = store.log.indexOf('clear');
       expect(
         store.log.skip(cleared).where((e) => e.startsWith('save:')),
         isEmpty,
@@ -625,7 +625,7 @@ void main() {
       chat.answerAll();
       await pastDebounce();
 
-      final cleared = store.log.lastIndexOf('clear');
+      final cleared = store.log.indexOf('clear');
       expect(
         store.log.skip(cleared).where((e) => e.startsWith('save:')),
         isEmpty,

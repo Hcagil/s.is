@@ -58,6 +58,9 @@ class _Feed extends ChatFake {
   final changeGates = <int, Completer<void>>{};
   final beforeGates = <int, Completer<void>>{};
 
+  /// When set, newestChange waits for it.
+  Completer<void>? newestGate;
+
   /// changesSince call numbers that answer Err.
   final changeErrs = <int>{};
 
@@ -98,6 +101,7 @@ class _Feed extends ChatFake {
   Future<Result<ChangeCursor?>> newestChange() async {
     calls.add('newestChange');
     await _wait();
+    if (newestGate case final g?) await g.future;
     return Ok(newest);
   }
 
@@ -137,6 +141,29 @@ class _Spy extends SpyStore {
   _Spy(super.inner, this.feed);
   final _Feed feed;
   final saved = <ChangeCursor>[];
+
+  /// When set, upsertAll is recorded at once and then waits for it.
+  Completer<void>? holdUpsert;
+
+  static const _writeOps = [
+    'upsert:',
+    'reconcile:',
+    'extendOlder:',
+    'remove:',
+    'deleteConversation:',
+    'clear',
+  ];
+
+  /// Every write asked of this store so far, cursor saves included.
+  int get writes =>
+      calls.where((c) => _writeOps.any(c.startsWith)).length + saved.length;
+
+  @override
+  Future<void> upsertAll(List<Message> messages) async {
+    final f = super.upsertAll(messages);
+    if (holdUpsert case final g?) await g.future;
+    return f;
+  }
 
   @override
   Future<void> saveCursor(ChangeCursor cursor) {
@@ -679,6 +706,183 @@ void main() {
       expect(await back.syncState('c1'), isNull);
       expect(await back.cursor(), isNull);
     });
+  });
+
+  // Halt before every write. The stores here are one per account, as
+  // main.dart builds them, but NEVER closed: a write after the halt would
+  // land. So only the controller's own checks can keep a stale page out.
+  group('halts before a write', () {
+    Override openStores() => messageStoreProvider.overrideWith((ref) {
+      final uid = ref.watch(currentUserIdProvider) ?? '';
+      final s = _Spy(reopen('open-$uid'), feed);
+      (opened[uid] ??= []).add(s);
+      return s;
+    });
+
+    final halts = <String, SessionState>{
+      'a sign-out': const SignedOut(),
+      'an account switch': _allowed('other'),
+    };
+
+    /// Starts a pass on 'me', waits until [inFlight], halts with [to], then
+    /// lets [release] go and waits for the pass to end. Returns the old store
+    /// and its write count at the halt.
+    Future<(_Spy, int)> haltDuring({
+      required ProviderContainer c,
+      required SessionState to,
+      required bool Function() inFlight,
+      required void Function() release,
+      String what = '',
+    }) async {
+      final old = storeOf(c);
+      final pass = c.read(storeSyncProvider).run();
+      await eventually(inFlight, reason: '$what in flight');
+      (c.read(sessionControllerProvider.notifier) as _Session).become(to);
+      await eventually(
+        () => c.read(currentUserIdProvider) != 'me',
+        reason: 'session changed',
+      );
+      final atHalt = old.writes;
+      release();
+      await pass.timeout(const Duration(seconds: 10));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      return (old, atHalt);
+    }
+
+    void noneElsewhere() {
+      for (final MapEntry(:key, :value) in opened.entries) {
+        if (key == 'me') continue;
+        for (final s in value) {
+          expect(s.writes, 0, reason: 'store of "$key" got ${s.calls}');
+        }
+      }
+    }
+
+    /// A fresh store (no cursor) with one chat of 700 rows on the server.
+    Future<ProviderContainer> fresh() async {
+      feed.history['c1'] = _rows('c1', 0, 700);
+      feed.change(feed.history['c1']!.last);
+      feed.conversationsResult = Ok([_chat('c1', 699)]);
+      return boot(withStore: false, more: [openStores()]);
+    }
+
+    /// A complete c1 and a stored cursor, with changes after it.
+    Future<ProviderContainer> withCursor() async {
+      feed.conversationsResult = Ok([_chat('c1', 300)]);
+      final c = await boot(withStore: false, more: [openStores()]);
+      final s = storeOf(c);
+      await s.reconcilePage('c1', [
+        msg('c1-seed', conv: 'c1', t: 1),
+      ], reachedStart: true);
+      await s.saveCursor(ChangeCursor(at(100), 'c1-seed'));
+      for (var i = 0; i < 3; i++) {
+        feed.change(msg('c1-n$i', t: 200 + i));
+      }
+      s.calls.clear();
+      s.saved.clear();
+      return c;
+    }
+
+    for (final MapEntry(key: how, value: to) in halts.entries) {
+      test(
+        '$how while newestChange is in flight: no cursor, no page',
+        () async {
+          feed.newestGate = Completer<void>();
+          final c = await fresh();
+          final (old, atHalt) = await haltDuring(
+            c: c,
+            to: to,
+            what: 'newestChange',
+            inFlight: () => feed.count('newestChange') == 1,
+            release: feed.newestGate!.complete,
+          );
+          expect(atHalt, 0);
+          expect(
+            old.writes,
+            0,
+            reason: 'old store got ${old.calls} ${old.saved}',
+          );
+          expect(feed.count('messages:'), 0, reason: 'no fill read');
+          noneElsewhere();
+        },
+      );
+
+      test(
+        '$how while changesSince is in flight: no page, no cursor',
+        () async {
+          feed.changeGates[1] = Completer<void>();
+          final c = await withCursor();
+          final (old, atHalt) = await haltDuring(
+            c: c,
+            to: to,
+            what: 'changesSince',
+            inFlight: () => feed.feedCalls.length == 1,
+            release: feed.changeGates[1]!.complete,
+          );
+          expect(old.writes, atHalt, reason: 'old store got ${old.calls}');
+          expect(old.saved, isEmpty, reason: 'cursor saved after the halt');
+          expect(feed.feedCalls, hasLength(1), reason: 'no further page');
+          noneElsewhere();
+        },
+      );
+
+      test(
+        '$how while a feed page is being written: no cursor saved',
+        () async {
+          final c = await withCursor();
+          final old = storeOf(c)..holdUpsert = Completer<void>();
+          final (_, atHalt) = await haltDuring(
+            c: c,
+            to: to,
+            what: 'page write',
+            inFlight: () => old.count('upsert:') == 1,
+            release: old.holdUpsert!.complete,
+          );
+          expect(old.writes, atHalt, reason: 'old store got ${old.calls}');
+          expect(old.saved, isEmpty, reason: 'cursor saved after the halt');
+          noneElsewhere();
+        },
+      );
+
+      test(
+        '$how while a newest page (messages) is in flight: no reconcile',
+        () async {
+          feed.holdChat = 'c1';
+          final c = await fresh();
+          final (old, atHalt) = await haltDuring(
+            c: c,
+            to: to,
+            what: 'messages',
+            inFlight: () => feed.count('held:c1') == 1,
+            release: feed.chatGate.complete,
+          );
+          expect(old.writes, atHalt, reason: 'old store got ${old.calls}');
+          expect(old.count('reconcile:'), 0);
+          expect(old.count('extendOlder:'), 0);
+          expect(feed.beforeCalls, isEmpty, reason: 'no older page asked for');
+          noneElsewhere();
+        },
+      );
+
+      test('$how while messagesBefore is in flight: no extendOlder', () async {
+        feed.beforeGates[1] = Completer<void>();
+        final c = await fresh();
+        final (old, atHalt) = await haltDuring(
+          c: c,
+          to: to,
+          what: 'messagesBefore',
+          inFlight: () => feed.beforeCalls.length == 1,
+          release: feed.beforeGates[1]!.complete,
+        );
+        expect(old.count('reconcile:'), 1, reason: 'the newest page landed');
+        expect(old.writes, atHalt, reason: 'old store got ${old.calls}');
+        expect(old.count('extendOlder:'), 0);
+        expect(feed.beforeCalls, hasLength(1), reason: 'no further pages');
+        final back = (await old.syncState('c1'))!;
+        expect(back.contiguousFrom?.toUtc(), at(650), reason: 'not lowered');
+        noneElsewhere();
+      });
+    }
   });
 
   group('open chat loading', () {

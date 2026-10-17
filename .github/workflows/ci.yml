@@ -40,6 +40,8 @@ jobs:
               - 'test/**'
               - 'android/**'
               - 'ios/**'
+              - 'rust/**'
+              - 'rust_builder/**'
               - 'tool/**'
               - 'docker/**'
               - 'pubspec.yaml'
@@ -87,7 +89,9 @@ jobs:
       - name: Restore dependency caches
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
-          path: .ci-cache
+          path: |
+            .ci-cache
+            .dart_tool/hooks_runner/shared/sqlite3
           key: flutter-${{ runner.os }}-${{ hashFiles('pubspec.lock', 'docker/Dockerfile') }}
           restore-keys: flutter-${{ runner.os }}-
       - name: Build development image
@@ -101,6 +105,9 @@ jobs:
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter dart format --output=none --set-exit-if-changed lib test
       - name: Analyze
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter analyze
+      # test/data/crypto runs against the real Rust library; RustLib.init() loads it from rust/target/release.
+      - name: Build the Rust library for the Dart tests
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo build --release --manifest-path rust/Cargo.toml
       # A non-UTC zone on purpose: the container defaults to UTC, where a test
       # of local-time formatting passes whether or not the code converts to
       # local time at all. POSIX form, so no tzdata is needed.
@@ -173,6 +180,12 @@ jobs:
             test --no-check --no-lock --allow-all test/edge/
       - name: Prepare cache directories
         run: mkdir -p .ci-cache/pub .ci-cache/gradle
+      # The sqlite3 build hook downloads a prebuilt library (hash-checked) from github.com; keep it between runs.
+      - name: Restore the sqlite3 library cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .dart_tool/hooks_runner/shared/sqlite3
+          key: sqlite3-hook-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
       - name: Build development image
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml build flutter
       # Skipped by the ordinary `flutter test` run; this is the only job with a
@@ -227,6 +240,12 @@ jobs:
           test -n "$version"
           git clone --depth 1 --branch "$version" https://github.com/flutter/flutter.git "$HOME/flutter"
           echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+      # The sqlite3 build hook downloads a prebuilt library (hash-checked) from github.com; keep it between runs.
+      - name: Restore the sqlite3 library cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .dart_tool/hooks_runner/shared/sqlite3
+          key: sqlite3-hook-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
       - name: Restore Firebase config
         env:
           GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
@@ -237,6 +256,20 @@ jobs:
         run: flutter pub get
       - name: Build iOS (no codesign)
         run: flutter build ios --release --no-codesign
+      # The iPhone notification extension will call the same Rust crate from Swift (C header from cbindgen).
+      # This compiles and links a Swift probe against the crate for the simulator.
+      - name: Swift calls the Rust crate (notification extension route)
+        timeout-minutes: 15
+        working-directory: rust
+        run: |
+          rustup target add aarch64-apple-ios-sim
+          cargo build --release --target aarch64-apple-ios-sim
+          mkdir -p "$RUNNER_TEMP/probe"
+          printf 'import Foundation\nexit(sis_olm_selftest())\n' > "$RUNNER_TEMP/probe/main.swift"
+          xcrun --sdk iphonesimulator swiftc -target arm64-apple-ios15.0-simulator \
+            -import-objc-header include/sis_crypto.h \
+            "$RUNNER_TEMP/probe/main.swift" target/aarch64-apple-ios-sim/release/librust_lib_sis.a \
+            -framework Security -o "$RUNNER_TEMP/probe/probe"
       # ios/RunnerTests: the Swift channel handlers against real ImageIO/PhotosUI,
       # hosted in the app on a simulator (whichever iPhone this Xcode ships).
       - name: Native iOS tests (simulator)

@@ -33,7 +33,11 @@ import 'features/chat/data/external_picker_channel.dart';
 import 'features/chat/data/file_video_importer.dart';
 import 'features/chat/data/method_channel_share_intake.dart';
 import 'features/chat/data/file_attachment_cache.dart';
-import 'features/chat/data/file_chat_list_snapshot_store.dart';
+import 'features/chat/data/store/drift_chat_list_snapshot_store.dart';
+import 'features/chat/data/store/drift_message_store.dart';
+import 'features/chat/data/store/legacy_chat_list.dart';
+import 'features/chat/data/store/store_key.dart';
+import 'features/chat/data/store/store_location.dart';
 import 'features/chat/data/flutter_device_files.dart';
 import 'features/chat/data/flutter_device_videos.dart';
 import 'features/chat/data/geolocator_device_location.dart';
@@ -146,6 +150,16 @@ Future<void> main() async {
       'Noto Emoji images',
     ], await rootBundle.loadString('assets/stickers/NOTO-EMOJI-LICENSE.txt'));
   });
+  // The on-phone message store is encrypted with SQLite3 Multiple Ciphers
+  // (MIT, plus ISC and BSD parts).
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(
+      ['SQLite3 Multiple Ciphers'],
+      await rootBundle.loadString(
+        'assets/licenses/SQLITE3-MULTIPLE-CIPHERS-LICENSE.txt',
+      ),
+    );
+  });
   final config = RuntimeConfig.fromEnvironment();
   // Read before runApp (like the session marker), so the first frame already
   // has the member's theme, font, text size and language: no flash.
@@ -197,7 +211,12 @@ Future<void> main() async {
     );
     final attachmentCache = FileAttachmentCache();
     final deviceFiles = FlutterDeviceFiles();
+    // Drops the old chat_list.json (may hold message text); keeps the push feed.
+    unawaited(deleteLegacyChatList());
     StartupMarks.mark('run-app');
+    // The store messageStoreProvider built last: the chat-list store shares that
+    // very instance (it rebuilds with it, see below).
+    DriftMessageStore? builtStore;
     runApp(
       ProviderScope(
         overrides: [
@@ -290,9 +309,27 @@ Future<void> main() async {
           mapViewProvider.overrideWithValue(maps.mapView),
           mapPreviewProvider.overrideWithValue(maps.mapPreview),
           attachmentCacheProvider.overrideWithValue(attachmentCache),
-          chatListSnapshotStoreProvider.overrideWithValue(
-            FileChatListSnapshotStore(),
-          ),
+          // One encrypted database per signed-in account: the provider
+          // watches the user id, so another account gets a fresh instance
+          // (and the file's owner check wipes the old rows).
+          messageStoreProvider.overrideWith((ref) {
+            const key = StoreKey();
+            final store = DriftMessageStore(
+              ownerId: ref.watch(currentUserIdProvider) ?? '',
+              file: storeFile,
+              key: key.loadOrCreate,
+              deleteKey: key.delete,
+            );
+            ref.onDispose(store.close);
+            builtStore = store;
+            return store;
+          }),
+          chatListSnapshotStoreProvider.overrideWith((ref) {
+            // Watching messageStoreProvider rebuilds this whenever a new store
+            // is built, and that build has just set builtStore.
+            ref.watch(messageStoreProvider);
+            return DriftChatListSnapshotStore(builtStore!);
+          }),
           lastSessionStoreProvider.overrideWithValue(FileLastSessionStore()),
           galleryProvider.overrideWithValue(const PhotoManagerGallery()),
           videoGalleryProvider.overrideWithValue(

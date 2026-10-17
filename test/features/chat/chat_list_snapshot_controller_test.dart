@@ -4,7 +4,9 @@
 // "stored chat list" section of docs/SECURITY.md -- never from the
 // implementation.
 //
-// The store is the REAL FileChatListSnapshotStore on a temp directory, behind
+// The store is the REAL DriftChatListSnapshotStore over a REAL encrypted
+// DriftMessageStore file in a temp directory, wired as lib/main.dart wires it
+// (one store instance per signed-in user, the snapshot store over it), behind
 // a thin decorator that only logs and can hold a load in flight after the
 // disk read, as a slow phone does. The chat fake answers as whoever holds the
 // session at call time and can hold each list read open separately, so a
@@ -13,13 +15,16 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
-import 'package:sis/features/chat/data/file_chat_list_snapshot_store.dart';
+import 'package:sis/features/chat/data/store/drift_chat_list_snapshot_store.dart';
+import 'package:sis/features/chat/data/store/drift_message_store.dart';
+import 'package:sis/features/chat/data/store/store_key.dart';
 import 'package:sis/features/chat/domain/chat_list_snapshot_store.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -104,45 +109,81 @@ class ListChat extends FakeChat {
   }
 }
 
-/// The real file store, logged; [holdLoad] keeps a load's answer in flight
-/// AFTER the file was read, so the list it read arrives late.
-class DiskStore implements ChatListSnapshotStore {
-  DiskStore(this.dir)
-    : inner = FileChatListSnapshotStore(root: () async => dir);
+/// The real encrypted store, logged; [holdLoad] keeps a load's answer in
+/// flight AFTER the database was read, so the list it read arrives late.
+/// [messages] builds a store instance per owner the way main.dart's
+/// messageStoreProvider does; [over] is the snapshot store main.dart builds
+/// over it. [raw] decodes what the file holds now, as the last owner reads it.
+class DiskStore {
+  DiskStore(this.dir, this.key);
   final Directory dir;
-  final FileChatListSnapshotStore inner;
+  final String key;
   final log = <String>[];
   Completer<void>? holdLoad;
+  String _lastOwner = '';
 
-  File get file => File('${dir.path}/chat_list.json');
+  File get file => File('${dir.path}/sis_store.sqlite');
 
-  /// The file's raw text, or null when there is none.
-  String? get raw => file.existsSync() ? file.readAsStringSync() : null;
+  DriftMessageStore messages(String owner) {
+    _lastOwner = owner;
+    return _last = DriftMessageStore(
+      ownerId: owner,
+      file: () async => file,
+      key: () async => key,
+      deleteKey: () async {},
+    );
+  }
+
+  DriftMessageStore? _last;
+
+  ChatListSnapshotStore over(DriftMessageStore s) =>
+      _Logged(DriftChatListSnapshotStore(s), this);
+
+  /// The stored list as text (ids, previews, archived flags), read through
+  /// the newest store instance (the one the app uses now), or null when
+  /// there is no file or no list.
+  Future<String?> raw() async {
+    final last = _last;
+    if (!file.existsSync() || last == null || _lastOwner.isEmpty) return null;
+    final list = await DriftChatListSnapshotStore(last).load(_lastOwner);
+    if (list == null) return null;
+    return [
+      for (final c in list)
+        '{"id":"${c.id}","lastMessage":"${c.lastMessage}",'
+            '"archived":${c.archived}}',
+    ].join(',');
+  }
 
   /// Every save as "owner:id,id".
   List<String> get saves => [
     for (final e in log)
       if (e.startsWith('save:')) e.substring(5),
   ];
+}
+
+class _Logged implements ChatListSnapshotStore {
+  _Logged(this.inner, this.disk);
+  final ChatListSnapshotStore inner;
+  final DiskStore disk;
 
   @override
   Future<List<Conversation>?> load(String ownerId) async {
-    log.add('load:$ownerId');
+    disk.log.add('load:$ownerId');
     final read = await inner.load(ownerId);
-    final hold = holdLoad;
+    final hold = disk.holdLoad;
     if (hold != null) await hold.future;
     return read;
   }
 
   @override
   Future<void> save(String ownerId, List<Conversation> conversations) {
-    log.add('save:$ownerId:${conversations.map((c) => c.id).join(',')}');
+    disk.log.add('save:$ownerId:${conversations.map((c) => c.id).join(',')}');
     return inner.save(ownerId, conversations);
   }
 
   @override
   Future<void> clear() {
-    log.add('clear');
+    disk.log.add('clear');
     return inner.clear();
   }
 }
@@ -155,9 +196,9 @@ Future<void> pause([int ms = 30]) =>
 /// scheduled has had its chance to land.
 Future<void> pastDebounce() => pause(2600);
 
-Future<void> until(bool Function() ok, String what) async {
+Future<void> until(FutureOr<bool> Function() ok, String what) async {
   for (var i = 0; i < 500; i++) {
-    if (ok()) return;
+    if (await ok()) return;
     await pause(20);
   }
   fail('timed out waiting for $what');
@@ -181,7 +222,8 @@ void main() {
 
   setUp(() async {
     dir = await Directory.systemTemp.createTemp('chat-list-ctl-');
-    store = DiskStore(dir);
+    FlutterSecureStorage.setMockInitialValues({});
+    store = DiskStore(dir, await const StoreKey().loadOrCreate());
     chat = ListChat()
       ..byOwner[alice.userId] = aList
       ..byOwner[bora.userId] = bList;
@@ -200,7 +242,7 @@ void main() {
 
   /// Alice's list already on the phone from an earlier run.
   Future<void> seedAlice() =>
-      FileChatListSnapshotStore(root: () async => dir)
+      DriftChatListSnapshotStore(store.messages(alice.userId))
           .save(alice.userId, aList);
 
   /// Who the one client answers as. A recheck (SessionLoading) or an
@@ -229,7 +271,15 @@ void main() {
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         pushSourceProvider.overrideWithValue(PushSourceFake()),
         sessionControllerProvider.overrideWith(() => _Session(initial)),
-        chatListSnapshotStoreProvider.overrideWithValue(store),
+        messageStoreProvider.overrideWith((ref) {
+          final s = store.messages(ref.watch(currentUserIdProvider) ?? '');
+          ref.onDispose(s.close);
+          return s;
+        }),
+        chatListSnapshotStoreProvider.overrideWith(
+          (ref) =>
+              store.over(ref.watch(messageStoreProvider) as DriftMessageStore),
+        ),
         chatArchiveRepositoryProvider.overrideWithValue(archive),
       ],
     );
@@ -261,7 +311,7 @@ void main() {
     );
     // Logged is not written: wait for the file itself.
     await until(
-      () => store.raw?.contains('secret of alice 1') ?? false,
+      () async => (await store.raw())?.contains('secret of alice 1') ?? false,
       "alice's snapshot on disk",
     );
     return c;
@@ -299,14 +349,14 @@ void main() {
     return c;
   }
 
-  void expectNoAliceOnDisk() {
+  Future<void> expectNoAliceOnDisk() async {
     expect(
       store.saves.where((s) => s.startsWith('${bora.userId}:')),
       everyElement(isNot(contains('a-'))),
       reason: "A's list saved under B: ${store.log}",
     );
     expect(
-      store.raw ?? '',
+      (await store.raw()) ?? '',
       isNot(contains('secret of alice')),
       reason: "B's stored file holds A's list",
     );
@@ -328,7 +378,7 @@ void main() {
     test('a loaded list is saved for its owner, and shown from the phone on '
         'the next start before the server answers', () async {
       await aliceLoaded();
-      expect(store.raw, contains('secret of alice 1'));
+      expect(await store.raw(), contains('secret of alice 1'));
 
       // Next app run: the server is slow; the stored list shows first.
       states.clear();
@@ -351,7 +401,7 @@ void main() {
         ('a-1', true),
       ]);
       await pastDebounce();
-      expect(store.raw, contains('"archived":true'));
+      expect(await store.raw(), contains('"archived":true'));
       // Next app run: the server is held; the stored list shows first.
       states.clear();
       chat.holding = true;
@@ -440,7 +490,7 @@ void main() {
         chat.deliver(incoming('a-2', 'fresh'));
         await pastDebounce();
         expect(store.saves.length, greaterThan(before));
-        expect(store.raw, contains('fresh'));
+        expect(await store.raw(), contains('fresh'));
       },
     );
   });
@@ -487,13 +537,16 @@ void main() {
         expect(hasAny(idsOf(s), aIds), isFalse, reason: 'B saw $s');
       }
 
+      // With the stores wired as main.dart wires them, B's build can ask
+      // twice (the store instance follows the user id); answer every read.
+      chat.holding = false;
       chat.answerAll();
       await until(() => idsOf(list(c)).join() == 'b-1', "B's list");
       await pastDebounce();
       for (final s in states) {
         expect(hasAny(idsOf(s), aIds), isFalse, reason: 'B saw $s');
       }
-      expect(store.raw ?? '', isNot(contains('secret of alice')));
+      expect((await store.raw()) ?? '', isNot(contains('secret of alice')));
       for (final s in store.saves) {
         expect(s, isNot(contains('a-')), reason: 'saved A data: $s');
       }
@@ -520,7 +573,7 @@ void main() {
       for (final s in store.saves.skip(savesBefore)) {
         expect(s, isNot(contains('a-')), reason: 'saved A data: $s');
       }
-      expect(store.raw ?? '', isNot(contains('secret of alice')));
+      expect((await store.raw()) ?? '', isNot(contains('secret of alice')));
     });
   });
 
@@ -542,7 +595,7 @@ void main() {
       chat.answerAll();
       await pastDebounce();
 
-      final cleared = store.log.lastIndexOf('clear');
+      final cleared = store.log.indexOf('clear');
       expect(
         store.log.skip(cleared).where((e) => e.startsWith('save:')),
         isEmpty,
@@ -572,7 +625,7 @@ void main() {
       chat.answerAll();
       await pastDebounce();
 
-      final cleared = store.log.lastIndexOf('clear');
+      final cleared = store.log.indexOf('clear');
       expect(
         store.log.skip(cleared).where((e) => e.startsWith('save:')),
         isEmpty,
@@ -610,13 +663,13 @@ void main() {
 
     Future<ProviderContainer> coldStart(Failure f, {bool seed = true}) async {
       if (seed) await seedAlice();
-      final before = store.raw;
+      final before = await store.raw();
       chat.failWith = Err(f);
       final c = app(const Allowed(alice));
       await until(() => chat.calls.isNotEmpty, 'the read');
       await until(() => settled(c) && list(c) is! AsyncLoading, 'settled');
       await pause(100);
-      expect(store.raw, before, reason: 'fixture: nothing written yet');
+      expect(await store.raw(), before, reason: 'fixture: nothing written yet');
       return c;
     }
 
@@ -639,7 +692,7 @@ void main() {
       test('cold start, $name: the stored list, the file not '
           'rewritten', () async {
         final c = await coldStart(failure);
-        final raw = store.raw;
+        final raw = await store.raw();
         expect(
           list(c),
           isA<AsyncData<List<Conversation>>>(),
@@ -648,7 +701,7 @@ void main() {
         expect(idsOf(list(c)), aIds);
         await pastDebounce();
         expect(store.saves, isEmpty, reason: '${store.log}');
-        expect(store.raw, raw);
+        expect(await store.raw(), raw);
       });
 
       test('refresh, $name, a list on screen: loading, then the same list, '
@@ -858,7 +911,7 @@ void main() {
         )) {
           expect(s, isNot(contains('a-')), reason: "A's list saved as B: $s");
         }
-        expect(store.raw ?? '', isNot(contains('secret of alice')));
+        expect((await store.raw()) ?? '', isNot(contains('secret of alice')));
         expect(idsOf(list(c)), ['b-1']);
       });
     }
@@ -909,11 +962,11 @@ void main() {
         await c.read(conversationListProvider.notifier).markRead('a-1');
       } catch (_) {}
       await pastDebounce();
-      expectNoAliceOnDisk();
+      await expectNoAliceOnDisk();
       chat.answerAll();
       await until(() => idsOf(list(c)).join() == 'b-1', "B's list");
       await pastDebounce();
-      expectNoAliceOnDisk();
+      await expectNoAliceOnDisk();
     });
 
     for (final failure in [
@@ -930,11 +983,11 @@ void main() {
           await c.read(conversationListProvider.notifier).reloadQuietly();
         } catch (_) {}
         await pastDebounce();
-        expectNoAliceOnDisk();
+        await expectNoAliceOnDisk();
 
         chat.answerAll(Err(failure));
         await pastDebounce();
-        expectNoAliceOnDisk();
+        await expectNoAliceOnDisk();
       });
 
       test('(b) markRead during it, then the load failing ($kind)', () async {
@@ -944,7 +997,7 @@ void main() {
         } catch (_) {}
         chat.answerAll(Err(failure));
         await pastDebounce();
-        expectNoAliceOnDisk();
+        await expectNoAliceOnDisk();
       });
     }
   });
@@ -1158,8 +1211,8 @@ void main() {
 
         expect(store.saves.skip(before), isNotEmpty, reason: 'not saved');
         expect(store.saves.last, startsWith('${bora.userId}:'));
-        expect(store.raw, contains(want));
-        expectNoAliceOnDisk();
+        expect(await store.raw(), contains(want));
+        await expectNoAliceOnDisk();
       });
     }
   });

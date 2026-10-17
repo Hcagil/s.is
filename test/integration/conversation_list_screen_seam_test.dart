@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/runtime_config.dart';
@@ -14,7 +15,8 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/core/failure.dart';
-import 'package:sis/features/chat/data/file_chat_list_snapshot_store.dart';
+import 'package:sis/features/chat/data/store/drift_chat_list_snapshot_store.dart';
+import 'package:sis/features/chat/data/store/store_key.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
@@ -26,6 +28,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/fakes.dart';
 import '../support/dead_host.dart';
+import '../support/drift_stores.dart';
 import '../support/video_fakes.dart';
 
 /// The home screen wired exactly as `main.dart` wires it, over a real
@@ -177,13 +180,15 @@ void main() {
     late String cleoId;
     final storedTitle = 'stored group ${DateTime.now().microsecondsSinceEpoch}';
 
-    setUp(() => dir = Directory.systemTemp.createTempSync('chat-list-seam-'));
+    late String key;
+    setUp(() async {
+      dir = Directory.systemTemp.createTempSync('chat-list-seam-');
+      FlutterSecureStorage.setMockInitialValues({});
+      key = await const StoreKey().loadOrCreate();
+    });
     tearDown(() {
       if (dir.existsSync()) dir.deleteSync(recursive: true);
     });
-
-    FileChatListSnapshotStore store() =>
-        FileChatListSnapshotStore(root: () async => dir);
 
     /// No offline strip of any past version (0.30.16, 0.30.17): slice 4
     /// removed them; the stored list alone shows the state.
@@ -212,11 +217,15 @@ void main() {
             .update({'onboarding_done': true})
             .eq('user_id', cleoId),
       );
-      await t.runAsync(
-        () => store().save(cleoId, [
+      // Closed after the save: the app opens its own store over the same
+      // file (driftStoreOverrides), and drift warns when two are open.
+      final seed = driftStore(cleoId, dir, key);
+      await t.runAsync(() async {
+        await DriftChatListSnapshotStore(seed).save(cleoId, [
           Conversation(id: 'stored-1', title: storedTitle, lastMessage: 'hi'),
-        ]),
-      );
+        ]);
+        await seed.close();
+      });
       final chat = (await t.runAsync(() => chatClient(live)))!;
       addTearDown(() => chat.dispose());
       final c = ProviderContainer(
@@ -245,7 +254,7 @@ void main() {
           presenceRepositoryProvider.overrideWithValue(
             SupabasePresenceRepository(live),
           ),
-          chatListSnapshotStoreProvider.overrideWithValue(store()),
+          ...driftStoreOverrides(dir, key),
         ],
       );
       addTearDown(c.dispose);
@@ -278,14 +287,27 @@ void main() {
     ) async {
       // The dead client carries cleo's real session before the app asks.
       final c = await app(t, deadButSignedIn);
-      // 0.30.16: the stored list is up in the first frames, while the dead
-      // host's read is still being retried.
-      await t.pump();
-      await t.pump();
+      // 0.30.16: the stored list is up while the dead host's read is still
+      // being retried. That read fails only after about 7 s (dead_host.dart);
+      // the store's open and read take real time (this binding runs real
+      // timers), so wait for it, well inside that window.
+      final stored = find.byKey(const ValueKey('conversation-stored-1'));
+      final clock = Stopwatch()..start();
+      while (stored.evaluate().isEmpty && clock.elapsed.inSeconds < 3) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await t.pump();
+      }
       expect(
-        find.byKey(const ValueKey('conversation-stored-1')),
+        stored,
         findsOneWidget,
-        reason: 'the stored list before the server read settles',
+        reason:
+            'the stored list before the server read settles '
+            '(waited ${clock.elapsed})',
+      );
+      expect(
+        c.read(conversationListProvider).hasError,
+        isFalse,
+        reason: 'the server read had already settled after ${clock.elapsed}',
       );
       final v = await settledList(t, c);
       expectNoOfflineStrip();

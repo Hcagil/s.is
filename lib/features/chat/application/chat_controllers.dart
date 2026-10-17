@@ -35,6 +35,7 @@ import '../domain/links.dart';
 import '../domain/location_services.dart';
 import '../domain/location_share_repository.dart';
 import '../domain/message.dart';
+import '../domain/message_store.dart';
 import '../domain/phone_book.dart';
 import '../domain/picture_cropper.dart';
 import '../domain/poll.dart';
@@ -74,6 +75,7 @@ part 'polls_controller.dart';
 part 'phone_book_controller.dart';
 part 'chat_search_controller.dart';
 part 'chat_list_search_controller.dart';
+part 'store_sync_controller.dart';
 
 final chatRepositoryProvider = Provider<ChatRepository>(
   (_) => throw UnimplementedError('override in main'),
@@ -202,11 +204,55 @@ final chatListSnapshotStoreProvider = Provider<ChatListSnapshotStore>(
 /// mirroring [attachmentCacheOwnerProvider] exactly: same two states, same
 /// fireImmediately, same reach (a cold start landing directly on SignedOut
 /// or Denied included). A snapshot is per-owner-checked on read too (see
-/// FileChatListSnapshotStore.load), so this is defence in depth, not the
-/// only guard.
+/// DriftChatListSnapshotStore.load), so this is defence in depth, not the
+/// only guard. It also erases the message store (see [_eraseMessageStore]).
 final chatListSnapshotOwnerProvider = Provider<void>((ref) {
-  _onSessionEnd(ref, () => ref.read(chatListSnapshotStoreProvider).clear());
+  _onSessionEnd(ref, () async {
+    // In this order and in ONE routine: the snapshot clear must be queued
+    // before the message store clear, or it would re-create the file.
+    await _clearSnapshot(ref);
+    await _eraseMessageStore(ref);
+  });
 });
+
+Future<void> _clearSnapshot(Ref ref) async {
+  try {
+    await ref.read(chatListSnapshotStoreProvider).clear();
+  } catch (_) {
+    // No snapshot store configured (most tests) or the clear failed: the
+    // message store is erased all the same.
+  }
+}
+
+/// The on-phone message database (encrypted). Overridden in main.dart with a
+/// provider that watches [currentUserIdProvider], so each account gets its own
+/// instance; data/ is the only layer allowed to import drift.
+final messageStoreProvider = Provider<MessageStore>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// The message store, or null when none is configured (most tests, where the
+/// provider is not overridden). Never throws.
+MessageStore? _storeOf(Ref ref) {
+  try {
+    return ref.read(messageStoreProvider);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Erases the database file and drops the store instance: after clear() an
+/// upsert on the old instance would re-create rows under the old owner, so the
+/// provider is invalidated and the next read builds a fresh store.
+Future<void> _eraseMessageStore(Ref ref) async {
+  final store = _storeOf(ref);
+  if (store == null) return;
+  await store.clear();
+  // Again, after the store closed and before a fresh one is built: a list
+  // save that finished before store.clear() may have re-written the feed.
+  await _clearSnapshot(ref);
+  if (ref.mounted) ref.invalidate(messageStoreProvider);
+}
 
 /// One attachment's bytes: from this phone when they are here, otherwise
 /// downloaded once and kept. Replaces a signed URL per look, which fetched

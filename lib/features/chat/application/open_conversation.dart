@@ -48,6 +48,8 @@ final resumeCatchUpProvider = Provider<void Function()>((ref) {
   return () {
     // Nothing to catch up on before sign-in (and no repository to ask).
     if (ref.read(sessionControllerProvider).value is! Allowed) return;
+    // The phone's own message store catches up on what changed meanwhile.
+    unawaited(ref.read(storeSyncProvider).run());
     final open = ref.read(openConversationProvider);
     final list = ref.read(conversationListProvider.notifier);
     if (open == null) {

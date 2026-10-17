@@ -164,6 +164,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     void onMessage(Message message) {
       // Strictly this chat's: a row for another conversation is never shown.
       if (message.conversationId != conversationId) return;
+      _persist([message]);
       if (!loaded) {
         buffered.add(message);
         return;
@@ -214,7 +215,23 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       }
       return opened;
     });
-    final (joined, read) = await (joining, repo.messages(conversationId)).wait;
+    // The server read starts now; the stored newest page shows meanwhile (only
+    // when this chat shows nothing yet), so a cold open is not blank.
+    final reading = repo.messages(conversationId);
+    var stored = const <Message>[];
+    final store = shownBefore.isEmpty ? _storeOf(ref) : null;
+    if (store != null) {
+      stored = await store.newest(conversationId, limit: messagePageSize);
+      if (alive && ref.mounted && stored.isNotEmpty) {
+        final queued = ref.read(sendQueueProvider)[conversationId] ?? const [];
+        state = AsyncData([
+          ...stored,
+          for (final p in queued)
+            if (!stored.any((m) => m.id == p.id)) p,
+        ]);
+      }
+    }
+    final (joined, read) = await (joining, reading).wait;
     if (!alive) return const []; // replaced or closed mid-open: drop it all
     // A catch-up that cannot reach the server (resume while offline) keeps
     // the list on screen and tries again a little later; only a first open,
@@ -225,8 +242,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       _ => null,
     };
     if (failed != null) {
+      // Offline: what is stored counts as something to show.
+      final offline = shownBefore.isNotEmpty ? shownBefore : stored;
       if (failed is DeniedFailure ||
-          shownBefore.isEmpty ||
+          offline.isEmpty ||
           _catchUpRetries >= _maxCatchUpRetries) {
         throw failed;
       }
@@ -236,7 +255,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
           if (alive && ref.mounted) ref.invalidateSelf();
         }),
       );
-      return shownBefore;
+      return offline;
     }
     _catchUpRetries = 0;
 
@@ -289,6 +308,20 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       for (final m in merged)
         if (m.deletion != MessageDeletion.vanished) m,
     ];
+    // The server page is the truth: written to the phone in one transaction,
+    // stored rows it no longer returns are dropped. Rows that landed live
+    // meanwhile (merged above) are part of the page, so they are kept.
+    final pageStore = _storeOf(ref);
+    if (pageStore != null) {
+      unawaited(
+        pageStore.reconcilePage(conversationId, [
+          for (final m in shown)
+            if (value.isNotEmpty &&
+                !m.createdAt.isBefore(value.first.createdAt))
+              m,
+        ], reachedStart: value.length < messagePageSize),
+      );
+    }
     final pending = ref.read(sendQueueProvider)[conversationId] ?? const [];
     // A later turn, so the list below is already the state when it runs.
     final edits = _ownEdits;
@@ -322,6 +355,76 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         if (!shown.any((m) => m.id == p.id)) p,
       ...photos,
     ];
+  }
+
+  /// Writes [list] to the on-phone store (best effort, fire and forget). A
+  /// legacy `vanished` row leaves the store; a pending send is skipped by it.
+  void _persist(Iterable<Message> list) {
+    final store = _storeOf(ref);
+    if (store == null) return;
+    final keep = <Message>[];
+    for (final m in list) {
+      if (m.deletion == MessageDeletion.vanished) {
+        unawaited(store.remove(m.id));
+      } else {
+        keep.add(m);
+      }
+    }
+    if (keep.isNotEmpty) unawaited(store.upsertAll(keep));
+  }
+
+  /// An older page, from the phone, when it provably holds it: no gap between
+  /// [oldest] and the page (the chat's contiguous block reaches [oldest]), and
+  /// the page is full or the chat's first message is stored. Null means the
+  /// server must be asked. `end` is true when nothing older exists.
+  Future<({List<Message> rows, bool end})?> _storedOlder(
+    String conversationId,
+    Message oldest,
+  ) async {
+    final store = _storeOf(ref);
+    if (store == null) return null;
+    final sync = await store.syncState(conversationId);
+    final from = sync?.contiguousFrom;
+    if (sync == null || from == null || from.isAfter(oldest.createdAt)) {
+      return null;
+    }
+    final rows = await store.older(
+      conversationId,
+      oldest.createdAt,
+      limit: messagePageSize,
+    );
+    if (rows.length >= messagePageSize) {
+      return rows.first.createdAt.isBefore(from)
+          ? null
+          : (rows: rows, end: false);
+    }
+    return sync.complete ? (rows: rows, end: true) : null;
+  }
+
+  /// The window around [anchor] from the phone, when every row of it lies in
+  /// the chat's contiguous block; null means the server must be asked.
+  Future<List<Message>?> _storedAround(
+    String conversationId,
+    Message anchor,
+  ) async {
+    final store = _storeOf(ref);
+    if (store == null) return null;
+    final sync = await store.syncState(conversationId);
+    final from = sync?.contiguousFrom;
+    final to = sync?.newestAt;
+    if (from == null || to == null) return null;
+    const each = 50;
+    final rows = await store.around(conversationId, anchor.id, each: each);
+    if (rows.isEmpty ||
+        rows.first.createdAt.isBefore(from) ||
+        rows.last.createdAt.isAfter(to)) {
+      return null;
+    }
+    // A window cut short at contiguousFrom is not covered unless the chat starts there.
+    if (!sync!.complete && rows.indexWhere((m) => m.id == anchor.id) < each) {
+      return null;
+    }
+    return rows;
   }
 
   /// The app is visible again after being backgrounded (or a notification
@@ -419,11 +522,20 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     final epoch = _epoch;
     _loadingOlder = true;
     ref.read(olderLoadingProvider.notifier).set(true);
-    final result = await ref
-        .read(chatRepositoryProvider)
-        .messagesAround(conversationId, oldest);
+    // The phone answers when it provably holds the page (no gap); else the
+    // server.
+    final local = await _storedOlder(conversationId, oldest);
+    final Result<List<Message>> result = local != null
+        ? Ok(local.rows)
+        : await ref
+              .read(chatRepositoryProvider)
+              .messagesAround(conversationId, oldest);
     if (!ref.mounted) return;
     if (epoch != _epoch) return; // rebuilt meanwhile: the new build owns this
+    if (local == null && result is Ok<List<Message>>) {
+      _persist(result.value);
+      unawaited(_extendStored(conversationId, oldest, result.value));
+    }
     ref.read(olderLoadingProvider.notifier).set(false);
     _loadingOlder = false;
     final now = state.value;
@@ -438,7 +550,11 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         .length;
     // Counted from the server's page, before shown rows are dropped: a row
     // live delivery already added must not make a full page look short.
-    if (page <= messagePageSize) _noOlder = true;
+    if (local != null) {
+      _noOlder = local.end;
+    } else if (page <= messagePageSize) {
+      _noOlder = true;
+    }
     final older = [
       for (final m in fresh)
         if (m.deletion != MessageDeletion.vanished) m,
@@ -450,6 +566,29 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     unawaited(
       _fillPreviews(conversationId, () => ref.mounted && epoch == _epoch),
     );
+  }
+
+  /// The server page just read for [oldest] (rows at or before it, plus rows
+  /// after) joins the stored block when that block reaches [oldest]: the phone
+  /// then holds the page with no gap, so the chat's contiguous start moves
+  /// down. A block that does not reach [oldest] is left alone.
+  Future<void> _extendStored(
+    String conversationId,
+    Message oldest,
+    List<Message> rows,
+  ) async {
+    final store = _storeOf(ref);
+    if (store == null) return;
+    final from = (await store.syncState(conversationId))?.contiguousFrom;
+    if (from == null || from.isAfter(oldest.createdAt)) return;
+    final older = [
+      for (final m in rows)
+        if (!m.createdAt.isAfter(oldest.createdAt)) m,
+    ];
+    await store.extendOlder(conversationId, [
+      for (final m in older)
+        if (m.deletion != MessageDeletion.vanished) m,
+    ], reachedStart: older.length <= messagePageSize);
   }
 
   /// The mirror of [loadOlder] for a jumped window: reads the page after the
@@ -522,6 +661,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     if (ref.read(openConversationProvider) != conversationId) return;
     final current = state.value;
     if (result is! Ok<List<Message>> || current == null) return;
+    _persist(result.value);
     var next = current;
     for (final m in result.value) {
       if (m.deletion == MessageDeletion.vanished) continue;
@@ -565,6 +705,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     // Sending from a jumped window goes back to live first, so the sent
     // message shows at the bottom without a gap.
     if (_jumped && next.isNotEmpty) returnToLive();
+    _persist(next);
     final current = state.value;
     if (current == null) return;
     var list = current;
@@ -633,21 +774,21 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// Realtime.
   Future<Result<void>> deleteForEveryone(Message message) async {
     _ownEdits++;
-    _deleted(
-      Message(
-        id: message.id,
-        conversationId: message.conversationId,
-        senderId: message.senderId,
-        body: '',
-        createdAt: message.createdAt,
-        deletion: MessageDeletion.placeholder,
-        deletedBy: _me,
-      ),
+    final placeholder = Message(
+      id: message.id,
+      conversationId: message.conversationId,
+      senderId: message.senderId,
+      body: '',
+      createdAt: message.createdAt,
+      deletion: MessageDeletion.placeholder,
+      deletedBy: _me,
     );
+    _deleted(placeholder);
     final result = await ref
         .read(chatRepositoryProvider)
         .deleteForEveryone(message);
     if (result is Err && ref.mounted) _replace(message);
+    if (result is Ok) _persist([placeholder]);
     return result;
   }
 
@@ -663,6 +804,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       ]);
     }
     final result = await ref.read(chatRepositoryProvider).hideForMe(message);
+    if (result is Ok) {
+      final store = _storeOf(ref);
+      if (store != null) unawaited(store.remove(message.id));
+    }
     if (result is Err && ref.mounted) {
       final now = state.value;
       if (now != null && !now.any((m) => m.id == message.id)) {
@@ -691,8 +836,9 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     final result = await ref
         .read(chatRepositoryProvider)
         .editMessage(message, body);
-    if (result case Ok(:final value) when ref.mounted) {
-      _edited(value);
+    if (result case Ok(:final value)) {
+      _persist([value]);
+      if (ref.mounted) _edited(value);
     }
     return result;
   }
@@ -821,6 +967,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     // so the photo never leaves the screen. Whatever pending is left over
     // (a failed send) is removed after.
     if (result case Ok(:final value)) {
+      _persist([value]);
       _append(value);
       // The phone's own copy stays on the stored entry to the end, even when
       // the stored row was not paired with its pending bubble above.
@@ -1092,9 +1239,16 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     final conversationId = ref.read(openConversationProvider);
     if (conversationId == null) return const Err(DeniedFailure());
     _requestedAnchorId = anchor.id;
-    final result = await ref
-        .read(chatRepositoryProvider)
-        .messagesAround(conversationId, anchor);
+    // From the phone when it provably holds the whole window, else the server.
+    final local = await _storedAround(conversationId, anchor);
+    final Result<List<Message>> result = local != null
+        ? Ok(local)
+        : await ref
+              .read(chatRepositoryProvider)
+              .messagesAround(conversationId, anchor);
+    if (local == null && result is Ok<List<Message>> && ref.mounted) {
+      _persist(result.value);
+    }
     if (result case Ok(:final value)
         when ref.mounted &&
             ref.read(openConversationProvider) == conversationId &&

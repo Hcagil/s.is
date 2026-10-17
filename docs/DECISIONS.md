@@ -2108,3 +2108,35 @@ Nothing contacts the site before that tap.
   8. key backup;
   9. bot and system chats, and switching off the plain-text server paths;
   10. report and block.
+
+## 2026-10-14 — Private Chats engine: our own binding, Olm version 1, pinned Rust
+
+**SIS calls vodozemac 0.11.1 through its own thin flutter_rust_bridge 2.13.0 binding (Cargokit), and one-to-one sessions use Olm version 1.** Version 1 is vodozemac's default and the Matrix `m.olm.v1.curve25519-aes-sha2` scheme, the one covered by the 2022 Least Authority audit; version 2 sits behind an experimental feature and is not in the Matrix spec.
+
+- Message types keep vodozemac's numbering: 0 = pre-key (opens a session), 1 = normal. There is no mapping layer.
+- The iPhone notification extension reaches the same crate through a plain C function and a cbindgen header, because flutter_rust_bridge needs the Flutter engine and the extension has none.
+- Rust is pinned to 1.99.0 in `rust/rust-toolchain.toml`; the vendored Cargokit reads that file instead of installing today's stable, so builds can be reproduced. The rustup installer in the Docker image is pinned and checked by SHA-256.
+- Release builds log only warnings from Rust, so a later debug line cannot leak plain text into device logs.
+- The binding lives in `lib/data/crypto/`, and only `data/` layers may import `flutter_rust_bridge` (`tool/check_pattern.sh`).
+
+**Reason.** Apache-2.0 keeps SIS closed source (the existing Flutter binding is AGPL), and the audited, spec-defined version is the safe default. **Consequence.** Each session stores its version, so moving to version 2 later affects only new sessions. The crate licences must be shown in the app before a public release.
+
+## 2026-10-17 — Private Chats step 1: every message lives on the phone
+
+**Each phone keeps its own copy of the member's chats in one encrypted database file, and the screens read that copy first.** This is step 1 of Private Chats (2026-10-13). It replaces the 2026-09-27 "Instant search inside a chat" decision, which kept only the newest messages on the phone because a full copy cost the server too much. Once messages are encrypted the server can no longer search them, so the full copy on the phone is required.
+
+- The store is drift 2.35 on SQLite3 Multiple Ciphers. The file is encrypted from day one, and its key is kept in the iPhone Keychain or the Android Keystore (on iPhone, this device only, so a backup restores it only onto the same phone). On iPhone the file sits in the App Group container, so the notification extension can open it later; if the container is unavailable it falls back to the app support folder. On Android it sits in the app support folder, which is not backed up (`allowBackup="false"`). The iPhone backup-exclusion flag is set on Application Support only, not on the App Group container; on any other phone a restored file there cannot be opened, so the app deletes it and starts empty.
+- The server stays the truth. Opening a chat shows the stored messages at once, then the server page replaces them and removes rows the server no longer returns.
+- Catch-up: a new `messages.updated_at` column, set by a trigger on every insert and update, feeds `changesSince`. One cursor per account moves forward after each page and starts 5 seconds early, so a late commit is not missed. Catch-up runs on app start, on resume and on sign-in.
+- A new phone fills in the whole history in the background: text and metadata only, never media. It goes newest chats first, in pages of 300 rows, and gives way to the chat that is open. A killed app resumes where it stopped.
+- Groups the member left keep the messages the server still lets the member read (its membership dates decide). The app has no leave-date rule of its own.
+- Sign-out, a denied account or a replaced session erases the file and its key. A file left by another account is erased on open. The chat list itself lives in the same encrypted file. The push feed file (`chat_list.json`, read by the Android push code) never holds message text; at launch the app deletes an old-format `chat_list.json` (one that could hold previews) and keeps a valid new feed.
+- Search runs on the phone. The server search stays as a fallback for history not yet filled in, until step 9 switches off the plain-text server paths. In the chat list it is asked unless every chat is fully stored. Inside one chat it is asked only if that chat is not fully stored and the phone found nothing.
+
+**Reason.** Chats must open instantly and keep working offline. Encrypted chats can only be searched and shown where they are unlocked: on the phone.
+
+**Consequences.**
+- A new phone downloads the member's full text history once, which costs server reads.
+- Reactions and polls still load a moment after the messages; storing them is a later slice.
+- Messages hidden only for this member, and messages removed outright on the server, are not in the change feed. They leave the phone when the chat list or that chat's page is next checked.
+- There is no reconnect signal yet, so a Realtime reconnect does not start a catch-up; resume does. A reconnect hook is a follow-up.

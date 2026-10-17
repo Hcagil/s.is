@@ -88,13 +88,34 @@ class ChatSearchController extends Notifier<ChatSearchState> {
         return const Ok(null);
       }
     }
-    final local = _localHits(conversationId, query);
+    var local = _localHits(conversationId, query);
     state = ChatSearchState(
       query: query,
       hits: local,
       index: local.isEmpty ? -1 : 0,
     );
-    if (local.isEmpty) {
+    // Then the phone's own store: every stored message of this chat, not only
+    // the loaded page. Once the whole history is stored the server is not
+    // asked at all; before that it stays the fallback for older hits.
+    final store = _storeOf(ref);
+    var complete = false;
+    if (store != null) {
+      final stored = await store.search(query, conversationId: conversationId);
+      complete = (await store.syncState(conversationId))?.complete ?? false;
+      if (!ref.mounted ||
+          ref.read(openConversationProvider) != conversationId ||
+          state.query != query) {
+        return const Ok(null);
+      }
+      local = _merge(local, stored);
+      state = ChatSearchState(
+        query: query,
+        hits: local,
+        index: local.isEmpty ? -1 : 0,
+        serverAnswered: complete,
+      );
+    }
+    if (!complete && local.isEmpty) {
       return _askServer(conversationId, query);
     }
     return const Ok(null);

@@ -10,6 +10,7 @@ dependencies:
   clock: ^1.1.2
   connectivity_plus: ^7.3.1
   crypto: ^3.0.7
+  drift: 2.35.2
   file_picker: ^13.1.0
   firebase_core: ^4.15.0
   firebase_messaging: ^16.7.0
@@ -21,6 +22,7 @@ dependencies:
     sdk: flutter
   flutter_map: ^8.3.2
   flutter_riverpod: ^3.4.3
+  flutter_rust_bridge: 2.13.0
   flutter_secure_storage: ^11.2.0
   geolocator: ^14.1.1
   google_maps_flutter: ^2.18.2
@@ -38,12 +40,17 @@ dependencies:
   package_info_plus: ^10.2.1
   path: ^1.9.1
   path_provider: ^2.1.6
+  # App Group container path on iOS (getContainerPath).
+  path_provider_foundation: ^2.6.0
   photo_manager: ^3.12.0
   record: ^7.1.1
+  rust_lib_sis:
+    path: rust_builder
   share_plus: ^13.3.1
   shared_preferences: ^2.5.5
   sign_in_with_apple: ^8.2.0
   speech_to_text: ^7.5.0
+  sqlite3: 3.7.1
   supabase_flutter: ^2.17.2
   url_launcher: ^6.3.2
   video_player: ^2.14.1
@@ -54,6 +61,9 @@ dependencies:
   webview_flutter_wkwebview: ^3.27.0
 
 dev_dependencies:
+  build_runner: 2.16.2
+  # Generates the on-phone store's drift code (output is checked in).
+  drift_dev: 2.35.1
   flutter_test:
     sdk: flutter
   integration_test:
@@ -75,6 +85,7 @@ flutter:
     - assets/fonts/OFL-manrope.txt
     - assets/fonts/OFL-sora.txt
     - assets/stickers/
+    - assets/licenses/
   fonts:
     - family: Manrope
       fonts:
@@ -92,3 +103,9 @@ flutter:
       fonts:
         - asset: assets/fonts/Sora-800.ttf
           weight: 800
+
+hooks:
+  user_defines:
+    sqlite3:
+      # SQLite3 Multiple Ciphers: the on-phone message store is encrypted at rest.
+      source: sqlite3mc

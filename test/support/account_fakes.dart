@@ -21,6 +21,7 @@ import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/links.dart';
 import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/message_store.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/presence/domain/presence_repository.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
@@ -170,6 +171,20 @@ class SwitchingAuth implements AuthRepository {
 /// row-level security's manners: no session or no membership reads as
 /// nothing, and a write is refused.
 class SessionChat implements ChatRepository {
+  // Change feed (store catch-up): an empty feed, as a server with no changes.
+  @override
+  Future<Result<ChangePage>> changesSince(
+    ChangeCursor cursor, {
+    int limit = 500,
+  }) async => const Ok(ChangePage([], null));
+  @override
+  Future<Result<ChangeCursor?>> newestChange() async => const Ok(null);
+  @override
+  Future<Result<List<Message>>> messagesBefore(
+    String conversationId,
+    DateTime before, {
+    int limit = 500,
+  }) async => const Ok([]);
   // Slice 5a signatures only (delivery marks); no behaviour.
   @override
   Future<Result<void>> markDelivered(

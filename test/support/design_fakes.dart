@@ -25,6 +25,7 @@ import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/message_store.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
@@ -119,6 +120,20 @@ class DesignUpdate implements UpdateRepository {
 }
 
 class DesignChat implements ChatRepository {
+  // Change feed (store catch-up): an empty feed, as a server with no changes.
+  @override
+  Future<Result<ChangePage>> changesSince(
+    ChangeCursor cursor, {
+    int limit = 500,
+  }) async => const Ok(ChangePage([], null));
+  @override
+  Future<Result<ChangeCursor?>> newestChange() async => const Ok(null);
+  @override
+  Future<Result<List<Message>>> messagesBefore(
+    String conversationId,
+    DateTime before, {
+    int limit = 500,
+  }) async => const Ok([]);
   // Slice 5a signatures only (delivery marks); no behaviour.
   @override
   Future<Result<void>> markDelivered(

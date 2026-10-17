@@ -108,8 +108,9 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     group AND the sender, so a member cannot pull another member's photos
     into their own album. Nothing filters on it, so it has no index.
   - Drafts and queued unsent messages live in the app's memory only; if they
-    are ever stored on the phone (not stored as of v0.24.0; the chat list is — see Secrets), they are
-    personal data under the on-phone storage posture.
+    are ever stored on the phone (not stored; the messages and the chat list are, in the encrypted
+    store — see "On-phone message store"), they are personal data under the on-phone storage
+    posture.
   - `messages.attachment_path` points into the private `attachments` storage
     bucket, keyed `<conversation_id>/<file>`. The storage policies ask the same
     membership question the table policies ask, so there is one access rule and
@@ -471,7 +472,7 @@ widened: no path may write a clock time into `delivered_at` or broadcast one on
 No secrets in the app or repository. Service-role keys and signing material
 exist only in GitHub Actions secrets and in the maintainer's offline backup.
 
-Nothing the app stores on the phone (session, waiting notification previews, the stored chat list)
+Nothing the app stores on the phone (session, waiting notification previews, the message store)
 leaves it through Android backup or device-to-device transfer: both are
 excluded in `android/app/src/main/res/xml/` (see DECISIONS 2026-09-24, one
 SIS notification). A previous member's notifications are cleared on every
@@ -482,29 +483,27 @@ line: it draws nothing without a stored owner, and drops a push addressed to
 someone other than the stored owner, even one the server computed correctly
 before a handover (see DECISIONS 2026-09-25).
 
-**Stored chat list and last confirmed session (v0.24.0, revised 0.30.15).**
-The last conversation list the member saw is kept in one file,
-`chat_list.json`, in the app's private support directory (`files/`, never the
-cache). It holds each conversation's id, title, the other person's id, name,
-tag and picture path (never an email), the one-line last-message preview and
-its time, sender id, unread count and left-group flag. This is personal data.
-It is written to a temporary file and renamed, stamped with the owner's user
-id and a schema version, and any file that does not match the reading
-account, is on an old schema, or is unreadable is deleted rather than used.
-Once an erase and any save it overtook have finished, neither the list file
-nor its temporary file remains, wherever that save had reached, including its
-final rename (since v0.24.1). A process killed mid-save can leave the
-temporary file, which the app never reads, until the next erase or save.
-Once the owner changes, the previous owner's list is unreachable from the app's
-list state, even while the new owner's list is loading or has failed. Drafts
-and queued unsent messages are not stored.
+**Stored chat list and last confirmed session (v0.24.0, revised 0.30.15, store moved 2026-10-17).**
+The last conversation list the member saw is kept in the `conversations` table
+of the encrypted message store (see "On-phone message store" below). It holds
+each conversation's id, title, the other person's id, name, tag and picture
+path (never an email), the one-line last-message preview and its time, sender
+id, unread count and left-group flag. This is personal data. The store is
+stamped with the owner's user id; a store that does not match the reading
+account is deleted rather than used, and the list is only read for the account
+that owns the store. Until 2026-10-17 the list was a plain file,
+`chat_list.json`, with the previews in it. The name lives on as the push feed
+described below, without any message text. At every launch the app keeps that
+file only if it is a valid new feed (version 1, every message field empty) and
+deletes anything else, so an old file with previews is gone after the first
+start. Drafts and queued unsent messages are not stored.
 
 Since 0.30.15 the list is no longer held back until the server has confirmed
-the session. A second file, `last_session.json` (the marker), sits beside it:
+the session. A second file, `last_session.json` (the marker), sits in the app support directory:
 the user id, the `session_id` claim of the access token, the member (id, name,
 tag, picture path; never the email), whether the first-run screen was
 finished, and `confirmedAt`. It never holds a token. A cold start shows Home
-and the stored list from the two files at once, with no network call before
+and the stored list from the marker and the store at once, with no network call before
 the first list frame, only when all of these hold: a saved session exists, the
 marker's user id is the signed-in user, its session id is the current
 token's `session_id`, the member had finished first run, and `confirmedAt` is
@@ -517,13 +516,13 @@ Behind the stored list the app asks `activate_session()`. `true`: confirmed,
 and `confirmedAt` moves (only a server `true` ever moves it). `false` (revoked,
 or replaced on another device): the Denied screen is assigned in the same
 frame, every open page is closed (a chat opened from a notification in the
-unconfirmed window never stays on top of it), then the marker, the list file
-and the photo cache are wiped. A refresh token the server rejects: signed out
+unconfirmed window never stays on top of it), then the marker, the message store
+with its key, the push feed file and the photo cache are wiped. A refresh token the server rejects: signed out
 and wiped. A network error, a timeout or a non-retryable server error: the
 list stays, a small notice shows, the app retries after 2 s, 4 s ... capped at
 60 s and again when the app returns to the foreground; it never confirms and
 never clears on a failure. A session end the app observes (sign-out, "not
-allowed", a cold start onto sign-in) erases both files.
+allowed", a cold start onto sign-in) erases the marker, the store with its key and the feed file.
 
 RLS stays the authority. While unconfirmed nothing the server would refuse is
 granted: reads of a revoked member return no rows, `messages_send` and
@@ -531,12 +530,100 @@ granted: reads of a revoked member return no rows, `messages_send` and
 optimistic send; a refusal (42501) is not retried, and Denied drops the queue
 and the drafts. Accepted residual risk: a member revoked while this phone is
 offline sees the stored list (and nothing newer) until the phone reaches the
-server or the 14 days end. Both files are in the app's private directory,
-encrypted with the phone, and excluded from backup: on Android by
+server or the 14 days end. The marker and the feed file are in the app's private directory,
+encrypted with the phone, and excluded from backup (the store is covered below): on Android by
 `allowBackup="false"` plus the data-extraction rules, on iOS by
 `NSURLIsExcludedFromBackupKey` set on Application Support at launch (new in
 0.30.15; before it these files could be in iCloud and iTunes backups on iOS).
 Low note: the iOS Keychain session survives an uninstall.
+
+### On-phone message store (Private Chats step 1)
+
+Since 2026-10-17 each phone keeps a copy of the member's chats: text and
+metadata only, never media, never a message still being sent. The server stays
+the truth (DECISIONS 2026-10-17).
+
+- **Encrypted file.** One file, `sis_store.sqlite` (with `-wal`, `-shm` and
+  `-journal` beside it), made by drift on SQLite3 Multiple Ciphers. The key is
+  set with `PRAGMA key` on every connection. A plain SQLite would ignore that
+  and store everything unencrypted, so the app refuses to run if the cipher
+  build is not loaded.
+- **Where the key lives.** 32 random bytes (64 hex characters) from
+  `Random.secure`, made once and kept in the platform secure storage
+  (`flutter_secure_storage`: Android Keystore, iOS Keychain) as `sis.store.key`.
+  On iOS it is `first_unlock_this_device`: a backup carries it locked to this
+  phone's hardware, so it is restored only onto the same phone. Every erase
+  deletes it.
+- **Where the file lives.** Android: the app support directory (never the cache,
+  which the OS may clear). iOS: the App Group container `group.com.esd.sis`, so
+  a notification extension can reach it later; the app support directory if the
+  container is unavailable. One function in `data/store/store_location.dart`
+  decides.
+- **Backup is off.** Android: `allowBackup="false"` plus the extraction rules.
+  iOS: the exclude-from-backup flag is set on Application Support only, not on
+  the App Group container. There the protection is the key: it is this-device-only,
+  so the file is readable again only when restored onto the same phone (same
+  owner; `activate_session` still decides). On any other phone a restored file
+  cannot be opened; the app deletes it and starts empty.
+- **Owner check on open.** The file holds the owner's user id (`meta.owner_id`).
+  It is written when missing. A different owner, a wrong key or a corrupt file
+  makes the app delete the files and start again from nothing. An open that began
+  before an erase deletes the files and the key it just made, and fails.
+- **Erasure on SignedOut, Denied and Replaced.** One routine, in this order:
+  clear the chat-list snapshot (the push feed file first, then the list
+  tables), then `store.clear()`, then clear the snapshot a second time, then
+  invalidate `messageStoreProvider`. The second clear catches a list save that
+  finished before `store.clear()` and rewrote the feed. It must run before the
+  invalidate: after it, a fresh store would re-create the database.
+- **Process-wide erase counter.** Every `clear()` on any store instance raises
+  one static counter. An instance whose work began before a raise closes itself
+  and refuses to serve or write. `clear()` waits for the work already running,
+  closes the database, then deletes the files and the key. A closed store
+  refuses every write.
+- **Push feed.** `chat_list.json` in the app support directory exists only for
+  the Android push code, which reads picture paths from it. `lastMessage`,
+  `lastMessageAt` and `lastSenderId` are always null: it never holds message
+  text. It is written to a `.part` file and renamed. A static epoch in the
+  writer is raised by every clear. A list save captures the epoch at the start
+  of `save()` and writes the feed only if the database took the list and the
+  epoch has not changed; the writer checks the epoch again around its rename.
+- **The SQLite finding (case A and case B).** Case A: a save queued behind other
+  work starts writing after the file was unlinked; SQLite refuses the write and
+  no feed is written. Case B: the save's first write landed before the unlink and
+  its commit succeeds into the unlinked file after the whole erase. Only the
+  epoch captured at the start of `save()` stops the feed write there. Rows
+  committed into the unlinked file are harmless: no file remains.
+- **Sync stops on a change of account.** `StoreSyncController` (catch-up and
+  history fill) checks a halt before every write to the store: after each server
+  read and before the write, and before it saves the cursor. It halts when the
+  account changed, the store instance is no longer the current one, or a new run
+  was asked. It keeps the instance it started with, and a closed instance
+  refuses writes, so a late write cannot reach another account's store.
+- **Server side.** Migration `20261028120000_messages_updated_at.sql` adds
+  `messages.updated_at`, set by a `BEFORE INSERT OR UPDATE` trigger to
+  `clock_timestamp()` on every write. A client value is ignored, and the column
+  has no insert or update grant. The trigger function is in `app_private` with
+  `search_path ''` and no execute right for `public`, `anon` or `authenticated`.
+  There are no new grants and RLS is unchanged. `changesSince`, `newestChange`
+  and `messagesBefore` use the member's own client through PostgREST (no service
+  key, no RPC), so they read only the rows `messages_read` allows. A non-member
+  gets nothing.
+- **Accepted residuals.**
+  - The change feed is blind to hide-for-me (a separate table), hard-deleted
+    rows and chats removed from the list. Those leave the phone at the next
+    list purge or reconcile of that chat's page.
+  - A halt in the middle of one page write (between removing the stale rows and
+    writing the new ones) is not covered; the closed old store refuses the write.
+  - There is no reconnect signal in the app. App start, resume and sign-in start
+    a catch-up; a Realtime reconnect does not.
+  - A live row written between a page read and its commit can be deleted by the
+    reconcile; the next catch-up pass adds it again.
+  - Members can see when a message last changed (an edit or a deletion). They
+    already see that moment over Realtime.
+  - A rare X to Y to sign-out to Z race can wipe the local cache; the network
+    refills it.
+  - If two deletes of the feed's `.part` file both fail, the file can stay. It
+    holds no message text and is never read.
 
 **Accepted risk: CI secrets and pushed branches.** Any branch pushed to
 this repository runs its own workflow files and can reach every repository

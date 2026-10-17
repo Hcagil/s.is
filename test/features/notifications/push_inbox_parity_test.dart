@@ -27,7 +27,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/data/file_attachment_cache.dart';
-import 'package:sis/features/chat/data/file_chat_list_snapshot_store.dart';
+import 'package:sis/features/chat/data/store/drift_chat_list_snapshot_store.dart';
+import 'package:sis/features/chat/data/store/drift_message_store.dart';
+import 'package:sis/features/chat/data/store/store_key.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/notifications/data/firebase_push_source.dart';
 import 'package:sis/features/notifications/data/local_push_display.dart';
@@ -124,8 +127,19 @@ void main() {
       await cache.delete(recursive: true);
     });
 
+    // InstantPush.avatarFor (Android) reads the chat's picture path from
+    // chat_list.json in the support directory. The chat list now lives in
+    // the encrypted store (DriftChatListSnapshotStore); this holds it to
+    // still leave the native side the snapshot the vectors describe.
     test('the vector snapshot is what the chat list store writes', () async {
-      await FileChatListSnapshotStore().save(_owner, const [
+      FlutterSecureStorage.setMockInitialValues({});
+      final db = DriftMessageStore(
+        ownerId: _owner,
+        file: () async => File('${support.path}/sis_store.sqlite'),
+        key: const StoreKey().loadOrCreate,
+        deleteKey: () async {},
+      );
+      await DriftChatListSnapshotStore(db).save(_owner, const [
         Conversation(
           id: 'c1',
           other: Member(
@@ -140,11 +154,15 @@ void main() {
           other: Member(userId: 'u-cy', displayName: 'Cy'),
         ),
       ]);
-      final files = support.listSync(recursive: true).whereType<File>();
-      expect(files, hasLength(1));
+      final native = File('${support.path}/chat_list.json');
+      expect(
+        native.existsSync(),
+        isTrue,
+        reason: 'InstantPush.kt reads chat avatars from chat_list.json',
+      );
       final avatars = _vectors['avatars']! as Map<String, Object?>;
       expect(
-        jsonDecode(files.single.readAsStringSync()),
+        jsonDecode(native.readAsStringSync()),
         jsonDecode(avatars['snapshot']! as String),
       );
     });

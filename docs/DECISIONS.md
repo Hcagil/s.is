@@ -2155,4 +2155,4 @@ Nothing contacts the site before that tap.
 
 **Why.** The bot cannot guess a person's language; the app knows it.
 
-**Consequences.** New stored data per person (one two-letter code, readable only by the server); the privacy notice lists it. What's new notes carry both languages (`For users:` and `For users (TR):`).
+**Consequences.** New stored data per person (one two-letter code, readable only by the server); it must be added to the store privacy notice, which lives outside this repo. What's new notes carry both languages (`For users:` and `For users (TR):`).

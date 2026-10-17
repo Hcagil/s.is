@@ -802,6 +802,20 @@ class SessionProfile implements ProfileRepository {
     return Ok(updated);
   }
 
+  /// (signed-in user, code) per [setAppLanguage], kept out of [calls].
+  final appLanguages = <(String?, String)>[];
+
+  @override
+  Future<Result<void>> setAppLanguage(String code) async {
+    final who = backend.signedIn;
+    appLanguages.add((who, code));
+    await backend.hop();
+    if (who == null || (code != 'en' && code != 'tr')) {
+      return const Err(DeniedFailure());
+    }
+    return const Ok(null);
+  }
+
   @override
   Future<Result<bool>> isTagAvailable(String tag) async {
     final who = await _as('check:$tag');

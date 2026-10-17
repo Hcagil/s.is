@@ -2148,3 +2148,11 @@ Nothing contacts the site before that tap.
 **Why.** A name built from the date says how fresh a build is at a glance, needs no manual edit, and always rises. The build number is a store detail with no meaning to users.
 
 **Consequences.** `pubspec.yaml`'s version is used only for local builds. `isNewerVersion` compares names part by part, so `26.10.220` ranks above the old `0.x` names. Stored What's new notes keep their "(build)" header; the app hides it.
+
+## 2026-10-17 — The server knows the app language
+
+**Decision.** `profiles.app_language` (`en`/`tr`, nullable) holds the language the app shows (the in-app Settings choice, or the phone's when set to System), not the phone language. The app writes it at start and when it changes. SIS Destek's automatic first line (1:1 and group) uses it; unknown means Turkish. A group line is English only when every other active member has `en`. A line already sent is never resent. Lines Discuss writes by hand are untouched.
+
+**Why.** The bot cannot guess a person's language; the app knows it.
+
+**Consequences.** New stored data per person (one two-letter code, readable only by the server); the privacy notice lists it. What's new notes carry both languages (`For users:` and `For users (TR):`).

@@ -281,8 +281,8 @@ tool/ci_local.sh --database
 
 ## What's new notes
 
-Every pull request body carries a line `For users: <plain sentence>`, left
-empty when the change is invisible. On release, the *Store the What's new note
+Every pull request body carries two lines, `For users: <plain sentence>` (English) and
+`For users (TR): <plain sentence>` (Turkish), left empty when the change is invisible. The Turkish lines are stored after a line `---`; the app shows the part for its current language and falls back to the other when one is empty. The older label `Kullanıcılar için:` is still read. On release, the *Store the What's new note
 for this build* step joins the non-empty lines of the pull requests merged
 since the previous release and stores them as the note for that build's
 `versionCode` in `public.release_notes`. Nothing is stored when no line is

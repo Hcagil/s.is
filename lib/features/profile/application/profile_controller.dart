@@ -134,3 +134,12 @@ class OwnProfileController extends AsyncNotifier<OwnProfile> {
     return result;
   }
 }
+
+/// Tells the server which language the app shows, once per start and whenever it changes
+/// (the family key is the language code). Watched by the signed-in gate, so it runs after sign-in
+/// and never for a signed-out phone. A failure is silent; the next start tries again.
+final appLanguageSyncProvider = FutureProvider.autoDispose.family<void, String>(
+  (ref, code) async {
+    await ref.read(profileRepositoryProvider).setAppLanguage(code);
+  },
+);

@@ -177,7 +177,7 @@ jobs:
       # so nothing is delivered. The text goes to SQL base64-encoded: PR bodies
       # are untrusted input. An existing row is left alone so an edit made in
       # the dashboard survives a re-run. A Turkish part follows after a line
-      # "---": every "Kullanıcılar için:" line under "Sürüm <version>"; the app
+      # "---": every "For users (TR):" line (or the older "Kullanıcılar için:") under "Sürüm <version>"; the app
       # shows the part in its own language.
       - name: Store the What's new note for this build
         id: note
@@ -199,7 +199,7 @@ jobs:
                 gh api "repos/${GITHUB_REPOSITORY}/pulls/$pr" --jq 'select(.author_association | IN("OWNER","MEMBER","COLLABORATOR")) | .body' </dev/null | tr -d '\r' || exit 1
               done)
           note=$(printf '%s\n' "$bodies" | sed -n 's/^For users: *//p' | sed '/^[[:space:]]*$/d')
-          note_tr=$(printf '%s\n' "$bodies" | sed -n 's/^Kullanıcılar için: *//p' | sed '/^[[:space:]]*$/d')
+          note_tr=$(printf '%s\n' "$bodies" | sed -n -e 's/^For users (TR): *//p' -e 's/^Kullanıcılar için: *//p' | sed '/^[[:space:]]*$/d')
           note=${note:0:1900}
           note_tr=${note_tr:0:1900}
           echo "Note: $note"

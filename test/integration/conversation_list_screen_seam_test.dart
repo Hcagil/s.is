@@ -217,12 +217,15 @@ void main() {
             .update({'onboarding_done': true})
             .eq('user_id', cleoId),
       );
-      await t.runAsync(
-        () => DriftChatListSnapshotStore(driftStore(cleoId, dir, key)).save(
-          cleoId,
-          [Conversation(id: 'stored-1', title: storedTitle, lastMessage: 'hi')],
-        ),
-      );
+      // Closed after the save: the app opens its own store over the same
+      // file (driftStoreOverrides), and drift warns when two are open.
+      final seed = driftStore(cleoId, dir, key);
+      await t.runAsync(() async {
+        await DriftChatListSnapshotStore(seed).save(cleoId, [
+          Conversation(id: 'stored-1', title: storedTitle, lastMessage: 'hi'),
+        ]);
+        await seed.close();
+      });
       final chat = (await t.runAsync(() => chatClient(live)))!;
       addTearDown(() => chat.dispose());
       final c = ProviderContainer(
@@ -284,14 +287,27 @@ void main() {
     ) async {
       // The dead client carries cleo's real session before the app asks.
       final c = await app(t, deadButSignedIn);
-      // 0.30.16: the stored list is up in the first frames, while the dead
-      // host's read is still being retried.
-      await t.pump();
-      await t.pump();
+      // 0.30.16: the stored list is up while the dead host's read is still
+      // being retried. That read fails only after about 7 s (dead_host.dart);
+      // the store's open and read take real time (this binding runs real
+      // timers), so wait for it, well inside that window.
+      final stored = find.byKey(const ValueKey('conversation-stored-1'));
+      final clock = Stopwatch()..start();
+      while (stored.evaluate().isEmpty && clock.elapsed.inSeconds < 3) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await t.pump();
+      }
       expect(
-        find.byKey(const ValueKey('conversation-stored-1')),
+        stored,
         findsOneWidget,
-        reason: 'the stored list before the server read settles',
+        reason:
+            'the stored list before the server read settles '
+            '(waited ${clock.elapsed})',
+      );
+      expect(
+        c.read(conversationListProvider).hasError,
+        isFalse,
+        reason: 'the server read had already settled after ${clock.elapsed}',
       );
       final v = await settledList(t, c);
       expectNoOfflineStrip();

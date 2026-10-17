@@ -894,7 +894,7 @@ WhatsApp-like:
 ## 2026-09-27 — Instant search inside a chat (phone first, then server)
 
 The owner asked for search to run on the phone, to reduce database load, and
-said "if needed we will change it to instant-local-then-server". The design
+left room to switch to phone-first-then-server later. The design
 review (feature-lead) found that a full on-phone index would download every
 member's whole history, which costs the server more than on-demand search.
 So the owner's fallback was taken.
@@ -979,7 +979,7 @@ long press" (v0.10).
 
 ## 2026-09-28 — Your text message appears the moment you send it
 
-The owner reported that sending feels slow "when I click send". Measured:
+The owner reported that sending felt slow. Measured:
 the server's work for one message (access rules, the notification queue,
 the insert) is 5–10 ms; the rest is the phone-to-server round trip, which
 the app showed as nothing at all, because a text message was added to the
@@ -1425,7 +1425,7 @@ the runner. Now:
   design can still need.
 
 **Amended 2026-10-01 (automatic group distribution).** Every TestFlight upload
-now reaches the testers without a manual step (owner: "automate both"). App
+now reaches the testers without a manual step. App
 Store Connect has two groups named `bacanaks`, one internal and one external;
 the repository variable `TESTFLIGHT_GROUPS` (comma-separated names, unset =
 `bacanaks`) names the targets, and every group with a matching name gets the

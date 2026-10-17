@@ -26,8 +26,12 @@ final class DriftMessageStore implements MessageStore {
   Future<StoreDatabase>? _db;
   bool _closed = false;
 
-  /// The database file once known; if another instance's clear() deleted it, this one is stale and closes itself.
-  File? _path;
+  /// Bumped by every clear() in the process; an instance whose work began before a bump lost to that erase.
+  static int _erasures = 0;
+  int? _seen;
+
+  /// The process-wide erase count; a sibling store compares it before and after its own work.
+  int get erasures => _erasures;
 
   /// Operations running now (registered synchronously when they start).
   final _inflight = <Future<void>>{};
@@ -69,8 +73,8 @@ final class DriftMessageStore implements MessageStore {
     _inflight.add(done.future);
     try {
       final db = await opened;
-      if (!(_path?.existsSync() ?? true)) {
-        // The file is gone (another instance erased it): never serve or write on this stale connection.
+      if (_seen != _erasures) {
+        // Another clear() erased the store since this instance opened: never serve or write on it.
         _closed = true;
         unawaited(close());
         return fallback;
@@ -173,10 +177,10 @@ final class DriftMessageStore implements MessageStore {
       });
 
   Future<StoreDatabase> _create() async {
+    final seen = _seen ??= _erasures;
     final file = await _file();
     await file.parent.create(recursive: true);
     final key = await _key();
-    _path = file;
 
     Future<StoreDatabase> attempt() async {
       final db = StoreDatabase(
@@ -201,13 +205,23 @@ final class DriftMessageStore implements MessageStore {
       }
     }
 
+    StoreDatabase db;
     try {
-      return await attempt();
+      db = await attempt();
     } catch (_) {
       /* wrong key, other owner, or corrupt: start again from nothing */
       await _deleteFiles(file);
-      return attempt();
+      // An erase that came meanwhile must not be answered by a new file.
+      if (seen != _erasures) throw StateError('erased while opening');
+      db = await attempt();
     }
+    if (seen != _erasures) {
+      // A clear() ran while this was opening: the erase wins, remove what was just made.
+      await db.close();
+      await _deleteFiles(file);
+      throw StateError('erased while opening');
+    }
+    return db;
   }
 
   @override
@@ -347,6 +361,7 @@ final class DriftMessageStore implements MessageStore {
   /// abandoned in the database isolate; work started later waits for the clear.
   @override
   Future<void> clear() {
+    _erasures++;
     _closed = true;
     final running = _inflight.toList();
     final pending = _db;

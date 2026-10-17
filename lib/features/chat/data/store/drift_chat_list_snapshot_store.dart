@@ -46,6 +46,7 @@ class DriftChatListSnapshotStore implements ChatListSnapshotStore {
   @override
   Future<void> save(String ownerId, List<Conversation> conversations) async {
     if (ownerId != _store.ownerId) return;
+    final erasures = _store.erasures;
     await _store.run(null, (db) async {
       await db.transaction(() async {
         await db.delete(db.conversations).go();
@@ -72,7 +73,8 @@ class DriftChatListSnapshotStore implements ChatListSnapshotStore {
         });
       });
     });
-    await _feed.save(ownerId, conversations);
+    // A clear() since this save began wins: write no feed file.
+    if (_store.erasures == erasures) await _feed.save(ownerId, conversations);
   }
 
   @override

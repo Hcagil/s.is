@@ -26,7 +26,7 @@ final class FileChatListSnapshotStore implements ChatListSnapshotStore {
 
   /// Bumped by [clear]; a [save] in flight when it changes lost the race and
   /// must not resurrect what clear() just erased.
-  int _epoch = 0;
+  static int _epoch = 0;
 
   Future<File> _file() async => File('${(await _root()).path}/chat_list.json');
 

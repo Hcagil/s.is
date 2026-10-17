@@ -214,6 +214,9 @@ Future<void> main() async {
     // The chat list used to live in chat_list.json; now it is in the store.
     unawaited(deleteLegacyChatList());
     StartupMarks.mark('run-app');
+    // The store messageStoreProvider built last: the chat-list store shares that
+    // very instance (it rebuilds with it, see below).
+    DriftMessageStore? builtStore;
     runApp(
       ProviderScope(
         overrides: [
@@ -318,13 +321,15 @@ Future<void> main() async {
               deleteKey: key.delete,
             );
             ref.onDispose(store.close);
+            builtStore = store;
             return store;
           }),
-          chatListSnapshotStoreProvider.overrideWith(
-            (ref) => DriftChatListSnapshotStore(
-              ref.watch(messageStoreProvider) as DriftMessageStore,
-            ),
-          ),
+          chatListSnapshotStoreProvider.overrideWith((ref) {
+            // Watching messageStoreProvider rebuilds this whenever a new store
+            // is built, and that build has just set builtStore.
+            ref.watch(messageStoreProvider);
+            return DriftChatListSnapshotStore(builtStore!);
+          }),
           lastSessionStoreProvider.overrideWithValue(FileLastSessionStore()),
           galleryProvider.overrideWithValue(const PhotoManagerGallery()),
           videoGalleryProvider.overrideWithValue(

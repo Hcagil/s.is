@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart' show Database;
 
 import '../../domain/message.dart';
@@ -31,6 +32,7 @@ final class DriftMessageStore implements MessageStore {
   int? _seen;
 
   /// The process-wide erase count (every clear() on any instance raises it).
+  @visibleForTesting
   int get erasures => _erasures;
 
   /// Operations running now (registered synchronously when they start).
@@ -507,6 +509,9 @@ final class DriftMessageStore implements MessageStore {
 void Function(Database) _keyed(String key) {
   return (raw) {
     raw.execute("PRAGMA key = \"x'$key'\";");
+    // A second connection (the future iOS notification extension) waits for a
+    // lock instead of failing at once.
+    raw.execute('PRAGMA busy_timeout = 5000;');
     if (raw.select('PRAGMA cipher;').isEmpty) {
       throw StateError('SQLite3 Multiple Ciphers is not loaded');
     }

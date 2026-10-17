@@ -204,7 +204,7 @@ final chatListSnapshotStoreProvider = Provider<ChatListSnapshotStore>(
 /// mirroring [attachmentCacheOwnerProvider] exactly: same two states, same
 /// fireImmediately, same reach (a cold start landing directly on SignedOut
 /// or Denied included). A snapshot is per-owner-checked on read too (see
-/// FileChatListSnapshotStore.load), so this is defence in depth, not the
+/// DriftChatListSnapshotStore.load), so this is defence in depth, not the
 /// only guard. It also erases the message store (see [_eraseMessageStore]).
 final chatListSnapshotOwnerProvider = Provider<void>((ref) {
   _onSessionEnd(ref, () async {

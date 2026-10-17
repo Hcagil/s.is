@@ -3,60 +3,30 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-import '../domain/chat_list_snapshot_store.dart';
-import '../domain/conversation.dart';
+import '../../domain/conversation.dart';
 
 const _schemaVersion = 1;
 
-/// The conversation list's last snapshot, one JSON file in the app's private
-/// support directory (path_provider's `getApplicationSupportDirectory` --
-/// unlike the cache directory, the OS never clears this under storage
-/// pressure).
-final class FileChatListSnapshotStore implements ChatListSnapshotStore {
-  FileChatListSnapshotStore({
-    Future<Directory> Function()? root,
-    this._stripPreviews = false,
-  }) : _root = root ?? getApplicationSupportDirectory;
+/// Writes chat_list.json, the plain-file feed the Android push code reads
+/// picture paths from (InstantPush.avatarFor). It holds no message text. The
+/// phone's own chat list lives in the encrypted store; this file is only that
+/// feed.
+final class PushFeedWriter {
+  PushFeedWriter({Future<Directory> Function()? root})
+    : _root = root ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _root;
-
-  /// Writes no message text (lastMessage, lastMessageAt, lastSenderId are
-  /// null): the feed the Android push code reads picture paths from.
-  final bool _stripPreviews;
 
   /// Bumped by [clear]; a [save] in flight when it changes lost the race and
   /// must not resurrect what clear() just erased.
   static int _epoch = 0;
 
-  /// The current erase count, for a caller that must give up a write begun before a clear().
+  /// The current erase count, for a caller that must give up a write begun
+  /// before a clear().
   int get epoch => _epoch;
 
   Future<File> _file() async => File('${(await _root()).path}/chat_list.json');
 
-  @override
-  Future<List<Conversation>?> load(String ownerId) async {
-    try {
-      final file = await _file();
-      final raw = jsonDecode(await file.readAsString()) as Map<String, Object?>;
-      if (raw['v'] != _schemaVersion || raw['owner'] != ownerId) {
-        await clear();
-        return null;
-      }
-      return [
-        for (final e in raw['list']! as List)
-          Conversation.fromJson(e as Map<String, Object?>),
-      ];
-    } catch (_) {
-      // Missing, unreadable, wrong owner, wrong schema, corrupt JSON, or the
-      // platform channel itself unavailable: all the same "nothing usable"
-      // to the caller, which falls back to the network. Any leftover file is
-      // removed so a bad snapshot is never retried.
-      await clear();
-      return null;
-    }
-  }
-
-  @override
   Future<void> save(String ownerId, List<Conversation> conversations) async {
     final epoch = _epoch;
     try {
@@ -67,14 +37,12 @@ final class FileChatListSnapshotStore implements ChatListSnapshotStore {
         'owner': ownerId,
         'list': [
           for (final c in conversations)
-            _stripPreviews
-                ? {
-                    ...c.toJson(),
-                    'lastMessage': null,
-                    'lastMessageAt': null,
-                    'lastSenderId': null,
-                  }
-                : c.toJson(),
+            {
+              ...c.toJson(),
+              'lastMessage': null,
+              'lastMessageAt': null,
+              'lastSenderId': null,
+            },
         ],
       });
       // Written aside, then renamed: a half-written file is never read.
@@ -106,7 +74,6 @@ final class FileChatListSnapshotStore implements ChatListSnapshotStore {
     }
   }
 
-  @override
   Future<void> clear() async {
     _epoch++;
     final File file;

@@ -549,8 +549,9 @@ the truth (DECISIONS 2026-10-17).
 - **Where the key lives.** 32 random bytes (64 hex characters) from
   `Random.secure`, made once and kept in the platform secure storage
   (`flutter_secure_storage`: Android Keystore, iOS Keychain) as `sis.store.key`.
-  On iOS it is `first_unlock_this_device`, so it never travels in an iCloud or
-  Finder backup. Every erase deletes it.
+  On iOS it is `first_unlock_this_device`: a backup carries it locked to this
+  phone's hardware, so it is restored only onto the same phone. Every erase
+  deletes it.
 - **Where the file lives.** Android: the app support directory (never the cache,
   which the OS may clear). iOS: the App Group container `group.com.esd.sis`, so
   a notification extension can reach it later; the app support directory if the
@@ -559,7 +560,9 @@ the truth (DECISIONS 2026-10-17).
 - **Backup is off.** Android: `allowBackup="false"` plus the extraction rules.
   iOS: the exclude-from-backup flag is set on Application Support only, not on
   the App Group container. There the protection is the key: it is this-device-only,
-  so a restored file cannot be opened. The app then deletes it and starts empty.
+  so the file is readable again only when restored onto the same phone (same
+  owner; `activate_session` still decides). On any other phone a restored file
+  cannot be opened; the app deletes it and starts empty.
 - **Owner check on open.** The file holds the owner's user id (`meta.owner_id`).
   It is written when missing. A different owner, a wrong key or a corrupt file
   makes the app delete the files and start again from nothing. An open that began

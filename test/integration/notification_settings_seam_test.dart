@@ -129,16 +129,48 @@ void main() {
     fail('never happened: $what');
   }
 
-  /// A bounded real-time wait for an in-flight save to land, without
-  /// `pumpAndSettle()`: once a real Realtime channel is open its own timers
-  /// never stop scheduling frames, so `pumpAndSettle()` never returns.
-  Future<void> settle(WidgetTester t, {int steps = 20}) async {
-    for (var i = 0; i < steps; i++) {
+  /// Taps [key] once it is on screen and has stopped moving. Under the live
+  /// binding the page transition runs in real time, so the widget exists
+  /// while it is still sliding in from beyond the 800x600 surface; a tap
+  /// then misses (CI: Offset(1009.1, 100)). Waits for a hit-testable centre
+  /// that held still across two polls, then taps it.
+  Future<void> tapSteady(WidgetTester t, String key) async {
+    final f = byKey(key).hitTestable();
+    Rect? last;
+    await until(t, () {
+      if (f.evaluate().isEmpty) return false;
+      final now = t.getRect(f);
+      final steady = now == last;
+      last = now;
+      return steady;
+    }, '$key on screen and steady');
+    await t.tap(f);
+  }
+
+  /// Polls the table with a fresh, independent read until [ok] holds, or
+  /// fails with [why]. No `pumpAndSettle()`: once a real Realtime channel is
+  /// open its own timers never stop scheduling frames.
+  Future<NotificationSettings> saved(
+    WidgetTester t,
+    bool Function(NotificationSettings) ok,
+    String why,
+  ) async {
+    NotificationSettings? got;
+    for (var i = 0; i < 100; i++) {
+      final now = _ok(
+        (await t.runAsync(
+          () => SupabaseNotificationSettingsRepository(cleoClient!).load(),
+        ))!,
+        'load from the database',
+      );
+      if (ok(now)) return now;
+      got = now;
       await t.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 100)),
       );
       await t.pump();
     }
+    fail('$why (last read: enabled ${got?.enabled}, preview ${got?.preview})');
   }
 
   group('NotificationsScreen', () {
@@ -200,44 +232,23 @@ void main() {
           () => byKey('home-settings').evaluate().isNotEmpty,
           'home',
         );
-        await t.tap(byKey('home-settings'));
-        await until(
-          t,
-          () => byKey('settings-notifications').evaluate().isNotEmpty,
-          'settings',
-        );
-        await t.tap(byKey('settings-notifications'));
-        await until(
-          t,
-          () => byKey('notif-enabled').evaluate().isNotEmpty,
-          'the notifications screen',
-        );
+        await tapSteady(t, 'home-settings');
+        await tapSteady(t, 'settings-notifications');
+        await tapSteady(t, 'notif-enabled');
 
-        await t.tap(byKey('notif-enabled'));
-        await settle(t);
-
-        final afterToggle = _ok(
-          await SupabaseNotificationSettingsRepository(cleoClient!).load(),
-          'load after toggling the switch',
-        );
-        expect(
-          afterToggle.enabled,
-          isFalse,
-          reason: 'the switch on screen did not reach the database',
+        await saved(
+          t,
+          (s) => !s.enabled,
+          'the switch on screen did not reach the database',
         );
 
         await t.ensureVisible(byKey('notif-preview-none'));
-        await t.tap(byKey('notif-preview-none'));
-        await settle(t);
+        await tapSteady(t, 'notif-preview-none');
 
-        final afterPreview = _ok(
-          await SupabaseNotificationSettingsRepository(cleoClient!).load(),
-          'load after picking a preview',
-        );
-        expect(
-          afterPreview.preview,
-          NotificationPreview.none,
-          reason: 'the radio pick on screen did not reach the database',
+        final afterPreview = await saved(
+          t,
+          (s) => s.preview == NotificationPreview.none,
+          'the radio pick on screen did not reach the database',
         );
         expect(
           afterPreview.enabled,

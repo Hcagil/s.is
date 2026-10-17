@@ -20,6 +20,7 @@ import '../domain/file_attachment.dart';
 import '../domain/group_settings.dart';
 import '../domain/link_preview.dart';
 import '../domain/message.dart';
+import '../domain/message_store.dart';
 import '../domain/poll.dart';
 import '../domain/read_marks.dart';
 import '../domain/shared_contact.dart';
@@ -1362,6 +1363,83 @@ final class SupabaseChatRepository implements ChatRepository {
       // (>=); reversed, followed by `after` (strictly newer, ascending),
       // gives one oldest-first run centred on the anchor.
       return Ok([...before.reversed.map(_toMessage), ...after.map(_toMessage)]);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<ChangePage>> changesSince(
+    ChangeCursor cursor, {
+    int limit = 500,
+  }) async {
+    try {
+      final at = cursor.updatedAt.toUtc().toIso8601String();
+      final rows = await _client
+          .from('messages')
+          .select('$_pageColumns, updated_at')
+          .or('updated_at.gt.$at,and(updated_at.eq.$at,id.gt.${cursor.id})')
+          .order('updated_at', ascending: true)
+          .order('id', ascending: true)
+          .limit(limit)
+          .retriedOnce();
+      return Ok(
+        ChangePage(
+          [for (final r in rows) _toMessage(r)],
+          rows.isEmpty
+              ? null
+              : ChangeCursor(
+                  DateTime.parse(rows.last['updated_at'] as String),
+                  rows.last['id'] as String,
+                ),
+        ),
+      );
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<ChangeCursor?>> newestChange() async {
+    try {
+      final rows = await _client
+          .from('messages')
+          .select('id, updated_at')
+          .order('updated_at', ascending: false)
+          .order('id', ascending: false)
+          .limit(1)
+          .retriedOnce();
+      if (rows.isEmpty) {
+        return Ok(null);
+      }
+      final row = rows[0];
+      return Ok(
+        ChangeCursor(
+          DateTime.parse(row['updated_at'] as String),
+          row['id'] as String,
+        ),
+      );
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<List<Message>>> messagesBefore(
+    String conversationId,
+    DateTime before, {
+    int limit = 500,
+  }) async {
+    try {
+      final rows = await _client
+          .from('messages')
+          .select(_pageColumns)
+          .eq('conversation_id', conversationId)
+          .lte('created_at', before.toUtc().toIso8601String())
+          .order('created_at', ascending: false)
+          .limit(limit)
+          .retriedOnce();
+      return Ok(rows.reversed.map(_toMessage).toList());
     } catch (e) {
       return Err(_asFailure(e));
     }

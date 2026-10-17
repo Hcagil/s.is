@@ -408,6 +408,74 @@ void main() {
       );
       expect(ids(await real.older('c1', at(100), limit: 50)), _ids(50, 100));
     });
+
+    // Contract (Group C): the server path lowers contiguousFrom only when the
+    // stored block reaches the oldest shown row; otherwise the sync row stays.
+    test('a server page joined to the stored block lowers contiguousFrom; '
+        'newestAt and complete stay', () async {
+      chat.history['c1'] = _rows(0, 150);
+      await open('c1');
+      await settle();
+      final before = (await real.syncState('c1'))!;
+      expect(before.contiguousFrom?.toUtc(), at(100), reason: 'h100..h149');
+      expect(shown().first, 'h100', reason: 'the block reaches the oldest row');
+
+      await c.read(messagesProvider.notifier).loadOlder();
+      expect(serverCalls('around:'), hasLength(1));
+      expect(shown().first, 'h50');
+      await eventually(
+        () async =>
+            (await real.syncState('c1'))?.contiguousFrom?.toUtc() == at(50),
+        reason: 'lowered to the oldest row of the server page',
+      );
+      final after = (await real.syncState('c1'))!;
+      expect(after.newestAt?.toUtc(), before.newestAt?.toUtc());
+      expect(after.complete, isFalse);
+    });
+
+    test('a short server page joined to the stored block marks the chat '
+        'complete', () async {
+      chat.history['c1'] = _rows(0, 80);
+      await open('c1');
+      await settle();
+      expect((await real.syncState('c1'))!.complete, isFalse);
+
+      await c.read(messagesProvider.notifier).loadOlder();
+      expect(shown().first, 'h0');
+      await eventually(
+        () async => (await real.syncState('c1'))?.complete ?? false,
+        reason: 'h0..h29 is shorter than a page: the first message is stored',
+      );
+      expect((await real.syncState('c1'))!.contiguousFrom?.toUtc(), at(0));
+    });
+
+    test('a server page while the shown rows lie below the stored block '
+        'leaves the sync row unchanged', () async {
+      chat.history['c1'] = _rows(0, 300);
+      await open('c1');
+      await settle();
+      // A jump far back: h50..h150 shown, the stored block is h250..h299.
+      await c
+          .read(messagesProvider.notifier)
+          .jumpToAround(chat.history['c1']![100]);
+      await settle();
+      expect(shown().first, 'h50');
+      final before = (await real.syncState('c1'))!;
+      expect(
+        before.contiguousFrom!.toUtc().isAfter(at(150)),
+        isTrue,
+        reason: 'a gap between the shown rows and the stored block: $before',
+      );
+
+      await c.read(messagesProvider.notifier).loadOlder();
+      expect(serverCalls('around:c1:h50'), hasLength(1));
+      expect(shown().first, 'h0');
+      await settle();
+      final after = (await real.syncState('c1'))!;
+      expect(after.contiguousFrom?.toUtc(), before.contiguousFrom?.toUtc());
+      expect(after.newestAt?.toUtc(), before.newestAt?.toUtc());
+      expect(after.complete, before.complete);
+    });
   });
 
   group('jumpToAround', () {

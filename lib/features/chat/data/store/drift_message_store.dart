@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart' show Database;
 
 import '../../domain/message.dart';
@@ -31,6 +32,7 @@ final class DriftMessageStore implements MessageStore {
   int? _seen;
 
   /// The process-wide erase count (every clear() on any instance raises it).
+  @visibleForTesting
   int get erasures => _erasures;
 
   /// Operations running now (registered synchronously when they start).
@@ -299,6 +301,54 @@ final class DriftMessageStore implements MessageStore {
     }),
   );
 
+  /// Older page from the background fill: lowers contiguousFrom only.
+  @override
+  Future<void> extendOlder(
+    String conversationId,
+    List<Message> page, {
+    required bool reachedStart,
+  }) => _run<void>(
+    null,
+    (db) => db.transaction(() async {
+      final prev =
+          await (db.select(db.syncStates)
+                ..where((t) => t.conversationId.equals(conversationId)))
+              .getSingleOrNull();
+      if (prev == null) return;
+      for (final m in page) {
+        final c = messageToCompanion(m);
+        await db.into(db.messages).insert(c, onConflict: DoUpdate((_) => c));
+      }
+      if (page.isEmpty) {
+        if (reachedStart) {
+          await db
+              .into(db.syncStates)
+              .insertOnConflictUpdate(
+                SyncStatesCompanion.insert(
+                  conversationId: conversationId,
+                  complete: const Value(true),
+                ),
+              );
+        }
+        return;
+      }
+      final oldest = page.first.createdAt.microsecondsSinceEpoch;
+      final from = prev.contiguousFrom == null
+          ? oldest
+          : math.min(prev.contiguousFrom!, oldest);
+      await db
+          .into(db.syncStates)
+          .insertOnConflictUpdate(
+            SyncStatesCompanion.insert(
+              conversationId: conversationId,
+              newestAt: Value(prev.newestAt),
+              contiguousFrom: Value(from),
+              complete: Value(reachedStart || prev.complete),
+            ),
+          );
+    }),
+  );
+
   @override
   Future<StoredSync?> syncState(String conversationId) =>
       _run<StoredSync?>(null, (db) async {
@@ -459,6 +509,9 @@ final class DriftMessageStore implements MessageStore {
 void Function(Database) _keyed(String key) {
   return (raw) {
     raw.execute("PRAGMA key = \"x'$key'\";");
+    // A second connection (the future iOS notification extension) waits for a
+    // lock instead of failing at once.
+    raw.execute('PRAGMA busy_timeout = 5000;');
     if (raw.select('PRAGMA cipher;').isEmpty) {
       throw StateError('SQLite3 Multiple Ciphers is not loaded');
     }

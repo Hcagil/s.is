@@ -4,8 +4,8 @@ import 'package:drift/drift.dart';
 
 import '../../domain/chat_list_snapshot_store.dart';
 import '../../domain/conversation.dart';
-import '../file_chat_list_snapshot_store.dart';
 import 'drift_message_store.dart';
+import 'push_feed_writer.dart';
 import 'store_database.dart';
 
 /// Stores the chat list in the [conversations] table of the same encrypted
@@ -16,7 +16,7 @@ class DriftChatListSnapshotStore implements ChatListSnapshotStore {
   final DriftMessageStore _store;
 
   /// Plain-file chat_list.json for the Android push code (InstantPush.avatarFor): picture paths only, no message text.
-  final _feed = FileChatListSnapshotStore(stripPreviews: true);
+  final _feed = PushFeedWriter();
 
   @override
   Future<List<Conversation>?> load(String ownerId) {

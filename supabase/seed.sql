@@ -314,5 +314,10 @@ insert into app_private.allowlist(email) values
   ('fc-asli@mail.test'),
   ('fc-bora@mail.test'),
   ('fc-cem@mail.test'),
+  -- store catch-up feed (test/integration/change_feed_repository_test.dart):
+  -- ann and bob share a group; fay is a member of none of it
+  ('cf-ann@mail.test'),
+  ('cf-bob@mail.test'),
+  ('cf-fay@mail.test'),
   ('sis-destek-bot@example.com')
 on conflict do nothing;

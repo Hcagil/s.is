@@ -49,7 +49,9 @@ publishes, and skips commits that touch nothing but docs, Markdown or
 
 1. `versionCode` = GitHub Actions run number **+ 100** (monotonic, never
    reused; the offset keeps codes above builds published before the pipeline
-   existed). `versionName` from `pubspec.yaml`.
+   existed). `versionName` = `<yy>.<month>.<commit count>` (UTC, e.g.
+   `26.10.220`), computed in the `scope` job from a full-history checkout.
+   The app shows only the name, never the `versionCode`.
 2. Build a signed release AAB with the upload key from secrets.
 3. Apply pending migrations to the Supabase project (schema goes forward
    before the app does).
@@ -267,7 +269,7 @@ tool/ci_local.sh --database
   Store → profile → *Manage apps & device* → *Updates available* to refresh
   it; the next time SIS comes to the foreground it offers the update. Never
   uninstall to update: that signs the phone out and drops its local cache.
-- **versionCode** is `run_number + 100` of the Release workflow — never edit it by hand, never reuse one. `versionName` is edited in `pubspec.yaml` when a milestone changes (0.1.0 → 0.2.0).
+- **versionCode** is `run_number + 100` of the Release workflow — never edit it by hand, never reuse one. `versionName` is set by the release run (`<yy>.<month>.<commit count>`); the `pubspec.yaml` version is for local builds only and is not edited per release.
 - **Raise the minimum supported build** only when an older build would break against the current backend: a migration `update public.app_config set min_supported_build = <code> where id = 1;` with the reason in a SQL comment, plus a DECISIONS entry. Every migration must remain compatible with all builds ≥ the current minimum.
 - **Register a signing fingerprint with Google:** download the certificate
   archive from Play Console → Test and release → Setup → App signing, then hash

@@ -165,7 +165,7 @@ select is(
   (select array_agg(attname::text order by attname) from pg_attribute
     where attrelid = 'public.profiles'::regclass and attnum > 0 and not attisdropped
       and has_column_privilege('authenticated', 'public.profiles', attname, 'UPDATE')),
-  array['avatar_object', 'avatar_path', 'avatar_visibility', 'display_name', 'onboarding_done',
+  array['app_language', 'avatar_object', 'avatar_path', 'avatar_visibility', 'display_name', 'onboarding_done',
         'share_last_seen', 'share_presence', 'share_read_status', 'share_typing', 'tag'],
   'a client updates only the member-editable profiles columns');
 select ok(not has_table_privilege('authenticated', 'public.profiles', 'INSERT')

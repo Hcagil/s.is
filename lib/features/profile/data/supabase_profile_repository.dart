@@ -90,6 +90,22 @@ final class SupabaseProfileRepository implements ProfileRepository {
   }
 
   @override
+  Future<Result<void>> setAppLanguage(String code) async {
+    final me = _client.auth.currentUser?.id;
+    if (me == null) return const Err(DeniedFailure());
+    if (code != 'en' && code != 'tr') return const Err(DeniedFailure());
+    try {
+      await _client
+          .from('profiles')
+          .update({'app_language': code})
+          .eq('user_id', me);
+      return const Ok(null);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
   Future<Result<OwnProfile>> setAvatar(
     PickedImage image, {
     String? previousPath,

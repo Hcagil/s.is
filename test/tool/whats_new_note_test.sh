@@ -13,7 +13,8 @@
 #   - no previous release -> only the released commit itself;
 #   - only PRs whose author is OWNER, MEMBER or COLLABORATOR count (anyone else
 #     could edit a merged PR's body and have it sent to every member as SIS);
-#   - the joined EN ("For users:") and TR ("Kullanıcılar için:") texts are each
+#   - the joined EN ("For users:") and TR ("For users (TR):", or the older
+#     "Kullanıcılar için:") texts are each
 #     cut to 1900 characters (never bytes: LC_ALL=C.UTF-8 in the step), then a
 #     non-empty note is "Version $VERSION ($BUILD)\n" + EN, plus "\n---\nSürüm $VERSION ($BUILD)\n"
 #     + TR when there is TR text (room under the 4000-char release_notes check
@@ -300,5 +301,21 @@ same_note
 if STUB_DB_FAIL=1 run_step v0.26.0+178; then fail "a failed insert did not fail the run block"; fi
 check_out
 [ "$(out_of)" = "$utf" ] || fail "the note was not handed on when the insert failed (b64 must come before the insert)"
+
+# 9 the TR text also comes from "For users (TR):" (old "Kullanıcılar için:" still
+# read), in merge order; that line is never taken as EN text.
+printf 'For users: Hello.\nFor users (TR): Merhaba.\n' > "$tmp/prs/10"
+printf 'For users: Faster.\nKullanıcılar için: Daha hızlı.\n' > "$tmp/prs/12"
+run_step v0.26.0+178 || fail "step exited non-zero with a For users (TR): line"
+[ "$(note_of)" = "$V"$'\nHello.\nFaster.\n---\nSürüm 1.2.3 (179)\nMerhaba.\nDaha hızlı.' ] \
+  || fail "For users (TR): not read as TR text: note was [$(note_of)]"
+same_note
+
+# 10 TR text only (EN part empty) -> nothing stored, no output, still success
+printf 'For users (TR): Yalnız Türkçe.\n' > "$tmp/prs/10"
+printf 'Kullanıcılar için: Bu da.\n' > "$tmp/prs/12"
+run_step v0.26.0+178 || fail "step failed with TR text only"
+[ ! -s "$tmp/calls" ] || fail "a note was stored with an empty EN part"
+[ ! -s "$tmp/ghout" ] || fail "a b64 output was written with an empty EN part"
 
 echo "whats_new_note_test: OK"

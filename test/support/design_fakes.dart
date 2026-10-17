@@ -477,6 +477,18 @@ class DesignProfile implements ProfileRepository {
       const Err(NetworkFailure('not in this test'));
   @override
   Future<Result<bool>> isTagAvailable(String tag) async => const Ok(true);
+
+  /// Codes passed to [setAppLanguage], in order.
+  final appLanguages = <String>[];
+
+  /// The [setAppLanguage] answer; a failure is what an offline phone gets.
+  Result<void> appLanguageResult = const Ok(null);
+
+  @override
+  Future<Result<void>> setAppLanguage(String code) async {
+    appLanguages.add(code);
+    return appLanguageResult;
+  }
 }
 
 /// The app as main.dart mounts it, with fakes at the repository boundary.

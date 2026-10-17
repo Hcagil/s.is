@@ -209,6 +209,12 @@ select is((select count(*) from pg_attribute
           'conversation_previews has contact, attachment_name, attachment_duration_ms, location_lat and attachment_mime');
 select as_('01');
 select is(sc(g('G'), gen_random_uuid(), 'Newest', '123'), 'ok', 'fixture: a contact as the newest message');
+-- now() is one instant for the whole transaction: without this the contact
+-- ties every earlier message in G, and the planner picks the "newest".
+reset role;
+update public.messages set created_at = now() + interval '500 milliseconds'
+ where conversation_id = g('G') and contact and body like 'Newest%';
+select as_('01');
 select is((select contact from public.conversation_previews where conversation_id = g('G')), true,
           'the preview marks the newest message as a contact');
 reset role;

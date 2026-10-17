@@ -532,8 +532,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSignOut => 'Sign out';
 
   @override
-  String settingsVersion(String name, int build) {
-    return 'Version $name ($build)';
+  String settingsVersion(String name) {
+    return 'Version $name';
   }
 
   @override
@@ -1219,9 +1219,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateRequiredTitle => 'Update required';
 
   @override
-  String updateRequiredBody(int installed, int minimum) {
-    return 'This version ($installed) is no longer supported (minimum $minimum).';
-  }
+  String get updateRequiredBody =>
+      'This version is no longer supported. Please update to keep using SIS.';
 
   @override
   String get updateNow => 'Update now';

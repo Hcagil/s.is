@@ -34,6 +34,7 @@ Postgres Row Level Security is the only authority. The client is untrusted.
 - `public` — RLS enabled on every table; policies use the helpers below.
   - `profiles(user_id pk → auth.users, display_name, created_at)` — created by
     a trigger on `auth.users` insert.
+    Stored preference `profiles.app_language` (`en` or `tr`, null = unknown, treated as Turkish): the language the app shows, written by the member's own app (column update grant, `profiles_update_own` pins the row; the bot cannot). It is not in the column-level select grant, so no client reads it; only `app_private.messages_bot_intro()` (security definer) reads it, to pick the language of SIS Destek's automatic first line.
   - `app_config(id = 1, min_supported_build int)` — single row, readable by an
     **active allowlisted member** (`has_app_access()`), never writable from the
     client. The latest available build is not stored: Google Play reports it to

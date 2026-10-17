@@ -33,8 +33,7 @@ class UpdateRequiredScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  AppLocalizations.of(context)
-                      .updateRequiredBody(installed, minimum),
+                  AppLocalizations.of(context).updateRequiredBody,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),

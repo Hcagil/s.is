@@ -13,14 +13,23 @@ const _schemaVersion = 1;
 /// unlike the cache directory, the OS never clears this under storage
 /// pressure).
 final class FileChatListSnapshotStore implements ChatListSnapshotStore {
-  FileChatListSnapshotStore({Future<Directory> Function()? root})
-    : _root = root ?? getApplicationSupportDirectory;
+  FileChatListSnapshotStore({
+    Future<Directory> Function()? root,
+    this._stripPreviews = false,
+  }) : _root = root ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _root;
 
+  /// Writes no message text (lastMessage, lastMessageAt, lastSenderId are
+  /// null): the feed the Android push code reads picture paths from.
+  final bool _stripPreviews;
+
   /// Bumped by [clear]; a [save] in flight when it changes lost the race and
   /// must not resurrect what clear() just erased.
-  int _epoch = 0;
+  static int _epoch = 0;
+
+  /// The current erase count, for a caller that must give up a write begun before a clear().
+  int get epoch => _epoch;
 
   Future<File> _file() async => File('${(await _root()).path}/chat_list.json');
 
@@ -56,7 +65,17 @@ final class FileChatListSnapshotStore implements ChatListSnapshotStore {
       final body = jsonEncode({
         'v': _schemaVersion,
         'owner': ownerId,
-        'list': [for (final c in conversations) c.toJson()],
+        'list': [
+          for (final c in conversations)
+            _stripPreviews
+                ? {
+                    ...c.toJson(),
+                    'lastMessage': null,
+                    'lastMessageAt': null,
+                    'lastSenderId': null,
+                  }
+                : c.toJson(),
+        ],
       });
       // Written aside, then renamed: a half-written file is never read.
       final part = File('${file.path}.part');

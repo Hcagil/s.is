@@ -7,6 +7,7 @@ import 'dart:math' show max;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:sis/app/sis_app.dart';
@@ -15,7 +16,8 @@ import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
-import 'package:sis/features/chat/data/file_chat_list_snapshot_store.dart';
+import 'package:sis/features/chat/data/store/drift_chat_list_snapshot_store.dart';
+import 'package:sis/features/chat/data/store/store_key.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -29,6 +31,7 @@ import 'package:sis/features/profile/data/supabase_profile_repository.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/drift_stores.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
 import '../support/video_fakes.dart';
@@ -538,16 +541,21 @@ void main() {
   });
 
   group('the stored chat list (v0.24.0), over the real repository and the '
-      'real file store', () {
+      'real encrypted store', () {
     late Directory dir;
-    setUp(() => dir = Directory.systemTemp.createTempSync('chat-list-seam-'));
+    late String key;
+    setUp(() async {
+      dir = Directory.systemTemp.createTempSync('chat-list-seam-');
+      FlutterSecureStorage.setMockInitialValues({});
+      key = await const StoreKey().loadOrCreate();
+    });
     tearDown(() {
       if (dir.existsSync()) dir.deleteSync(recursive: true);
     });
 
     /// bram's app as main.dart wires it, the stored list included (on a temp
     /// directory: path_provider has no platform side in a test).
-    ProviderContainer app(FileChatListSnapshotStore store) => ProviderContainer(
+    ProviderContainer app({Future<File> Function()? file}) => ProviderContainer(
       overrides: [
         ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(
@@ -580,7 +588,7 @@ void main() {
         notificationExplainerStoreProvider.overrideWithValue(
           NotificationExplainerStoreFake(shown: true),
         ),
-        chatListSnapshotStoreProvider.overrideWithValue(store),
+        ...driftStoreOverrides(dir, key, file: file),
       ],
     );
 
@@ -599,27 +607,49 @@ void main() {
 
     testWidgets('saved after the server answers, shown from the phone on the '
         'next start before the server answers, erased on sign-out', (t) async {
-      final file = File('${dir.path}/chat_list.json');
-      FileChatListSnapshotStore store() =>
-          FileChatListSnapshotStore(root: () async => dir);
+      final file = storeFileIn(dir);
       final tile = find.byKey(ValueKey('conversation-$withEli'));
 
+      /// What the stored list holds for bram, as text, read through a
+      /// fresh store instance over the same file; null when nothing is saved.
+      Future<String?> saved() async {
+        if (!file.existsSync()) return null;
+        final list = await t.runAsync(
+          () =>
+              DriftChatListSnapshotStore(driftStore(bramId, dir, key))
+                  .load(bramId),
+        );
+        if (list == null) return null;
+        String text(Conversation x) => [
+          x.id,
+          x.title,
+          x.lastMessage,
+          x.other?.userId,
+          x.other?.displayName,
+          x.other?.tag,
+        ].join('|');
+        return list.map(text).join('\n');
+      }
+
       // First start: nothing on the phone; the server's list is saved.
-      var c = app(store());
+      var c = app();
       await t.pumpWidget(
         UncontrolledProviderScope(container: c, child: const SisApp()),
       );
       await pumpUntil(t, () => tile.evaluate().isNotEmpty, 'the list');
-      await pumpUntil(
-        t,
-        () => file.existsSync() && file.readAsStringSync().contains(bramLast),
-        'the snapshot of what the server returned',
+      String? last;
+      for (var i = 0; i < 200 && !(last ?? '').contains(bramLast); i++) {
+        await t.pump(const Duration(milliseconds: 50));
+        last = await saved();
+      }
+      expect(
+        last,
+        contains(bramLast),
+        reason: 'the snapshot of what the server returned, for its owner',
       );
-      final saved = file.readAsStringSync();
-      expect(saved, contains(bramId), reason: 'not stamped with its owner');
-      expect(saved, contains(groupTitle));
-      expect(saved, contains(doraLast));
-      expect(saved, isNot(contains('@integration.test')), reason: 'an email');
+      expect(last, contains(groupTitle));
+      expect(last, contains(doraLast));
+      expect(last, isNot(contains('@integration.test')), reason: 'an email');
       await t.pumpWidget(const SizedBox());
       c.dispose();
 
@@ -628,7 +658,7 @@ void main() {
       wire
         ..delay = const Duration(milliseconds: 1500)
         ..reset();
-      c = app(store());
+      c = app();
       await t.pumpWidget(
         UncontrolledProviderScope(container: c, child: const SisApp()),
       );
@@ -660,6 +690,10 @@ void main() {
         () => c.read(sessionControllerProvider.notifier).signOut(),
       );
       await pumpUntil(t, () => !file.existsSync(), 'the erase');
+      for (var i = 0; i < 20; i++) {
+        await t.pump(const Duration(milliseconds: 50));
+      }
+      expect(file.existsSync(), isFalse, reason: 're-created after the erase');
       await t.pumpWidget(const SizedBox());
       await t.pump(const Duration(milliseconds: 50));
       c.dispose();
@@ -668,9 +702,7 @@ void main() {
     testWidgets('a store that cannot be read or written never stops the '
         "server's list", (t) async {
       final c = app(
-        FileChatListSnapshotStore(
-          root: () async => throw const FileSystemException('no storage'),
-        ),
+        file: () async => throw const FileSystemException('no storage'),
       );
       addTearDown(c.dispose);
       await t.pumpWidget(

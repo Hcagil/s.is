@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 
 import '../../domain/chat_list_snapshot_store.dart';
 import '../../domain/conversation.dart';
+import '../file_chat_list_snapshot_store.dart';
 import 'drift_message_store.dart';
 import 'store_database.dart';
 
@@ -13,6 +14,9 @@ class DriftChatListSnapshotStore implements ChatListSnapshotStore {
   DriftChatListSnapshotStore(this._store);
 
   final DriftMessageStore _store;
+
+  /// Plain-file chat_list.json for the Android push code (InstantPush.avatarFor): picture paths only, no message text.
+  final _feed = FileChatListSnapshotStore(stripPreviews: true);
 
   @override
   Future<List<Conversation>?> load(String ownerId) {
@@ -40,9 +44,10 @@ class DriftChatListSnapshotStore implements ChatListSnapshotStore {
   }
 
   @override
-  Future<void> save(String ownerId, List<Conversation> conversations) {
-    if (ownerId != _store.ownerId) return Future.value();
-    return _store.run(null, (db) async {
+  Future<void> save(String ownerId, List<Conversation> conversations) async {
+    if (ownerId != _store.ownerId) return;
+    final epoch = _feed.epoch;
+    final wrote = await _store.run(false, (db) async {
       await db.transaction(() async {
         await db.delete(db.conversations).go();
         final inserts = <ConversationsCompanion>[];
@@ -67,12 +72,20 @@ class DriftChatListSnapshotStore implements ChatListSnapshotStore {
           );
         });
       });
+      return true;
     });
+    // No feed for a list the store did not take (closed, erased or failed), nor
+    // for a save that began before any feed clear: an erase that started after
+    // this save began always wins, on any store instance.
+    if (wrote && _feed.epoch == epoch) {
+      await _feed.save(ownerId, conversations);
+    }
   }
 
   @override
-  Future<void> clear() {
-    return _store.run(null, (db) async {
+  Future<void> clear() async {
+    await _feed.clear();
+    await _store.run(null, (db) async {
       await db.transaction(() async {
         await db.delete(db.conversations).go();
         await (db.delete(

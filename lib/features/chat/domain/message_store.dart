@@ -89,6 +89,9 @@ abstract interface class MessageStore {
   /// Saves the change cursor.
   Future<void> saveCursor(ChangeCursor cursor);
 
+  /// Ids of every chat that has stored messages, a sync state or a list row.
+  Future<Set<String>> conversationIds();
+
   /// Closes the store and deletes the database file; used at sign-out.
   Future<void> clear();
 }

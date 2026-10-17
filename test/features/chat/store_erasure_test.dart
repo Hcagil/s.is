@@ -29,6 +29,7 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message_store.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 import '../../support/fakes.dart';
 import '../../support/store_spy.dart';
@@ -645,6 +646,87 @@ void main() {
         expectNoFiles('database after sign-out');
       },
     );
+
+    // Case B (gate F1): S's first write lands BEFORE the sign-out unlink and
+    // S's commit lands AFTER the whole routine. drift sets no busy timeout and
+    // the store uses journal_mode=delete, so a lock taken from a second
+    // connection makes S fail at once (SQLITE_BUSY), which is not case B.
+    // Instead a second connection adds a trigger that keeps S busy (CPU, no
+    // lock) right after its first DELETE: S then holds the write lock and has
+    // a -journal on disk (the test waits for it) while the routine unlinks the
+    // files. S's commit then succeeds into the unlinked inode: the second
+    // connection, which still has that inode open, reads S's row afterwards.
+    // Verified: on 11bac0b this test is red (S counted as written, feed
+    // re-written); without the -journal step below it is green there.
+    test("case B: a save whose write began before the unlink and whose commit "
+        'lands after the whole sign-out routine leaves no feed file', () async {
+      follow = true;
+      await signedIn();
+      final snap = c.read(chatListSnapshotStoreProvider);
+      await snap.save('ann', const [Conversation(id: 'c0')]); // a row to delete
+      final key = (await keys()).values.single;
+      final other = sqlite3.open(h.file.path);
+      addTearDown(other.close);
+      other.execute("PRAGMA key = \"x'$key'\";");
+      List<Object?> rows() => [
+        for (final r in other.select('SELECT id FROM conversations')) r['id'],
+      ];
+      expect(rows(), ['c0'], reason: 'fixture: the stored row');
+      other.execute('CREATE TABLE slow(x INTEGER)');
+      other.execute(
+        'WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n '
+        'WHERE i < 6000) INSERT INTO slow SELECT i FROM n',
+      );
+      other.execute(
+        'CREATE TRIGGER slow_delete AFTER DELETE ON conversations BEGIN '
+        'SELECT sum(a.x * b.x) FROM slow a, slow b; END',
+      );
+      expect(journal().existsSync(), isFalse, reason: 'fixture: no journal');
+      final saving = snap.save('ann', const [
+        Conversation(id: 'c1', avatarPath: 'groups/c1.jpg'),
+      ]);
+      unawaited(saving.then((_) => log.add('S.done')));
+      await eventually(
+        () => journal().existsSync(),
+        reason: "fixture: S's first write holds the write lock",
+      );
+      log.add('S.writing');
+      signOut();
+      await eventually(() => log.contains('store.cleared'));
+      await eventually(
+        () =>
+            log.lastIndexOf('snapshot.cleared') > log.indexOf('store.cleared'),
+        reason: 'the trailing feed clear ($log)',
+      );
+      log.add('routine.done');
+      expect(h.file.existsSync(), isFalse, reason: 'fixture: unlinked');
+      // In journal_mode=delete the commit point is unlinking -journal; the
+      // routine already unlinked it, so S's COMMIT would report an error
+      // and S would not count as written (a safe case A-like path). Put the
+      // name back: this models S committing before the routine reached the
+      // -journal unlink, while its result reaches Dart only after the
+      // trailing feed clear. S's commit removes this file (checked below).
+      journal().writeAsBytesSync(const []);
+      await saving;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(
+        log.indexOf('S.done'),
+        greaterThan(log.indexOf('routine.done')),
+        reason: 'fixture: S committed only after the routine ($log)',
+      );
+      expect(
+        rows(),
+        ['c1'],
+        reason: "fixture (case B): S's commit succeeded into the unlinked file",
+      );
+      expect(
+        feed().existsSync(),
+        isFalse,
+        reason: 'feed re-written after sign-out ($log)',
+      );
+      expect(feedPart().existsSync(), isFalse, reason: 'feed .part left');
+      expectNoFiles('database after sign-out');
+    });
 
     // Security re-gate 3: the REAL sign-out order (feed clear, delete rows,
     // store.clear) through the providers. A transaction held open on the same

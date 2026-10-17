@@ -75,6 +75,7 @@ part 'polls_controller.dart';
 part 'phone_book_controller.dart';
 part 'chat_search_controller.dart';
 part 'chat_list_search_controller.dart';
+part 'store_sync_controller.dart';
 
 final chatRepositoryProvider = Provider<ChatRepository>(
   (_) => throw UnimplementedError('override in main'),

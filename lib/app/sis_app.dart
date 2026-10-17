@@ -227,6 +227,11 @@ class _SessionGateState extends ConsumerState<SessionGate> {
               (v is Allowed && v.member.userId != before.member.userId))) {
         unawaited(ref.read(pendingShareProvider.notifier).finish(shown));
       }
+      if (v is Allowed && prev?.value is! Allowed) {
+        // Signed in (or restored): the phone's message store catches up and,
+        // on a new phone, starts filling its history.
+        unawaited(ref.read(storeSyncProvider).run());
+      }
       if ((v is SignedOut || v is Denied || v is Replaced) && mounted) {
         // No transition: chat content must not stay visible, even sliding
         // out, over the Denied or sign-in screen.

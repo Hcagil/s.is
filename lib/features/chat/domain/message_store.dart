@@ -64,6 +64,18 @@ abstract interface class MessageStore {
     required bool reachedStart,
   });
 
+  /// Stores an OLDER page of [conversationId] (oldest first), fetched by the
+  /// background fill: upserts it in one transaction and lowers the chat's
+  /// contiguousFrom to the page's oldest row. Unlike [reconcilePage] it never
+  /// moves newestAt and deletes nothing. [reachedStart] marks the chat complete
+  /// (the page was short, so it holds the first message). Does nothing when the
+  /// chat has no sync state yet (no newest page was reconciled first).
+  Future<void> extendOlder(
+    String conversationId,
+    List<Message> page, {
+    required bool reachedStart,
+  });
+
   /// Removes one stored message (hidden for me, vanished).
   Future<void> remove(String messageId);
 

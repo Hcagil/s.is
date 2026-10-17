@@ -8,6 +8,7 @@ import 'group_event.dart';
 import 'group_member.dart';
 import 'link_preview.dart';
 import 'message.dart';
+import 'message_store.dart';
 import 'read_marks.dart';
 
 /// How many messages one read of a conversation returns: the newest page on
@@ -270,4 +271,34 @@ abstract interface class ChatRepository {
     String conversationId,
     Message anchor,
   );
+
+  /// Messages changed after [cursor] (by `updated_at`, then id), oldest change
+  /// first, at most [limit]: new, edited and deleted-for-everyone rows of every
+  /// chat the member can read. A page with [limit] rows may have more after it.
+  /// Feeds the on-phone store's catch-up.
+  Future<Result<ChangePage>> changesSince(
+    ChangeCursor cursor, {
+    int limit = 500,
+  });
+
+  /// The cursor of the newest change the member can read, or null when there is
+  /// none; the start point for a phone that fills its history by chat.
+  Future<Result<ChangeCursor?>> newestChange();
+
+  /// Up to [limit] messages of [conversationId] created at or before [before],
+  /// oldest first, WITHOUT photo previews: a backfill page. At-or-before, so a
+  /// message sharing the instant is never skipped; the caller dedupes by id.
+  Future<Result<List<Message>>> messagesBefore(
+    String conversationId,
+    DateTime before, {
+    int limit = 500,
+  });
+}
+
+/// One page of [ChatRepository.changesSince]: the changed messages and the
+/// cursor of the last one (null for an empty page).
+final class ChangePage {
+  const ChangePage(this.messages, this.last);
+  final List<Message> messages;
+  final ChangeCursor? last;
 }

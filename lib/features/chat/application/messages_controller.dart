@@ -532,7 +532,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
               .messagesAround(conversationId, oldest);
     if (!ref.mounted) return;
     if (epoch != _epoch) return; // rebuilt meanwhile: the new build owns this
-    if (local == null && result is Ok<List<Message>>) _persist(result.value);
+    if (local == null && result is Ok<List<Message>>) {
+      _persist(result.value);
+      unawaited(_extendStored(conversationId, oldest, result.value));
+    }
     ref.read(olderLoadingProvider.notifier).set(false);
     _loadingOlder = false;
     final now = state.value;
@@ -563,6 +566,29 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     unawaited(
       _fillPreviews(conversationId, () => ref.mounted && epoch == _epoch),
     );
+  }
+
+  /// The server page just read for [oldest] (rows at or before it, plus rows
+  /// after) joins the stored block when that block reaches [oldest]: the phone
+  /// then holds the page with no gap, so the chat's contiguous start moves
+  /// down. A block that does not reach [oldest] is left alone.
+  Future<void> _extendStored(
+    String conversationId,
+    Message oldest,
+    List<Message> rows,
+  ) async {
+    final store = _storeOf(ref);
+    if (store == null) return;
+    final from = (await store.syncState(conversationId))?.contiguousFrom;
+    if (from == null || from.isAfter(oldest.createdAt)) return;
+    final older = [
+      for (final m in rows)
+        if (!m.createdAt.isAfter(oldest.createdAt)) m,
+    ];
+    await store.extendOlder(conversationId, [
+      for (final m in older)
+        if (m.deletion != MessageDeletion.vanished) m,
+    ], reachedStart: older.length <= messagePageSize);
   }
 
   /// The mirror of [loadOlder] for a jumped window: reads the page after the

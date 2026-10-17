@@ -299,6 +299,54 @@ final class DriftMessageStore implements MessageStore {
     }),
   );
 
+  /// Older page from the background fill: lowers contiguousFrom only.
+  @override
+  Future<void> extendOlder(
+    String conversationId,
+    List<Message> page, {
+    required bool reachedStart,
+  }) => _run<void>(
+    null,
+    (db) => db.transaction(() async {
+      final prev =
+          await (db.select(db.syncStates)
+                ..where((t) => t.conversationId.equals(conversationId)))
+              .getSingleOrNull();
+      if (prev == null) return;
+      for (final m in page) {
+        final c = messageToCompanion(m);
+        await db.into(db.messages).insert(c, onConflict: DoUpdate((_) => c));
+      }
+      if (page.isEmpty) {
+        if (reachedStart) {
+          await db
+              .into(db.syncStates)
+              .insertOnConflictUpdate(
+                SyncStatesCompanion.insert(
+                  conversationId: conversationId,
+                  complete: const Value(true),
+                ),
+              );
+        }
+        return;
+      }
+      final oldest = page.first.createdAt.microsecondsSinceEpoch;
+      final from = prev.contiguousFrom == null
+          ? oldest
+          : math.min(prev.contiguousFrom!, oldest);
+      await db
+          .into(db.syncStates)
+          .insertOnConflictUpdate(
+            SyncStatesCompanion.insert(
+              conversationId: conversationId,
+              newestAt: Value(prev.newestAt),
+              contiguousFrom: Value(from),
+              complete: Value(reachedStart || prev.complete),
+            ),
+          );
+    }),
+  );
+
   @override
   Future<StoredSync?> syncState(String conversationId) =>
       _run<StoredSync?>(null, (db) async {

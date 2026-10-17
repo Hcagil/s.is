@@ -89,7 +89,9 @@ jobs:
       - name: Restore dependency caches
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
-          path: .ci-cache
+          path: |
+            .ci-cache
+            .dart_tool/hooks_runner/shared/sqlite3
           key: flutter-${{ runner.os }}-${{ hashFiles('pubspec.lock', 'docker/Dockerfile') }}
           restore-keys: flutter-${{ runner.os }}-
       - name: Build development image
@@ -178,6 +180,12 @@ jobs:
             test --no-check --no-lock --allow-all test/edge/
       - name: Prepare cache directories
         run: mkdir -p .ci-cache/pub .ci-cache/gradle
+      # The sqlite3 build hook downloads a prebuilt library (hash-checked) from github.com; keep it between runs.
+      - name: Restore the sqlite3 library cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .dart_tool/hooks_runner/shared/sqlite3
+          key: sqlite3-hook-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
       - name: Build development image
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml build flutter
       # Skipped by the ordinary `flutter test` run; this is the only job with a
@@ -232,6 +240,12 @@ jobs:
           test -n "$version"
           git clone --depth 1 --branch "$version" https://github.com/flutter/flutter.git "$HOME/flutter"
           echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+      # The sqlite3 build hook downloads a prebuilt library (hash-checked) from github.com; keep it between runs.
+      - name: Restore the sqlite3 library cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .dart_tool/hooks_runner/shared/sqlite3
+          key: sqlite3-hook-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
       - name: Restore Firebase config
         env:
           GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}

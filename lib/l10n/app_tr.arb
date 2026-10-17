@@ -164,7 +164,7 @@
   "settingsSignedInAs": "Google ile giriş yapılan hesap",
   "settingsUnknownAccount": "Bilinmeyen hesap",
   "settingsSignOut": "Çıkış yap",
-  "settingsVersion": "Sürüm {name} ({build})",
+  "settingsVersion": "Sürüm {name}",
   "appTagline": "Hep bağlantıda kal",
   "settingsLicences": "Açık kaynak lisansları",
   "notifSwitchHint": "Uygulama kapalıyken yeni mesajlar",

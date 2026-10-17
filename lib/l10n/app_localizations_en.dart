@@ -532,8 +532,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSignOut => 'Sign out';
 
   @override
-  String settingsVersion(String name, int build) {
-    return 'Version $name ($build)';
+  String settingsVersion(String name) {
+    return 'Version $name';
   }
 
   @override

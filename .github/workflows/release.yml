@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 2
+          fetch-depth: 0
       # A re-run (attempt 2 or more) must never deploy an older commit: it may only
       # publish when its commit is main's tip right now. A first attempt always runs.
       # A re-run of the CI run this follows starts a fresh Release (attempt 1) with
@@ -64,7 +64,7 @@ jobs:
         id: v
         run: |
           echo "code=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_OUTPUT"
-          echo "name=$(sed -n 's/^version: *\([^ +]*\).*/\1/p' pubspec.yaml)" >> "$GITHUB_OUTPUT"
+          echo "name=$(date -u +%y.%-m).$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
 
   publish:
     needs: scope
@@ -215,7 +215,7 @@ jobs:
         run: |
           gh release create "v${{ needs.scope.outputs.name }}+${{ needs.scope.outputs.code }}" \
             --target "$SHA" --generate-notes \
-            --title "SIS ${{ needs.scope.outputs.name }} (build ${{ needs.scope.outputs.code }})"
+            --title "SIS ${{ needs.scope.outputs.name }}"
       - name: Remove signing key
         if: always()
         run: rm -f .private/upload-keystore.jks

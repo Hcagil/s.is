@@ -529,8 +529,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get settingsSignOut => 'Çıkış yap';
 
   @override
-  String settingsVersion(String name, int build) {
-    return 'Sürüm $name ($build)';
+  String settingsVersion(String name) {
+    return 'Sürüm $name';
   }
 
   @override

@@ -1085,8 +1085,8 @@ abstract class AppLocalizations {
   /// Installed app version on the About page
   ///
   /// In en, this message translates to:
-  /// **'Version {name} ({build})'**
-  String settingsVersion(String name, int build);
+  /// **'Version {name}'**
+  String settingsVersion(String name);
 
   /// Short app tagline on the sign-in and About pages
   ///

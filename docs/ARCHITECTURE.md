@@ -98,6 +98,37 @@ widgets). Reactions, reply, forward and delete act on the whole album, anchored
 on its first photo; only the photo viewer's menu acts on one photo. This is
 not the sticker `albumId`/`albumCard`.
 
+### On-phone message store
+
+Each phone keeps its chats in one encrypted database (details: SECURITY.md,
+"On-phone message store"). The interface `MessageStore` (and
+`ChatListSnapshotStore`) is pure `domain/`. The files live in
+`features/chat/data/store/`, the only place that imports `drift` and `sqlite3`
+(both are on the SDK list above): `tables.dart`, `store_database.dart` (with the
+generated `store_database.g.dart`, checked in), `message_row_mapper.dart`,
+`drift_message_store.dart`, `drift_chat_list_snapshot_store.dart`,
+`push_feed_writer.dart`, `store_key.dart`, `store_location.dart` and
+`legacy_chat_list.dart`.
+
+`messageStoreProvider` throws until `main.dart` overrides it. The override
+watches `currentUserIdProvider`, so each account gets its own store, and builds
+it from `StoreKey` and `storeFile`. The chat-list store is overridden in the
+same place and shares that one instance.
+
+`StoreSyncController` (`application/store_sync_controller.dart`, started on app
+start, on resume and on sign-in) keeps the store current. The rule: the server
+is the truth.
+- Opening a chat shows the stored messages first. The server page then replaces
+  them and removes stored rows the server no longer returns.
+- Catch-up: one cursor per account (`messages.updated_at`, then id) moves
+  forward after each page of `changesSince` and starts 5 seconds back, so a late
+  commit is not missed.
+- A new phone fills the history in the background, newest chats first, in pages
+  of 300 (`messagesBefore`), text and metadata only. It gives way to the chat
+  that is open and resumes where it stopped.
+- Search runs on the phone. The server search is asked only until a chat is fully
+  stored.
+
 ### Errors
 
 Repositories return `Result<T>` with typed `Failure`s

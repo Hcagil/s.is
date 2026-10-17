@@ -492,9 +492,11 @@ id, unread count and left-group flag. This is personal data. The store is
 stamped with the owner's user id; a store that does not match the reading
 account is deleted rather than used, and the list is only read for the account
 that owns the store. Until 2026-10-17 the list was a plain file,
-`chat_list.json`, with the previews in it. The app deletes any file with that
-name at every launch. The name lives on as the push feed described below,
-which the next list save writes again, without any message text. Drafts and queued unsent messages are not stored.
+`chat_list.json`, with the previews in it. The name lives on as the push feed
+described below, without any message text. At every launch the app keeps that
+file only if it is a valid new feed (version 1, every message field empty) and
+deletes anything else, so an old file with previews is gone after the first
+start. Drafts and queued unsent messages are not stored.
 
 Since 0.30.15 the list is no longer held back until the server has confirmed
 the session. A second file, `last_session.json` (the marker), sits in the app support directory:

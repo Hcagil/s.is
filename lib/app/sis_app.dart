@@ -221,12 +221,10 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     // Signed in or restored: the phone's message store catches up and, on a new
     // phone, starts its fill. (Already Allowed at startup: see initState.)
     ref.listen(sessionControllerProvider, (prev, next) {
-      if (next.value is Allowed && prev?.value is! Allowed) {
+      final v = next.value;
+      if (v is Allowed && prev?.value is! Allowed) {
         unawaited(ref.read(storeSyncProvider).run());
       }
-    });
-    ref.listen(sessionControllerProvider, (prev, next) {
-      final v = next.value;
       // What a member was about to share must not wait for the next account: finish it (and delete its files)
       // when the signed-in member signs out or another member signs in. A share that arrived before any
       // sign-in is kept, so sign-in first and then continue works. A refresh (loading) keeps it.

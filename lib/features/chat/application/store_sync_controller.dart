@@ -118,7 +118,7 @@ class StoreSyncController {
       final r = await _ref
           .read(chatRepositoryProvider)
           .changesSince(at, limit: _feedPage);
-      if (r is! Ok<ChangePage>) return;
+      if (r is! Ok<ChangePage> || _halted(store)) return;
       final last = r.value.last;
       if (last == null) return;
       await _write(store, r.value.messages, chats);
@@ -126,7 +126,7 @@ class StoreSyncController {
           last.updatedAt.isAfter(high.updatedAt) ||
           (last.updatedAt.isAtSameMomentAs(high.updatedAt) &&
               last.id.compareTo(high.id) > 0);
-      if (ahead) {
+      if (ahead && !_halted(store)) {
         high = last;
         await store.saveCursor(high);
       }
@@ -168,7 +168,7 @@ class StoreSyncController {
       await _yieldToOpenChat();
       if (_halted(store)) return;
       final r = await _ref.read(chatRepositoryProvider).messages(id);
-      if (r is! Ok<List<Message>>) return;
+      if (r is! Ok<List<Message>> || _halted(store)) return;
       await store.reconcilePage(id, [
         for (final m in r.value)
           if (m.deletion != MessageDeletion.vanished) m,
@@ -182,7 +182,7 @@ class StoreSyncController {
       final r = await _ref
           .read(chatRepositoryProvider)
           .messagesBefore(id, before, limit: _fillPage);
-      if (r is! Ok<List<Message>>) return;
+      if (r is! Ok<List<Message>> || _halted(store)) return;
       await store.extendOlder(id, [
         for (final m in r.value)
           if (m.deletion != MessageDeletion.vanished) m,

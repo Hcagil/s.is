@@ -212,6 +212,13 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     // out only after the stored list was shown) -- leaves no page open: a chat
     // opened from a notification in the unconfirmed window must not stay on
     // top of the Denied or sign-in screen. Synchronous on purpose (same frame).
+    // Signed in, restored, or already Allowed at startup (fireImmediately): the
+    // phone's message store catches up and, on a new phone, starts its fill.
+    ref.listen(sessionControllerProvider, (prev, next) {
+      if (next.value is Allowed && prev?.value is! Allowed) {
+        unawaited(ref.read(storeSyncProvider).run());
+      }
+    }, fireImmediately: true);
     ref.listen(sessionControllerProvider, (prev, next) {
       final v = next.value;
       // What a member was about to share must not wait for the next account: finish it (and delete its files)
@@ -226,11 +233,6 @@ class _SessionGateState extends ConsumerState<SessionGate> {
               v is Replaced ||
               (v is Allowed && v.member.userId != before.member.userId))) {
         unawaited(ref.read(pendingShareProvider.notifier).finish(shown));
-      }
-      if (v is Allowed && prev?.value is! Allowed) {
-        // Signed in (or restored): the phone's message store catches up and,
-        // on a new phone, starts filling its history.
-        unawaited(ref.read(storeSyncProvider).run());
       }
       if ((v is SignedOut || v is Denied || v is Replaced) && mounted) {
         // No transition: chat content must not stay visible, even sliding

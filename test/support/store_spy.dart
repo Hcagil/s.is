@@ -13,7 +13,7 @@ class SpyStore implements MessageStore {
   final MessageStore inner;
 
   /// Call names in order, e.g. `newest:c1`, `older:c1`, `around:c1:m5`,
-  /// `upsert:<ids>`, `reconcile:c1`, `remove:m1`, `deleteConversation:c1`,
+  /// `upsert:<ids>`, `reconcile:c1`, `extendOlder:c1`, `remove:m1`, `deleteConversation:c1`,
   /// `search:q:c1`, `syncState:c1`, `clear`.
   final calls = <String>[];
 
@@ -76,6 +76,16 @@ class SpyStore implements MessageStore {
       page,
       reachedStart: reachedStart,
     );
+  }
+
+  @override
+  Future<void> extendOlder(
+    String conversationId,
+    List<Message> page, {
+    required bool reachedStart,
+  }) {
+    calls.add('extendOlder:$conversationId');
+    return inner.extendOlder(conversationId, page, reachedStart: reachedStart);
   }
 
   @override

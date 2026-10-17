@@ -25,6 +25,7 @@ import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/message_store.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
@@ -75,6 +76,20 @@ typedef _Send = Future<Result<Message>> Function({
 
 /// The real repository, passed through untouched except where noted.
 class _Relay implements ChatRepository {
+  // Change feed (store catch-up): relayed to the real repository.
+  @override
+  Future<Result<ChangePage>> changesSince(
+    ChangeCursor cursor, {
+    int limit = 500,
+  }) => real.changesSince(cursor, limit: limit);
+  @override
+  Future<Result<ChangeCursor?>> newestChange() => real.newestChange();
+  @override
+  Future<Result<List<Message>>> messagesBefore(
+    String conversationId,
+    DateTime before, {
+    int limit = 500,
+  }) => real.messagesBefore(conversationId, before, limit: limit);
   // Slice 5a signatures only (delivery marks); no behaviour.
   @override
   Future<Result<void>> markDelivered(

@@ -26,6 +26,7 @@ import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/message_store.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
@@ -128,6 +129,20 @@ class _AccountAuth implements AuthRepository {
 /// The real repository; search and messagesAround can be pointed at a real
 /// repository on a dead host -- the phone going offline mid-way.
 class _Switch implements ChatRepository {
+  // Change feed (store catch-up): relayed to the real repository.
+  @override
+  Future<Result<ChangePage>> changesSince(
+    ChangeCursor cursor, {
+    int limit = 500,
+  }) => live.changesSince(cursor, limit: limit);
+  @override
+  Future<Result<ChangeCursor?>> newestChange() => live.newestChange();
+  @override
+  Future<Result<List<Message>>> messagesBefore(
+    String conversationId,
+    DateTime before, {
+    int limit = 500,
+  }) => live.messagesBefore(conversationId, before, limit: limit);
   // Slice 5a signatures only (delivery marks); no behaviour.
   @override
   Future<Result<void>> markDelivered(

@@ -17,6 +17,7 @@ import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/message_store.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -91,6 +92,20 @@ String _stamp(String what) => '$what ${DateTime.now().microsecondsSinceEpoch}';
 /// survive — reads working, Realtime not — and both halves are the real
 /// implementation, so the Err is the one production produces.
 class _RealtimeDown implements ChatRepository {
+  // Change feed (store catch-up): relayed to the real repository.
+  @override
+  Future<Result<ChangePage>> changesSince(
+    ChangeCursor cursor, {
+    int limit = 500,
+  }) => live.changesSince(cursor, limit: limit);
+  @override
+  Future<Result<ChangeCursor?>> newestChange() => live.newestChange();
+  @override
+  Future<Result<List<Message>>> messagesBefore(
+    String conversationId,
+    DateTime before, {
+    int limit = 500,
+  }) => live.messagesBefore(conversationId, before, limit: limit);
   // Slice 5a signatures only (delivery marks); no behaviour.
   @override
   Future<Result<void>> markDelivered(

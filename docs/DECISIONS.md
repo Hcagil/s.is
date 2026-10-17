@@ -2133,7 +2133,7 @@ Nothing contacts the site before that tap.
 - Sign-out, a denied account or a replaced session erases the file and its key. A file left by another account is erased on open. The chat list itself lives in the same encrypted file. The push feed file (`chat_list.json`, read by the Android push code) never holds message text; the app deletes any old `chat_list.json` at launch and the next list save writes the feed again.
 - Search runs on the phone. The server search stays as a fallback for history not yet filled in, until step 9 switches off the plain-text server paths. In the chat list it is asked unless every chat is fully stored. Inside one chat it is asked only if that chat is not fully stored and the phone found nothing.
 
-**Reason.** The owner wants the app to respond instantly and to keep working offline. Encrypted chats can only be searched and shown where they are unlocked: on the phone.
+**Reason.** Chats must open instantly and keep working offline. Encrypted chats can only be searched and shown where they are unlocked: on the phone.
 
 **Consequences.**
 - A new phone downloads the member's full text history once, which costs server reads.

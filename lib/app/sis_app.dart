@@ -165,6 +165,12 @@ class _SessionGateState extends ConsumerState<SessionGate> {
   @override
   void initState() {
     super.initState();
+    // Already Allowed at startup: the listener in build only sees changes.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ref.read(sessionControllerProvider).value is Allowed) {
+        unawaited(ref.read(storeSyncProvider).run());
+      }
+    });
     // A build released, or a flexible download finished, while the app was
     // backgrounded is otherwise never seen again without a restart. Queued
     // sends resume the same way: paused while backgrounded, retried at once
@@ -212,13 +218,13 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     // out only after the stored list was shown) -- leaves no page open: a chat
     // opened from a notification in the unconfirmed window must not stay on
     // top of the Denied or sign-in screen. Synchronous on purpose (same frame).
-    // Signed in, restored, or already Allowed at startup (fireImmediately): the
-    // phone's message store catches up and, on a new phone, starts its fill.
+    // Signed in or restored: the phone's message store catches up and, on a new
+    // phone, starts its fill. (Already Allowed at startup: see initState.)
     ref.listen(sessionControllerProvider, (prev, next) {
       if (next.value is Allowed && prev?.value is! Allowed) {
         unawaited(ref.read(storeSyncProvider).run());
       }
-    }, fireImmediately: true);
+    });
     ref.listen(sessionControllerProvider, (prev, next) {
       final v = next.value;
       // What a member was about to share must not wait for the next account: finish it (and delete its files)

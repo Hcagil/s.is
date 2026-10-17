@@ -63,25 +63,31 @@ expect_exit() {
 # samples what it puts in TMPDIR and every process's argv. Then checks the exit
 # code, that SECRET never appeared in any argv (S-3), and, for tool/sis_bot.sh,
 # that no temp file outlives the run and every temp file sat inside a single
-# mode-700 directory (S-2). /tmp is diffed too, in case TMPDIR is not honoured.
+# mode-700 directory (S-2). Only the private TMPDIR is watched: other processes
+# fill the shared /tmp at any moment. A mktemp shim logs every path the tool
+# gets, so a temp file made outside TMPDIR (TMPDIR not honoured) still fails.
 TMPD="$BOX/tmp"; mkdir -m 700 "$TMPD"
-tmp_top() { find /tmp -mindepth 1 -maxdepth 1 -user "$(id -u)" 2>/dev/null | LC_ALL=C sort; }
+mkdir "$BOX/bin"; REAL_MKTEMP=$(command -v mktemp)
+printf '#!/bin/sh\nout=$("%s" "$@") || exit $?\nprintf "%%s\\n" "$out" >>"%s"\nprintf "%%s\\n" "$out"\n' \
+  "$REAL_MKTEMP" "$BOX/mktemps" >"$BOX/bin/mktemp"; chmod 700 "$BOX/bin/mktemp"
 watch() {
   local want=$1 name=$2 secret=$3; shift 3
   printf '%s\n' "$secret" >"$BOX/pats"
-  tmp_top >"$BOX/tmp_before"; : >"$BOX/seen"; : >"$BOX/argv_hits"
+  : >"$BOX/seen"; : >"$BOX/argv_hits"; : >"$BOX/mktemps"
   ( while :; do
       find "$TMPD" -mindepth 1 -printf '%d %m %y %P\n' >>"$BOX/seen" 2>/dev/null || true
       grep -lsF -f "$BOX/pats" /proc/[0-9]*/cmdline >>"$BOX/argv_hits" 2>/dev/null || true
     done ) & local poller=$!
-  local got=0; TMPDIR="$TMPD" "$@" >"$BOX/out" 2>"$BOX/err" || got=$?
+  local got=0; PATH="$BOX/bin:$PATH" TMPDIR="$TMPD" "$@" >"$BOX/out" 2>"$BOX/err" || got=$?
   kill "$poller" 2>/dev/null || true; wait "$poller" 2>/dev/null || true
   if [ "$got" = "$want" ]; then ok "$name (exit $got)"
   else bad "$name: want exit $want, got $got: $(tr '\n' ' ' <"$BOX/err" | head -c 300)"; fi
   check "$name: the secret was never in a process argv" test ! -s "$BOX/argv_hits"
   [ "$1" = "$BOT" ] || return 0
-  local left; left=$( (ls -A "$TMPD"; tmp_top | LC_ALL=C comm -13 "$BOX/tmp_before" -) | tr '\n' ' ')
+  local left; left=$(ls -A "$TMPD" | tr '\n' ' ')
   check "$name: no temp file left behind${left:+ ($left)}" test -z "$left"
+  local outside; outside=$(grep -v "^$TMPD/" "$BOX/mktemps" | tr '\n' ' ' || true)
+  check "$name: every temp file was made inside TMPDIR${outside:+ ($outside)}" test -z "$outside"
   local tops; tops=$(awk '$1 == 1' "$BOX/seen" | sort -u)
   check "$name: temp files only inside one mode-700 directory ($(wc -l <<<"$tops") seen: $(tr '\n' ' ' <<<"$tops"))" \
     awk -v n="$(awk '$1 == 1 {print $4}' "$BOX/seen" | sort -u | wc -l)" \

@@ -211,7 +211,7 @@ Future<void> main() async {
     );
     final attachmentCache = FileAttachmentCache();
     final deviceFiles = FlutterDeviceFiles();
-    // The chat list used to live in chat_list.json; now it is in the store.
+    // Drops the old chat_list.json (may hold message text); keeps the push feed.
     unawaited(deleteLegacyChatList());
     StartupMarks.mark('run-app');
     // The store messageStoreProvider built last: the chat-list store shares that

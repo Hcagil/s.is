@@ -87,19 +87,23 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(errorCode(invoke("cropPicture", nil)), "bad_args", "no arguments")
   }
 
-  func testCropOfAMissingOrNonImageFileIsAnError() throws {
+  // One test per input, so a failure names it. Both normally answer in
+  // milliseconds; the message carries how long the answer took (a missing
+  // answer is the 20 s wait in invoke() expiring).
+  func testCropOfAMissingFileIsAnError() throws {
     let missing = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString + ".jpg")
+    XCTAssertFalse(FileManager.default.fileExists(atPath: missing.path), "fixture: the file exists")
+
+    assertCropIsAnError(missing.path, "missing")
+  }
+
+  func testCropOfAFileThatIsNoImageIsAnError() throws {
     let text = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString + ".jpg")
     try Data("not a picture".utf8).write(to: text)
 
-    for (name, url) in [("missing", missing), ("text", text)] {
-      let answer = invoke("cropPicture", cropArgs(url.path, 0, 0, 1, 1))
-      XCTAssertTrue(
-        ["unreadable", "not_image", "crop_failed"].contains(errorCode(answer) ?? ""),
-        "\(name): answered \(String(describing: answer))")
-    }
+    assertCropIsAnError(text.path, "text")
   }
 
   // MARK: - The picked-image copy (what pickAttachments / pickProfilePicture send)
@@ -186,6 +190,15 @@ class RunnerTests: XCTestCase {
     }
     wait(for: [answered], timeout: 20)
     return answer
+  }
+
+  private func assertCropIsAnError(_ path: String, _ name: String, line: UInt = #line) {
+    let start = Date()
+    let answer = invoke("cropPicture", cropArgs(path, 0, 0, 1, 1))
+    let took = String(format: "%.3f", Date().timeIntervalSince(start))
+    XCTAssertTrue(
+      ["unreadable", "not_image", "crop_failed"].contains(errorCode(answer) ?? ""),
+      "\(name): answered \(String(describing: answer)) after \(took) s", line: line)
   }
 
   private func errorCode(_ answer: Any?) -> String? {

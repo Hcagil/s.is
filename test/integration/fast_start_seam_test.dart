@@ -17,6 +17,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/data/store/drift_chat_list_snapshot_store.dart';
+import 'package:sis/features/chat/data/store/drift_message_store.dart';
 import 'package:sis/features/chat/data/store/store_key.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
@@ -610,14 +611,11 @@ void main() {
       final file = storeFileIn(dir);
       final tile = find.byKey(ValueKey('conversation-$withEli'));
 
-      /// What the stored list holds for bram, as text, read through a
-      /// fresh store instance over the same file; null when nothing is saved.
-      Future<String?> saved() async {
-        if (!file.existsSync()) return null;
+      /// What the stored list in [store] holds for bram, as text; null when
+      /// nothing is saved.
+      Future<String?> saved(DriftMessageStore store) async {
         final list = await t.runAsync(
-          () =>
-              DriftChatListSnapshotStore(driftStore(bramId, dir, key))
-                  .load(bramId),
+          () => DriftChatListSnapshotStore(store).load(bramId),
         );
         if (list == null) return null;
         String text(Conversation x) => [
@@ -637,11 +635,27 @@ void main() {
         UncontrolledProviderScope(container: c, child: const SisApp()),
       );
       await pumpUntil(t, () => tile.evaluate().isNotEmpty, 'the list');
-      String? last;
-      for (var i = 0; i < 200 && !(last ?? '').contains(bramLast); i++) {
+      // Wait through the app's own store: a second store opening the file
+      // while the app's is still opening can erase it (its failed first try
+      // deletes the files), which lost the save in CI run 39137594193.
+      final appStore = c.read(messageStoreProvider) as DriftMessageStore;
+      final deadline = wire.now + const Duration(seconds: 20);
+      String? seen;
+      while (!(seen ?? '').contains(bramLast) && wire.now < deadline) {
         await t.pump(const Duration(milliseconds: 50));
-        last = await saved();
+        seen = await saved(appStore);
       }
+      expect(seen, contains(bramLast), reason: 'the app never saved the list');
+      await t.pumpWidget(const SizedBox());
+      await t.runAsync(appStore.close);
+      c.dispose();
+
+      // On the phone: read back through a fresh store over the same file,
+      // opened only after the app closed its own.
+      expect(file.existsSync(), isTrue, reason: 'no store file');
+      final fresh = driftStore(bramId, dir, key);
+      final last = await saved(fresh);
+      await t.runAsync(fresh.close);
       expect(
         last,
         contains(bramLast),
@@ -650,8 +664,6 @@ void main() {
       expect(last, contains(groupTitle));
       expect(last, contains(doraLast));
       expect(last, isNot(contains('@integration.test')), reason: 'an email');
-      await t.pumpWidget(const SizedBox());
-      c.dispose();
 
       // Next start, over a slow connection: the stored list is on screen
       // before the server has answered the list's reads.

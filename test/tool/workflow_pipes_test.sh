@@ -12,7 +12,14 @@
 #   ci.yml "Native iOS tests (simulator)"
 #   - the destination is the UUID on the first `  iPhone` line of
 #     `xcrun simctl list devices available`; never a UUID from another line;
-#     no iPhone -> the step fails before xcodebuild;
+#     no iPhone -> the step fails before xcodebuild; a failing xcodebuild
+#     fails the step with its own code after printing the result bundle's
+#     summary (the same -resultBundlePath);
+#   ci.yml "Video prep integration test (simulator)"
+#   - flutter's output reaches the log; its exit code is the step's; no
+#     clock before "Xcode build done" (a slow build is not a hang); after it,
+#     no result within VIDEO_PREP_AFTER_BUILD_S -> flutter is stopped and the
+#     step fails at once with an ::error:: line;
 #   ios-ipa.yml "Check the signature"
 #   - authority = the text after the FIRST `Authority=` line of
 #     `codesign -dvv` (stderr included); signed only when it begins with
@@ -101,14 +108,23 @@ done
 # ---- 2 simulator UDID ----------------------------------------------------------
 step_run .github/workflows/ci.yml "Native iOS tests (simulator)" "$tmp/udid.sh"
 stub flutter ':'
-stub xcrun '[ "$*" = "simctl list devices available" ] || { echo "xcrun stub: unexpected: $*" >&2; exit 2; }
-cat "$DEVICES"'
-# xcodebuild: records the exact -destination argument (a multi-line one too).
-stub xcodebuild 'while [ $# -gt 0 ]; do [ "$1" = -destination ] && printf "%s" "$2" > "$XCB_ARGS"; shift; done'
-udid() { # <shell> <devices file> -> prints the -destination given to xcodebuild; rc of the step
-  rm -f "$tmp/xcb"
+stub xcrun 'case "$*" in
+  "simctl list devices available") cat "$DEVICES" ;;
+  "simctl bootstatus "*" -b") ;;
+  "xcresulttool get test-results summary --path "*) echo "SUMMARY of ${*: -1}" ;;
+  *) echo "xcrun stub: unexpected: $*" >&2; exit 2 ;;
+esac'
+# xcodebuild: records the exact -destination argument (a multi-line one too)
+# and the -resultBundlePath; exits $XCB_RC.
+stub xcodebuild 'while [ $# -gt 0 ]; do
+  [ "$1" = -destination ] && printf "%s" "$2" > "$XCB_ARGS"
+  [ "$1" = -resultBundlePath ] && printf "%s" "$2" > "$XCB_ARGS.bundle"
+  shift; done; exit "${XCB_RC:-0}"'
+udid() { # <shell> <devices file> [XCB_RC] -> prints the -destination given to xcodebuild; rc of the step
+  rm -f "$tmp/xcb" "$tmp/xcb.bundle"
   local rc=0
-  PATH="$tmp/bin:$PATH" DEVICES=$2 XCB_ARGS="$tmp/xcb" $1 "$tmp/udid.sh" > "$tmp/out" 2>&1 || rc=$?
+  PATH="$tmp/bin:$PATH" DEVICES=$2 XCB_ARGS="$tmp/xcb" XCB_RC=${3:-0} RUNNER_TEMP="$tmp/rt" \
+    $1 "$tmp/udid.sh" > "$tmp/out" 2>&1 || rc=$?
   [ ! -e "$tmp/xcb" ] || cat "$tmp/xcb"
   return $rc
 }
@@ -136,6 +152,50 @@ for sh in "${SHELLS[@]}"; do
   [ "$got" = "id=$A" ] || fail "a $BIG-line device list under '$sh' gave [$got], want id=$A"
   if udid "$sh" "$tmp/dev-none" > /dev/null; then fail "no iPhone, yet the step passed under '$sh'"; fi
   [ ! -e "$tmp/xcb" ] || fail "no iPhone, yet xcodebuild ran under '$sh' with $(tr '\n' ' ' < "$tmp/xcb")"
+  # Green: no summary. Red (65, a failing test): the summary of the bundle
+  # xcodebuild wrote, then the step fails with xcodebuild's code.
+  udid "$sh" "$tmp/dev-normal" > /dev/null || fail "a passing xcodebuild failed the step under '$sh'"
+  ! grep -q SUMMARY "$tmp/out" || fail "a passing run printed the result summary under '$sh'"
+  rc=0; udid "$sh" "$tmp/dev-normal" 65 > /dev/null || rc=$?
+  [ "$rc" = 65 ] || fail "a failing xcodebuild (65) ended the step with $rc under '$sh'"
+  bundle=$(cat "$tmp/xcb.bundle" 2>/dev/null) || fail "xcodebuild got no -resultBundlePath under '$sh'"
+  [ "$bundle" = "$tmp/rt/RunnerTests.xcresult" ] || fail "result bundle [$bundle] is not in RUNNER_TEMP under '$sh'"
+  grep -qxF "SUMMARY of $bundle" "$tmp/out" || fail "a failing run did not print the summary of $bundle under '$sh': $(cat "$tmp/out")"
+done
+
+# ---- 2b video prep: flutter's exit code, and a hang after the build ----------
+step_run .github/workflows/ci.yml "Video prep integration test (simulator)" "$tmp/video.sh"
+# flutter: prints its arguments; FL_BUILT=1 prints flutter's "Xcode build
+# done" line; then sleeps FL_SLEEP seconds (exec: the step's kill reaches it)
+# or exits FL_RC.
+stub flutter 'echo "flutter $*"
+[ "${FL_BUILT:-0}" = 1 ] && echo "Xcode build done.                                           248.7s"
+[ "${FL_SLEEP:-0}" = 0 ] || exec sleep "$FL_SLEEP"
+exit "${FL_RC:-0}"'
+video() { # <shell> <FL_BUILT> <FL_SLEEP> <FL_RC> -> rc of the step; output in $tmp/out, seconds in $tmp/secs
+  local rc=0 t0=$SECONDS
+  PATH="$tmp/bin:$PATH" DEVICES="$tmp/dev-normal" RUNNER_TEMP="$tmp/rt" VIDEO_PREP_AFTER_BUILD_S=2 \
+    FL_BUILT=$2 FL_SLEEP=$3 FL_RC=$4 $1 "$tmp/video.sh" > "$tmp/out" 2>&1 || rc=$?
+  echo $((SECONDS - t0)) > "$tmp/secs"
+  return $rc
+}
+mkdir -p "$tmp/rt"
+for sh in "${SHELLS[@]}"; do
+  video "$sh" 1 0 0 || fail "a passing flutter test failed the step under '$sh'"
+  grep -qxF "flutter test integration_test/video_source_prep_ios_test.dart -d $A" "$tmp/out" \
+    || fail "flutter's output (or the -d $A) is missing from the step log under '$sh': $(cat "$tmp/out")"
+  ! grep -q '::error::' "$tmp/out" || fail "a passing run printed an error under '$sh'"
+  rc=0; video "$sh" 1 0 3 || rc=$?
+  [ "$rc" = 3 ] || fail "flutter test exit 3 ended the step with $rc under '$sh'"
+  ! grep -q '::error::' "$tmp/out" || fail "a failing test was reported as a hang under '$sh'"
+  # Built, then silent: stopped after the 2 s limit, not after the 30 s sleep.
+  rc=0; video "$sh" 1 30 0 || rc=$?
+  [ "$rc" != 0 ] || fail "flutter hanging after the build passed the step under '$sh'"
+  [ "$(cat "$tmp/secs")" -le 10 ] || fail "a hang after the build took $(cat "$tmp/secs")s to fail under '$sh'"
+  grep -q '^::error::video prep test: no result 2s after the Xcode build' "$tmp/out" \
+    || fail "a hang after the build has no ::error:: line under '$sh': $(cat "$tmp/out")"
+  # Still building after the limit (no "Xcode build done" yet): not a hang.
+  video "$sh" 0 4 0 || fail "a build slower than the after-build limit failed the step under '$sh': $(cat "$tmp/out")"
 done
 
 # ---- 3 signature authority ---------------------------------------------------

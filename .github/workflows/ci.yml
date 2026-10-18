@@ -272,23 +272,57 @@ jobs:
             -framework Security -o "$RUNNER_TEMP/probe/probe"
       # ios/RunnerTests: the Swift channel handlers against real ImageIO/PhotosUI,
       # hosted in the app on a simulator (whichever iPhone this Xcode ships).
+      # -quiet hides why a test failed; on a failure the result bundle's
+      # summary prints each failing assertion's message.
       - name: Native iOS tests (simulator)
         run: |
           flutter build ios --config-only --simulator --debug
           devices=$(xcrun simctl list devices available)
           udid=$(grep -m1 -E '^ +iPhone' <<<"$devices" | grep -oE '[0-9A-F-]{36}')
           test -n "$udid"
+          results="$RUNNER_TEMP/RunnerTests.xcresult"
           xcodebuild test -quiet -workspace ios/Runner.xcworkspace -scheme Runner \
-            -configuration Debug -destination "id=$udid" CODE_SIGNING_ALLOWED=NO
+            -configuration Debug -destination "id=$udid" -resultBundlePath "$results" CODE_SIGNING_ALLOWED=NO || {
+            rc=$?
+            xcrun xcresulttool get test-results summary --path "$results" || true
+            exit "$rc"
+          }
       # The video copy and its real AVFoundation read, on a booted simulator.
+      # Normally ~11 of the 20 minutes: boot ~1-2, flutter's own start ~3-4,
+      # the cold Xcode build ~4-6, then install, launch and the 3 tests ~1.
+      # That last phase once hung silently until the step limit. It gets its
+      # own clock, started by flutter's "Xcode build done" line, and each call
+      # in the test has its own timeout, so a hang fails in minutes, named.
       - name: Video prep integration test (simulator)
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: |
           devices=$(xcrun simctl list devices available)
           udid=$(grep -m1 -E '^ +iPhone' <<<"$devices" | grep -oE '[0-9A-F-]{36}')
           test -n "$udid"
           xcrun simctl bootstatus "$udid" -b
-          flutter test integration_test/video_source_prep_ios_test.dart -d "$udid"
+          log="$RUNNER_TEMP/video-prep.log"
+          : > "$log"
+          tail -f "$log" &
+          tail_pid=$!
+          flutter test integration_test/video_source_prep_ios_test.dart -d "$udid" > "$log" 2>&1 &
+          pid=$!
+          limit=${VIDEO_PREP_AFTER_BUILD_S:-240}
+          waited=0
+          while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$limit" ]; do
+            sleep 1
+            grep -q 'Xcode build done' "$log" && waited=$((waited + 1))
+          done
+          rc=0
+          if kill -0 "$pid" 2>/dev/null; then
+            echo "::error::video prep test: no result ${limit}s after the Xcode build (stuck installing, launching or reaching the app); stopped"
+            kill "$pid"
+            rc=1
+          else
+            wait "$pid" || rc=$?
+          fi
+          sleep 1
+          kill "$tail_pid"
+          exit "$rc"
 
   # Signing proof on the pull request: the same signed archive + export the
   # Release workflow uploads (.github/workflows/ios-ipa.yml), without the

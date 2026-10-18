@@ -22,6 +22,14 @@ void main() {
   final files = FlutterDeviceFiles(root: getTemporaryDirectory);
   final compressor = lc.LightCompressor();
 
+  // A copy and its read take well under a second on the simulator. A hang
+  // fails the test it is in, by name, instead of stalling the CI step until
+  // its limit (ci.yml "Video prep integration test (simulator)").
+  Future<T> answered<T>(String what, Future<T> call) => call.timeout(
+    const Duration(seconds: 60),
+    onTimeout: () => fail('$what gave no answer in 60 s'),
+  );
+
   void readableSample(String label, VideoSource r) {
     // ignore: avoid_print
     print(
@@ -33,12 +41,15 @@ void main() {
   }
 
   test('(a) extension "MOV": the copy is source.mov and readable', () async {
-    final result = await prepareVideoSource(
-      files: files,
-      compressor: compressor,
-      name: 'IMG_0001.MOV',
-      bytes: Stream.value(sampleMov),
-      extension: 'MOV',
+    final result = await answered(
+      'prepareVideoSource(IMG_0001.MOV)',
+      prepareVideoSource(
+        files: files,
+        compressor: compressor,
+        name: 'IMG_0001.MOV',
+        bytes: Stream.value(sampleMov),
+        extension: 'MOV',
+      ),
     );
     expect(result.tooLong, isFalse);
     final source = result.source;
@@ -50,11 +61,14 @@ void main() {
   test(
     '(c) no extension given: on iOS the copy is source.mov and readable',
     () async {
-      final result = await prepareVideoSource(
-        files: files,
-        compressor: compressor,
-        name: 'IMG_0001',
-        bytes: Stream.value(sampleMov),
+      final result = await answered(
+        'prepareVideoSource(IMG_0001)',
+        prepareVideoSource(
+          files: files,
+          compressor: compressor,
+          name: 'IMG_0001',
+          bytes: Stream.value(sampleMov),
+        ),
       );
       final source = result.source;
       expect(source, isNotNull);

@@ -21,6 +21,7 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
     ref.watch(ownProfileProvider.select((p) => p.value?.shareReadStatus));
     if (conversationId == null) return const [];
     _conversationId = conversationId;
+    _shown = false;
     // Watched: a group discovered to be one the member has left or been
     // removed from (leftConversationGuardProvider) rebuilds this at once and
     // leaves the reads:<id> channel, same reasoning as Typing.build() in
@@ -40,6 +41,13 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
       ),
     );
     if (hasLeft) return const [];
+    // Stored marks first (milliseconds, works offline); the server answer
+    // replaces them when it lands.
+    final stored = await _stored(conversationId);
+    if (stored.isNotEmpty) {
+      state = AsyncData(stored);
+      _shown = true;
+    }
     final repo = ref.read(chatRepositoryProvider);
     // Subscribed before the read, so a read in between is not lost; a
     // failed subscription only costs the live part.
@@ -73,16 +81,18 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
         // stopped sharing loses the stored read time.
         final merged = _early.fold<List<ReadMark>>(value, _merged);
         unawaited(_save(conversationId, merged));
+        _shown = true;
         return merged;
       case Err(:final failure):
-        // Offline: the marks saved on the phone.
-        final stored = await _stored(conversationId);
+        // Offline: keep the marks saved on the phone.
         if (stored.isEmpty) throw failure;
+        _shown = true;
         return _early.fold<List<ReadMark>>(stored, _merged);
     }
   }
 
   String? _conversationId;
+  bool _shown = false;
 
   Future<List<ReadMark>> _stored(String id) async {
     try {
@@ -99,11 +109,9 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
   }
 
   void _saw(ReadMark mark) {
+    _early.add(mark); // folded into the server answer when it lands
     final current = state.value;
-    if (state.isLoading || current == null) {
-      _early.add(mark);
-      return;
-    }
+    if (!_shown || current == null) return;
     final merged = _merged(current, mark);
     state = AsyncData(merged);
     if (_conversationId case final id?) unawaited(_save(id, merged));

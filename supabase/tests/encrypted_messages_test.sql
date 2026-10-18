@@ -1,5 +1,5 @@
 begin;
-select plan(133);
+select plan(170);
 
 -- Encrypted messages (Private Chats step 4a, 20261031120000_encrypted_messages.sql):
 -- messages.ciphertext / olm_type, the conversation gates, the plain-text lock
@@ -28,15 +28,19 @@ select plan(133);
 --   fay  edits once, then leaves FB (with bob)
 --   gus  preview sender       hal  preview none      own  the owner (admin chat)
 --   bot  enabled bot, ann's 1:1 AT
--- Every human publishes keys first, so a later "members need live keys"
--- rule cannot be what refuses a row here.
+--   nok  never publishes at first (AN, with ann), then publishes
+--   ivy  a sender with no keys (IB, with bob), then publishes
+--   jon  published, then moves to a new phone without re-publishing (AJ)
+--   kim  never publishes (AK, with ann), then leaves (left_at set)
+-- Every other human publishes keys first, so only section 5b is about keys.
 
 -- fixtures -----------------------------------------------------------------
 create function u(n text) returns uuid language sql immutable as $$
   select ('00000000-0000-0000-0000-0000e5c000' || case n
     when 'ann' then '01' when 'bob' then '02' when 'cat' then '03' when 'dee' then '04'
     when 'eve' then '05' when 'bot' then '06' when 'own' then '07' when 'fay' then '08'
-    when 'gus' then '09' when 'hal' then '0a' end)::uuid
+    when 'gus' then '09' when 'hal' then '0a'
+    when 'nok' then '0b' when 'ivy' then '0c' when 'jon' then '0d' when 'kim' then '0e' end)::uuid
 $$;
 create function sid(n text) returns text language sql immutable as $$
   select 'e5c00000-0000-0000-0000-' || right(u(n)::text, 12)
@@ -55,14 +59,15 @@ create function ct(n int, c text default 'A') returns text language sql immutabl
 
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
   select u(n), 'e5c-' || n || '@mail.test', now(), json_build_object('full_name', initcap(n))::jsonb
-    from unnest(array['ann','bob','cat','dee','eve','bot','own','fay','gus','hal']) n;
+    from unnest(array['ann','bob','cat','dee','eve','bot','own','fay','gus','hal','nok','ivy','jon','kim']) n;
 insert into app_private.allowlist(email) select email from auth.users where email like 'e5c-%@mail.test';
 insert into auth.sessions (id, user_id, created_at, updated_at)
   select sid(n)::uuid, u(n), now(), now()
-    from unnest(array['ann','bob','cat','dee','eve','bot','own','fay','gus','hal']) n;
+    from unnest(array['ann','bob','cat','dee','eve','bot','own','fay','gus','hal','nok','ivy','jon','kim']) n;
 insert into app_private.tag_finds(finder, found_id) values
   (u('ann'), u('bob')), (u('ann'), u('cat')), (u('ann'), u('bot')), (u('ann'), u('gus')),
-  (u('ann'), u('hal')), (u('dee'), u('eve')), (u('fay'), u('bob')), (u('bob'), u('cat'));
+  (u('ann'), u('hal')), (u('dee'), u('eve')), (u('fay'), u('bob')), (u('bob'), u('cat')),
+  (u('ann'), u('nok')), (u('ivy'), u('bob')), (u('ann'), u('jon')), (u('ann'), u('kim'));
 
 create function as_(n text) returns void language plpgsql as $$
 begin
@@ -77,6 +82,24 @@ begin set constraints all immediate; set constraints all deferred; end $$;
 create function try(q text) returns text language plpgsql as $$
 begin execute q; perform commit_check(); return 'ok';
 exception when others then return sqlstate; end $$;
+-- as_ on another phone (session s)
+create function as_s(n text, s text) returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', u(n), 'role', 'authenticated',
+      'email', (select email from auth.users where id = u(n)), 'session_id', s)::text, true);
+  execute 'set local role authenticated';
+end $$;
+create function pub(n text) returns text language sql as $$
+  select try(format('select public.publish_olm_keys(%L, %L, %L, array[%L, %L], %L)',
+                    k(n || '-I'), k(n || '-S'), sig(n), k(n || '1'), k(n || '2'), k(n || '-F')))
+$$;
+create function enc_at(c uuid) returns timestamptz language sql stable security definer as $$
+  select encrypted_at from public.conversations where id = c
+$$;
+create function plain(c uuid, b text default 'plain words') returns text language sql stable as $$
+  select try(format($q$insert into public.messages(conversation_id, sender_id, body) values (%L, auth.uid(), %L)$q$, c, b))
+$$;
 
 create table public.e5c_ids(name text primary key, id uuid);
 grant select, insert on public.e5c_ids to authenticated, anon, service_role;
@@ -106,17 +129,17 @@ begin
 exception when others then return sqlstate;
 end $$;
 grant execute on function u(text), sid(text), mid(text), k(text), sig(text), ph(), ct(int, text),
-  as_(text), commit_check(), try(text), g(text), ins(uuid, uuid, text, text, int, boolean),
+  as_(text), as_s(text, text), pub(text), enc_at(uuid), plain(uuid, text), commit_check(), try(text), g(text), ins(uuid, uuid, text, text, int, boolean),
   put(text), col(uuid, text), enc(uuid, text, int) to authenticated, anon, service_role;
 
 -- activate, publish keys, register a push token
 do $$
 declare n text;
 begin
-  foreach n in array array['ann','bob','cat','dee','eve','bot','own','fay','gus','hal'] loop
+  foreach n in array array['ann','bob','cat','dee','eve','bot','own','fay','gus','hal','nok','ivy','jon','kim'] loop
     perform as_(n);
     if not public.activate_session() then raise exception 'activate % failed', n; end if;
-    if n <> 'bot' then
+    if n not in ('bot', 'nok', 'ivy', 'kim') then
       perform public.publish_olm_keys(k(n || '-I'), k(n || '-S'), sig(n),
                                       array[k(n || '1'), k(n || '2')], k(n || '-F'));
     end if;
@@ -126,6 +149,10 @@ begin
     execute 'reset role';
   end loop;
 end $$;
+-- The bot gets a device bound to its live session, so a bot is refused for
+-- being a bot, never for having no keys.
+insert into app_private.olm_devices(user_id, identity_key, signing_key, device_signature, fallback_key, session_id)
+  values (u('bot'), k('bot-I'), k('bot-S'), sig('bot'), k('bot-F'), sid('bot')::uuid);
 insert into public.conversations(id, title) values ('e5c0c000-0000-0000-0000-00000000dbdb', 'e5c debug');
 insert into app_private.bot_accounts(user_id, debug_conversation, enabled)
   values (u('bot'), 'e5c0c000-0000-0000-0000-00000000dbdb', true);
@@ -138,11 +165,15 @@ insert into public.e5c_ids values
   ('AT', public.start_direct_conversation(u('bot'))),
   ('AG', public.start_direct_conversation(u('gus'))),
   ('AH', public.start_direct_conversation(u('hal'))),
+  ('AN', public.start_direct_conversation(u('nok'))),
+  ('AJ', public.start_direct_conversation(u('jon'))),
+  ('AK', public.start_direct_conversation(u('kim'))),
   ('G',  public.start_group_conversation('e5c group', array[u('bob'), u('cat')]));
 reset role;
 select as_('dee'); insert into public.e5c_ids values ('DE', public.start_direct_conversation(u('eve'))); reset role;
 select as_('fay'); insert into public.e5c_ids values ('FB', public.start_direct_conversation(u('bob'))); reset role;
 select as_('bob'); insert into public.e5c_ids values ('BC', public.start_direct_conversation(u('cat'))); reset role;
+select as_('ivy'); insert into public.e5c_ids values ('IB', public.start_direct_conversation(u('bob'))); reset role;
 insert into public.conversations(id, system) values ('e5c0c000-0000-0000-0000-00000000555a', true);
 insert into public.conversation_members(conversation_id, user_id) values ('e5c0c000-0000-0000-0000-00000000555a', u('ann'));
 insert into public.e5c_ids values ('SYS', 'e5c0c000-0000-0000-0000-00000000555a');
@@ -153,11 +184,13 @@ insert into public.stickers(id, owner_id) values ('e5c05000-0000-0000-0000-00000
 insert into storage.objects(bucket_id, name, owner_id, metadata)
   values ('stickers', 'e5c05000-0000-0000-0000-000000000001.webp', u('ann'), '{"size":3}'::jsonb);
 
-select is((select count(*) from public.e5c_ids where id is not null), 11::bigint, 'fixture: all eleven conversations exist');
+select is((select count(*) from public.e5c_ids where id is not null), 15::bigint, 'fixture: all fifteen conversations exist');
 select ok(exists(select 1 from public.conversation_members where conversation_id = g('AT') and user_id = u('bot')),
   'fixture: the bot is a member of AT');
 select is((select count(*) from app_private.olm_devices where user_id in (u('ann'), u('bob'))), 2::bigint,
   'fixture: ann and bob have published devices');
+select ok(exists(select 1 from app_private.olm_devices d join app_private.active_sessions a on a.session_id = d.session_id
+                  where d.user_id = u('bot')), 'fixture: the bot has a device bound to its live session');
 
 -- 1 the columns ------------------------------------------------------------
 select has_column('public', 'messages', 'ciphertext', 'messages.ciphertext exists');
@@ -185,6 +218,7 @@ select is(try(ins(g('AB'), mid('c9'), ph() || ' ', ct(10), 0)), '23514', 'the pl
 reset role;
 select is((select count(*) from public.messages where conversation_id = g('AB') and ciphertext is not null), 0::bigint,
   'fixture: AB still holds no ciphertext row');
+select is(enc_at(g('AB')), null, 'before any ciphertext row AB.encrypted_at is null');
 
 -- 3 the happy path --------------------------------------------------------------
 select as_('ann');
@@ -200,6 +234,15 @@ reset role;
 select is(col(mid('E1'), 'ciphertext'), ct(10), 'the ciphertext is stored as sent');
 select is(col(mid('E1'), 'olm_type'), '0', 'and its olm_type');
 select is(col(mid('E1'), 'body'), ph(), 'and the placeholder body');
+
+-- 3b encrypted_at: set by the first ciphertext row, kept by later ones -----------
+select ok(enc_at(g('AB')) between now() and clock_timestamp(), 'the first ciphertext row set AB.encrypted_at');
+select is(enc_at(g('AC')), null, 'a plain chat (AC) has no encrypted_at');
+update public.conversations set encrypted_at = '2020-01-01 00:00:00+00' where id = g('AB');
+select as_('bob');
+select is(try(ins(g('AB'), mid('EB2'), ph(), ct(10, 'G'), 1)), 'ok', 'bob sends one more ciphertext row');
+reset role;
+select is(enc_at(g('AB')), '2020-01-01 00:00:00+00'::timestamptz, 'a later ciphertext row keeps the first encrypted_at');
 
 -- 4 the content columns, as the superuser (no client grant needed) ---------------
 -- 'ok', or the sqlstate and the constraint that refused the row.
@@ -275,6 +318,57 @@ select is(try(format($q$insert into public.messages(conversation_id, sender_id, 
 select is(try(ins(g('AT'), mid('xbot'), ph(), ct(10), 1)), '42501', 'the bot''s client: ciphertext -> 42501');
 reset role;
 
+-- 5b every current member, the sender included, needs live keys -------------------
+select is((select count(*) from app_private.olm_devices where user_id in (u('nok'), u('ivy'), u('kim'))), 0::bigint,
+  'fixture: nok, ivy and kim have no device');
+select as_('ann');
+select is(plain(g('AN')), 'ok', 'control: plain text to nok goes');
+select is(try(ins(g('AN'), mid('kn1'), ph(), ct(10), 1)), '42501', 'ann: ciphertext to nok, who has no keys -> 42501');
+reset role;
+select as_('nok');
+select is(pub('nok'), 'ok', 'nok publishes keys');
+reset role;
+select as_('ann');
+select is(try(ins(g('AN'), mid('kn2'), ph(), ct(10), 1)), 'ok', 'then the same ciphertext to nok goes');
+reset role;
+select as_('ivy');
+select is(try(ins(g('IB'), mid('ki1'), ph(), ct(10), 1)), '42501', 'ivy, the sender, has no keys: ciphertext -> 42501');
+select is(pub('ivy'), 'ok', 'ivy publishes keys');
+select is(try(ins(g('IB'), mid('ki2'), ph(), ct(10), 1)), 'ok', 'then ivy''s ciphertext goes');
+reset role;
+-- jon moves to a new phone and has not published there yet: his keys are not live
+insert into auth.sessions (id, user_id, created_at, updated_at)
+  values ('e5c00000-0000-0000-0000-00000000f00d', u('jon'), now() + interval '1 minute', now());
+select as_s('jon', 'e5c00000-0000-0000-0000-00000000f00d');
+select is(public.activate_session(), true, 'fixture: jon activates his new phone');
+reset role;
+select as_('ann');
+select is(try(ins(g('AJ'), mid('kj1'), ph(), ct(10), 1)), '42501', 'ann: ciphertext to jon, whose keys belong to an old session -> 42501');
+reset role;
+select as_s('jon', 'e5c00000-0000-0000-0000-00000000f00d');
+select is(pub('jon'), 'ok', 'jon publishes on his new phone');
+reset role;
+select as_('ann');
+select is(try(ins(g('AJ'), mid('kj2'), ph(), ct(10), 1)), 'ok', 'then the ciphertext to jon goes');
+select is(try(ins(g('AK'), mid('kk1'), ph(), ct(10), 1)), '42501', 'ann: ciphertext to kim, a current member with no keys -> 42501');
+reset role;
+update public.conversation_members set left_at = now(), left_reason = 'left' where conversation_id = g('AK') and user_id = u('kim');
+select as_('ann');
+select is(try(ins(g('AK'), mid('kk2'), ph(), ct(10), 1)), 'ok', 'once kim has left (left_at set), her missing keys do not block it');
+reset role;
+-- jon signs out of his new phone: his keys are not live again
+delete from auth.sessions where id = 'e5c00000-0000-0000-0000-00000000f00d';
+select as_('ann');
+select is(try(ins(g('AJ'), mid('kj3'), ph(), ct(10), 1)), '42501', 'ann: ciphertext to jon after his phone signed out -> 42501');
+reset role;
+-- the last ciphertext row removed outright: AN stays encrypted
+delete from public.messages where conversation_id = g('AN') and ciphertext is not null;
+select is((select count(*) from public.messages where conversation_id = g('AN') and ciphertext is not null), 0::bigint,
+  'fixture: AN''s only ciphertext row is gone');
+select as_('ann');
+select is(plain(g('AN')), 'ENCR1', 'ann: plain text into AN after its last ciphertext row was removed -> ENCR1');
+reset role;
+
 -- 6 an encrypted 1:1 refuses plain text, keeps the other kinds -------------------
 select as_('ann');
 select is(try(format($q$insert into public.messages(conversation_id, sender_id, body) values (%L, auth.uid(), 'leak')$q$, g('AB'))),
@@ -301,6 +395,19 @@ select is(try(format($q$insert into public.messages(id, conversation_id, sender_
                         values (%L, %L, auth.uid(), 'we talk about encrypted things')$q$, mid('acplain'), g('AC'))),
   'ok', 'another conversation (AC) still takes plain text');
 reset role;
+select as_('cat');
+select is(plain(g('AB'), 'leak'), '42501', 'cat, not a member: plain text into encrypted AB -> 42501 (RLS), not ENCR1');
+reset role;
+-- a client cannot write encrypted_at
+select ok(not has_column_privilege(r, 'public.conversations', 'encrypted_at', p), r || ' has no ' || p || ' on conversations.encrypted_at')
+  from unnest(array['authenticated', 'anon']) r, unnest(array['INSERT', 'UPDATE']) p;
+select as_('ann');
+select is(try(format('update public.conversations set encrypted_at = null where id = %L', g('AB'))), '42501',
+  'ann cannot clear AB.encrypted_at');
+select is(try(format('insert into public.conversations(id, encrypted_at) values (%L, now())', md5('e5c-conv-x')::uuid)), '42501',
+  'ann cannot insert a conversation with encrypted_at');
+reset role;
+select is(enc_at(g('AB')), '2020-01-01 00:00:00+00'::timestamptz, 'AB.encrypted_at is unchanged');
 -- 7 delete_message on a ciphertext row -------------------------------------------
 select as_('dee');
 select is(try(ins(g('DE'), mid('D1'), ph(), ct(12), 1)), 'ok', 'dee sends ciphertext in DE');
@@ -310,6 +417,15 @@ select is(col(mid('D1'), 'ciphertext'), '<null>', 'deleted: ciphertext is null')
 select is(col(mid('D1'), 'olm_type'), '<null>', 'deleted: olm_type is null');
 select is(col(mid('D1'), 'body'), '', 'deleted: body is empty');
 select isnt(col(mid('D1'), 'deleted'), '<null>', 'deleted: deleted is set');
+select is((select count(*) from public.messages where conversation_id = g('DE') and ciphertext is not null), 0::bigint,
+  'fixture: DE holds no ciphertext row now');
+select isnt(enc_at(g('DE')), null, 'DE.encrypted_at stays set');
+select as_('dee');
+select is(plain(g('DE')), 'ENCR1', 'dee: plain text into DE after its last ciphertext row was deleted -> ENCR1');
+reset role;
+select as_('eve');
+select is(plain(g('DE')), 'ENCR1', 'eve: the same -> ENCR1');
+reset role;
 
 -- 8 edit_message_encrypted -------------------------------------------------------
 -- fixtures only the superuser can shape: exact ages
@@ -428,8 +544,10 @@ grant execute on function na(text, uuid, uuid) to service_role;
 set local role service_role;
 select is(na('bob', g('AB'), mid('nab')), '42501', 'a notification reply into encrypted AB -> 42501');
 select alike(na('ann', g('AC'), mid('nac')), 'ok:%', 'control: the same reply into plain AC goes');
+select is(na('eve', g('DE'), mid('nde')), '42501', 'a notification reply into DE, encrypted with no ciphertext row left -> 42501');
 reset role;
 select is((select count(*) from public.messages where id = mid('nab')), 0::bigint, 'and no reply row exists in AB');
+select is((select count(*) from public.messages where id = mid('nde')), 0::bigint, 'and none in DE');
 select is((select count(*) from public.messages where id = mid('nac')), 1::bigint, 'while the AC reply was stored');
 
 select * from finish();

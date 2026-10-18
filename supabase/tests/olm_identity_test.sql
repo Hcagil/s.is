@@ -1,5 +1,5 @@
 begin;
-select plan(25);
+select plan(31);
 
 -- public.olm_identity(target) (Private Chats step 4a): a member's published
 -- identity, so a phone can verify who it talks to, WITHOUT claiming a key.
@@ -12,7 +12,8 @@ select plan(25);
 --   on the allowlist, X not reachable -> 42501. X a bot, or X's device stale
 --   behind a newer live session -> no rows. anon cannot execute. Not rate
 --   limited: 100 calls in a row raise no RLMT1.
---   (X with no live session is left to the next round: its result changes.)
+--   X published, allowed and reachable but with no live session (its
+--   active session gone, or its auth session signed out) -> no rows, no error.
 --
 -- Fixtures: every refused target published while allowed, active and
 -- reachable by ann; then exactly one condition is taken away.
@@ -21,12 +22,15 @@ select plan(25);
 --   stl  published, then a new phone session, not re-published
 --   bot  enabled bot with a device row (target) and the bot caller
 --   nac  never activated (no access), reaches bob
+--   gon  published, then its active session row is removed
+--   out  published, then its auth session is signed out
 
 -- fixtures -----------------------------------------------------------------
 create function u(n text) returns uuid language sql immutable as $$
   select ('00000000-0000-0000-0000-0000013d00' || case n
     when 'ann' then '01' when 'bob' then '02' when 'far' then '03' when 'nal' then '04'
-    when 'stl' then '05' when 'bot' then '06' when 'nac' then '07' end)::uuid
+    when 'stl' then '05' when 'bot' then '06' when 'nac' then '07' when 'gon' then '08'
+    when 'out' then '09' end)::uuid
 $$;
 create function k(n text) returns text language sql immutable as $$
   select rtrim(replace(encode(sha256(convert_to(n, 'UTF8')), 'base64'), E'\n', ''), '=')
@@ -36,7 +40,7 @@ create function sig(n text) returns text language sql immutable as $$
 $$;
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
   select u(n), 'oi-' || n || '@mail.test', now(), json_build_object('full_name', n)::jsonb
-    from unnest(array['ann','bob','far','nal','stl','bot','nac']) n;
+    from unnest(array['ann','bob','far','nal','stl','bot','nac','gon','out']) n;
 insert into app_private.allowlist(email) select email from auth.users where email like 'oi-%@mail.test';
 insert into auth.sessions (id, user_id, created_at, updated_at)
   select ('013d0000-0000-0000-0000-' || right(id::text, 12))::uuid, id, now(), now()
@@ -74,7 +78,7 @@ $$;
 do $$
 declare n text;
 begin
-  foreach n in array array['ann','bob','far','nal','stl','bot'] loop
+  foreach n in array array['ann','bob','far','nal','stl','bot','gon','out'] loop
     perform test_as(u(n));
     perform public.activate_session();
     if n <> 'bot' then
@@ -92,7 +96,7 @@ insert into app_private.olm_devices(user_id, identity_key, signing_key, device_s
   values (u('bot'), k('bot-I'), k('bot-S'), sig('bot'), k('bot-F'), '013d0000-0000-0000-0000-0000013d0006');
 insert into public.contacts(owner_id, contact_id) values
   (u('ann'), u('bob')), (u('ann'), u('nal')), (u('ann'), u('stl')), (u('ann'), u('bot')),
-  (u('bot'), u('bob')), (u('nac'), u('bob'));
+  (u('bot'), u('bob')), (u('nac'), u('bob')), (u('ann'), u('gon')), (u('ann'), u('out'));
 -- take one condition away from each refused target
 delete from app_private.allowlist where email = 'oi-nal@mail.test';
 select test_as(u('stl'), '013d0000-0000-0000-0000-0000013df005');
@@ -147,6 +151,25 @@ select is(oi(null), '{"err":"42501"}', 'a null target -> 42501');
 -- 4 no rows -------------------------------------------------------------------------
 select is(oi(u('bot')), '[]', 'X is a bot -> no rows');
 select is(oi(u('stl')), '[]', 'X''s device is stale behind a newer live session -> no rows');
+reset role;
+-- 4b no live session: no rows, no error (test_writer draft, checked)
+select test_as(u('ann'));
+select is((oi(u('gon'))->0->>'identity_key'), k('gon-I'), 'control: gon answers while live');
+select is((oi(u('out'))->0->>'identity_key'), k('out-I'), 'control: out answers while live');
+reset role;
+
+delete from app_private.active_sessions where user_id = u('gon');
+delete from auth.sessions where user_id = u('out');
+
+select ok(not exists(select 1 from app_private.active_sessions where user_id = u('gon')), 'fixture: gon has no active session');
+select ok(not exists(select 1 from auth.sessions where user_id = u('out')), 'fixture: out has no auth session');
+
+select test_as(u('ann'));
+select is(oi(u('gon')), '[]', 'gon has no active session -> 0 rows, no error');
+select is(oi(u('out')), '[]', 'out''s session was signed out -> 0 rows, no error');
+reset role;
+
+select test_as(u('ann'));
 -- 5 not rate limited ------------------------------------------------------------------
 select is((select count(*) from generate_series(1, 100) i where oi(u('bob')) ? 'err'), 0::bigint,
   '100 calls in a row: no error, no RLMT1');

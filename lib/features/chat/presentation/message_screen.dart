@@ -78,6 +78,8 @@ import 'photo_viewer.dart';
 import 'pinned_bar.dart';
 import 'profile_pages.dart';
 import 'readers_card.dart';
+import 'day_chip.dart';
+import 'seen_time.dart';
 
 part 'message_bubble.dart';
 part 'reaction_chips.dart';
@@ -802,7 +804,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                               // being read.
                               itemCount:
                                   timeline.length + (loadingOlder ? 1 : 0),
-                              itemBuilder: (context, i) {
+                              itemBuilder: withDayChips(timeline, (context, i) {
                                 if (i == timeline.length) {
                                   return const Padding(
                                     key: ValueKey('older-loading'),
@@ -976,7 +978,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                         child: bubble,
                                       )
                                     : bubble;
-                              },
+                              }),
                             ),
                           AsyncError(:final error) => Center(
                             child: Padding(

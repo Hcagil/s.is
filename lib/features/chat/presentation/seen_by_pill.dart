@@ -47,7 +47,7 @@ class _SeenByPill extends ConsumerWidget {
                       Reader(
                         userId: m.userId,
                         name: people[m.userId]?.name ?? l.commonMember,
-                        time: clockTime(m.readAt!),
+                        time: seenTime(l, m.readAt!, DateTime.now()),
                         avatarPath: people[m.userId]?.avatarPath,
                         groupSlot: people[m.userId]?.slot,
                       ),

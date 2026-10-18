@@ -97,6 +97,7 @@ job_database() {
   step "Edge function tests" edge_tests || return 1
   step "Prepare cache directories" mkdir -p .ci-cache/pub .ci-cache/gradle || return 1
   step "Build development image" "${CI[@]}" build flutter || return 1
+  step "Build the Rust library for the Dart tests" "${CI[@]}" run --rm flutter cargo build --release --manifest-path rust/Cargo.toml || return 1
   step "Wait until Realtime delivers" "${CI[@]}" run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart || return 1
   step "Repository integration tests" integration || return 1
   step "SIS Bot tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_bot_tool_test.sh

@@ -323,5 +323,11 @@ insert into app_private.allowlist(email) values
   -- ben each set their own; neither can touch the other's
   ('al-ana@mail.test'),
   ('al-ben@mail.test'),
+  -- key directory (test/integration/key_directory_seam_test.dart): ana
+  -- publishes, ben finds her by tag and claims; cy is allowlisted and active
+  -- but cannot reach ana, so only the reach gate can refuse her
+  ('kd-ana@mail.test'),
+  ('kd-ben@mail.test'),
+  ('kd-cy@mail.test'),
   ('sis-destek-bot@example.com')
 on conflict do nothing;

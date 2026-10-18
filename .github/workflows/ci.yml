@@ -201,6 +201,10 @@ jobs:
       # would time out on a message published into a pipeline nobody was
       # reading yet. This blocks until it genuinely delivers once -- a
       # readiness gate, not a longer timeout.
+      # test/integration/key_directory_seam_test.dart drives the real Rust
+      # library (vodozemac); RustLib.init() loads it from rust/target/release.
+      - name: Build the Rust library for the Dart tests
+        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo build --release --manifest-path rust/Cargo.toml
       - name: Wait until Realtime delivers
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart
       - name: Repository integration tests

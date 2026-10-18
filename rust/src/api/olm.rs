@@ -1,7 +1,10 @@
 use flutter_rust_bridge::frb;
 
 use vodozemac::olm::{Account, OlmMessage, Session, SessionConfig};
-use vodozemac::Curve25519PublicKey;
+use vodozemac::{
+    olm::{AccountPickle, SessionPickle},
+    Curve25519PublicKey, Ed25519PublicKey, Ed25519Signature,
+};
 
 pub struct OlmAccount {
     inner: Account,
@@ -33,6 +36,90 @@ impl OlmAccount {
     #[frb(sync)]
     pub fn identity_key(&self) -> String {
         self.inner.curve25519_key().to_base64()
+    }
+
+    #[frb(sync)]
+    pub fn ed25519_key(&self) -> String {
+        self.inner.ed25519_key().to_base64()
+    }
+
+    #[frb(sync)]
+    pub fn max_one_time_keys(&self) -> u32 {
+        self.inner.max_number_of_one_time_keys() as u32
+    }
+
+    #[frb(sync)]
+    pub fn stored_one_time_key_count(&self) -> u32 {
+        self.inner.stored_one_time_key_count() as u32
+    }
+
+    #[frb(sync)]
+    pub fn generate_one_time_keys(&mut self, count: u32) -> Vec<String> {
+        self.inner
+            .generate_one_time_keys(count as usize)
+            .created
+            .into_iter()
+            .map(|k| k.to_base64())
+            .collect()
+    }
+
+    #[frb(sync)]
+    pub fn unpublished_one_time_keys(&self) -> Vec<String> {
+        self.inner
+            .one_time_keys()
+            .values()
+            .map(|k| k.to_base64())
+            .collect()
+    }
+
+    #[frb(sync)]
+    pub fn generate_fallback_key(&mut self) {
+        self.inner.generate_fallback_key();
+    }
+
+    #[frb(sync)]
+    pub fn unpublished_fallback_key(&self) -> Option<String> {
+        self.inner
+            .fallback_key()
+            .values()
+            .next()
+            .map(|k| k.to_base64())
+    }
+
+    #[frb(sync)]
+    pub fn forget_fallback_key(&mut self) -> bool {
+        self.inner.forget_fallback_key()
+    }
+
+    #[frb(sync)]
+    pub fn mark_keys_as_published(&mut self) {
+        self.inner.mark_keys_as_published();
+    }
+
+    #[frb(sync)]
+    pub fn sign(&self, message: String) -> String {
+        self.inner.sign(message.as_bytes()).to_base64()
+    }
+
+    #[frb(sync)]
+    pub fn pickle(&self, key: Vec<u8>) -> Result<String, String> {
+        if key.len() != 32 {
+            return Err("invalid key length".to_string());
+        }
+        let k = <[u8; 32]>::try_from(key.as_slice()).unwrap();
+        Ok(self.inner.pickle().encrypt(&k))
+    }
+
+    #[frb(sync)]
+    pub fn from_pickle(pickle: String, key: Vec<u8>) -> Result<OlmAccount, String> {
+        if key.len() != 32 {
+            return Err("invalid key length".to_string());
+        }
+        let k = <[u8; 32]>::try_from(key.as_slice()).unwrap();
+        let p = AccountPickle::from_encrypted(&pickle, &k).map_err(|_| "invalid pickle")?;
+        Ok(OlmAccount {
+            inner: Account::from_pickle(p),
+        })
     }
 
     #[frb(sync)]
@@ -110,6 +197,35 @@ impl OlmSession {
             .map_err(|e| e.to_string())?;
         self.inner.decrypt(&olm_message).map_err(|e| e.to_string())
     }
+
+    #[frb(sync)]
+    pub fn pickle(&self, key: Vec<u8>) -> Result<String, String> {
+        if key.len() != 32 {
+            return Err("invalid key length".to_string());
+        }
+        let k = <[u8; 32]>::try_from(key.as_slice()).unwrap();
+        Ok(self.inner.pickle().encrypt(&k))
+    }
+
+    #[frb(sync)]
+    pub fn from_pickle(pickle: String, key: Vec<u8>) -> Result<OlmSession, String> {
+        if key.len() != 32 {
+            return Err("invalid key length".to_string());
+        }
+        let k = <[u8; 32]>::try_from(key.as_slice()).unwrap();
+        let p = SessionPickle::from_encrypted(&pickle, &k).map_err(|_| "invalid pickle")?;
+        Ok(OlmSession {
+            inner: Session::from_pickle(p),
+        })
+    }
+}
+
+#[frb(sync)]
+pub fn olm_verify(signing_key: String, message: String, signature: String) -> Result<(), String> {
+    let key = Ed25519PublicKey::from_base64(&signing_key).map_err(|_| "invalid signature")?;
+    let sig = Ed25519Signature::from_base64(&signature).map_err(|_| "invalid signature")?;
+    key.verify(message.as_bytes(), &sig)
+        .map_err(|_| "invalid signature".to_string())
 }
 
 #[flutter_rust_bridge::frb(init)]

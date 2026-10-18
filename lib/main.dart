@@ -73,6 +73,11 @@ import 'features/chat/data/supabase_poll_repository.dart';
 import 'features/chat/data/supabase_reaction_repository.dart';
 import 'features/chat/data/supabase_sticker_repository.dart';
 import 'features/chat/data/supabase_contacts_repository.dart';
+import 'features/crypto/application/key_directory_controller.dart';
+import 'features/crypto/data/drift_olm_pickle_store.dart';
+import 'features/crypto/data/olm_key_engine.dart';
+import 'features/crypto/data/pickle_key.dart';
+import 'features/crypto/data/supabase_key_directory.dart';
 import 'features/chat/data/supabase_contact_share_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
 import 'features/chat/data/video_player_playback.dart';
@@ -319,7 +324,11 @@ Future<void> main() async {
               ownerId: ref.watch(currentUserIdProvider) ?? '',
               file: storeFile,
               key: key.loadOrCreate,
-              deleteKey: key.delete,
+              // Sign-out erases both keys: the store key and the Olm pickle key.
+              deleteKey: () async {
+                await key.delete();
+                await const PickleKey().delete();
+              },
             );
             ref.onDispose(store.close);
             builtStore = store;
@@ -335,6 +344,14 @@ Future<void> main() async {
             ref.watch(messageStoreProvider);
             return DriftReadMarkStore(builtStore!);
           }),
+          olmPickleStoreProvider.overrideWith((ref) {
+            // Same rule as the chat list snapshot: rebuilt with every new store.
+            ref.watch(messageStoreProvider);
+            return DriftOlmPickleStore(builtStore!);
+          }),
+          pickleKeyStoreProvider.overrideWithValue(const PickleKey()),
+          keyEngineProvider.overrideWithValue(OlmKeyEngine()),
+          keyDirectoryProvider.overrideWithValue(SupabaseKeyDirectory(client)),
           lastSessionStoreProvider.overrideWithValue(FileLastSessionStore()),
           galleryProvider.overrideWithValue(const PhotoManagerGallery()),
           videoGalleryProvider.overrideWithValue(

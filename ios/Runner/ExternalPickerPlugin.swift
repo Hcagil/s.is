@@ -1,4 +1,5 @@
 import Flutter
+import ImageIO
 import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
@@ -201,6 +202,14 @@ final class ExternalPickerPlugin: NSObject, FlutterPlugin, PHPickerViewControlle
       let bottom = (args?["bottom"] as? NSNumber)?.doubleValue
     else {
       result(FlutterError(code: "bad_args", message: "Missing crop arguments.", details: nil))
+      return
+    }
+    // Missing or non-image input is answered here, at once, never queued behind the worker.
+    guard FileManager.default.isReadableFile(atPath: path),
+      let probe = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil),
+      CGImageSourceGetType(probe) != nil
+    else {
+      result(FlutterError(code: "crop_failed", message: "Could not crop the photo.", details: nil))
       return
     }
     let size = (args?["size"] as? NSNumber)?.intValue ?? 640

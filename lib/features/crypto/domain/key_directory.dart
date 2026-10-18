@@ -30,7 +30,7 @@ final class PublishedStatus {
     required this.oneTimeKeys,
     required this.hasFallback,
     required this.fallbackUsed,
-    this.sameSession = true,
+    required this.sameSession,
   });
   final String identityKey;
   final String signingKey;

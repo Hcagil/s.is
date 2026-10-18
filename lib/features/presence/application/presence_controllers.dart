@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
@@ -159,7 +160,7 @@ class Typing extends Notifier<Set<String>> {
     final shares = ref.read(ownProfileProvider).value?.shareTyping ?? false;
     final channel = _channel;
     if (!shares || channel == null) return;
-    final now = DateTime.now();
+    final now = clock.now();
     final last = _lastSignal;
     if (last != null && now.difference(last) < typingEvery) return;
     _lastSignal = now;

@@ -3,6 +3,7 @@
 // a fake that joins late, refuses, and keeps announcing a channel nobody let
 // go of. Time is the test binding's fake clock, so the linger and throttle
 // windows are exact rather than slept through.
+import 'package:clock/clock.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
@@ -341,36 +342,54 @@ void main() {
       await drain(t);
     });
 
-    // Real time, not the binding's fake clock: the throttle may measure the
-    // wall clock, which a fake clock does not move. That is a legitimate
-    // choice, so the test pays two real seconds rather than dictate it.
+    // The throttle reads package:clock, so a hand-moved clock drives it: no
+    // real waits, nothing for a loaded machine to stretch. Real event-loop
+    // turns only let the fakes' async hops run.
     test('signalTyping sends at most once per typingEvery', () async {
-      final presence = PresenceFake();
-      final c = await scope(presence, ProfileFake(profile: profile()));
-      c.listen(typingProvider, (_, _) {});
-      c.read(openConversationProvider.notifier).open('c1');
-      await c.read(ownProfileProvider.future);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      final channel = presence.typingIn('c1')!;
-      final typing = c.read(typingProvider.notifier);
+      var now = DateTime(2026, 10, 18, 12);
+      await withClock(Clock(() => now), () async {
+        Future<void> hops() async {
+          for (var i = 0; i < 20; i++) {
+            await Future<void>.delayed(Duration.zero);
+          }
+        }
 
-      for (var i = 0; i < 5; i++) {
+        final presence = PresenceFake();
+        final c = await scope(presence, ProfileFake(profile: profile()));
+        c.listen(typingProvider, (_, _) {});
+        c.read(openConversationProvider.notifier).open('c1');
+        await c.read(ownProfileProvider.future);
+        for (var i = 0; i < 250 && presence.typingIn('c1') == null; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
+        final channel = presence.typingIn('c1');
+        expect(channel, isNotNull, reason: 'precondition: channel open');
+        final typing = c.read(typingProvider.notifier);
+
+        for (var i = 0; i < 5; i++) {
+          typing.signalTyping();
+        }
+        await hops();
+        expect(channel!.signals, 1);
+
+        now = now.add(typingEvery - const Duration(milliseconds: 1));
         typing.signalTyping();
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(channel.signals, 1);
+        await hops();
+        expect(channel.signals, 1, reason: 'throttle window too short');
 
-      await Future<void>.delayed(
-        typingEvery - const Duration(milliseconds: 400),
-      );
-      typing.signalTyping();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(channel.signals, 1, reason: 'throttle window too short');
+        now = now.add(const Duration(milliseconds: 1));
+        typing.signalTyping();
+        await hops();
+        expect(
+          channel.signals,
+          2,
+          reason: 'never signals again at typingEvery',
+        );
 
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-      typing.signalTyping();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(channel.signals, 2, reason: 'never signals again');
+        typing.signalTyping();
+        await hops();
+        expect(channel.signals, 2, reason: 'the window did not restart');
+      });
     });
 
     testWidgets('with typing sharing off nothing is sent, and others are '

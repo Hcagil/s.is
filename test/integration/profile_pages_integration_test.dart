@@ -607,14 +607,43 @@ void main() {
 
       // Realtime: a message sent now must reach the group chat on screen.
       final live = _stamp('group after');
+      // A row sent before the reopened chat has joined its channel and done
+      // its reads comes in by a read, not Realtime, and proves nothing. So:
+      // settled on THIS chat's rows (while reloading the state still holds
+      // the 1:1 chat's), the real SDK channel joined again, then a quiet
+      // second for the newest-check read that follows every load.
+      await until(t, () {
+        final s = container.read(messagesProvider);
+        return !s.isLoading &&
+            (s.value?.any((m) => m.body == inGroup) ?? false);
+      }, 'the group chat reloaded');
       await until(
         t,
-        () => container.read(messagesProvider).hasValue,
-        'the group chat reloaded',
+        () => fernClient!.getChannels().any(
+          // ignore: invalid_use_of_internal_member
+          (c) => c.topic == 'realtime:messages:$g' && c.canPush,
+        ),
+        'the group chat joined its Realtime channel again',
       );
-      final sent = await t.runAsync(
-        () => hugo.send(id: randomMessageId(), conversationId: g, body: live),
-      );
+      await t.runAsync(() => Future<void>.delayed(const Duration(seconds: 1)));
+      // Hugo's send is the fixture, not the code under test. CI refused it
+      // once with a retryable "No connection" (run 38357351297), so the test
+      // failed before Realtime was ever asked. The client id makes a resend
+      // idempotent (message_client_id_test), so retry that, bounded.
+      final liveId = randomMessageId();
+      final sent = await t.runAsync(() async {
+        for (var attempt = 1; ; attempt++) {
+          final r = await hugo.send(id: liveId, conversationId: g, body: live);
+          if (r case Err(:final NetworkFailure failure)
+              when failure.retryable && attempt < 3) {
+            // ignore: avoid_print
+            print('hugo send attempt $attempt: ${failure.message}; retrying');
+            await Future<void>.delayed(Duration(milliseconds: 500 * attempt));
+            continue;
+          }
+          return r;
+        }
+      });
       // A refused send is a different failure from a lost Realtime row.
       _ok(sent!, 'hugo sends the live message');
       // On failure: was the row lost before the controller, or only unshown?

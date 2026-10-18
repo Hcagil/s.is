@@ -164,14 +164,19 @@ begin
     return;
   end if;
 
-  -- Only a device bound to the target's live session; a replaced or signed-out
-  -- phone hands out nothing.
+  -- Only a device bound to the target's live session. No live session at all is
+  -- refused (42501); a stale device behind a live session hands out nothing.
   select d.* into dev
     from app_private.olm_devices d
     join app_private.active_sessions s on s.user_id = d.user_id and s.session_id = d.session_id
     join auth.sessions x on x.id = s.session_id and x.user_id = s.user_id
    where d.user_id = target;
   if not found then
+    if not exists (select 1 from app_private.active_sessions s
+                    join auth.sessions x on x.id = s.session_id and x.user_id = s.user_id
+                   where s.user_id = target) then
+      raise exception 'not permitted' using errcode = '42501';
+    end if;
     return;
   end if;
 

@@ -6,10 +6,15 @@ import '../domain/key_engine.dart';
 final class OlmKeyEngine implements KeyEngine {
   static Future<void>? _ready;
 
-  static Future<void> _init() => _ready ??= RustLib.init().catchError((_) {
-    _ready = null;
-    throw const KeyEngineException();
-  });
+  // A failed init is forgotten so the next call retries; success stays memoised.
+  static Future<void> _init() async {
+    try {
+      await (_ready ??= RustLib.init());
+    } catch (_) {
+      _ready = null;
+      throw const KeyEngineException();
+    }
+  }
 
   @override
   Future<KeyAccount> create() async {

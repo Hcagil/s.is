@@ -3,9 +3,10 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:drift/drift.dart';
+import 'package:drift/isolate.dart' show DriftRemoteException;
 import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
-import 'package:sqlite3/sqlite3.dart' show Database;
+import 'package:sqlite3/sqlite3.dart' show Database, SqlError, SqliteException;
 
 import '../../domain/message.dart';
 import '../../domain/message_store.dart';
@@ -207,7 +208,7 @@ final class DriftMessageStore implements MessageStore {
               .into(db.meta)
               .insert(MetaCompanion.insert(key: 'owner_id', value: ownerId));
         } else if (owner.value != ownerId) {
-          throw StateError('other owner');
+          throw const _OtherOwner();
         }
         ok = true;
         return db;
@@ -216,16 +217,27 @@ final class DriftMessageStore implements MessageStore {
       }
     }
 
-    StoreDatabase db;
-    try {
-      db = await attempt();
-    } catch (_) {
-      /* wrong key, other owner, or corrupt: start again from nothing */
-      await _deleteFiles(file);
-      // An erase that came meanwhile must not be answered by a new file.
-      if (seen != _erasures) await _lostToErase(file);
-      db = await attempt();
+    StoreDatabase? opened;
+    var reset = false;
+    for (var tries = 0; opened == null; tries++) {
+      try {
+        opened = await attempt();
+      } catch (e) {
+        if (_unusable(e)) {
+          // Wrong key, not a database, corrupt, or another owner: start again from nothing, once.
+          if (reset) rethrow;
+          reset = true;
+          await _deleteFiles(file);
+          // An erase that came meanwhile must not be answered by a new file.
+          if (seen != _erasures) await _lostToErase(file);
+        } else {
+          // Busy, locked, or a racing opener got there first: a valid store is never deleted, retry.
+          if (tries >= 5) rethrow;
+          await Future<void>.delayed(Duration(milliseconds: 50 * (tries + 1)));
+        }
+      }
     }
+    final db = opened;
     if (seen != _erasures) {
       // A clear() ran while this was opening: the erase wins, remove what was just made.
       await db.close();
@@ -516,6 +528,23 @@ void Function(Database) _keyed(String key) {
       throw StateError('SQLite3 Multiple Ciphers is not loaded');
     }
   };
+}
+
+/// Another owner's store (we threw it ourselves).
+final class _OtherOwner implements Exception {
+  const _OtherOwner();
+}
+
+/// True when the file itself cannot be used, so it may be deleted: another owner, SQLITE_NOTADB (26, wrong key
+/// or not a database) or SQLITE_CORRUPT (11). Anything else (busy, locked, constraint) is a passing failure.
+/// Drift's background isolate may wrap the SqliteException, so look through the wrappers.
+bool _unusable(Object e) {
+  if (e is _OtherOwner) return true;
+  if (e is DriftRemoteException) return _unusable(e.remoteCause);
+  if (e is DriftWrappedException && e.cause != null) return _unusable(e.cause!);
+  return e is SqliteException &&
+      (e.resultCode == SqlError.SQLITE_NOTADB ||
+          e.resultCode == SqlError.SQLITE_CORRUPT);
 }
 
 Future<void> _deleteFiles(File file) async {

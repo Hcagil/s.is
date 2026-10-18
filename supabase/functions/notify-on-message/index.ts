@@ -32,6 +32,8 @@ type Target = {
   // Storage path of a small picture for the notification (a photo's or video's `.t` object); null when none or when the recipient's preview setting hides content. thumb_video marks a video. Absent from an old schema.
   thumb_path?: string | null;
   thumb_video?: boolean;
+  // True for an end-to-end encrypted message: the body is only a placeholder and the app must not offer Reply. Absent from an old schema.
+  encrypted?: boolean;
 };
 
 type ServiceAccount = { client_email: string; private_key: string };
@@ -246,6 +248,7 @@ async function send(id: string): Promise<void> {
               title: t.title,
               body: t.body,
               ...(group ? { sender: t.sender!, chat: t.chat! } : {}),
+              ...(t.encrypted ? { encrypted: 'true' } : {}), // FCM data values are strings
               ...actionData,
               ...(thumbUrl ? { thumb_url: thumbUrl, thumb_kind: t.thumb_video ? 'video' : 'photo' } : {}),
               // Android has no remote badge: the app's own notification sets
@@ -260,7 +263,8 @@ async function send(id: string): Promise<void> {
                         'thread-id': t.conversation_id,
                         // The buttons AppDelegate.swift registers for this
                         // category; an older build has none and shows none.
-                        category: 'SIS_MESSAGE',
+                        // SIS_MESSAGE_LOCKED has no Reply (the text cannot be typed into an encrypted chat).
+                        category: t.encrypted ? 'SIS_MESSAGE_LOCKED' : 'SIS_MESSAGE',
                         sound: 'default',
                         // Lets the iPhone's notification service extension fetch the picture and attach it.
                         ...(thumbUrl ? { 'mutable-content': 1 } : {}),

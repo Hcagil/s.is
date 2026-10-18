@@ -138,7 +138,7 @@ select set_eq(
   $$values ('id'),('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
            ('reply_to'),('forwarded'),('attachment_name'),('attachment_mime'),('attachment_size'),
            ('attachment_duration_ms'),('attachment_waveform'),('voice_transcript'),
-           ('link_preview'),('photo_group')$$,
+           ('link_preview'),('photo_group'),('ciphertext'),('olm_type')$$,
   'authenticated may insert exactly the original five columns plus reply_to, forwarded, id '
   'and the three file columns and the duration');
 select is((select count(*) from information_schema.column_privileges

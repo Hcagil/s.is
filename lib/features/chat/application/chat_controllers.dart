@@ -42,6 +42,7 @@ import '../domain/poll.dart';
 import '../domain/poll_repository.dart';
 import '../domain/reaction.dart';
 import '../domain/reaction_repository.dart';
+import '../domain/read_mark_store.dart';
 import '../domain/read_marks.dart';
 import '../domain/send_queue_store.dart';
 import '../domain/recent_sticker_store.dart';
@@ -197,6 +198,12 @@ final attachmentCacheOwnerProvider = Provider<void>((ref) {
 /// implementation is overridden in main.dart; data/ is the only layer
 /// allowed to import path_provider.
 final chatListSnapshotStoreProvider = Provider<ChatListSnapshotStore>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Where read marks are kept on the phone (seen ticks offline). Overridden in
+/// main.dart; unset in most tests, so callers must tolerate the throw.
+final readMarkStoreProvider = Provider<ReadMarkStore>(
   (_) => throw UnimplementedError('override in main'),
 );
 

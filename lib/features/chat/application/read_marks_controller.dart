@@ -20,6 +20,7 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
     ref.watch(currentUserIdProvider);
     ref.watch(ownProfileProvider.select((p) => p.value?.shareReadStatus));
     if (conversationId == null) return const [];
+    _conversationId = conversationId;
     // Watched: a group discovered to be one the member has left or been
     // removed from (leftConversationGuardProvider) rebuilds this at once and
     // leaves the reads:<id> channel, same reasoning as Typing.build() in
@@ -66,11 +67,35 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
         }
       }),
     );
-    final loaded = switch (await repo.readMarks(conversationId)) {
-      Ok(:final value) => value,
-      Err(:final failure) => throw failure,
-    };
-    return _early.fold<List<ReadMark>>(loaded, _merged);
+    switch (await repo.readMarks(conversationId)) {
+      case Ok(:final value):
+        // The server answer replaces the stored list entirely, so a member who
+        // stopped sharing loses the stored read time.
+        final merged = _early.fold<List<ReadMark>>(value, _merged);
+        unawaited(_save(conversationId, merged));
+        return merged;
+      case Err(:final failure):
+        // Offline: the marks saved on the phone.
+        final stored = await _stored(conversationId);
+        if (stored.isEmpty) throw failure;
+        return _early.fold<List<ReadMark>>(stored, _merged);
+    }
+  }
+
+  String? _conversationId;
+
+  Future<List<ReadMark>> _stored(String id) async {
+    try {
+      return await ref.read(readMarkStoreProvider).load(id);
+    } catch (_) {
+      return const []; // no store configured (tests) or it failed
+    }
+  }
+
+  Future<void> _save(String id, List<ReadMark> marks) async {
+    try {
+      await ref.read(readMarkStoreProvider).save(id, marks);
+    } catch (_) {}
   }
 
   void _saw(ReadMark mark) {
@@ -79,7 +104,9 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
       _early.add(mark);
       return;
     }
-    state = AsyncData(_merged(current, mark));
+    final merged = _merged(current, mark);
+    state = AsyncData(merged);
+    if (_conversationId case final id?) unawaited(_save(id, merged));
   }
 
   static DateTime? _later(DateTime? a, DateTime? b) =>

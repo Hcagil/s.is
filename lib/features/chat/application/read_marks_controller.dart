@@ -13,8 +13,13 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
   // Reads that arrive while a load is on its way, applied once it lands.
   final _early = <ReadMark>[];
 
+  // Bumped at the start of every build; a continuation of an older build
+  // (chat switched, sharing toggled) sees the mismatch and writes nothing.
+  int _gen = 0;
+
   @override
   Future<List<ReadMark>> build() async {
+    final gen = ++_gen;
     _early.clear();
     final conversationId = ref.watch(openConversationProvider);
     ref.watch(currentUserIdProvider);
@@ -44,6 +49,7 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
     // Stored marks first (milliseconds, works offline); the server answer
     // replaces them when it lands.
     final stored = await _stored(conversationId);
+    if (gen != _gen) return const [];
     if (stored.isNotEmpty) {
       state = AsyncData(stored);
       _shown = true;
@@ -52,8 +58,9 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
     // Subscribed before the read, so a read in between is not lost; a
     // failed subscription only costs the live part.
     final updates = await repo.readUpdates(conversationId);
+    if (gen != _gen) return const [];
     if (updates case Ok(:final value)) {
-      final sub = value.listen(_saw);
+      final sub = value.listen((m) => _saw(m, gen));
       ref.onDispose(sub.cancel);
     }
     // Delivery is a separate topic; a failed or slow join only costs the live
@@ -66,7 +73,7 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
     unawaited(
       repo.deliveredUpdates(conversationId).then((delivered) {
         if (delivered case Ok(:final value)) {
-          final sub = value.listen(_saw);
+          final sub = value.listen((m) => _saw(m, gen));
           if (live) {
             ref.onDispose(sub.cancel);
           } else {
@@ -75,7 +82,9 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
         }
       }),
     );
-    switch (await repo.readMarks(conversationId)) {
+    final answer = await repo.readMarks(conversationId);
+    if (gen != _gen) return const [];
+    switch (answer) {
       case Ok(:final value):
         // The server answer replaces the stored list entirely, so a member who
         // stopped sharing loses the stored read time.
@@ -108,7 +117,8 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
     } catch (_) {}
   }
 
-  void _saw(ReadMark mark) {
+  void _saw(ReadMark mark, int gen) {
+    if (gen != _gen) return;
     _early.add(mark); // folded into the server answer when it lands
     final current = state.value;
     if (!_shown || current == null) return;

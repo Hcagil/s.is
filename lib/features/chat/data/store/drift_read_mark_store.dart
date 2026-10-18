@@ -12,8 +12,8 @@ final class DriftReadMarkStore implements ReadMarkStore {
 
   final DriftMessageStore _store;
 
-  static DateTime? _at(int? ms) =>
-      ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+  static DateTime? _at(int? us) =>
+      us == null ? null : DateTime.fromMicrosecondsSinceEpoch(us, isUtc: true);
 
   @override
   Future<List<ReadMark>> load(String conversationId) {
@@ -47,8 +47,8 @@ final class DriftReadMarkStore implements ReadMarkStore {
                 conversationId: conversationId,
                 userId: m.userId,
                 shares: m.shares,
-                readAt: Value(m.readAt?.millisecondsSinceEpoch),
-                deliveredAt: Value(m.deliveredAt?.millisecondsSinceEpoch),
+                readAt: Value(m.readAt?.microsecondsSinceEpoch),
+                deliveredAt: Value(m.deliveredAt?.microsecondsSinceEpoch),
               ),
           ]);
         });

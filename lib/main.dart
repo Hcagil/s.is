@@ -35,6 +35,7 @@ import 'features/chat/data/method_channel_share_intake.dart';
 import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/store/drift_chat_list_snapshot_store.dart';
 import 'features/chat/data/store/drift_message_store.dart';
+import 'features/chat/data/store/drift_read_mark_store.dart';
 import 'features/chat/data/store/legacy_chat_list.dart';
 import 'features/chat/data/store/store_key.dart';
 import 'features/chat/data/store/store_location.dart';
@@ -338,6 +339,10 @@ Future<void> main() async {
             // is built, and that build has just set builtStore.
             ref.watch(messageStoreProvider);
             return DriftChatListSnapshotStore(builtStore!);
+          }),
+          readMarkStoreProvider.overrideWith((ref) {
+            ref.watch(messageStoreProvider);
+            return DriftReadMarkStore(builtStore!);
           }),
           olmPickleStoreProvider.overrideWith((ref) {
             // Same rule as the chat list snapshot: rebuilt with every new store.

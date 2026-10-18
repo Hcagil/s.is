@@ -91,3 +91,23 @@ class Meta extends Table {
   @override
   String get tableName => 'meta';
 }
+
+/// Stored read/delivery mark of one member of one conversation.
+@DataClassName('StoredReadMarkRow')
+class ReadMarks extends Table {
+  TextColumn get conversationId => text()();
+
+  TextColumn get userId => text()();
+
+  BoolColumn get shares => boolean()();
+
+  IntColumn get readAt => integer().nullable()();
+
+  IntColumn get deliveredAt => integer().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {conversationId, userId};
+
+  @override
+  String get tableName => 'read_marks';
+}

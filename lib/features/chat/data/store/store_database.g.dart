@@ -1665,6 +1665,384 @@ class MetaCompanion extends UpdateCompanion<StoredMetaRow> {
   }
 }
 
+class $ReadMarksTable extends ReadMarks
+    with TableInfo<$ReadMarksTable, StoredReadMarkRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ReadMarksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _conversationIdMeta = const VerificationMeta(
+    'conversationId',
+  );
+  @override
+  late final GeneratedColumn<String> conversationId = GeneratedColumn<String>(
+    'conversation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sharesMeta = const VerificationMeta('shares');
+  @override
+  late final GeneratedColumn<bool> shares = GeneratedColumn<bool>(
+    'shares',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("shares" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _readAtMeta = const VerificationMeta('readAt');
+  @override
+  late final GeneratedColumn<int> readAt = GeneratedColumn<int>(
+    'read_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _deliveredAtMeta = const VerificationMeta(
+    'deliveredAt',
+  );
+  @override
+  late final GeneratedColumn<int> deliveredAt = GeneratedColumn<int>(
+    'delivered_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    conversationId,
+    userId,
+    shares,
+    readAt,
+    deliveredAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'read_marks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredReadMarkRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('conversation_id')) {
+      context.handle(
+        _conversationIdMeta,
+        conversationId.isAcceptableOrUnknown(
+          data['conversation_id']!,
+          _conversationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_conversationIdMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('shares')) {
+      context.handle(
+        _sharesMeta,
+        shares.isAcceptableOrUnknown(data['shares']!, _sharesMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sharesMeta);
+    }
+    if (data.containsKey('read_at')) {
+      context.handle(
+        _readAtMeta,
+        readAt.isAcceptableOrUnknown(data['read_at']!, _readAtMeta),
+      );
+    }
+    if (data.containsKey('delivered_at')) {
+      context.handle(
+        _deliveredAtMeta,
+        deliveredAt.isAcceptableOrUnknown(
+          data['delivered_at']!,
+          _deliveredAtMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {conversationId, userId};
+  @override
+  StoredReadMarkRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredReadMarkRow(
+      conversationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}conversation_id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      shares: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}shares'],
+      )!,
+      readAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}read_at'],
+      ),
+      deliveredAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}delivered_at'],
+      ),
+    );
+  }
+
+  @override
+  $ReadMarksTable createAlias(String alias) {
+    return $ReadMarksTable(attachedDatabase, alias);
+  }
+}
+
+class StoredReadMarkRow extends DataClass
+    implements Insertable<StoredReadMarkRow> {
+  final String conversationId;
+  final String userId;
+  final bool shares;
+  final int? readAt;
+  final int? deliveredAt;
+  const StoredReadMarkRow({
+    required this.conversationId,
+    required this.userId,
+    required this.shares,
+    this.readAt,
+    this.deliveredAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['conversation_id'] = Variable<String>(conversationId);
+    map['user_id'] = Variable<String>(userId);
+    map['shares'] = Variable<bool>(shares);
+    if (!nullToAbsent || readAt != null) {
+      map['read_at'] = Variable<int>(readAt);
+    }
+    if (!nullToAbsent || deliveredAt != null) {
+      map['delivered_at'] = Variable<int>(deliveredAt);
+    }
+    return map;
+  }
+
+  ReadMarksCompanion toCompanion(bool nullToAbsent) {
+    return ReadMarksCompanion(
+      conversationId: Value(conversationId),
+      userId: Value(userId),
+      shares: Value(shares),
+      readAt: readAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(readAt),
+      deliveredAt: deliveredAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deliveredAt),
+    );
+  }
+
+  factory StoredReadMarkRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredReadMarkRow(
+      conversationId: serializer.fromJson<String>(json['conversationId']),
+      userId: serializer.fromJson<String>(json['userId']),
+      shares: serializer.fromJson<bool>(json['shares']),
+      readAt: serializer.fromJson<int?>(json['readAt']),
+      deliveredAt: serializer.fromJson<int?>(json['deliveredAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'conversationId': serializer.toJson<String>(conversationId),
+      'userId': serializer.toJson<String>(userId),
+      'shares': serializer.toJson<bool>(shares),
+      'readAt': serializer.toJson<int?>(readAt),
+      'deliveredAt': serializer.toJson<int?>(deliveredAt),
+    };
+  }
+
+  StoredReadMarkRow copyWith({
+    String? conversationId,
+    String? userId,
+    bool? shares,
+    Value<int?> readAt = const Value.absent(),
+    Value<int?> deliveredAt = const Value.absent(),
+  }) => StoredReadMarkRow(
+    conversationId: conversationId ?? this.conversationId,
+    userId: userId ?? this.userId,
+    shares: shares ?? this.shares,
+    readAt: readAt.present ? readAt.value : this.readAt,
+    deliveredAt: deliveredAt.present ? deliveredAt.value : this.deliveredAt,
+  );
+  StoredReadMarkRow copyWithCompanion(ReadMarksCompanion data) {
+    return StoredReadMarkRow(
+      conversationId: data.conversationId.present
+          ? data.conversationId.value
+          : this.conversationId,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      shares: data.shares.present ? data.shares.value : this.shares,
+      readAt: data.readAt.present ? data.readAt.value : this.readAt,
+      deliveredAt: data.deliveredAt.present
+          ? data.deliveredAt.value
+          : this.deliveredAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReadMarkRow(')
+          ..write('conversationId: $conversationId, ')
+          ..write('userId: $userId, ')
+          ..write('shares: $shares, ')
+          ..write('readAt: $readAt, ')
+          ..write('deliveredAt: $deliveredAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(conversationId, userId, shares, readAt, deliveredAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredReadMarkRow &&
+          other.conversationId == this.conversationId &&
+          other.userId == this.userId &&
+          other.shares == this.shares &&
+          other.readAt == this.readAt &&
+          other.deliveredAt == this.deliveredAt);
+}
+
+class ReadMarksCompanion extends UpdateCompanion<StoredReadMarkRow> {
+  final Value<String> conversationId;
+  final Value<String> userId;
+  final Value<bool> shares;
+  final Value<int?> readAt;
+  final Value<int?> deliveredAt;
+  final Value<int> rowid;
+  const ReadMarksCompanion({
+    this.conversationId = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.shares = const Value.absent(),
+    this.readAt = const Value.absent(),
+    this.deliveredAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ReadMarksCompanion.insert({
+    required String conversationId,
+    required String userId,
+    required bool shares,
+    this.readAt = const Value.absent(),
+    this.deliveredAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : conversationId = Value(conversationId),
+       userId = Value(userId),
+       shares = Value(shares);
+  static Insertable<StoredReadMarkRow> custom({
+    Expression<String>? conversationId,
+    Expression<String>? userId,
+    Expression<bool>? shares,
+    Expression<int>? readAt,
+    Expression<int>? deliveredAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (conversationId != null) 'conversation_id': conversationId,
+      if (userId != null) 'user_id': userId,
+      if (shares != null) 'shares': shares,
+      if (readAt != null) 'read_at': readAt,
+      if (deliveredAt != null) 'delivered_at': deliveredAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ReadMarksCompanion copyWith({
+    Value<String>? conversationId,
+    Value<String>? userId,
+    Value<bool>? shares,
+    Value<int?>? readAt,
+    Value<int?>? deliveredAt,
+    Value<int>? rowid,
+  }) {
+    return ReadMarksCompanion(
+      conversationId: conversationId ?? this.conversationId,
+      userId: userId ?? this.userId,
+      shares: shares ?? this.shares,
+      readAt: readAt ?? this.readAt,
+      deliveredAt: deliveredAt ?? this.deliveredAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (conversationId.present) {
+      map['conversation_id'] = Variable<String>(conversationId.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (shares.present) {
+      map['shares'] = Variable<bool>(shares.value);
+    }
+    if (readAt.present) {
+      map['read_at'] = Variable<int>(readAt.value);
+    }
+    if (deliveredAt.present) {
+      map['delivered_at'] = Variable<int>(deliveredAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ReadMarksCompanion(')
+          ..write('conversationId: $conversationId, ')
+          ..write('userId: $userId, ')
+          ..write('shares: $shares, ')
+          ..write('readAt: $readAt, ')
+          ..write('deliveredAt: $deliveredAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$StoreDatabase extends GeneratedDatabase {
   _$StoreDatabase(QueryExecutor e) : super(e);
   $StoreDatabaseManager get managers => $StoreDatabaseManager(this);
@@ -1672,6 +2050,7 @@ abstract class _$StoreDatabase extends GeneratedDatabase {
   late final $ConversationsTable conversations = $ConversationsTable(this);
   late final $SyncStatesTable syncStates = $SyncStatesTable(this);
   late final $MetaTable meta = $MetaTable(this);
+  late final $ReadMarksTable readMarks = $ReadMarksTable(this);
   late final Index messagesConversationCreated = Index(
     'messages_conversation_created',
     'CREATE INDEX messages_conversation_created ON messages (conversation_id, created_at)',
@@ -1685,6 +2064,7 @@ abstract class _$StoreDatabase extends GeneratedDatabase {
     conversations,
     syncStates,
     meta,
+    readMarks,
     messagesConversationCreated,
   ];
 }
@@ -2606,6 +2986,217 @@ typedef $$MetaTableProcessedTableManager =
       StoredMetaRow,
       PrefetchHooks Function()
     >;
+typedef $$ReadMarksTableCreateCompanionBuilder = ReadMarksCompanion Function({
+  required String conversationId,
+  required String userId,
+  required bool shares,
+  Value<int?> readAt,
+  Value<int?> deliveredAt,
+  Value<int> rowid,
+});
+typedef $$ReadMarksTableUpdateCompanionBuilder = ReadMarksCompanion Function({
+  Value<String> conversationId,
+  Value<String> userId,
+  Value<bool> shares,
+  Value<int?> readAt,
+  Value<int?> deliveredAt,
+  Value<int> rowid,
+});
+
+class $$ReadMarksTableFilterComposer
+    extends Composer<_$StoreDatabase, $ReadMarksTable> {
+  $$ReadMarksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get shares => $composableBuilder(
+    column: $table.shares,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get readAt => $composableBuilder(
+    column: $table.readAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deliveredAt => $composableBuilder(
+    column: $table.deliveredAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ReadMarksTableOrderingComposer
+    extends Composer<_$StoreDatabase, $ReadMarksTable> {
+  $$ReadMarksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get shares => $composableBuilder(
+    column: $table.shares,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get readAt => $composableBuilder(
+    column: $table.readAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get deliveredAt => $composableBuilder(
+    column: $table.deliveredAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ReadMarksTableAnnotationComposer
+    extends Composer<_$StoreDatabase, $ReadMarksTable> {
+  $$ReadMarksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<bool> get shares =>
+      $composableBuilder(column: $table.shares, builder: (column) => column);
+
+  GeneratedColumn<int> get readAt =>
+      $composableBuilder(column: $table.readAt, builder: (column) => column);
+
+  GeneratedColumn<int> get deliveredAt => $composableBuilder(
+    column: $table.deliveredAt,
+    builder: (column) => column,
+  );
+}
+
+class $$ReadMarksTableTableManager
+    extends
+        RootTableManager<
+          _$StoreDatabase,
+          $ReadMarksTable,
+          StoredReadMarkRow,
+          $$ReadMarksTableFilterComposer,
+          $$ReadMarksTableOrderingComposer,
+          $$ReadMarksTableAnnotationComposer,
+          $$ReadMarksTableCreateCompanionBuilder,
+          $$ReadMarksTableUpdateCompanionBuilder,
+          (
+            StoredReadMarkRow,
+            BaseReferences<_$StoreDatabase, $ReadMarksTable, StoredReadMarkRow>,
+          ),
+          StoredReadMarkRow,
+          PrefetchHooks Function()
+        > {
+  $$ReadMarksTableTableManager(_$StoreDatabase db, $ReadMarksTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ReadMarksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ReadMarksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ReadMarksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> conversationId = const Value.absent(),
+                Value<String> userId = const Value.absent(),
+                Value<bool> shares = const Value.absent(),
+                Value<int?> readAt = const Value.absent(),
+                Value<int?> deliveredAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ReadMarksCompanion(
+                conversationId: conversationId,
+                userId: userId,
+                shares: shares,
+                readAt: readAt,
+                deliveredAt: deliveredAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String conversationId,
+                required String userId,
+                required bool shares,
+                Value<int?> readAt = const Value.absent(),
+                Value<int?> deliveredAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ReadMarksCompanion.insert(
+                conversationId: conversationId,
+                userId: userId,
+                shares: shares,
+                readAt: readAt,
+                deliveredAt: deliveredAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ReadMarksTable, StoredReadMarkRow>(table),
+                  BaseReferences<
+                    _$StoreDatabase,
+                    $ReadMarksTable,
+                    StoredReadMarkRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ReadMarksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$StoreDatabase,
+      $ReadMarksTable,
+      StoredReadMarkRow,
+      $$ReadMarksTableFilterComposer,
+      $$ReadMarksTableOrderingComposer,
+      $$ReadMarksTableAnnotationComposer,
+      $$ReadMarksTableCreateCompanionBuilder,
+      $$ReadMarksTableUpdateCompanionBuilder,
+      (
+        StoredReadMarkRow,
+        BaseReferences<_$StoreDatabase, $ReadMarksTable, StoredReadMarkRow>,
+      ),
+      StoredReadMarkRow,
+      PrefetchHooks Function()
+    >;
 
 class $StoreDatabaseManager {
   final _$StoreDatabase _db;
@@ -2617,4 +3208,6 @@ class $StoreDatabaseManager {
   $$SyncStatesTableTableManager get syncStates =>
       $$SyncStatesTableTableManager(_db, _db.syncStates);
   $$MetaTableTableManager get meta => $$MetaTableTableManager(_db, _db.meta);
+  $$ReadMarksTableTableManager get readMarks =>
+      $$ReadMarksTableTableManager(_db, _db.readMarks);
 }

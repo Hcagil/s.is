@@ -1472,6 +1472,24 @@ abstract class AppLocalizations {
   /// **'last seen yesterday at {time}'**
   String lastSeenYesterday(String time);
 
+  /// Day chip above the first message of today
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get dayChipToday;
+
+  /// Read time, yesterday
+  ///
+  /// In en, this message translates to:
+  /// **'yesterday at {time}'**
+  String seenYesterdayAt(String time);
+
+  /// Read time on an older day
+  ///
+  /// In en, this message translates to:
+  /// **'{date} at {time}'**
+  String seenDateAt(String date, String time);
+
   /// Last seen on an older date
   ///
   /// In en, this message translates to:

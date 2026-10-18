@@ -751,6 +751,19 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String get dayChipToday => 'Bugün';
+
+  @override
+  String seenYesterdayAt(String time) {
+    return 'dün $time';
+  }
+
+  @override
+  String seenDateAt(String date, String time) {
+    return '$date $time';
+  }
+
+  @override
   String lastSeenDate(String date) {
     return '$date görüldü';
   }

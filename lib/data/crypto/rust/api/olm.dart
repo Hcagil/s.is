@@ -7,6 +7,16 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+void olmVerify({
+  required String signingKey,
+  required String message,
+  required String signature,
+}) => RustLib.instance.api.crateApiOlmOlmVerify(
+  signingKey: signingKey,
+  message: message,
+  signature: signature,
+);
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<OlmAccount>>
 abstract class OlmAccount implements RustOpaqueInterface {
   OlmInbound createInboundSession({
@@ -19,11 +29,41 @@ abstract class OlmAccount implements RustOpaqueInterface {
     required String theirOneTimeKey,
   });
 
+  String ed25519Key();
+
+  bool forgetFallbackKey();
+
+  static OlmAccount fromPickle({
+    required String pickle,
+    required List<int> key,
+  }) => RustLib.instance.api.crateApiOlmOlmAccountFromPickle(
+    pickle: pickle,
+    key: key,
+  );
+
+  void generateFallbackKey();
+
   String generateOneTimeKey();
+
+  List<String> generateOneTimeKeys({required int count});
 
   String identityKey();
 
+  void markKeysAsPublished();
+
+  int maxOneTimeKeys();
+
   factory OlmAccount() => RustLib.instance.api.crateApiOlmOlmAccountNew();
+
+  String pickle({required List<int> key});
+
+  String sign({required String message});
+
+  int storedOneTimeKeyCount();
+
+  String? unpublishedFallbackKey();
+
+  List<String> unpublishedOneTimeKeys();
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<OlmSession>>
@@ -31,6 +71,16 @@ abstract class OlmSession implements RustOpaqueInterface {
   Uint8List decrypt({required OlmCiphertext message});
 
   OlmCiphertext encrypt({required List<int> plaintext});
+
+  static OlmSession fromPickle({
+    required String pickle,
+    required List<int> key,
+  }) => RustLib.instance.api.crateApiOlmOlmSessionFromPickle(
+    pickle: pickle,
+    key: key,
+  );
+
+  String pickle({required List<int> key});
 }
 
 class OlmCiphertext {

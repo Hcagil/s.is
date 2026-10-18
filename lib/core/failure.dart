@@ -126,6 +126,14 @@ final class HiddenEmailFailure extends Failure {
       "SIS needs your real email address. In Apple's sign-in choose Share My Email and try again.";
 }
 
+/// A chat partner's published keys failed their signature check; no session is opened.
+final class DeviceKeysFailure extends Failure {
+  const DeviceKeysFailure();
+
+  @override
+  String get message => 'Could not verify this contact\'s security keys.';
+}
+
 /// Words for any error a screen shows: a Failure's own message, never a raw
 /// SDK error (a platform plugin's text must not reach the member).
 String failureReason(Object error) =>

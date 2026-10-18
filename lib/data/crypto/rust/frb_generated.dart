@@ -69,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1597517293;
+  int get rustContentHash => 1962060524;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -93,11 +93,51 @@ abstract class RustLibApi extends BaseApi {
     required String theirOneTimeKey,
   });
 
+  String crateApiOlmOlmAccountEd25519Key({required OlmAccount that});
+
+  bool crateApiOlmOlmAccountForgetFallbackKey({required OlmAccount that});
+
+  OlmAccount crateApiOlmOlmAccountFromPickle({
+    required String pickle,
+    required List<int> key,
+  });
+
+  void crateApiOlmOlmAccountGenerateFallbackKey({required OlmAccount that});
+
   String crateApiOlmOlmAccountGenerateOneTimeKey({required OlmAccount that});
+
+  List<String> crateApiOlmOlmAccountGenerateOneTimeKeys({
+    required OlmAccount that,
+    required int count,
+  });
 
   String crateApiOlmOlmAccountIdentityKey({required OlmAccount that});
 
+  void crateApiOlmOlmAccountMarkKeysAsPublished({required OlmAccount that});
+
+  int crateApiOlmOlmAccountMaxOneTimeKeys({required OlmAccount that});
+
   OlmAccount crateApiOlmOlmAccountNew();
+
+  String crateApiOlmOlmAccountPickle({
+    required OlmAccount that,
+    required List<int> key,
+  });
+
+  String crateApiOlmOlmAccountSign({
+    required OlmAccount that,
+    required String message,
+  });
+
+  int crateApiOlmOlmAccountStoredOneTimeKeyCount({required OlmAccount that});
+
+  String? crateApiOlmOlmAccountUnpublishedFallbackKey({
+    required OlmAccount that,
+  });
+
+  List<String> crateApiOlmOlmAccountUnpublishedOneTimeKeys({
+    required OlmAccount that,
+  });
 
   Uint8List crateApiOlmOlmSessionDecrypt({
     required OlmSession that,
@@ -109,7 +149,23 @@ abstract class RustLibApi extends BaseApi {
     required List<int> plaintext,
   });
 
+  OlmSession crateApiOlmOlmSessionFromPickle({
+    required String pickle,
+    required List<int> key,
+  });
+
+  String crateApiOlmOlmSessionPickle({
+    required OlmSession that,
+    required List<int> key,
+  });
+
   Future<void> crateApiOlmInitApp();
+
+  void crateApiOlmOlmVerify({
+    required String signingKey,
+    required String message,
+    required String signature,
+  });
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_OlmAccount;
@@ -208,6 +264,124 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  String crateApiOlmOlmAccountEd25519Key({required OlmAccount that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiOlmOlmAccountEd25519KeyConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmAccountEd25519KeyConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmAccount_ed25519_key",
+        argNames: ["that"],
+      );
+
+  @override
+  bool crateApiOlmOlmAccountForgetFallbackKey({required OlmAccount that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiOlmOlmAccountForgetFallbackKeyConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmAccountForgetFallbackKeyConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmAccount_forget_fallback_key",
+        argNames: ["that"],
+      );
+
+  @override
+  OlmAccount crateApiOlmOlmAccountFromPickle({
+    required String pickle,
+    required List<int> key,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(pickle, serializer);
+          sse_encode_list_prim_u_8_loose(key, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiOlmOlmAccountFromPickleConstMeta,
+        argValues: [pickle, key],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmAccountFromPickleConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmAccount_from_pickle",
+        argNames: ["pickle", "key"],
+      );
+
+  @override
+  void crateApiOlmOlmAccountGenerateFallbackKey({required OlmAccount that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiOlmOlmAccountGenerateFallbackKeyConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmAccountGenerateFallbackKeyConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmAccount_generate_fallback_key",
+        argNames: ["that"],
+      );
+
+  @override
   String crateApiOlmOlmAccountGenerateOneTimeKey({required OlmAccount that}) {
     return handler.executeSync(
       SyncTask(
@@ -217,7 +391,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -237,6 +411,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  List<String> crateApiOlmOlmAccountGenerateOneTimeKeys({
+    required OlmAccount that,
+    required int count,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
+            that,
+            serializer,
+          );
+          sse_encode_u_32(count, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiOlmOlmAccountGenerateOneTimeKeysConstMeta,
+        argValues: [that, count],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmAccountGenerateOneTimeKeysConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmAccount_generate_one_time_keys",
+        argNames: ["that", "count"],
+      );
+
+  @override
   String crateApiOlmOlmAccountIdentityKey({required OlmAccount that}) {
     return handler.executeSync(
       SyncTask(
@@ -246,7 +453,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -266,12 +473,70 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  void crateApiOlmOlmAccountMarkKeysAsPublished({required OlmAccount that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiOlmOlmAccountMarkKeysAsPublishedConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmAccountMarkKeysAsPublishedConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmAccount_mark_keys_as_published",
+        argNames: ["that"],
+      );
+
+  @override
+  int crateApiOlmOlmAccountMaxOneTimeKeys({required OlmAccount that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiOlmOlmAccountMaxOneTimeKeysConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmAccountMaxOneTimeKeysConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmAccount_max_one_time_keys",
+        argNames: ["that"],
+      );
+
+  @override
   OlmAccount crateApiOlmOlmAccountNew() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
         },
         codec: SseCodec(
           decodeSuccessData:
@@ -289,6 +554,162 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "OlmAccount_new", argNames: []);
 
   @override
+  String crateApiOlmOlmAccountPickle({
+    required OlmAccount that,
+    required List<int> key,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
+            that,
+            serializer,
+          );
+          sse_encode_list_prim_u_8_loose(key, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiOlmOlmAccountPickleConstMeta,
+        argValues: [that, key],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmAccountPickleConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmAccount_pickle",
+        argNames: ["that", "key"],
+      );
+
+  @override
+  String crateApiOlmOlmAccountSign({
+    required OlmAccount that,
+    required String message,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
+            that,
+            serializer,
+          );
+          sse_encode_String(message, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiOlmOlmAccountSignConstMeta,
+        argValues: [that, message],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmAccountSignConstMeta => const TaskConstMeta(
+    debugName: "OlmAccount_sign",
+    argNames: ["that", "message"],
+  );
+
+  @override
+  int crateApiOlmOlmAccountStoredOneTimeKeyCount({required OlmAccount that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiOlmOlmAccountStoredOneTimeKeyCountConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmAccountStoredOneTimeKeyCountConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmAccount_stored_one_time_key_count",
+        argNames: ["that"],
+      );
+
+  @override
+  String? crateApiOlmOlmAccountUnpublishedFallbackKey({
+    required OlmAccount that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiOlmOlmAccountUnpublishedFallbackKeyConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmAccountUnpublishedFallbackKeyConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmAccount_unpublished_fallback_key",
+        argNames: ["that"],
+      );
+
+  @override
+  List<String> crateApiOlmOlmAccountUnpublishedOneTimeKeys({
+    required OlmAccount that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiOlmOlmAccountUnpublishedOneTimeKeysConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmAccountUnpublishedOneTimeKeysConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmAccount_unpublished_one_time_keys",
+        argNames: ["that"],
+      );
+
+  @override
   Uint8List crateApiOlmOlmSessionDecrypt({
     required OlmSession that,
     required OlmCiphertext message,
@@ -302,7 +723,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_box_autoadd_olm_ciphertext(message, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -335,7 +756,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_list_prim_u_8_loose(plaintext, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_olm_ciphertext,
@@ -355,6 +776,70 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  OlmSession crateApiOlmOlmSessionFromPickle({
+    required String pickle,
+    required List<int> key,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(pickle, serializer);
+          sse_encode_list_prim_u_8_loose(key, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmSession,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiOlmOlmSessionFromPickleConstMeta,
+        argValues: [pickle, key],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmSessionFromPickleConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmSession_from_pickle",
+        argNames: ["pickle", "key"],
+      );
+
+  @override
+  String crateApiOlmOlmSessionPickle({
+    required OlmSession that,
+    required List<int> key,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmSession(
+            that,
+            serializer,
+          );
+          sse_encode_list_prim_u_8_loose(key, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiOlmOlmSessionPickleConstMeta,
+        argValues: [that, key],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmSessionPickleConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmSession_pickle",
+        argNames: ["that", "key"],
+      );
+
+  @override
   Future<void> crateApiOlmInitApp() {
     return handler.executeNormal(
       NormalTask(
@@ -363,7 +848,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 22,
             port: port_,
           );
         },
@@ -380,6 +865,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiOlmInitAppConstMeta =>
       const TaskConstMeta(debugName: "init_app", argNames: []);
+
+  @override
+  void crateApiOlmOlmVerify({
+    required String signingKey,
+    required String message,
+    required String signature,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(signingKey, serializer);
+          sse_encode_String(message, serializer);
+          sse_encode_String(signature, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiOlmOlmVerifyConstMeta,
+        argValues: [signingKey, message, signature],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmVerifyConstMeta => const TaskConstMeta(
+    debugName: "olm_verify",
+    argNames: ["signingKey", "message", "signature"],
+  );
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_OlmAccount => wire
@@ -443,6 +959,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  OlmSession
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmSession(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return OlmSessionImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
   OlmAccount
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
     dynamic raw,
@@ -467,9 +992,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  bool dco_decode_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as bool;
+  }
+
+  @protected
   OlmCiphertext dco_decode_box_autoadd_olm_ciphertext(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_olm_ciphertext(raw);
+  }
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_String).toList();
   }
 
   @protected
@@ -509,6 +1046,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           ),
       plaintext: dco_decode_list_prim_u_8_strict(arr[1]),
     );
+  }
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_String(raw);
   }
 
   @protected
@@ -596,6 +1139,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  OlmSession
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmSession(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return OlmSessionImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
   OlmAccount
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
     SseDeserializer deserializer,
@@ -627,11 +1182,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  bool sse_decode_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
   OlmCiphertext sse_decode_box_autoadd_olm_ciphertext(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_olm_ciphertext(deserializer));
+  }
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <String>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
   }
 
   @protected
@@ -668,6 +1241,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   int sse_decode_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint32();
@@ -694,12 +1278,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
-  }
-
-  @protected
-  bool sse_decode_bool(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8() != 0;
   }
 
   @protected
@@ -769,6 +1347,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmSession(
+    OlmSession self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as OlmSessionImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmAccount(
     OlmAccount self,
     SseSerializer serializer,
@@ -800,12 +1391,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_bool(bool self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
   void sse_encode_box_autoadd_olm_ciphertext(
     OlmCiphertext self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_olm_ciphertext(self, serializer);
+  }
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_String(item, serializer);
+    }
   }
 
   @protected
@@ -848,6 +1454,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_String(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint32(self);
@@ -874,12 +1490,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
-  }
-
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self ? 1 : 0);
   }
 }
 
@@ -920,11 +1530,44 @@ class OlmAccountImpl extends RustOpaque implements OlmAccount {
     theirOneTimeKey: theirOneTimeKey,
   );
 
+  String ed25519Key() =>
+      RustLib.instance.api.crateApiOlmOlmAccountEd25519Key(that: this);
+
+  bool forgetFallbackKey() =>
+      RustLib.instance.api.crateApiOlmOlmAccountForgetFallbackKey(that: this);
+
+  void generateFallbackKey() =>
+      RustLib.instance.api.crateApiOlmOlmAccountGenerateFallbackKey(that: this);
+
   String generateOneTimeKey() =>
       RustLib.instance.api.crateApiOlmOlmAccountGenerateOneTimeKey(that: this);
 
+  List<String> generateOneTimeKeys({required int count}) => RustLib.instance.api
+      .crateApiOlmOlmAccountGenerateOneTimeKeys(that: this, count: count);
+
   String identityKey() =>
       RustLib.instance.api.crateApiOlmOlmAccountIdentityKey(that: this);
+
+  void markKeysAsPublished() =>
+      RustLib.instance.api.crateApiOlmOlmAccountMarkKeysAsPublished(that: this);
+
+  int maxOneTimeKeys() =>
+      RustLib.instance.api.crateApiOlmOlmAccountMaxOneTimeKeys(that: this);
+
+  String pickle({required List<int> key}) =>
+      RustLib.instance.api.crateApiOlmOlmAccountPickle(that: this, key: key);
+
+  String sign({required String message}) => RustLib.instance.api
+      .crateApiOlmOlmAccountSign(that: this, message: message);
+
+  int storedOneTimeKeyCount() => RustLib.instance.api
+      .crateApiOlmOlmAccountStoredOneTimeKeyCount(that: this);
+
+  String? unpublishedFallbackKey() => RustLib.instance.api
+      .crateApiOlmOlmAccountUnpublishedFallbackKey(that: this);
+
+  List<String> unpublishedOneTimeKeys() => RustLib.instance.api
+      .crateApiOlmOlmAccountUnpublishedOneTimeKeys(that: this);
 }
 
 @sealed
@@ -951,4 +1594,7 @@ class OlmSessionImpl extends RustOpaque implements OlmSession {
 
   OlmCiphertext encrypt({required List<int> plaintext}) => RustLib.instance.api
       .crateApiOlmOlmSessionEncrypt(that: this, plaintext: plaintext);
+
+  String pickle({required List<int> key}) =>
+      RustLib.instance.api.crateApiOlmOlmSessionPickle(that: this, key: key);
 }

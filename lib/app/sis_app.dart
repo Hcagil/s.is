@@ -21,6 +21,7 @@ import '../features/chat/application/chat_drafts.dart';
 import '../features/chat/application/group_controller.dart';
 import '../features/chat/application/share_controller.dart';
 import '../features/chat/presentation/share_page.dart';
+import '../features/crypto/application/key_directory_controller.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/notifications/application/badge_controller.dart';
 import '../features/notifications/application/push_controller.dart';
@@ -194,6 +195,7 @@ class _SessionGateState extends ConsumerState<SessionGate> {
         // An unconfirmed session asks the server again at once.
         ref.read(sessionControllerProvider.notifier).recheck();
         ref.read(updateControllerProvider.notifier).recheck();
+        unawaited(ref.read(keyDirectoryControllerProvider.notifier).refresh());
         ref.read(sendQueueProvider.notifier).resumeForeground();
       },
       onHide: () {
@@ -215,6 +217,8 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     if (startupError != null) return StartupFailedScreen(startupError);
 
     final session = ref.watch(sessionControllerProvider);
+    // Publishes this phone's encryption keys once the session is confirmed.
+    ref.watch(keyDirectoryControllerProvider);
     // Held from the start, signed in or not: what another app shared waits
     // here until the member has signed in and picks chats (ShareHost).
     ref.listen(pendingShareProvider, (_, _) {});

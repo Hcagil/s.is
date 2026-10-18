@@ -1,5 +1,5 @@
 begin;
-select plan(145);
+select plan(148);
 
 -- Key directory (Private Chats step 3): publish_olm_keys, claim_olm_keys,
 -- olm_key_status and their three private tables.
@@ -25,7 +25,8 @@ select plan(145);
 --   (claimed_at) so a re-publish cannot make it free again. Empty pool -> the
 --   fallback, is_fallback, repeatedly, fallback_used. 60 calls per hour per
 --   caller and 5 per (caller, target), every passed call counting, RLMT1.
---   status(): own row only, free count, fallback flags; no row when
+--   status(): own row only, free count, fallback flags, same_session (the
+--   row is bound to the caller's JWT session); no row when
 --   unpublished; bot / no access 42501.
 --   Two claims at the same moment (two connections) run in
 --   test/integration/key_directory_seam_test.dart: pgTAP has one connection.
@@ -295,10 +296,18 @@ select is((select count(*)::int from app_private.olm_one_time_keys where user_id
   'publish: the repeat stored no duplicates');
 select is((select device_signature from app_private.olm_devices where user_id = u('sem')), sig('s'),
   'publish: device_signature is stored');
+select test_as(u('sem'));
+select is((select same_session from public.olm_key_status()), true,
+  'status: same_session is true for the session that published');
+reset role;
 -- sem moves to a new phone session; the old one is refused, the new rebinds.
 select test_as(u('sem'), '5e5e0000-0000-0000-0000-0000cde0f010');
 select public.activate_session();
+select is((select same_session::text || ':' || identity_key from public.olm_key_status()), 'false:' || k('s-I'),
+  'status: after the session changed the row is still there, with same_session false');
 select is(try_pub(k('s-I'), k('s-S'), sig('s'), '{}'), 'ok:3', 'publish: an empty list returns the count');
+select is((select same_session from public.olm_key_status()), true,
+  'status: the rebind makes same_session true again');
 reset role;
 select is((select session_id::text from app_private.olm_devices where user_id = u('sem')),
   '5e5e0000-0000-0000-0000-0000cde0f010', 'publish: an empty list rebinds the device to the live session');

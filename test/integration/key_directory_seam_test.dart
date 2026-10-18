@@ -204,6 +204,55 @@ void main() {
     await (again.read(messageStoreProvider) as DriftMessageStore).clear();
     expect(await again.read(olmPickleStoreProvider)!.load(), isNull);
     again.dispose();
+
+    // Same session, pickle gone (store reset): fail closed, no new identity.
+    final lost = _wired(ana, anaDir);
+    expect(await _settled(lost), isA<KeysIdentityLost>());
+    lost.dispose();
+    final still =
+        (await SupabaseKeyDirectory(ana).status()) as Ok<PublishedStatus?>;
+    expect(still.value!.identityKey, row.identityKey);
+    expect(still.value!.sameSession, isTrue);
+
+    // Sign out and back in (a new session, the store starts empty): a new
+    // account is made and published, and the old phone's keys are gone.
+    await ana.auth.signOut();
+    await ana.auth.signInWithPassword(email: 'kd-ana@mail.test', password: _pw);
+    expect(await ana.rpc('activate_session'), isTrue);
+    final before =
+        (await SupabaseKeyDirectory(ana).status()) as Ok<PublishedStatus?>;
+    expect(
+      before.value!.sameSession,
+      isFalse,
+      reason: 'the row is the old session\'s',
+    );
+    final freshDir = await Directory.systemTemp.createTemp('kd-ana2');
+    final fresh = _wired(ana, freshDir);
+    final third = await _settled(fresh);
+    expect(third, isA<KeysReady>());
+    expect(
+      (third as KeysReady).freeOneTimeKeys,
+      50,
+      reason: 'the 47 old free keys were wiped, not added to',
+    );
+    final now =
+        (await SupabaseKeyDirectory(ana).status()) as Ok<PublishedStatus?>;
+    expect(now.value!.identityKey, isNot(row.identityKey));
+    expect(now.value!.sameSession, isTrue);
+    expect(now.value!.oneTimeKeys, 50);
+    final newClaim = await benKeys
+        .read(keyDirectoryControllerProvider.notifier)
+        .claimVerified(anaId);
+    final newKeys = (newClaim as Ok<ClaimedKeys?>).value!;
+    expect(newKeys.identityKey, now.value!.identityKey);
+    expect(newKeys.isFallback, isFalse);
+    expect([
+      keys.oneTimeKey,
+      two[0].oneTimeKey,
+      two[1].oneTimeKey,
+    ], isNot(contains(newKeys.oneTimeKey)));
+    fresh.dispose();
+    await freshDir.delete(recursive: true);
     benKeys.dispose();
   });
 }

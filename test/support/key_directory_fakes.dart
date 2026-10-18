@@ -243,6 +243,7 @@ PublishedStatus serverRow({
   int free = 50,
   bool hasFallback = true,
   bool fallbackUsed = false,
+  bool sameSession = true,
   int id = 1,
 }) => PublishedStatus(
   identityKey: 'IDENTITY-$id',
@@ -250,4 +251,5 @@ PublishedStatus serverRow({
   oneTimeKeys: free,
   hasFallback: hasFallback,
   fallbackUsed: fallbackUsed,
+  sameSession: sameSession,
 );

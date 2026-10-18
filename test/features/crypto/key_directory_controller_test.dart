@@ -124,11 +124,11 @@ void main() {
     },
   );
 
-  testWidgets('server has a device but the phone has no pickle: IdentityLost', (
+  testWidgets('no pickle and a server row of this same session: IdentityLost', (
     t,
   ) async {
     final r = _Rig();
-    r.dir.statusAnswers.add(Ok(serverRow()));
+    r.dir.statusAnswers.add(Ok(serverRow(sameSession: true)));
     await r.start(t);
 
     expect(r.state, isA<KeysIdentityLost>());
@@ -136,6 +136,28 @@ void main() {
     expect(r.dir.publishes, isEmpty);
     expect(r.store.savedHistory, isEmpty);
   });
+
+  testWidgets(
+    'no pickle and a server row of another session (new sign-in): new account',
+    (t) async {
+      final r = _Rig();
+      r.dir.statusAnswers.add(Ok(serverRow(sameSession: false)));
+      await r.start(t);
+
+      expect(r.engine.created, 1);
+      expect(r.log.sublist(0, 2), ['status', 'create']);
+      final p = r.dir.publishes.single;
+      expect(p.oneTimeKeys, hasLength(50));
+      expect(p.fallbackKey, isNotNull);
+      expect(r.store.savedHistory, isNotEmpty);
+      expect(
+        r.log.indexOf('save'),
+        lessThan(r.log.indexOf('publish:50:fb')),
+        reason: 'the new account is saved before it is published',
+      );
+      expect(r.state, isA<KeysReady>());
+    },
+  );
 
   testWidgets('a pickle that cannot be read: IdentityLost, no new account', (
     t,

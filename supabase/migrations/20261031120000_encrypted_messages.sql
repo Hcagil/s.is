@@ -7,8 +7,9 @@
 -- seeing the text. A ciphertext row carries nothing else that could leak
 -- content: no link card, attachment, poll, contact, sticker, album or place.
 --
---  * A plain text insert into a conversation that already has a ciphertext row
---    is refused (ENCR1): a downgrade cannot survive a reinstall.
+--  * A member's plain text insert into a conversation that has held ciphertext
+--    (conversations.encrypted_at, kept even after the ciphertext rows are
+--    deleted) is refused (ENCR1): a downgrade cannot survive a reinstall.
 --  * Only a direct human chat may hold ciphertext (a member could otherwise
 --    lock a group's plain text), and a bot may not send it.
 --  * olm_identity(target): the sender's published keys for the receiver to
@@ -39,6 +40,13 @@ alter table public.messages
 create index messages_ciphertext_idx on public.messages (conversation_id)
   where ciphertext is not null;
 
+-- Set once by the guard on the first ciphertext insert; no client grant; it
+-- survives deleting the ciphertext rows.
+alter table public.conversations add column encrypted_at timestamptz;
+update public.conversations c set encrypted_at = now()
+ where exists (select 1 from public.messages m
+                where m.conversation_id = c.id and m.ciphertext is not null);
+
 -- Column-level insert grants are cumulative (20261027120000_photo_albums.sql).
 grant insert (ciphertext, olm_type) on public.messages to authenticated;
 
@@ -50,21 +58,34 @@ create function app_private.messages_ciphertext_guard() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
   if new.ciphertext is not null then
-    if not exists (select 1 from public.conversations c
+    if app_private.is_bot(new.sender_id)
+       or not exists (select 1 from public.conversations c
                     where c.id = new.conversation_id
                       and c.direct_key is not null and not c.system and not c.admin_chat)
        or exists (select 1 from public.conversation_members cm
                    where cm.conversation_id = new.conversation_id
-                     and app_private.is_bot(cm.user_id)) then
+                     and app_private.is_bot(cm.user_id))
+       or exists (select 1 from public.conversation_members cm
+                   where cm.conversation_id = new.conversation_id
+                     and cm.left_at is null
+                     and not exists (select 1 from app_private.olm_devices d
+                                     join app_private.active_sessions s
+                                       on s.user_id = d.user_id and s.session_id = d.session_id
+                                     join auth.sessions x
+                                       on x.id = s.session_id and x.user_id = s.user_id
+                                     where d.user_id = cm.user_id)) then
       raise exception 'not permitted' using errcode = '42501';
     end if;
+    update public.conversations set encrypted_at = coalesce(encrypted_at, now())
+     where id = new.conversation_id;
     return new;
   end if;
   if new.attachment_path is null and new.sticker_id is null and not new.sticker_album
      and not new.poll and not new.contact and new.location_lat is null
      and new.admin_msg is null
-     and exists (select 1 from public.messages m
-                  where m.conversation_id = new.conversation_id and m.ciphertext is not null) then
+     and app_private.is_member(new.conversation_id)
+     and exists (select 1 from public.conversations c
+                  where c.id = new.conversation_id and c.encrypted_at is not null) then
     raise exception 'conversation is encrypted' using errcode = 'ENCR1';
   end if;
   return new;
@@ -76,7 +97,8 @@ create trigger messages_ciphertext_guard before insert on public.messages
 -- The sender's published device keys, for the receiver to check the
 -- self-signature against the sender's user id. Same gates as claim_olm_keys;
 -- uses no one-time key and writes nothing. No rows for a bot or a stale
--- device. Errors: 42501 not permitted (also: target has no live session).
+-- device. Errors: 42501 not permitted. No rows when the target is a bot or has
+-- no live session.
 create function public.olm_identity(target uuid)
 returns table (identity_key text, signing_key text, device_signature text)
 language plpgsql stable security definer set search_path = '' as $$
@@ -100,11 +122,6 @@ begin
     join auth.sessions x on x.id = s.session_id and x.user_id = s.user_id
    where d.user_id = target;
   if not found then
-    if not exists (select 1 from app_private.active_sessions s
-                    join auth.sessions x on x.id = s.session_id and x.user_id = s.user_id
-                   where s.user_id = target) then
-      raise exception 'not permitted' using errcode = '42501';
-    end if;
     return;
   end if;
   return query select dev.identity_key, dev.signing_key, dev.device_signature;
@@ -357,8 +374,8 @@ begin
        or app_private.is_system_conversation(p_conversation) then
       raise exception 'not permitted' using errcode = '42501';
     end if;
-    if exists (select 1 from public.messages m
-                where m.conversation_id = p_conversation and m.ciphertext is not null) then
+    if exists (select 1 from public.conversations c
+                where c.id = p_conversation and c.encrypted_at is not null) then
       raise exception 'not permitted' using errcode = '42501';
     end if;
     insert into public.messages(id, conversation_id, sender_id, body)

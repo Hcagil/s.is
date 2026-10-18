@@ -83,6 +83,7 @@ final class SupabaseKeyDirectory implements KeyDirectory {
           oneTimeKeys: r['one_time_keys'] as int,
           hasFallback: r['has_fallback'] as bool,
           fallbackUsed: r['fallback_used'] as bool,
+          sameSession: r['same_session'] as bool,
         ),
       );
     } on PostgrestException catch (e) {

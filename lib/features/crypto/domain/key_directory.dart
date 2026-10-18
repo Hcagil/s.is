@@ -30,6 +30,7 @@ final class PublishedStatus {
     required this.oneTimeKeys,
     required this.hasFallback,
     required this.fallbackUsed,
+    this.sameSession = true,
   });
   final String identityKey;
   final String signingKey;
@@ -38,6 +39,9 @@ final class PublishedStatus {
   final int oneTimeKeys;
   final bool hasFallback;
   final bool fallbackUsed;
+
+  /// The server row is bound to this very session (false after a sign-out and sign-in, or on a new phone).
+  final bool sameSession;
 }
 
 /// The key directory on the server (RPCs publish_olm_keys, claim_olm_keys, olm_key_status).

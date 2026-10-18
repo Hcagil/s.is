@@ -202,10 +202,12 @@ grant execute on function public.claim_olm_keys(uuid) to authenticated;
 
 -- The caller's own device row: lets the phone top up, and tell a first run
 -- from an identity reset (a server row but no key on the phone).
--- No row = nothing published. Errors: 42501 not permitted.
+-- No row = nothing published. same_session = the row is bound to this session.
+-- Errors: 42501 not permitted.
 create or replace function public.olm_key_status()
 returns table (has_device boolean, identity_key text, signing_key text,
-               one_time_keys integer, has_fallback boolean, fallback_used boolean)
+               one_time_keys integer, has_fallback boolean, fallback_used boolean,
+               same_session boolean)
 language plpgsql stable security definer set search_path = '' as $$
 begin
   if app_private.is_bot(auth.uid()) or not app_private.has_app_access() then
@@ -215,7 +217,8 @@ begin
     select true, d.identity_key, d.signing_key,
            (select count(*)::int from app_private.olm_one_time_keys k
              where k.user_id = d.user_id and k.claimed_at is null),
-           d.fallback_key is not null, d.fallback_used
+           d.fallback_key is not null, d.fallback_used,
+           d.session_id = app_private.jwt_session_id()
       from app_private.olm_devices d where d.user_id = auth.uid();
 end $$;
 revoke all on function public.olm_key_status() from public, anon;

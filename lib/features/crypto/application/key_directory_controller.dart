@@ -115,7 +115,7 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
     if (!alive()) return;
     KeyAccount account;
     if (saved == null) {
-      // No pickle: first run, or a lost one. The server decides which; never create silently over an existing server row.
+      // No pickle: first run, a lost one, or a new sign-in. A server row bound to this same session means the key is lost; never create silently over it.
       final st = await dir.status();
       if (!alive()) return;
       switch (st) {
@@ -125,7 +125,7 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
         case Err():
           _scheduleRetry(userId, rev);
           return;
-        case Ok(:final value) when value != null:
+        case Ok(:final value) when value != null && value.sameSession:
           state = const KeysIdentityLost();
           return;
         case Ok():

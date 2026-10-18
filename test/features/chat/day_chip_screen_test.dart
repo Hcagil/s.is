@@ -7,8 +7,10 @@
 //    and a bubble keeps its element (its state) when a new message arrives.
 // Run under TZ=JST-9 like every unit test.
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
+import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
@@ -24,11 +26,16 @@ String hm(DateTime at) =>
 
 final oldDay = DateTime(2024, 3, 4, 10, 0);
 
+const longName = Member(
+  userId: 'u4',
+  displayName: 'Bartholomew Alexander Montgomery-Featherstonehaugh',
+);
+
 ChatFake world(List<Message> messages, {List<ReadMark> marks = const []}) =>
     ChatFake(self: me.userId)
       ..history['c1'] = messages
-      ..roster['c1'] = [me, bob, cem]
-      ..membersResult = const Ok([bob, cem])
+      ..roster['c1'] = [me, bob, cem, longName]
+      ..membersResult = const Ok([bob, cem, longName])
       ..readMarksData['c1'] = marks
       ..conversationsResult = const Ok([Conversation(id: 'c1', title: 'Bob')]);
 
@@ -48,6 +55,39 @@ List<String> textsIn(WidgetTester t, Finder of) => [
       in find.descendant(of: of, matching: find.byType(RichText)).evaluate())
     (e.widget as RichText).text.toPlainText(),
 ];
+
+/// The painted box of a chip (its DecoratedBox) and of a bubble (the first
+/// DecoratedBox under `message-<id>`), in global coordinates.
+Rect painted(WidgetTester t, Finder f) {
+  final box =
+      find
+              .descendant(of: f, matching: find.byType(DecoratedBox))
+              .evaluate()
+              .first
+              .renderObject!
+          as RenderBox;
+  return box.localToGlobal(Offset.zero) & box.size;
+}
+
+Finder chipOf(String label) =>
+    find.ancestor(of: find.text(label), matching: find.byType(DayChip));
+
+/// Opens m1 (mine) and its readers card.
+Future<Finder> openReaders(WidgetTester t, List<ReadMark> marks) async {
+  await open(
+    t,
+    world([
+      chatMessage('m1', body: 'mine', from: me.userId, createdAt: oldDay),
+    ], marks: marks),
+  );
+  await t.tap(find.byKey(const ValueKey('body-m1')));
+  await t.pumpAndSettle();
+  await t.tap(find.byKey(const ValueKey('seen-by-m1')));
+  await t.pumpAndSettle();
+  final card = find.byKey(const ValueKey('readers-card'));
+  expect(card, findsOneWidget, reason: 'fixture: the card opened');
+  return card;
+}
 
 void drained(String description, WidgetTesterCallback body) =>
     testWidgets(description, (t) async {
@@ -101,13 +141,17 @@ void main() {
     ]) {
       final texts = textsIn(t, bubble(id));
       expect(
-        texts.any((s) => s.contains(hm(at))),
-        isTrue,
-        reason: 'bubble $id shows ${hm(at)}: $texts',
+        texts,
+        contains(hm(at)),
+        reason: 'bubble $id shows ${hm(at)} as its own text: $texts',
       );
+      expect(texts.where((s) => s.contains(hm(at))), [
+        hm(at),
+      ], reason: 'the time text is HH:mm and nothing else: $texts');
       expect(
         texts.any(
           (s) =>
+              RegExp(r'\d{1,2}[./-]\d{1,2}').hasMatch(s) ||
               s.contains('2024') ||
               s.contains('Mar') ||
               s.contains('Today') ||
@@ -119,31 +163,40 @@ void main() {
     }
   });
 
-  drained('the readers card shows the read time by day', (t) async {
-    final yesterday = DateTime(now.year, now.month, now.day - 1, 14, 32);
+  drained('8 px from each painted chip to the painted bubble above and '
+      'below it', (t) async {
     await open(
       t,
-      world(
-        [chatMessage('m1', body: 'mine', from: me.userId, createdAt: oldDay)],
-        marks: [
-          ReadMark(
-            userId: bob.userId,
-            shares: true,
-            readAt: DateTime(2024, 3, 4, 14, 32),
-          ),
-          ReadMark(userId: cem.userId, shares: true, readAt: yesterday),
-        ],
-      ),
+      world([
+        chatMessage('o1', body: 'old one', createdAt: oldDay),
+        chatMessage('n1', body: 'new one', createdAt: todayAt),
+      ]),
     );
-    await t.tap(find.byKey(const ValueKey('body-m1')));
-    await t.pumpAndSettle();
-    await t.tap(find.byKey(const ValueKey('seen-by-m1')));
-    await t.pumpAndSettle();
-    final card = find.byKey(const ValueKey('readers-card'));
-    expect(card, findsOneWidget, reason: 'fixture: the card opened');
+    final old = painted(t, chipOf('March 4, 2024'));
+    final today = painted(t, chipOf('Today'));
+    final o1 = painted(t, bubble('o1'));
+    final n1 = painted(t, bubble('n1'));
+    expect(o1.top - old.bottom, moreOrLessEquals(8, epsilon: 0.01));
+    expect(today.top - o1.bottom, moreOrLessEquals(8, epsilon: 0.01));
+    expect(n1.top - today.bottom, moreOrLessEquals(8, epsilon: 0.01));
+  });
 
+  drained('the readers card shows the read time by day, under the name', (
+    t,
+  ) async {
+    final yesterday = DateTime(now.year, now.month, now.day - 1, 14, 32);
+    final card = await openReaders(t, [
+      ReadMark(
+        userId: bob.userId,
+        shares: true,
+        readAt: DateTime(2024, 3, 4, 14, 32),
+      ),
+      ReadMark(userId: cem.userId, shares: true, readAt: yesterday),
+    ]);
+    expect(t.takeException(), isNull, reason: 'no overflow');
     final bobRow = find.byKey(ValueKey('reader-${bob.userId}'));
     final cemRow = find.byKey(ValueKey('reader-${cem.userId}'));
+    expect(find.descendant(of: card, matching: bobRow), findsOneWidget);
     expect(
       textsIn(t, bobRow),
       contains('04.03.24 at 14:32'),
@@ -154,6 +207,57 @@ void main() {
       contains('yesterday at 14:32'),
       reason: 'a read yesterday',
     );
+    for (final (row, name, time) in [
+      (bobRow, 'Bob', '04.03.24 at 14:32'),
+      (cemRow, 'Cem', 'yesterday at 14:32'),
+    ]) {
+      final n = t.getRect(find.descendant(of: row, matching: find.text(name)));
+      final r = t.getRect(find.descendant(of: row, matching: find.text(time)));
+      expect(
+        r.top,
+        greaterThanOrEqualTo(n.bottom),
+        reason: '$time under $name',
+      );
+    }
+  });
+
+  drained('a long name and "04.03.24 at 14:32" fit on one line each, no '
+      'overflow', (t) async {
+    await openReaders(t, [
+      ReadMark(
+        userId: longName.userId,
+        shares: true,
+        readAt: DateTime(2024, 3, 4, 14, 32),
+      ),
+    ]);
+    expect(t.takeException(), isNull, reason: 'no overflow');
+    final row = find.byKey(ValueKey('reader-${longName.userId}'));
+    final name = find.descendant(
+      of: row,
+      matching: find.text(longName.displayName),
+    );
+    final time = find.descendant(
+      of: row,
+      matching: find.text('04.03.24 at 14:32'),
+    );
+    expect(name, findsOneWidget);
+    expect(time, findsOneWidget);
+    final card = t.getRect(find.byKey(const ValueKey('readers-card')));
+    for (final f in [name, time]) {
+      final r = t.getRect(f);
+      expect(r.right, lessThanOrEqualTo(card.right + 0.5), reason: 'inside');
+      expect(
+        t
+            .renderObject<RenderParagraph>(
+              find.descendant(of: f, matching: find.byType(RichText)),
+            )
+            .size
+            .height,
+        lessThan(30),
+        reason: 'one line',
+      );
+    }
+    expect(t.getRect(time).top, greaterThanOrEqualTo(t.getRect(name).bottom));
   });
 
   drained('a bubble keeps its element when a new message arrives, also when '

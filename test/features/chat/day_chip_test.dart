@@ -2,7 +2,8 @@
 // builder (reversed list, index 0 = newest; index timeline.length = the
 // "loading older" row) gets one day chip above the first message of every
 // local day, the very first message included; none between same-day
-// messages and none on the loading row; 8 px above and below the chip.
+// messages and none on the loading row. (The 8 px gap is measured on the
+// real screen, day_chip_screen_test.)
 // Run under TZ=JST-9 like every unit test.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -175,36 +176,6 @@ void main() {
       lessThanOrEqualTo(t.getRect(chipAbove(t, 'a1')!).top),
       reason: 'the loader sits above the oldest chip, not inside the list',
     );
-  });
-
-  testWidgets('8 px between the chip and the rows above and below it', (
-    t,
-  ) async {
-    await pumpList(t, timelineOf([('a1', on(d1, 9, 0)), ('b1', on(d2, 9, 0))]));
-    final chip = chipAbove(t, 'b1')!;
-    // The painted chip: the outermost decorated box around its text.
-    final text = t.getRect(
-      find.descendant(of: chip, matching: find.byType(Text)),
-    );
-    final pill = find
-        .descendant(
-          of: chip,
-          matching: find.byWidgetPredicate(
-            (w) =>
-                w is DecoratedBox ||
-                w is Material ||
-                w is PhysicalModel ||
-                w is PhysicalShape,
-          ),
-        )
-        .evaluate()
-        .map((e) => t.getRect(find.byWidget(e.widget)))
-        .where((r) => r.contains(text.center))
-        .toList();
-    expect(pill, isNotEmpty, reason: 'fixture: the chip paints a box');
-    final box = pill.first;
-    expect(box.top - t.getRect(row('a1')).bottom, moreOrLessEquals(8));
-    expect(t.getRect(row('b1')).top - box.bottom, moreOrLessEquals(8));
   });
 
   testWidgets('DayChip shows dayChipLabel against its own now', (t) async {

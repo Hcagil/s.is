@@ -262,4 +262,29 @@ void main() {
       );
     });
   });
+
+  group('gaps the draft missed', () {
+    test('yesterday is the calendar day, not the last 24 hours', () {
+      final now = DateTime(2026, 10, 18, 20, 0);
+      final at = DateTime(2026, 10, 17, 8, 0); // 36 h ago, still yesterday
+      expect(seenTime(en, at, now), 'yesterday at 08:00');
+      expect(seenTime(tr, at, now), 'dün 08:00');
+    });
+
+    // 15:01Z on the 16th is the 17th under JST-9: the date shown is local.
+    final atUtc = DateTime.utc(2026, 10, 16, 15, 1);
+    final now = DateTime(2026, 10, 25, 12);
+    final day = atUtc.toLocal().day;
+    final hm = '${two(atUtc.toLocal().hour)}:${two(atUtc.toLocal().minute)}';
+
+    test('the chip date is the local date of a UTC time', () {
+      expect(dayChipLabel(en, atUtc, now), 'October $day');
+      expect(dayChipLabel(tr, atUtc, now), '$day Ekim');
+    });
+
+    test('the read date is the local date of a UTC time', () {
+      expect(seenTime(en, atUtc, now), 'Oct $day at $hm');
+      expect(seenTime(tr, atUtc, now), '$day Eki $hm');
+    });
+  });
 }

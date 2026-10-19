@@ -18,7 +18,8 @@ import 'package:sis/features/crypto/domain/key_directory.dart';
 import 'package:sis/features/crypto/domain/key_engine.dart';
 
 /// Every call any fake saw, in order: 'status', 'create', 'restore',
-/// 'gen:N', 'fallback', 'mark', 'save', 'publish:N' (+ ':fb' with a fallback).
+/// 'gen:N', 'fallback', 'mark', 'update', 'save' (a pickle stored by update),
+/// 'save-direct', 'publish:N' (+ ':fb' with a fallback).
 typedef KeyLog = List<String>;
 
 /// A session the test drives: starts as [initial], [set] moves it.
@@ -114,9 +115,16 @@ class FakeEngine implements KeyEngine {
   /// The account a pickle holds, without logging (for assertions).
   static FakeAccount? peek(String? pickle) => _pickles[pickle]?.$1;
 
+  /// How many of the next creates throw KeyEngineException.
+  int failCreates = 0;
+
   @override
   Future<KeyAccount> create() async {
     _log.add('create');
+    if (failCreates > 0) {
+      failCreates--;
+      throw const KeyEngineException();
+    }
     return FakeAccount(_log, ++created);
   }
 
@@ -218,9 +226,24 @@ class FakePickleStore implements OlmPickleStore {
   @override
   Future<String?> load() async => saved;
 
+  /// Direct saves (outside [update]); the controller must not make any.
+  int directSaves = 0;
+
+  /// Runs inside the next [update] before [change] sees the pickle: another
+  /// writer of the account that committed first (an inbound session, a second
+  /// run). Cleared after one use.
+  void Function()? beforeNextUpdate;
+
+  /// How many of the next updates fail: [change] runs, then the transaction
+  /// rolls back (nothing stored) and update returns false.
+  int failNextUpdate = 0;
+
+  Future<void> _tx = Future<void>.value();
+
   @override
   Future<bool> save(String pickle) async {
-    _log.add('save');
+    directSaves++;
+    _log.add('save-direct');
     if (failNext > 0) {
       failNext--;
       return false;
@@ -228,6 +251,41 @@ class FakePickleStore implements OlmPickleStore {
     saved = pickle;
     savedHistory.add(pickle);
     return true;
+  }
+
+  /// One transaction at a time, as the real store: read, change, save.
+  /// Logs 'update', and 'save' when a pickle was stored.
+  @override
+  Future<bool> update(Future<String?> Function(String? current) change) {
+    final run = _tx.then((_) async {
+      _log.add('update');
+      final hook = beforeNextUpdate;
+      beforeNextUpdate = null;
+      hook?.call();
+      await Future<void>.value(); // an async hop, as a real read has
+      final String? next;
+      try {
+        next = await change(saved);
+      } catch (_) {
+        return false; // the transaction rolls back
+      }
+      if (failNextUpdate > 0) {
+        failNextUpdate--;
+        return false;
+      }
+      if (next != null) {
+        if (failNext > 0) {
+          failNext--;
+          return false;
+        }
+        _log.add('save');
+        saved = next;
+        savedHistory.add(next);
+      }
+      return true;
+    });
+    _tx = run.then((_) {}, onError: (_) {});
+    return run;
   }
 }
 

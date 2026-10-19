@@ -69,41 +69,56 @@ String publishedPickle({int stored = 50, int id = 1}) {
 }
 
 void main() {
-  testWidgets(
-    'first confirmed sign-in: create, save, publish, mark, save; Ready(50)',
-    (t) async {
-      final r = _Rig();
-      await r.start(t);
+  testWidgets('first confirmed sign-in: create+save in one update, publish, '
+      'mark+save in another; Ready(50)', (t) async {
+    final r = _Rig();
+    await r.start(t);
 
-      // The order that matters: the account exists before anything is saved,
-      // the pickle is saved before publishing, marked after, saved again.
-      expect(r.log.sublist(0, 2), ['status', 'create']);
-      expect(r.log.sublist(2, 4), unorderedEquals(['gen:50', 'fallback']));
-      expect(r.log.sublist(4, 8), ['save', 'publish:50:fb', 'mark', 'save']);
-      expect(r.engine.created, 1);
-      final p = r.dir.publishes.single;
-      expect(p.identityKey, 'IDENTITY-1');
-      expect(p.signingKey, 'SIGNING-1');
-      expect(p.oneTimeKeys.toSet(), hasLength(50));
-      expect(p.fallbackKey, isNotNull);
-      expect(
-        p.deviceSignature,
-        'sig[1](${deviceStatement('u1', 'IDENTITY-1', 'SIGNING-1')})',
-        reason: 'the device signature is the account signing deviceStatement',
-      );
-      // The pickle saved before publishing holds exactly the keys sent, so a
-      // crash after publish re-sends the same set.
-      final first = FakeEngine.peek(r.store.savedHistory.first)!;
-      expect(first.unpublishedOneTimeKeys, p.oneTimeKeys);
-      expect(first.unpublishedFallbackKey, p.fallbackKey);
-      // The pickle saved after marking holds no unpublished keys.
-      final last = FakeEngine.peek(r.store.saved)!;
-      expect(last.unpublishedOneTimeKeys, isEmpty);
-      expect(last.unpublishedFallbackKey, isNull);
-      expect(r.state, isA<KeysReady>());
-      expect((r.state as KeysReady).freeOneTimeKeys, 50);
-    },
-  );
+    // The order that matters: the account is created and saved inside one
+    // update before anything is published; the publish reads a snapshot in
+    // a second update (no save), and a third update restores the STORED
+    // account, marks it and saves it.
+    expect(r.log.sublist(0, 3), ['status', 'update', 'create']);
+    expect(r.log.sublist(3, 5), unorderedEquals(['gen:50', 'fallback']));
+    expect(r.log.sublist(5, 13), [
+      'save',
+      'update',
+      'restore',
+      'publish:50:fb',
+      'update',
+      'restore',
+      'mark',
+      'save',
+    ]);
+    expect(
+      r.log.sublist(13).where((e) => e == 'save' || e.startsWith('gen:')),
+      isEmpty,
+      reason: 'nothing to refill: no extra save',
+    );
+    expect(r.store.directSaves, 0, reason: 'every save goes through update');
+    expect(r.engine.created, 1);
+    final p = r.dir.publishes.single;
+    expect(p.identityKey, 'IDENTITY-1');
+    expect(p.signingKey, 'SIGNING-1');
+    expect(p.oneTimeKeys.toSet(), hasLength(50));
+    expect(p.fallbackKey, isNotNull);
+    expect(
+      p.deviceSignature,
+      'sig[1](${deviceStatement('u1', 'IDENTITY-1', 'SIGNING-1')})',
+      reason: 'the device signature is the account signing deviceStatement',
+    );
+    // The pickle saved before publishing holds exactly the keys sent, so a
+    // crash after publish re-sends the same set.
+    final first = FakeEngine.peek(r.store.savedHistory.first)!;
+    expect(first.unpublishedOneTimeKeys, p.oneTimeKeys);
+    expect(first.unpublishedFallbackKey, p.fallbackKey);
+    // The pickle saved after marking holds no unpublished keys.
+    final last = FakeEngine.peek(r.store.saved)!;
+    expect(last.unpublishedOneTimeKeys, isEmpty);
+    expect(last.unpublishedFallbackKey, isNull);
+    expect(r.state, isA<KeysReady>());
+    expect((r.state as KeysReady).freeOneTimeKeys, 50);
+  });
 
   testWidgets(
     'second start: restores the pickle and re-publishes an empty list',
@@ -145,11 +160,12 @@ void main() {
       await r.start(t);
 
       expect(r.engine.created, 1);
-      expect(r.log.sublist(0, 2), ['status', 'create']);
+      expect(r.log.sublist(0, 3), ['status', 'update', 'create']);
       final p = r.dir.publishes.single;
       expect(p.oneTimeKeys, hasLength(50));
       expect(p.fallbackKey, isNotNull);
       expect(r.store.savedHistory, isNotEmpty);
+      expect(r.store.directSaves, 0);
       expect(
         r.log.indexOf('save'),
         lessThan(r.log.indexOf('publish:50:fb')),
@@ -174,6 +190,8 @@ void main() {
       'garbled',
       reason: 'the old pickle is not overwritten',
     );
+    expect(r.store.savedHistory, isEmpty);
+    expect(r.store.directSaves, 0);
   });
 
   testWidgets(
@@ -253,6 +271,81 @@ void main() {
     expect(r.state, isA<KeysReady>());
   });
 
+  testWidgets('a failed update: nothing is published, Retrying', (t) async {
+    final r = _Rig();
+    r.store.failNextUpdate = 1;
+    await r.start(t);
+    expect(r.state, isA<KeysRetrying>());
+    expect(r.dir.publishes, isEmpty);
+    expect(r.store.savedHistory, isEmpty);
+  });
+
+  testWidgets('engine.create throws: Retrying, nothing saved, then recovers', (
+    t,
+  ) async {
+    final r = _Rig();
+    r.engine.failCreates = 1;
+    await r.start(t);
+    expect(r.state, isA<KeysRetrying>());
+    expect(r.dir.publishes, isEmpty);
+    expect(r.store.savedHistory, isEmpty);
+
+    await t.pump(sessionRetryDelays[0] + const Duration(milliseconds: 50));
+    await settle(t);
+    expect(r.state, isA<KeysReady>());
+    expect(r.dir.publishes, hasLength(1));
+  });
+
+  testWidgets('a pickle that appeared meanwhile: no new account over it', (
+    t,
+  ) async {
+    final r = _Rig();
+    // Another writer stores an account after the status call and before the
+    // controller's update reads the store.
+    r.store.beforeNextUpdate = () => r.store.saved = publishedPickle(id: 7);
+    await r.start(t);
+
+    for (final saved in r.store.savedHistory) {
+      expect(FakeEngine.peek(saved)!.id, 7, reason: 'overwritten');
+    }
+    expect(FakeEngine.peek(r.store.saved)!.id, 7);
+    expect(r.log.where((e) => e.startsWith('gen:')), isEmpty);
+    expect(
+      r.dir.publishes.map((p) => p.identityKey),
+      everyElement('IDENTITY-7'),
+    );
+  });
+
+  testWidgets(
+    'a one-time key consumed during publish stays consumed after mark',
+    (t) async {
+      final r = _Rig();
+      final paused = Completer<Result<int>>();
+      r.dir.publishAnswers.add(paused.future);
+      await r.start(t);
+      expect(r.dir.publishes, hasLength(1));
+      expect(r.log.last, 'publish:50:fb', reason: 'publish is paused');
+
+      // An inbound session consumes a key through the store meanwhile.
+      final inbound = r.store.update((current) async {
+        final a =
+            await r.engine.restore(current!, FakePickleKeys.key) as FakeAccount;
+        a.storedOneTimeKeyCount = 49;
+        return a.pickle(FakePickleKeys.key);
+      });
+      await settle(t);
+      expect(await inbound, isTrue);
+
+      paused.complete(const Ok(50));
+      await settle(t);
+      expect(r.state, isA<KeysReady>());
+      final last = FakeEngine.peek(r.store.saved)!;
+      expect(last.storedOneTimeKeyCount, 49, reason: 'snapshot saved over it');
+      expect(last.unpublishedOneTimeKeys, isEmpty);
+      expect(r.store.directSaves, 0);
+    },
+  );
+
   testWidgets('DeniedFailure on publish: Idle and no retry', (t) async {
     final r = _Rig();
     r.dir.publishAnswers.add(const Err(DeniedFailure()));
@@ -286,8 +379,12 @@ void main() {
       await r.start(t);
 
       expect(r.log, contains('gen:20'));
+      expect(r.dir.publishes, hasLength(2), reason: 'rebind, then refill');
+      expect(r.dir.publishes.first.oneTimeKeys, isEmpty);
       final p = r.dir.publishes.last;
       expect(p.oneTimeKeys, hasLength(20));
+      expect(FakeEngine.peek(r.store.saved)!.unpublishedOneTimeKeys, isEmpty);
+      expect(r.store.directSaves, 0);
       expect(p.fallbackKey, isNull, reason: 'the fallback was not used');
       expect(r.state, isA<KeysReady>());
     },
@@ -302,6 +399,12 @@ void main() {
 
       expect(r.log.where((e) => e.startsWith('gen:')), isEmpty);
       expect(r.dir.publishes.every((p) => p.oneTimeKeys.isEmpty), isTrue);
+      expect(r.dir.publishes, hasLength(1), reason: 'nothing to republish');
+      expect(
+        r.log.where((e) => e == 'save'),
+        hasLength(1),
+        reason: 'only the markPublished save',
+      );
     });
   }
 
@@ -314,6 +417,7 @@ void main() {
     await r.start(t);
 
     expect(r.log, contains('fallback'));
+    expect(r.dir.publishes, hasLength(2));
     expect(r.dir.publishes.last.fallbackKey, isNotNull);
   });
 
@@ -327,6 +431,7 @@ void main() {
 
     expect(r.log.where((e) => e.startsWith('gen:')), isEmpty);
     expect(r.dir.publishes.every((p) => p.oneTimeKeys.isEmpty), isTrue);
+    expect(r.dir.publishes, hasLength(1), reason: 'nothing to republish');
   });
 
   testWidgets('sign-out cancels the retry timer', (t) async {

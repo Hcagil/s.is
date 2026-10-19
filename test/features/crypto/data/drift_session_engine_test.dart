@@ -10,6 +10,8 @@ import 'package:drift/drift.dart' show Variable, driftRuntimeOptions;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
+import 'package:sis/features/chat/data/store/drift_send_queue_store.dart';
+import 'package:sis/features/chat/domain/send_queue_store.dart';
 import 'package:sis/features/crypto/data/drift_olm_pickle_store.dart';
 import 'package:sis/features/crypto/data/drift_session_engine.dart';
 import 'package:sis/features/crypto/data/olm_key_engine.dart';
@@ -166,7 +168,9 @@ void main() {
   /// Alice opens a session to Bob and locks [text]; the first message.
   Future<LockedText> first([String text = 'merhaba']) async {
     ok(await alice.engine.createOutbound('bob', bob.keys()));
-    return ok(await alice.engine.encrypt('bob', text));
+    return ok(
+      await alice.engine.encrypt('bob', text, peerIdentityKey: bob.identityKey),
+    );
   }
 
   Future<Result<String>> bobOpens(
@@ -192,7 +196,17 @@ void main() {
   /// A session both ways: Bob opened Alice's first message and Alice his reply.
   Future<void> established() async {
     ok(await bobOpens(await first()));
-    ok(await aliceOpens(ok(await bob.engine.encrypt('alice', 'selam'))));
+    ok(
+      await aliceOpens(
+        ok(
+          await bob.engine.encrypt(
+            'alice',
+            'selam',
+            peerIdentityKey: alice.identityKey,
+          ),
+        ),
+      ),
+    );
   }
 
   group('round trip', () {
@@ -202,7 +216,13 @@ void main() {
       final id = ok(await alice.engine.createOutbound('bob', bob.keys()));
       expect(await alice.engine.hasSession('bob'), isTrue);
 
-      final m = ok(await alice.engine.encrypt('bob', 'merhaba dünya'));
+      final m = ok(
+        await alice.engine.encrypt(
+          'bob',
+          'merhaba dünya',
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
       expect(m.olmType, 0, reason: 'first message must be pre-key');
       expect(m.sessionId, id);
       expect(m.ciphertext, isNot(contains('merhaba')));
@@ -235,11 +255,23 @@ void main() {
 
     test('a reply switches to type 1, both ways', () async {
       ok(await bobOpens(await first()));
-      final reply = ok(await bob.engine.encrypt('alice', 'selam'));
+      final reply = ok(
+        await bob.engine.encrypt(
+          'alice',
+          'selam',
+          peerIdentityKey: alice.identityKey,
+        ),
+      );
       expect(reply.olmType, 1, reason: 'inbound side sends normal');
       expect(ok(await aliceOpens(reply)), 'selam');
 
-      final after = ok(await alice.engine.encrypt('bob', 'nasılsın'));
+      final after = ok(
+        await alice.engine.encrypt(
+          'bob',
+          'nasılsın',
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
       expect(after.olmType, 1, reason: 'reply received: no more pre-key');
       expect(ok(await bobOpens(after)), 'nasılsın');
     });
@@ -248,7 +280,13 @@ void main() {
       'before any reply every message stays pre-key and each opens',
       () async {
         final a = await first('bir');
-        final b = ok(await alice.engine.encrypt('bob', 'iki'));
+        final b = ok(
+          await alice.engine.encrypt(
+            'bob',
+            'iki',
+            peerIdentityKey: bob.identityKey,
+          ),
+        );
         expect(b.olmType, 0);
         expect(b.sessionId, a.sessionId);
         expect(ok(await bobOpens(a)), 'bir');
@@ -261,7 +299,13 @@ void main() {
       await established();
       final ms = [
         for (final t in ['m1', 'm2', 'm3', 'm4'])
-          ok(await alice.engine.encrypt('bob', t)),
+          ok(
+            await alice.engine.encrypt(
+              'bob',
+              t,
+              peerIdentityKey: bob.identityKey,
+            ),
+          ),
       ];
       expect(ok(await bobOpens(ms[3])), 'm4');
       expect(ok(await bobOpens(ms[0])), 'm1');
@@ -273,7 +317,13 @@ void main() {
   group('failures', () {
     test('no session: decrypt type 1 and encrypt are SessionPending', () async {
       await established();
-      final m = ok(await alice.engine.encrypt('bob', 'x'));
+      final m = ok(
+        await alice.engine.encrypt(
+          'bob',
+          'x',
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
       // Bob's phone that never saw the first message.
       final fresh = await Phone.make('bob2');
       final r = await fresh.engine.decrypt(
@@ -284,7 +334,13 @@ void main() {
       );
       expect(err(r), isA<SessionPendingFailure>());
       expect(
-        err(await fresh.engine.encrypt('alice', 'x')),
+        err(
+          await fresh.engine.encrypt(
+            'alice',
+            'x',
+            peerIdentityKey: alice.identityKey,
+          ),
+        ),
         isA<SessionPendingFailure>(),
       );
       expect(await fresh.sessions(), isEmpty);
@@ -293,7 +349,13 @@ void main() {
     test('duplicate delivery of a normal message is Unreadable, nothing '
         'written', () async {
       await established();
-      final m = ok(await alice.engine.encrypt('bob', 'bir kez'));
+      final m = ok(
+        await alice.engine.encrypt(
+          'bob',
+          'bir kez',
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
       expect(ok(await bobOpens(m)), 'bir kez');
       final before = await bob.snapshot();
       expect(err(await bobOpens(m)), isA<UnreadableMessageFailure>());
@@ -313,7 +375,13 @@ void main() {
         'real message still opens', () async {
       await established();
       await bob.placeholder('m1');
-      final m = ok(await alice.engine.encrypt('bob', 'gizli'));
+      final m = ok(
+        await alice.engine.encrypt(
+          'bob',
+          'gizli',
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
       final before = await bob.snapshot();
       for (final at in [-1, 10]) {
         final bad = LockedText(
@@ -397,12 +465,24 @@ void main() {
 
     test('a session id that belongs to another peer is never used', () async {
       await established();
-      final normal = ok(await alice.engine.encrypt('bob', 'x'));
+      final normal = ok(
+        await alice.engine.encrypt(
+          'bob',
+          'x',
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
       expect(normal.olmType, 1);
       final pre = await first('ikinci oturum');
       ok(await bobOpens(pre));
       // Not yet delivered to Bob; its session id is stored, for Alice.
-      final pre2 = ok(await alice.engine.encrypt('bob', 'üçüncü'));
+      final pre2 = ok(
+        await alice.engine.encrypt(
+          'bob',
+          'üçüncü',
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
       expect(pre2.olmType, 0);
       expect(pre2.sessionId, pre.sessionId);
       final before = await bob.snapshot();
@@ -428,7 +508,13 @@ void main() {
       await established();
       ok(await bobOpens(await first('ikinci')));
       expect(await bob.sessions(), hasLength(2));
-      final m = ok(await alice.engine.encrypt('bob', 'x'));
+      final m = ok(
+        await alice.engine.encrypt(
+          'bob',
+          'x',
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
       final before = await bob.snapshot();
       final bad = LockedText(
         ciphertext: tamper(m.ciphertext),
@@ -476,21 +562,39 @@ void main() {
         await established();
         final s1 = (await bob.sessions()).single['session_id'];
         // Alice locks one on S1, then opens S2.
-        final onS1 = ok(await alice.engine.encrypt('bob', 'eski'));
+        final onS1 = ok(
+          await alice.engine.encrypt(
+            'bob',
+            'eski',
+            peerIdentityKey: bob.identityKey,
+          ),
+        );
         expect(onS1.sessionId, s1);
         final onS2 = await first('yeni');
         expect(onS2.sessionId, isNot(s1));
 
         expect(ok(await bobOpens(onS2)), 'yeni');
         expect(
-          ok(await bob.engine.encrypt('alice', 'a')).sessionId,
+          ok(
+            await bob.engine.encrypt(
+              'alice',
+              'a',
+              peerIdentityKey: alice.identityKey,
+            ),
+          ).sessionId,
           onS2.sessionId,
           reason: 'S2 is the newest used',
         );
 
         expect(ok(await bobOpens(onS1)), 'eski', reason: 'older session tried');
         expect(
-          ok(await bob.engine.encrypt('alice', 'b')).sessionId,
+          ok(
+            await bob.engine.encrypt(
+              'alice',
+              'b',
+              peerIdentityKey: alice.identityKey,
+            ),
+          ).sessionId,
           s1,
           reason: 'S1 now newest used (lastUsedAt saved on decrypt)',
         );
@@ -526,6 +630,7 @@ void main() {
         await alice.engine.encrypt(
           'bob',
           'gönderdim',
+          peerIdentityKey: bob.identityKey,
           save: const PlaintextSave('s1', 'gönderdim'),
         ),
       );
@@ -576,7 +681,13 @@ void main() {
           'message still opens later', () async {
         await established();
         await bob.placeholder('m2');
-        final m = ok(await alice.engine.encrypt('bob', 'tekrar'));
+        final m = ok(
+          await alice.engine.encrypt(
+            'bob',
+            'tekrar',
+            peerIdentityKey: bob.identityKey,
+          ),
+        );
         await bob.exec(
           'CREATE TRIGGER fail_tx $trigger BEGIN '
           "SELECT RAISE(ABORT, 'forced'); END",
@@ -618,6 +729,7 @@ void main() {
           await alice.engine.encrypt(
             'bob',
             'x',
+            peerIdentityKey: bob.identityKey,
             save: const PlaintextSave('s1', 'x'),
           ),
         ),
@@ -640,12 +752,24 @@ void main() {
       final b1 = await bob.accountPickle();
       expect(b1, isNot(b0), reason: 'one-time key consumed but not saved');
 
-      final again = ok(await alice.engine.encrypt('bob', 'iki'));
+      final again = ok(
+        await alice.engine.encrypt(
+          'bob',
+          'iki',
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
       expect(again.olmType, 0);
       ok(await bobOpens(again));
       expect(await bob.accountPickle(), b1, reason: 'no new key consumed');
 
-      final reply = ok(await bob.engine.encrypt('alice', 'r'));
+      final reply = ok(
+        await bob.engine.encrypt(
+          'alice',
+          'r',
+          peerIdentityKey: alice.identityKey,
+        ),
+      );
       ok(await aliceOpens(reply));
       expect(await bob.accountPickle(), b1, reason: 'encrypt');
       expect(await alice.accountPickle(), a0, reason: 'normal decrypt');
@@ -653,7 +777,13 @@ void main() {
       // createInbound directly, on a second session from Carol.
       final carol = await Phone.make('carol');
       ok(await carol.engine.createOutbound('bob', bob.keys()));
-      final c = ok(await carol.engine.encrypt('bob', 'c'));
+      final c = ok(
+        await carol.engine.encrypt(
+          'bob',
+          'c',
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
       ok(
         await bob.engine.createInbound(
           peerUserId: 'carol',
@@ -663,6 +793,415 @@ void main() {
         ),
       );
       expect(await bob.accountPickle(), isNot(b1), reason: 'createInbound');
+    });
+  });
+
+  /// The identity keys of [phone]'s stored sessions with [peer], sorted.
+  Future<List<String>> keysOf(Phone phone, String peer) async => [
+    for (final r in await phone.sessions())
+      if (r['peer_user_id'] == peer) r['peer_identity_key']! as String,
+  ]..sort();
+
+  Future<void> blockSessionWrites(Phone p) async {
+    await p.exec(
+      'CREATE TRIGGER fail_tx BEFORE INSERT ON olm_sessions BEGIN '
+      "SELECT RAISE(ABORT, 'forced'); END",
+    );
+    await p.exec(
+      'CREATE TRIGGER fail_tx2 BEFORE UPDATE ON olm_sessions BEGIN '
+      "SELECT RAISE(ABORT, 'forced'); END",
+    );
+  }
+
+  Future<void> unblock(Phone p) async {
+    await p.exec('DROP TRIGGER IF EXISTS fail_tx');
+    await p.exec('DROP TRIGGER IF EXISTS fail_tx2');
+  }
+
+  group('identity-key bound sessions', () {
+    test('encrypt with a key no stored session has is SessionPending, '
+        'nothing written', () async {
+      final carol = await Phone.make('carol');
+      ok(await alice.engine.createOutbound('bob', bob.keys()));
+      final before = await alice.snapshot();
+      expect(
+        err(
+          await alice.engine.encrypt(
+            'bob',
+            'x',
+            peerIdentityKey: carol.identityKey,
+            save: const PlaintextSave('s1', 'x'),
+          ),
+        ),
+        isA<SessionPendingFailure>(),
+      );
+      expect(await alice.snapshot(), before);
+    });
+
+    test('decrypt type 1 with only another key\'s sessions is SessionPending, '
+        'nothing written; the right key opens it', () async {
+      final carol = await Phone.make('carol');
+      await established();
+      final reply = ok(
+        await bob.engine.encrypt(
+          'alice',
+          'ikinci',
+          peerIdentityKey: alice.identityKey,
+        ),
+      );
+      expect(reply.olmType, 1);
+      final before = await alice.snapshot();
+      final r = await alice.engine.decrypt(
+        peerUserId: 'bob',
+        peerIdentityKey: carol.identityKey,
+        ciphertext: reply.ciphertext,
+        olmType: 1,
+      );
+      expect(err(r), isA<SessionPendingFailure>());
+      expect(await alice.snapshot(), before);
+      expect(ok(await aliceOpens(reply)), 'ikinci');
+    });
+
+    test('a type 0 whose stored session has another key is Unreadable, '
+        'nothing written', () async {
+      final carol = await Phone.make('carol');
+      ok(await bobOpens(await first()));
+      final again = ok(
+        await alice.engine.encrypt(
+          'bob',
+          'tekrar',
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
+      expect(again.olmType, 0, reason: 'no reply yet: same pre-key session');
+      final before = await bob.snapshot();
+      expect(
+        err(await bobOpens(again, identityKey: carol.identityKey)),
+        isA<UnreadableMessageFailure>(),
+      );
+      expect(await bob.snapshot(), before);
+      expect(ok(await bobOpens(again)), 'tekrar');
+    });
+
+    test(
+      'createOutbound deletes only that peer\'s rows of another key',
+      () async {
+        final carol = await Phone.make('carol');
+        ok(await alice.engine.createOutbound('bob', bob.keys()));
+        ok(await alice.engine.createOutbound('bob', bob.keys()));
+        ok(await alice.engine.createOutbound('carol', carol.keys()));
+        expect(await keysOf(alice, 'bob'), [
+          bob.identityKey,
+          bob.identityKey,
+        ], reason: 'rows of the same key are kept');
+
+        final bob2 = await Phone.make('bob'); // Bob reinstalled: new identity
+        expect(bob2.identityKey, isNot(bob.identityKey));
+        ok(await alice.engine.createOutbound('bob', bob2.keys()));
+        expect(await keysOf(alice, 'bob'), [bob2.identityKey]);
+        expect(await keysOf(alice, 'carol'), [carol.identityKey]);
+      },
+    );
+
+    test(
+      'a failed createOutbound deletes nothing (bad keys, store failure)',
+      () async {
+        ok(await alice.engine.createOutbound('bob', bob.keys()));
+        final bob2 = await Phone.make('bob');
+        final before = await alice.snapshot();
+
+        final good = bob2.keys();
+        final forged = ClaimedKeys(
+          identityKey: good.identityKey,
+          signingKey: good.signingKey,
+          deviceSignature: alice.keys().deviceSignature,
+          oneTimeKey: good.oneTimeKey,
+          isFallback: false,
+        );
+        expect(
+          err(await alice.engine.createOutbound('bob', forged)),
+          isA<DeviceKeysFailure>(),
+        );
+        expect(await alice.snapshot(), before);
+
+        // Signed correctly, but the one-time key does not fit: fails in the tx.
+        final bogus = ClaimedKeys(
+          identityKey: good.identityKey,
+          signingKey: good.signingKey,
+          deviceSignature: good.deviceSignature,
+          oneTimeKey: 'not-a-key',
+          isFallback: false,
+        );
+        expect(
+          err(await alice.engine.createOutbound('bob', bogus)),
+          isA<DeviceKeysFailure>(),
+        );
+        expect(await alice.snapshot(), before);
+        await blockSessionWrites(alice);
+        expect(
+          err(await alice.engine.createOutbound('bob', bob2.keys())),
+          isA<SessionStoreFailure>(),
+        );
+        await unblock(alice);
+        expect(
+          await alice.snapshot(),
+          before,
+          reason: 'the delete rolled back',
+        );
+      },
+    );
+
+    for (final viaDecrypt in [true, false]) {
+      final how = viaDecrypt ? 'decrypt type 0' : 'createInbound';
+      test('a new inbound session ($how) deletes only that peer\'s rows of '
+          'another key; a failed one deletes nothing', () async {
+        final carol = await Phone.make('carol');
+        ok(await bobOpens(await first()));
+        ok(await carol.engine.createOutbound('bob', bob.keys()));
+        ok(
+          await bob.engine.decrypt(
+            peerUserId: 'carol',
+            peerIdentityKey: carol.identityKey,
+            ciphertext: ok(
+              await carol.engine.encrypt(
+                'bob',
+                'c',
+                peerIdentityKey: bob.identityKey,
+              ),
+            ).ciphertext,
+            olmType: 0,
+          ),
+        );
+        expect(await keysOf(bob, 'alice'), [alice.identityKey]);
+
+        final alice2 = await Phone.make('alice'); // Alice reinstalled
+        ok(await alice2.engine.createOutbound('bob', bob.keys()));
+        final m = ok(
+          await alice2.engine.encrypt(
+            'bob',
+            'yeni',
+            peerIdentityKey: bob.identityKey,
+          ),
+        );
+        Future<Result<String>> open(String ciphertext) => viaDecrypt
+            ? bob.engine.decrypt(
+                peerUserId: 'alice',
+                peerIdentityKey: alice2.identityKey,
+                ciphertext: ciphertext,
+                olmType: 0,
+              )
+            : bob.engine.createInbound(
+                peerUserId: 'alice',
+                peerIdentityKey: alice2.identityKey,
+                ciphertext: ciphertext,
+                olmType: 0,
+              );
+
+        final before = await bob.snapshot();
+        expect(
+          err(await open(tamper(m.ciphertext))),
+          isA<UnreadableMessageFailure>(),
+        );
+        expect(await bob.snapshot(), before, reason: 'unreadable: no delete');
+
+        await blockSessionWrites(bob);
+        expect(err(await open(m.ciphertext)), isA<Failure>());
+        await unblock(bob);
+        expect(await bob.snapshot(), before, reason: 'the delete rolled back');
+
+        expect(ok(await open(m.ciphertext)), 'yeni');
+        expect(await keysOf(bob, 'alice'), [alice2.identityKey]);
+        expect(await keysOf(bob, 'carol'), [carol.identityKey]);
+      });
+    }
+
+    test('peer reinstall: SessionPending, createOutbound, a new session that '
+        'works both ways', () async {
+      await established();
+      final bob2 = await Phone.make('bob');
+
+      // The directory now gives Bob's new key (checked with verifyDevice).
+      expect(
+        err(
+          await alice.engine.encrypt(
+            'bob',
+            'merhaba',
+            peerIdentityKey: bob2.identityKey,
+          ),
+        ),
+        isA<SessionPendingFailure>(),
+      );
+      ok(await alice.engine.createOutbound('bob', bob2.keys()));
+      final m = ok(
+        await alice.engine.encrypt(
+          'bob',
+          'merhaba',
+          peerIdentityKey: bob2.identityKey,
+        ),
+      );
+      expect(m.olmType, 0);
+      final opened = await bob2.engine.decrypt(
+        peerUserId: 'alice',
+        peerIdentityKey: alice.identityKey,
+        ciphertext: m.ciphertext,
+        olmType: 0,
+      );
+      expect(ok(opened), 'merhaba');
+      final reply = ok(
+        await bob2.engine.encrypt(
+          'alice',
+          'selam',
+          peerIdentityKey: alice.identityKey,
+        ),
+      );
+      expect(reply.olmType, 1);
+      final back = await alice.engine.decrypt(
+        peerUserId: 'bob',
+        peerIdentityKey: bob2.identityKey,
+        ciphertext: reply.ciphertext,
+        olmType: 1,
+      );
+      expect(ok(back), 'selam');
+      expect(await keysOf(alice, 'bob'), [bob2.identityKey]);
+    });
+  });
+
+  group('ciphertext to the send queue in the session transaction', () {
+    Future<void> enqueue(Phone p, String userId, String id) =>
+        DriftSendQueueStore(p.store).save(userId, [
+          QueuedRecord(
+            id: id,
+            conversationId: 'c1',
+            createdAt: DateTime.utc(2026, 3, 1),
+            body: 'x',
+          ),
+        ]);
+
+    Future<List<String>> queueRows(Phone p) => p.store.run(
+      const ['store closed'],
+      (db) async => [
+        for (final r
+            in await db
+                .customSelect(
+                  'SELECT user_id, id, position, record, ciphertext, olm_type '
+                  'FROM send_queue ORDER BY user_id, id',
+                )
+                .get())
+          '${r.data}',
+      ],
+    );
+
+    test('the ciphertext and olmType land on that row only', () async {
+      ok(await alice.engine.createOutbound('bob', bob.keys()));
+      await enqueue(alice, 'alice', 'q1');
+      await enqueue(alice, 'other', 'q1');
+      final m = ok(
+        await alice.engine.encrypt(
+          'bob',
+          'kuyruk',
+          peerIdentityKey: bob.identityKey,
+          queue: const QueueTarget('alice', 'q1'),
+        ),
+      );
+      final stored = await DriftSendQueueStore(alice.store)
+          .ciphertextOf('alice', 'q1');
+      expect(stored?.ciphertext, m.ciphertext);
+      expect(stored?.olmType, m.olmType);
+      expect(
+        await DriftSendQueueStore(alice.store).ciphertextOf('other', 'q1'),
+        isNull,
+      );
+      expect(ok(await bobOpens(m)), 'kuyruk', reason: 'stored = returned');
+    });
+
+    test(
+      'no such row: still Ok and no row written; no queue: untouched',
+      () async {
+        ok(await alice.engine.createOutbound('bob', bob.keys()));
+        await enqueue(alice, 'alice', 'q1');
+        final before = await queueRows(alice);
+        ok(
+          await alice.engine.encrypt(
+            'bob',
+            'x',
+            peerIdentityKey: bob.identityKey,
+            queue: const QueueTarget('alice', 'missing'),
+          ),
+        );
+        expect(await queueRows(alice), before);
+        ok(
+          await alice.engine.encrypt(
+            'bob',
+            'y',
+            peerIdentityKey: bob.identityKey,
+          ),
+        );
+        expect(await queueRows(alice), before);
+      },
+    );
+
+    test('SessionPending leaves the row untouched', () async {
+      await enqueue(alice, 'alice', 'q1');
+      final before = await queueRows(alice);
+      expect(
+        err(
+          await alice.engine.encrypt(
+            'bob',
+            'x',
+            peerIdentityKey: bob.identityKey,
+            queue: const QueueTarget('alice', 'q1'),
+          ),
+        ),
+        isA<SessionPendingFailure>(),
+      );
+      expect(await queueRows(alice), before);
+    });
+
+    test('a failed session write leaves the row untouched', () async {
+      ok(await alice.engine.createOutbound('bob', bob.keys()));
+      await enqueue(alice, 'alice', 'q1');
+      final before = await alice.snapshot();
+      final rows = await queueRows(alice);
+      await blockSessionWrites(alice);
+      expect(
+        err(
+          await alice.engine.encrypt(
+            'bob',
+            'x',
+            peerIdentityKey: bob.identityKey,
+            queue: const QueueTarget('alice', 'q1'),
+          ),
+        ),
+        isA<SessionStoreFailure>(),
+      );
+      await unblock(alice);
+      expect(await queueRows(alice), rows);
+      expect(await alice.snapshot(), before);
+    });
+
+    test('a failed queue write rolls back the session pickle too', () async {
+      ok(await alice.engine.createOutbound('bob', bob.keys()));
+      await enqueue(alice, 'alice', 'q1');
+      final before = await alice.snapshot();
+      final rows = await queueRows(alice);
+      await alice.exec(
+        'CREATE TRIGGER fail_tx BEFORE UPDATE ON send_queue BEGIN '
+        "SELECT RAISE(ABORT, 'forced'); END",
+      );
+      expect(
+        err(
+          await alice.engine.encrypt(
+            'bob',
+            'x',
+            peerIdentityKey: bob.identityKey,
+            queue: const QueueTarget('alice', 'q1'),
+          ),
+        ),
+        isA<Failure>(),
+      );
+      await unblock(alice);
+      expect(await alice.snapshot(), before, reason: 'session rolled back');
+      expect(await queueRows(alice), rows);
     });
   });
 }

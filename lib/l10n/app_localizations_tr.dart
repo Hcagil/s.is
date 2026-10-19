@@ -2351,4 +2351,28 @@ class AppLocalizationsTr extends AppLocalizations {
   String appearanceModeNoteAlwaysDark(String name) {
     return '“$name” her zaman koyudur. Burada ne seçerseniz seçin koyu kalır.';
   }
+
+  @override
+  String get cropCancel => 'İptal';
+
+  @override
+  String get cropDone => 'Bitti';
+
+  @override
+  String get cropReset => 'Sıfırla';
+
+  @override
+  String get cropOriginal => 'Orijinal';
+
+  @override
+  String get cropSquare => 'Kare';
+
+  @override
+  String get cropFree => 'Serbest';
+
+  @override
+  String get cropButtonLabel => 'Fotoğrafı kırp';
+
+  @override
+  String get cropRotateLabel => 'Döndür';
 }

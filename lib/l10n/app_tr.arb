@@ -711,5 +711,13 @@
   "appearanceModeNoteBuiltIn": "Temanız kendi renklerini korur; bu yalnızca açık ya da koyu sürümünü seçer.",
   "appearanceModeNoteFollows": "“{name}” bu seçimi izler.",
   "appearanceModeNoteAlwaysLight": "“{name}” her zaman açıktır. Burada ne seçerseniz seçin açık kalır.",
-  "appearanceModeNoteAlwaysDark": "“{name}” her zaman koyudur. Burada ne seçerseniz seçin koyu kalır."
+  "appearanceModeNoteAlwaysDark": "“{name}” her zaman koyudur. Burada ne seçerseniz seçin koyu kalır.",
+  "cropCancel": "İptal",
+  "cropDone": "Bitti",
+  "cropReset": "Sıfırla",
+  "cropOriginal": "Orijinal",
+  "cropSquare": "Kare",
+  "cropFree": "Serbest",
+  "cropButtonLabel": "Fotoğrafı kırp",
+  "cropRotateLabel": "Döndür"
 }

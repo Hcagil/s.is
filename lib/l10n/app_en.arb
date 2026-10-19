@@ -1622,5 +1622,21 @@
   "appearanceModeNoteAlwaysLight": "“{name}” is always light. It stays light whatever you choose here.",
   "@appearanceModeNoteAlwaysLight": {"description": "Note on the light or dark card for a custom theme fixed to light", "placeholders": {"name": {"type": "String"}}},
   "appearanceModeNoteAlwaysDark": "“{name}” is always dark. It stays dark whatever you choose here.",
-  "@appearanceModeNoteAlwaysDark": {"description": "Note on the light or dark card for a custom theme fixed to dark", "placeholders": {"name": {"type": "String"}}}
+  "@appearanceModeNoteAlwaysDark": {"description": "Note on the light or dark card for a custom theme fixed to dark", "placeholders": {"name": {"type": "String"}}},
+  "cropCancel": "Cancel",
+  "@cropCancel": {"description": "Photo crop bottom bar, left"},
+  "cropDone": "Done",
+  "@cropDone": {"description": "Photo crop bottom bar, right"},
+  "cropReset": "Reset",
+  "@cropReset": {"description": "Photo crop reset text, centre of the tool row"},
+  "cropOriginal": "Original",
+  "@cropOriginal": {"description": "Photo crop aspect chip: keep the photo's own shape"},
+  "cropSquare": "Square",
+  "@cropSquare": {"description": "Photo crop aspect chip: 1 to 1"},
+  "cropFree": "Free",
+  "@cropFree": {"description": "Photo crop aspect chip: no fixed shape"},
+  "cropButtonLabel": "Crop photo",
+  "@cropButtonLabel": {"description": "Accessibility label of the crop button in the send preview"},
+  "cropRotateLabel": "Rotate",
+  "@cropRotateLabel": {"description": "Accessibility label of the rotate button"}
 }

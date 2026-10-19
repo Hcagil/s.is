@@ -4177,6 +4177,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'“{name}” is always dark. It stays dark whatever you choose here.'**
   String appearanceModeNoteAlwaysDark(String name);
+
+  /// Photo crop bottom bar, left
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cropCancel;
+
+  /// Photo crop bottom bar, right
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get cropDone;
+
+  /// Photo crop reset text, centre of the tool row
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get cropReset;
+
+  /// Photo crop aspect chip: keep the photo's own shape
+  ///
+  /// In en, this message translates to:
+  /// **'Original'**
+  String get cropOriginal;
+
+  /// Photo crop aspect chip: 1 to 1
+  ///
+  /// In en, this message translates to:
+  /// **'Square'**
+  String get cropSquare;
+
+  /// Photo crop aspect chip: no fixed shape
+  ///
+  /// In en, this message translates to:
+  /// **'Free'**
+  String get cropFree;
+
+  /// Accessibility label of the crop button in the send preview
+  ///
+  /// In en, this message translates to:
+  /// **'Crop photo'**
+  String get cropButtonLabel;
+
+  /// Accessibility label of the rotate button
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate'**
+  String get cropRotateLabel;
 }
 
 class _AppLocalizationsDelegate

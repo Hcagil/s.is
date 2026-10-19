@@ -2375,4 +2375,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String appearanceModeNoteAlwaysDark(String name) {
     return '“$name” is always dark. It stays dark whatever you choose here.';
   }
+
+  @override
+  String get cropCancel => 'Cancel';
+
+  @override
+  String get cropDone => 'Done';
+
+  @override
+  String get cropReset => 'Reset';
+
+  @override
+  String get cropOriginal => 'Original';
+
+  @override
+  String get cropSquare => 'Square';
+
+  @override
+  String get cropFree => 'Free';
+
+  @override
+  String get cropButtonLabel => 'Crop photo';
+
+  @override
+  String get cropRotateLabel => 'Rotate';
 }

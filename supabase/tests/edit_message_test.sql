@@ -154,7 +154,7 @@ select set_eq(
   $$values ('id'),('conversation_id'),('sender_id'),('body'),('attachment_path'),('attachment_preview'),
            ('reply_to'),('forwarded'),('attachment_name'),('attachment_mime'),('attachment_size'),
            ('attachment_duration_ms'),('attachment_waveform'),('voice_transcript'),
-           ('link_preview'),('photo_group')$$,
+           ('link_preview'),('photo_group'),('ciphertext'),('olm_type')$$,
   'authenticated inserts exactly these twelve columns (id since 20260928170000, '
   'the three file columns since 20261013120000, the duration since 20261014120000) -- never edited_at');
 select test_as('00000000-0000-0000-0000-0000000ed001', 'ed000000-0000-0000-0000-0000000ed001');

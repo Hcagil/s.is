@@ -13,6 +13,7 @@ import '../domain/send_queue_store.dart';
 import '../domain/shared_location.dart';
 import '../domain/video.dart';
 import 'chat_controllers.dart';
+import 'text_locker.dart';
 
 /// One conversation's composer state kept while it is off screen: the typed
 /// text and who it replies to, if anyone. Never written to disk -- see
@@ -487,7 +488,10 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
   }
 
   /// Saves everything still queued so the app being killed loses nothing.
-  void _persist() {
+  void _persist() => unawaited(_persistNow());
+
+  /// Like [_persist] but completes when the queue is saved (a locked text needs its queue row to exist before its ciphertext is stored on it).
+  Future<void> _persistNow() async {
     final me = _me;
     if (me == null) return;
     final records = [
@@ -507,7 +511,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
             albumName: i.albumId == null ? null : i.message.body,
           ),
     ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    unawaited(ref.read(sendQueueStoreProvider).save(me, records));
+    await ref.read(sendQueueStoreProvider).save(me, records);
   }
 
   /// Brings back the sends saved before the app was killed, ahead of anything
@@ -664,15 +668,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
                         }
                       : null,
                 )
-          : await ref
-                .read(chatRepositoryProvider)
-                .send(
-                  id: item.message.id,
-                  conversationId: conversationId,
-                  body: item.body,
-                  replyTo: item.message.replyTo,
-                  preview: item.preview,
-                );
+          : await _sendText(conversationId, item);
       if (!ref.mounted) return;
       switch (result) {
         case Ok(:final value):
@@ -789,6 +785,57 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
       Ok() => Ok(item.message.stored()),
       Err(:final failure) => Err(failure),
     };
+  }
+
+  /// Sends a text. A direct human chat whose partner has verified keys gets the text locked on this phone (ciphertext only goes to the server); any other chat gets it plain. When locking fails the text is NOT sent at all (never plain): the Err is handled like any send failure.
+  Future<Result<Message>> _sendText(
+    String conversationId,
+    _QueuedSend item,
+  ) async {
+    final text = item.body.trim();
+    if (!isSendableBody(text)) return const Err(DeniedFailure());
+    // The queue row must exist before the ciphertext is stored on it.
+    await _persistNow();
+    final lock = await ref
+        .read(textLockerProvider)
+        .lock(
+          conversationId: conversationId,
+          messageId: item.message.id,
+          text: text,
+          card: item.preview?.preview,
+          queued: true,
+        );
+    switch (lock) {
+      case Err(:final failure):
+        return Err(failure);
+      case Ok(value: null):
+        return ref
+            .read(chatRepositoryProvider)
+            .send(
+              id: item.message.id,
+              conversationId: conversationId,
+              body: item.body,
+              replyTo: item.message.replyTo,
+              preview: item.preview,
+            );
+      case Ok(:final value?):
+        final repository = ref.read(encryptedMessageRepositoryProvider);
+        if (repository == null) return const Err(DeniedFailure());
+        final sent = await repository.send(
+          id: item.message.id,
+          conversationId: conversationId,
+          ciphertext: value.ciphertext,
+          olmType: value.olmType,
+          replyTo: item.message.replyTo,
+        );
+        // The stored row only holds the placeholder: this phone keeps the text, and the card without its picture (a locked chat never uploads it).
+        return switch (sent) {
+          Ok(:final value) => Ok(
+            value.withPlain(text, item.preview?.preview.withImagePath(null)),
+          ),
+          Err(:final failure) => Err(failure),
+        };
+    }
   }
 
   // ponytail: a fixed delay ladder capped at 5s (owner: 30s left a message

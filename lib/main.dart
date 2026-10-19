@@ -29,6 +29,7 @@ import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/application/link_preview_controller.dart';
 import 'features/chat/application/share_controller.dart';
+import 'features/chat/application/text_locker.dart';
 import 'features/chat/data/external_picker_channel.dart';
 import 'features/chat/data/file_video_importer.dart';
 import 'features/chat/data/method_channel_share_intake.dart';
@@ -37,6 +38,8 @@ import 'features/chat/data/store/drift_chat_list_snapshot_store.dart';
 import 'features/chat/data/store/drift_message_store.dart';
 import 'features/chat/data/store/drift_read_mark_store.dart';
 import 'features/chat/data/store/legacy_chat_list.dart';
+import 'features/chat/data/store/drift_send_queue_store.dart';
+import 'features/chat/data/store/legacy_send_queue.dart';
 import 'features/chat/data/store/store_key.dart';
 import 'features/chat/data/store/store_location.dart';
 import 'features/chat/data/flutter_device_files.dart';
@@ -58,7 +61,6 @@ import 'features/chat/data/share_plus_video_sharer.dart';
 import 'features/chat/data/shared_prefs_contacts_disclosure_store.dart';
 import 'features/chat/data/shared_prefs_played_voice_store.dart';
 import 'features/chat/data/shared_prefs_recent_sticker_store.dart';
-import 'features/chat/data/shared_prefs_send_queue_store.dart';
 import 'features/chat/data/speech_dictation.dart';
 import 'features/chat/data/supabase_admin_chat_repository.dart';
 import 'features/chat/data/supabase_chat_archive_repository.dart';
@@ -67,6 +69,7 @@ import 'features/chat/data/supabase_chat_file_repository.dart';
 import 'features/chat/data/supabase_chat_pin_repository.dart';
 import 'features/chat/data/supabase_group_settings_repository.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
+import 'features/chat/data/supabase_encrypted_message_repository.dart';
 import 'features/chat/data/supabase_location_share_repository.dart';
 import 'features/chat/data/url_launcher_maps_opener.dart';
 import 'features/chat/data/supabase_poll_repository.dart';
@@ -75,6 +78,7 @@ import 'features/chat/data/supabase_sticker_repository.dart';
 import 'features/chat/data/supabase_contacts_repository.dart';
 import 'features/crypto/application/key_directory_controller.dart';
 import 'features/crypto/data/drift_olm_pickle_store.dart';
+import 'features/crypto/data/drift_session_engine.dart';
 import 'features/crypto/data/olm_key_engine.dart';
 import 'features/crypto/data/pickle_key.dart';
 import 'features/crypto/data/supabase_key_directory.dart';
@@ -223,6 +227,9 @@ Future<void> main() async {
     // The store messageStoreProvider built last: the chat-list store shares that
     // very instance (it rebuilds with it, see below).
     DriftMessageStore? builtStore;
+
+    // One Olm engine for key publishing and for sessions.
+    final olm = OlmKeyEngine();
     runApp(
       ProviderScope(
         overrides: [
@@ -293,8 +300,21 @@ Future<void> main() async {
           playedVoiceStoreProvider.overrideWithValue(
             const SharedPrefsPlayedVoiceStore(),
           ),
-          sendQueueStoreProvider.overrideWithValue(
-            const SharedPrefsSendQueueStore(),
+          // The send queue lives in the encrypted store, with the ciphertext of locked texts.
+          sendQueueStoreProvider.overrideWith((ref) {
+            ref.watch(messageStoreProvider);
+            final queue = DriftSendQueueStore(builtStore!);
+            final owner = ref.watch(currentUserIdProvider);
+            // What the old build kept in preferences moves into the store once.
+            if (owner != null) unawaited(moveLegacySendQueue(queue, owner));
+            return queue;
+          }),
+          queuedCiphertextsProvider.overrideWith((ref) {
+            ref.watch(messageStoreProvider);
+            return DriftSendQueueStore(builtStore!);
+          }),
+          encryptedMessageRepositoryProvider.overrideWithValue(
+            SupabaseEncryptedMessageRepository(client),
           ),
           stickerRepositoryProvider.overrideWithValue(
             SupabaseStickerRepository(client),
@@ -350,7 +370,16 @@ Future<void> main() async {
             return DriftOlmPickleStore(builtStore!);
           }),
           pickleKeyStoreProvider.overrideWithValue(const PickleKey()),
-          keyEngineProvider.overrideWithValue(OlmKeyEngine()),
+          keyEngineProvider.overrideWithValue(olm),
+          sessionEngineProvider.overrideWith((ref) {
+            ref.watch(messageStoreProvider);
+            return DriftSessionEngine(
+              store: builtStore!,
+              keys: olm,
+              sessions: olm,
+              pickleKey: const PickleKey(),
+            );
+          }),
           keyDirectoryProvider.overrideWithValue(SupabaseKeyDirectory(client)),
           lastSessionStoreProvider.overrideWithValue(FileLastSessionStore()),
           galleryProvider.overrideWithValue(const PhotoManagerGallery()),

@@ -97,9 +97,10 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     message id to be server-generated or unpredictable** — never key an
     authorisation decision, storage path or topic on it. The app treats a
     duplicate-key answer as "already sent" only when the stored row is the
-    caller's own, in the same conversation, with the same body (and, when
-    the retried message is a reply, the same reply target);
-    otherwise the send fails. Accepted leftover risk: a member who already
+    caller's own, in the same conversation, with the same body (a locked text:
+    the same ciphertext, which the queue keeps so a retry sends the same bytes
+    and an encrypted text is never locked twice) (and, when the retried message
+    is a reply, the same reply target); otherwise the send fails. Accepted leftover risk: a member who already
     knows a message id learns whether that message exists.
   - `messages.photo_group` (a uuid, null for every message but the photos of
     an album) is only a grouping label: each photo is its own message with
@@ -110,10 +111,16 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     the value). The app folds photos into one bubble only when they share the
     group AND the sender, so a member cannot pull another member's photos
     into their own album. Nothing filters on it, so it has no index.
-  - Drafts and queued unsent messages live in the app's memory only; if they
-    are ever stored on the phone (not stored; the messages and the chat list are, in the encrypted
-    store — see "On-phone message store"), they are personal data under the on-phone storage
-    posture.
+  - Drafts live in the app's memory only. Queued unsent messages (text, files,
+    videos, places, stickers) are stored in the encrypted on-phone store (table
+    `send_queue`, see "On-phone message store"), never in shared_preferences,
+    so an unsent text is not readable from a copy of the app's files; a locked
+    text waits there as its ciphertext, plus the plain text it was typed as
+    (needed to show it and to retry a refusal). The old preferences key is
+    moved into the store at the first start and removed. The queue is erased
+    with the store at sign-out; files the queue copied into the app's own
+    folders are deleted then too. They are personal data under the on-phone
+    storage posture.
   - `messages.attachment_path` points into the private `attachments` storage
     bucket, keyed `<conversation_id>/<file>`. The storage policies ask the same
     membership question the table policies ask, so there is one access rule and
@@ -499,7 +506,8 @@ that owns the store. Until 2026-10-17 the list was a plain file,
 described below, without any message text. At every launch the app keeps that
 file only if it is a valid new feed (version 1, every message field empty) and
 deletes anything else, so an old file with previews is gone after the first
-start. Drafts and queued unsent messages are not stored.
+start. Drafts are not stored; queued unsent messages are, in the same encrypted
+store (table send_queue).
 
 Since 0.30.15 the list is no longer held back until the server has confirmed
 the session. A second file, `last_session.json` (the marker), sits in the app support directory:

@@ -1,22 +1,15 @@
 import 'dart:io';
 
 import 'package:drift/drift.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 
 import '../../domain/send_queue_store.dart';
 import 'drift_message_store.dart';
 import 'store_database.dart';
 
-/// The ciphertext a queued send was locked into (base64) and its Olm type (0 pre-key, 1 normal).
-final class QueuedCiphertext {
-  const QueuedCiphertext(this.ciphertext, this.olmType);
-
-  final String ciphertext;
-  final int olmType;
-}
-
 /// [SendQueueStore] in the encrypted on-phone store (table send_queue): per member, never synced.
-/// Replaces nothing yet; the send path moves onto it later.
-final class DriftSendQueueStore implements SendQueueStore {
+final class DriftSendQueueStore implements SendQueueStore, QueuedCiphertexts {
   /// Creates the store.
   DriftSendQueueStore(this._store);
 
@@ -96,8 +89,35 @@ final class DriftSendQueueStore implements SendQueueStore {
   @override
   Future<void> clear() {
     return _store.run<void>(null, (db) async {
+      // Files outside the app's own folders are the member's own and are never deleted.
+      final own = await _ownFolders();
+      for (final row in await db.select(db.sendQueueRows).get()) {
+        for (final r in decodeQueue(row.record)) {
+          for (final p in [r.file?.path, r.file?.thumbPath, r.video?.path]) {
+            if (p == null) continue;
+            // Normalised, and a real folder boundary: neither "<app>/../DCIM/x" nor "<app>-gallery/x" counts as inside the app's folders.
+            final clean = path.normalize(p);
+            if (!own.any((d) => path.isWithin(d, clean))) continue;
+            try {
+              await File(clean).delete();
+            } catch (_) {}
+          }
+        }
+      }
       await db.delete(db.sendQueueRows).go();
     });
+  }
+
+  static Future<List<String>> _ownFolders() async {
+    try {
+      return [
+        (await getTemporaryDirectory()).path,
+        (await getApplicationSupportDirectory()).path,
+        (await getApplicationDocumentsDirectory()).path,
+      ];
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// Updates the ciphertext and olmType for a queued send.
@@ -123,6 +143,7 @@ final class DriftSendQueueStore implements SendQueueStore {
   }
 
   /// Returns the ciphertext and olmType for a queued send, if both are set.
+  @override
   Future<QueuedCiphertext?> ciphertextOf(String userId, String id) {
     return _store.run<QueuedCiphertext?>(null, (db) async {
       final row =

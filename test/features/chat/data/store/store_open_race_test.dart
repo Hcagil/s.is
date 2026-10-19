@@ -79,6 +79,46 @@ void main() {
       expect(lost, isEmpty, reason: '${42 - lost.length}/42 saves kept');
     });
 
+    test('six openers x 40 rounds on NEW files under CPU load: every save '
+        'kept, no reset', () async {
+      // Load makes the write-lock races that lost saves before the fix.
+      // 48 busy shell loops (separate processes, so the test's own
+      // isolates are not frozen with them).
+      final spinners = [
+        for (var i = 0; i < 48; i++)
+          await Process.start('sh', ['-c', 'while :; do :; done']),
+      ];
+      addTearDown(() {
+        for (final s in spinners) {
+          s.kill(ProcessSignal.sigkill);
+        }
+      });
+      final lost = <String>[];
+      var total = 0;
+      for (var r = 0; r < 40; r++) {
+        const n = 6;
+        // gap 0: all at once; else opener i starts i*gap ms (max 40) later.
+        final gap = r % 9;
+        final f = File(p.join(h.dir.path, 'six_$r.sqlite'));
+        final saves = <Future<void>>[];
+        for (var i = 0; i < n; i++) {
+          if (gap > 0 && i > 0) {
+            await Future<void>.delayed(Duration(milliseconds: gap));
+          }
+          saves.add(storeAt(f).upsertAll([msg('r${r}o$i', t: i)]));
+        }
+        await Future.wait(saves);
+        total += n;
+        expect(await f.exists(), isTrue, reason: 'round $r: file kept');
+        final kept = ids(await storeAt(f).newest('c1')).toSet();
+        for (var i = 0; i < n; i++) {
+          if (!kept.contains('r${r}o$i')) lost.add('r${r}o$i');
+        }
+      }
+      expect(lost, isEmpty, reason: '${total - lost.length}/$total saves kept');
+      expect(h.deleteKeyCalls, 0, reason: 'deleteKey never called');
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
     test('an existing store reopened twice at once keeps its data', () async {
       final first = storeAt(h.file);
       await first.upsertAll([for (var i = 0; i < 10; i++) msg('m$i', t: i)]);
@@ -129,6 +169,127 @@ void main() {
             'busy is passing: the data survives (gave up after '
             '${watch.elapsedMilliseconds} ms)',
       );
+    });
+  });
+
+  group('opens on one file wait for each other, other files do not', () {
+    test('forty stores released at the same instant on a NEW file, 15 '
+        'rounds: each store reads its own save back (no fallback)', () async {
+      // The file() seam is held until every store has asked for it, so all
+      // forty opens start in the same event-loop turn: no timing luck.
+      final lost = <String>[];
+      for (var r = 0; r < 15; r++) {
+        const n = 40;
+        final f = File(p.join(h.dir.path, 'forty_$r.sqlite'));
+        final go = Completer<void>();
+        var asked = 0;
+        final stores = [
+          for (var i = 0; i < n; i++)
+            DriftMessageStore(
+              ownerId: 'owner-1',
+              file: () async {
+                if (++asked == n) go.complete();
+                await go.future;
+                return f;
+              },
+              key: () async => key,
+              deleteKey: () async => h.deleteKeyCalls++,
+            ),
+        ];
+        for (final s in stores) {
+          addTearDown(s.close);
+        }
+        final mine = await Future.wait([
+          for (var i = 0; i < n; i++)
+            stores[i]
+                .upsertAll([msg('r${r}s$i', t: i)])
+                .then((_) => stores[i].newest('c1')),
+        ]);
+        expect(asked, n, reason: 'fixture: every store opened');
+        for (var i = 0; i < n; i++) {
+          // A store that fell back reads an empty list, not its own save.
+          if (!ids(mine[i]).contains('r${r}s$i')) lost.add('r${r}s$i (own)');
+        }
+        expect(await f.exists(), isTrue, reason: 'round $r: file kept');
+        final kept = ids(await storeAt(f).newest('c1')).toSet();
+        for (var i = 0; i < n; i++) {
+          if (!kept.contains('r${r}s$i')) lost.add('r${r}s$i');
+        }
+      }
+      expect(lost, isEmpty, reason: 'lost: $lost');
+      expect(h.deleteKeyCalls, 0, reason: 'deleteKey never called');
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    test('file A held busy: a store on file B opens, saves and reads while '
+        'A is still waiting', () async {
+      final a = File(p.join(h.dir.path, 'a.sqlite'));
+      final b = File(p.join(h.dir.path, 'b.sqlite'));
+      final first = storeAt(a);
+      await first.upsertAll([msg('kept-a')]);
+      await first.close();
+      final raw = holdBusy(a);
+      var released = false;
+      addTearDown(() {
+        if (!released) {
+          raw.execute('COMMIT');
+          raw.close();
+        }
+      });
+      final watch = Stopwatch()..start();
+      var aDoneMs = -1;
+      final readA = storeAt(a).newest('c1').then((r) {
+        aDoneMs = watch.elapsedMilliseconds;
+        return r;
+      });
+      // Let A's open start and hit the lock before B begins.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      final sb = storeAt(b);
+      await sb.upsertAll([msg('b1')]);
+      final readB = await sb.newest('c1');
+      final bDoneMs = watch.elapsedMilliseconds;
+      expect(ids(readB), ['b1'], reason: 'B opened for real, no fallback');
+      expect(
+        aDoneMs,
+        -1,
+        reason:
+            'B finished at $bDoneMs ms while A was still busy (A ended at '
+            '$aDoneMs ms)',
+      );
+      expect(await readA.timeout(const Duration(seconds: 10)), isEmpty);
+      expect(
+        aDoneMs - bDoneMs,
+        greaterThan(300),
+        reason: 'B ($bDoneMs ms) did not wait for A ($aDoneMs ms)',
+      );
+      raw.execute('COMMIT');
+      raw.close();
+      released = true;
+      expect(await a.exists(), isTrue, reason: 'busy A file kept');
+      expect(ids(await storeAt(a).newest('c1')), ['kept-a']);
+    });
+    test('file A slow to open (its key arrives late): a store on file B '
+        'opens, saves and reads meanwhile; A then opens for real', () async {
+      final a = File(p.join(h.dir.path, 'a.sqlite'));
+      final b = File(p.join(h.dir.path, 'b.sqlite'));
+      final slowKey = Completer<String>();
+      final sa = DriftMessageStore(
+        ownerId: 'owner-1',
+        file: () async => a,
+        key: () => slowKey.future,
+        deleteKey: () async => h.deleteKeyCalls++,
+      );
+      addTearDown(sa.close);
+      var aDone = false;
+      final savedA = sa.upsertAll([msg('a1')]).then((_) => aDone = true);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      final sb = storeAt(b);
+      await sb.upsertAll([msg('b1')]).timeout(const Duration(seconds: 5));
+      expect(ids(await sb.newest('c1')), ['b1'], reason: 'B did not wait');
+      expect(aDone, isFalse, reason: 'fixture: A is still opening');
+      slowKey.complete(key);
+      await savedA.timeout(const Duration(seconds: 10));
+      expect(ids(await sa.newest('c1')), ['a1'], reason: 'A opened for real');
+      expect(h.deleteKeyCalls, 0);
     });
   });
 

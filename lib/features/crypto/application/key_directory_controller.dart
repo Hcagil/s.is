@@ -81,12 +81,14 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
       return;
     }
     _busy = true;
-    final rev = _revision;
     try {
       do {
         _again = false;
-        await _ensure(userId);
-      } while (_again && ref.mounted && rev == _revision);
+        // read the user again: a session change during the run only sets _again
+        final id = _userOf(ref.read(sessionControllerProvider).value);
+        if (id == null) break;
+        await _ensure(id);
+      } while (_again && ref.mounted);
     } finally {
       _busy = false;
     }
@@ -148,6 +150,7 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
     var free = await _publish(dir, engine, userId, pickleKey, pickles, rev);
     if (free == null) return; // _publish already set the state (retry or idle)
     final st = await dir.status();
+    if (!alive()) return;
     final fallbackUsed = switch (st) {
       Ok(:final value) => value?.fallbackUsed ?? false,
       Err() => false,
@@ -222,6 +225,7 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
       },
     );
     if (!_editOk(snap, userId, rev)) return null;
+    if (!ref.mounted || rev != _revision) return null;
     final r = await dir.publish(
       identityKey: identityKey,
       signingKey: signingKey,

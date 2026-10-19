@@ -9,23 +9,25 @@
 #     merge order, joined by newlines;
 #   - the text reaches SQL base64-encoded (PR bodies are untrusted), as one
 #     insert for $BUILD with `on conflict (build) do nothing`;
-#   - no such line -> no insert at all, and the step still succeeds;
+#   - an insert is always made: no EN line -> EN "Background improvements.";
+#     no TR line and no EN line -> TR "Arka planda iyileştirmeler."; EN lines
+#     and no TR line -> EN only (no "---" part);
 #   - no previous release -> only the released commit itself;
 #   - only PRs whose author is OWNER, MEMBER or COLLABORATOR count (anyone else
 #     could edit a merged PR's body and have it sent to every member as SIS);
 #   - the joined EN ("For users:") and TR ("For users (TR):", or the older
 #     "Kullanıcılar için:") texts are each
-#     cut to 1900 characters (never bytes: LC_ALL=C.UTF-8 in the step), then a
-#     non-empty note is "Version $VERSION ($BUILD)\n" + EN, plus "\n---\nSürüm $VERSION ($BUILD)\n"
+#     cut to 1900 characters (never bytes: LC_ALL=C.UTF-8 in the step), then the
+#     note is "Version $VERSION ($BUILD)\n" + EN, plus "\n---\nSürüm $VERSION ($BUILD)\n"
 #     + TR when there is TR text (room under the 4000-char release_notes check
-#     and TestFlight limit); an empty note gets no prefix;
+#     and TestFlight limit);
 #   - a failing `gh api` pull read fails the run block, and the step is
 #     continue-on-error so that failure never blocks the release;
 #   - each PR is read from the REST endpoint repos/$GITHUB_REPOSITORY/pulls/N
 #     and kept by its snake_case author_association;
 #   - the step is `id: note` and writes the stored note, base64 on one line, as
 #     output `b64` (publish exposes it as note_b64 for TestFlight's What to
-#     Test): only when there is a note, before the insert (a failed insert
+#     Test): before the insert (a failed insert
 #     still hands it on), and it decodes to exactly the stored text.
 #
 # A `run:` block with no `shell:` runs as `bash -e {0}` on GitHub Actions --
@@ -157,6 +159,9 @@ g commit -q --allow-empty -m 'docs: no pull request here'
 g commit -q --allow-empty -m 'fix: faster start (#12)'
 head_sha=$(g rev-parse HEAD)
 V='Version 1.2.3 (179)' # BUILD=179 in run_step
+S='Sürüm 1.2.3 (179)'
+EN_DEFAULT='Background improvements.'
+TR_DEFAULT='Arka planda iyileştirmeler.'
 
 printf 'For users: Old news.\n' > "$tmp/prs/9"
 printf '## Summary\r\nSound.\r\n\r\nFor users: You can pick a sound.\r\n' > "$tmp/prs/10"
@@ -209,12 +214,15 @@ if grep -q $'\r' <<<"$(note_of)"; then fail "a carriage return survived"; fi
 if grep -q 'Old news' <<<"$(note_of)"; then fail "a PR from the previous release was included"; fi
 same_note
 
-# 2 nothing user-facing -> no insert, still success
+# 2 nothing user-facing -> still one insert, both parts defaulted
 printf 'For users:   \n' > "$tmp/prs/10"
 printf 'Nothing to see.\n' > "$tmp/prs/12"
-run_step v0.26.0+178 || fail "step failed when there was nothing to store"
-[ ! -s "$tmp/calls" ] || fail "an insert was made with no For users line"
-[ ! -s "$tmp/ghout" ] || fail "a b64 output was written with no note: [$(cat "$tmp/ghout")]"
+run_step v0.26.0+178 || fail "step failed when there was nothing user-facing"
+[ "$(wc -l < "$tmp/calls")" -eq 1 ] || fail "expected exactly one insert with no For users line"
+grep -q 'on conflict (build) do nothing' "$tmp/calls" || fail "default insert would overwrite a dashboard edit"
+[ "$(note_of)" = "$V"$'\n'"$EN_DEFAULT"$'\n---\n'"$S"$'\n'"$TR_DEFAULT" ] \
+  || fail "no For users line: note was [$(note_of)]"
+same_note
 
 # 3 no previous release -> only the released commit
 printf 'For users: Only this one.\n' > "$tmp/prs/12"
@@ -238,7 +246,8 @@ run_step v0.26.0+178 || fail "step exited non-zero"
 [ "$(note_of)" = "$V"$'\nFrom the owner.\nFrom a collaborator.\nFrom a stranger.' ] || fail "MEMBER dropped: [$(note_of)]"
 for pr in 10 11 12; do echo NONE > "$tmp/prs/$pr.assoc"; done
 run_step v0.26.0+178 || fail "step exited non-zero"
-[ ! -s "$tmp/calls" ] || fail "an insert was made from non-collaborator PRs only"
+[ "$(note_of)" = "$V"$'\n'"$EN_DEFAULT"$'\n---\n'"$S"$'\n'"$TR_DEFAULT" ] \
+  || fail "non-collaborator PRs only: note was [$(note_of)], want the defaults"
 for pr in 10 11 12; do echo OWNER > "$tmp/prs/$pr.assoc"; done
 
 # 5 EN ("For users:") and TR ("Kullanıcılar için:") texts are each cut to their
@@ -311,11 +320,20 @@ run_step v0.26.0+178 || fail "step exited non-zero with a For users (TR): line"
   || fail "For users (TR): not read as TR text: note was [$(note_of)]"
 same_note
 
-# 10 TR text only (EN part empty) -> nothing stored, no output, still success
+# 10 TR text only -> EN defaulted, real TR kept (never the TR default)
 printf 'For users (TR): Yalnız Türkçe.\n' > "$tmp/prs/10"
 printf 'Kullanıcılar için: Bu da.\n' > "$tmp/prs/12"
 run_step v0.26.0+178 || fail "step failed with TR text only"
-[ ! -s "$tmp/calls" ] || fail "a note was stored with an empty EN part"
-[ ! -s "$tmp/ghout" ] || fail "a b64 output was written with an empty EN part"
+[ "$(wc -l < "$tmp/calls")" -eq 1 ] || fail "expected exactly one insert with TR text only"
+[ "$(note_of)" = "$V"$'\n'"$EN_DEFAULT"$'\n---\n'"$S"$'\nYalnız Türkçe.\nBu da.' ] \
+  || fail "TR text only: note was [$(note_of)]"
+same_note
+
+# 11 EN text only -> EN alone, no "---" part and no TR default
+printf 'For users: Just English.\n' > "$tmp/prs/10"
+printf 'Nothing.\n' > "$tmp/prs/12"
+run_step v0.26.0+178 || fail "step failed with EN text only"
+[ "$(note_of)" = "$V"$'\nJust English.' ] || fail "EN text only: note was [$(note_of)]"
+same_note
 
 echo "whats_new_note_test: OK"

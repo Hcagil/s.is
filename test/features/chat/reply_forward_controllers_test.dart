@@ -193,8 +193,16 @@ void main() {
         'c3',
       ]);
       expect(result, isA<Ok<void>>());
-      expect(fake.forwarded.single.messageId, 'm1');
-      expect(fake.forwarded.single.conversationIds, ['c2', 'c3']);
+      // A plain text goes per target through the send path (Private Chats
+      // 4a): one old forward per target, the same message each time.
+      expect([for (final f in fake.forwarded) f.messageId], ['m1', 'm1']);
+      expect(
+        [for (final f in fake.forwarded) f.conversationIds],
+        [
+          ['c2'],
+          ['c3'],
+        ],
+      );
     });
 
     test('on Ok, the chat list is re-read', () async {

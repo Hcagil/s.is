@@ -43,7 +43,7 @@ mkdir -p "$ROOT/.private" "$ROOT/.orchestra"
 [ -f "$SEEN" ] || date -u +%Y-%m-%dT%H:%M:%S.%6NZ >"$SEEN"
 
 process() { # $1 = stdout of sis_bot.sh read, $2 = bot id
-  printf '%s\n' "$1" | INBOX="$INBOX" SEEN="$SEEN" BOTID="$2" BAD="$BAD" BOT="$BOT" python3 -u -I -c '
+  printf '%s\n' "$1" | INBOX="$INBOX" SEEN="$SEEN" BOTID="$2" BAD="$BAD" BOT="$BOT" RETRIES="$ROOT/.private/bot-watch.retries" python3 -u -I -c '
 import hashlib, json, os, re, subprocess, sys
 def clean(s, keep_nl):
     return re.sub(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]" if keep_nl else r"[\x00-\x1f\x7f-\x9f]", "", s)
@@ -85,9 +85,19 @@ for line in sys.stdin:
     pic = bool(pic) and pic.group(1) == mid
     if pic:  # download first (sis_bot.sh attachments); on failure keep the cursor so the next poll retries
         print("PICTURE from %s, id %s" % (who, mid))
+        rpath = os.environ["RETRIES"]
         if subprocess.run([os.environ["BOT"], "attachments", mid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
-            print("watch: picture download failed for %s, will retry" % mid)
-            sys.exit(0)
+            parts = open(rpath).read().split() if os.path.exists(rpath) else []
+            n = (int(parts[1]) if len(parts) == 2 and parts[0] == mid and parts[1].isdigit() else 0) + 1
+            if n >= 3:
+                print("watch: picture download gave up for %s" % mid)
+                os.path.exists(rpath) and os.remove(rpath)
+            else:
+                open(rpath, "w").write("%s %d\n" % (mid, n))
+                print("watch: picture download failed for %s, will retry" % mid)
+                sys.exit(0)
+        elif os.path.exists(rpath):
+            os.remove(rpath)
     fence = "`" * max(3, max([len(x) for x in re.findall(r"`+", body)] + [0]) + 1)
     with open(os.environ["INBOX"], "a", encoding="utf-8") as f:
         f.write("## %s — %s\nconversation: %s\n\n%s\n%s\n%s\n\n" % (ts, who, conv, fence, body, fence))
@@ -153,6 +163,15 @@ FAKE
   : >"$T/failpic"; out=$(run)
   t "picture line" "PICTURE from Bob, id $PID" "$(printf '%s\n' "$out" | head -1)"
   t "cursor kept on failed download" 2000-01-01T00:00:00Z "$(cat "$T/.private/tester-inbox.seen")"
+  # give up after 3 failures: later messages are not blocked, inbox gets the message once
+  run >/dev/null
+  t "no inbox entry while retrying" 0 "$(cat "$T/.private/tester-inbox.md" 2>/dev/null | grep -c '^## ')"
+  out=$(run)
+  t "gave up after 3 failures" "watch: picture download gave up for $PID" "$(printf '%s\n' "$out" | grep gave)"
+  t "cursor moved past the given-up picture" "$TS" "$(cat "$T/.private/tester-inbox.seen")"
+  t "no duplicate inbox entry" 1 "$(grep -c '^## ' "$T/.private/tester-inbox.md")"
+  t "retry file removed" no "$([ -e "$T/.private/bot-watch.retries" ] && echo yes || echo no)"
+  echo 2000-01-01T00:00:00Z >"$T/.private/tester-inbox.seen"
   # good download: cursor moves, heartbeat is an ISO time
   rm "$T/failpic"; run >/dev/null
   t "cursor moved after handling" "$TS" "$(cat "$T/.private/tester-inbox.seen")"

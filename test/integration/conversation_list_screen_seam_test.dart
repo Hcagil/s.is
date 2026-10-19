@@ -322,6 +322,8 @@ void main() {
       for (final needle in ['Exception', 'statusCode', 'errno']) {
         expect(find.textContaining(needle), findsNothing);
       }
+      await t.pumpWidget(const SizedBox());
+      await t.runAsync(() => quit(c));
     });
 
     testWidgets('a captive portal (an HTML 502 for every request, through '
@@ -360,6 +362,8 @@ void main() {
       );
       expectNoOfflineStrip();
       expect(find.textContaining('hotel'), findsNothing);
+      await t.pumpWidget(const SizedBox());
+      await t.runAsync(() => quit(c));
     });
 
     testWidgets('refused (DeniedFailure from the real repository): an '
@@ -370,6 +374,8 @@ void main() {
 
       expect(v.error, isA<DeniedFailure>(), reason: 'precondition: $v');
       expect(find.byKey(const ValueKey('conversation-stored-1')), findsNothing);
+      await t.pumpWidget(const SizedBox());
+      await t.runAsync(() => quit(c));
     });
   });
 }

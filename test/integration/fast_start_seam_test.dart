@@ -708,7 +708,7 @@ void main() {
       expect(file.existsSync(), isFalse, reason: 're-created after the erase');
       await t.pumpWidget(const SizedBox());
       await t.pump(const Duration(milliseconds: 50));
-      c.dispose();
+      await t.runAsync(() => quit(c));
     });
 
     testWidgets('a store that cannot be read or written never stops the '

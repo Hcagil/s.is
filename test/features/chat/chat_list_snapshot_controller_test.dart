@@ -32,6 +32,7 @@ import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/archive_fakes.dart';
+import '../../support/drift_stores.dart';
 import '../../support/fakes.dart';
 
 const alice = Member(userId: 'u-a', displayName: 'Alice');
@@ -236,7 +237,6 @@ void main() {
     for (final c in chat.calls) {
       if (!c.gate.isCompleted) c.gate.complete();
     }
-    await pause();
     if (await dir.exists()) await dir.delete(recursive: true);
   });
 
@@ -285,6 +285,8 @@ void main() {
     );
     if (mountEraser) c.listen(chatListSnapshotOwnerProvider, (_, _) {});
     home = watchList(c);
+    // Before ProviderContainer.test's own dispose: await the store's close.
+    addTearDown(() => quit(c));
     return c;
   }
 

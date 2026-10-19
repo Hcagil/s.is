@@ -79,6 +79,46 @@ void main() {
       expect(lost, isEmpty, reason: '${42 - lost.length}/42 saves kept');
     });
 
+    test('six openers x 40 rounds on NEW files under CPU load: every save '
+        'kept, no reset', () async {
+      // Load makes the write-lock races that lost saves before the fix.
+      // 48 busy shell loops (separate processes, so the test's own
+      // isolates are not frozen with them).
+      final spinners = [
+        for (var i = 0; i < 48; i++)
+          await Process.start('sh', ['-c', 'while :; do :; done']),
+      ];
+      addTearDown(() {
+        for (final s in spinners) {
+          s.kill(ProcessSignal.sigkill);
+        }
+      });
+      final lost = <String>[];
+      var total = 0;
+      for (var r = 0; r < 40; r++) {
+        const n = 6;
+        // gap 0: all at once; else opener i starts i*gap ms (max 40) later.
+        final gap = r % 9;
+        final f = File(p.join(h.dir.path, 'six_$r.sqlite'));
+        final saves = <Future<void>>[];
+        for (var i = 0; i < n; i++) {
+          if (gap > 0 && i > 0) {
+            await Future<void>.delayed(Duration(milliseconds: gap));
+          }
+          saves.add(storeAt(f).upsertAll([msg('r${r}o$i', t: i)]));
+        }
+        await Future.wait(saves);
+        total += n;
+        expect(await f.exists(), isTrue, reason: 'round $r: file kept');
+        final kept = ids(await storeAt(f).newest('c1')).toSet();
+        for (var i = 0; i < n; i++) {
+          if (!kept.contains('r${r}o$i')) lost.add('r${r}o$i');
+        }
+      }
+      expect(lost, isEmpty, reason: '${total - lost.length}/$total saves kept');
+      expect(h.deleteKeyCalls, 0, reason: 'deleteKey never called');
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
     test('an existing store reopened twice at once keeps its data', () async {
       final first = storeAt(h.file);
       await first.upsertAll([for (var i = 0; i < 10; i++) msg('m$i', t: i)]);

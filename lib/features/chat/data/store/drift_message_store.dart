@@ -82,7 +82,20 @@ final class DriftMessageStore implements MessageStore {
         unawaited(close());
         return fallback;
       }
-      return await body(db);
+      // A write racing another connection can fail busy; the bodies are idempotent, so retry before giving up.
+      for (var n = 0; ; n++) {
+        try {
+          return await body(db);
+        } catch (e) {
+          if (n >= 4 ||
+              !(e is DriftRemoteException ||
+                  e is DriftWrappedException ||
+                  e is SqliteException)) {
+            rethrow;
+          }
+          await Future<void>.delayed(Duration(milliseconds: 25 * (n + 1)));
+        }
+      }
     } catch (_) {
       return fallback;
     } finally {

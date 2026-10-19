@@ -14,25 +14,44 @@
 # OR lock busy for 30 s; the watcher prints one line and tries again next round.
 # Exit 4/5/other: one line, keep looping; 5 (rate limited) doubles the next wait.
 # SIS_BOT_CMD overrides the sis_bot.sh path (tests only).
+#
+#   tool/sis_bot_watch.sh --supervise [seconds]  restart the poll loop after a crash (backoff 5 s .. 5 min)
+#   tool/sis_bot_watch.sh --once                 one check, then exit
+#   tool/sis_bot_watch.sh --self-test            offline self-check (lock, cursor, PICTURE line, heartbeat)
+# Interval: argument, else SIS_WATCH_INTERVAL, else 60 seconds. No AI call anywhere.
+# One instance only: flock on .private/bot-watch.lock (the kernel frees it when the process
+# dies, so a stale lock never blocks). A second start exits 1 at once.
+# Heartbeat: .orchestra/bot-watch.heartbeat holds the ISO time of the last successful poll.
+# A picture prints "PICTURE from <sender>, id <id>" and is saved by `sis_bot.sh attachments`
+# into .private/bot-attachments/<id>/. The cursor moves only after a message is handled; a
+# failed picture download keeps it, so the next poll retries.
 set -uo pipefail
 umask 077
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ROOT=${SIS_WATCH_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
 BOT="${SIS_BOT_CMD:-$ROOT/tool/sis_bot.sh}"
 INBOX="$ROOT/.private/tester-inbox.md"
 SEEN="$ROOT/.private/tester-inbox.seen"
 BAD="$ROOT/.private/tester-inbox.bad"
-INTERVAL=${1:-3600}
+MODE=loop
+case "${1:-}" in --supervise|--once|--self-test) MODE=${1#--}; shift ;; esac
+INTERVAL=${1:-${SIS_WATCH_INTERVAL:-60}}
+HEART="$ROOT/.orchestra/bot-watch.heartbeat"
+LOCK="$ROOT/.private/bot-watch.lock"
 BACKOFF=0
-mkdir -p "$ROOT/.private"
+mkdir -p "$ROOT/.private" "$ROOT/.orchestra"
 [ -f "$SEEN" ] || date -u +%Y-%m-%dT%H:%M:%S.%6NZ >"$SEEN"
 
 process() { # $1 = stdout of sis_bot.sh read, $2 = bot id
-  printf '%s\n' "$1" | INBOX="$INBOX" SEEN="$SEEN" BOTID="$2" BAD="$BAD" python3 -u -I -c '
-import hashlib, json, os, re, sys
+  printf '%s\n' "$1" | INBOX="$INBOX" SEEN="$SEEN" BOTID="$2" BAD="$BAD" BOT="$BOT" RETRIES="$ROOT/.private/bot-watch.retries" python3 -u -I -c '
+import hashlib, json, os, re, subprocess, sys
 def clean(s, keep_nl):
     return re.sub(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]" if keep_nl else r"[\x00-\x1f\x7f-\x9f]", "", s)
-newest = ""
+def save(ts):  # cursor moves only after a message is handled; atomic
+    tmp = os.environ["SEEN"] + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(ts)
+    os.replace(tmp, os.environ["SEEN"])
 # A bad line has no usable time, so it is remembered by hash: reported once, never again.
 badf = os.environ["BAD"]
 known = set(open(badf).read().split()) if os.path.exists(badf) else set()
@@ -56,18 +75,40 @@ for line in sys.stdin:
             open(badf, "a").write(h + "\n")
             print("watch: skipped a bad line")
         continue
-    newest = max(newest, ts)
     if sender_id == os.environ["BOTID"]:
+        save(ts)
         continue
     who = clean(name if isinstance(name, str) and name else sender_id, False)
     body = clean(body, True)
+    mid = m.get("id")
+    pic = re.search(r"\[image ([0-9a-fA-F-]{36})\]\s*$", body)
+    pic = bool(pic) and pic.group(1) == mid
+    if pic:  # download first (sis_bot.sh attachments); on failure keep the cursor so the next poll retries
+        print("PICTURE from %s, id %s" % (who, mid))
+        rpath = os.environ["RETRIES"]
+        if subprocess.run([os.environ["BOT"], "attachments", mid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
+            parts = open(rpath).read().split() if os.path.exists(rpath) else []
+            n = (int(parts[1]) if len(parts) == 2 and parts[0] == mid and parts[1].isdigit() else 0) + 1
+            if n >= 3:
+                print("watch: picture download gave up for %s" % mid)
+                os.path.exists(rpath) and os.remove(rpath)
+            else:
+                open(rpath, "w").write("%s %d\n" % (mid, n))
+                print("watch: picture download failed for %s, will retry" % mid)
+                sys.exit(0)
+        elif os.path.exists(rpath):
+            os.remove(rpath)
     fence = "`" * max(3, max([len(x) for x in re.findall(r"`+", body)] + [0]) + 1)
     with open(os.environ["INBOX"], "a", encoding="utf-8") as f:
         f.write("## %s — %s\nconversation: %s\n\n%s\n%s\n%s\n\n" % (ts, who, conv, fence, body, fence))
-    print("%s: %s" % (who, body[:80].replace("\n", " ")))
-if newest:
-    open(os.environ["SEEN"], "w").write(newest)
+    if not pic:
+        print("%s: %s" % (who, body[:80].replace("\n", " ")))
+    save(ts)
 '
+}
+
+heartbeat() { # atomic: tmp + mv
+  date -u +%Y-%m-%dT%H:%M:%SZ >"$HEART.tmp" && mv -f "$HEART.tmp" "$HEART"
 }
 
 check() {
@@ -77,7 +118,7 @@ check() {
   out=$("$BOT" read --since "$(cat "$SEEN")" 2>/dev/null)
   rc=$?
   case $rc in
-    0) process "$out" "$botid" ;;
+    0) process "$out" "$botid" && heartbeat ;;
     3) echo "watch: bot session lost or busy (exit 3)" ;;
     4) echo "watch: bot not permitted or switched off (exit 4)" ;;
     5) echo "watch: rate limited (exit 5), backing off"; BACKOFF=1 ;;
@@ -85,8 +126,79 @@ check() {
   esac
 }
 
+lock_or_exit() {
+  [ -n "${SIS_WATCH_LOCKED:-}" ] && return 0  # the supervisor already holds it
+  exec 8>"$LOCK"
+  flock -n 8 || { echo "watch: already running (lock $LOCK); this copy exits" >&2; exit 1; }
+  export SIS_WATCH_LOCKED=1
+}
+
+self_test() {
+  local T fail=0 out h
+  local PID=11111111-1111-4111-8111-111111111111 TS=2030-01-01T00:00:00.000000+00:00
+  T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+  mkdir -p "$T/.private"
+  cat >"$T/bot.sh" <<'FAKE'
+#!/usr/bin/env bash
+d=$(dirname "$0")
+echo "$*" >>"$d/calls"
+case "$1" in
+  status) echo "ok user=00000000-0000-4000-8000-000000b07b07 session active" ;;
+  attachments) [ ! -f "$d/failpic" ] ;;
+  read) cat "$d/mailbox" ;;
+esac
+FAKE
+  chmod +x "$T/bot.sh"
+  printf '{"id":"%s","conversation_id":"c","sender_id":"u","sender_name":"Bob","body":"hi\\n[image %s]","created_at":"%s","reply_to":null}\n' \
+    "$PID" "$PID" "$TS" >"$T/mailbox"
+  echo 2000-01-01T00:00:00Z >"$T/.private/tester-inbox.seen"
+  run() { SIS_WATCH_ROOT=$T SIS_BOT_CMD=$T/bot.sh "$0" --once 2>&1; }
+  t() { if [ "$2" = "$3" ]; then echo "ok - $1"; else echo "not ok - $1: want [$2] got [$3]"; fail=1; fi; }
+  # lock: a live holder blocks a second start; once it is dead the lock is free again
+  ( exec 7>"$T/.private/bot-watch.lock"; flock 7; exec sleep 30 ) & h=$!
+  sleep 0.3
+  out=$(run); t "second start exits at once with a message" yes "$([[ $out == *"already running"* ]] && echo yes || echo "$out")"
+  kill $h; wait $h 2>/dev/null; sleep 0.2
+  # failed download: PICTURE line printed, cursor kept, no heartbeat claim of the picture
+  : >"$T/failpic"; out=$(run)
+  t "picture line" "PICTURE from Bob, id $PID" "$(printf '%s\n' "$out" | head -1)"
+  t "cursor kept on failed download" 2000-01-01T00:00:00Z "$(cat "$T/.private/tester-inbox.seen")"
+  # give up after 3 failures: later messages are not blocked, inbox gets the message once
+  run >/dev/null
+  t "no inbox entry while retrying" 0 "$(cat "$T/.private/tester-inbox.md" 2>/dev/null | grep -c '^## ')"
+  out=$(run)
+  t "gave up after 3 failures" "watch: picture download gave up for $PID" "$(printf '%s\n' "$out" | grep gave)"
+  t "cursor moved past the given-up picture" "$TS" "$(cat "$T/.private/tester-inbox.seen")"
+  t "no duplicate inbox entry" 1 "$(grep -c '^## ' "$T/.private/tester-inbox.md")"
+  t "retry file removed" no "$([ -e "$T/.private/bot-watch.retries" ] && echo yes || echo no)"
+  echo 2000-01-01T00:00:00Z >"$T/.private/tester-inbox.seen"
+  # good download: cursor moves, heartbeat is an ISO time
+  rm "$T/failpic"; run >/dev/null
+  t "cursor moved after handling" "$TS" "$(cat "$T/.private/tester-inbox.seen")"
+  t "attachments called with the message id" yes "$(grep -qx "attachments $PID" "$T/calls" && echo yes || echo no)"
+  t "heartbeat is ISO time" yes "$([[ $(cat "$T/.orchestra/bot-watch.heartbeat" 2>/dev/null) =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$ ]] && echo yes || echo no)"
+  exit $fail
+}
+
+[ "$MODE" = self-test ] && self_test
+
+lock_or_exit
+
+if [ "$MODE" = once ]; then check; exit 0; fi
+
+if [ "$MODE" = supervise ]; then
+  wait_s=5
+  while true; do
+    start=$(date +%s)
+    "$0" "$INTERVAL"
+    echo "watch: poll loop ended (exit $?), restarting in ${wait_s}s" >&2
+    sleep "$wait_s" 8>&-
+    if [ $(( $(date +%s) - start )) -gt 300 ]; then wait_s=5; else wait_s=$((wait_s * 2 > 300 ? 300 : wait_s * 2)); fi
+  done
+fi
+
 while true; do
   BACKOFF=0
   check
-  if [ "$BACKOFF" = 1 ]; then sleep $((INTERVAL * 2)); else sleep "$INTERVAL"; fi
+  if [ "$BACKOFF" = 1 ]; then sleep $((INTERVAL * 2)) 8>&-; else sleep "$INTERVAL" 8>&-; fi
 done

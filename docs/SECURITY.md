@@ -86,7 +86,9 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     changes of members whose time in the group overlapped hers.
   - `messages` inserts: `authenticated` may insert exactly `id,
     conversation_id, sender_id, body, attachment_path, attachment_preview,
-    reply_to, forwarded, link_preview, photo_group`; `created_at`, `deleted`, `deleted_at` and
+    attachment_name, attachment_mime, attachment_size, attachment_duration_ms,
+    attachment_waveform, voice_transcript, reply_to, forwarded, link_preview,
+    photo_group`; `created_at`, `deleted`, `deleted_at` and
     `edited_at` stay server-assigned, and there is no UPDATE or DELETE
     privilege (edits and deletes go through `edit_message` /
     `delete_message`). The `id` is proposed by the phone (a random v4 UUID),

@@ -5,6 +5,7 @@
 // off, old messages showed but the seen tick and the readers card vanished.
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
@@ -94,13 +95,35 @@ void main() {
   List<(String, bool, DateTime?)> shown(ProviderContainer c) =>
       rows(c.read(readMarksProvider).value);
 
+  /// Waits until the app's own store holds [want] for c1. Read through the
+  /// app's store: a second store opened on the same file can disturb it.
+  Future<void> stored(
+    ProviderContainer c,
+    List<(String, bool, DateTime?)> want,
+    String why,
+  ) async {
+    final store = c.read(readMarkStoreProvider);
+    final sw = Stopwatch()..start();
+    while (!listEquals(rows(await store.load('c1')), want)) {
+      if (sw.elapsed > const Duration(seconds: 5)) fail(why);
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+  }
+
+  /// Ends one app run. dispose() alone starts the store's close without
+  /// awaiting it, so the next run or the tear-down's delete of [dir] raced
+  /// the closing database (CI run 39213600192: "Directory not empty").
+  Future<void> quit(ProviderContainer c) async {
+    await (c.read(messageStoreProvider) as DriftMessageStore).close();
+    c.dispose();
+  }
+
   Future<void> onlineRun(List<ReadMark> server) async {
     final chat = ChatFake()..readMarksData['c1'] = server;
     final c = await app(chat);
     await until(() => shown(c).length == server.length, 'online load');
-    // The save is behind the answer; give the real file a moment.
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    c.dispose();
+    await stored(c, rows(server), 'online answer not saved');
+    await quit(c);
   }
 
   test(
@@ -115,6 +138,9 @@ void main() {
         ..readMarksResult = const Err(NetworkFailure('offline'));
       final c = await app(chat);
       await until(() => shown(c).isNotEmpty, 'nothing shown offline');
+      await until(() => chat.readMarksCalls.isNotEmpty, 'server not asked');
+      // Not a wait for a condition: a window in which the server's error
+      // must NOT replace what is shown (there is no event to await).
       await Future<void>.delayed(const Duration(milliseconds: 100));
 
       expect(c.read(readMarksProvider).hasError, isFalse);
@@ -129,7 +155,7 @@ void main() {
         'u2',
         'u3',
       ], reason: 'group readers card empty offline');
-      c.dispose();
+      await quit(c);
     },
   );
 
@@ -146,15 +172,15 @@ void main() {
 
     chat.releaseReadMarks();
     await until(() => shown(c).firstOrNull?.$3 == t2, 'no refresh');
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    c.dispose();
+    await stored(c, [('u2', true, t2)], 'refresh not saved');
+    await quit(c);
 
     final offline = await app(
       ChatFake()..readMarksResult = const Err(NetworkFailure('offline')),
     );
     await until(() => shown(offline).isNotEmpty, 'nothing stored');
     expect(shown(offline), [('u2', true, t2)], reason: 'refresh not saved');
-    offline.dispose();
+    await quit(offline);
   });
 
   test('a member who stopped sharing has no read time offline', () async {
@@ -166,6 +192,6 @@ void main() {
     );
     await until(() => shown(c).isNotEmpty, 'nothing stored');
     expect(shown(c), [('u2', false, null)]);
-    c.dispose();
+    await quit(c);
   });
 }

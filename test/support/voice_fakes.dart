@@ -80,6 +80,44 @@ class VoiceRecorderFake implements VoiceRecorder {
   }
 }
 
+/// A [VoiceRecorderFake] that can also hold and carry on, like the real
+/// recorder: each call answers after a short delay, and [pauseOk] /
+/// [resumeOk] decide whether the platform accepted it.
+class PausableVoiceRecorderFake extends VoiceRecorderFake
+    implements PausableVoiceRecorder {
+  PausableVoiceRecorderFake({
+    super.startResult,
+    super.latency,
+    super.take,
+    this.pauseOk = true,
+    this.resumeOk = true,
+    this.callLatency = const Duration(milliseconds: 20),
+  });
+
+  /// What [pause] answers.
+  bool pauseOk;
+
+  /// What [resume] answers.
+  bool resumeOk;
+
+  /// How long [pause] and [resume] take to answer.
+  Duration callLatency;
+
+  @override
+  Future<bool> pause() async {
+    calls.add('pause');
+    await Future<void>.delayed(callLatency);
+    return pauseOk;
+  }
+
+  @override
+  Future<bool> resume() async {
+    calls.add('resume');
+    await Future<void>.delayed(callLatency);
+    return resumeOk;
+  }
+}
+
 /// A fake transcriber that records calls and returns a preset transcript.
 class VoiceTranscriberFake implements VoiceTranscriber {
   VoiceTranscriberFake({this.words});

@@ -30,6 +30,21 @@ final class DriftMessageStore implements MessageStore {
 
   /// Bumped by every clear() in the process; an instance whose work began before a bump lost to that erase.
   static int _erasures = 0;
+
+  /// Per file path: opens in this process run one after another, so a new file's schema is created by one opener while the others wait (no create-vs-create race).
+  static final _openGates = <String, Future<void>>{};
+
+  static Future<T> _serial<T>(String path, Future<T> Function() job) {
+    final prev = _openGates[path] ?? Future<void>.value();
+    final run = prev.then((_) => job());
+    final next = run.then<void>((_) {}, onError: (Object _) {});
+    _openGates[path] = next;
+    next.whenComplete(() {
+      if (identical(_openGates[path], next)) _openGates.remove(path);
+    });
+    return run;
+  }
+
   int? _seen;
 
   /// The process-wide erase count (every clear() on any instance raises it).
@@ -234,7 +249,7 @@ final class DriftMessageStore implements MessageStore {
     var reset = false;
     for (var tries = 0; opened == null; tries++) {
       try {
-        opened = await attempt();
+        opened = await _serial(file.path, attempt);
       } catch (e) {
         if (_unusable(e)) {
           // Wrong key, not a database, corrupt, or another owner: start again from nothing, once.

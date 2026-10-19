@@ -111,3 +111,46 @@ class ReadMarks extends Table {
   @override
   String get tableName => 'read_marks';
 }
+
+/// Stored Olm session with one contact (pickle encrypted with the pickle key).
+@DataClassName('StoredOlmSessionRow')
+class OlmSessions extends Table {
+  TextColumn get sessionId => text()();
+
+  TextColumn get peerUserId => text()();
+
+  TextColumn get peerIdentityKey => text()();
+
+  TextColumn get pickle => text()();
+
+  /// Microseconds since epoch.
+  IntColumn get lastUsedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {sessionId};
+
+  @override
+  String get tableName => 'olm_sessions';
+}
+
+/// One queued send of one member (record = encodeQueue of that single record), with its ciphertext once locked.
+@DataClassName('StoredSendQueueRow')
+class SendQueueRows extends Table {
+  TextColumn get userId => text()();
+
+  TextColumn get id => text()();
+
+  IntColumn get position => integer()();
+
+  TextColumn get record => text()();
+
+  TextColumn get ciphertext => text().nullable()();
+
+  IntColumn get olmType => integer().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {userId, id};
+
+  @override
+  String get tableName => 'send_queue';
+}

@@ -69,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1962060524;
+  int get rustContentHash => -579034159;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -159,7 +159,11 @@ abstract class RustLibApi extends BaseApi {
     required List<int> key,
   });
 
+  String crateApiOlmOlmSessionSessionId({required OlmSession that});
+
   Future<void> crateApiOlmInitApp();
+
+  String crateApiOlmOlmPreKeySessionId({required OlmCiphertext message});
 
   void crateApiOlmOlmVerify({
     required String signingKey,
@@ -840,6 +844,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  String crateApiOlmOlmSessionSessionId({required OlmSession that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOlmSession(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiOlmOlmSessionSessionIdConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmSessionSessionIdConstMeta =>
+      const TaskConstMeta(
+        debugName: "OlmSession_session_id",
+        argNames: ["that"],
+      );
+
+  @override
   Future<void> crateApiOlmInitApp() {
     return handler.executeNormal(
       NormalTask(
@@ -848,7 +881,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 23,
             port: port_,
           );
         },
@@ -867,6 +900,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "init_app", argNames: []);
 
   @override
+  String crateApiOlmOlmPreKeySessionId({required OlmCiphertext message}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_olm_ciphertext(message, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiOlmOlmPreKeySessionIdConstMeta,
+        argValues: [message],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOlmOlmPreKeySessionIdConstMeta =>
+      const TaskConstMeta(
+        debugName: "olm_pre_key_session_id",
+        argNames: ["message"],
+      );
+
+  @override
   void crateApiOlmOlmVerify({
     required String signingKey,
     required String message,
@@ -879,7 +938,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(signingKey, serializer);
           sse_encode_String(message, serializer);
           sse_encode_String(signature, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1597,4 +1656,7 @@ class OlmSessionImpl extends RustOpaque implements OlmSession {
 
   String pickle({required List<int> key}) =>
       RustLib.instance.api.crateApiOlmOlmSessionPickle(that: this, key: key);
+
+  String sessionId() =>
+      RustLib.instance.api.crateApiOlmOlmSessionSessionId(that: this);
 }

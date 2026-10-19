@@ -17,6 +17,9 @@ void olmVerify({
   signature: signature,
 );
 
+String olmPreKeySessionId({required OlmCiphertext message}) =>
+    RustLib.instance.api.crateApiOlmOlmPreKeySessionId(message: message);
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<OlmAccount>>
 abstract class OlmAccount implements RustOpaqueInterface {
   OlmInbound createInboundSession({
@@ -81,6 +84,8 @@ abstract class OlmSession implements RustOpaqueInterface {
   );
 
   String pickle({required List<int> key});
+
+  String sessionId();
 }
 
 class OlmCiphertext {

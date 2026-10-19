@@ -2043,6 +2043,801 @@ class ReadMarksCompanion extends UpdateCompanion<StoredReadMarkRow> {
   }
 }
 
+class $OlmSessionsTable extends OlmSessions
+    with TableInfo<$OlmSessionsTable, StoredOlmSessionRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OlmSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _sessionIdMeta = const VerificationMeta(
+    'sessionId',
+  );
+  @override
+  late final GeneratedColumn<String> sessionId = GeneratedColumn<String>(
+    'session_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _peerUserIdMeta = const VerificationMeta(
+    'peerUserId',
+  );
+  @override
+  late final GeneratedColumn<String> peerUserId = GeneratedColumn<String>(
+    'peer_user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _peerIdentityKeyMeta = const VerificationMeta(
+    'peerIdentityKey',
+  );
+  @override
+  late final GeneratedColumn<String> peerIdentityKey = GeneratedColumn<String>(
+    'peer_identity_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pickleMeta = const VerificationMeta('pickle');
+  @override
+  late final GeneratedColumn<String> pickle = GeneratedColumn<String>(
+    'pickle',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastUsedAtMeta = const VerificationMeta(
+    'lastUsedAt',
+  );
+  @override
+  late final GeneratedColumn<int> lastUsedAt = GeneratedColumn<int>(
+    'last_used_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    sessionId,
+    peerUserId,
+    peerIdentityKey,
+    pickle,
+    lastUsedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'olm_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredOlmSessionRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('session_id')) {
+      context.handle(
+        _sessionIdMeta,
+        sessionId.isAcceptableOrUnknown(data['session_id']!, _sessionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sessionIdMeta);
+    }
+    if (data.containsKey('peer_user_id')) {
+      context.handle(
+        _peerUserIdMeta,
+        peerUserId.isAcceptableOrUnknown(
+          data['peer_user_id']!,
+          _peerUserIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_peerUserIdMeta);
+    }
+    if (data.containsKey('peer_identity_key')) {
+      context.handle(
+        _peerIdentityKeyMeta,
+        peerIdentityKey.isAcceptableOrUnknown(
+          data['peer_identity_key']!,
+          _peerIdentityKeyMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_peerIdentityKeyMeta);
+    }
+    if (data.containsKey('pickle')) {
+      context.handle(
+        _pickleMeta,
+        pickle.isAcceptableOrUnknown(data['pickle']!, _pickleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pickleMeta);
+    }
+    if (data.containsKey('last_used_at')) {
+      context.handle(
+        _lastUsedAtMeta,
+        lastUsedAt.isAcceptableOrUnknown(
+          data['last_used_at']!,
+          _lastUsedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastUsedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {sessionId};
+  @override
+  StoredOlmSessionRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredOlmSessionRow(
+      sessionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}session_id'],
+      )!,
+      peerUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}peer_user_id'],
+      )!,
+      peerIdentityKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}peer_identity_key'],
+      )!,
+      pickle: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pickle'],
+      )!,
+      lastUsedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_used_at'],
+      )!,
+    );
+  }
+
+  @override
+  $OlmSessionsTable createAlias(String alias) {
+    return $OlmSessionsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredOlmSessionRow extends DataClass
+    implements Insertable<StoredOlmSessionRow> {
+  final String sessionId;
+  final String peerUserId;
+  final String peerIdentityKey;
+  final String pickle;
+
+  /// Microseconds since epoch.
+  final int lastUsedAt;
+  const StoredOlmSessionRow({
+    required this.sessionId,
+    required this.peerUserId,
+    required this.peerIdentityKey,
+    required this.pickle,
+    required this.lastUsedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['session_id'] = Variable<String>(sessionId);
+    map['peer_user_id'] = Variable<String>(peerUserId);
+    map['peer_identity_key'] = Variable<String>(peerIdentityKey);
+    map['pickle'] = Variable<String>(pickle);
+    map['last_used_at'] = Variable<int>(lastUsedAt);
+    return map;
+  }
+
+  OlmSessionsCompanion toCompanion(bool nullToAbsent) {
+    return OlmSessionsCompanion(
+      sessionId: Value(sessionId),
+      peerUserId: Value(peerUserId),
+      peerIdentityKey: Value(peerIdentityKey),
+      pickle: Value(pickle),
+      lastUsedAt: Value(lastUsedAt),
+    );
+  }
+
+  factory StoredOlmSessionRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredOlmSessionRow(
+      sessionId: serializer.fromJson<String>(json['sessionId']),
+      peerUserId: serializer.fromJson<String>(json['peerUserId']),
+      peerIdentityKey: serializer.fromJson<String>(json['peerIdentityKey']),
+      pickle: serializer.fromJson<String>(json['pickle']),
+      lastUsedAt: serializer.fromJson<int>(json['lastUsedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'sessionId': serializer.toJson<String>(sessionId),
+      'peerUserId': serializer.toJson<String>(peerUserId),
+      'peerIdentityKey': serializer.toJson<String>(peerIdentityKey),
+      'pickle': serializer.toJson<String>(pickle),
+      'lastUsedAt': serializer.toJson<int>(lastUsedAt),
+    };
+  }
+
+  StoredOlmSessionRow copyWith({
+    String? sessionId,
+    String? peerUserId,
+    String? peerIdentityKey,
+    String? pickle,
+    int? lastUsedAt,
+  }) => StoredOlmSessionRow(
+    sessionId: sessionId ?? this.sessionId,
+    peerUserId: peerUserId ?? this.peerUserId,
+    peerIdentityKey: peerIdentityKey ?? this.peerIdentityKey,
+    pickle: pickle ?? this.pickle,
+    lastUsedAt: lastUsedAt ?? this.lastUsedAt,
+  );
+  StoredOlmSessionRow copyWithCompanion(OlmSessionsCompanion data) {
+    return StoredOlmSessionRow(
+      sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
+      peerUserId: data.peerUserId.present
+          ? data.peerUserId.value
+          : this.peerUserId,
+      peerIdentityKey: data.peerIdentityKey.present
+          ? data.peerIdentityKey.value
+          : this.peerIdentityKey,
+      pickle: data.pickle.present ? data.pickle.value : this.pickle,
+      lastUsedAt: data.lastUsedAt.present
+          ? data.lastUsedAt.value
+          : this.lastUsedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredOlmSessionRow(')
+          ..write('sessionId: $sessionId, ')
+          ..write('peerUserId: $peerUserId, ')
+          ..write('peerIdentityKey: $peerIdentityKey, ')
+          ..write('pickle: $pickle, ')
+          ..write('lastUsedAt: $lastUsedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(sessionId, peerUserId, peerIdentityKey, pickle, lastUsedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredOlmSessionRow &&
+          other.sessionId == this.sessionId &&
+          other.peerUserId == this.peerUserId &&
+          other.peerIdentityKey == this.peerIdentityKey &&
+          other.pickle == this.pickle &&
+          other.lastUsedAt == this.lastUsedAt);
+}
+
+class OlmSessionsCompanion extends UpdateCompanion<StoredOlmSessionRow> {
+  final Value<String> sessionId;
+  final Value<String> peerUserId;
+  final Value<String> peerIdentityKey;
+  final Value<String> pickle;
+  final Value<int> lastUsedAt;
+  final Value<int> rowid;
+  const OlmSessionsCompanion({
+    this.sessionId = const Value.absent(),
+    this.peerUserId = const Value.absent(),
+    this.peerIdentityKey = const Value.absent(),
+    this.pickle = const Value.absent(),
+    this.lastUsedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  OlmSessionsCompanion.insert({
+    required String sessionId,
+    required String peerUserId,
+    required String peerIdentityKey,
+    required String pickle,
+    required int lastUsedAt,
+    this.rowid = const Value.absent(),
+  }) : sessionId = Value(sessionId),
+       peerUserId = Value(peerUserId),
+       peerIdentityKey = Value(peerIdentityKey),
+       pickle = Value(pickle),
+       lastUsedAt = Value(lastUsedAt);
+  static Insertable<StoredOlmSessionRow> custom({
+    Expression<String>? sessionId,
+    Expression<String>? peerUserId,
+    Expression<String>? peerIdentityKey,
+    Expression<String>? pickle,
+    Expression<int>? lastUsedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (sessionId != null) 'session_id': sessionId,
+      if (peerUserId != null) 'peer_user_id': peerUserId,
+      if (peerIdentityKey != null) 'peer_identity_key': peerIdentityKey,
+      if (pickle != null) 'pickle': pickle,
+      if (lastUsedAt != null) 'last_used_at': lastUsedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  OlmSessionsCompanion copyWith({
+    Value<String>? sessionId,
+    Value<String>? peerUserId,
+    Value<String>? peerIdentityKey,
+    Value<String>? pickle,
+    Value<int>? lastUsedAt,
+    Value<int>? rowid,
+  }) {
+    return OlmSessionsCompanion(
+      sessionId: sessionId ?? this.sessionId,
+      peerUserId: peerUserId ?? this.peerUserId,
+      peerIdentityKey: peerIdentityKey ?? this.peerIdentityKey,
+      pickle: pickle ?? this.pickle,
+      lastUsedAt: lastUsedAt ?? this.lastUsedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (sessionId.present) {
+      map['session_id'] = Variable<String>(sessionId.value);
+    }
+    if (peerUserId.present) {
+      map['peer_user_id'] = Variable<String>(peerUserId.value);
+    }
+    if (peerIdentityKey.present) {
+      map['peer_identity_key'] = Variable<String>(peerIdentityKey.value);
+    }
+    if (pickle.present) {
+      map['pickle'] = Variable<String>(pickle.value);
+    }
+    if (lastUsedAt.present) {
+      map['last_used_at'] = Variable<int>(lastUsedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OlmSessionsCompanion(')
+          ..write('sessionId: $sessionId, ')
+          ..write('peerUserId: $peerUserId, ')
+          ..write('peerIdentityKey: $peerIdentityKey, ')
+          ..write('pickle: $pickle, ')
+          ..write('lastUsedAt: $lastUsedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SendQueueRowsTable extends SendQueueRows
+    with TableInfo<$SendQueueRowsTable, StoredSendQueueRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SendQueueRowsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _recordMeta = const VerificationMeta('record');
+  @override
+  late final GeneratedColumn<String> record = GeneratedColumn<String>(
+    'record',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ciphertextMeta = const VerificationMeta(
+    'ciphertext',
+  );
+  @override
+  late final GeneratedColumn<String> ciphertext = GeneratedColumn<String>(
+    'ciphertext',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _olmTypeMeta = const VerificationMeta(
+    'olmType',
+  );
+  @override
+  late final GeneratedColumn<int> olmType = GeneratedColumn<int>(
+    'olm_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    userId,
+    id,
+    position,
+    record,
+    ciphertext,
+    olmType,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'send_queue';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredSendQueueRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_positionMeta);
+    }
+    if (data.containsKey('record')) {
+      context.handle(
+        _recordMeta,
+        record.isAcceptableOrUnknown(data['record']!, _recordMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_recordMeta);
+    }
+    if (data.containsKey('ciphertext')) {
+      context.handle(
+        _ciphertextMeta,
+        ciphertext.isAcceptableOrUnknown(data['ciphertext']!, _ciphertextMeta),
+      );
+    }
+    if (data.containsKey('olm_type')) {
+      context.handle(
+        _olmTypeMeta,
+        olmType.isAcceptableOrUnknown(data['olm_type']!, _olmTypeMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {userId, id};
+  @override
+  StoredSendQueueRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredSendQueueRow(
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      position: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position'],
+      )!,
+      record: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}record'],
+      )!,
+      ciphertext: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}ciphertext'],
+      ),
+      olmType: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}olm_type'],
+      ),
+    );
+  }
+
+  @override
+  $SendQueueRowsTable createAlias(String alias) {
+    return $SendQueueRowsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredSendQueueRow extends DataClass
+    implements Insertable<StoredSendQueueRow> {
+  final String userId;
+  final String id;
+  final int position;
+  final String record;
+  final String? ciphertext;
+  final int? olmType;
+  const StoredSendQueueRow({
+    required this.userId,
+    required this.id,
+    required this.position,
+    required this.record,
+    this.ciphertext,
+    this.olmType,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['user_id'] = Variable<String>(userId);
+    map['id'] = Variable<String>(id);
+    map['position'] = Variable<int>(position);
+    map['record'] = Variable<String>(record);
+    if (!nullToAbsent || ciphertext != null) {
+      map['ciphertext'] = Variable<String>(ciphertext);
+    }
+    if (!nullToAbsent || olmType != null) {
+      map['olm_type'] = Variable<int>(olmType);
+    }
+    return map;
+  }
+
+  SendQueueRowsCompanion toCompanion(bool nullToAbsent) {
+    return SendQueueRowsCompanion(
+      userId: Value(userId),
+      id: Value(id),
+      position: Value(position),
+      record: Value(record),
+      ciphertext: ciphertext == null && nullToAbsent
+          ? const Value.absent()
+          : Value(ciphertext),
+      olmType: olmType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(olmType),
+    );
+  }
+
+  factory StoredSendQueueRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredSendQueueRow(
+      userId: serializer.fromJson<String>(json['userId']),
+      id: serializer.fromJson<String>(json['id']),
+      position: serializer.fromJson<int>(json['position']),
+      record: serializer.fromJson<String>(json['record']),
+      ciphertext: serializer.fromJson<String?>(json['ciphertext']),
+      olmType: serializer.fromJson<int?>(json['olmType']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'userId': serializer.toJson<String>(userId),
+      'id': serializer.toJson<String>(id),
+      'position': serializer.toJson<int>(position),
+      'record': serializer.toJson<String>(record),
+      'ciphertext': serializer.toJson<String?>(ciphertext),
+      'olmType': serializer.toJson<int?>(olmType),
+    };
+  }
+
+  StoredSendQueueRow copyWith({
+    String? userId,
+    String? id,
+    int? position,
+    String? record,
+    Value<String?> ciphertext = const Value.absent(),
+    Value<int?> olmType = const Value.absent(),
+  }) => StoredSendQueueRow(
+    userId: userId ?? this.userId,
+    id: id ?? this.id,
+    position: position ?? this.position,
+    record: record ?? this.record,
+    ciphertext: ciphertext.present ? ciphertext.value : this.ciphertext,
+    olmType: olmType.present ? olmType.value : this.olmType,
+  );
+  StoredSendQueueRow copyWithCompanion(SendQueueRowsCompanion data) {
+    return StoredSendQueueRow(
+      userId: data.userId.present ? data.userId.value : this.userId,
+      id: data.id.present ? data.id.value : this.id,
+      position: data.position.present ? data.position.value : this.position,
+      record: data.record.present ? data.record.value : this.record,
+      ciphertext: data.ciphertext.present
+          ? data.ciphertext.value
+          : this.ciphertext,
+      olmType: data.olmType.present ? data.olmType.value : this.olmType,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSendQueueRow(')
+          ..write('userId: $userId, ')
+          ..write('id: $id, ')
+          ..write('position: $position, ')
+          ..write('record: $record, ')
+          ..write('ciphertext: $ciphertext, ')
+          ..write('olmType: $olmType')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(userId, id, position, record, ciphertext, olmType);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredSendQueueRow &&
+          other.userId == this.userId &&
+          other.id == this.id &&
+          other.position == this.position &&
+          other.record == this.record &&
+          other.ciphertext == this.ciphertext &&
+          other.olmType == this.olmType);
+}
+
+class SendQueueRowsCompanion extends UpdateCompanion<StoredSendQueueRow> {
+  final Value<String> userId;
+  final Value<String> id;
+  final Value<int> position;
+  final Value<String> record;
+  final Value<String?> ciphertext;
+  final Value<int?> olmType;
+  final Value<int> rowid;
+  const SendQueueRowsCompanion({
+    this.userId = const Value.absent(),
+    this.id = const Value.absent(),
+    this.position = const Value.absent(),
+    this.record = const Value.absent(),
+    this.ciphertext = const Value.absent(),
+    this.olmType = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SendQueueRowsCompanion.insert({
+    required String userId,
+    required String id,
+    required int position,
+    required String record,
+    this.ciphertext = const Value.absent(),
+    this.olmType = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : userId = Value(userId),
+       id = Value(id),
+       position = Value(position),
+       record = Value(record);
+  static Insertable<StoredSendQueueRow> custom({
+    Expression<String>? userId,
+    Expression<String>? id,
+    Expression<int>? position,
+    Expression<String>? record,
+    Expression<String>? ciphertext,
+    Expression<int>? olmType,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (userId != null) 'user_id': userId,
+      if (id != null) 'id': id,
+      if (position != null) 'position': position,
+      if (record != null) 'record': record,
+      if (ciphertext != null) 'ciphertext': ciphertext,
+      if (olmType != null) 'olm_type': olmType,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SendQueueRowsCompanion copyWith({
+    Value<String>? userId,
+    Value<String>? id,
+    Value<int>? position,
+    Value<String>? record,
+    Value<String?>? ciphertext,
+    Value<int?>? olmType,
+    Value<int>? rowid,
+  }) {
+    return SendQueueRowsCompanion(
+      userId: userId ?? this.userId,
+      id: id ?? this.id,
+      position: position ?? this.position,
+      record: record ?? this.record,
+      ciphertext: ciphertext ?? this.ciphertext,
+      olmType: olmType ?? this.olmType,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (record.present) {
+      map['record'] = Variable<String>(record.value);
+    }
+    if (ciphertext.present) {
+      map['ciphertext'] = Variable<String>(ciphertext.value);
+    }
+    if (olmType.present) {
+      map['olm_type'] = Variable<int>(olmType.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SendQueueRowsCompanion(')
+          ..write('userId: $userId, ')
+          ..write('id: $id, ')
+          ..write('position: $position, ')
+          ..write('record: $record, ')
+          ..write('ciphertext: $ciphertext, ')
+          ..write('olmType: $olmType, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$StoreDatabase extends GeneratedDatabase {
   _$StoreDatabase(QueryExecutor e) : super(e);
   $StoreDatabaseManager get managers => $StoreDatabaseManager(this);
@@ -2051,6 +2846,8 @@ abstract class _$StoreDatabase extends GeneratedDatabase {
   late final $SyncStatesTable syncStates = $SyncStatesTable(this);
   late final $MetaTable meta = $MetaTable(this);
   late final $ReadMarksTable readMarks = $ReadMarksTable(this);
+  late final $OlmSessionsTable olmSessions = $OlmSessionsTable(this);
+  late final $SendQueueRowsTable sendQueueRows = $SendQueueRowsTable(this);
   late final Index messagesConversationCreated = Index(
     'messages_conversation_created',
     'CREATE INDEX messages_conversation_created ON messages (conversation_id, created_at)',
@@ -2065,6 +2862,8 @@ abstract class _$StoreDatabase extends GeneratedDatabase {
     syncStates,
     meta,
     readMarks,
+    olmSessions,
+    sendQueueRows,
     messagesConversationCreated,
   ];
 }
@@ -3197,6 +3996,465 @@ typedef $$ReadMarksTableProcessedTableManager =
       StoredReadMarkRow,
       PrefetchHooks Function()
     >;
+typedef $$OlmSessionsTableCreateCompanionBuilder =
+    OlmSessionsCompanion Function({
+      required String sessionId,
+      required String peerUserId,
+      required String peerIdentityKey,
+      required String pickle,
+      required int lastUsedAt,
+      Value<int> rowid,
+    });
+typedef $$OlmSessionsTableUpdateCompanionBuilder =
+    OlmSessionsCompanion Function({
+      Value<String> sessionId,
+      Value<String> peerUserId,
+      Value<String> peerIdentityKey,
+      Value<String> pickle,
+      Value<int> lastUsedAt,
+      Value<int> rowid,
+    });
+
+class $$OlmSessionsTableFilterComposer
+    extends Composer<_$StoreDatabase, $OlmSessionsTable> {
+  $$OlmSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get sessionId => $composableBuilder(
+    column: $table.sessionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get peerUserId => $composableBuilder(
+    column: $table.peerUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get peerIdentityKey => $composableBuilder(
+    column: $table.peerIdentityKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pickle => $composableBuilder(
+    column: $table.pickle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastUsedAt => $composableBuilder(
+    column: $table.lastUsedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$OlmSessionsTableOrderingComposer
+    extends Composer<_$StoreDatabase, $OlmSessionsTable> {
+  $$OlmSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get sessionId => $composableBuilder(
+    column: $table.sessionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get peerUserId => $composableBuilder(
+    column: $table.peerUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get peerIdentityKey => $composableBuilder(
+    column: $table.peerIdentityKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get pickle => $composableBuilder(
+    column: $table.pickle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastUsedAt => $composableBuilder(
+    column: $table.lastUsedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$OlmSessionsTableAnnotationComposer
+    extends Composer<_$StoreDatabase, $OlmSessionsTable> {
+  $$OlmSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get sessionId =>
+      $composableBuilder(column: $table.sessionId, builder: (column) => column);
+
+  GeneratedColumn<String> get peerUserId => $composableBuilder(
+    column: $table.peerUserId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get peerIdentityKey => $composableBuilder(
+    column: $table.peerIdentityKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get pickle =>
+      $composableBuilder(column: $table.pickle, builder: (column) => column);
+
+  GeneratedColumn<int> get lastUsedAt => $composableBuilder(
+    column: $table.lastUsedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$OlmSessionsTableTableManager
+    extends
+        RootTableManager<
+          _$StoreDatabase,
+          $OlmSessionsTable,
+          StoredOlmSessionRow,
+          $$OlmSessionsTableFilterComposer,
+          $$OlmSessionsTableOrderingComposer,
+          $$OlmSessionsTableAnnotationComposer,
+          $$OlmSessionsTableCreateCompanionBuilder,
+          $$OlmSessionsTableUpdateCompanionBuilder,
+          (
+            StoredOlmSessionRow,
+            BaseReferences<
+              _$StoreDatabase,
+              $OlmSessionsTable,
+              StoredOlmSessionRow
+            >,
+          ),
+          StoredOlmSessionRow,
+          PrefetchHooks Function()
+        > {
+  $$OlmSessionsTableTableManager(_$StoreDatabase db, $OlmSessionsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$OlmSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$OlmSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$OlmSessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> sessionId = const Value.absent(),
+                Value<String> peerUserId = const Value.absent(),
+                Value<String> peerIdentityKey = const Value.absent(),
+                Value<String> pickle = const Value.absent(),
+                Value<int> lastUsedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => OlmSessionsCompanion(
+                sessionId: sessionId,
+                peerUserId: peerUserId,
+                peerIdentityKey: peerIdentityKey,
+                pickle: pickle,
+                lastUsedAt: lastUsedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String sessionId,
+                required String peerUserId,
+                required String peerIdentityKey,
+                required String pickle,
+                required int lastUsedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => OlmSessionsCompanion.insert(
+                sessionId: sessionId,
+                peerUserId: peerUserId,
+                peerIdentityKey: peerIdentityKey,
+                pickle: pickle,
+                lastUsedAt: lastUsedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$OlmSessionsTable, StoredOlmSessionRow>(table),
+                  BaseReferences<
+                    _$StoreDatabase,
+                    $OlmSessionsTable,
+                    StoredOlmSessionRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$OlmSessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$StoreDatabase,
+      $OlmSessionsTable,
+      StoredOlmSessionRow,
+      $$OlmSessionsTableFilterComposer,
+      $$OlmSessionsTableOrderingComposer,
+      $$OlmSessionsTableAnnotationComposer,
+      $$OlmSessionsTableCreateCompanionBuilder,
+      $$OlmSessionsTableUpdateCompanionBuilder,
+      (
+        StoredOlmSessionRow,
+        BaseReferences<_$StoreDatabase, $OlmSessionsTable, StoredOlmSessionRow>,
+      ),
+      StoredOlmSessionRow,
+      PrefetchHooks Function()
+    >;
+typedef $$SendQueueRowsTableCreateCompanionBuilder =
+    SendQueueRowsCompanion Function({
+      required String userId,
+      required String id,
+      required int position,
+      required String record,
+      Value<String?> ciphertext,
+      Value<int?> olmType,
+      Value<int> rowid,
+    });
+typedef $$SendQueueRowsTableUpdateCompanionBuilder =
+    SendQueueRowsCompanion Function({
+      Value<String> userId,
+      Value<String> id,
+      Value<int> position,
+      Value<String> record,
+      Value<String?> ciphertext,
+      Value<int?> olmType,
+      Value<int> rowid,
+    });
+
+class $$SendQueueRowsTableFilterComposer
+    extends Composer<_$StoreDatabase, $SendQueueRowsTable> {
+  $$SendQueueRowsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get record => $composableBuilder(
+    column: $table.record,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ciphertext => $composableBuilder(
+    column: $table.ciphertext,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get olmType => $composableBuilder(
+    column: $table.olmType,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SendQueueRowsTableOrderingComposer
+    extends Composer<_$StoreDatabase, $SendQueueRowsTable> {
+  $$SendQueueRowsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get record => $composableBuilder(
+    column: $table.record,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ciphertext => $composableBuilder(
+    column: $table.ciphertext,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get olmType => $composableBuilder(
+    column: $table.olmType,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SendQueueRowsTableAnnotationComposer
+    extends Composer<_$StoreDatabase, $SendQueueRowsTable> {
+  $$SendQueueRowsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+
+  GeneratedColumn<String> get record =>
+      $composableBuilder(column: $table.record, builder: (column) => column);
+
+  GeneratedColumn<String> get ciphertext => $composableBuilder(
+    column: $table.ciphertext,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get olmType =>
+      $composableBuilder(column: $table.olmType, builder: (column) => column);
+}
+
+class $$SendQueueRowsTableTableManager
+    extends
+        RootTableManager<
+          _$StoreDatabase,
+          $SendQueueRowsTable,
+          StoredSendQueueRow,
+          $$SendQueueRowsTableFilterComposer,
+          $$SendQueueRowsTableOrderingComposer,
+          $$SendQueueRowsTableAnnotationComposer,
+          $$SendQueueRowsTableCreateCompanionBuilder,
+          $$SendQueueRowsTableUpdateCompanionBuilder,
+          (
+            StoredSendQueueRow,
+            BaseReferences<
+              _$StoreDatabase,
+              $SendQueueRowsTable,
+              StoredSendQueueRow
+            >,
+          ),
+          StoredSendQueueRow,
+          PrefetchHooks Function()
+        > {
+  $$SendQueueRowsTableTableManager(
+    _$StoreDatabase db,
+    $SendQueueRowsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SendQueueRowsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SendQueueRowsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SendQueueRowsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> userId = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<String> record = const Value.absent(),
+                Value<String?> ciphertext = const Value.absent(),
+                Value<int?> olmType = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SendQueueRowsCompanion(
+                userId: userId,
+                id: id,
+                position: position,
+                record: record,
+                ciphertext: ciphertext,
+                olmType: olmType,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String userId,
+                required String id,
+                required int position,
+                required String record,
+                Value<String?> ciphertext = const Value.absent(),
+                Value<int?> olmType = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SendQueueRowsCompanion.insert(
+                userId: userId,
+                id: id,
+                position: position,
+                record: record,
+                ciphertext: ciphertext,
+                olmType: olmType,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SendQueueRowsTable, StoredSendQueueRow>(table),
+                  BaseReferences<
+                    _$StoreDatabase,
+                    $SendQueueRowsTable,
+                    StoredSendQueueRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SendQueueRowsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$StoreDatabase,
+      $SendQueueRowsTable,
+      StoredSendQueueRow,
+      $$SendQueueRowsTableFilterComposer,
+      $$SendQueueRowsTableOrderingComposer,
+      $$SendQueueRowsTableAnnotationComposer,
+      $$SendQueueRowsTableCreateCompanionBuilder,
+      $$SendQueueRowsTableUpdateCompanionBuilder,
+      (
+        StoredSendQueueRow,
+        BaseReferences<
+          _$StoreDatabase,
+          $SendQueueRowsTable,
+          StoredSendQueueRow
+        >,
+      ),
+      StoredSendQueueRow,
+      PrefetchHooks Function()
+    >;
 
 class $StoreDatabaseManager {
   final _$StoreDatabase _db;
@@ -3210,4 +4468,8 @@ class $StoreDatabaseManager {
   $$MetaTableTableManager get meta => $$MetaTableTableManager(_db, _db.meta);
   $$ReadMarksTableTableManager get readMarks =>
       $$ReadMarksTableTableManager(_db, _db.readMarks);
+  $$OlmSessionsTableTableManager get olmSessions =>
+      $$OlmSessionsTableTableManager(_db, _db.olmSessions);
+  $$SendQueueRowsTableTableManager get sendQueueRows =>
+      $$SendQueueRowsTableTableManager(_db, _db.sendQueueRows);
 }

@@ -218,3 +218,21 @@ abstract interface class SendQueueStore {
   /// Forgets everything saved for every member (sign-out).
   Future<void> clear();
 }
+
+/// The ciphertext a queued send was locked into (base64) and its Olm type (0 pre-key, 1 normal).
+final class QueuedCiphertext {
+  /// Creates a queued ciphertext.
+  const QueuedCiphertext(this.ciphertext, this.olmType);
+
+  /// Base64 of the Olm message bytes.
+  final String ciphertext;
+
+  /// 0 pre-key, 1 normal.
+  final int olmType;
+}
+
+/// The locked form of a queued text send, kept with its queue row so a retry sends the very same ciphertext.
+abstract interface class QueuedCiphertexts {
+  /// The ciphertext saved for the queued send [id] of [userId], or null when none (or unreadable). Never throws.
+  Future<QueuedCiphertext?> ciphertextOf(String userId, String id);
+}

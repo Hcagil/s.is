@@ -329,5 +329,12 @@ insert into app_private.allowlist(email) values
   ('kd-ana@mail.test'),
   ('kd-ben@mail.test'),
   ('kd-cy@mail.test'),
+  -- encrypted send path (test/integration/encrypted_send_seam_test.dart): ana,
+  -- ben and dan publish keys and send locked texts; cy never publishes, so
+  -- ana's chat with her stays plain
+  ('es-ana@mail.test'),
+  ('es-ben@mail.test'),
+  ('es-cy@mail.test'),
+  ('es-dan@mail.test'),
   ('sis-destek-bot@example.com')
 on conflict do nothing;

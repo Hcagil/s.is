@@ -212,6 +212,17 @@ class FakeKeyDirectory implements KeyDirectory {
     await Future<void>.value(); // an async hop, as a real call has
     return claimAnswer;
   }
+
+  /// Answer for identity (nothing is consumed); calls go to [identities].
+  Result<ClaimedKeys?> identityAnswer = const Ok(null);
+  final identities = <String>[];
+
+  @override
+  Future<Result<ClaimedKeys?>> identity(String userId) async {
+    identities.add(userId);
+    await Future<void>.value(); // an async hop, as a real call has
+    return identityAnswer;
+  }
 }
 
 class FakePickleStore implements OlmPickleStore {

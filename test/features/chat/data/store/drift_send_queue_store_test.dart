@@ -1,364 +1,355 @@
+// DriftSendQueueStore over a REAL encrypted store file, and
+// moveLegacySendQueue from the old preferences queue into it. Written from
+// the SendQueueStore / QueuedCiphertexts contract and the send-path contract
+// (queue rows keep their ciphertext; clear() deletes queued files only inside
+// the app's own folders), never from the implementation.
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sis/features/chat/domain/send_queue_store.dart';
-import 'package:sis/features/chat/domain/file_attachment.dart';
-import 'package:sis/features/chat/domain/video.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sis/features/chat/data/store/drift_message_store.dart';
 import 'package:sis/features/chat/data/store/drift_send_queue_store.dart';
+import 'package:sis/features/chat/data/store/legacy_send_queue.dart';
+import 'package:sis/features/chat/domain/file_attachment.dart';
+import 'package:sis/features/chat/domain/send_queue_store.dart';
+import 'package:sis/features/chat/domain/video.dart';
 
 import 'store_harness.dart';
 
+const _channel = MethodChannel('plugins.flutter.io/path_provider');
+
 void main() {
-  // Helpers
-  QueuedRecord textRecord(String id, {String? replyTo}) => QueuedRecord(
-    id: id,
-    conversationId: 'c1',
-    createdAt: DateTime.now(),
-    body: 'text',
-    replyTo: replyTo,
-  );
+  TestWidgetsFlutterBinding.ensureInitialized();
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  late StoreHarness h;
+  late String key;
+  late DriftMessageStore db;
+  late DriftSendQueueStore store;
+  late Directory root, temp, support, docs, gallery, lookalike;
 
-  QueuedRecord fileRecord(String id, String filePath, {String? replyTo}) =>
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({'sis.other.setting': 'kept'});
+    h = await StoreHarness.create();
+    key = await h.newKey();
+    db = h.open(owner: 'u1', key: key);
+    addTearDown(() => db.close());
+    store = DriftSendQueueStore(db);
+    root = Directory('${h.dir.path}/phone')..createSync();
+    temp = Directory('${root.path}/tmp')..createSync();
+    support = Directory('${root.path}/support')..createSync();
+    docs = Directory('${root.path}/docs')..createSync();
+    gallery = Directory('${root.path}/DCIM')..createSync();
+    // Shares the temp folder's name as a prefix but is not inside it.
+    lookalike = Directory('${root.path}/tmp-gallery')..createSync();
+  });
+
+  tearDown(() => messenger.setMockMethodCallHandler(_channel, null));
+
+  void folders() => messenger.setMockMethodCallHandler(_channel, (call) async {
+    return switch (call.method) {
+      'getTemporaryDirectory' => temp.path,
+      'getApplicationSupportDirectory' => support.path,
+      'getApplicationDocumentsDirectory' => docs.path,
+      _ => null,
+    };
+  });
+
+  File file(Directory d, String name) =>
+      File('${d.path}/$name')..writeAsStringSync('x');
+
+  QueuedRecord text(String id, {String body = 'text', int at = 0}) =>
       QueuedRecord(
         id: id,
         conversationId: 'c1',
-        createdAt: DateTime.now(),
-        body: 'file',
-        replyTo: replyTo,
-        file: PickedFile(
-          id: 'pf$id',
-          path: filePath,
-          name: 'file.txt',
-          mime: 'text/plain',
-          size: 1,
-        ),
+        createdAt: DateTime(2026, 10, 12, 9, 0, at),
+        body: body,
       );
 
-  QueuedRecord videoRecord(String id, String videoPath, {String? replyTo}) =>
-      QueuedRecord(
-        id: id,
-        conversationId: 'c1',
-        createdAt: DateTime.now(),
-        body: 'video',
-        replyTo: replyTo,
-        video: VideoSource(
-          id: 'pv$id',
-          path: videoPath,
-          name: 'video.mp4',
-          size: 1,
-          durationMs: 1000,
-          width: 100,
-          height: 100,
-          thumbPath: '$videoPath-thumb',
-        ),
-      );
-
-  QueuedRecord stickerRecord(String id, {String? replyTo}) => QueuedRecord(
+  QueuedRecord withFile(String id, File f) => QueuedRecord(
     id: id,
     conversationId: 'c1',
-    createdAt: DateTime.now(),
-    body: 'sticker',
-    replyTo: replyTo,
-    stickerId: 'sticker-$id',
+    createdAt: DateTime(2026, 10, 12),
+    file: PickedFile(
+      id: id,
+      path: f.path,
+      name: 'f.bin',
+      mime: 'application/octet-stream',
+      size: 1,
+    ),
   );
 
-  Future<File> createFile(String name, Directory dir) async {
-    final file = File('${dir.path}/$name');
-    await file.writeAsString('x');
-    return file;
-  }
+  QueuedRecord withVideo(String id, File f) => QueuedRecord(
+    id: id,
+    conversationId: 'c1',
+    createdAt: DateTime(2026, 10, 12),
+    video: VideoSource(
+      id: id,
+      path: f.path,
+      name: 'v.mp4',
+      size: 1,
+      durationMs: 1000,
+      width: 10,
+      height: 10,
+      thumbPath: '${root.path}/thumb-$id.jpg',
+    ),
+  );
 
-  Future<DriftSendQueueStore> openStore(
-    StoreHarness h,
-    String owner,
-    String key,
-  ) async {
-    final messageStore = h.open(owner: owner, key: key);
-    final store = DriftSendQueueStore(messageStore);
-    addTearDown(() async => await messageStore.close());
-    return store;
-  }
+  List<String> ids(List<QueuedRecord> rs) => [for (final r in rs) r.id];
 
-  test('save then load returns the same records in order', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
+  group('save and load', () {
+    test('save then load gives the same records, in the order saved', () async {
+      final f = file(temp, 'a.pdf');
+      await store.save('u1', [text('t1', at: 1), withFile('f1', f)]);
+      final back = await store.load('u1');
+      expect(ids(back), ['t1', 'f1']);
+      expect(back[0].body, 'text');
+      expect(back[1].file!.path, f.path);
+    });
 
-    final file = await createFile('file.txt', h.dir);
-    final video = await createFile('video.mp4', h.dir);
+    test('a member never saved has nothing; members are separate', () async {
+      expect(await store.load('u1'), isEmpty);
+      await store.save('u1', [text('a')]);
+      await store.save('u2', [text('b')]);
+      expect(ids(await store.load('u1')), ['a']);
+      expect(ids(await store.load('u2')), ['b']);
+    });
 
-    final records = [
-      textRecord('t1'),
-      fileRecord('f1', file.path),
-      videoRecord('v1', video.path),
-      stickerRecord('s1'),
-    ];
+    test(
+      'save replaces what was saved; an empty save leaves nothing',
+      () async {
+        await store.save('u1', [text('a'), text('b', at: 1)]);
+        await store.save('u1', [text('b', at: 1)]);
+        expect(ids(await store.load('u1')), ['b']);
+        await store.save('u1', const []);
+        expect(await store.load('u1'), isEmpty);
+      },
+    );
 
-    await store.save('u1', records);
-    final loaded = await store.load('u1');
+    test('a file or video gone from the phone is left out', () async {
+      final f = file(temp, 'a.pdf');
+      final v = file(temp, 'v.mov');
+      await store.save('u1', [
+        withFile('f1', f),
+        withVideo('v1', v),
+        text('t'),
+      ]);
+      f.deleteSync();
+      v.deleteSync();
+      expect(ids(await store.load('u1')), ['t']);
+    });
 
-    expect(loaded.length, 4, reason: 'four records loaded');
-    expect(loaded[0].id, 't1', reason: 'id matches');
-    expect(loaded[0].conversationId, 'c1', reason: 'conversationId matches');
-    expect(loaded[0].body, 'text', reason: 'body matches');
-
-    expect(loaded[1].id, 'f1', reason: 'file id matches');
-    expect(loaded[1].file?.path, file.path, reason: 'file path matches');
-
-    expect(loaded[2].id, 'v1', reason: 'video id matches');
-    expect(loaded[2].video?.path, video.path, reason: 'video path matches');
-
-    expect(loaded[3].id, 's1', reason: 'sticker id matches');
-    expect(loaded[3].stickerId, 'sticker-s1', reason: 'stickerId matches');
+    test('the queue survives closing and reopening the store file', () async {
+      await store.save('u1', [text('t1', body: 'still here')]);
+      await db.close();
+      final again = h.open(owner: 'u1', key: key);
+      addTearDown(again.close);
+      final back = await DriftSendQueueStore(again).load('u1');
+      expect(ids(back), ['t1']);
+      expect(back.single.body, 'still here');
+    });
   });
 
-  test('load for a user never saved returns empty', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
+  group('ciphertext on the queue row', () {
+    test('a saved ciphertext is read back; none -> null', () async {
+      await store.save('u1', [text('t1'), text('t2', at: 1)]);
+      expect(await store.ciphertextOf('u1', 't1'), isNull);
+      expect(await store.setCiphertext('u1', 't1', 'Q0lQSEVS', 0), isTrue);
+      final c = await store.ciphertextOf('u1', 't1');
+      expect((c!.ciphertext, c.olmType), ('Q0lQSEVS', 0));
+      expect(await store.ciphertextOf('u1', 't2'), isNull);
+      expect(await store.ciphertextOf('u2', 't1'), isNull);
+    });
 
-    final loaded = await store.load('u2');
-    expect(loaded.isEmpty, true, reason: 'empty list for unsaved user');
-  });
+    test(
+      'save keeps the ciphertext of a row that stays in the queue',
+      () async {
+        await store.save('u1', [text('t1')]);
+        await store.setCiphertext('u1', 't1', 'Q0lQSEVS', 1);
+        // The queue is saved again (another send added, the first unchanged).
+        await store.save('u1', [text('t1'), text('t2', at: 1)]);
+        final c = await store.ciphertextOf('u1', 't1');
+        expect((c?.ciphertext, c?.olmType), ('Q0lQSEVS', 1));
+      },
+    );
 
-  test('users are separate', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
+    test(
+      'the row (and its ciphertext) goes when the item leaves the queue',
+      () async {
+        await store.save('u1', [text('t1')]);
+        await store.setCiphertext('u1', 't1', 'Q0lQSEVS', 0);
+        await store.save('u1', const []);
+        expect(await store.ciphertextOf('u1', 't1'), isNull);
+        // The same id queued again is a new row: no stale ciphertext.
+        await store.save('u1', [text('t1')]);
+        expect(await store.ciphertextOf('u1', 't1'), isNull);
+      },
+    );
 
-    await store.save('u1', [textRecord('t1')]);
-    await store.save('u2', [textRecord('t2')]);
-
-    final l1 = await store.load('u1');
-    final l2 = await store.load('u2');
-
-    expect(l1.length, 1, reason: 'u1 has one record');
-    expect(l1[0].id, 't1', reason: 'u1 record id');
-    expect(l2.length, 1, reason: 'u2 has one record');
-    expect(l2[0].id, 't2', reason: 'u2 record id');
-  });
-
-  test('save replaces existing records', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
-
-    await store.save('u1', [textRecord('a'), textRecord('b'), textRecord('c')]);
-    await store.save('u1', [textRecord('c'), textRecord('a')]);
-
-    final loaded = await store.load('u1');
-    expect(loaded.map((r) => r.id).toList(), [
-      'c',
-      'a',
-    ], reason: 'order preserved after replace');
-  });
-
-  test('save empty list results in empty load', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
-
-    await store.save('u1', []);
-    final loaded = await store.load('u1');
-    expect(loaded.isEmpty, true, reason: 'empty after saving empty list');
-  });
-
-  test('file record missing on disk is dropped', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
-
-    final file = await createFile('file.txt', h.dir);
-    await store.save('u1', [fileRecord('f1', file.path), textRecord('t1')]);
-
-    file.deleteSync();
-    final loaded = await store.load('u1');
-    expect(loaded.length, 1, reason: 'only text record remains');
-    expect(loaded[0].id, 't1', reason: 'text record id');
-  });
-
-  test('video record missing on disk is dropped', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
-
-    final video = await createFile('video.mp4', h.dir);
-    await store.save('u1', [videoRecord('v1', video.path), textRecord('t1')]);
-
-    video.deleteSync();
-    final loaded = await store.load('u1');
-    expect(loaded.length, 1, reason: 'only text record remains');
-    expect(loaded[0].id, 't1', reason: 'text record id');
-  });
-
-  test('clear removes all records for all users', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
-
-    await store.save('u1', [textRecord('t1')]);
-    await store.save('u2', [textRecord('t2')]);
-
-    await store.clear();
-
-    final l1 = await store.load('u1');
-    final l2 = await store.load('u2');
-    expect(l1.isEmpty, true, reason: 'u1 empty after clear');
-    expect(l2.isEmpty, true, reason: 'u2 empty after clear');
-  });
-
-  test('store survives close and reopen', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-
-    // Open, save, close
-    var messageStore = h.open(owner: 'owner-1', key: key);
-    var store = DriftSendQueueStore(messageStore);
-    addTearDown(() async => await messageStore.close());
-
-    await store.save('u1', [textRecord('t1')]);
-
-    await messageStore.close();
-
-    // Reopen
-    messageStore = h.open(owner: 'owner-1', key: key);
-    store = DriftSendQueueStore(messageStore);
-    addTearDown(() async => await messageStore.close());
-
-    final loaded = await store.load('u1');
-    expect(loaded.length, 1, reason: 'record persisted after reopen');
-    expect(loaded[0].id, 't1', reason: 'id matches after reopen');
-  });
-
-  test('setCiphertext returns true and ciphertextOf returns same', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
-
-    await store.save('u1', [textRecord('a')]);
-
-    final ok0 = await store.setCiphertext('u1', 'a', 'cipher0', 0);
-    expect(ok0, true, reason: 'setCiphertext returned true for olmType 0');
-
-    final ct0 = await store.ciphertextOf('u1', 'a');
-    expect(ct0, isNotNull, reason: 'ciphertext present');
-    expect(ct0!.ciphertext, 'cipher0', reason: 'ciphertext matches');
-    expect(ct0.olmType, 0, reason: 'olmType matches');
-
-    final ok1 = await store.setCiphertext('u1', 'a', 'cipher1', 1);
-    expect(ok1, true, reason: 'setCiphertext returned true for olmType 1');
-
-    final ct1 = await store.ciphertextOf('u1', 'a');
-    expect(ct1, isNotNull, reason: 'ciphertext present after update');
-    expect(ct1!.ciphertext, 'cipher1', reason: 'ciphertext updated');
-    expect(ct1.olmType, 1, reason: 'olmType updated');
-  });
-
-  test(
-    'setCiphertext for unknown id returns false and other user null',
-    () async {
-      final h = await StoreHarness.create();
-      final key = await h.newKey();
-      final store = await openStore(h, 'owner-1', key);
-
-      await store.save('u1', [textRecord('a')]);
-
-      final ok = await store.setCiphertext('u1', 'b', 'cipher', 0);
-      expect(ok, false, reason: 'unknown id returns false');
-
-      final ct = await store.ciphertextOf('u1', 'b');
-      expect(ct, isNull, reason: 'ciphertext null for unknown id');
-
+    test('setCiphertext on a row that does not exist writes nothing', () async {
+      expect(await store.setCiphertext('u1', 'nope', 'Q0lQSEVS', 0), isFalse);
+      expect(await store.ciphertextOf('u1', 'nope'), isNull);
+      await store.save('u1', [text('a')]);
       expect(
-        await store.setCiphertext('u2', 'a', 'cipher', 0),
-        false,
-        reason: 'another member\'s row updated',
+        await store.setCiphertext('u2', 'a', 'Q0lQSEVS', 0),
+        isFalse,
+        reason: "another member's row was written",
       );
-      final ctOther = await store.ciphertextOf('u2', 'a');
-      expect(ctOther, isNull, reason: 'other user has no ciphertext');
-    },
-  );
+      expect(await store.ciphertextOf('u2', 'a'), isNull);
+    });
 
-  test('ciphertextOf before any setCiphertext returns null', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
-
-    await store.save('u1', [textRecord('a')]);
-
-    final ct = await store.ciphertextOf('u1', 'a');
-    expect(ct, isNull, reason: 'no ciphertext before set');
+    test('clear drops every ciphertext', () async {
+      await store.save('u1', [text('t1')]);
+      await store.setCiphertext('u1', 't1', 'Q0lQSEVS', 0);
+      await store.clear();
+      expect(await store.ciphertextOf('u1', 't1'), isNull);
+      await store.save('u1', [text('t1')]);
+      expect(await store.ciphertextOf('u1', 't1'), isNull);
+    });
   });
 
-  test('ciphertext is kept across save()', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
+  group('clear', () {
+    test("deletes queued files in the app's temp, support and documents "
+        'folders, for every member, and every row', () async {
+      folders();
+      final a = file(temp, 'a.jpg');
+      final b = file(support, 'b.bin');
+      final c = file(docs, 'c.mp4');
+      await store.save('u1', [withFile('1', a), withFile('2', b)]);
+      await store.save('u2', [withVideo('3', c)]);
 
-    await store.save('u1', [textRecord('a'), textRecord('b')]);
-    await store.setCiphertext('u1', 'a', 'cipher', 0);
+      await store.clear();
 
-    // Reorder and save again
-    await store.save('u1', [textRecord('b'), textRecord('a')]);
+      expect(a.existsSync(), isFalse, reason: 'temp file kept');
+      expect(b.existsSync(), isFalse, reason: 'support file kept');
+      expect(c.existsSync(), isFalse, reason: 'documents video kept');
+      expect(await store.load('u1'), isEmpty);
+      expect(await store.load('u2'), isEmpty);
+    });
 
-    final ctA = await store.ciphertextOf('u1', 'a');
-    expect(ctA, isNotNull, reason: 'ciphertext persists');
-    expect(ctA!.ciphertext, 'cipher', reason: 'ciphertext value');
-    expect(ctA.olmType, 0, reason: 'olmType value');
+    test('never deletes a gallery original, nor a file in a folder that only '
+        "shares the app folder's name prefix", () async {
+      folders();
+      final original = file(gallery, 'IMG_0001.jpg');
+      final video = file(gallery, 'VID_0001.mp4');
+      final near = file(lookalike, 'IMG_0002.jpg');
+      final own = file(temp, 'copy.jpg');
+      await store.save('u1', [
+        withFile('1', original),
+        withVideo('2', video),
+        withFile('3', near),
+        withFile('4', own),
+      ]);
 
-    final ctB = await store.ciphertextOf('u1', 'b');
-    expect(ctB, isNull, reason: 'b has no ciphertext');
+      await store.clear();
+
+      expect(original.existsSync(), isTrue, reason: 'gallery photo deleted');
+      expect(video.existsSync(), isTrue, reason: 'gallery video deleted');
+      expect(near.existsSync(), isTrue, reason: 'prefix look-alike deleted');
+      expect(own.existsSync(), isFalse, reason: 'control: own copy kept');
+      expect(await store.load('u1'), isEmpty);
+    });
+
+    test(
+      'a file reached through ".." out of the app folder is not deleted',
+      () async {
+        folders();
+        final original = file(gallery, 'IMG_0003.jpg');
+        final sneaky = File('${temp.path}/../DCIM/IMG_0003.jpg');
+        final own = file(temp, 'copy.jpg');
+        await store.save('u1', [withFile('1', sneaky), withFile('2', own)]);
+
+        await store.clear();
+
+        expect(original.existsSync(), isTrue);
+        expect(own.existsSync(), isFalse, reason: 'control: own copy kept');
+        expect(await store.load('u1'), isEmpty);
+      },
+    );
+
+    test('without path_provider, clear still removes every row and deletes '
+        'nothing', () async {
+      // No handler: every path_provider call fails (MissingPluginException).
+      final original = file(gallery, 'IMG_0004.jpg');
+      final own = file(temp, 'copy.jpg');
+      await store.save('u1', [withFile('1', original)]);
+      await store.save('u2', [withFile('2', own)]);
+
+      await store.clear();
+
+      expect(await store.load('u1'), isEmpty);
+      expect(await store.load('u2'), isEmpty);
+      expect(original.existsSync(), isTrue);
+      expect(own.existsSync(), isTrue);
+    });
+
+    test(
+      'path_provider failing with an error: clear still removes the rows',
+      () async {
+        messenger.setMockMethodCallHandler(
+          _channel,
+          (call) async => throw PlatformException(code: 'boom'),
+        );
+        await store.save('u1', [withFile('1', file(temp, 'a.jpg'))]);
+
+        await store.clear();
+
+        expect(await store.load('u1'), isEmpty);
+      },
+    );
   });
 
-  test('removed record loses its ciphertext', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
+  group('moveLegacySendQueue', () {
+    test("appends the member's old prefs queue, skips ids already held, and "
+        'removes every sis.sendqueue. key', () async {
+      SharedPreferences.setMockInitialValues({
+        'sis.sendqueue.u1': encodeQueue([
+          text('old1', body: 'from prefs', at: 5),
+          text('held', body: 'prefs copy', at: 6),
+        ]),
+        'sis.sendqueue.u2': encodeQueue([text('other', body: 'u2 text')]),
+        'sis.other.setting': 'kept',
+      });
+      await store.save('u1', [text('held', body: 'store copy')]);
 
-    await store.save('u1', [textRecord('a'), textRecord('b')]);
-    await store.setCiphertext('u1', 'a', 'cipher', 0);
+      await moveLegacySendQueue(store, 'u1');
 
-    // Remove a
-    await store.save('u1', [textRecord('b')]);
+      final back = await store.load('u1');
+      expect(ids(back).toSet(), {'held', 'old1'});
+      expect(back.length, 2, reason: 'a held id was added twice');
+      expect(
+        back.firstWhere((r) => r.id == 'held').body,
+        'store copy',
+        reason: 'the stored record was overwritten by the prefs one',
+      );
+      expect(back.firstWhere((r) => r.id == 'old1').body, 'from prefs');
+      expect(await store.load('u2'), isEmpty, reason: 'not the owner');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      expect(
+        prefs.getKeys().where((k) => k.startsWith('sis.sendqueue.')),
+        isEmpty,
+      );
+      expect(prefs.getString('sis.other.setting'), 'kept');
+    });
 
-    final ctA = await store.ciphertextOf('u1', 'a');
-    expect(ctA, isNull, reason: 'ciphertext removed with record');
-  });
+    test('a moved text keeps the ciphertext of a held row untouched', () async {
+      SharedPreferences.setMockInitialValues({
+        'sis.sendqueue.u1': encodeQueue([text('old1', at: 5)]),
+      });
+      await store.save('u1', [text('held')]);
+      await store.setCiphertext('u1', 'held', 'Q0lQSEVS', 1);
 
-  test('clear drops ciphertext', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
+      await moveLegacySendQueue(store, 'u1');
 
-    await store.save('u1', [textRecord('a')]);
-    await store.setCiphertext('u1', 'a', 'cipher', 0);
+      expect((await store.ciphertextOf('u1', 'held'))?.ciphertext, 'Q0lQSEVS');
+    });
 
-    await store.clear();
-
-    final ct = await store.ciphertextOf('u1', 'a');
-    expect(ct, isNull, reason: 'ciphertext cleared');
-  });
-
-  test('ciphertext is user specific', () async {
-    final h = await StoreHarness.create();
-    final key = await h.newKey();
-    final store = await openStore(h, 'owner-1', key);
-
-    await store.save('u1', [textRecord('a')]);
-    await store.save('u2', [textRecord('a')]);
-
-    await store.setCiphertext('u1', 'a', 'cipher-u1', 0);
-    await store.setCiphertext('u2', 'a', 'cipher-u2', 1);
-
-    final ctU1 = await store.ciphertextOf('u1', 'a');
-    final ctU2 = await store.ciphertextOf('u2', 'a');
-
-    expect(ctU1, isNotNull, reason: 'u1 ciphertext present');
-    expect(ctU1!.ciphertext, 'cipher-u1', reason: 'u1 ciphertext value');
-    expect(ctU1.olmType, 0, reason: 'u1 olmType');
-
-    expect(ctU2, isNotNull, reason: 'u2 ciphertext present');
-    expect(ctU2!.ciphertext, 'cipher-u2', reason: 'u2 ciphertext value');
-    expect(ctU2.olmType, 1, reason: 'u2 olmType');
+    test('nothing in prefs: the store is left as it is', () async {
+      await store.save('u1', [text('held')]);
+      await moveLegacySendQueue(store, 'u1');
+      expect(ids(await store.load('u1')), ['held']);
+    });
   });
 }

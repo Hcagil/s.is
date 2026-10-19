@@ -71,6 +71,31 @@ final class SupabaseKeyDirectory implements KeyDirectory {
   }
 
   @override
+  Future<Result<ClaimedKeys?>> identity(String userId) async {
+    try {
+      final res = await _client.rpc(
+        'olm_identity',
+        params: {'target': userId},
+      ) as List<dynamic>;
+      if (res.isEmpty) return const Ok(null);
+      final r = res[0] as Map<String, dynamic>;
+      return Ok(
+        ClaimedKeys(
+          identityKey: r['identity_key'] as String,
+          signingKey: r['signing_key'] as String,
+          deviceSignature: r['device_signature'] as String,
+          oneTimeKey: '',
+          isFallback: false,
+        ),
+      );
+    } on PostgrestException catch (e) {
+      return Err(_asFailure(e));
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
   Future<Result<PublishedStatus?>> status() async {
     try {
       final res = await _client.rpc('olm_key_status') as List<dynamic>;

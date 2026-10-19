@@ -833,9 +833,37 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// reason; on success the new text shows here at once, and on every other
   /// open screen through Realtime.
   Future<Result<Message>> editMessage(Message message, String body) async {
-    final result = await ref
-        .read(chatRepositoryProvider)
-        .editMessage(message, body);
+    final text = body.trim();
+    // A direct chat with a verified partner edits the locked text with a fresh ciphertext; any other chat edits it plain. A locking failure edits nothing (never plain).
+    final lock = await ref
+        .read(textLockerProvider)
+        .lock(
+          conversationId: message.conversationId,
+          messageId: message.id,
+          text: text,
+        );
+    final Result<Message> result;
+    switch (lock) {
+      case Err(:final failure):
+        return Err(failure);
+      case Ok(value: null):
+        result = await ref
+            .read(chatRepositoryProvider)
+            .editMessage(message, body);
+      case Ok(:final value?):
+        final repository = ref.read(encryptedMessageRepositoryProvider);
+        if (repository == null) return const Err(DeniedFailure());
+        final edited = await repository.edit(
+          id: message.id,
+          ciphertext: value.ciphertext,
+          olmType: value.olmType,
+        );
+        // The stored row only holds the placeholder: this phone keeps the new text (an edit drops the link card).
+        result = switch (edited) {
+          Ok(:final value) => Ok(value.withPlain(text, null)),
+          Err(:final failure) => Err(failure),
+        };
+    }
     if (result case Ok(:final value)) {
       _persist([value]);
       if (ref.mounted) _edited(value);
@@ -1180,12 +1208,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     if (photos.length < 2) {
       // One message (a lone photo leaves any album): one call for all targets.
       final one = photos.first;
-      result = await ref
-          .read(chatRepositoryProvider)
-          .forward(
-            one.photoGroup == null ? one : one.withPhotoGroup(null),
-            conversationIds,
-          );
+      result = await _forwardOne(
+        one.photoGroup == null ? one : one.withPhotoGroup(null),
+        conversationIds,
+      );
     } else {
       // An album: every target gets its own fresh group id.
       for (final target in conversationIds) {
@@ -1204,6 +1230,55 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       unawaited(ref.read(conversationListProvider.notifier).reloadQuietly());
     }
     return result;
+  }
+
+  /// Forwards one message to each target. A plain text goes through the send path: a direct chat with a verified partner gets it locked, any other chat the ordinary copy. A locking failure stops the forward (never plain). Everything else (photos, files, stickers, ...) is copied as before.
+  Future<Result<void>> _forwardOne(
+    Message message,
+    List<String> conversationIds,
+  ) async {
+    final repository = ref.read(chatRepositoryProvider);
+    final isText =
+        message.body.isNotEmpty &&
+        message.attachmentPath == null &&
+        message.localImage == null &&
+        message.stickerId == null &&
+        !message.albumCard &&
+        !message.poll &&
+        !message.contact &&
+        message.location == null &&
+        message.file == null &&
+        message.adminMsg == null;
+    if (!isText) return repository.forward(message, conversationIds);
+    // A message this phone could not unlock only has the placeholder as text: never forward that.
+    if (isLockedPlaceholder(message.body)) {
+      return const Err(DeniedFailure());
+    }
+    for (final target in conversationIds) {
+      final id = randomMessageId();
+      final lock = await ref
+          .read(textLockerProvider)
+          .lock(conversationId: target, messageId: id, text: message.body);
+      switch (lock) {
+        case Err(:final failure):
+          return Err(failure);
+        case Ok(value: null):
+          final sent = await repository.forward(message, [target]);
+          if (sent is Err) return sent;
+        case Ok(:final value?):
+          final locked = ref.read(encryptedMessageRepositoryProvider);
+          if (locked == null) return const Err(DeniedFailure());
+          final sent = await locked.send(
+            id: id,
+            conversationId: target,
+            ciphertext: value.ciphertext,
+            olmType: value.olmType,
+            forwarded: true,
+          );
+          if (sent case Err(:final failure)) return Err(failure);
+      }
+    }
+    return const Ok(null);
   }
 
   /// Forwards [message] to [conversationIds] and to [personIds]: a person

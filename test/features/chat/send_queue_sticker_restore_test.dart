@@ -1,21 +1,20 @@
 // Stickers and album cards go through the offline send queue (step 10a): the
-// queue is saved by the real SharedPrefsSendQueueStore, so a sticker and an
+// queue is saved in a store that outlives the container, so a sticker and an
 // album card waiting when the app is killed come back on the next start, as
 // the same messages (same client ids, so the server's retry is harmless),
 // and are sent then. A retryable failure keeps them queued.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/chat_drafts.dart';
-import 'package:sis/features/chat/data/shared_prefs_send_queue_store.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/sticker.dart';
 
 import '../../support/held_send_chat.dart';
+import '../../support/memory_send_queue_store.dart';
 import '../../support/sticker_fakes.dart';
 import '../../support/video_fakes.dart';
 
@@ -25,7 +24,8 @@ class _Session extends SessionController {
 }
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  late MemorySendQueueStore store;
+  setUp(() => store = MemorySendQueueStore());
 
   Future<void> hop(WidgetTester t) async {
     for (var i = 0; i < 4; i++) {
@@ -45,7 +45,7 @@ void main() {
     final chat = HeldSendChat();
     final c = ProviderContainer.test(
       overrides: [
-        ...videoOverrides(store: const SharedPrefsSendQueueStore()),
+        ...videoOverrides(store: store),
         chatRepositoryProvider.overrideWithValue(chat),
         stickerRepositoryProvider.overrideWithValue(stickers),
         recentStickerStoreProvider.overrideWithValue(RecentStickerStoreFake()),
@@ -61,8 +61,7 @@ void main() {
   List<Message> pending(ProviderContainer c) =>
       c.read(sendQueueProvider)['c1'] ?? const <Message>[];
 
-  Future<Set<String>> keys() async =>
-      (await SharedPreferences.getInstance()).getKeys();
+  Set<String> keys() => store.saved.keys.toSet();
 
   final s1 = starterStickerId(1);
   final answered = Message(
@@ -115,7 +114,7 @@ void main() {
     final st = q.enqueueSticker('c1', s1, replyTo: answered);
     final card = q.enqueueStickerAlbum('c1', 'alb-1', 'Trip');
     await hop(t);
-    expect(await keys(), contains('sis.sendqueue.u1'));
+    expect(keys(), contains('u1'));
     a.c.dispose(); // killed; nothing was answered
 
     final b = await run(t);
@@ -146,7 +145,7 @@ void main() {
       (card.id, 'alb-1', 'c1'),
     );
     expect(pending(b.c), isEmpty);
-    expect(await keys(), isNot(contains('sis.sendqueue.u1')));
+    expect(keys(), isNot(contains('u1')));
     await t.pump(const Duration(seconds: 30));
   });
 
@@ -159,7 +158,7 @@ void main() {
     a.stickers.fail(0, const NetworkFailure('offline', retryable: true));
     await hop(t);
     expect([for (final x in pending(a.c)) x.id], [m.id]);
-    expect(await keys(), contains('sis.sendqueue.u1'));
+    expect(keys(), contains('u1'));
     a.c.dispose();
 
     final b = await run(t);

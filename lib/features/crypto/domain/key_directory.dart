@@ -58,6 +58,9 @@ abstract interface class KeyDirectory {
   /// Claims one key of [userId]'s phone. Ok(null) when that member has no live published phone. Err(DeniedFailure) when not allowed to chat with them (42501).
   Future<Result<ClaimedKeys?>> claim(String userId);
 
+  /// The keys of [userId]'s phone WITHOUT claiming a one-time key (RPC olm_identity: same gates as claim, no rate-limit use, nothing consumed). The result has an empty [ClaimedKeys.oneTimeKey] and isFallback false; it is good for checking the signature and for encrypting on an existing session, never for opening a new one (use claim for that). Ok(null) when that member has no live published phone or is a bot. Err(DeniedFailure) when not allowed to chat with them (42501).
+  Future<Result<ClaimedKeys?>> identity(String userId);
+
   /// This member's own row; Ok(null) when nothing is published yet.
   Future<Result<PublishedStatus?>> status();
 }

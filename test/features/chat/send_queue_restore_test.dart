@@ -1,5 +1,6 @@
 // Pending sends survive the app being killed (Update 2, 7b): the queue is
-// saved by the real SharedPrefsSendQueueStore, files live on a real disk, and
+// saved in a store that outlives the container (MemorySendQueueStore; the
+// real DriftSendQueueStore has its own tests), files live on a real disk, and
 // a second container (the restarted app) brings the sends back and resumes
 // them. The video fake behaves as the real shrinker does on disk: success
 // deletes the picked copy and leaves the shrunk mp4.
@@ -7,20 +8,19 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/chat_drafts.dart';
-import 'package:sis/features/chat/data/shared_prefs_send_queue_store.dart';
 import 'package:sis/features/chat/domain/file_attachment.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/video.dart';
 
 import '../../support/file_fakes.dart';
 import '../../support/held_send_chat.dart';
+import '../../support/memory_send_queue_store.dart';
 import '../../support/video_fakes.dart';
 
 class _Session extends SessionController {
@@ -60,9 +60,10 @@ class _DiskVideos extends DeviceVideosFake {
 
 void main() {
   late Directory dir;
+  late MemorySendQueueStore store;
 
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    store = MemorySendQueueStore();
     dir = Directory.systemTemp.createTempSync('restore');
   });
   tearDown(() => dir.deleteSync(recursive: true));
@@ -122,10 +123,7 @@ void main() {
     final videos = _DiskVideos(dir.path);
     final c = ProviderContainer.test(
       overrides: [
-        ...videoOverrides(
-          store: const SharedPrefsSendQueueStore(),
-          videos: videos,
-        ),
+        ...videoOverrides(store: store, videos: videos),
         chatRepositoryProvider.overrideWithValue(chat),
         chatFileRepositoryProvider.overrideWithValue(files),
         sessionControllerProvider.overrideWith(() => _Session(Allowed(who))),
@@ -142,8 +140,7 @@ void main() {
     for (final m in c.read(sendQueueProvider)['c1'] ?? const <Message>[]) m.id,
   ];
 
-  Future<Set<String>> keys() async =>
-      (await SharedPreferences.getInstance()).getKeys();
+  Set<String> keys() => store.saved.keys.toSet();
 
   testWidgets('killed with a text, a file and a video waiting: the next start '
       'shows all three in order and sends each, the video shrunk once', (
@@ -155,7 +152,7 @@ void main() {
     q.enqueueFile('c1', pdf('f1'));
     q.enqueueVideo('c1', clip('v1'));
     await hop(t);
-    expect(await keys(), contains('sis.sendqueue.u1'));
+    expect(keys(), contains('u1'));
     a.c.dispose(); // the app is killed; nothing was answered
 
     final b = await run(t);
@@ -180,7 +177,7 @@ void main() {
     b.files.sendOk(1);
     await hop(t);
     expect(pending(b.c), isEmpty);
-    expect(await keys(), isNot(contains('sis.sendqueue.u1')));
+    expect(keys(), isNot(contains('u1')));
     await t.pump(const Duration(seconds: 30));
   });
 
@@ -247,13 +244,10 @@ void main() {
       final a = await run(t, owner: true);
       a.c.read(sendQueueProvider.notifier).enqueue('c1', body: 'mine');
       await hop(t);
-      expect(await keys(), contains('sis.sendqueue.u1'));
+      expect(keys(), contains('u1'));
       (a.c.read(sessionControllerProvider.notifier) as _Session).set(ended);
       await hop(t);
-      expect(
-        (await keys()).where((k) => k.startsWith('sis.sendqueue.')),
-        isEmpty,
-      );
+      expect(keys(), isEmpty);
       await t.pump(const Duration(seconds: 30));
     });
   }

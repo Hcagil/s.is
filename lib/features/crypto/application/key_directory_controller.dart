@@ -8,12 +8,16 @@ import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../domain/key_directory.dart';
 import '../domain/key_engine.dart';
+import '../domain/session_engine.dart';
 
 /// The four providers below are null until main wires them; the controller then stays idle.
 final keyDirectoryProvider = Provider<KeyDirectory?>((_) => null);
 final keyEngineProvider = Provider<KeyEngine?>((_) => null);
 final olmPickleStoreProvider = Provider<OlmPickleStore?>((_) => null);
 final pickleKeyStoreProvider = Provider<PickleKeyStore?>((_) => null);
+
+/// The Olm sessions on this phone; null until main wires it (tests, unwired builds).
+final sessionEngineProvider = Provider<SessionEngine?>((_) => null);
 
 /// Where this phone's key publishing stands.
 sealed class KeyDirectoryState {
@@ -318,6 +322,23 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
     return r;
   }
 
+  /// Looks a chat partner's keys up WITHOUT claiming a one-time key (KeyDirectory.identity) and checks the phone's self-signature like [claimVerified]; a failed check returns Err(DeviceKeysFailure) and no key. Ok(null): no live phone (a bot, or no keys): nothing to lock for. The keys carry no one-time key, so they cannot open a session.
+  Future<Result<ClaimedKeys?>> identityVerified(String targetUserId) async {
+    final dir = ref.read(keyDirectoryProvider);
+    final engine = ref.read(keyEngineProvider);
+    if (dir == null || engine == null) {
+      return const Err(DeniedFailure());
+    }
+    final r = await dir.identity(targetUserId);
+    if (r case Ok(:final value?)) {
+      final ok = await engine.verifyDevice(targetUserId, value);
+      if (!ok) {
+        return const Err(DeviceKeysFailure());
+      }
+    }
+    return r;
+  }
+
   void _onSession(SessionState? s) {
     _retry?.cancel();
     _revision++;
@@ -346,6 +367,7 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
           sessionRetryDelays.length - 1,
         ].reduce(math.min)];
     _attempt++;
+    _retry?.cancel();
     _retry = Timer(delay, () {
       if (ref.mounted && rev == _revision) unawaited(refresh());
     });

@@ -28,21 +28,26 @@ class TextLocker {
 
   final Ref _ref;
 
-  /// The one other member of a direct human chat [conversationId]; Ok(null) for a group, the system chat, an admin chat; Err when the chat is not in the list.
+  /// The one other member of a direct human chat [conversationId]; Ok(null) for a group, the system chat, an admin chat; Err when the chat is not in the list, even after one re-read (a chat just started may not be in it yet).
   Future<Result<String?>> _peerOf(String conversationId) async {
-    final List<Conversation> list;
-    try {
-      list = await _ref.read(conversationListProvider.future);
-    } catch (_) {
-      return const Err(DeniedFailure());
-    }
-    for (final c in list) {
-      if (c.id != conversationId) continue;
-      if (c.title != null || c.isSystem || c.isAdminChat) {
-        return const Ok(null);
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (attempt == 1) {
+        await _ref.read(conversationListProvider.notifier).reloadQuietly();
       }
-      final other = c.other;
-      return other == null ? const Err(DeniedFailure()) : Ok(other.userId);
+      final List<Conversation> list;
+      try {
+        list = await _ref.read(conversationListProvider.future);
+      } catch (_) {
+        return const Err(DeniedFailure());
+      }
+      for (final c in list) {
+        if (c.id != conversationId) continue;
+        if (c.title != null || c.isSystem || c.isAdminChat) {
+          return const Ok(null);
+        }
+        final other = c.other;
+        return other == null ? const Err(DeniedFailure()) : Ok(other.userId);
+      }
     }
     return const Err(DeniedFailure());
   }

@@ -796,6 +796,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     if (!isSendableBody(text)) return const Err(DeniedFailure());
     // The queue row must exist before the ciphertext is stored on it.
     await _persistNow();
+    if (!ref.mounted) return const Err(DeniedFailure());
     final lock = await ref
         .read(textLockerProvider)
         .lock(
@@ -805,6 +806,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
           card: item.preview?.preview,
           queued: true,
         );
+    if (!ref.mounted) return const Err(DeniedFailure());
     switch (lock) {
       case Err(:final failure):
         return Err(failure);

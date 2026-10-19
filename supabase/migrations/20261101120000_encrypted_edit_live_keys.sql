@@ -43,3 +43,43 @@ begin
 end $$;
 revoke all on function public.edit_message_encrypted(uuid, text, smallint) from public, anon;
 grant execute on function public.edit_message_encrypted(uuid, text, smallint) to authenticated;
+
+-- edit_message as in 20261031120000, plus: refused in a chat that has ever been
+-- encrypted (conversations.encrypted_at), not only on a ciphertext row, so a
+-- locked chat never gets a plain edit.
+create or replace function public.edit_message(message uuid, body text)
+returns public.messages language plpgsql security definer set search_path = '' as $$
+declare
+  m public.messages;
+  trimmed text := btrim(coalesce(body, ''));
+begin
+  if not app_private.has_app_access() then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
+  select * into m from public.messages where id = message for update;
+  if not found
+     or m.sender_id <> auth.uid()
+     or not app_private.is_member(m.conversation_id)
+     or m.deleted is not null
+     or m.forwarded
+     or m.ciphertext is not null
+     or m.created_at < now() - interval '6 hours'
+     or exists (select 1 from public.conversations c
+                 where c.id = m.conversation_id and c.encrypted_at is not null) then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
+  if not (
+    (m.attachment_path is not null and char_length(trimmed) between 0 and 4000)
+    or char_length(trimmed) between 1 and 4000
+  ) then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
+  update public.messages
+     set body = trimmed,
+         edited_at = now()
+   where id = message
+  returning * into m;
+  return m;
+end $$;
+revoke all on function public.edit_message(uuid, text) from public, anon;
+grant execute on function public.edit_message(uuid, text) to authenticated;

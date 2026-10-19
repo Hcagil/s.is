@@ -1251,7 +1251,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         message.adminMsg == null;
     if (!isText) return repository.forward(message, conversationIds);
     // A message this phone could not unlock only has the placeholder as text: never forward that.
-    if (message.body == lockedBodyPlaceholder) {
+    if (isLockedPlaceholder(message.body)) {
       return const Err(DeniedFailure());
     }
     for (final target in conversationIds) {

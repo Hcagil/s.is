@@ -29,4 +29,25 @@ class DriftOlmPickleStore implements OlmPickleStore {
       return true;
     });
   }
+
+  @override
+  Future<bool> update(Future<String?> Function(String? current) change) {
+    return _store.run<bool>(
+      false,
+      (db) => db.transaction(() async {
+        final current = await (db.select(
+          db.meta,
+        )..where((m) => m.key.equals('olm_account'))).getSingleOrNull();
+        final next = await change(current?.value);
+        if (next != null) {
+          await db
+              .into(db.meta)
+              .insertOnConflictUpdate(
+                MetaCompanion.insert(key: 'olm_account', value: next),
+              );
+        }
+        return true;
+      }),
+    );
+  }
 }

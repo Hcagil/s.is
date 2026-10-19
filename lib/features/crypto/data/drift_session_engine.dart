@@ -56,12 +56,30 @@ final class DriftSessionEngine implements SessionEngine {
 
   Future<List<StoredOlmSessionRow>> _sessionsOf(
     StoreDatabase db,
+    String peerUserId, {
+    String? identityKey,
+  }) {
+    final query = db.select(db.olmSessions)
+      ..where((t) => t.peerUserId.equals(peerUserId))
+      ..orderBy([(t) => OrderingTerm.desc(t.lastUsedAt)]);
+    if (identityKey != null) {
+      query.where((t) => t.peerIdentityKey.equals(identityKey));
+    }
+    return query.get();
+  }
+
+  /// Deletes the peer's sessions made for any other identity key (the contact's key changed).
+  Future<void> _retireOthers(
+    StoreDatabase db,
     String peerUserId,
-  ) {
-    return (db.select(db.olmSessions)
-          ..where((t) => t.peerUserId.equals(peerUserId))
-          ..orderBy([(t) => OrderingTerm.desc(t.lastUsedAt)]))
-        .get();
+    String identityKey,
+  ) async {
+    await (db.delete(db.olmSessions)..where(
+          (t) =>
+              t.peerUserId.equals(peerUserId) &
+              t.peerIdentityKey.equals(identityKey).not(),
+        ))
+        .go();
   }
 
   Future<void> _putSession(
@@ -131,6 +149,7 @@ final class DriftSessionEngine implements SessionEngine {
       } on KeyEngineException {
         return const Err(DeviceKeysFailure());
       }
+      await _retireOthers(db, peerUserId, keys.identityKey);
       await _putSession(
         db,
         key,
@@ -146,10 +165,16 @@ final class DriftSessionEngine implements SessionEngine {
   Future<Result<LockedText>> encrypt(
     String peerUserId,
     String plaintext, {
+    required String peerIdentityKey,
     PlaintextSave? save,
+    QueueTarget? queue,
   }) {
     return _tx<LockedText>((db, key) async {
-      final rows = await _sessionsOf(db, peerUserId);
+      final rows = await _sessionsOf(
+        db,
+        peerUserId,
+        identityKey: peerIdentityKey,
+      );
       if (rows.isEmpty) return const Err(SessionPendingFailure());
       final row = rows.first; // newest used
       final KeySession session;
@@ -168,6 +193,17 @@ final class DriftSessionEngine implements SessionEngine {
         peerIdentityKey: row.peerIdentityKey,
       );
       await _savePlaintext(db, save);
+      if (queue != null) {
+        await (db.update(db.sendQueueRows)..where(
+              (r) => r.userId.equals(queue.userId) & r.id.equals(queue.queueId),
+            ))
+            .write(
+              SendQueueRowsCompanion(
+                ciphertext: Value(base64.encode(cipher.body)),
+                olmType: Value(cipher.type),
+              ),
+            );
+      }
       return Ok(
         LockedText(
           ciphertext: base64.encode(cipher.body),
@@ -246,6 +282,9 @@ final class DriftSessionEngine implements SessionEngine {
         if (existing.peerUserId != peerUserId) {
           return const Err(UnreadableMessageFailure());
         }
+        if (existing.peerIdentityKey != peerIdentityKey) {
+          return const Err(UnreadableMessageFailure());
+        }
         return _tryRows(db, key, [existing], cipher, save);
       }
       final account = await _account(db, key);
@@ -258,6 +297,7 @@ final class DriftSessionEngine implements SessionEngine {
       }
       final text = _text(inbound.plaintext);
       if (text == null) return const Err(UnreadableMessageFailure());
+      await _retireOthers(db, peerUserId, peerIdentityKey);
       await _putSession(
         db,
         key,
@@ -302,7 +342,11 @@ final class DriftSessionEngine implements SessionEngine {
       return _createInbound(peerUserId, peerIdentityKey, cipher, save);
     }
     return _tx<String>((db, key) async {
-      final rows = await _sessionsOf(db, peerUserId);
+      final rows = await _sessionsOf(
+        db,
+        peerUserId,
+        identityKey: peerIdentityKey,
+      );
       if (rows.isEmpty) return const Err(SessionPendingFailure());
       return _tryRows(db, key, rows, cipher, save);
     });

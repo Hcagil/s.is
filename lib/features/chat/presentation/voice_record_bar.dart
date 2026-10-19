@@ -118,7 +118,10 @@ class _VoiceRecordBarState extends ConsumerState<VoiceRecordBar>
                             animation: _blink,
                             builder: (context, child) {
                               final v = _blink.value;
-                              final opacity = v < 0.5 ? 1 - 2 * v : 2 * v - 1;
+                              // Paused: the dot stays solid instead of blinking.
+                              final opacity = state.paused
+                                  ? 1.0
+                                  : (v < 0.5 ? 1 - 2 * v : 2 * v - 1);
                               return Opacity(
                                 opacity: opacity,
                                 child: Container(

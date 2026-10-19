@@ -6,7 +6,7 @@ import 'package:record/record.dart';
 import '../domain/voice.dart';
 
 /// Records voice messages using the record package.
-final class RecordVoiceRecorder implements VoiceRecorder {
+final class RecordVoiceRecorder implements PausableVoiceRecorder {
   /// Creates a recorder.
   RecordVoiceRecorder() : _rec = AudioRecorder();
 
@@ -76,6 +76,30 @@ final class RecordVoiceRecorder implements VoiceRecorder {
       );
     } catch (_) {
       return null;
+    }
+  }
+
+  @override
+  Future<bool> pause() async {
+    try {
+      await _rec.pause();
+      _clock.stop();
+      _sub?.pause();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> resume() async {
+    try {
+      await _rec.resume();
+      _clock.start();
+      _sub?.resume();
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 

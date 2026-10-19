@@ -37,6 +37,7 @@ import '../domain/location_share_repository.dart';
 import '../domain/message.dart';
 import '../domain/message_store.dart';
 import '../domain/phone_book.dart';
+import '../domain/photo_crop_renderer.dart';
 import '../domain/picture_cropper.dart';
 import '../domain/poll.dart';
 import '../domain/poll_repository.dart';
@@ -156,6 +157,11 @@ final externalPickerProvider = Provider<ExternalPicker>(
 /// Crops a picture on the phone into the final square JPEG, for the crop
 /// screen.
 final pictureCropperProvider = Provider<PictureCropper>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Turns and cuts a photo for the free crop screen in the send preview.
+final photoCropRendererProvider = Provider<PhotoCropRenderer>(
   (_) => throw UnimplementedError('override in main'),
 );
 

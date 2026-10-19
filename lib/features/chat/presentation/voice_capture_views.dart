@@ -12,6 +12,7 @@ class VoiceCircleView extends StatelessWidget {
     required this.amplitude,
     required this.opacity,
     required this.locked,
+    this.paused = false,
   });
 
   /// Scale factor for the circle (0..1.2).
@@ -26,9 +27,13 @@ class VoiceCircleView extends StatelessWidget {
   /// Whether the recording is locked.
   final bool locked;
 
+  /// Whether the locked recording is held (the disc shrinks to 40 dp).
+  final bool paused;
+
   @override
   Widget build(BuildContext context) {
     final brand = SisBrand.of(context);
+    final disc = locked ? (paused ? 40.0 : 56.0) : 82.0;
     return SizedBox(
       key: const ValueKey('voice-circle'),
       width: 82,
@@ -37,13 +42,36 @@ class VoiceCircleView extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
-          // Halo 2
-          IgnorePointer(
-            ignoring: true,
+          // Halo 2 (gone while locked: only the red dot and timer show it)
+          AnimatedOpacity(
+            opacity: locked ? 0 : 1,
+            duration: const Duration(milliseconds: 150),
+            child: IgnorePointer(
+              ignoring: true,
+              child: Opacity(
+                opacity: 0.12 * scale * opacity.clamp(0.0, 1.0),
+                child: Transform.scale(
+                  scale: scale * (1.2 + 0.35 * amplitude),
+                  child: Container(
+                    width: 82,
+                    height: 82,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: brand.brand,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Halo 1
+          AnimatedOpacity(
+            opacity: locked ? 0 : 1,
+            duration: const Duration(milliseconds: 150),
             child: Opacity(
-              opacity: 0.12 * scale * opacity.clamp(0.0, 1.0),
+              opacity: 0.22 * scale * opacity.clamp(0.0, 1.0),
               child: Transform.scale(
-                scale: scale * (1.2 + 0.35 * amplitude),
+                scale: scale * (1.1 + 0.25 * amplitude),
                 child: Container(
                   width: 82,
                   height: 82,
@@ -55,27 +83,15 @@ class VoiceCircleView extends StatelessWidget {
               ),
             ),
           ),
-          // Halo 1
-          Opacity(
-            opacity: 0.22 * scale * opacity.clamp(0.0, 1.0),
-            child: Transform.scale(
-              scale: scale * (1.1 + 0.25 * amplitude),
-              child: Container(
-                width: 82,
-                height: 82,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: brand.brand,
-                ),
-              ),
-            ),
-          ),
           // Disc
           Opacity(
             opacity: opacity.clamp(0.0, 1.0),
             child: Transform.scale(
               scale: scale,
-              child: DecoratedBox(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: disc,
+                height: disc,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
@@ -83,13 +99,21 @@ class VoiceCircleView extends StatelessWidget {
                     end: Alignment.bottomRight,
                     colors: [brand.brandDeep, brand.brand],
                   ),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x733D4BE8),
-                      blurRadius: 24,
-                      offset: Offset(0, 8),
-                    ),
-                  ],
+                  boxShadow: locked
+                      ? const [
+                          BoxShadow(
+                            color: Color(0x33000000),
+                            blurRadius: 12,
+                            offset: Offset(0, 4),
+                          ),
+                        ]
+                      : const [
+                          BoxShadow(
+                            color: Color(0x733D4BE8),
+                            blurRadius: 24,
+                            offset: Offset(0, 8),
+                          ),
+                        ],
                 ),
                 child: Stack(
                   alignment: Alignment.center,
@@ -109,7 +133,7 @@ class VoiceCircleView extends StatelessWidget {
                       child: VoiceGlyph(
                         kind: VoiceGlyphKind.send,
                         color: Colors.white,
-                        size: 34,
+                        size: 28,
                       ),
                     ),
                   ],

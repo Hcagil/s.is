@@ -157,6 +157,15 @@ abstract interface class VoiceRecorder {
   Future<void> dispose();
 }
 
+/// A [VoiceRecorder] that can hold a recording and carry on. Never throws.
+abstract interface class PausableVoiceRecorder implements VoiceRecorder {
+  /// Holds the recording (the file stays, the clock stops). False on failure.
+  Future<bool> pause();
+
+  /// Carries on appending to the same file. False on failure.
+  Future<bool> resume();
+}
+
 /// Turns a finished recording into text ON THIS PHONE, never on a server.
 abstract interface class VoiceTranscriber {
   /// The words of the recording at [path] in [localeTag] ('en_US', 'tr_TR'),

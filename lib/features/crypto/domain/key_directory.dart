@@ -69,6 +69,9 @@ abstract interface class OlmPickleStore {
 
   /// True when the pickle was saved.
   Future<bool> save(String pickle);
+
+  /// Reads the saved pickle (null when none), calls [change] with it, and when [change] returns a pickle saves it - all in ONE database transaction, so no other writer of the account can be lost. Returns true when the transaction finished (also when [change] returned null and nothing was saved); false when it failed or rolled back. [change] must not do network calls.
+  Future<bool> update(Future<String?> Function(String? current) change);
 }
 
 /// The 32-byte key that encrypts the pickle, kept in the platform's secure storage.

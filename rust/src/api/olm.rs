@@ -182,6 +182,11 @@ impl OlmAccount {
 
 impl OlmSession {
     #[frb(sync)]
+    pub fn session_id(&self) -> String {
+        self.inner.session_id()
+    }
+
+    #[frb(sync)]
     pub fn encrypt(&mut self, plaintext: Vec<u8>) -> Result<OlmCiphertext, String> {
         let olm_message = self.inner.encrypt(&plaintext).map_err(|e| e.to_string())?;
         let (message_type, body) = olm_message.to_parts();
@@ -226,6 +231,16 @@ pub fn olm_verify(signing_key: String, message: String, signature: String) -> Re
     let sig = Ed25519Signature::from_base64(&signature).map_err(|_| "invalid signature")?;
     key.verify(message.as_bytes(), &sig)
         .map_err(|_| "invalid signature".to_string())
+}
+
+#[frb(sync)]
+pub fn olm_pre_key_session_id(message: OlmCiphertext) -> Result<String, String> {
+    match OlmMessage::from_parts(message.message_type as usize, &message.body)
+        .map_err(|e| e.to_string())?
+    {
+        OlmMessage::PreKey(m) => Ok(m.session_id()),
+        _ => Err("not a pre-key message".to_string()),
+    }
 }
 
 #[flutter_rust_bridge::frb(init)]

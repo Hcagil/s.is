@@ -6,6 +6,7 @@
 // all: a locking failure NEVER sends plain.
 //
 // testWidgets for its fake clock (the retry ladder).
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,6 +23,7 @@ import 'package:sis/features/chat/domain/encrypted_message_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/crypto/application/key_directory_controller.dart';
 import 'package:sis/features/crypto/domain/key_directory.dart';
+import 'package:sis/features/crypto/domain/session_engine.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
@@ -115,7 +117,71 @@ Future<void> hop(WidgetTester t) async {
 Map<String, Object?> envelopeOf(EncryptCall call) =>
     jsonDecode(call.plaintext) as Map<String, Object?>;
 
+/// An engine whose encrypt waits until [release]: the app can be gone before
+/// the lock step answers.
+class _GatedEngine extends FakeSessionEngine {
+  _GatedEngine({super.queue});
+  final _gate = Completer<void>();
+  int started = 0;
+  void release() => _gate.complete();
+
+  @override
+  Future<Result<LockedText>> encrypt(
+    String peerUserId,
+    String plaintext, {
+    required String peerIdentityKey,
+    PlaintextSave? save,
+    QueueTarget? queue,
+  }) async {
+    started++;
+    await _gate.future;
+    return super.encrypt(
+      peerUserId,
+      plaintext,
+      peerIdentityKey: peerIdentityKey,
+      save: save,
+      queue: queue,
+    );
+  }
+}
+
 void main() {
+  group('the app is disposed while a text send waits', () {
+    testWidgets('in the save step: no lock, no send, nothing thrown', (
+      t,
+    ) async {
+      final store = MemorySendQueueStore()
+        ..saveDelay = const Duration(milliseconds: 100);
+      final a = App(store);
+      await hop(t);
+      a.q.enqueue('c1', body: 'gone');
+      await t.pump(const Duration(milliseconds: 10));
+      a.c.dispose();
+      await t.pump(const Duration(milliseconds: 200));
+      await hop(t);
+      expect(a.engine!.encrypts, isEmpty, reason: 'locked after dispose');
+      expect(a.enc.sends, isEmpty);
+      expect(a.chat.sent, isEmpty);
+      await t.pump(const Duration(seconds: 30));
+    });
+
+    testWidgets('in the lock step: no send, nothing thrown', (t) async {
+      final store = MemorySendQueueStore();
+      final engine = _GatedEngine(queue: store)..sessions['u2'] = {'idk-bob'};
+      final a = App(store, engine: engine);
+      await hop(t);
+      a.q.enqueue('c1', body: 'gone');
+      await hop(t);
+      expect(engine.started, 1, reason: 'setup: the lock step is waiting');
+      a.c.dispose();
+      engine.release();
+      await hop(t);
+      expect(a.enc.sends, isEmpty, reason: 'sent after dispose');
+      expect(a.chat.sent, isEmpty);
+      await t.pump(const Duration(seconds: 30));
+    });
+  });
+
   group('drain', () {
     testWidgets('a direct chat with keys: the text leaves ONLY as a '
         'ciphertext, the sender keeps the plaintext', (t) async {

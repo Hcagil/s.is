@@ -159,11 +159,41 @@ void main() {
     });
   }
 
-  test('a chat missing from the list: Err(Denied), never plain', () async {
-    final w = World()..session();
-    final r = await w.lock('nowhere');
-    expect(failureOf(r), isA<DeniedFailure>());
-    expect(w.engine.encrypts, isEmpty);
+  group('a chat missing from the list', () {
+    int listReads(World w) =>
+        w.chat.calls.where((c) => c == 'conversations').length;
+
+    /// The list is loaded once, so the lock starts from a list that lacks c1.
+    Future<void> loadedWithout(World w) async {
+      w.chat.conversationsResult = const Ok([hikers]);
+      await w.c.read(sessionControllerProvider.future);
+      w.c.listen(currentUserIdProvider, (_, _) {});
+      w.c.listen(conversationListProvider, (_, _) {});
+      await w.c.read(conversationListProvider.future);
+      expect(listReads(w), 1, reason: 'setup: the first list read');
+    }
+
+    test('present after ONE quiet re-read (a chat just started): locked and '
+        'sent to its peer', () async {
+      final w = World()..session();
+      await loadedWithout(w);
+      w.chat.conversationsResult = const Ok([direct, hikers]);
+      final r = await w.lock('c1');
+      expect(lockedOf(r), isNotNull);
+      expect(w.engine.encrypts.single.peer, 'u2');
+      expect(listReads(w), 2, reason: 'exactly one re-read');
+    });
+
+    test('still missing after the re-read: Err(Denied), never plain, and no '
+        'second re-read', () async {
+      final w = World()..session();
+      await loadedWithout(w);
+      final r = await w.lock('nowhere');
+      expect(failureOf(r), isA<DeniedFailure>());
+      expect(w.engine.encrypts, isEmpty);
+      expect(w.dir.identities, isEmpty);
+      expect(listReads(w), 2, reason: 'exactly one re-read');
+    });
   });
 
   test('the chat list failed to load: Err(Denied), never plain', () async {

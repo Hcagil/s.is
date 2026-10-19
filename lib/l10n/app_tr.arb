@@ -537,6 +537,8 @@
   "voiceHoldHint": "Kaydetmek için basılı tut, göndermek için bırak",
   "voiceMicDenied": "Kayıt için Ayarlar'dan mikrofona izin ver.",
   "voiceMicFailed": "Kayıt başlatılamadı.",
+  "voicePauseRecording": "Kaydı duraklat",
+  "voiceResumeRecording": "Kayda devam et",
   "voiceDictationUnavailable": "Bu telefonda bu dilde yazdırma kullanılamıyor.",
   "voiceSlideToCancel": "İptal için kaydır",
   "voiceCancel": "İPTAL",

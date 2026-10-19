@@ -1756,6 +1756,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get voiceMicFailed => 'Kayıt başlatılamadı.';
 
   @override
+  String get voicePauseRecording => 'Kaydı duraklat';
+
+  @override
+  String get voiceResumeRecording => 'Kayda devam et';
+
+  @override
   String get voiceDictationUnavailable =>
       'Bu telefonda bu dilde yazdırma kullanılamıyor.';
 

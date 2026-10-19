@@ -3128,6 +3128,18 @@ abstract class AppLocalizations {
   /// **'Could not start recording.'**
   String get voiceMicFailed;
 
+  /// Accessibility label of the pause button while recording is locked
+  ///
+  /// In en, this message translates to:
+  /// **'Pause recording'**
+  String get voicePauseRecording;
+
+  /// Accessibility label of the resume button while recording is paused
+  ///
+  /// In en, this message translates to:
+  /// **'Resume recording'**
+  String get voiceResumeRecording;
+
   /// Notice when dictation cannot start
   ///
   /// In en, this message translates to:

@@ -1779,6 +1779,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get voiceMicFailed => 'Could not start recording.';
 
   @override
+  String get voicePauseRecording => 'Pause recording';
+
+  @override
+  String get voiceResumeRecording => 'Resume recording';
+
+  @override
   String get voiceDictationUnavailable =>
       'Dictation is not available for this language on this phone.';
 

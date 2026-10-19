@@ -68,6 +68,7 @@ final class VoiceCaptureState {
     this.mode = VoiceMode.voice,
     this.phase = VoicePhase.idle,
     this.elapsedMs = 0,
+    this.paused = false,
     this.notice,
   });
 
@@ -80,6 +81,9 @@ final class VoiceCaptureState {
   /// Milliseconds since the hold began.
   final int elapsedMs;
 
+  /// True while a locked voice recording is held.
+  final bool paused;
+
   /// A notice waiting to be shown once.
   final VoiceNotice? notice;
 
@@ -88,12 +92,14 @@ final class VoiceCaptureState {
     VoiceMode? mode,
     VoicePhase? phase,
     int? elapsedMs,
+    bool? paused,
     VoiceNotice? notice,
     bool clearNotice = false,
   }) => VoiceCaptureState(
     mode: mode ?? this.mode,
     phase: phase ?? this.phase,
     elapsedMs: elapsedMs ?? this.elapsedMs,
+    paused: paused ?? this.paused,
     notice: clearNotice ? null : (notice ?? this.notice),
   );
 }
@@ -172,6 +178,7 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
       state = state.copyWith(
         phase: VoicePhase.idle,
         elapsedMs: 0,
+        paused: false,
         notice: result == VoiceStart.denied
             ? VoiceNotice.micDenied
             : (state.mode == VoiceMode.voice
@@ -186,6 +193,39 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
     if (state.phase == VoicePhase.held) {
       state = state.copyWith(phase: VoicePhase.locked);
     }
+  }
+
+  /// Holds a locked voice recording: the clock stops and the recorder pauses.
+  /// A recorder that cannot pause shows the mic-failed notice and carries on.
+  Future<void> pause() async {
+    final rec = ref.read(voiceRecorderProvider);
+    if (state.phase != VoicePhase.locked ||
+        state.mode != VoiceMode.voice ||
+        state.paused ||
+        rec is! PausableVoiceRecorder) {
+      return;
+    }
+    _clock.stop();
+    state = state.copyWith(paused: true, elapsedMs: _clock.elapsedMilliseconds);
+    if (await rec.pause() || !ref.mounted) return;
+    if (state.phase == VoicePhase.locked) _clock.start();
+    state = state.copyWith(paused: false, notice: VoiceNotice.micFailed);
+  }
+
+  /// Carries on a held recording; the clock continues from where it stopped.
+  /// A failed resume stays paused and shows the mic-failed notice.
+  Future<void> resume() async {
+    final rec = ref.read(voiceRecorderProvider);
+    if (state.phase != VoicePhase.locked ||
+        !state.paused ||
+        rec is! PausableVoiceRecorder) {
+      return;
+    }
+    _clock.start();
+    state = state.copyWith(paused: false);
+    if (await rec.resume() || !ref.mounted) return;
+    _clock.stop();
+    state = state.copyWith(paused: true, notice: VoiceNotice.micFailed);
   }
 
   void _tick() {
@@ -219,7 +259,11 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
       _ending = false;
     }
     if (ref.mounted) {
-      state = state.copyWith(phase: VoicePhase.idle, elapsedMs: 0);
+      state = state.copyWith(
+        phase: VoicePhase.idle,
+        elapsedMs: 0,
+        paused: false,
+      );
     }
   }
 
@@ -277,7 +321,11 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
       }
     }
     if (ref.mounted) {
-      state = state.copyWith(phase: VoicePhase.idle, elapsedMs: 0);
+      state = state.copyWith(
+        phase: VoicePhase.idle,
+        elapsedMs: 0,
+        paused: false,
+      );
     }
   }
 
@@ -298,7 +346,11 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
     if (!ref.mounted) return;
     if (state.mode == VoiceMode.dictation && state.phase != VoicePhase.idle) {
       _stopTicker();
-      state = state.copyWith(phase: VoicePhase.idle, elapsedMs: 0);
+      state = state.copyWith(
+        phase: VoicePhase.idle,
+        elapsedMs: 0,
+        paused: false,
+      );
     }
   }
 

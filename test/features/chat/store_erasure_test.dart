@@ -31,6 +31,7 @@ import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import '../../support/drift_stores.dart';
 import '../../support/fakes.dart';
 import '../../support/store_spy.dart';
 import '../../support/video_fakes.dart';
@@ -163,6 +164,8 @@ void main() {
         ],
       );
       container.listen(chatListSnapshotOwnerProvider, (_, _) {});
+      // Before ProviderContainer.test's own dispose: await the store's close.
+      addTearDown(() => quit(container));
       return container;
     }
 
@@ -504,6 +507,8 @@ void main() {
         ],
       );
       c.listen(chatListSnapshotOwnerProvider, (_, _) {});
+      // Before ProviderContainer.test's own dispose: await the store's close.
+      addTearDown(() => quit(c));
     });
 
     Future<void> signedIn() async {

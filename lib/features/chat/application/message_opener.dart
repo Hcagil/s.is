@@ -129,6 +129,8 @@ class StoreMessageOpener implements MessageOpener {
       final near = await store.around(m.conversationId, m.id, each: 0);
       stored = near.where((s) => s.id == m.id).firstOrNull;
     }
+    // A deleted row stays deleted: never decrypted, never written over.
+    if (stored?.deletion != null) return stored!;
     final have = stored != null && !isLockedPlaceholder(stored.body)
         ? stored
         : null;
@@ -175,10 +177,16 @@ class StoreMessageOpener implements MessageOpener {
           return fallback;
         }
         final plain = m.withPlain(env.text, env.card, sealed: hash);
-        // Saved before it is shown: the ratchet moved, so this message can never be opened again.
-        await store?.upsertAll([plain]);
         _pending.remove(m.id);
         _remember(slot, plain);
+        // The ratchet moved, so this message can never be opened again: saved before it is shown, kept in memory even if the write fails.
+        try {
+          await store?.upsertAll([plain]);
+          // A deletion that landed while decrypting wins over the text.
+          final near = await store?.around(m.conversationId, m.id, each: 0);
+          final now = near?.where((s) => s.id == m.id).firstOrNull;
+          if (now?.deletion != null) return now!;
+        } catch (_) {}
         return plain;
       case Err(failure: SessionPendingFailure()):
         _wait(m);
@@ -198,7 +206,9 @@ class StoreMessageOpener implements MessageOpener {
   }
 
   void _wait(Message m) {
-    if (_pending.length >= 200) _pending.remove(_pending.keys.first);
+    if (!_pending.containsKey(m.id) && _pending.length >= 200) {
+      _pending.remove(_pending.keys.first);
+    }
     _pending[m.id] = m;
   }
 
@@ -211,6 +221,10 @@ class StoreMessageOpener implements MessageOpener {
     final keys = <String, Result<ClaimedKeys?>>{};
     for (final m in waiting) {
       final opened = await _openOne(m, keys);
+      if (opened.deletion != null) {
+        _pending.remove(m.id);
+        continue;
+      }
       if (!isLockedPlaceholder(opened.body)) {
         _pending.remove(m.id);
         if (!_reopened.isClosed) _reopened.add(opened);

@@ -213,13 +213,15 @@ final class DriftMessageStore implements MessageStore {
     final out = <MessagesCompanion>[];
     for (final m in messages) {
       if (m.isPending) continue;
-      if (isLockedPlaceholder(m.body) && m.deletion == null) {
+      if (m.deletion == null) {
         final old = await (db.select(
           db.messages,
         )..where((t) => t.id.equals(m.id))).getSingleOrNull();
+        // A deleted row is never replaced by a live one; a placeholder never erases readable text.
         if (old != null &&
-            !isLockedPlaceholder(old.body) &&
-            old.deleted == null) {
+            (old.deleted != null ||
+                (isLockedPlaceholder(m.body) &&
+                    !isLockedPlaceholder(old.body)))) {
           continue;
         }
       }

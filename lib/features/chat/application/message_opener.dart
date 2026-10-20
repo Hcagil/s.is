@@ -57,8 +57,14 @@ class StoreMessageOpener implements MessageOpener {
   @override
   Stream<Message> get reopened => _reopened.stream;
 
+  // shortcut: ids stay for the opener's life (a hidden message never comes back); bounded by the user's own hides.
+  final Set<String> _forgotten = {};
+
   @override
-  void forget(String id) => _pending.remove(id);
+  void forget(String id) {
+    _forgotten.add(id);
+    _pending.remove(id);
+  }
 
   /// Closes the [reopened] stream.
   void dispose() {
@@ -179,6 +185,8 @@ class StoreMessageOpener implements MessageOpener {
           _remember(slot, unreadable);
           return fallback;
         }
+        // Hidden while this decrypt ran: the text is dropped, never stored or shown.
+        if (_forgotten.contains(m.id)) return fallback;
         final plain = m.withPlain(env.text, env.card, sealed: hash);
         _pending.remove(m.id);
         _remember(slot, plain);
@@ -230,7 +238,9 @@ class StoreMessageOpener implements MessageOpener {
       }
       if (!isLockedPlaceholder(opened.body)) {
         _pending.remove(m.id);
-        if (!_reopened.isClosed) _reopened.add(opened);
+        if (!_reopened.isClosed && !_forgotten.contains(m.id)) {
+          _reopened.add(opened);
+        }
       }
     }
   }

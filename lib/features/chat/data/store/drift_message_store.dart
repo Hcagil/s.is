@@ -200,20 +200,20 @@ final class DriftMessageStore implements MessageStore {
         final stored = await _writable(db, messages);
         await db.batch((b) {
           for (final c in stored) {
-            // One statement: a live row never replaces a deleted one, even when a deletion lands between a read and this write. A deletion row always wins.
-            b.insert(
-              db.messages,
-              c,
-              onConflict: DoUpdate<$MessagesTable, StoredMessageRow>(
-                (_) => c,
-                where: (old) => c.deleted.present && c.deleted.value != null
-                    ? const Constant(true)
-                    : old.deleted.isNull(),
-              ),
-            );
+            b.insert(db.messages, c, onConflict: _upsertClause(c));
           }
         });
       });
+
+  /// One ON CONFLICT clause for every write: a live row never replaces a deleted one, even when a deletion lands between a read and this write; a deletion row always wins.
+  DoUpdate<$MessagesTable, StoredMessageRow> _upsertClause(
+    MessagesCompanion c,
+  ) => DoUpdate<$MessagesTable, StoredMessageRow>(
+    (_) => c,
+    where: (old) => c.deleted.present && c.deleted.value != null
+        ? const Constant(true)
+        : old.deleted.isNull(),
+  );
 
   /// The companions to write: a row that only carries the locked placeholder is dropped when the stored row of that id already holds readable text, so a failed open or the echo of the member's own locked row never erases a plaintext.
   Future<List<MessagesCompanion>> _writable(
@@ -328,7 +328,7 @@ final class DriftMessageStore implements MessageStore {
         final writable = await _writable(db, [m]);
         if (writable.isEmpty) continue;
         final c = writable.first;
-        await db.into(db.messages).insert(c, onConflict: DoUpdate((_) => c));
+        await db.into(db.messages).insert(c, onConflict: _upsertClause(c));
       }
       if (oldest == null) {
         if (reachedStart) {
@@ -387,7 +387,7 @@ final class DriftMessageStore implements MessageStore {
       if (prev == null) return;
       for (final m in page) {
         final c = messageToCompanion(m);
-        await db.into(db.messages).insert(c, onConflict: DoUpdate((_) => c));
+        await db.into(db.messages).insert(c, onConflict: _upsertClause(c));
       }
       if (page.isEmpty) {
         if (reachedStart) {

@@ -323,10 +323,10 @@ for f in "$ipa_wf" "$release" "$ci"; do
   grep -nE 'asc_signing\.py +(create|delete|cleanup|release|revoke)' "$f" && fail "$f creates, cleans up or revokes signing material"
 done
 # ensure only makes the share App ID / profiles if missing (test/tool/asc_signing_test.py); exact calls, exact order. The app profile must carry Sign in with Apple (--signin).
-# The notification extension's profile carries no App Group (--no-group).
+# The notification extension reads the App Group store: its profile carries the App Group too.
 want_asc='asc_signing.py ensure --signin com.esd.sis "sis ci distribution" "sis ci distribution"
 asc_signing.py ensure com.esd.sis.share "sis ci distribution share" "sis ci distribution"
-asc_signing.py ensure --no-group com.esd.sis.notify "sis ci distribution notify" "sis ci distribution"
+asc_signing.py ensure com.esd.sis.notify "sis ci distribution notify" "sis ci distribution"
 asc_signing.py fetch "sis ci distribution" "$dir"
 asc_signing.py fetch "sis ci distribution share" "$dir/share"
 asc_signing.py fetch "sis ci distribution notify" "$dir/notify"'
@@ -447,9 +447,10 @@ run() {
 }
 fresh() {
   rm -rf "$tmp/job" "$tmp/rt" "$tmp/home"
-  mkdir -p "$tmp/job/ios/Runner" "$tmp/job/ios/ShareExtension" "$tmp/job/ios/Flutter" "$tmp/job/tool" "$tmp/job/rust" "$tmp/rt" "$tmp/home"
+  mkdir -p "$tmp/job/ios/NotificationService" "$tmp/job/ios/Runner" "$tmp/job/ios/ShareExtension" "$tmp/job/ios/Flutter" "$tmp/job/tool" "$tmp/job/rust" "$tmp/rt" "$tmp/home"
   cp rust/rust-toolchain.toml "$tmp/job/rust/"
   cp ios/Runner/Runner.entitlements "$tmp/job/ios/Runner/"
+  cp ios/NotificationService/NotificationService.entitlements "$tmp/job/ios/NotificationService/"
   cp ios/ShareExtension/ShareExtension.entitlements "$tmp/job/ios/ShareExtension/"
   ln -s "$stubs" "$tmp/job/tool/asc_signing.py"
   : > "$tmp/github_env"; : > "$tmp/github_output"; : > "$tmp/calls"; : > "$tmp/all-out"
@@ -551,7 +552,7 @@ channel=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust/rust-toolchain.toml)
 # ensure (idempotent: makes the share / notify App ID and profile if missing) then fetch, all three profiles.
 asc_calls='asc ensure --signin | com.esd.sis | sis ci distribution | sis ci distribution
 asc ensure com.esd.sis.share | sis ci distribution share | sis ci distribution
-asc ensure --no-group | com.esd.sis.notify | sis ci distribution notify | sis ci distribution
+asc ensure com.esd.sis.notify | sis ci distribution notify | sis ci distribution
 asc fetch sis ci distribution
 asc fetch sis ci distribution share
 asc fetch sis ci distribution notify'
@@ -699,6 +700,16 @@ run_job false STUB_CERT_KIND="Apple Development"
 [ "$failed_step" = "Check the signature" ] || fail "a development-signed app passed the signature check (failed: '${failed_step:-none}')"
 grep -q '^altool' "$tmp/calls" && fail "altool ran after the signature check failed"
 cleaned
+# The notify profile without the App Group (App Groups not yet switched on for com.esd.sis.notify in the portal):
+# the import stops and names the portal step, before any export or upload.
+fresh
+run_job true STUB_NOTIFY_GROUP=0
+[ "$failed_step" = "Import the signing certificate" ] || fail "a notify profile without the App Group did not stop the import (failed: '${failed_step:-none}')"
+grep -q 'the notify signing profile lacks the App Group group.com.esd.sis: enable App Groups on com.esd.sis.notify in the Apple developer portal' "$tmp/out" \
+  || fail "a notify profile without the App Group failed without the portal step: $(sed -n '/^--- Import the signing/,/^---/p' "$tmp/out")"
+grep -q '^xcodebuild export' "$tmp/calls" && fail "the job exported after the notify profile check failed"
+grep -q '^altool' "$tmp/calls" && fail "the job went on to altool after the notify profile check failed"
+cleaned
 # A profile without the production push environment fails the push check.
 fresh
 run_job true STUB_PROFILE_APS=development
@@ -727,20 +738,26 @@ if sig_case Flutter.framework tamper; then fail "a framework changed after the a
 grep -q "sealed resource is missing or invalid" "$tmp/out" || fail "the check did not fail on the broken seal: $(cat "$tmp/out")"
 
 # 12 the push entitlement on its own: production passes; everything else fails.
-mkipa() { # <aps-environment | unset | unsigned> [lacks: app | appex | signin]: $RUNNER_TEMP/export/sis.ipa
+mkipa() { # <aps-environment | unset | unsigned> [lacks: app | share | notify | crypto-app | crypto-notify | signin]: $RUNNER_TEMP/export/sis.ipa
   rm -rf "$tmp/rt/export" "$tmp/rt/ipa"; mkdir -p "$tmp/rt/export"
   python3 - "$tmp/rt/export/sis.ipa" "$1" "${2:-}" <<'EOF'
 import io, json, plistlib, sys, zipfile
 z = zipfile.ZipFile(sys.argv[1], "w")
-group = {"com.apple.security.application-groups": ["group.com.esd.sis"]}
-for obj, ident in (("Runner.app", "com.esd.sis"), ("Runner.app/PlugIns/ShareExtension.appex", "com.esd.sis.share")):
+lacks = sys.argv[3]
+# object, bundle id, its name in "lacks" for the App Group, for the crypto keychain group (None: it has none)
+for obj, ident, short, crypto in (("Runner.app", "com.esd.sis", "app", "crypto-app"),
+                                  ("Runner.app/PlugIns/ShareExtension.appex", "com.esd.sis.share", "share", None),
+                                  ("Runner.app/PlugIns/NotificationService.appex", "com.esd.sis.notify", "notify", "crypto-notify")):
     z.writestr("Payload/%s/Info.plist" % obj, plistlib.dumps({"CFBundleIdentifier": ident}))
     if sys.argv[2] == "unsigned":
         continue
     ents = {"application-identifier": "TEAM123." + ident}
-    if sys.argv[3] != obj.split(".")[-1]: ents.update(group)
+    if lacks != short: ents["com.apple.security.application-groups"] = ["group.com.esd.sis"]
+    if crypto:
+        # The bundle's own keychain group stays: only the crypto one may be missing.
+        ents["keychain-access-groups"] = ["TEAM123." + ident] + ([] if lacks == crypto else ["TEAM123.com.esd.sis.crypto"])
     if obj == "Runner.app" and sys.argv[2] != "unset": ents["aps-environment"] = sys.argv[2]
-    if obj == "Runner.app" and sys.argv[3] != "signin": ents["com.apple.developer.applesignin"] = ["Default"]
+    if obj == "Runner.app" and lacks != "signin": ents["com.apple.developer.applesignin"] = ["Default"]
     z.writestr("Payload/%s/_CodeSignature/stub.json" % obj, json.dumps({"identifier": ident, "adhoc": True,
                "leaf": None, "entitlements": ents, "dr": None, "seal": {}}))
 EOF
@@ -752,11 +769,18 @@ for bad in development unset unsigned; do
   fresh; mkipa "$bad"
   if run "Check the push entitlement"; then fail "aps-environment '$bad' passed the push check"; fi
 done
-# The share App Group (group.com.esd.sis) on the app and on the extension, each.
-for lacks in app appex; do
+# The share App Group (group.com.esd.sis) on the app and on each extension.
+for lacks in app share notify; do
   fresh; mkipa production "$lacks"
   if run "Check the push entitlement"; then fail "the push check passed with no App Group on the $lacks"; fi
   grep -q "has no App Group entitlement" "$tmp/out" || fail "a missing App Group on the $lacks is not named: $(cat "$tmp/out")"
+done
+# The crypto keychain group (TEAM_ID.com.esd.sis.crypto) on the app and on the notification extension, each.
+for lacks in app notify; do
+  fresh; mkipa production "crypto-$lacks"
+  if run "Check the push entitlement"; then fail "the push check passed with no crypto keychain group on the $lacks"; fi
+  case $lacks in app) obj=Runner.app ;; notify) obj=Runner.app/PlugIns/NotificationService.appex ;; esac
+  grep -q "^$obj has no crypto keychain group" "$tmp/out" || fail "a missing crypto keychain group on the $lacks is not named: $(cat "$tmp/out")"
 done
 # Sign in with Apple on the app: without it the iPhone button fails at Apple.
 fresh; mkipa production signin

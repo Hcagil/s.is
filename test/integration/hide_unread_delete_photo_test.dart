@@ -127,8 +127,18 @@ void main() {
   });
 
   group('unreadTotal', () {
+    // unreadTotal spans every chat, and gia is not this file's alone: another
+    // suite may have made her account first, so a release note broadcast
+    // later (group_colors_seam_test) sits unread in her SIS chat. Start each
+    // case from zero across all her chats, not just [chat].
+    setUp(() async {
+      for (final c in _ok(await gia.conversations())) {
+        _ok(await gia.markRead(c.id));
+      }
+      expect(_ok(await gia.unreadTotal()), 0, reason: 'clean start');
+    });
+
     test('rises with what arrives, falls to 0 when read', () async {
-      _ok(await gia.markRead(chat));
       final base = _ok(await gia.unreadTotal());
       final senderBase = _ok(await hol.unreadTotal());
 
@@ -146,7 +156,6 @@ void main() {
     });
 
     test('a hidden unread message no longer counts', () async {
-      _ok(await gia.markRead(chat));
       final m = await say(hol, 'gone soon');
       await say(hol, 'stays');
       expect(_ok(await gia.unreadTotal()), 2);

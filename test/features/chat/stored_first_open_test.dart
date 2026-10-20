@@ -16,6 +16,7 @@ import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/application/message_opener.dart';
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
+import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 
 import '../../support/fakes.dart';
@@ -247,6 +248,11 @@ void main() {
 
   group('live writes', () {
     setUp(() async {
+      // The open chat is on the server's list: a list read (a live insert
+      // marks it read) must not erase it from the phone as a gone chat.
+      chat.conversationsResult = Ok([
+        Conversation(id: 'c1', lastMessageAt: at(9)),
+      ]);
       chat.history['c1'] = _rows(0, 10);
       await open('c1');
       await settle();
@@ -360,6 +366,9 @@ void main() {
         ],
       );
       c.listen(messagesProvider, (_, _) {});
+      chat.conversationsResult = Ok([
+        Conversation(id: 'c1', lastMessageAt: at(9)),
+      ]);
       chat.history['c1'] = _rows(0, 10);
       await open('c1');
       await settle();

@@ -155,11 +155,6 @@ class Fake(http.server.BaseHTTPRequestHandler):
                 return self.reply(200, {"data": []})
             return self.reply(200, {"data": [{"type": "builds", "id": "BUILD-1", "attributes": {
                 "version": st["version"], "processingState": state}}]})
-        if key == ("PATCH", "/v1/builds/BUILD-1"):
-            # Apple's builds update: answers with the build, carrying the attributes it was sent.
-            sent = ((json.loads(raw) if raw else {}).get("data") or {}).get("attributes") or {}
-            return self.reply(200, {"data": {"type": "builds", "id": "BUILD-1", "attributes": dict(
-                {"version": st["version"], "processingState": "VALID"}, **sent)}})
         if key == ("GET", "/v1/builds/BUILD-1/betaBuildLocalizations"):
             return self.reply(200, {"data": [{"type": "betaBuildLocalizations", "id": i, "attributes": {
                 "locale": loc, "whatsNew": "old"}} for i, loc in st["locs"]]})
@@ -634,63 +629,18 @@ class AscSigningTest(unittest.TestCase):
         self.assertEqual(sub[0]["body"]["data"]["relationships"]["build"]["data"], {"type": "builds", "id": "BUILD-1"})
         order = [next(i for i, r in enumerate(rs) if pred(r)) for pred in (
             lambda r: r["path"] == "/v1/builds",
-            lambda r: (r["method"], r["path"]) == ("PATCH", "/v1/builds/BUILD-1"),
-            lambda r: r["method"] == "PATCH" and r["path"].startswith("/v1/betaBuildLocalizations"),
+            lambda r: r["method"] == "PATCH",
             lambda r: r["path"].endswith("/betaGroups"),
             lambda r: r["path"].endswith("/relationships/builds"),
             lambda r: "betaAppReviewSubmission" in r["path"])]
         self.assertEqual(order, sorted(order), "requests out of the contract order")
         self.assertEqual([r for r in rs if r["method"] == "DELETE"], [])
 
-    ENCRYPTION_BODY = {"data": {"type": "builds", "id": "BUILD-1", "attributes": {"usesNonExemptEncryption": True}}}
-
-    def build_patches(self):
-        return [r for r in self.reqs("PATCH") if r["path"].startswith("/v1/builds")]
-
-    def test_distribute_declares_encryption_once(self):
-        for groups in ("bacanaks", "other"):  # with and without beta review
-            self.setUp()
-            self.srv.state["builds"] = [None, "PROCESSING", "VALID"]
-            p = self.dist(groups=groups)
-            self.assertEqual(p.returncode, 0, p.stderr)
-            bp = self.build_patches()
-            self.assertEqual([r["path"] for r in bp], ["/v1/builds/BUILD-1"], "%s: want one PATCH of the build" % groups)
-            self.assertEqual(bp[0]["body"], self.ENCRYPTION_BODY, groups)
-            self.assertIs(bp[0]["body"]["data"]["attributes"]["usesNonExemptEncryption"], True, "must be JSON true")
-            self.assertIn("application/json", bp[0]["headers"].get("content-type", ""))
-
-    def test_distribute_declares_encryption_before_the_rest(self):
-        self.srv.state["builds"] = ["PROCESSING", "VALID"]
-        p = self.dist()
-        self.assertEqual(p.returncode, 0, p.stderr)
-        rs = self.reqs()
-        at = next(i for i, r in enumerate(rs) if (r["method"], r["path"]) == ("PATCH", "/v1/builds/BUILD-1"))
-        polls = [i for i, r in enumerate(rs) if r["path"] == "/v1/builds"]
-        self.assertLess(polls[-1], at, "the build was patched before it was VALID")
-        later = [i for i, r in enumerate(rs) if r["path"].startswith("/v1/betaBuildLocalizations")
-                 or "betaGroups" in r["path"] or "betaAppReviewSubmission" in r["path"]]
-        self.assertTrue(later)
-        self.assertLess(at, min(later), "What's New, groups or beta review ran before the encryption answer")
-
-    def test_distribute_encryption_patch_error_stops(self):
-        for status in (400, 403, 404, 409, 422, 500):
-            self.setUp()
-            self.srv.state["fail"][("PATCH", "/v1/builds/BUILD-1")] = status
-            p = self.dist()
-            self.assertNotEqual(p.returncode, 0, "%d on the build PATCH was ignored" % status)
-            self.assertRegex(p.stderr, r"(?m)^PATCH /builds/BUILD-1: HTTP %d" % status)
-            rs = self.reqs()
-            at = next(i for i, r in enumerate(rs) if (r["method"], r["path"]) == ("PATCH", "/v1/builds/BUILD-1"))
-            self.assertEqual([(r["method"], r["path"]) for r in rs[at + 1:]], [], "%d: went on after the PATCH failed" % status)
-            self.assertEqual(self.group_adds(), [], status)
-            self.assertEqual(self.review_reqs(), [], status)
-
     def test_distribute_posts_en_us_when_missing(self):
         self.srv.state["locs"] = [("L-DE", "de-DE")]
         p = self.dist(note="Hello")
         self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertFalse([r for r in self.reqs("PATCH") if r["path"].startswith("/v1/betaBuildLocalizations")],
-                         "another locale was overwritten")
+        self.assertFalse(self.reqs("PATCH"), "another locale was overwritten")
         post = self.find("POST", "/v1/betaBuildLocalizations")
         self.assertEqual(len(post), 1)
         d = post[0]["body"]["data"]

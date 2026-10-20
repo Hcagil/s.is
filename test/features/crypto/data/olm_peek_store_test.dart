@@ -258,6 +258,17 @@ void main() {
     expect(await peek(junk, id: 'm9'), 'already opened text');
   });
 
+  test('a stored body is only taken from the same conversation', () async {
+    await bob.store.upsertAll([
+      msg('m9', conv: 'c2', sender: 'carol', body: 'text from chat B'),
+    ]);
+    await bob.store.close();
+    final junk = const LockedText(ciphertext: '!!', olmType: 1, sessionId: 'x');
+    expect(await peek(junk, id: 'm9', conv: 'c1'), isNull);
+    // Same id, its own conversation: the stored text comes back.
+    expect(await peek(junk, id: 'm9', conv: 'c2'), 'text from chat B');
+  });
+
   test(
     'the conversation peer differs from the session owner => null',
     () async {
@@ -306,6 +317,8 @@ void main() {
     writer.execute('ROLLBACK;');
 
     expect(text, isNull);
+    // Held past the ~1 s busy wait: the peek retried for about 1 s, then gave up.
+    expect(sw.elapsedMilliseconds, greaterThanOrEqualTo(800));
     expect(sw.elapsedMilliseconds, lessThan(4000));
     // Lock released: the peek works again.
     expect(await peek(m2), 'secret words');

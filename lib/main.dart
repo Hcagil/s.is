@@ -178,12 +178,14 @@ Future<void> main() async {
   // iPhone: the keychain group of the store and pickle keys (null elsewhere); the app moved the keys there before Flutter started.
   final keychainGroup = await cryptoKeychainGroup();
   // Before the store opens: a store whose Olm pickle key is gone is set aside (renamed), never deleted.
-  await guardLostPickleKey(
-    group: keychainGroup,
-    file: await storeFile(),
-    storeKey: StoreKey.inGroup(keychainGroup),
-    pickleKey: PickleKey.inGroup(keychainGroup),
-  );
+  if (keychainGroup != null) {
+    await guardLostPickleKey(
+      group: keychainGroup,
+      file: await storeFile(),
+      storeKey: StoreKey.inGroup(keychainGroup),
+      pickleKey: PickleKey.inGroup(keychainGroup),
+    );
+  }
   // Read before runApp (like the session marker), so the first frame already
   // has the member's theme, font, text size and language: no flash.
   const appearanceStore = SharedPrefsAppearanceStore();

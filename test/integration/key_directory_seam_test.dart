@@ -191,7 +191,7 @@ void main() {
 
     // Restart: a new container over the same store restores the pickle and
     // re-publishes the same identity; the server counts only free keys.
-    anaKeys.dispose();
+    await quit(anaKeys);
     final again = _wired(ana, anaDir);
     final second = await _settled(again);
     expect(second, isA<KeysReady>());
@@ -203,12 +203,12 @@ void main() {
     // The store's clear() takes the pickle with it.
     await (again.read(messageStoreProvider) as DriftMessageStore).clear();
     expect(await again.read(olmPickleStoreProvider)!.load(), isNull);
-    again.dispose();
+    await quit(again);
 
     // Same session, pickle gone (store reset): fail closed, no new identity.
     final lost = _wired(ana, anaDir);
     expect(await _settled(lost), isA<KeysIdentityLost>());
-    lost.dispose();
+    await quit(lost);
     final still =
         (await SupabaseKeyDirectory(ana).status()) as Ok<PublishedStatus?>;
     expect(still.value!.identityKey, row.identityKey);
@@ -251,8 +251,8 @@ void main() {
       two[0].oneTimeKey,
       two[1].oneTimeKey,
     ], isNot(contains(newKeys.oneTimeKey)));
-    fresh.dispose();
+    await quit(fresh);
     await freshDir.delete(recursive: true);
-    benKeys.dispose();
+    await quit(benKeys);
   });
 }

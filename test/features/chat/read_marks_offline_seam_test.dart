@@ -110,14 +110,6 @@ void main() {
     }
   }
 
-  /// Ends one app run. dispose() alone starts the store's close without
-  /// awaiting it, so the next run or the tear-down's delete of [dir] raced
-  /// the closing database (CI run 39213600192: "Directory not empty").
-  Future<void> quit(ProviderContainer c) async {
-    await (c.read(messageStoreProvider) as DriftMessageStore).close();
-    c.dispose();
-  }
-
   Future<void> onlineRun(List<ReadMark> server) async {
     final chat = ChatFake()..readMarksData['c1'] = server;
     final c = await app(chat);

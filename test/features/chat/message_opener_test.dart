@@ -526,6 +526,62 @@ void main() {
       expect(engine.calls, isEmpty);
     });
   });
+
+  // Group E: forget(id), a row hidden or vanished on this phone.
+  group('11 forget', () {
+    /// w-rows wait for bob's session; k0 (pre-key) brings it.
+    void waitForKey(List<String> ids) {
+      var session = false;
+      for (final id in ids) {
+        engine.answer[ct(id)] = () => session
+            ? Ok(encodeEnvelope(id: id, text: 'text $id'))
+            : const Err(SessionPendingFailure());
+      }
+      engine.answer[ct('k0')] = () {
+        session = true;
+        return Ok(encodeEnvelope(id: 'k0', text: 'key'));
+      };
+    }
+
+    test('a forgotten waiting row is never emitted on reopened and never '
+        'stored when the session appears; the others still are', () async {
+      waitForKey(['w1', 'w2']);
+      final o = make();
+      final got = <Message>[];
+      final sub = o.reopened.listen(got.add);
+      addTearDown(sub.cancel);
+      await o.open([locked('w1', t: 1), locked('w2', t: 2)]);
+      o.forget('w1');
+      await o.open([locked('k0', t: 3, olmType: 0)]);
+      await pumpUntil(() => got.any((m) => m.id == 'w2'));
+      await pumpUntil(() async => (await stored('w2'))?.body == 'text w2');
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(got.map((m) => m.id), isNot(contains('w1')));
+      expect(await stored('w1'), isNull);
+    });
+
+    test('forget while the retry of that row is in flight: still never '
+        'emitted, never stored', () async {
+      waitForKey(['w1']);
+      final o = make();
+      var retrying = false;
+      engine.during = (c) async {
+        if (retrying && c == ct('w1')) o.forget('w1');
+      };
+      final got = <Message>[];
+      final sub = o.reopened.listen(got.add);
+      addTearDown(sub.cancel);
+      await o.open([locked('w1', t: 1)]);
+      retrying = true;
+      await o.open([locked('k0', t: 2, olmType: 0)]);
+      await pumpUntil(
+        () => engine.decrypted.where((c) => c == ct('w1')).length == 2,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(got.map((m) => m.id), isNot(contains('w1')));
+      expect(await stored('w1'), isNull);
+    });
+  });
 }
 
 /// Polls [done] (sync or async) until true; fails after 5 s.

@@ -14,10 +14,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/chat_drafts.dart';
+import 'package:sis/features/chat/application/message_opener.dart';
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
 import 'package:sis/features/chat/domain/message.dart';
 
 import '../../support/fakes.dart';
+import '../../support/opener_fakes.dart' show ForgetSpyOpener;
 import '../../support/store_spy.dart';
 import 'data/store/store_harness.dart';
 
@@ -329,6 +331,44 @@ void main() {
       chat.hideForMeResult = null;
       await ctl.hideForMe(chat.history['c1']![7]);
       await eventually(() async => (await storedRow('h7')) == null);
+    });
+  });
+
+  // Group E: a hidden row is forgotten by the opener BEFORE the store drops
+  // it (a late reopen could otherwise write it back); a refused hide is not.
+  group('hideForMe forgets the row', () {
+    setUp(() async {
+      c = ProviderContainer.test(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(chat),
+          messageStoreProvider.overrideWithValue(store),
+          messageOpenerProvider.overrideWithValue(
+            ForgetSpyOpener((id) => store.calls.add('forget:$id')),
+          ),
+        ],
+      );
+      c.listen(messagesProvider, (_, _) {});
+      chat.history['c1'] = _rows(0, 10);
+      await open('c1');
+      await settle();
+      store.calls.clear();
+    });
+
+    List<String> log() => store.calls
+        .where((x) => x.startsWith('forget:') || x.startsWith('remove:'))
+        .toList();
+
+    test('Ok: forget, then remove', () async {
+      await c.read(messagesProvider.notifier).hideForMe(chat.history['c1']![4]);
+      await eventually(() => store.count('remove:h4') == 1);
+      expect(log(), ['forget:h4', 'remove:h4']);
+    });
+
+    test('Err: neither forgotten nor removed', () async {
+      chat.hideForMeResult = const Err(DeniedFailure());
+      await c.read(messagesProvider.notifier).hideForMe(chat.history['c1']![4]);
+      await settle();
+      expect(log(), isEmpty);
     });
   });
 

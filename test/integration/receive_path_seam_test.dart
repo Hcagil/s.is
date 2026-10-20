@@ -140,6 +140,10 @@ class _Recording implements MessageOpener {
 
   @override
   Stream<Message> get reopened => const Stream.empty();
+
+  final forgotten = <String>[];
+  @override
+  void forget(String id) => forgotten.add(id);
 }
 
 /// Opens each row by id after [delay] of that id; throws for [boom]; rows
@@ -164,6 +168,10 @@ class _Scripted implements MessageOpener {
 
   @override
   Stream<Message> get reopened => _reopened.stream;
+
+  final forgotten = <String>[];
+  @override
+  void forget(String id) => forgotten.add(id);
 }
 
 void main() {

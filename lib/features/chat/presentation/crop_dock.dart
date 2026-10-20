@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../app/theme.dart';
@@ -90,16 +92,16 @@ class CropActionRow extends StatelessWidget {
     duration: const Duration(milliseconds: 150),
     child: IgnorePointer(
       ignoring: !changed,
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: TextButton(
-          key: const ValueKey('crop-free-reset'),
-          onPressed: onReset,
-          style: TextButton.styleFrom(
-            foregroundColor: brand.brand,
-            minimumSize: const Size(48, 48),
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-          ),
+      child: TextButton(
+        key: const ValueKey('crop-free-reset'),
+        onPressed: onReset,
+        style: TextButton.styleFrom(
+          foregroundColor: brand.brand,
+          minimumSize: const Size(48, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
           child: Text(
             resetLabel,
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
@@ -162,25 +164,40 @@ class CropActionRow extends StatelessWidget {
             Expanded(
               child: Row(
                 children: [
-                  Expanded(child: Center(child: _reset(brand))),
+                  Expanded(
+                    // Reset keeps >= 48 dp and up to 16 dp air on each side.
+                    child: LayoutBuilder(
+                      builder: (context, c) => Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: math.max(48, c.maxWidth - 32),
+                          ),
+                          child: _reset(brand),
+                        ),
+                      ),
+                    ),
+                  ),
                   CropPress(
                     onTap: canDone ? onDone : null,
                     child: Container(
                       key: const ValueKey('crop-free-done'),
                       height: 44,
-                      constraints: const BoxConstraints(minWidth: 72),
+                      width: 72,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: brand.brand,
                         borderRadius: BorderRadius.circular(22),
                       ),
-                      child: Text(
-                        doneLabel,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          doneLabel,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),

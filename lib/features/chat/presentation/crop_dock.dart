@@ -90,14 +90,15 @@ class CropActionRow extends StatelessWidget {
     duration: const Duration(milliseconds: 150),
     child: IgnorePointer(
       ignoring: !changed,
-      child: SizedBox(
-        width: 72,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
         child: TextButton(
           key: const ValueKey('crop-free-reset'),
           onPressed: onReset,
           style: TextButton.styleFrom(
             foregroundColor: brand.brand,
             minimumSize: const Size(48, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
           ),
           child: Text(
             resetLabel,
@@ -117,8 +118,7 @@ class CropActionRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
-            SizedBox(
-              width: 96,
+            Expanded(
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton(
@@ -138,68 +138,54 @@ class CropActionRow extends StatelessWidget {
                 ),
               ),
             ),
-            Expanded(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Positioned.fill(
-                    child: Row(
-                      children: [
-                        const Expanded(child: SizedBox.shrink()),
-                        const SizedBox(width: 24),
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: _reset(brand),
-                          ),
-                        ),
-                      ],
-                    ),
+            Semantics(
+              button: true,
+              label: rotateLabel,
+              child: CropPress(
+                onTap: onRotate,
+                child: Container(
+                  key: const ValueKey('crop-free-rotate'),
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: brand.surfaceHigh,
                   ),
-                  Semantics(
-                    button: true,
-                    label: rotateLabel,
-                    child: CropPress(
-                      onTap: onRotate,
-                      child: Container(
-                        key: const ValueKey('crop-free-rotate'),
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: brand.surfaceHigh,
-                        ),
-                        child: Icon(
-                          Icons.rotate_90_degrees_ccw_outlined,
-                          color: brand.text,
-                          size: 24,
+                  child: Icon(
+                    Icons.rotate_90_degrees_ccw_outlined,
+                    color: brand.text,
+                    size: 24,
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(child: Center(child: _reset(brand))),
+                  CropPress(
+                    onTap: canDone ? onDone : null,
+                    child: Container(
+                      key: const ValueKey('crop-free-done'),
+                      height: 44,
+                      constraints: const BoxConstraints(minWidth: 72),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: brand.brand,
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Text(
+                        doneLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                   ),
                 ],
-              ),
-            ),
-            CropPress(
-              onTap: canDone ? onDone : null,
-              child: Container(
-                key: const ValueKey('crop-free-done'),
-                height: 44,
-                constraints: const BoxConstraints(minWidth: 96),
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: brand.brand,
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Text(
-                  doneLabel,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
               ),
             ),
           ],

@@ -258,8 +258,20 @@ void main() {
     )).where((m) => m.id == id).firstOrNull;
 
     test('a realtime insert is stored', () async {
+      // Realtime reaches a live subscription only; wait for it, not a fixed time.
+      await eventually(
+        () => chat.hasLiveListener('c1'),
+        reason: 'never subscribed',
+      );
       chat.deliver(msg('n1', t: 20, body: 'fresh'));
-      await eventually(() async => (await storedRow('n1')) != null);
+      try {
+        await eventually(() async => (await storedRow('n1')) != null);
+      } on StateError {
+        fail(
+          'n1 not stored. shown: ${shown().contains('n1')}, listening: '
+          '${chat.hasLiveListener('c1')}, store calls: ${store.calls}',
+        );
+      }
     });
 
     test('a realtime edit replaces the stored body', () async {

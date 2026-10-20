@@ -29,6 +29,7 @@ import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/application/link_preview_controller.dart';
 import 'features/chat/application/share_controller.dart';
+import 'features/chat/application/message_opener.dart';
 import 'features/chat/application/text_locker.dart';
 import 'features/chat/data/external_picker_channel.dart';
 import 'features/chat/data/file_video_importer.dart';
@@ -237,8 +238,13 @@ Future<void> main() async {
           ...autoDownloadOverrides,
           runtimeConfigProvider.overrideWithValue(config),
           ...platformOverrides(defaultTargetPlatform, client, config),
-          chatRepositoryProvider.overrideWithValue(
-            SupabaseChatRepository(client, cache: attachmentCache),
+          chatRepositoryProvider.overrideWith(
+            (ref) => SupabaseChatRepository(
+              client,
+              cache: attachmentCache,
+              // Every read of server rows opens locked texts here, once.
+              opener: ref.read(messageOpenerProvider),
+            ),
           ),
           groupSettingsRepositoryProvider.overrideWithValue(
             SupabaseGroupSettingsRepository(client),

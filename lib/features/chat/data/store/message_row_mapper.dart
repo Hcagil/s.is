@@ -21,6 +21,7 @@ MessagesCompanion messageToCompanion(Message m) {
   }
   if (m.linkPreview != null) extraMap['lp'] = m.linkPreview!.toJson();
   if (m.adminMsg != null) extraMap['am'] = m.adminMsg;
+  if (m.sealed != null) extraMap['sh'] = m.sealed;
   if (m.file != null) {
     final file = m.file!;
     final fileMap = <String, Object?>{
@@ -106,5 +107,6 @@ Message messageFromRow(StoredMessageRow r) {
           ),
     linkPreview: x['lp'] == null ? null : LinkPreview.fromJson(x['lp']),
     adminMsg: (x['am'] as Map?)?.cast<String, dynamic>(),
+    sealed: x['sh'] as String?,
   );
 }

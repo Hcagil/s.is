@@ -20,6 +20,7 @@ import '../domain/file_attachment.dart';
 import '../domain/group_settings.dart';
 import '../domain/link_preview.dart';
 import '../domain/message.dart';
+import '../domain/message_opener.dart';
 import '../domain/message_store.dart';
 import '../domain/poll.dart';
 import '../domain/read_marks.dart';
@@ -36,11 +37,20 @@ import 'link_image_shrink.dart';
 /// filters for authorisation. A refusal arrives as a [PostgrestException] with
 /// SQLSTATE 42501 and is reported as [DeniedFailure].
 final class SupabaseChatRepository implements ChatRepository {
-  SupabaseChatRepository(this._client, {AttachmentCache? cache})
+  SupabaseChatRepository(this._client, {AttachmentCache? cache, this._opener})
     : _cache = cache ?? const _NoCache();
 
   final SupabaseClient _client;
   final AttachmentCache _cache;
+
+  /// Opens locked texts of rows read from the server (null: rows pass as they are).
+  final MessageOpener? _opener;
+
+  /// Live rows are opened one after the other so they keep their order.
+  Future<void> _tail = Future<void>.value();
+
+  Future<List<Message>> _open(List<Message> rows) =>
+      _opener?.open(rows) ?? Future.value(rows);
 
   /// The cap of the shared photos and links reads; a conversation screen reads
   /// pages instead (see [messagePageSize]).
@@ -352,13 +362,13 @@ final class SupabaseChatRepository implements ChatRepository {
   }
 
   static const _messageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, photo_group, link_preview, admin_msg';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, photo_group, link_preview, admin_msg, ciphertext, olm_type';
 
   /// The columns of a page read (open chat): no photo preview -- those arrive
   /// separately, see [attachmentPreviews], so the first paint never waits on
   /// them.
   static const _pageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, photo_group, link_preview, admin_msg';
+      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, photo_group, link_preview, admin_msg, ciphertext, olm_type';
 
   @override
   Future<Result<List<Member>>> conversationMembers(
@@ -634,7 +644,7 @@ final class SupabaseChatRepository implements ChatRepository {
           .retriedOnce();
       // The interface documents oldest-first, which is also what the screen
       // renders. One newest page; older history is paged with messagesAround.
-      return Ok(rows.reversed.map(_toMessage).toList());
+      return Ok(await _open(rows.reversed.map(_toMessage).toList()));
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -752,6 +762,7 @@ final class SupabaseChatRepository implements ChatRepository {
       column: 'conversation_id',
       value: conversationId,
     ),
+    only: conversationId,
   );
 
   @override
@@ -763,8 +774,9 @@ final class SupabaseChatRepository implements ChatRepository {
   /// Realtime re-checks the read policy per subscriber.
   Future<Result<Stream<Message>>> _inserts(
     String topic,
-    PostgresChangeFilter? filter,
-  ) async {
+    PostgresChangeFilter? filter, {
+    String? only,
+  }) async {
     final channel = _client.channel(topic);
     final controller = StreamController<Message>();
 
@@ -782,10 +794,25 @@ final class SupabaseChatRepository implements ChatRepository {
         // after its account signed out) carries no row: there is nothing
         // to show, and a throw here would escape the Realtime client.
         if (row['id'] == null) return;
-        controller.add(_toMessage(row));
+        final message = _toMessage(row);
+        _tail = _tail
+            .then((_) async {
+              final opened = await _open([message]);
+              if (!controller.isClosed) controller.add(opened.first);
+            })
+            .catchError((_) {});
       },
     );
-    controller.onCancel = () => leaveChannel(_client, channel);
+    // A row that waited for its session and is now open goes out again.
+    final reopened = _opener?.reopened.listen((m) {
+      if (!controller.isClosed && (only == null || m.conversationId == only)) {
+        controller.add(m);
+      }
+    });
+    controller.onCancel = () {
+      unawaited(reopened?.cancel());
+      leaveChannel(_client, channel);
+    };
 
     try {
       // A dead subscription must fail loudly rather than hang the screen.
@@ -1362,7 +1389,12 @@ final class SupabaseChatRepository implements ChatRepository {
       // `before` comes back newest-first and includes the anchor itself
       // (>=); reversed, followed by `after` (strictly newer, ascending),
       // gives one oldest-first run centred on the anchor.
-      return Ok([...before.reversed.map(_toMessage), ...after.map(_toMessage)]);
+      return Ok(
+        await _open([
+          ...before.reversed.map(_toMessage),
+          ...after.map(_toMessage),
+        ]),
+      );
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -1385,7 +1417,7 @@ final class SupabaseChatRepository implements ChatRepository {
           .retriedOnce();
       return Ok(
         ChangePage(
-          [for (final r in rows) _toMessage(r)],
+          await _open([for (final r in rows) _toMessage(r)]),
           rows.isEmpty
               ? null
               : ChangeCursor(
@@ -1439,7 +1471,7 @@ final class SupabaseChatRepository implements ChatRepository {
           .order('created_at', ascending: false)
           .limit(limit)
           .retriedOnce();
-      return Ok(rows.reversed.map(_toMessage).toList());
+      return Ok(await _open(rows.reversed.map(_toMessage).toList()));
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -1456,6 +1488,8 @@ final class SupabaseChatRepository implements ChatRepository {
     replyTo: row['reply_to'] as String?,
     linkPreview: LinkPreview.fromJson(row['link_preview']),
     adminMsg: row['admin_msg'] as Map<String, dynamic>?,
+    ciphertext: row['ciphertext'] as String?,
+    olmType: (row['olm_type'] as num?)?.toInt(),
     forwarded: row['forwarded'] as bool? ?? false,
     poll: row['poll'] as bool? ?? false,
     contact: row['contact'] as bool? ?? false,

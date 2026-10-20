@@ -8,6 +8,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart' show Database, SqlError, SqliteException;
 
+import '../../domain/encrypted_message_repository.dart';
 import '../../domain/message.dart';
 import '../../domain/message_store.dart';
 import 'message_row_mapper.dart';
@@ -196,16 +197,36 @@ final class DriftMessageStore implements MessageStore {
   @override
   Future<void> upsertAll(List<Message> messages) =>
       _run<void>(null, (db) async {
-        final stored = [
-          for (final m in messages)
-            if (!m.isPending) messageToCompanion(m),
-        ];
+        final stored = await _writable(db, messages);
         await db.batch((b) {
           for (final c in stored) {
             b.insert(db.messages, c, onConflict: DoUpdate((_) => c));
           }
         });
       });
+
+  /// The companions to write: a row that only carries the locked placeholder is dropped when the stored row of that id already holds readable text, so a failed open or the echo of the member's own locked row never erases a plaintext.
+  Future<List<MessagesCompanion>> _writable(
+    StoreDatabase db,
+    List<Message> messages,
+  ) async {
+    final out = <MessagesCompanion>[];
+    for (final m in messages) {
+      if (m.isPending) continue;
+      if (isLockedPlaceholder(m.body) && m.deletion == null) {
+        final old = await (db.select(
+          db.messages,
+        )..where((t) => t.id.equals(m.id))).getSingleOrNull();
+        if (old != null &&
+            !isLockedPlaceholder(old.body) &&
+            old.deleted == null) {
+          continue;
+        }
+      }
+      out.add(messageToCompanion(m));
+    }
+    return out;
+  }
 
   /// An erase since this open began wins: remove the file and key it may have re-created.
   Future<Never> _lostToErase(File file) async {
@@ -297,7 +318,9 @@ final class DriftMessageStore implements MessageStore {
           .go();
       for (final m in page) {
         // one upsert per row, same as upsertAll
-        final c = messageToCompanion(m);
+        final writable = await _writable(db, [m]);
+        if (writable.isEmpty) continue;
+        final c = writable.first;
         await db.into(db.messages).insert(c, onConflict: DoUpdate((_) => c));
       }
       if (oldest == null) {

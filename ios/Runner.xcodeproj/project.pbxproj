@@ -26,6 +26,12 @@
 		B2000000000000000000B012 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B2000000000000000000B004 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B3000000000000000000B011 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3000000000000000000B001 /* NotificationService.swift */; };
 		B3000000000000000000B012 /* NotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B3000000000000000000B004 /* NotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B3000000000000000000B013 /* PushPeekCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3000000000000000000B005 /* PushPeekCore.swift */; };
+		B3000000000000000000B014 /* PeekNative.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3000000000000000000B006 /* PeekNative.swift */; };
+		B3000000000000000000B015 /* PushPeek.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3000000000000000000B007 /* PushPeek.swift */; };
+		B3000000000000000000B016 /* PeekStore.c in Sources */ = {isa = PBXBuildFile; fileRef = B3000000000000000000B008 /* PeekStore.c */; };
+		A10000000000000000000B01 /* KeychainMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000B11 /* KeychainMigration.swift */; };
+		A10000000000000000000B02 /* SisKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000B12 /* SisKeychain.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -110,6 +116,16 @@
 		B3000000000000000000B001 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		B3000000000000000000B002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B3000000000000000000B004 /* NotificationService.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B3000000000000000000B005 /* PushPeekCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPeekCore.swift; sourceTree = "<group>"; };
+		B3000000000000000000B006 /* PeekNative.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeekNative.swift; sourceTree = "<group>"; };
+		B3000000000000000000B007 /* PushPeek.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPeek.swift; sourceTree = "<group>"; };
+		B3000000000000000000B008 /* PeekStore.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c; path = PeekStore.c; sourceTree = "<group>"; };
+		B3000000000000000000B009 /* PeekStore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PeekStore.h; sourceTree = "<group>"; };
+		B3000000000000000000B00A /* NotificationService-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NotificationService-Bridging-Header.h; sourceTree = "<group>"; };
+		B3000000000000000000B00B /* NotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NotificationService.entitlements; sourceTree = "<group>"; };
+		B3000000000000000000B00C /* build_native.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = build_native.sh; sourceTree = "<group>"; };
+		A10000000000000000000B11 /* KeychainMigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainMigration.swift; sourceTree = "<group>"; };
+		A10000000000000000000B12 /* SisKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SisKeychain.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -194,6 +210,8 @@
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
+				A10000000000000000000B11 /* KeychainMigration.swift */,
+				A10000000000000000000B12 /* SisKeychain.swift */,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				A10000000000000000000A11 /* PickedImageProcessor.swift */,
 				A10000000000000000000A31 /* StickerCutout.swift */,
@@ -219,6 +237,14 @@
 			children = (
 				B3000000000000000000B001 /* NotificationService.swift */,
 				B3000000000000000000B002 /* Info.plist */,
+				B3000000000000000000B005 /* PushPeekCore.swift */,
+				B3000000000000000000B006 /* PeekNative.swift */,
+				B3000000000000000000B007 /* PushPeek.swift */,
+				B3000000000000000000B008 /* PeekStore.c */,
+				B3000000000000000000B009 /* PeekStore.h */,
+				B3000000000000000000B00A /* NotificationService-Bridging-Header.h */,
+				B3000000000000000000B00B /* NotificationService.entitlements */,
+				B3000000000000000000B00C /* build_native.sh */,
 			);
 			path = NotificationService;
 			sourceTree = "<group>";
@@ -290,6 +316,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = B3000000000000000000B054 /* Build configuration list for PBXNativeTarget "NotificationService" */;
 			buildPhases = (
+				B3000000000000000000B034 /* Build native libraries */,
 				B3000000000000000000B031 /* Sources */,
 				B3000000000000000000B032 /* Frameworks */,
 				B3000000000000000000B033 /* Resources */,
@@ -423,6 +450,21 @@
 			shellPath = /bin/sh;
 			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
 		};
+		B3000000000000000000B034 /* Build native libraries */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Build native libraries";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "\"${SRCROOT}/NotificationService/build_native.sh\"";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -439,6 +481,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
+				A10000000000000000000B01 /* KeychainMigration.swift in Sources */,
+				A10000000000000000000B02 /* SisKeychain.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 				A10000000000000000000A12 /* PickedImageProcessor.swift in Sources */,
@@ -461,6 +505,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				B3000000000000000000B011 /* NotificationService.swift in Sources */,
+				B3000000000000000000B013 /* PushPeekCore.swift in Sources */,
+				B3000000000000000000B014 /* PeekNative.swift in Sources */,
+				B3000000000000000000B015 /* PushPeek.swift in Sources */,
+				B3000000000000000000B016 /* PeekStore.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -824,6 +872,20 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
+				HEADER_SEARCH_PATHS = (
+					"$(DERIVED_FILE_DIR)/native/include",
+					"$(SRCROOT)/../rust/include",
+					"$(SRCROOT)/NotificationService",
+				);
+				LIBRARY_SEARCH_PATHS = "$(DERIVED_FILE_DIR)/native/$(PLATFORM_NAME)";
+				OTHER_LDFLAGS = (
+					"-lsqlite3mc",
+					"-lrust_lib_sis",
+					"-framework",
+					Security,
+				);
+				SWIFT_OBJC_BRIDGING_HEADER = "NotificationService/NotificationService-Bridging-Header.h";
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
@@ -870,6 +932,20 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
+				HEADER_SEARCH_PATHS = (
+					"$(DERIVED_FILE_DIR)/native/include",
+					"$(SRCROOT)/../rust/include",
+					"$(SRCROOT)/NotificationService",
+				);
+				LIBRARY_SEARCH_PATHS = "$(DERIVED_FILE_DIR)/native/$(PLATFORM_NAME)";
+				OTHER_LDFLAGS = (
+					"-lsqlite3mc",
+					"-lrust_lib_sis",
+					"-framework",
+					Security,
+				);
+				SWIFT_OBJC_BRIDGING_HEADER = "NotificationService/NotificationService-Bridging-Header.h";
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
@@ -915,6 +991,20 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
+				HEADER_SEARCH_PATHS = (
+					"$(DERIVED_FILE_DIR)/native/include",
+					"$(SRCROOT)/../rust/include",
+					"$(SRCROOT)/NotificationService",
+				);
+				LIBRARY_SEARCH_PATHS = "$(DERIVED_FILE_DIR)/native/$(PLATFORM_NAME)";
+				OTHER_LDFLAGS = (
+					"-lsqlite3mc",
+					"-lrust_lib_sis",
+					"-framework",
+					Security,
+				);
+				SWIFT_OBJC_BRIDGING_HEADER = "NotificationService/NotificationService-Bridging-Header.h";
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";

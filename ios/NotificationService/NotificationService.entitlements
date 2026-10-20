@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The app's message database lives in this App Group; the extension only reads it. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.esd.sis</string>
+	</array>
+	<!-- The two keys that open the database. Read only, and ONLY this group: the extension never sees the app's other keychain items. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.esd.sis.crypto</string>
+	</array>
+</dict>
+</plist>

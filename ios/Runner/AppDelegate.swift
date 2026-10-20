@@ -9,6 +9,8 @@ import UserNotifications
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // Before Flutter starts: move the store and pickle keys to the crypto keychain group (idempotent; see KeychainMigration.swift).
+    SisKeychain.runMigration()
     excludeSupportFromBackup()
     // Google Maps starts only with a key; with none, Dart uses OpenStreetMap and never builds a GoogleMap.
     if let mapsKey = Bundle.main.object(forInfoDictionaryKey: "MapsApiKey") as? String, !mapsKey.isEmpty, !mapsKey.hasPrefix("$(") {
@@ -126,6 +128,10 @@ import UserNotifications
     // of the one MainActivity.kt serves on Android).
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ExternalPickerPlugin") {
       ExternalPickerPlugin.register(with: registrar)
+    }
+    // The keychain group the Dart key stores must name (see SisKeychain.swift).
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SisKeychain") {
+      SisKeychain.register(with: registrar)
     }
     // Share into SIS: hands what the Share Extension left in the App Group to Dart.
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ShareIntakePlugin") {

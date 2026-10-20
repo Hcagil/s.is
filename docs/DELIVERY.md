@@ -227,15 +227,20 @@ server marks the push `mutable-content` and adds a short-lived signed link to
 a small picture (about 480 px wide, at most 64 KiB); the extension downloads it
 and attaches it, so the banner and the expanded notification show the picture
 without opening SIS. If the download fails or takes more than 10 seconds the
-text notification is shown as it is. The extension shares no data with the app,
-so it needs no App Group and no entitlements: `ios-ipa.yml` runs
-`tool/asc_signing.py ensure --no-group` for it, which creates the
-`com.esd.sis.notify` App ID and its profile ("sis ci distribution notify") if
-missing, and treats any ACTIVE profile as good. The owner has no manual Apple
-step for this extension: nothing to click in the Apple developer portal (the
-App Store Connect API key the workflow already holds creates the App ID and the
-profile on the first signed run). Only if that run stops with an error from
-App Store Connect, read the message first.
+text notification is shown as it is. For an encrypted message it also opens
+the app's message database read-only and shows the real text (the same rules as
+Android). For that it shares two things with the app: the App Group
+`group.com.esd.sis` (where the database file lives) and a keychain group
+`TEAMID.com.esd.sis.crypto` (the two keys that open it; only the app and this
+extension are in it). `ios-ipa.yml` runs `tool/asc_signing.py ensure` (with the
+App Group check) for `com.esd.sis.notify`. Keychain groups need no Apple
+capability, but the App Group does, and the App Store Connect API cannot switch
+it on. Owner step, once: in the Apple developer portal open Identifiers,
+`com.esd.sis.notify`, tick App Groups, Configure, select `group.com.esd.sis`,
+save. Until then the signed run stops with "the notify signing profile lacks
+the App Group". The static libraries the extension links (Rust crypto, SQLite3
+Multiple Ciphers) are built by `ios/NotificationService/build_native.sh` during
+the Xcode build.
 
 ### Before pushing
 

@@ -164,9 +164,15 @@ jobs:
       - name: Sign the archive with its entitlements
         run: |
           app="$RUNNER_TEMP/Runner.xcarchive/Products/Applications/Runner.app"
+          # The keychain groups are written $(AppIdentifierPrefix)...; Xcode expands that, codesign does not: use the team id.
+          for name in Runner/Runner NotificationService/NotificationService; do
+            sed "s/\$(AppIdentifierPrefix)/$TEAM_ID./g" "ios/$name.entitlements" > "$RUNNER_TEMP/$(basename $name).entitlements"
+          done
           codesign --force --sign - --entitlements ios/ShareExtension/ShareExtension.entitlements \
             "$app/PlugIns/ShareExtension.appex"
-          codesign --force --sign - --entitlements ios/Runner/Runner.entitlements "$app"
+          codesign --force --sign - --entitlements "$RUNNER_TEMP/NotificationService.entitlements" \
+            "$app/PlugIns/NotificationService.appex"
+          codesign --force --sign - --entitlements "$RUNNER_TEMP/Runner.entitlements" "$app"
       # One long-lived distribution certificate for every build. A per-run one
       # cannot work: Apple validates a build's signature again in TestFlight beta
       # review (up to about 48 hours after the upload) and a revoked certificate
@@ -187,8 +193,9 @@ jobs:
           # The app's App ID also gets Sign in with Apple, and a profile without it is replaced.
           python3 tool/asc_signing.py ensure --signin com.esd.sis "sis ci distribution" "sis ci distribution"
           python3 tool/asc_signing.py ensure com.esd.sis.share "sis ci distribution share" "sis ci distribution"
-          # The Notification Service Extension shares no data with the app: no App Group on its App ID or profile.
-          python3 tool/asc_signing.py ensure --no-group com.esd.sis.notify "sis ci distribution notify" "sis ci distribution"
+          # The Notification Service Extension reads the app's message database from the App Group: its App ID and profile carry it too
+          # (the App Group capability on com.esd.sis.notify is switched on once in the developer portal, docs/DELIVERY.md).
+          python3 tool/asc_signing.py ensure com.esd.sis.notify "sis ci distribution notify" "sis ci distribution"
           python3 tool/asc_signing.py fetch "sis ci distribution" "$dir"
           openssl x509 -inform der -in "$dir/cert.cer" -out "$dir/cert.pem"
           openssl pkey -in "$dir/key.pem" -pubout -out "$dir/key.pub" 2>/dev/null || { echo 'IOS_DISTRIBUTION_KEY is not a valid private key PEM' >&2; exit 1; }
@@ -226,9 +233,10 @@ jobs:
             cp "$dir/share/profile.mobileprovision" "$profiles/$share_uuid.mobileprovision"
           done
           echo "SHARE_PROFILE_UUID=$share_uuid" >> "$GITHUB_ENV"
-          # The Notification Service Extension (com.esd.sis.notify) has its own profile; it carries no App Group, so it is not in the group check above.
+          # The Notification Service Extension (com.esd.sis.notify) has its own profile, which must carry the App Group as well.
           mkdir -m 700 "$dir/notify"
           python3 tool/asc_signing.py fetch "sis ci distribution notify" "$dir/notify"
+          security cms -D -i "$dir/notify/profile.mobileprovision" | grep -q 'group.com.esd.sis' || { echo 'the notify signing profile lacks the App Group group.com.esd.sis: enable App Groups on com.esd.sis.notify in the Apple developer portal (docs/DELIVERY.md)' >&2; exit 1; }
           notify_uuid=$(security cms -D -i "$dir/notify/profile.mobileprovision" | plutil -extract UUID raw -o - -)
           for profiles in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
             cp "$dir/notify/profile.mobileprovision" "$profiles/$notify_uuid.mobileprovision"
@@ -300,9 +308,14 @@ jobs:
             | plutil -extract aps-environment raw -o - -)
           echo "aps-environment: $env"
           test "$env" = production || { echo "aps-environment is not production" >&2; exit 1; }
-          for object in Runner.app Runner.app/PlugIns/ShareExtension.appex; do
+          for object in Runner.app Runner.app/PlugIns/ShareExtension.appex Runner.app/PlugIns/NotificationService.appex; do
             codesign -d --entitlements :- "$RUNNER_TEMP/ipa/Payload/$object" 2>/dev/null | grep -q 'group.com.esd.sis' \
               || { echo "$object has no App Group entitlement" >&2; exit 1; }
+          done
+          # The store key and Olm pickle key live in the crypto keychain group, shared by the app and the notification extension only.
+          for object in Runner.app Runner.app/PlugIns/NotificationService.appex; do
+            codesign -d --entitlements :- "$RUNNER_TEMP/ipa/Payload/$object" 2>/dev/null | grep -q "$TEAM_ID.com.esd.sis.crypto" \
+              || { echo "$object has no crypto keychain group" >&2; exit 1; }
           done
           codesign -d --entitlements :- "$RUNNER_TEMP/ipa/Payload/Runner.app" 2>/dev/null | grep -q 'com.apple.developer.applesignin' \
             || { echo "Runner.app has no Sign in with Apple entitlement" >&2; exit 1; }

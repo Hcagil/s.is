@@ -12,6 +12,12 @@
 	<array>
 		<string>group.com.esd.sis</string>
 	</array>
+	<!-- Keychain groups. The default group (TEAMID.com.esd.sis) MUST stay first: it is where every key was kept until now and where other plugins keep theirs. The crypto group holds the store key and the Olm pickle key and is shared with the notification extension only (ios/NotificationService/NotificationService.entitlements). -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.esd.sis</string>
+		<string>$(AppIdentifierPrefix)com.esd.sis.crypto</string>
+	</array>
 	<!-- Sign in with Apple (the iPhone button). The profile must carry the same entitlement: tool/asc_signing.py (ensure with the signin flag). -->
 	<key>com.apple.developer.applesignin</key>
 	<array>

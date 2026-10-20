@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer';
+import 'dart:io' show Platform;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -17,6 +18,7 @@ import 'core/runtime_config.dart';
 import 'core/startup_failure.dart';
 import 'core/startup_marks.dart';
 import 'features/appearance/application/appearance_controller.dart';
+import 'data/keychain_group.dart';
 import 'features/appearance/data/picker_wallpaper_photos.dart';
 import 'features/appearance/data/shared_prefs_appearance_store.dart';
 import 'features/autodownload/application/auto_download_controller.dart';
@@ -173,6 +175,8 @@ Future<void> main() async {
     );
   });
   final config = RuntimeConfig.fromEnvironment();
+  // iPhone: the keychain group of the store and pickle keys (null elsewhere); the app moved the keys there before Flutter started.
+  final keychainGroup = await cryptoKeychainGroup();
   // Read before runApp (like the session marker), so the first frame already
   // has the member's theme, font, text size and language: no flash.
   const appearanceStore = SharedPrefsAppearanceStore();
@@ -346,15 +350,19 @@ Future<void> main() async {
           // watches the user id, so another account gets a fresh instance
           // (and the file's owner check wipes the old rows).
           messageStoreProvider.overrideWith((ref) {
-            const key = StoreKey();
+            final key = StoreKey.inGroup(keychainGroup);
             final store = DriftMessageStore(
               ownerId: ref.watch(currentUserIdProvider) ?? '',
               file: storeFile,
-              key: key.loadOrCreate,
+              // On iPhone an existing database with a missing key is an error, never a reason to make a new key.
+              key: () async => key.loadOrCreate(
+                mayCreate:
+                    !Platform.isIOS || !await (await storeFile()).exists(),
+              ),
               // Sign-out erases both keys: the store key and the Olm pickle key.
               deleteKey: () async {
                 await key.delete();
-                await const PickleKey().delete();
+                await PickleKey.inGroup(keychainGroup).delete();
               },
             );
             ref.onDispose(store.close);
@@ -376,7 +384,9 @@ Future<void> main() async {
             ref.watch(messageStoreProvider);
             return DriftOlmPickleStore(builtStore!);
           }),
-          pickleKeyStoreProvider.overrideWithValue(const PickleKey()),
+          pickleKeyStoreProvider.overrideWithValue(
+            PickleKey.inGroup(keychainGroup),
+          ),
           keyEngineProvider.overrideWithValue(olm),
           sessionEngineProvider.overrideWith((ref) {
             ref.watch(messageStoreProvider);
@@ -384,7 +394,7 @@ Future<void> main() async {
               store: builtStore!,
               keys: olm,
               sessions: olm,
-              pickleKey: const PickleKey(),
+              pickleKey: PickleKey.inGroup(keychainGroup),
             );
           }),
           keyDirectoryProvider.overrideWithValue(SupabaseKeyDirectory(client)),

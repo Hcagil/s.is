@@ -36,6 +36,16 @@ final class PickleKey implements PickleKeyStore {
     return bytes;
   }
 
+  /// The saved key bytes, or null; never makes or writes one (a notification must not).
+  Future<List<int>?> read() async {
+    final key = await _storage.read(key: _name);
+    if (key == null || !_hex64.hasMatch(key)) return null;
+    return List.generate(
+      32,
+      (i) => int.parse(key.substring(i * 2, i * 2 + 2), radix: 16),
+    );
+  }
+
   /// Forgets the key (sign-out): the pickle is unreadable without it.
   @override
   Future<void> delete() => _storage.delete(key: _name);

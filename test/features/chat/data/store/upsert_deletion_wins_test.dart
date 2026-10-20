@@ -116,4 +116,30 @@ void main() {
     expect(await row('pendingNew'), isNull);
     expect((await row('fresh'))?.body, 'new');
   });
+
+  group('extendOlder (background fill) keeps the same rule', () {
+    setUp(() async {
+      await store.reconcilePage('c1', [
+        msg('newest', t: 100),
+      ], reachedStart: false);
+    });
+
+    test('an older live row never replaces a stored deleted one', () async {
+      await store.upsertAll([
+        msg('m1', t: 5, body: '', deletion: MessageDeletion.placeholder),
+      ]);
+      await store.extendOlder('c1', [
+        msg('m1', t: 5, body: 'resurrected'),
+      ], reachedStart: false);
+      expect((await row('m1'))?.isDeleted, isTrue);
+    });
+
+    test('an older deletion row replaces stored readable text', () async {
+      await store.upsertAll([msg('m1', t: 5, body: 'readable')]);
+      await store.extendOlder('c1', [
+        msg('m1', t: 5, body: '', deletion: MessageDeletion.placeholder),
+      ], reachedStart: false);
+      expect((await row('m1'))?.isDeleted, isTrue);
+    });
+  });
 }

@@ -581,6 +581,33 @@ void main() {
       expect(got.map((m) => m.id), isNot(contains('w1')));
       expect(await stored('w1'), isNull);
     });
+
+    test('forget while the retried row is being written: never emitted (the '
+        'caller removes it from the store right after)', () async {
+      waitForKey(['w1']);
+      final o = make();
+      var retrying = false;
+      engine.during = (c) async {
+        if (!retrying || c != ct('w1')) return;
+        // Lands after the decrypt answered, while the slow write runs.
+        unawaited(
+          Future<void>.delayed(
+            const Duration(milliseconds: 40),
+            () => o.forget('w1'),
+          ),
+        );
+      };
+      final got = <Message>[];
+      final sub = o.reopened.listen(got.add);
+      addTearDown(sub.cancel);
+      await o.open([locked('w1', t: 1)]);
+      retrying = true;
+      store.writeDelay = const Duration(milliseconds: 150);
+      await o.open([locked('k0', t: 2, olmType: 0)]);
+      await pumpUntil(() => store.upserted.contains('w1'));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(got.map((m) => m.id), isNot(contains('w1')));
+    });
   });
 }
 

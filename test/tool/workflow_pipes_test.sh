@@ -6,7 +6,8 @@
 # writer with SIGPIPE (exit 141) when the reader stops early:
 #
 #   release.yml `scope` / "Decide whether this change ships" (id: diff)
-#   - ship=true when some changed path matches none of ^(docs/|\.github/),
+#   - ship=true when some changed path matches none of ^(test/|
+#     integration_test/|supabase/tests/|tool/|docs/|\.github/),
 #     \.md$, ^\.git(ignore|attributes)$; else ship=false (no paths, or a
 #     failing git diff); the same answer with or without pipefail, at any size;
 #   ci.yml "Native iOS tests (simulator)"
@@ -78,6 +79,20 @@ false|docs/DESIGN.md
 false|.github/workflows/ci.yml,docs/a.png,README.md,lib/x/notes.md
 false|.gitignore,.gitattributes
 false|docs/a,.github/b,CHANGELOG.md,.gitignore
+false|test/tool/whats_new_note_test.sh
+false|integration_test/app_test.dart
+false|supabase/tests/rls_test.sql
+false|tool/ci_local.sh
+false|test/a.dart,integration_test/b.dart,supabase/tests/c.sql,tool/d.sh,docs/e,.github/f,g.md,.gitignore
+true|lib/tool/x.dart
+true|lib/test/x.dart
+true|supabase/migrations/2.sql
+true|supabase/functions/f/index.ts
+true|test/a.dart,pubspec.yaml
+true|assets/icon.png
+true|android/app/build.gradle
+true|ios/Runner/Info.plist
+true|tool/x.sh,supabase/functions/f/index.ts
 true|lib/main.dart
 true|docs/x.md,pubspec.yaml
 true|.github/dependabot.yml,supabase/migrations/1.sql

@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import androidx.annotation.VisibleForTesting
 import io.flutter.FlutterInjector
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
@@ -26,6 +27,18 @@ object PeekRunner {
     /** Test seam: when set, replaces the engine (unit tests cannot start Flutter). */
     @Volatile var override: ((Bundle) -> String?)? = null
 
+    /** Test seam: the clock for every budget time read. */
+    @VisibleForTesting @Volatile var now: () -> Long = { System.currentTimeMillis() }
+
+    /** Test seam: called after the budget check instead of starting a real engine; gets the ms this push may still use. Its elapsed time (via [now]) is charged to the budget like a real peek. */
+    @VisibleForTesting @Volatile var engine: ((Bundle, Long) -> String?)? = null
+
+    /** Test seam: forgets the burst budget. */
+    @VisibleForTesting fun resetBudget() = synchronized(this) {
+        burstSpentMs = 0L
+        lastPeekEnd = 0L
+    }
+
     /** True when [extras] is an encrypted push with ciphertext: encrypted == "true", non-empty "ct", "ot" is "0" or "1", and non-empty user_id, conversation_id, message_id. */
     fun wanted(extras: Bundle): Boolean =
         extras.getString("encrypted") == "true" &&
@@ -41,11 +54,15 @@ object PeekRunner {
         override?.let { return it(extras) }
         if (Looper.myLooper() == Looper.getMainLooper()) return null
         val timeout = synchronized(this) {
-            if (System.currentTimeMillis() - lastPeekEnd > QUIET_GAP_MS) burstSpentMs = 0L
+            if (now() - lastPeekEnd > QUIET_GAP_MS) burstSpentMs = 0L
             minOf(PUSH_CAP_MS, BURST_BUDGET_MS - burstSpentMs)
         }
         if (timeout < 500L) return null
-        val startedAt = System.currentTimeMillis()
+        val startedAt = now()
+        engine?.let { fake ->
+            val text = try { fake(extras, timeout) } finally { charge(startedAt) }
+            return text?.takeIf { it.isNotEmpty() }
+        }
 
         val args = listOf("user_id", "conversation_id", "message_id", "ct", "ot").associateWith { extras.getString(it) }
         val latch = CountDownLatch(1)
@@ -59,13 +76,14 @@ object PeekRunner {
                 val loader = FlutterInjector.instance().flutterLoader()
                 loader.startInitialization(app)
                 loader.ensureInitializationComplete(app, null)
-                val engine = FlutterEngine(app)
-                engineRef.set(engine)
+                // false: do not register every plugin of the app; only the three below.
+                val flutter = FlutterEngine(app, null, false)
+                engineRef.set(flutter)
                 // Only what peekMain uses: the key storage and the JNI plugins that path_provider's Android code runs on.
-                engine.plugins.add(com.it_nomads.fluttersecurestorage.FlutterSecureStoragePlugin())
-                engine.plugins.add(com.github.dart_lang.jni.JniPlugin())
-                engine.plugins.add(com.github.dart_lang.jni_flutter.JniFlutterPlugin())
-                MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, res ->
+                flutter.plugins.add(com.it_nomads.fluttersecurestorage.FlutterSecureStoragePlugin())
+                flutter.plugins.add(com.github.dart_lang.jni.JniPlugin())
+                flutter.plugins.add(com.github.dart_lang.jni_flutter.JniFlutterPlugin())
+                MethodChannel(flutter.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, res ->
                     when (call.method) {
                         "take" -> res.success(args)
                         "done" -> {
@@ -76,7 +94,7 @@ object PeekRunner {
                         else -> res.notImplemented()
                     }
                 }
-                engine.dartExecutor.executeDartEntrypoint(
+                flutter.dartExecutor.executeDartEntrypoint(
                     DartExecutor.DartEntrypoint(loader.findAppBundlePath(), ENTRY_LIBRARY, "peekMain"),
                 )
             } catch (t: Throwable) {
@@ -87,10 +105,12 @@ object PeekRunner {
 
         val finished = latch.await(timeout, TimeUnit.MILLISECONDS)
         main.post { engineRef.get()?.destroy() }
-        synchronized(this) {
-            lastPeekEnd = System.currentTimeMillis()
-            burstSpentMs += lastPeekEnd - startedAt
-        }
+        charge(startedAt)
         return if (finished) result.get()?.takeIf { it.isNotEmpty() } else null
+    }
+
+    private fun charge(startedAt: Long) = synchronized(this) {
+        lastPeekEnd = now()
+        burstSpentMs += lastPeekEnd - startedAt
     }
 }

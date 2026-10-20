@@ -681,6 +681,18 @@ when a collaborator leaves or a dependency is suspected compromised.
 - On the phone: the account is an encrypted vodozemac pickle in the encrypted on-phone store (meta row `olm_account`); its 32-byte key is in secure storage as `sis.olm.pickle.key` (this device only) and is deleted with the store key at sign-out. The pickle is saved before publishing and again after marking published; a failed publish is retried (idempotent). No pickle but a server row bound to this same session (olm_key_status same_session) means identity lost (KeysIdentityLost): never a silent new account; a row bound to another session (sign-out and sign-in, new phone) gets a new account and a publish. Pickles, keys and engine errors are never logged or shown.
 - The engine keeps the previous fallback key on rotation (late first messages still decrypt); this step never forgets it.
 
+### Encrypted one-to-one text (Private Chats step 4a)
+
+- A one-to-one text between two human members is locked (Olm) on the sender's phone and opened only on the receiver's phone. The server, Supabase, Google and Apple see ciphertext, never the text. Metadata (who, when, size, type) stays visible.
+- A locked message is a messages row with `ciphertext` and `olm_type` set and `body` fixed to the placeholder `🔒 Encrypted message`. A CHECK forces link_preview, attachments, poll, contact, photo group, sticker and location to be empty on such a row.
+- Only a direct human chat can hold ciphertext; bots never send it. Server search never matches ciphertext rows (search runs on the phone).
+- No downgrade after the first locked message: once a conversation has held one (`conversations.encrypted_at`, kept after deletes), the server refuses a plain insert into it, and `notification_action` refuses a reply into it.
+- First-message gap, open until step 7 (security codes): the first message of a chat is sent in plain text when the peer has published no keys (the key lookup returns nothing). A malicious server that withholds the peer's keys can cause this. Any lookup error blocks the send instead of sending plain. There is no "not encrypted" label yet (steps 7 and 9).
+- Plain until step 6: places, polls, contacts, photos and other media with captions, stickers and voice. The link-card picture is not uploaded in a locked chat.
+- The send queue lives in the encrypted on-phone store, with the ciphertext of a locked text, so a retry sends the same bytes.
+- Notifications (4a): the push carries `encrypted: true`. Android shows "🔒 New message" (Turkish "🔒 Yeni mesaj") with the sender's name, and no Reply or Mark as read button. iPhone gets category `SIS_MESSAGE_LOCKED`, registered with no actions. Decrypted notification text and a locked Reply come in step 4b.
+- On the phone, an opened text is stored once. The store's upsert is one atomic statement, so a live row never replaces a deleted one. A hidden or vanished message is dropped from the opener's waiting list, so it cannot come back.
+
 ## Runbook
 
 - **Allow a member:** insert the row directly against the project, through the

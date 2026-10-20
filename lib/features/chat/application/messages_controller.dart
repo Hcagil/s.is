@@ -814,6 +814,8 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     final result = await ref.read(chatRepositoryProvider).hideForMe(message);
     if (result is Ok) {
       final store = _storeOf(ref);
+      // The opener must not bring the hidden row back from its waiting list.
+      ref.read(messageOpenerProvider).forget(message.id);
       if (store != null) unawaited(store.remove(message.id));
     }
     if (result is Err && ref.mounted) {

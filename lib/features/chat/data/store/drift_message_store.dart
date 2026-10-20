@@ -200,10 +200,20 @@ final class DriftMessageStore implements MessageStore {
         final stored = await _writable(db, messages);
         await db.batch((b) {
           for (final c in stored) {
-            b.insert(db.messages, c, onConflict: DoUpdate((_) => c));
+            b.insert(db.messages, c, onConflict: _upsertClause(c));
           }
         });
       });
+
+  /// One ON CONFLICT clause for every write: a live row never replaces a deleted one, even when a deletion lands between a read and this write; a deletion row always wins.
+  DoUpdate<$MessagesTable, StoredMessageRow> _upsertClause(
+    MessagesCompanion c,
+  ) => DoUpdate<$MessagesTable, StoredMessageRow>(
+    (_) => c,
+    where: (old) => c.deleted.present && c.deleted.value != null
+        ? const Constant(true)
+        : old.deleted.isNull(),
+  );
 
   /// The companions to write: a row that only carries the locked placeholder is dropped when the stored row of that id already holds readable text, so a failed open or the echo of the member's own locked row never erases a plaintext.
   Future<List<MessagesCompanion>> _writable(
@@ -213,17 +223,12 @@ final class DriftMessageStore implements MessageStore {
     final out = <MessagesCompanion>[];
     for (final m in messages) {
       if (m.isPending) continue;
-      if (m.deletion == null) {
+      if (m.deletion == null && isLockedPlaceholder(m.body)) {
         final old = await (db.select(
           db.messages,
         )..where((t) => t.id.equals(m.id))).getSingleOrNull();
-        // A deleted row is never replaced by a live one; a placeholder never erases readable text.
-        if (old != null &&
-            (old.deleted != null ||
-                (isLockedPlaceholder(m.body) &&
-                    !isLockedPlaceholder(old.body)))) {
-          continue;
-        }
+        // A placeholder never erases readable text (a deleted old row is refused by the upsert itself).
+        if (old != null && !isLockedPlaceholder(old.body)) continue;
       }
       out.add(messageToCompanion(m));
     }
@@ -323,7 +328,7 @@ final class DriftMessageStore implements MessageStore {
         final writable = await _writable(db, [m]);
         if (writable.isEmpty) continue;
         final c = writable.first;
-        await db.into(db.messages).insert(c, onConflict: DoUpdate((_) => c));
+        await db.into(db.messages).insert(c, onConflict: _upsertClause(c));
       }
       if (oldest == null) {
         if (reachedStart) {
@@ -382,7 +387,7 @@ final class DriftMessageStore implements MessageStore {
       if (prev == null) return;
       for (final m in page) {
         final c = messageToCompanion(m);
-        await db.into(db.messages).insert(c, onConflict: DoUpdate((_) => c));
+        await db.into(db.messages).insert(c, onConflict: _upsertClause(c));
       }
       if (page.isEmpty) {
         if (reachedStart) {

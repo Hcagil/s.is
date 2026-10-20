@@ -58,6 +58,7 @@ import '../domain/video.dart';
 import '../domain/video_gallery.dart';
 import '../domain/voice.dart';
 import 'chat_drafts.dart';
+import 'message_opener.dart';
 import 'text_locker.dart';
 
 part 'open_conversation.dart';

@@ -14,10 +14,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/chat_drafts.dart';
+import 'package:sis/features/chat/application/message_opener.dart';
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
+import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 
 import '../../support/fakes.dart';
+import '../../support/opener_fakes.dart' show ForgetSpyOpener;
 import '../../support/store_spy.dart';
 import 'data/store/store_harness.dart';
 
@@ -245,6 +248,11 @@ void main() {
 
   group('live writes', () {
     setUp(() async {
+      // The open chat is on the server's list: a list read (a live insert
+      // marks it read) must not erase it from the phone as a gone chat.
+      chat.conversationsResult = Ok([
+        Conversation(id: 'c1', lastMessageAt: at(9)),
+      ]);
       chat.history['c1'] = _rows(0, 10);
       await open('c1');
       await settle();
@@ -256,8 +264,20 @@ void main() {
     )).where((m) => m.id == id).firstOrNull;
 
     test('a realtime insert is stored', () async {
+      // Realtime reaches a live subscription only; wait for it, not a fixed time.
+      await eventually(
+        () => chat.hasLiveListener('c1'),
+        reason: 'never subscribed',
+      );
       chat.deliver(msg('n1', t: 20, body: 'fresh'));
-      await eventually(() async => (await storedRow('n1')) != null);
+      try {
+        await eventually(() async => (await storedRow('n1')) != null);
+      } on StateError {
+        fail(
+          'n1 not stored. shown: ${shown().contains('n1')}, listening: '
+          '${chat.hasLiveListener('c1')}, store calls: ${store.calls}',
+        );
+      }
     });
 
     test('a realtime edit replaces the stored body', () async {
@@ -329,6 +349,47 @@ void main() {
       chat.hideForMeResult = null;
       await ctl.hideForMe(chat.history['c1']![7]);
       await eventually(() async => (await storedRow('h7')) == null);
+    });
+  });
+
+  // Group E: a hidden row is forgotten by the opener BEFORE the store drops
+  // it (a late reopen could otherwise write it back); a refused hide is not.
+  group('hideForMe forgets the row', () {
+    setUp(() async {
+      c = ProviderContainer.test(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(chat),
+          messageStoreProvider.overrideWithValue(store),
+          messageOpenerProvider.overrideWithValue(
+            ForgetSpyOpener((id) => store.calls.add('forget:$id')),
+          ),
+        ],
+      );
+      c.listen(messagesProvider, (_, _) {});
+      chat.conversationsResult = Ok([
+        Conversation(id: 'c1', lastMessageAt: at(9)),
+      ]);
+      chat.history['c1'] = _rows(0, 10);
+      await open('c1');
+      await settle();
+      store.calls.clear();
+    });
+
+    List<String> log() => store.calls
+        .where((x) => x.startsWith('forget:') || x.startsWith('remove:'))
+        .toList();
+
+    test('Ok: forget, then remove', () async {
+      await c.read(messagesProvider.notifier).hideForMe(chat.history['c1']![4]);
+      await eventually(() => store.count('remove:h4') == 1);
+      expect(log(), ['forget:h4', 'remove:h4']);
+    });
+
+    test('Err: neither forgotten nor removed', () async {
+      chat.hideForMeResult = const Err(DeniedFailure());
+      await c.read(messagesProvider.notifier).hideForMe(chat.history['c1']![4]);
+      await settle();
+      expect(log(), isEmpty);
     });
   });
 

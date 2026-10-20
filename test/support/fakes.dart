@@ -878,6 +878,11 @@ class ChatFake implements ChatRepository {
   Completer<void>? _subscribe;
   final _streams = <String, StreamController<Message>>{};
 
+  /// Somebody listens to [conversationId]'s live stream right now (what
+  /// [deliver] needs to reach anyone).
+  bool hasLiveListener(String conversationId) =>
+      _streams[conversationId]?.hasListener ?? false;
+
   /// Leaves the next [messages] read in flight until [releaseMessages].
   void holdMessages() => _read = Completer<void>();
   void releaseMessages() {

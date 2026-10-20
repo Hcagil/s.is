@@ -279,7 +279,9 @@ object InstantPush {
         try {
             val conversationId = extras.getString("conversation_id")
             val title = extras.getString("title")
-            val text = extras.getString("body")
+            val locked = extras.getString("encrypted") == "true"
+            // An encrypted chat shows no text and offers no Reply: the server body is only a placeholder.
+            val text = if (locked) context.getString(R.string.notification_locked) else extras.getString("body")
             val hasFields = conversationId != null && title != null && text != null
             val chat = extras.getString("chat")
             val hasNotificationBlock = extras.keySet().any { it.startsWith("gcm.n.") || it.startsWith("gcm.notification.") }
@@ -395,7 +397,7 @@ object InstantPush {
                     // The buttons need the action token the push carried; an older server sends none.
                     val token = extras.getString("action_token")
                     val url = extras.getString("action_url")
-                    if (!token.isNullOrEmpty() && url != null && url.startsWith("https://")) addActions(context, this, conversationId, id, token, url)
+                    if (!locked && !token.isNullOrEmpty() && url != null && url.startsWith("https://")) addActions(context, this, conversationId, id, token, url)
                 }
                 .build()
 

@@ -25,6 +25,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/message_opener.dart';
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
@@ -33,6 +34,7 @@ import 'package:sis/features/chat/domain/message_store.dart';
 
 import '../../support/drift_stores.dart';
 import '../../support/fakes.dart';
+import '../../support/opener_fakes.dart' show ForgetSpyOpener;
 import '../../support/store_spy.dart';
 import '../../support/video_fakes.dart';
 import 'data/store/store_harness.dart';
@@ -371,9 +373,10 @@ void main() {
     /// A stored, complete c1 (no fill noise) and the saved cursor.
     Future<(ProviderContainer, _Spy)> withCursor({
       List<String> listed = const ['c1'],
+      List<Override> more = const [],
     }) async {
       feed.conversationsResult = Ok([for (final id in listed) _chat(id, 100)]);
-      final c = await boot();
+      final c = await boot(more: more);
       final store = storeOf(c);
       for (final id in listed) {
         await store.reconcilePage(id, [
@@ -482,6 +485,35 @@ void main() {
       expect(
         stored.firstWhere((m) => m.id == 'c1-p').deletion,
         MessageDeletion.placeholder,
+      );
+    });
+
+    // Group E: the opener forgets a vanished row BEFORE the store drops it.
+    test('a vanished row is forgotten by the opener, then removed; a '
+        'placeholder is not forgotten', () async {
+      _Spy? spy;
+      final (c, store) = await withCursor(
+        more: [
+          messageOpenerProvider.overrideWithValue(
+            ForgetSpyOpener((id) => spy!.calls.add('forget:$id')),
+          ),
+        ],
+      );
+      spy = store;
+      await store.upsertAll([msg('c1-v', t: 50), msg('c1-p', t: 51)]);
+      store.calls.clear();
+      feed.change(
+        msg('c1-v', t: 50, deletion: MessageDeletion.vanished),
+        at: at(200),
+      );
+      feed.change(
+        msg('c1-p', t: 51, body: '', deletion: MessageDeletion.placeholder),
+        at: at(201),
+      );
+      await run(c);
+      expect(
+        store.calls.where((x) => x.startsWith('forget:') || x == 'remove:c1-v'),
+        ['forget:c1-v', 'remove:c1-v'],
       );
     });
 

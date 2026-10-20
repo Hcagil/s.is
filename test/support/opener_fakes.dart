@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/message_opener.dart';
 import 'package:sis/features/chat/domain/message_store.dart';
 import 'package:sis/features/crypto/domain/key_directory.dart';
 import 'package:sis/features/crypto/domain/session_engine.dart';
@@ -205,4 +206,22 @@ class SlowStore implements MessageStore {
   Future<Set<String>> conversationIds() => real.conversationIds();
   @override
   Future<void> clear() => real.clear();
+}
+
+/// A MessageOpener for the controller seams: rows pass unchanged (as the
+/// real one passes plain rows), nothing reopens, and each forget is handed
+/// to [onForget] so a test can log it next to the store's own calls.
+class ForgetSpyOpener implements MessageOpener {
+  ForgetSpyOpener(this.onForget);
+
+  final void Function(String id) onForget;
+
+  @override
+  Future<List<Message>> open(List<Message> rows) async => rows;
+
+  @override
+  Stream<Message> get reopened => const Stream.empty();
+
+  @override
+  void forget(String id) => onForget(id);
 }

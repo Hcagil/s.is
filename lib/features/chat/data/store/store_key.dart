@@ -52,6 +52,9 @@ final class StoreKey {
     return hex;
   }
 
+  /// The saved key from either keychain group, or null. Never creates or writes.
+  Future<String?> peek() async => await _read(_storage) ?? await _read(_legacy);
+
   /// Forgets the key (sign-out): the database file is unreadable without it.
   Future<void> delete() async {
     await _storage.delete(key: _name);

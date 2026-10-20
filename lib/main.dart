@@ -84,6 +84,7 @@ import 'features/crypto/data/drift_olm_pickle_store.dart';
 import 'features/crypto/data/drift_session_engine.dart';
 import 'features/crypto/data/olm_key_engine.dart';
 import 'features/crypto/data/pickle_key.dart';
+import 'features/crypto/data/pickle_key_guard.dart';
 import 'features/crypto/data/supabase_key_directory.dart';
 import 'features/chat/data/supabase_contact_share_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
@@ -176,6 +177,13 @@ Future<void> main() async {
   final config = RuntimeConfig.fromEnvironment();
   // iPhone: the keychain group of the store and pickle keys (null elsewhere); the app moved the keys there before Flutter started.
   final keychainGroup = await cryptoKeychainGroup();
+  // Before the store opens: a store whose Olm pickle key is gone is set aside (renamed), never deleted.
+  await guardLostPickleKey(
+    group: keychainGroup,
+    file: await storeFile(),
+    storeKey: StoreKey.inGroup(keychainGroup),
+    pickleKey: PickleKey.inGroup(keychainGroup),
+  );
   // Read before runApp (like the session marker), so the first frame already
   // has the member's theme, font, text size and language: no flash.
   const appearanceStore = SharedPrefsAppearanceStore();

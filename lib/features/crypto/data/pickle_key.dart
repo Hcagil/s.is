@@ -65,6 +65,10 @@ final class PickleKey implements PickleKeyStore {
     return v != null && _hex64.hasMatch(v) ? v : null;
   }
 
+  /// True when a valid key is saved in either keychain group. Never creates or writes.
+  Future<bool> exists() async =>
+      await _read(_storage) != null || await _read(_legacy) != null;
+
   /// Forgets the key (sign-out): the pickle is unreadable without it.
   @override
   Future<void> delete() async {

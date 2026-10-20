@@ -30,3 +30,15 @@ Future<File> storeFile({
   final dir = await (supportDir ?? getApplicationSupportDirectory)();
   return File(p.join(dir.path, storeFileName));
 }
+
+/// Sets an existing database file aside (and its -wal and -shm), renamed to `sis_store.orphan-UNIXSECONDS.sqlite` (plus -wal and -shm) in the same folder. Never deletes: used when the key that opened it is gone for good.
+Future<void> setAsideStore(File file) async {
+  final stamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  final dir = p.dirname(file.path);
+  for (final suffix in ['', '-wal', '-shm']) {
+    final from = File('${file.path}$suffix');
+    if (await from.exists()) {
+      await from.rename(p.join(dir, 'sis_store.orphan-$stamp.sqlite$suffix'));
+    }
+  }
+}

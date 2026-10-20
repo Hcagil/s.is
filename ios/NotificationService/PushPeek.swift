@@ -1,12 +1,12 @@
 import Foundation
 import Security
 
-/// Read-only keychain access for the extension: it never adds, updates or deletes an item.
+/// Reads keys from the keychain.
 enum PeekKeychain {
   static let service = "flutter_secure_storage_service"
   static let groupSuffix = ".com.esd.sis.crypto"
 
-  /// The keychain access group of the shared keys: a read-only attribute lookup of the store key item without a group filter. The group it reports must end with groupSuffix, else nil.
+  /// Returns the crypto group from the keychain, or nil if not found or invalid.
   static func cryptoGroup() -> String? {
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
@@ -14,17 +14,23 @@ enum PeekKeychain {
       kSecAttrAccount as String: "sis.store.key",
       kSecAttrSynchronizable as String: false,
       kSecReturnAttributes as String: true,
-      kSecMatchLimit as String: kSecMatchLimitOne,
+      kSecMatchLimit as String: kSecMatchLimitOne
     ]
+
     var result: AnyObject?
-    guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-          let attributes = result as? [String: Any],
+    let status = SecItemCopyMatching(query as CFDictionary, &result)
+    guard status == errSecSuccess else { return nil }
+
+    guard let attributes = result as? [String: Any],
           let group = attributes[kSecAttrAccessGroup as String] as? String,
-          group.hasSuffix(groupSuffix) else { return nil }
+          group.hasSuffix(groupSuffix) else {
+      return nil
+    }
+
     return group
   }
 
-  /// The text value of the item (service, account) in the explicit [group], or nil.
+  /// Returns the value for an account in a keychain group, or nil if not found.
   static func value(account: String, group: String) -> String? {
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
@@ -33,48 +39,69 @@ enum PeekKeychain {
       kSecAttrAccessGroup as String: group,
       kSecAttrSynchronizable as String: false,
       kSecReturnData as String: true,
-      kSecMatchLimit as String: kSecMatchLimitOne,
+      kSecMatchLimit as String: kSecMatchLimitOne
     ]
+
     var result: AnyObject?
-    guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-          let data = result as? Data else { return nil }
-    return String(data: data, encoding: .utf8)
+    let status = SecItemCopyMatching(query as CFDictionary, &result)
+    guard status == errSecSuccess else { return nil }
+
+    guard let data = result as? Data,
+          let value = String(data: data, encoding: .utf8) else {
+      return nil
+    }
+
+    return value
   }
 }
 
+/// Handles push notification peeking.
 enum PushPeek {
   static let appGroup = "group.com.esd.sis"
   static let storeFileName = "sis_store.sqlite"
 
-  /// The real text of an encrypted push, or nil (then the notification keeps today's locked text). Reads the App Group store and the two keys read-only, decrypts on copies and saves nothing.
+  /// Extracts the text from a push notification using the given decryptor.
   static func text(for userInfo: [AnyHashable: Any], decryptor: PeekDecryptor = RustPeekDecryptor()) -> String? {
-    guard let push = PeekPush(userInfo: userInfo),
-          let store = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?.appendingPathComponent(storeFileName),
-          FileManager.default.fileExists(atPath: store.path),
-          let group = PeekKeychain.cryptoGroup(),
-          let storeKeyHex = PeekKeychain.value(account: "sis.store.key", group: group),
+    guard let push = PeekPush(userInfo: userInfo) else { return nil }
+
+    guard let store = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?.appendingPathComponent(storeFileName) else { return nil }
+    guard FileManager.default.fileExists(atPath: store.path) else { return nil }
+
+    guard let group = PeekKeychain.cryptoGroup() else { return nil }
+
+    guard let storeKeyHex = PeekKeychain.value(account: "sis.store.key", group: group),
           let pickleHex = PeekKeychain.value(account: "sis.olm.pickle.key", group: group),
-          isHex64(storeKeyHex), isHex64(pickleHex) else { return nil }
+          isHex64(storeKeyHex),
+          isHex64(pickleHex) else {
+      return nil
+    }
+
     var pickleKey = bytes(fromHex: pickleHex)
     defer { pickleKey.withUnsafeMutableBytes { _ = memset_s($0.baseAddress, $0.count, 0, $0.count) } }
-    guard let data = PeekStoreReader.read(path: store.path, keyHex: storeKeyHex, conversationId: push.conversationId, messageId: push.messageId) else { return nil }
+
+    guard let data = PeekStoreReader.read(path: store.path, keyHex: storeKeyHex, conversationId: push.conversationId, messageId: push.messageId) else {
+      return nil
+    }
+
     return PeekCore.text(push: push, data: data, pickleKey: pickleKey, decryptor: decryptor)
   }
 
-  /// What the notification body becomes: "sender: text" when the push carries a sender (a group chat), else the text; at most 1000 characters.
+  /// Formats the shown body of a notification.
   static func shownBody(text: String, sender: String?) -> String {
     let body = (sender?.isEmpty == false) ? "\(sender!): \(text)" : text
     return String(body.prefix(1000))
   }
 
+  /// Checks if a string is a valid hex64 string.
   private static func isHex64(_ s: String) -> Bool {
-    s.utf8.count == 64 && s.utf8.allSatisfy { ($0 >= 48 && $0 <= 57) || ($0 >= 97 && $0 <= 102) }
+    guard s.utf8.count == 64 else { return false }
+    return s.utf8.allSatisfy { c in (48...57).contains(c) || (97...102).contains(c) }
   }
 
-  /// 32 bytes from 64 lowercase hex characters (checked by isHex64).
+  /// Converts a hex string to bytes.
   private static func bytes(fromHex s: String) -> [UInt8] {
     let chars = Array(s.utf8)
-    func nibble(_ c: UInt8) -> UInt8 { c <= 57 ? c - 48 : c - 87 }
+    func nibble(_ c: UInt8) -> UInt8 { return c <= 57 ? c - 48 : c - 87 }
     return stride(from: 0, to: 64, by: 2).map { nibble(chars[$0]) << 4 | nibble(chars[$0 + 1]) }
   }
 }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:developer';
-import 'dart:io' show Platform;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -234,6 +233,14 @@ Future<void> main() async {
     // very instance (it rebuilds with it, see below).
     DriftMessageStore? builtStore;
 
+    // A missing pickle key is never replaced while pickles are stored (a new key would lock them for good).
+    final pickleKey = PickleKey.inGroup(
+      keychainGroup,
+      hasPickles: () async =>
+          builtStore != null &&
+          await DriftOlmPickleStore(builtStore!).load() != null,
+    );
+
     // One Olm engine for key publishing and for sessions.
     final olm = OlmKeyEngine();
     runApp(
@@ -354,15 +361,14 @@ Future<void> main() async {
             final store = DriftMessageStore(
               ownerId: ref.watch(currentUserIdProvider) ?? '',
               file: storeFile,
-              // On iPhone an existing database with a missing key is an error, never a reason to make a new key.
-              key: () async => key.loadOrCreate(
-                mayCreate:
-                    !Platform.isIOS || !await (await storeFile()).exists(),
+              // iPhone: a database whose key is gone from both keychain groups is set aside (renamed), never deleted.
+              key: () => key.loadOrCreate(
+                setAsideStore: () async => setAsideStore(await storeFile()),
               ),
               // Sign-out erases both keys: the store key and the Olm pickle key.
               deleteKey: () async {
                 await key.delete();
-                await PickleKey.inGroup(keychainGroup).delete();
+                await pickleKey.delete();
               },
             );
             ref.onDispose(store.close);
@@ -384,9 +390,7 @@ Future<void> main() async {
             ref.watch(messageStoreProvider);
             return DriftOlmPickleStore(builtStore!);
           }),
-          pickleKeyStoreProvider.overrideWithValue(
-            PickleKey.inGroup(keychainGroup),
-          ),
+          pickleKeyStoreProvider.overrideWithValue(pickleKey),
           keyEngineProvider.overrideWithValue(olm),
           sessionEngineProvider.overrideWith((ref) {
             ref.watch(messageStoreProvider);
@@ -394,7 +398,7 @@ Future<void> main() async {
               store: builtStore!,
               keys: olm,
               sessions: olm,
-              pickleKey: PickleKey.inGroup(keychainGroup),
+              pickleKey: pickleKey,
             );
           }),
           keyDirectoryProvider.overrideWithValue(SupabaseKeyDirectory(client)),

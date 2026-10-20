@@ -46,7 +46,11 @@ enum SisKeychain {
 
   /// Runs the key move at app start, BEFORE Flutter starts. Does nothing when the groups are unknown (an unsigned build). Never throws.
   static func runMigration(items: KeychainItems = SecKeychainItems()) {
-    guard let legacy = defaultGroup(), let new = cryptoGroup() else { return }
+    guard let legacy = defaultGroup(), let new = cryptoGroup() else {
+      // Unsigned build or unknown group: change nothing, the keys stay where they are. No key material is logged.
+      NSLog("SisKeychain: keychain group unknown, keys not moved")
+      return
+    }
     _ = KeychainMigration.migrate(items: items, legacyGroup: legacy, newGroup: new)
   }
 

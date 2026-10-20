@@ -9,6 +9,7 @@ import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
 import 'voice_capture_views.dart';
 import 'voice_gesture.dart';
+import 'voice_pause_button.dart';
 
 /// The floating part of the voice / dictation button while it is held: the
 /// circle with its halos, the lock pill and the dictation card. It lives in an
@@ -218,6 +219,7 @@ class _VoiceCaptureLayerState extends ConsumerState<VoiceCaptureLayer>
       amplitude: amplitude,
       opacity: _circleOpacity,
       locked: _isLocked,
+      paused: cap.paused,
     );
     return Material(
       type: MaterialType.transparency,
@@ -243,23 +245,24 @@ class _VoiceCaptureLayerState extends ConsumerState<VoiceCaptureLayer>
                 ),
               ),
             ),
-          Positioned(
-            left: c.dx - 18,
-            top: c.dy + _pillTop,
-            child: IgnorePointer(
-              child: Transform.scale(
-                scale: _pillScale,
-                child: Transform.rotate(
-                  angle: _pillRotDeg * math.pi / 180,
-                  child: VoicePillView(
-                    height: _pillHeight,
-                    closed: _closedV,
-                    legEnd: _lc,
+          if (!_isLocked)
+            Positioned(
+              left: c.dx - 18,
+              top: c.dy + _pillTop,
+              child: IgnorePointer(
+                child: Transform.scale(
+                  scale: _pillScale,
+                  child: Transform.rotate(
+                    angle: _pillRotDeg * math.pi / 180,
+                    child: VoicePillView(
+                      height: _pillHeight,
+                      closed: _closedV,
+                      legEnd: _lc,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
           Positioned(
             left: c.dx + _circleDx - 41,
             top: c.dy - 41,
@@ -272,6 +275,22 @@ class _VoiceCaptureLayerState extends ConsumerState<VoiceCaptureLayer>
                   )
                 : IgnorePointer(child: circle),
           ),
+          if (_isLocked && widget.gesture.exit == VoiceExit.none)
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 200),
+              left: c.dx - 24,
+              // 12 dp above the disc top: 56 dp disc -> centre - 80 - 4,
+              // 40 dp disc when paused -> centre - 72 - 4 (the 48 dp tap area
+              // is 4 dp taller on each side of the 40 dp visual).
+              top: c.dy - (cap.paused ? 76 : 84),
+              child: VoicePauseButton(
+                paused: cap.paused,
+                onTap: () {
+                  final n = ref.read(voiceCaptureProvider.notifier);
+                  unawaited(cap.paused ? n.resume() : n.pause());
+                },
+              ),
+            ),
         ],
       ),
     );

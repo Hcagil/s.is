@@ -234,7 +234,7 @@ void main() {
         ...more,
       ],
     );
-    addTearDown(c.dispose);
+    addTearDown(withStore ? () => quit(c) : c.dispose);
     c.listen(currentUserIdProvider, (_, _) {});
     await c.read(sessionControllerProvider.future);
     return c;
@@ -340,7 +340,7 @@ void main() {
         reason: 'first older page stored, second in flight',
       );
       final from = (await storeA.syncState('c1'))!.contiguousFrom!;
-      a.dispose(); // the app is killed mid-fill
+      await quit(a); // the app is killed mid-fill
       final before = feed.calls.length;
 
       final b = await boot();
@@ -716,7 +716,7 @@ void main() {
           ...driftStoreOverrides(h.dir, key),
         ],
       );
-      addTearDown(c.dispose);
+      addTearDown(() => quit(c));
       c.listen(currentUserIdProvider, (_, _) {});
       c.listen(chatListSnapshotOwnerProvider, (_, _) {});
       await c.read(sessionControllerProvider.future);

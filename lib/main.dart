@@ -52,6 +52,7 @@ import 'features/chat/data/http_link_preview_fetcher.dart';
 import 'features/chat/data/imcodec_sticker_encoder.dart';
 import 'features/chat/data/link_image_shrink.dart';
 import 'features/chat/data/native_picture_cropper.dart';
+import 'features/chat/data/ui_photo_crop_renderer.dart';
 import 'features/chat/data/native_sticker_cutter.dart';
 import 'features/chat/data/no_voice_transcriber.dart';
 import 'features/chat/data/photo_manager_gallery.dart';
@@ -401,6 +402,9 @@ Future<void> main() async {
           ),
           pictureCropperProvider.overrideWithValue(
             const NativePictureCropper(),
+          ),
+          photoCropRendererProvider.overrideWithValue(
+            const UiPhotoCropRenderer(),
           ),
           stickerCutterProvider.overrideWithValue(const NativeStickerCutter()),
           stickerEncoderProvider.overrideWithValue(

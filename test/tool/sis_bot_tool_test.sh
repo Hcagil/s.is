@@ -5,7 +5,7 @@
 # tools are copied into a sandbox, so their state file lives there.
 #
 # Covers: the admin tool's key file (SIS_SERVICE_KEY_FILE: unset, env-only,
-# missing, mode 644, foreign owner -> exit 2); bootstrap and list-add; read, send, start (by id and @tag); the
+# missing, mode 644, foreign owner -> exit 2); bootstrap and list-add; read (marking every chat it showed read, one and two chats), send, start (by id and @tag); the
 # token rotating on every run and the old one refused after the reuse
 # interval; two parallel runs; exit 2 (usage, mode 644, foreign owner), 3 (missing file,
 # busy lock, superseded by a second sign-in, revoked), 4 (unlisted chat,
@@ -201,9 +201,16 @@ curl -fsS -o /dev/null -X POST "$SIS_URL/rest/v1/messages" -H "apikey: $SIS_ANON
   -H 'content-type: application/json' -d "{\"conversation_id\":\"$DEBUG\",\"sender_id\":\"$ANN\",\"body\":\"hello from ann\"}"
 t0=$(jq -r .refresh_token "$STATE")
 expect_exit 0 "status" "$BOT" status
+# read marks every chat it showed as read: mark_read moves the bot's last_read_at
+# past an old sentinel (the last chat in its list was once skipped).
+unmark() { sql "update public.conversation_members set last_read_at = '2000-01-01' where user_id = '$BOT_ID'" >/dev/null; }
+marked() { test "$(sql "select last_read_at > '2000-01-02' from public.conversation_members
+                       where user_id = '$BOT_ID' and conversation_id = '$1'")" = t; }
+unmark
 watch 0 "read" "$t0" "$BOT" read
 check "read prints Debug's message as JSON lines" \
   bash -c "grep -q 'hello from ann' '$BOX/out' && grep -v '^\$' '$BOX/out' | jq -e . >/dev/null"
+check "read marked its only chat (Debug) read" marked "$DEBUG"
 t1=$(jq -r .refresh_token "$STATE")
 check "each run rotates the refresh token" test "$t0" != "$t1"
 INTRO='Merhaba, ben SIS Destek, bir yapay zekâ asistanıyım. Mesajlarımı yapay zekâ yazar.'
@@ -220,6 +227,13 @@ expect_exit 0 "start a 1:1 with a listed contact by id" "$BOT" start "$DAN" "hi 
 check "the 1:1 with dan exists with the greeting, after the AI line (first message to dan)" \
   test "$(sql "select count(*) from public.messages m join public.conversations c on c.id = m.conversation_id
               where m.sender_id = '$BOT_ID' and m.body = '$INTRO' || E'\\n\\n' || 'hi dan' and c.direct_key like '%$DAN%'")" = 1
+DAN_CHAT=$(sql "select id from public.conversations where direct_key like '%$DAN%' and direct_key like '%$BOT_ID%'")
+unmark
+watch 0 "read with two chats" "$(jq -r .refresh_token "$STATE")" "$BOT" read
+check "read showed exactly two chats: Debug, then the 1:1 with dan" \
+  test "$(jq -r .conversation_id "$BOX/out" | awk '!seen[$0]++' | tr '\n' ' ')" = "$DEBUG $DAN_CHAT "
+check "read marked the first chat (Debug) read" marked "$DEBUG"
+check "read marked the last chat (the 1:1 with dan) read" marked "$DAN_CHAT"
 BOB_TAG=$(sql "select tag from public.profiles where user_id = '$BOB'")
 expect_exit 0 "start a 1:1 with a listed contact by @tag" "$BOT" start "@$BOB_TAG" "hi bob"
 

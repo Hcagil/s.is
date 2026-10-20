@@ -403,7 +403,7 @@ object InstantPush {
                 .apply { if (!loud) setSilent(true).setOnlyAlertOnce(true) }
                 .apply { if (badge > 0) setNumber(badge) }
                 .apply {
-                    // The lock screen never shows the text: a locked public version.
+                    // With the default lock-screen setting the lock screen shows this locked public version, not the text; a phone set to "show all content" shows the full notification.
                     if (locked) {
                         setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                         setPublicVersion(

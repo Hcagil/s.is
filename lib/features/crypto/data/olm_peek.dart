@@ -19,13 +19,14 @@ Future<String?> peekDecrypt({
     final peer = rows.peerUserId;
     if (peer == null) return null;
 
-    final cipher = OlmCipher(olmType, base64.decode(ciphertext));
     if (olmType != 0 && olmType != 1) return null;
+    final cipher = OlmCipher(olmType, base64.decode(ciphertext));
 
     engine ??= OlmKeyEngine();
 
     if (olmType == 1) {
       for (final s in rows.sessions) {
+        if (s.peerUserId != peer) continue;
         try {
           final session = await engine.restoreSession(s.pickle, pickleKey);
           final plain = session.decrypt(cipher);

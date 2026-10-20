@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show sleep;
 
 import 'package:sqlite3/sqlite3.dart';
 
@@ -50,7 +51,28 @@ PeekRows? readPeekRows({
   required String conversationId,
   required String messageId,
 }) {
-  try {
+  // A busy or locked store (SQLITE_BUSY 5, SQLITE_LOCKED 6) is retried for at most about 1 s in total; PRAGMA busy_timeout alone fails at once on this build.
+  final clock = Stopwatch()..start();
+  while (true) {
+    try {
+      return _readPeekRows(path, keyHex, conversationId, messageId);
+    } on SqliteException catch (e) {
+      final busy = e.resultCode == 5 || e.resultCode == 6;
+      if (!busy || clock.elapsedMilliseconds >= 1000) return null;
+      sleep(const Duration(milliseconds: 25));
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+PeekRows? _readPeekRows(
+  String path,
+  String keyHex,
+  String conversationId,
+  String messageId,
+) {
+  {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     try {
       db.execute('PRAGMA key = "x\'$keyHex\'";');
@@ -81,8 +103,8 @@ PeekRows? readPeekRows({
         }
 
         final msg = db.select(
-          'SELECT body, deleted FROM messages WHERE id = ?;',
-          [messageId],
+          'SELECT body, deleted FROM messages WHERE id = ? AND conversation_id = ?;',
+          [messageId, conversationId],
         );
         final storedBody = msg.isNotEmpty && msg.first['deleted'] == null
             ? msg.first['body'] as String
@@ -118,7 +140,5 @@ PeekRows? readPeekRows({
     } finally {
       db.close();
     }
-  } catch (_) {
-    return null;
   }
 }

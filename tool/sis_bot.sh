@@ -156,7 +156,7 @@ for m in json.load(open(sys.argv[1])):
 open(sys.argv[2], "w").write("\n".join(convs))
 PY
     cat "$WORK/out"
-    while read -r c; do   # mark every chat shown as read
+    while read -r c || [ -n "$c" ]; do   # mark every chat shown as read (the list has no trailing newline)
       [ -z "$c" ] || call POST /rest/v1/rpc/mark_read "{\"conversation\":\"$c\"}"
     done <"$WORK/convs"
     ;;

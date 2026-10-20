@@ -44,7 +44,7 @@ jobs:
             echo 'This commit is not the tip of main: nothing is deployed.' >&2
             exit 1
           fi
-      # Changes that cannot affect the artefact or the database do not publish
+      # Docs, CI, tests and tool scripts cannot affect the artefact or the database, so they do not publish
       # a build: publishing for them burns a versionCode.
       # ponytail: diffs the last commit only. Squash merges make that one change
       # per push; code in an earlier commit of a multi-commit push ships with
@@ -53,7 +53,7 @@ jobs:
         id: diff
         run: |
           if git diff --name-only HEAD^ HEAD \
-              | grep -vE '^(docs/|\.github/)|\.md$|^\.git(ignore|attributes)$' >/dev/null; then
+              | grep -vE '^(docs/|\.github/|test/|integration_test/|supabase/tests/|tool/)|\.md$|^\.git(ignore|attributes)$' >/dev/null; then
             echo ship=true >> "$GITHUB_OUTPUT"
           else
             echo ship=false >> "$GITHUB_OUTPUT"
@@ -173,8 +173,9 @@ jobs:
           status: completed
       # The "What's new" note for this build: the `For users:` line of every PR
       # merged since the previous release (docs/DECISIONS.md, 2026-09-30). The
-      # app fetches it on its first start of this build. No such line, no row,
-      # so nothing is delivered. The text goes to SQL base64-encoded: PR bodies
+      # app fetches it on its first start of this build. No such line: the note is
+      # "Background improvements." (TR "Arka planda iyileştirmeler." when TR is empty too),
+      # so a row always exists. The text goes to SQL base64-encoded: PR bodies
       # are untrusted input. An existing row is left alone so an edit made in
       # the dashboard survives a re-run. A Turkish part follows after a line
       # "---": every "For users (TR):" line (or the older "Kullanıcılar için:") under "Sürüm <version>"; the app
@@ -203,7 +204,7 @@ jobs:
           note=${note:0:1900}
           note_tr=${note_tr:0:1900}
           echo "Note: $note"
-          if [ -z "$note" ]; then echo "No user-facing change in $range"; exit 0; fi
+          if [ -z "$note" ]; then note="Background improvements."; [ -n "$note_tr" ] || note_tr="Arka planda iyileştirmeler."; fi
           note="Version $VERSION ($BUILD)"$'\n'"$note"
           if [ -n "$note_tr" ]; then note="$note"$'\n---\n'"Sürüm $VERSION ($BUILD)"$'\n'"$note_tr"; fi
           b64=$(printf '%s' "$note" | base64 -w0)

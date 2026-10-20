@@ -90,7 +90,7 @@
 #   - the `if: always()` "Remove the signing material" removes the keychain,
 #     the key and the installed profiles in every case, and calls nothing in
 #     App Store Connect;
-#   ios/Runner/Info.plist declares ITSAppUsesNonExemptEncryption = false.
+#   ios/Runner/Info.plist declares ITSAppUsesNonExemptEncryption = true.
 #
 # What only a macOS runner shows: that Xcode and codesign really sign, that
 # the export really sets aps-environment to production, that Apple accepts
@@ -836,8 +836,8 @@ for empty in KEY KEY_ID ISSUER_ID; do
 done
 
 # ---- Info.plist --------------------------------------------------------------
-# 14 export compliance answered in the app: no manual question per TestFlight build.
-python3 -c 'import plistlib,sys; sys.exit(0 if plistlib.load(open("ios/Runner/Info.plist","rb")).get("ITSAppUsesNonExemptEncryption") is False else 1)' \
-  || fail "Info.plist must declare ITSAppUsesNonExemptEncryption = false"
+# 14 export compliance: the app ships vodozemac and sqlite3mc, so it uses non-exempt encryption.
+python3 -c 'import plistlib,sys; sys.exit(0 if plistlib.load(open("ios/Runner/Info.plist","rb")).get("ITSAppUsesNonExemptEncryption") is True else 1)' \
+  || fail "Info.plist must declare ITSAppUsesNonExemptEncryption = true"
 
 echo "ios_release_test: OK"

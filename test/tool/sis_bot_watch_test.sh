@@ -18,10 +18,23 @@
 # nothing; only `status` and `read --since <marker>` calls; the line for exit
 # 3, 4, 5 and any other code; continuing after a failure; the sleep doubling
 # after exit 5; the default interval (one check at start, none soon after).
+# Also: a picture (body ending "[image <its own id>]") prints only
+# "PICTURE from <sender>, id <id>" and calls `attachments <id>`; a foreign uuid is
+# plain text; a failed download prints "will retry" twice (batch stopped, cursor
+# kept, count in .private/bot-watch.retries, no inbox entry) and "gave up" on
+# try 3 (retry file deleted, entry written once, cursor moves); the count resets
+# on success and for another id; the heartbeat (ISO UTC, written only after a
+# successful poll, never on exit 3/4/5/other or an unknown bot id);
+# SIS_WATCH_INTERVAL, the argument beating it, SIS_WATCH_ROOT, --self-test; the
+# lock (a second copy exits 1 with the line and never reads, a kill -9'd holder
+# frees it, the supervisor holds it while its child polls); the supervisor
+# restarting a crashed loop after 5 s then 10 s with the "poll loop ended" line.
+# Not covered (needs 5+ minutes): the 300 s cap and the reset after a long run.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-BOX=$(mktemp -d); trap 'rm -rf "$BOX"' EXIT
+BOX=$(mktemp -d); BG=
+TRAP() { [ -z "$BG" ] || kill -9 -- "-$BG" 2>/dev/null || :; rm -rf "$BOX"; }; trap TRAP EXIT
 mkdir -p "$BOX/tool" "$BOX/fake"
 cp tool/sis_bot_watch.sh "$BOX/tool/"
 W="$BOX/tool/sis_bot_watch.sh"; FAKE="$BOX/fake"
@@ -47,7 +60,26 @@ set -euo pipefail
 d=$(dirname "$0")
 printf '%s %s\n' "$(date +%s.%N)" "$*" >>"$d/calls"
 sleep 0.2
-if [ "$*" = status ]; then echo "ok user=$FAKE_BOT_ID session active"; exit 0; fi  # as tool/sis_bot.sh prints it
+if [ "$*" = status ]; then
+  [ -n "${FAKE_NO_ID:-}" ] && { echo "ok session active"; exit 0; }  # no user=: bot id unknown
+  echo "ok user=$FAKE_BOT_ID session active"; exit 0  # as tool/sis_bot.sh prints it
+fi
+if [ "${1:-}" = attachments ]; then  # exit codes one per attachments call from $d/att_exits
+  n=$(grep -c ' attachments ' "$d/calls")
+  code=$(sed -n "${n}p" "$d/att_exits" 2>/dev/null); code=${code:-0}
+  [ "$code" = 0 ] && mkdir -p ".private/bot-attachments/$2" && : >".private/bot-attachments/$2/photo.jpg"
+  exit "$code"
+fi
+if [ -n "${FAKE_CRASH:-}" ]; then  # kill -9 the poll loop: the topmost watcher below the supervisor
+  p=$PPID; victim=
+  while [ "$p" -gt 1 ]; do
+    a=$(ps -o args= -p "$p") || break
+    case $a in *--supervise*) break ;; *sis_bot_watch.sh*) victim=$p ;; esac
+    p=$(ps -o ppid= -p "$p" | tr -d ' ')
+  done
+  [ -n "$victim" ] && kill -9 "$victim"
+  exit 0
+fi
 n=$(grep -c ' read ' "$d/calls")
 code=$(sed -n "${n}p" "$d/exits" 2>/dev/null); code=${code:-0}
 if [ "$code" != 0 ]; then
@@ -78,11 +110,13 @@ msg() {  # ID CONV SENDER_ID SENDER_NAME BODY EPOCH -> one mailbox line
 # output in $BOX/out.
 run() {
   local secs=$1 exits=$2; shift 2
-  rm -f "$FAKE/calls"; printf '%s' "$exits" >"$FAKE/exits"
-  (cd "$BOX" && umask 022 && SIS_BOT_CMD="$FAKE/sis_bot.sh" timeout "$secs" "$W" "$@") >"$BOX/out" 2>&1 || true
+  rm -f "$FAKE/calls"; printf '%s' "$exits" >"$FAKE/exits"; printf '%s' "${ATT:-}" >"$FAKE/att_exits"
+  RC=0
+  (cd "$BOX" && umask 022 && SIS_BOT_CMD="$FAKE/sis_bot.sh" timeout "$secs" "$W" "$@") >"$BOX/out" 2>&1 || RC=$?
   touch "$FAKE/calls"
 }
-calls_ok() { ! grep -vE '^[0-9.]+ (status|read --since [^ ]+)$' "$FAKE/calls"; }
+calls_ok() { ! grep -vE '^[0-9.]+ (status|read --since [^ ]+|attachments [0-9a-f-]{36})$' "$FAKE/calls"; }
+att_calls() { grep ' attachments ' "$FAKE/calls" | cut -d' ' -f2-; }
 first_read() { grep -m1 ' read ' "$FAKE/calls" | cut -d' ' -f2-; }
 # The inbox as a reader of Markdown sees it: entry headers and conversation
 # lines outside fences, each fenced block as "B <hex of its content>", any
@@ -234,18 +268,157 @@ same "after exit 3 the next check delivers" \
   "$(printf 'watch: bot session lost or busy (exit 3)\nJon: after the outage')" "$(cat "$BOX/out")"
 same "and the marker moves" "$(ts $((base+14)))" "$(cat "$SEEN")"
 
-# 9b image markers from read pass through unchanged ---------------------------------
+# 9b pictures: a body ending "[image <its own id>]" -----------------------------------
 I15=33333333-0000-4000-8000-000000000015; I16=33333333-0000-4000-8000-000000000016
+I17=33333333-0000-4000-8000-000000000017; OTHER=44444444-0000-4000-8000-0000000000ff
 msg "$I15" "$CONV" "$TESTER" Kim "[image $I15]" $((base+15))
 msg "$I16" "$CONV" "$TESTER" Kim $'look at this\n'"[image $I16]" $((base+16))
+msg "$I17" "$CONV" "$TESTER" Kim "[image $OTHER]" $((base+17))  # not its own id: plain text
 run 3 "" 100
-same "image markers are printed as read gives them" \
-  "$(printf 'Kim: [image %s]\nKim: look at this [image %s]' "$I15" "$I16")" "$(cat "$BOX/out")"
+same "each picture prints exactly one PICTURE line, a foreign uuid none" \
+  "$(printf 'PICTURE from Kim, id %s\nPICTURE from Kim, id %s' "$I15" "$I16")" "$(grep PICTURE "$BOX/out")"
+same "each picture is downloaded with attachments <id>, once" \
+  "$(printf 'attachments %s\nattachments %s' "$I15" "$I16")" "$(att_calls)"
+same "a picture prints only its PICTURE line; the foreign uuid prints as text" \
+  "$(printf 'PICTURE from Kim, id %s\nPICTURE from Kim, id %s\nKim: [image %s]' "$I15" "$I16" "$OTHER")" \
+  "$(cat "$BOX/out")"
 WANT+=$'\n'$(entry "$(ts $((base+14)))" Jon "$CONV" "after the outage")  # section 9's
 WANT+=$'\n'$(entry "$(ts $((base+15)))" Kim "$CONV" "[image $I15]")
 WANT+=$'\n'$(entry "$(ts $((base+16)))" Kim "$CONV" $'look at this\n'"[image $I16]")
-same "and appended unchanged" "$WANT" "$(inbox_view)"
-same "the marker is the newest" "$(ts $((base+16)))" "$(cat "$SEEN")"
+WANT+=$'\n'$(entry "$(ts $((base+17)))" Kim "$CONV" "[image $OTHER]")
+same "and appended unchanged, once each" "$WANT" "$(inbox_view)"
+same "the marker is the newest" "$(ts $((base+17)))" "$(cat "$SEEN")"
+check "it only calls status, read --since <marker> and attachments <id>" calls_ok
+
+# 9c a failing download: retried twice, given up on the third try ----------------------
+RETRY="$BOX/.private/bot-watch.retries"
+I18=33333333-0000-4000-8000-000000000018; I19=33333333-0000-4000-8000-000000000019
+I20=33333333-0000-4000-8000-000000000020
+msg "$I18" "$CONV" "$TESTER" Lea "before the picture" $((base+18))
+msg "$I19" "$CONV" "$TESTER" Lea "[image $I19]" $((base+19))
+msg "$I20" "$CONV" "$TESTER" Lea "after the picture" $((base+20))
+WANT18=$WANT$'\n'$(entry "$(ts $((base+18)))" Lea "$CONV" "before the picture")
+for n in 1 2; do
+  ATT=1 run 5 "" --once
+  same "try $n: PICTURE, then 'will retry'; the batch stops" \
+    "$(printf 'Lea: before the picture\nPICTURE from Lea, id %s\nwatch: picture download failed for %s, will retry' "$I19" "$I19" | tail -n $((n == 1 ? 3 : 2)))" \
+    "$(cat "$BOX/out")"
+  same "try $n: the retry file counts it" "$I19 $n" "$(cat "$RETRY" 2>/dev/null)"
+  same "try $n: the cursor stays on the last handled message" "$(ts $((base+18)))" "$(cat "$SEEN")"
+  same "try $n: no inbox entry for the picture yet" "$WANT18" "$(inbox_view)"
+done
+same "the retry reads from the kept cursor" "read --since $(ts $((base+18)))" "$(first_read)"
+ATT=1 run 5 "" --once
+same "try 3: PICTURE, then 'gave up', then the rest of the batch" \
+  "$(printf 'PICTURE from Lea, id %s\nwatch: picture download gave up for %s\nLea: after the picture' "$I19" "$I19" | sort)" \
+  "$(sort "$BOX/out")"
+check "try 3: the retry file is deleted" test ! -e "$RETRY"
+WANT=$WANT18$'\n'$(entry "$(ts $((base+19)))" Lea "$CONV" "[image $I19]")$'\n'$(entry "$(ts $((base+20)))" Lea "$CONV" "after the picture")
+same "try 3: the picture is in the inbox once, then the rest" "$WANT" "$(inbox_view)"
+same "try 3: the cursor moves past it" "$(ts $((base+20)))" "$(cat "$SEEN")"
+run 5 "" --once
+same "the next poll prints nothing" "" "$(cat "$BOX/out")"
+same "and appends nothing twice" "$WANT" "$(inbox_view)"
+
+# 9d the retry count resets on success and for another id -------------------------------
+I21=33333333-0000-4000-8000-000000000021; I22=33333333-0000-4000-8000-000000000022
+msg "$I21" "$CONV" "$TESTER" Max "[image $I21]" $((base+21))
+ATT=1 run 5 "" --once
+same "a failed try counts 1" "$I21 1" "$(cat "$RETRY" 2>/dev/null)"
+ATT=0 run 5 "" --once
+same "the next try prints PICTURE again and succeeds" \
+  "PICTURE from Max, id $I21" "$(cat "$BOX/out")"
+check "success clears the count" bash -c "! grep -qF '$I21' '$RETRY' 2>/dev/null"
+WANT+=$'\n'$(entry "$(ts $((base+21)))" Max "$CONV" "[image $I21]")
+same "it is appended once" "$WANT" "$(inbox_view)"
+printf '%s 2\n' "$OTHER" >"$RETRY"  # a stale count for another id
+msg "$I22" "$CONV" "$TESTER" Max "[image $I22]" $((base+22))
+ATT=1 run 5 "" --once
+same "another id's count is not inherited (first try, not give up)" \
+  "$(printf 'PICTURE from Max, id %s\nwatch: picture download failed for %s, will retry' "$I22" "$I22")" "$(cat "$BOX/out")"
+same "the count restarts at 1 for it" "$I22 1" "$(cat "$RETRY" 2>/dev/null)"
+ATT=0 run 5 "" --once
+WANT+=$'\n'$(entry "$(ts $((base+22)))" Max "$CONV" "[image $I22]")
+same "then it is delivered once" "$WANT" "$(inbox_view)"
+same "and the cursor moves to it" "$(ts $((base+22)))" "$(cat "$SEEN")"
+
+# 9e heartbeat: ISO UTC time, only after a successful poll --------------------------------
+HB="$BOX/.orchestra/bot-watch.heartbeat"
+hb_fresh() {
+  local h e; h=$(cat "$HB" 2>/dev/null) || return 1
+  [[ $h =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || return 1
+  e=$(date -u -d "$h" +%s) && [ $(( $(date +%s) - e )) -le 10 ] && [ $(( e - $(date +%s) )) -le 1 ]
+}
+rm -f "$HB"; run 5 "" --once
+check "a successful poll writes the heartbeat as YYYY-MM-DDTHH:MM:SSZ, now ($(cat "$HB" 2>/dev/null))" hb_fresh
+same "the heartbeat is one line, no temp file left beside it" "bot-watch.heartbeat 1" \
+  "$(ls -A "$BOX/.orchestra" | tr '\n' ' ')$(grep -c '' "$HB")"
+rm -f "$HB"; FAKE_NO_ID=1 run 5 "" --once
+check "no heartbeat when the bot id is unknown" test ! -e "$HB"
+for c in 3 4 5 7; do
+  rm -f "$HB"; run 5 "$c" --once
+  check "no heartbeat after a read exit $c" test ! -e "$HB"
+done
+I23=33333333-0000-4000-8000-000000000023
+msg "$I23" "$CONV" "$TESTER" Ned "late" $((base+23))
+rm -f "$HB"; run 5 "" --once
+WANT+=$'\n'$(entry "$(ts $((base+23)))" Ned "$CONV" "late")
+same "a poll with a message delivers it" "$WANT" "$(inbox_view)"
+check "and writes the heartbeat" hb_fresh
+
+# 9f interval from SIS_WATCH_INTERVAL, the argument wins; SIS_WATCH_ROOT ---------------------
+SIS_WATCH_INTERVAL=1 run 3 ""
+check "SIS_WATCH_INTERVAL=1 with no argument polls again ($(grep -c ' read ' "$FAKE/calls") reads in 3 s)" \
+  test "$(grep -c ' read ' "$FAKE/calls")" -ge 2
+SIS_WATCH_INTERVAL=1 run 3 "" 100
+check "an argument beats SIS_WATCH_INTERVAL ($(grep -c ' read ' "$FAKE/calls") reads)" \
+  test "$(grep -c ' read ' "$FAKE/calls")" = 1
+ROOT2=$(mktemp -d)
+SIS_WATCH_ROOT=$ROOT2 run 5 "" --once
+check "SIS_WATCH_ROOT moves the cursor file" test -s "$ROOT2/.private/tester-inbox.seen"
+rm -rf "$ROOT2"
+(cd "$BOX" && SIS_BOT_CMD="$FAKE/sis_bot.sh" timeout 60 "$W" --self-test) >"$BOX/out" 2>&1 && st=0 || st=$?
+same "--self-test passes offline" 0 "$st"
+
+# 9g the lock: one copy only; a dead holder frees it -------------------------------------------
+LOCKRE='^watch: already running \(lock .*\); this copy exits$'
+start_bg() {  # ARGS...: a watcher in its own process group; pid in BG
+  rm -f "$FAKE/calls"; : >"$FAKE/exits"; : >"$FAKE/att_exits"
+  (cd "$BOX" && SIS_BOT_CMD="$FAKE/sis_bot.sh" exec setsid "$W" "$@") >"$BOX/bg.out" 2>&1 &
+  BG=$!
+}
+second() {  # a second --once copy: stderr in $BOX/err, exit code in RC2, its calls in $BOX/calls2
+  local before; before=$(grep -c '' "$FAKE/calls" 2>/dev/null || echo 0)
+  RC2=0; (cd "$BOX" && SIS_BOT_CMD="$FAKE/sis_bot.sh" timeout 10 "$W" --once) >/dev/null 2>"$BOX/err" || RC2=$?
+  tail -n +$((before + 1)) "$FAKE/calls" >"$BOX/calls2" 2>/dev/null || :
+}
+start_bg 100; sleep 1.5
+second
+same "a second start exits 1" 1 "$RC2"
+check "and says so on stderr ($(cat "$BOX/err"))" grep -qE "$LOCKRE" "$BOX/err"
+check "and never reads" bash -c "! grep -q ' read ' '$BOX/calls2'"
+kill -9 "$BG" 2>/dev/null || :; wait "$BG" 2>/dev/null || :
+second
+same "after the holder is killed (kill -9) a new copy runs" 0 "$RC2"
+check "and is not told it is running" bash -c "! grep -q 'already running' '$BOX/err'"
+kill -9 -- "-$BG" 2>/dev/null || :
+
+start_bg --supervise 100; sleep 1.5
+check "under --supervise the child polls (the supervisor's lock does not stop it)" grep -q ' read ' "$FAKE/calls"
+second
+same "a second start beside the supervisor exits 1" 1 "$RC2"
+check "with the lock line" grep -qE "$LOCKRE" "$BOX/err"
+kill -9 -- "-$BG" 2>/dev/null || :; wait "$BG" 2>/dev/null || :
+
+# 9h the supervisor restarts a crashed loop with a doubling wait ------------------------------
+rm -f "$FAKE/calls"
+(cd "$BOX" && FAKE_CRASH=1 SIS_BOT_CMD="$FAKE/sis_bot.sh" timeout 8.5 "$W" --supervise 100) >"$BOX/out" 2>&1 || :
+touch "$FAKE/calls"
+same "each crash is reported with the exit code and the wait, 5 s then 10 s" \
+  "$(printf 'watch: poll loop ended (exit 137), restarting in 5s\nwatch: poll loop ended (exit 137), restarting in 10s')" \
+  "$(grep 'poll loop ended' "$BOX/out" || :)"
+g=$({ grep ' read ' "$FAKE/calls" || :; } | awk 'NR==1 {x=$1} NR==2 {y=$1} END {printf "%.1f", (NR < 2 ? -1 : y-x)}')
+check "the loop is restarted after 5 s ($g s between the two reads)" awk -v g="$g" 'BEGIN {exit !(g >= 4.8 && g < 6.5)}'
 
 # 10 backoff: after exit 5 the next sleep doubles ---------------------------------------
 run 9 $'0\n5\n0\n0' 2

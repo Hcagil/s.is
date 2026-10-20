@@ -6,6 +6,7 @@ import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../domain/attachment.dart';
 import '../domain/message.dart';
+import 'free_crop_screen.dart';
 
 /// Opens the full-screen preview of [images] with [caption] prefilled. Returns
 /// what is left of the photos and the caption when the member taps Send, or
@@ -50,6 +51,8 @@ Widget _undecodable(BuildContext context, Object error, StackTrace? stack) {
 
 class _AttachmentPreviewPageState extends State<AttachmentPreviewPage> {
   late final List<PickedImage> _images = List.of(widget.images);
+  // The untouched photos: opening the crop again starts from the original.
+  late final List<PickedImage> _originals = List.of(widget.images);
   late final _caption = TextEditingController(text: widget.caption);
   final _pager = PageController();
   int _page = 0;
@@ -64,11 +67,18 @@ class _AttachmentPreviewPageState extends State<AttachmentPreviewPage> {
   void _removeCurrent() {
     setState(() {
       _images.removeAt(_page);
+      _originals.removeAt(_page);
       if (_page >= _images.length) _page = _images.length - 1;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_pager.hasClients) _pager.jumpToPage(_page);
     });
+  }
+
+  Future<void> _crop() async {
+    final cropped = await openFreeCropScreen(context, _originals[_page]);
+    if (cropped == null || !mounted) return;
+    setState(() => _images[_page] = cropped);
   }
 
   @override
@@ -151,6 +161,31 @@ class _AttachmentPreviewPageState extends State<AttachmentPreviewPage> {
                 ),
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Semantics(
+              button: true,
+              label: AppLocalizations.of(context).cropButtonLabel,
+              child: GestureDetector(
+                key: const ValueKey('preview-crop'),
+                behavior: HitTestBehavior.opaque,
+                onTap: _crop,
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(context).colorScheme.onSurface
+                        .withValues(alpha: 0.1),
+                  ),
+                  child: Icon(
+                    Icons.crop_rounded,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ),
+          ),
           SafeArea(
             top: false,
             child: Padding(

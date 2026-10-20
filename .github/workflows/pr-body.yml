@@ -1,0 +1,19 @@
+# PR body
+# Checks the "For users:" / "For users (TR):" lines of a pull request body. It
+# runs on its own so editing a body does not re-run the whole CI. The body
+# arrives through an env var, never inside the shell script.
+name: PR body
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+permissions:
+  contents: read
+jobs:
+  note:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      PR_BODY: ${{ github.event.pull_request.body }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: python3 tool/check_pr_body.py

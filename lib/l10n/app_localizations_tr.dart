@@ -1756,6 +1756,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get voiceMicFailed => 'Kayıt başlatılamadı.';
 
   @override
+  String get voicePauseRecording => 'Kaydı duraklat';
+
+  @override
+  String get voiceResumeRecording => 'Kayda devam et';
+
+  @override
   String get voiceDictationUnavailable =>
       'Bu telefonda bu dilde yazdırma kullanılamıyor.';
 
@@ -2345,4 +2351,28 @@ class AppLocalizationsTr extends AppLocalizations {
   String appearanceModeNoteAlwaysDark(String name) {
     return '“$name” her zaman koyudur. Burada ne seçerseniz seçin koyu kalır.';
   }
+
+  @override
+  String get cropCancel => 'İptal';
+
+  @override
+  String get cropDone => 'Bitti';
+
+  @override
+  String get cropReset => 'Sıfırla';
+
+  @override
+  String get cropOriginal => 'Orijinal';
+
+  @override
+  String get cropSquare => 'Kare';
+
+  @override
+  String get cropFree => 'Serbest';
+
+  @override
+  String get cropButtonLabel => 'Fotoğrafı kırp';
+
+  @override
+  String get cropRotateLabel => 'Döndür';
 }

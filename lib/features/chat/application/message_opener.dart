@@ -57,6 +57,9 @@ class StoreMessageOpener implements MessageOpener {
   @override
   Stream<Message> get reopened => _reopened.stream;
 
+  @override
+  void forget(String id) => _pending.remove(id);
+
   /// Closes the [reopened] stream.
   void dispose() {
     unawaited(_reopened.close());

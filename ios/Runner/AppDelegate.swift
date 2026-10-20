@@ -19,6 +19,7 @@ import UserNotifications
   }
 
   private static let messageCategory = "SIS_MESSAGE"
+  private static let lockedCategory = "SIS_MESSAGE_LOCKED"
   private static let markReadAction = "SIS_MARK_READ"
   private static let replyAction = "SIS_REPLY"
 
@@ -28,7 +29,9 @@ import UserNotifications
     let reply = UNTextInputNotificationAction(identifier: AppDelegate.replyAction, title: turkish ? "Yanıtla" : "Reply", options: [.authenticationRequired], textInputButtonTitle: turkish ? "Gönder" : "Send", textInputPlaceholder: turkish ? "Mesaj" : "Message")
     let markRead = UNNotificationAction(identifier: AppDelegate.markReadAction, title: turkish ? "Okundu olarak işaretle" : "Mark as read", options: [])
     let category = UNNotificationCategory(identifier: AppDelegate.messageCategory, actions: [reply, markRead], intentIdentifiers: [], options: [])
-    UNUserNotificationCenter.current().setNotificationCategories([category])
+    // An encrypted chat's push (the server sets SIS_MESSAGE_LOCKED) has no Reply and no Mark as read.
+    let locked = UNNotificationCategory(identifier: AppDelegate.lockedCategory, actions: [], intentIdentifiers: [], options: [])
+    UNUserNotificationCenter.current().setNotificationCategories([category, locked])
   }
 
   /// A tap on one of the buttons. There is no Supabase session here: the push carries a signed action token and the function address (action_token, action_url), which the notification-action function checks. Returns false for any other response (a plain tap, other categories), which then goes on to the Flutter plugins as before. Replies get a fresh message id, sent again unchanged on one retry, so the server never stores a reply twice.

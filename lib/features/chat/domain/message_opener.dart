@@ -7,4 +7,7 @@ abstract interface class MessageOpener {
 
   /// Rows that could not be opened for lack of a session and were opened later, when the session appeared; each is the same message as before with its plaintext.
   Stream<Message> get reopened;
+
+  /// Stops waiting for the row [id]: it was hidden or vanished on this phone, so it must never be opened and shown later.
+  void forget(String id);
 }

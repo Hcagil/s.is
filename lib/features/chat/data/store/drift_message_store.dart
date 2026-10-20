@@ -200,7 +200,17 @@ final class DriftMessageStore implements MessageStore {
         final stored = await _writable(db, messages);
         await db.batch((b) {
           for (final c in stored) {
-            b.insert(db.messages, c, onConflict: DoUpdate((_) => c));
+            // One statement: a live row never replaces a deleted one, even when a deletion lands between a read and this write. A deletion row always wins.
+            b.insert(
+              db.messages,
+              c,
+              onConflict: DoUpdate<$MessagesTable, StoredMessageRow>(
+                (_) => c,
+                where: (old) => c.deleted.present && c.deleted.value != null
+                    ? const Constant(true)
+                    : old.deleted.isNull(),
+              ),
+            );
           }
         });
       });
@@ -213,17 +223,12 @@ final class DriftMessageStore implements MessageStore {
     final out = <MessagesCompanion>[];
     for (final m in messages) {
       if (m.isPending) continue;
-      if (m.deletion == null) {
+      if (m.deletion == null && isLockedPlaceholder(m.body)) {
         final old = await (db.select(
           db.messages,
         )..where((t) => t.id.equals(m.id))).getSingleOrNull();
-        // A deleted row is never replaced by a live one; a placeholder never erases readable text.
-        if (old != null &&
-            (old.deleted != null ||
-                (isLockedPlaceholder(m.body) &&
-                    !isLockedPlaceholder(old.body)))) {
-          continue;
-        }
+        // A placeholder never erases readable text (a deleted old row is refused by the upsert itself).
+        if (old != null && !isLockedPlaceholder(old.body)) continue;
       }
       out.add(messageToCompanion(m));
     }

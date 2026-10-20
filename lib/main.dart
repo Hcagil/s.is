@@ -14,11 +14,11 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/sis_app.dart';
+import 'core/keychain_group.dart';
 import 'core/runtime_config.dart';
 import 'core/startup_failure.dart';
 import 'core/startup_marks.dart';
 import 'features/appearance/application/appearance_controller.dart';
-import 'data/keychain_group.dart';
 import 'features/appearance/data/picker_wallpaper_photos.dart';
 import 'features/appearance/data/shared_prefs_appearance_store.dart';
 import 'features/autodownload/application/auto_download_controller.dart';

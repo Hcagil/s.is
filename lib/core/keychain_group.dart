@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 const _channel = MethodChannel('sis/keychain');
 
@@ -16,11 +15,3 @@ Future<String?> cryptoKeychainGroup() async {
     return null;
   }
 }
-
-/// Secure storage for a key: this device only (never in a backup together with the database file), in [group] when given.
-FlutterSecureStorage keychainStorage([String? group]) => FlutterSecureStorage(
-  iOptions: IOSOptions(
-    accessibility: KeychainAccessibility.first_unlock_this_device,
-    groupId: group,
-  ),
-);

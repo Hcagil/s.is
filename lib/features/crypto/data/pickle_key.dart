@@ -2,7 +2,6 @@ import 'dart:math';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import '../../../data/keychain_group.dart';
 import '../domain/key_directory.dart';
 
 /// The key that encrypts the olm account pickle: 32 random bytes as 64 hex characters, made once and kept in the platform's secure storage (Keystore / Keychain).
@@ -21,10 +20,17 @@ final class PickleKey implements PickleKeyStore {
   /// Keeps the key in the iOS crypto keychain group; sign-out also clears the old default group.
   PickleKey.inGroup(String? group)
     : this(
-        storage: keychainStorage(group),
-        legacy: group == null ? null : keychainStorage(),
+        storage: _inGroup(group),
+        legacy: group == null ? null : _inGroup(null),
       );
   final FlutterSecureStorage _storage;
+
+  static FlutterSecureStorage _inGroup(String? group) => FlutterSecureStorage(
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+      groupId: group,
+    ),
+  );
   final FlutterSecureStorage? _legacy;
   static const _name = 'sis.olm.pickle.key';
   static final _hex64 = RegExp(r'^[0-9a-f]{64}$');

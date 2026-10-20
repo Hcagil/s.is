@@ -765,8 +765,16 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     if (current == null) return;
     final i = current.indexWhere((m) => m.id == message.id);
     if (i < 0) return;
-    state = AsyncData([...current]..[i] = message);
+    state = AsyncData([...current]..[i] = _keepText(current[i], message));
   }
+
+  /// [fresh] unless it is only the locked placeholder of a message whose readable text is already shown (the echo of my own locked send): then the shown text stays.
+  Message _keepText(Message shown, Message fresh) =>
+      isLockedPlaceholder(fresh.body) &&
+          !isLockedPlaceholder(shown.body) &&
+          fresh.deletion == null
+      ? fresh.withPlain(shown.body, shown.linkPreview, sealed: shown.sealed)
+      : fresh;
 
   /// Deletes [message] for everyone (the member's own, or any member's when
   /// they are a group admin). The placeholder shows here at once and is
@@ -913,11 +921,12 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       // The echo and the answer are both this message: keep the phone's
       // own photo across the second one.
       final kept = current[i].localImage;
+      final text = _keepText(current[i], message);
       state = AsyncData(
         [...current]
-          ..[i] = message.localImage == null && kept != null
-              ? message.withLocalImage(kept)
-              : message,
+          ..[i] = text.localImage == null && kept != null
+              ? text.withLocalImage(kept)
+              : text,
       );
     }
   }

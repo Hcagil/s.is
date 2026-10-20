@@ -33,6 +33,20 @@ String encodeEnvelope({
   return jsonEncode(map);
 }
 
+/// Reads the JSON text [json] that [encodeEnvelope] made for the message [id]. Null (never a throw) when it is not valid JSON, not an object, `v` is not 1, `i` is not exactly [id] (a copy of another message replayed into this row), or `t` is not a string. The card is null when `lp` is absent or not a valid card (LinkPreview.fromJson); it never has a picture.
+({String text, LinkPreview? card})? decodeEnvelope(String json, String id) {
+  final Object? map;
+  try {
+    map = jsonDecode(json);
+  } on FormatException {
+    return null;
+  }
+  if (map is! Map || map['v'] != 1 || map['i'] != id) return null;
+  final text = map['t'];
+  if (text is! String) return null;
+  return (text: text, card: LinkPreview.fromJson(map['lp']));
+}
+
 /// Cuts [s] to [max] UTF-16 units without splitting a surrogate pair.
 String _cap(String s, int max) {
   if (s.length <= max) return s;

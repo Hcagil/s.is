@@ -266,8 +266,8 @@ async function send(id: string): Promise<void> {
                         // SIS_MESSAGE_LOCKED has no Reply (the text cannot be typed into an encrypted chat).
                         category: t.encrypted ? 'SIS_MESSAGE_LOCKED' : 'SIS_MESSAGE',
                         sound: 'default',
-                        // Lets the iPhone's notification service extension fetch the picture and attach it.
-                        ...(thumbUrl ? { 'mutable-content': 1 } : {}),
+                        // Runs the iPhone's notification service extension: it fetches the picture, or decrypts ct into the real text.
+                        ...(thumbUrl || withCt ? { 'mutable-content': 1 } : {}),
                         ...(badge != null ? { badge } : {}),
                       },
                     },

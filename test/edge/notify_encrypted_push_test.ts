@@ -261,14 +261,27 @@ test('iPhone, preview full: ct and ot travel and the apns block is the locked on
   const aps = (m.apns as { payload: { aps: Record<string, unknown> } }).payload.aps;
   assertEquals(aps.category, 'SIS_MESSAGE_LOCKED');
   assertEquals(aps['thread-id'], conv);
+  assertEquals(aps['mutable-content'], 1, 'ct sent: the iPhone extension may decrypt before showing');
   assertEquals(aps.sound, 'default');
   assertEquals(String(aps.badge), data(attempts[0]).badge);
   const alert = JSON.stringify(m.notification ?? aps.alert ?? '');
   assert(!alert.includes(ct), 'the ciphertext is not in the visible alert');
 });
 
+const apsOf = (a: Attempt) => (a.message.apns as { payload: { aps: Record<string, unknown> } }).payload.aps;
+
+test('iPhone, preview sender: no ct, so no mutable-content', async () => {
+  const p = await person('ivys', { platform: 'ios', preview: 'sender' });
+  await deliver(await send(await chatWith(p), cipher(50), 1));
+  assertEquals(attempts.length, 1);
+  assertEquals(data(attempts[0]).encrypted, 'true', 'fixture: an encrypted push');
+  assert(!('ct' in data(attempts[0])), 'fixture: no ct');
+  assert(!('mutable-content' in apsOf(attempts[0])), `no mutable-content: ${attempts[0].raw}`);
+});
+
 // The budget. ct and ot add exactly `,"ct":"<n>"` + `,"ot":"1"` = n + 17
-// bytes. One calibration send gives the size of the rest; each probe is a
+// bytes, and on an iPhone `"mutable-content":1,` (20 bytes) comes and goes
+// with ct. One calibration send gives the size of the rest; each probe is a
 // fresh recipient, so the badge (1) and every id keep their lengths. "The
 // message" is read as the whole request body FCM receives,
 // {"message":{...}} in compact JSON, UTF-8 (the `message` object alone is 12
@@ -301,10 +314,11 @@ async function longestKept(platform: 'android' | 'ios' = 'android') {
 }
 
 for (const platform of ['android', 'ios'] as const) {
+  const withCt = platform === 'ios' ? 17 + 20 : 17; // bytes ct (beyond its chars), ot and mutable-content add
   test(`budget (${platform}): a request of exactly 3500 bytes keeps ct and ot`, async () => {
     const base = await calibrate(platform);
     const { a, ct } = await probe(3500 - base, platform);
-    const size = 'ct' in data(a) ? bytes(a.raw) : bytes(a.raw) + ct.length + 17;
+    const size = 'ct' in data(a) ? bytes(a.raw) : bytes(a.raw) + ct.length + withCt;
     assertEquals(size, 3500, 'fixture: the request with ct is exactly 3500 bytes');
     assertEquals([data(a).ct, data(a).ot], [ct, '1'], `at 3500 bytes ct and ot stay; sent ${bytes(a.raw)} bytes`);
   });
@@ -316,7 +330,8 @@ for (const platform of ['android', 'ios'] as const) {
     assert(!('ct' in d) && !('ot' in d), `at 3501 bytes neither ct nor ot: ${Object.keys(d)}`);
     assert(!a.raw.includes(ct), 'the ciphertext is nowhere in the push');
     assertEquals(d.encrypted, 'true');
-    assertEquals(bytes(a.raw) + ct.length + 17, 3501, 'fixture: with ct it would be 3501');
+    if (platform === 'ios') assert(!('mutable-content' in apsOf(a)), `ct dropped: no mutable-content: ${a.raw}`);
+    assertEquals(bytes(a.raw) + ct.length + withCt, 3501, 'fixture: with ct it would be 3501');
   });
 }
 

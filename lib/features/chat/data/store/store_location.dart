@@ -31,6 +31,24 @@ Future<File> storeFile({
   return File(p.join(dir.path, storeFileName));
 }
 
+/// Deletes every set-aside store (sis_store.orphan-*.sqlite and its -wal and -shm) next to [file]: used at sign-out.
+Future<void> deleteOrphanStores(File file) async {
+  try {
+    await for (final entry in file.parent.list()) {
+      final name = p.basename(entry.path);
+      if (entry is File && name.startsWith('sis_store.orphan-')) {
+        try {
+          await entry.delete();
+        } catch (_) {
+          // Already gone.
+        }
+      }
+    }
+  } catch (_) {
+    // No folder, nothing to delete.
+  }
+}
+
 /// Sets an existing database file aside (and its -wal and -shm), renamed to `sis_store.orphan-UNIXSECONDS.sqlite` (plus -wal and -shm) in the same folder. Never deletes: used when the key that opened it is gone for good.
 Future<void> setAsideStore(File file) async {
   final stamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;

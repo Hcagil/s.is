@@ -107,6 +107,7 @@ static int open_keyed(const char *path, const char *key_hex, sqlite3 **db) {
   if (rc == SQLITE_OK) {
     snprintf(pragma, sizeof pragma, "PRAGMA key = \"x'%s'\";", key_hex);
     rc = sqlite3_exec(*db, pragma, 0, 0, 0);
+    { volatile char *w = pragma; for (size_t i = 0; i < sizeof pragma; i++) w[i] = 0; }
   }
   if (rc == SQLITE_OK) {
     rc = sqlite3_exec(*db, "PRAGMA busy_timeout = 1000; PRAGMA query_only = 1; PRAGMA cache_size = -256; PRAGMA mmap_size = 0;", 0, 0, 0);

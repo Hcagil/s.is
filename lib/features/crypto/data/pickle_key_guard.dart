@@ -9,8 +9,8 @@ import 'pickle_key.dart';
 /// iPhone start-up guard, run BEFORE the message store opens.
 /// When the store file exists, its key is saved, but the Olm pickle key is gone from both keychain groups,
 /// and the store holds an account pickle, those pickles can never be opened again:
-/// the store is set aside (renamed, never deleted) and the store key is forgotten,
-/// so a fresh store and keys are made.
+/// the store is set aside (renamed, never deleted); the store key is kept, so a fresh
+/// store opens with it and a new pickle key is made when first needed.
 /// Without pickles nothing is done (the pickle key is made when first needed).
 /// Does nothing without an iOS keychain group, and never throws:
 /// any problem leaves everything as it is.
@@ -40,8 +40,8 @@ Future<void> guardLostPickleKey({
     }
 
     if (!hasPickles) return;
+    // The store key is kept: the new store opens with the same key (the set-aside file stays readable with it until sign-out).
     await setAsideStore(file);
-    await storeKey.delete();
   } on Object {
     return;
   }

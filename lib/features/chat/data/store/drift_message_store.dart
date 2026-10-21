@@ -13,6 +13,7 @@ import '../../domain/message.dart';
 import '../../domain/message_store.dart';
 import 'message_row_mapper.dart';
 import 'store_database.dart';
+import 'store_location.dart' show deleteOrphanStores;
 
 /// The on-phone message store, one encrypted SQLite file; every method best-effort, never throws.
 final class DriftMessageStore implements MessageStore {
@@ -515,7 +516,9 @@ final class DriftMessageStore implements MessageStore {
       if (pending != null) await (await pending).close();
     } catch (_) {}
     try {
-      await _deleteFiles(await _file());
+      final file = await _file();
+      await _deleteFiles(file);
+      await deleteOrphanStores(file);
     } catch (_) {}
     try {
       await _deleteKey();

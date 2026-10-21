@@ -30,7 +30,7 @@ pub extern "C" fn sis_olm_selftest() -> i32 {
 }
 
 /// Wipe the buffer by overwriting it with zeros.
-fn wipe(buf: &mut [u8]) {
+pub(crate) fn wipe(buf: &mut [u8]) {
     for i in buf.iter_mut() {
         unsafe { std::ptr::write_volatile(i, 0); }
     }
@@ -46,19 +46,33 @@ unsafe fn cstr<'a>(p: *const std::os::raw::c_char) -> Option<&'a str> {
     }
 }
 
-/// Extract the "t" field from a JSON envelope.
-fn envelope_text(plaintext: &[u8], message_id: &str) -> Option<String> {
-    let json: serde_json::Value = serde_json::from_slice(plaintext).ok()?;
-    if let (Some(v), Some(i), Some(t)) = (
-        json.get("v")?.as_i64(),
-        json.get("i")?.as_str(),
-        json.get("t")?.as_str()
-    ) {
-        if v == 1 && i == message_id {
-            return Some(t.to_string());
+/// Overwrite every string inside a parsed JSON value with zeros (object keys are not secret).
+fn wipe_value(v: &mut serde_json::Value) {
+    match v {
+        serde_json::Value::String(s) => {
+            let mut bytes = std::mem::take(s).into_bytes();
+            wipe(&mut bytes);
         }
+        serde_json::Value::Array(a) => a.iter_mut().for_each(wipe_value),
+        serde_json::Value::Object(m) => m.iter_mut().for_each(|(_, x)| wipe_value(x)),
+        _ => {}
     }
-    None
+}
+
+/// Extract the "t" field from a JSON envelope; every other copy of the plaintext made here is wiped.
+fn envelope_text(plaintext: &[u8], message_id: &str) -> Option<String> {
+    let mut json: serde_json::Value = serde_json::from_slice(plaintext).ok()?;
+    let ok = json.get("v").and_then(|v| v.as_i64()) == Some(1) && json.get("i").and_then(|i| i.as_str()) == Some(message_id);
+    let text = if ok {
+        match json.get_mut("t").map(std::mem::take) {
+            Some(serde_json::Value::String(s)) => Some(s),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    wipe_value(&mut json);
+    text
 }
 
 /// Finish processing a decrypted message.
@@ -132,7 +146,7 @@ pub unsafe extern "C" fn sis_peek_session(key: *const u8, key_len: usize, pickle
                 return 1;
             }
         };
-        let mut session = match OlmSession::from_pickle(pickle.to_string(), key_vec.clone()) {
+        let mut session = match OlmSession::from_pickle(pickle.to_string(), std::mem::take(&mut key_vec)) {
             Ok(s) => s,
             Err(_) => {
                 wipe(&mut key_vec);
@@ -174,7 +188,7 @@ pub unsafe extern "C" fn sis_peek_inbound(key: *const u8, key_len: usize, accoun
                 return 1;
             }
         };
-        let mut account = match OlmAccount::from_pickle(account_pickle.to_string(), key_vec.clone()) {
+        let mut account = match OlmAccount::from_pickle(account_pickle.to_string(), std::mem::take(&mut key_vec)) {
             Ok(a) => a,
             Err(_) => {
                 wipe(&mut key_vec);

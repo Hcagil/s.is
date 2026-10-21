@@ -122,7 +122,7 @@
 		B3000000000000000000B005 /* PushPeekCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPeekCore.swift; sourceTree = "<group>"; };
 		B3000000000000000000B006 /* PeekNative.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeekNative.swift; sourceTree = "<group>"; };
 		B3000000000000000000B007 /* PushPeek.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPeek.swift; sourceTree = "<group>"; };
-		B3000000000000000000B008 /* PeekStore.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c; path = PeekStore.c; sourceTree = "<group>"; };
+		B3000000000000000000B008 /* PeekStore.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = PeekStore.c; sourceTree = "<group>"; };
 		B3000000000000000000B009 /* PeekStore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PeekStore.h; sourceTree = "<group>"; };
 		B3000000000000000000B00A /* NotificationService-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NotificationService-Bridging-Header.h; sourceTree = "<group>"; };
 		B3000000000000000000B00B /* NotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NotificationService.entitlements; sourceTree = "<group>"; };

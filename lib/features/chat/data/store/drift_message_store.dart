@@ -103,13 +103,17 @@ final class DriftMessageStore implements MessageStore {
         try {
           return await body(db);
         } catch (e) {
-          if (n >= 4 ||
+          if (n >= 9 ||
               !(e is DriftRemoteException ||
                   e is DriftWrappedException ||
                   e is SqliteException)) {
             rethrow;
           }
-          await Future<void>.delayed(Duration(milliseconds: 25 * (n + 1)));
+          // Jitter: dozens of writers retrying on the same beat kept colliding and gave up, dropping their saves.
+          final step = 25 * (n + 1);
+          await Future<void>.delayed(
+            Duration(milliseconds: step + math.Random().nextInt(step)),
+          );
         }
       }
     } catch (_) {
@@ -288,8 +292,12 @@ final class DriftMessageStore implements MessageStore {
           if (seen != _erasures) await _lostToErase(file);
         } else {
           // Busy, locked, or a racing opener got there first: a valid store is never deleted, retry.
-          if (tries >= 5) rethrow;
-          await Future<void>.delayed(Duration(milliseconds: 50 * (tries + 1)));
+          // Herd of openers retried in lockstep and gave up after ~750 ms, silently dropping their saves.
+          if (tries >= 9) rethrow;
+          final step = 50 * (tries + 1);
+          await Future<void>.delayed(
+            Duration(milliseconds: step + math.Random().nextInt(step)),
+          );
         }
       }
     }

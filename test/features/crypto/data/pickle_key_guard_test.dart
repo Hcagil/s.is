@@ -3,7 +3,7 @@
 // keyed like production; the keychain is test/support/group_keychain.dart on
 // the plugin's real channel. Contract: with an olm_account row and the pickle
 // key gone from both groups, the store is renamed aside (never deleted) and
-// the store key forgotten; otherwise, and on any error, nothing changes and
+// the store key kept in both groups; otherwise, and on any error, nothing changes and
 // nothing is thrown.
 import 'dart:convert';
 import 'dart:io';
@@ -74,35 +74,34 @@ void main() {
     pickleKey: PickleKey.inGroup(group),
   );
 
-  test(
-    'pickles stored, pickle key gone from both groups: the store is set '
-    'aside (bytes kept) and the store key forgotten in both groups',
-    () async {
-      await makeStore(key: validKeyA, pickle: 'ACCOUNT-PICKLE');
-      kc.put(cryptoGroup, storeKeyName, validKeyA);
-      final before = sha256.convert(file.readAsBytesSync()).toString();
+  test('pickles stored, pickle key gone from both groups: the store is set '
+      'aside (bytes kept) and the store key kept in both groups', () async {
+    await makeStore(key: validKeyA, pickle: 'ACCOUNT-PICKLE');
+    kc.put(cryptoGroup, storeKeyName, validKeyA);
+    kc.put(null, storeKeyName, validKeyA);
+    final before = sha256.convert(file.readAsBytesSync()).toString();
 
-      await guard();
+    await guard();
 
-      expect(file.existsSync(), isFalse);
-      final names = [for (final f in dir.listSync()) p.basename(f.path)];
-      expect(names, isNotEmpty);
-      expect(names, everyElement(matches(_orphan)), reason: '$names');
-      final main = dir.listSync().whereType<File>().firstWhere(
-        (f) => p.basename(f.path).endsWith('.sqlite'),
-      );
-      expect(sha256.convert(main.readAsBytesSync()).toString(), before);
-      expect(kc.get(cryptoGroup, storeKeyName), isNull);
-      expect(kc.get(null, storeKeyName), isNull);
-    },
-  );
+    expect(file.existsSync(), isFalse);
+    final names = [for (final f in dir.listSync()) p.basename(f.path)];
+    expect(names, isNotEmpty);
+    expect(names, everyElement(matches(_orphan)), reason: '$names');
+    final main = dir.listSync().whereType<File>().firstWhere(
+      (f) => p.basename(f.path).endsWith('.sqlite'),
+    );
+    expect(sha256.convert(main.readAsBytesSync()).toString(), before);
+    // Kept: the set-aside file stays readable with it.
+    expect(kc.get(cryptoGroup, storeKeyName), validKeyA);
+    expect(kc.get(null, storeKeyName), validKeyA);
+  });
 
   test('the store key only in the default group counts as present', () async {
     await makeStore(key: validKeyA, pickle: 'ACCOUNT-PICKLE');
     kc.put(null, storeKeyName, validKeyA);
     await guard();
     expect(file.existsSync(), isFalse);
-    expect(kc.get(null, storeKeyName), isNull);
+    expect(kc.get(null, storeKeyName), validKeyA);
   });
 
   test('no account pickle in the store: nothing changes', () async {

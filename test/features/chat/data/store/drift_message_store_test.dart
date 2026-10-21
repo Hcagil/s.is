@@ -635,6 +635,26 @@ void main() {
       expect(await journal.exists(), isFalse);
     });
 
+    test('sign-out also deletes set-aside stores, other files stay', () async {
+      final s = store();
+      await s.upsertAll([msg('a')]);
+      final orphans = [
+        for (final end in ['', '-wal', '-shm'])
+          File('${h.dir.path}/sis_store.orphan-1761000000.sqlite$end'),
+      ];
+      for (final f in orphans) {
+        await f.writeAsBytes([1, 2, 3]);
+      }
+      final other = File('${h.dir.path}/notes.txt');
+      await other.writeAsBytes([4]);
+      await s.clear();
+      for (final f in orphans) {
+        expect(await f.exists(), isFalse, reason: f.path);
+      }
+      expect(await other.exists(), isTrue);
+      expect(await h.file.exists(), isFalse);
+    });
+
     test('clear racing writes and reads never throws', () async {
       final s = store();
       await s.upsertAll([msg('a')]);

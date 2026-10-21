@@ -13,7 +13,6 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/sis_app.dart';
-import 'core/keychain_group.dart';
 import 'core/runtime_config.dart';
 import 'core/startup_failure.dart';
 import 'core/startup_marks.dart';
@@ -82,6 +81,7 @@ import 'features/chat/data/supabase_contacts_repository.dart';
 import 'features/crypto/application/key_directory_controller.dart';
 import 'features/crypto/data/drift_olm_pickle_store.dart';
 import 'features/crypto/data/drift_session_engine.dart';
+import 'features/crypto/data/keychain_group.dart';
 import 'features/crypto/data/olm_key_engine.dart';
 import 'features/crypto/data/pickle_key.dart';
 import 'features/crypto/data/pickle_key_guard.dart';

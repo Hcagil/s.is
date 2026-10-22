@@ -29,7 +29,22 @@ class StoreHarness {
       await Directory.systemTemp.createTemp('sis-store-'),
     );
     addTearDown(() async {
-      if (await h.dir.exists()) await h.dir.delete(recursive: true);
+      if (!await h.dir.exists()) return;
+      try {
+        await h.dir.delete(recursive: true);
+      } on FileSystemException catch (e) {
+        // Something still wrote here after the test closed its stores: name
+        // the files, so the writer can be found (CI: "Directory not empty").
+        final left = [
+          if (h.dir.existsSync())
+            for (final f in h.dir.listSync(recursive: true))
+              p.relative(f.path, from: h.dir.path),
+        ];
+        fail(
+          'temp folder still written after the test: '
+          '${left.take(20)} ($e)',
+        );
+      }
     });
     return h;
   }

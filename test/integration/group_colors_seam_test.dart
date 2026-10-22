@@ -223,6 +223,32 @@ void main() {
         ?.where((x) => x.id == group)
         .firstOrNull;
     expect(row()!.senders.containsKey(ionaId), isFalse);
+    // A joined channel is not yet a delivering one (a fresh stack without the
+    // warmup misses the insert below). Prove the live path into THIS list
+    // first: hugh, already a known sender, writes until his line shows.
+    final live = DateTime.now().add(const Duration(seconds: 60));
+    for (var shown = false; !shown;) {
+      if (DateTime.now().isAfter(live)) fail('Realtime never delivered');
+      final probe = _stamp('probe');
+      expect(
+        await hugh.send(
+          id: randomMessageId(),
+          conversationId: group,
+          body: probe,
+        ),
+        isA<Ok<Message>>(),
+      );
+      final wait = DateTime.now().add(const Duration(seconds: 3));
+      while (!(shown = row()?.lastMessage == probe) &&
+          DateTime.now().isBefore(wait)) {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      }
+    }
+    expect(
+      row()!.senders.containsKey(ionaId),
+      isFalse,
+      reason: 'still unknown',
+    );
 
     ok(await gwen.addMembers(group, [ionaId], withHistory: true));
     final body = _stamp('from the newcomer');

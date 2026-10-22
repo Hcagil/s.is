@@ -111,12 +111,16 @@ impl OlmAccount {
     }
 
     #[frb(sync)]
-    pub fn from_pickle(pickle: String, key: Vec<u8>) -> Result<OlmAccount, String> {
+    pub fn from_pickle(pickle: String, mut key: Vec<u8>) -> Result<OlmAccount, String> {
         if key.len() != 32 {
+            crate::c_api::wipe(&mut key);
             return Err("invalid key length".to_string());
         }
-        let k = <[u8; 32]>::try_from(key.as_slice()).unwrap();
-        let p = AccountPickle::from_encrypted(&pickle, &k).map_err(|_| "invalid pickle")?;
+        let mut k = <[u8; 32]>::try_from(key.as_slice()).unwrap();
+        let decoded = AccountPickle::from_encrypted(&pickle, &k);
+        crate::c_api::wipe(&mut k);
+        crate::c_api::wipe(&mut key);
+        let p = decoded.map_err(|_| "invalid pickle")?;
         Ok(OlmAccount {
             inner: Account::from_pickle(p),
         })
@@ -213,12 +217,16 @@ impl OlmSession {
     }
 
     #[frb(sync)]
-    pub fn from_pickle(pickle: String, key: Vec<u8>) -> Result<OlmSession, String> {
+    pub fn from_pickle(pickle: String, mut key: Vec<u8>) -> Result<OlmSession, String> {
         if key.len() != 32 {
+            crate::c_api::wipe(&mut key);
             return Err("invalid key length".to_string());
         }
-        let k = <[u8; 32]>::try_from(key.as_slice()).unwrap();
-        let p = SessionPickle::from_encrypted(&pickle, &k).map_err(|_| "invalid pickle")?;
+        let mut k = <[u8; 32]>::try_from(key.as_slice()).unwrap();
+        let decoded = SessionPickle::from_encrypted(&pickle, &k);
+        crate::c_api::wipe(&mut k);
+        crate::c_api::wipe(&mut key);
+        let p = decoded.map_err(|_| "invalid pickle")?;
         Ok(OlmSession {
             inner: Session::from_pickle(p),
         })

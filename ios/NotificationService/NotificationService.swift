@@ -15,6 +15,10 @@ final class NotificationService: UNNotificationServiceExtension, URLSessionDownl
       return
     }
     lock.lock(); handler = contentHandler; content = mutable; lock.unlock()
+    // An encrypted chat's push: the real text from this phone's own store when it can be read (PushPeek.swift), else the locked text the server sent.
+    if let text = PushPeek.text(for: mutable.userInfo) {
+      mutable.body = PushPeek.shownBody(text: text, sender: mutable.userInfo["sender"] as? String)
+    }
     // Only our own Supabase host: the push's action link is built from the same SUPABASE_URL as the picture link.
     guard let link = mutable.userInfo["thumb_url"] as? String, let url = URL(string: link), url.scheme == "https", let actionLink = mutable.userInfo["action_url"] as? String, let actionHost = URL(string: actionLink)?.host, let host = url.host, host.lowercased() == actionHost.lowercased() else {
       finish()

@@ -81,8 +81,10 @@ import 'features/chat/data/supabase_contacts_repository.dart';
 import 'features/crypto/application/key_directory_controller.dart';
 import 'features/crypto/data/drift_olm_pickle_store.dart';
 import 'features/crypto/data/drift_session_engine.dart';
+import 'features/crypto/data/keychain_group.dart';
 import 'features/crypto/data/olm_key_engine.dart';
 import 'features/crypto/data/pickle_key.dart';
+import 'features/crypto/data/pickle_key_guard.dart';
 import 'features/crypto/data/supabase_key_directory.dart';
 import 'features/chat/data/supabase_contact_share_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
@@ -173,6 +175,17 @@ Future<void> main() async {
     );
   });
   final config = RuntimeConfig.fromEnvironment();
+  // iPhone: the keychain group of the store and pickle keys (null elsewhere); the app moved the keys there before Flutter started.
+  final keychainGroup = await cryptoKeychainGroup();
+  // Before the store opens: a store whose Olm pickle key is gone is set aside (renamed), never deleted.
+  if (keychainGroup != null) {
+    await guardLostPickleKey(
+      group: keychainGroup,
+      file: await storeFile(),
+      storeKey: StoreKey.inGroup(keychainGroup),
+      pickleKey: PickleKey.inGroup(keychainGroup),
+    );
+  }
   // Read before runApp (like the session marker), so the first frame already
   // has the member's theme, font, text size and language: no flash.
   const appearanceStore = SharedPrefsAppearanceStore();
@@ -229,6 +242,14 @@ Future<void> main() async {
     // The store messageStoreProvider built last: the chat-list store shares that
     // very instance (it rebuilds with it, see below).
     DriftMessageStore? builtStore;
+
+    // A missing pickle key is never replaced while pickles are stored (a new key would lock them for good).
+    final pickleKey = PickleKey.inGroup(
+      keychainGroup,
+      hasPickles: () async =>
+          builtStore != null &&
+          await DriftOlmPickleStore(builtStore!).load() != null,
+    );
 
     // One Olm engine for key publishing and for sessions.
     final olm = OlmKeyEngine();
@@ -346,15 +367,18 @@ Future<void> main() async {
           // watches the user id, so another account gets a fresh instance
           // (and the file's owner check wipes the old rows).
           messageStoreProvider.overrideWith((ref) {
-            const key = StoreKey();
+            final key = StoreKey.inGroup(keychainGroup);
             final store = DriftMessageStore(
               ownerId: ref.watch(currentUserIdProvider) ?? '',
               file: storeFile,
-              key: key.loadOrCreate,
+              // iPhone: a database whose key is gone from both keychain groups is set aside (renamed), never deleted.
+              key: () => key.loadOrCreate(
+                setAsideStore: () async => setAsideStore(await storeFile()),
+              ),
               // Sign-out erases both keys: the store key and the Olm pickle key.
               deleteKey: () async {
                 await key.delete();
-                await const PickleKey().delete();
+                await pickleKey.delete();
               },
             );
             ref.onDispose(store.close);
@@ -376,7 +400,7 @@ Future<void> main() async {
             ref.watch(messageStoreProvider);
             return DriftOlmPickleStore(builtStore!);
           }),
-          pickleKeyStoreProvider.overrideWithValue(const PickleKey()),
+          pickleKeyStoreProvider.overrideWithValue(pickleKey),
           keyEngineProvider.overrideWithValue(olm),
           sessionEngineProvider.overrideWith((ref) {
             ref.watch(messageStoreProvider);
@@ -384,7 +408,7 @@ Future<void> main() async {
               store: builtStore!,
               keys: olm,
               sessions: olm,
-              pickleKey: const PickleKey(),
+              pickleKey: pickleKey,
             );
           }),
           keyDirectoryProvider.overrideWithValue(SupabaseKeyDirectory(client)),

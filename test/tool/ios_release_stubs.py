@@ -578,6 +578,7 @@ def xcodebuild():
                            ("Frameworks/App.framework", "io.flutter.flutter.app"),
                            ("Frameworks/objective_c.framework", "io.flutter.flutter.native-assets.objective-c"),
                            ("PlugIns/ShareExtension.appex", "com.esd.sis.share"),
+                           ("PlugIns/NotificationService.appex", "com.esd.sis.notify"),
                            ("", "com.esd.sis")):
             d = os.path.join(app, sub)
             os.makedirs(d, exist_ok=True)
@@ -769,7 +770,8 @@ def issue(csr, name, out, bundle="com.esd.sis", der=None):
     prof = {"Name": name, "UUID": str(uuid.uuid4()).upper(), "TeamIdentifier": [team], "DeveloperCertificates": [der],
             "Entitlements": {"application-identifier": team + "." + bundle, "com.apple.developer.team-identifier": team,
                              "aps-environment": E.get("STUB_PROFILE_APS", "production"), "get-task-allow": False}}
-    if E.get("STUB_PROFILE_GROUP", "1") == "1":
+    # STUB_NOTIFY_GROUP=0: only the notify App ID still lacks App Groups (switched on in the portal, not by the API).
+    if E.get("STUB_PROFILE_GROUP", "1") == "1" and not (bundle == "com.esd.sis.notify" and E.get("STUB_NOTIFY_GROUP") == "0"):
         prof["Entitlements"]["com.apple.security.application-groups"] = ["group.com.esd.sis"]
     with open(os.path.join(out, "profile.mobileprovision"), "wb") as f:
         f.write(b"STUBCMS\n" + plistlib.dumps(prof))

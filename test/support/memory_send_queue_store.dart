@@ -26,12 +26,21 @@ class MemorySendQueueStore implements SendQueueStore, QueuedCiphertexts {
   /// How long a save takes (on the test clock); zero: one async hop.
   Duration saveDelay = Duration.zero;
 
+  /// When set, every save fails with it after its hop and keeps nothing, as
+  /// the real store throws StoreWriteException once its retries are spent.
+  Object? saveError;
+  int failedSaves = 0;
+
   @override
   Future<void> save(String userId, List<QueuedRecord> records) async {
     records = List.of(records);
     await (saveDelay == Duration.zero
         ? Future<void>.value()
         : Future<void>.delayed(saveDelay));
+    if (saveError case final e?) {
+      failedSaves++;
+      throw e;
+    }
     final keep = {for (final r in records) r.id};
     cipher.removeWhere((k, _) => k.$1 == userId && !keep.contains(k.$2));
     if (records.isEmpty) {

@@ -55,9 +55,16 @@ const attempts: Attempt[] = []; // every FCM send, accepted or refused
 type Answer = { status: number; body: unknown };
 const answers: Answer[] = []; // next FCM answers, in order; empty = 200
 let mints = 0;
+let failChatLookup = false;
+let chatLookups = 0;
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  // The function's read of the chat row (conversations.encrypted_at) made to fail, as a database error would.
+  if (failChatLookup && url.includes('/rest/v1/conversations')) {
+    chatLookups++;
+    return Response.json({ code: 'XX000', message: 'stand-in lookup failure' }, { status: 500 });
+  }
   if (url.startsWith('https://oauth2.googleapis.com/')) {
     mints++;
     return Response.json({ access_token: `ya29.enc-fake-${mints}`, token_type: 'Bearer', expires_in: 3600 });
@@ -232,22 +239,73 @@ for (const preview of ['sender', 'none'] as const) {
   });
 }
 
-test('action token: an encrypted chat and a plain chat both sign mark_read and reply', async () => {
+// Group J: the scope is decided per CHAT (conversations.encrypted_at), not per
+// message: every push of a chat that ever held a locked message signs
+// mark_read only, also for a row with no ciphertext in it. A plain chat keeps
+// Reply. A failed read of the chat row counts as encrypted.
+const scopeOf = async (a: Attempt) => {
+  const claims = await verifyActionToken(data(a).action_token, serviceKey);
+  assert(claims, `the token verifies: ${a.raw}`);
+  return claims;
+};
+
+test('action token: a plain chat signs mark_read and reply; an encrypted chat mark_read only', async () => {
   const eve = await person('eve');
-  const plainConv = await chatWith(eve);
-  await deliver(await send(plainConv, null));
+  await deliver(await send(await chatWith(eve), null));
   assertEquals(attempts.length, 1);
-  const plain = await verifyActionToken(data(attempts[0]).action_token, serviceKey);
-  assertEquals(plain?.a, ['mark_read', 'reply'], 'plain chat');
+  assertEquals((await scopeOf(attempts[0])).a, ['mark_read', 'reply'], 'plain chat');
   assert(!('ct' in data(attempts[0])) && !('encrypted' in data(attempts[0])), 'plain: no ct, no encrypted');
 
   const fay = await person('fay');
   await deliver(await send(await chatWith(fay), cipher(40), 0));
   assertEquals(attempts.length, 1);
-  const enc = await verifyActionToken(data(attempts[0]).action_token, serviceKey);
-  assert(enc, 'the encrypted token verifies');
-  assertEquals(enc.a, ['mark_read', 'reply'], 'encrypted chat: mark_read and reply (Group I)');
+  const enc = await scopeOf(attempts[0]);
+  assertEquals(enc.a, ['mark_read'], 'encrypted chat: mark_read only');
   assertEquals([enc.u, enc.c], [fay.id, data(attempts[0]).conversation_id]);
+});
+
+test('action token: a row without ciphertext in an encrypted chat still signs mark_read only', async () => {
+  const gus = await person('gus');
+  const conv = await chatWith(gus);
+  await deliver(await send(conv, cipher(40), 0));
+  const [{ at }] = await sql`select encrypted_at as at from public.conversations where id = ${conv}`;
+  assert(at !== null, 'fixture: the chat is marked encrypted');
+
+  // Plain rows written by the server (service role, no member session, so the
+  // member guard does not apply): a text and a place, neither with ciphertext.
+  const server = (body: (tx: postgres.TransactionSql) => Promise<{ id: string }[]>) =>
+    sql.begin(async (tx) => {
+      await tx`set local role service_role`;
+      return await body(tx);
+    });
+  const [{ id: text }] = await server((tx) => tx`insert into public.messages(conversation_id, sender_id, body)
+    values (${conv}, ${sender.id}, 'plain words') returning id`);
+  const [{ id: place }] = await server((tx) => tx`insert into public.messages(conversation_id, sender_id, body, location_lat, location_lng)
+    values (${conv}, ${sender.id}, 'Cafe', 41.0, 29.0) returning id`);
+  for (const [what, id] of [['a place', place], ['a plain text', text]] as const) {
+    await deliver(id);
+    assertEquals(attempts.length, 1, what);
+    assert(!('ct' in data(attempts[0])) && data(attempts[0]).encrypted !== 'true', `${what}: fixture is a plain row`);
+    assertEquals((await scopeOf(attempts[0])).a, ['mark_read'], `${what} in an encrypted chat`);
+  }
+});
+
+test('action token: the chat row cannot be read -> mark_read only (fails closed)', async () => {
+  const hal = await person('hal');
+  const conv = await chatWith(hal);
+  failChatLookup = true;
+  chatLookups = 0;
+  try {
+    await deliver(await send(conv, null));
+  } finally {
+    failChatLookup = false;
+  }
+  assert(chatLookups > 0, 'fixture: the chat row was asked for and failed');
+  assertEquals(attempts.length, 1, 'the push still goes out');
+  assertEquals((await scopeOf(attempts[0])).a, ['mark_read'], 'lookup error');
+  // Control: the same plain chat with the lookup working keeps Reply.
+  await deliver(await send(conv, null));
+  assertEquals((await scopeOf(attempts[0])).a, ['mark_read', 'reply'], 'lookup working');
 });
 
 test('iPhone, preview full: ct and ot travel and the apns block is the locked one', async () => {

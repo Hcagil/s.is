@@ -114,12 +114,16 @@ async function checkActions(message: Record<string, unknown>) {
   const claims = await verifyActionToken(String(data.action_token), serviceKey);
   assert(claims, `action_token does not verify: ${raw}`);
   const now = Math.floor(Date.now() / 1000);
+  // 4b Group J: decided per chat, from the database: a chat that ever held a
+  // locked message (conversations.encrypted_at) signs mark_read only, whatever
+  // this message is; a plain chat signs both.
+  const [chat] = await sql`select encrypted_at from public.conversations where id = ${String(data.conversation_id)}`;
+  assert(chat, `the chat exists: ${raw}`);
   assertEquals({ ...claims, e: 0 }, {
     u: data.user_id,
     c: data.conversation_id,
     d: await sha256Hex(String(m.token)),
-    // 4b Group I: an encrypted chat has Reply too (the app sends it locked), so every token signs both.
-    a: ['mark_read', 'reply'],
+    a: chat.encrypted_at === null ? ['mark_read', 'reply'] : ['mark_read'],
     e: 0,
   }, `the token names this recipient, chat and device: ${raw}`);
   assert(Math.abs(claims.e - (now + ACTION_TTL_SECONDS)) <= 60, `expires in an hour: ${claims.e}`);

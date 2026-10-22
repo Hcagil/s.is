@@ -160,8 +160,17 @@ class _Spy extends SpyStore {
   int get writes =>
       calls.where((c) => _writeOps.any(c.startsWith)).length + saved.length;
 
+  /// While above zero, each upsertAll fails as the real store does once its
+  /// retries are spent (StoreWriteException), writing nothing.
+  int failUpserts = 0;
+
   @override
   Future<void> upsertAll(List<Message> messages) async {
+    if (failUpserts > 0) {
+      failUpserts--;
+      calls.add('upsert-failed');
+      throw const StoreWriteException();
+    }
     final f = super.upsertAll(messages);
     if (holdUpsert case final g?) await g.future;
     return f;
@@ -524,6 +533,24 @@ void main() {
       await run(c);
       expect((await store.cursor())?.id, cursor.id);
       expect(await store.newest('c1'), hasLength(1), reason: 'only the seed');
+    });
+
+    // Group J: a store write that fails stops the pass before the cursor
+    // moves, so the rows it could not keep are read again next time.
+    test('a failing store write stops the pass before saveCursor; the next '
+        'pass retries and moves it', () async {
+      feed.change(msg('c1-new', t: 200));
+      final (c, store) = await withCursor();
+      store.failUpserts = 1;
+      await run(c);
+      expect(store.calls, contains('upsert-failed'), reason: 'setup');
+      expect(store.saved, isEmpty, reason: 'cursor saved past a lost write');
+      expect((await store.cursor())?.id, cursor.id);
+      expect(ids(await store.newest('c1')), isNot(contains('c1-new')));
+
+      await run(c);
+      expect((await store.cursor())?.id, 'c1-new', reason: 'retried');
+      expect(ids(await store.newest('c1')), contains('c1-new'));
     });
 
     test(

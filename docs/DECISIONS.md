@@ -5,6 +5,7 @@ Entries before 2026-10-03 are in [DECISIONS-archive.md](DECISIONS-archive.md); s
 
 ## Current decisions
 
+- 2026-10-20 — [iPhone encryption is exempt; Info.plist stays NO](#2026-10-20--iphone-encryption-is-exempt-infoplist-stays-no): App Store Connect's own encryption questionnaire found SIS exempt, so `ITSAppUsesNonExemptEncryption` stays `false` and builds carry no per-build answer.
 - 2026-10-17 — [The server knows the app language](#2026-10-17--the-server-knows-the-app-language): The server stores the app language (profiles.app_language, en or tr) for the app's own messages
 - 2026-10-17 — [Version names follow the date and change count](#2026-10-17--version-names-follow-the-date-and-change-count): Version names are yy.month.commit-count in UTC; the build number is unchanged
 - 2026-10-17 — [Private Chats step 1: every message lives on the phone](#2026-10-17--private-chats-step-1-every-message-lives-on-the-phone): Private Chats step 1: each phone keeps a full encrypted copy of its chats and screens read it first
@@ -597,3 +598,11 @@ Nothing contacts the site before that tap.
 - 4a and 4b ship together (owner, 2026-10-19), so nothing reaches main or testers before 4b.
 - The send queue now lives in the encrypted on-phone store, with the ciphertext of locked texts.
 - Once a chat has held a locked message the server refuses plain inserts and notification replies into it, so a chat never goes back to plain.
+
+## 2026-10-20 — iPhone encryption is exempt; Info.plist stays NO
+
+**Decision.** `ios/Runner/Info.plist` keeps `ITSAppUsesNonExemptEncryption = false`, and the release tool sends no per-build encryption answer. The change that set it to `true` (#213) is reverted.
+
+**Why.** App Store Connect's App Encryption Documentation questionnaire (answered 2026-10-20: standard algorithms only, none proprietary, not offered in France) returned "you don't need to upload any documents" and pointed to the Info.plist key for skipping the per-build questions. The earlier `true` came from reading Apple's documentation table instead of running the questionnaire; with `true` and no compliance code every upload failed with altool error 90592.
+
+**Consequences.** iPhone uploads work again with no manual step. A store or build setting that depends on a legal reading is changed only after the platform's own form gives the answer. The US yearly self-classification question (5D992) is separate and open with a lawyer; it does not change this key.

@@ -356,10 +356,6 @@ def distribute(bundle_identifier, build_number, groups, note):
             sys.exit("build %s still %s at the polling limit; re-run this job later" % (build_number, state))
         time.sleep(interval)
     build_id = builds[0]["id"]
-    # Apple asks the export question for every build; the app has standard (non-exempt) encryption.
-    call("PATCH", "/builds/%s" % build_id, {"data": {
-        "type": "builds", "id": build_id, "attributes": {"usesNonExemptEncryption": True},
-    }})
 
     text = (note.strip() or "Bug fixes and improvements.")[:4000]
     locs = call("GET", "/builds/%s/betaBuildLocalizations" % build_id)["data"]

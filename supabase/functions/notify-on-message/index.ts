@@ -170,6 +170,10 @@ async function send(id: string): Promise<void> {
   const actionKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const actionUrl = `${Deno.env.get('SUPABASE_URL')!}/functions/v1/notification-action`;
 
+  // A chat that ever held a locked message (conversations.encrypted_at, kept after deletes) never gets a reply scope, whatever this message is: decided per chat, not per message. A failed lookup counts as encrypted.
+  const chatRow = await db.from('conversations').select('encrypted_at').eq('id', targets[0].conversation_id).maybeSingle();
+  const chatEncrypted = !!chatRow.error || chatRow.data?.encrypted_at != null || targets.some((t) => t.encrypted);
+
   // A short-lived link to the small picture of a photo/video message, one per path (several recipients share it). The service role signs it; the object is private, so only the recipients push_targets chose (not muted, not archived, preview 'full') ever get the link. A missing object (an old sender never made one) or any error gives null: the push then goes out as text. The link is never logged.
   const thumbLinks = new Map<string, Promise<string | null>>();
   const thumbLink = (path: string): Promise<string | null> => {
@@ -198,7 +202,7 @@ async function send(id: string): Promise<void> {
             u: t.user_id,
             c: t.conversation_id,
             d: await sha256Hex(t.token),
-            a: ['mark_read', 'reply'], // an encrypted chat signs reply too: its Reply never calls the function (the app sends it through its own encrypted queue); notification_action still refuses a plain reply into an encrypted chat (ENCR1)
+            a: chatEncrypted ? ['mark_read'] : ['mark_read', 'reply'], // an encrypted chat signs mark_read only; its Reply goes through the app's signed-in send path, never this token
             e: Math.floor(Date.now() / 1000) + ACTION_TTL_SECONDS,
           }, actionKey),
           action_url: actionUrl,

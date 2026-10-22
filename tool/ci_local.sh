@@ -15,6 +15,8 @@
 # Each job stops at its first failing step; both jobs always run.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# Create the bind-mounted caches as the user, before any docker call, so Docker never makes them root-owned.
+mkdir -p .ci-cache/pub .ci-cache/gradle .ci-cache/m2
 
 export LOCAL_UID="${LOCAL_UID:-$(id -u)}" LOCAL_GID="${LOCAL_GID:-$(id -g)}"
 CI=(docker compose -f compose.yaml -f .github/compose.ci.yaml)
@@ -74,7 +76,6 @@ integration() {
 }
 
 job_android() {
-  step "Prepare cache directories" mkdir -p .ci-cache/pub .ci-cache/gradle .ci-cache/m2 || return 1
   step "Build development image" "${CI[@]}" build || return 1
   step "Resolve dependencies" "${CI[@]}" run --rm flutter flutter pub get || return 1
   step "Layer rules" layer_rules || return 1
@@ -95,7 +96,6 @@ job_database() {
   step "Lint database" docker compose run --rm supabase db lint --level error || return 1
   step "Test database" docker compose run --rm supabase test db || return 1
   step "Edge function tests" edge_tests || return 1
-  step "Prepare cache directories" mkdir -p .ci-cache/pub .ci-cache/gradle || return 1
   step "Build development image" "${CI[@]}" build flutter || return 1
   step "Build the Rust library for the Dart tests" "${CI[@]}" run --rm flutter cargo build --release --manifest-path rust/Cargo.toml || return 1
   step "Wait until Realtime delivers" "${CI[@]}" run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart || return 1

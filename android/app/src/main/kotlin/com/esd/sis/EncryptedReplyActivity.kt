@@ -1,7 +1,10 @@
 package com.esd.sis
 
 import android.app.Activity
+import android.app.KeyguardManager
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.RemoteInput
@@ -29,6 +32,12 @@ class EncryptedReplyActivity : Activity() {
         setIntent(Intent())
 
         if (conversationId.isNullOrBlank() || userId.isNullOrBlank() || replyText.isNullOrBlank() || replyText.length > EncryptedReplyInbox.MAX_TEXT) {
+            finish()
+            return
+        }
+
+        // Below API 31 the system cannot hold a Reply behind the unlock: refused while the phone is locked (same guard as NotificationActionReceiver).
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && (getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isDeviceLocked) {
             finish()
             return
         }

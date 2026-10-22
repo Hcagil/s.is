@@ -212,7 +212,7 @@ abstract interface class SendQueueStore {
   /// The records saved for [userId], oldest first; those whose file or video is gone from the phone are left out. Never throws: unreadable -> empty.
   Future<List<QueuedRecord>> load(String userId);
 
-  /// Replaces what is saved for [userId]. Never throws.
+  /// Replaces what is saved for [userId]. Throws StoreWriteException (message_store.dart) when the write still fails after its retries; the queue in memory stays the live copy, so the caller saves again on its next change.
   Future<void> save(String userId, List<QueuedRecord> records);
 
   /// Forgets everything saved for every member (sign-out).

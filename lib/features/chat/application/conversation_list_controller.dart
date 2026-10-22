@@ -186,7 +186,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   void _persist(Message message) {
     final store = _storeOf(ref);
     if (store == null) return;
-    unawaited(
+    storeWrite(
       message.deletion == MessageDeletion.vanished
           ? store.remove(message.id)
           : store.upsertAll([message]),
@@ -208,7 +208,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     unawaited(
       store.conversationIds().then((stored) {
         for (final id in {...before, ...stored}.difference(now)) {
-          unawaited(store.deleteConversation(id));
+          storeWrite(store.deleteConversation(id));
         }
       }),
     );

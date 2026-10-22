@@ -313,7 +313,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     // meanwhile (merged above) are part of the page, so they are kept.
     final pageStore = _storeOf(ref);
     if (pageStore != null) {
-      unawaited(
+      storeWrite(
         pageStore.reconcilePage(conversationId, [
           for (final m in shown)
             if (value.isNotEmpty &&
@@ -365,12 +365,12 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     final keep = <Message>[];
     for (final m in list) {
       if (m.deletion == MessageDeletion.vanished) {
-        unawaited(store.remove(m.id));
+        storeWrite(store.remove(m.id));
       } else {
         keep.add(m);
       }
     }
-    if (keep.isNotEmpty) unawaited(store.upsertAll(keep));
+    if (keep.isNotEmpty) storeWrite(store.upsertAll(keep));
   }
 
   /// An older page, from the phone, when it provably holds it: no gap between
@@ -534,7 +534,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     if (epoch != _epoch) return; // rebuilt meanwhile: the new build owns this
     if (local == null && result is Ok<List<Message>>) {
       _persist(result.value);
-      unawaited(_extendStored(conversationId, oldest, result.value));
+      storeWrite(_extendStored(conversationId, oldest, result.value));
     }
     ref.read(olderLoadingProvider.notifier).set(false);
     _loadingOlder = false;
@@ -816,7 +816,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       final store = _storeOf(ref);
       // The opener must not bring the hidden row back from its waiting list.
       ref.read(messageOpenerProvider).forget(message.id);
-      if (store != null) unawaited(store.remove(message.id));
+      if (store != null) storeWrite(store.remove(message.id));
     }
     if (result is Err && ref.mounted) {
       final now = state.value;

@@ -9,10 +9,12 @@ import '../../auth/domain/session_state.dart';
 import '../domain/file_attachment.dart';
 import '../domain/link_preview.dart';
 import '../domain/message.dart';
+import '../domain/message_store.dart' show StoreWriteException;
 import '../domain/send_queue_store.dart';
 import '../domain/shared_location.dart';
 import '../domain/video.dart';
 import 'chat_controllers.dart';
+import 'store_write.dart';
 import 'text_locker.dart';
 
 /// One conversation's composer state kept while it is off screen: the typed
@@ -500,7 +502,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
   }
 
   /// Saves everything still queued so the app being killed loses nothing.
-  void _persist() => unawaited(_persistNow());
+  void _persist() => storeWrite(_persistNow());
 
   /// Like [_persist] but completes when the queue is saved (a locked text needs its queue row to exist before its ciphertext is stored on it).
   Future<void> _persistNow() async {
@@ -806,8 +808,17 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
   ) async {
     final text = item.body.trim();
     if (!isSendableBody(text)) return const Err(DeniedFailure());
-    // The queue row must exist before the ciphertext is stored on it.
-    await _persistNow();
+    // The queue row must exist before the ciphertext is stored on it; when it cannot be saved the text is not sent now (a retryable failure: the queue keeps it and tries again).
+    try {
+      await _persistNow();
+    } on StoreWriteException {
+      return const Err(
+        NetworkFailure(
+          'Could not save the message on this phone.',
+          retryable: true,
+        ),
+      );
+    }
     if (!ref.mounted) return const Err(DeniedFailure());
     final lock = await ref
         .read(textLockerProvider)

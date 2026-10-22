@@ -198,7 +198,7 @@ async function send(id: string): Promise<void> {
             u: t.user_id,
             c: t.conversation_id,
             d: await sha256Hex(t.token),
-            a: t.encrypted ? ['mark_read'] : ['mark_read', 'reply'], // an encrypted chat is never replied to from the notification
+            a: ['mark_read', 'reply'], // an encrypted chat signs reply too: its Reply never calls the function (the app sends it through its own encrypted queue); notification_action still refuses a plain reply into an encrypted chat (ENCR1)
             e: Math.floor(Date.now() / 1000) + ACTION_TTL_SECONDS,
           }, actionKey),
           action_url: actionUrl,
@@ -263,11 +263,11 @@ async function send(id: string): Promise<void> {
                         'thread-id': t.conversation_id,
                         // The buttons AppDelegate.swift registers for this
                         // category; an older build has none and shows none.
-                        // SIS_MESSAGE_LOCKED has no Reply (the text cannot be typed into an encrypted chat).
+                        // SIS_MESSAGE_LOCKED has only a foreground Reply (AppDelegate.swift hands the text to the app, which locks and sends it); no Mark as read.
                         category: t.encrypted ? 'SIS_MESSAGE_LOCKED' : 'SIS_MESSAGE',
                         sound: 'default',
-                        // Runs the iPhone's notification service extension: it fetches the picture, or decrypts ct into the real text.
-                        ...(thumbUrl || withCt ? { 'mutable-content': 1 } : {}),
+                        // Runs the iPhone's notification service extension: it fetches the picture, decrypts ct into the real text, or sets the one locked text of an encrypted chat.
+                        ...(thumbUrl || withCt || t.encrypted ? { 'mutable-content': 1 } : {}),
                         ...(badge != null ? { badge } : {}),
                       },
                     },

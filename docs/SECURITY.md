@@ -424,6 +424,19 @@ fields, and as an iPhone's alert title and body) under the "Name and message"
 and "Only who it is from" settings; "No details" carries neither (DECISIONS
 2026-10-01).
 
+A private (encrypted) chat's push is different. Its `body` is only the
+placeholder. Only when the recipient's preview is "Name and message" does it also
+carry the ciphertext (`ct`, base64) and `ot` (0 or 1), and only if the whole FCM
+message fits the byte budget (else it is resent once without `ct`). FCM and APNs
+see ciphertext, never the text; the text is opened on the phone (Android: a
+read-only peek in a short-lived engine; iPhone: the notification service
+extension), which never saves a ratchet step. `ct` and FCM response bodies are
+never logged, and no session id rides in the push. What the phone shows when it
+cannot open the text is one locked text, identical on both platforms: "🔒 New
+message" (Turkish "🔒 Yeni mesaj"); Android takes it from `notification_locked`,
+the iPhone extension sets it for every encrypted push (mutable-content is set for
+them all).
+
 ### Notification buttons (Mark as read, Reply)
 
 A notification's buttons run where no Supabase session exists (the Android
@@ -454,6 +467,8 @@ signs a short-lived action token into the push and `notification-action`
 - A request over 20000 bytes or a reply over 4000 characters is refused (400)
   before the database; every refused ticket is 403, a missing token 400.
 - Lock-screen Reply: decided 2026-10-06 (owner). Reply requires an unlocked phone on Android 12+ (the system enforces it, `setAuthenticationRequired`) and iOS. On Android 11 and older (API below 31) the system cannot enforce it, so a notification drawn natively (`InstantPush`) omits Reply whenever the phone has a secure lock (`KeyguardManager.isDeviceSecure`), locked or not; the check is made when the notification is drawn, so a lock set afterwards applies from the next one. Mark as read stays on every version. Limit: on those versions a phone with a PIN, pattern or password loses Reply in the shade too, because the app cannot tell when the phone locks; a phone with no secure lock (no PIN, pattern or password) keeps Reply below API 31. As a second guard, `NotificationActionReceiver` refuses a Reply on API below 31 while `KeyguardManager.isDeviceLocked` is true (nothing is sent, the "not sent" line shows), which covers a notification drawn by an older build or before a lock was set (finding L1) (the screen-off and user-present broadcasts cannot be declared in the manifest, and a lock-screen-only version of the notification does not hold when the user shows all content on the lock screen). Native `InstantPush` is the only drawer of chat notifications on Android; the Dart handler only keeps the delivery receipt. Therefore, on Android 12+, Reply is behind the unlock for every push, high-priority ones included; there is no Dart-drawn Reply and no `sis.reply_offered` preference. The Android receiver draws on one background thread under `goAsync`, so pacing never blocks the main thread. iOS buttons are drawn by `AppDelegate.swift` (Reply carries `.authenticationRequired`); the Dart side adds no iOS buttons.
+
+  Private (encrypted) chats (I2): the action token of an encrypted push signs `mark_read` and `reply`, but the notification Reply of a private chat never calls `notification-action`, and `notification_action` still refuses a plain reply into an encrypted chat (42501; a direct plain insert gets ENCR1 from the trigger). It is a different button: on Android `InstantPush.addEncryptedReply` offers Reply only (no Mark as read), with `setAuthenticationRequired(true)` and the same API-below-31 rule as above. Its `PendingIntent.getActivity` targets `EncryptedReplyActivity` by explicit component (`exported=false`, no UI, not in recents); only that intent is `FLAG_MUTABLE` (the system fills in the typed text). The activity reads the text, drops the intent (`setIntent(Intent())`, finish, noHistory), makes the message id at tap time, keeps `{id, chat, member, text}` in memory only (`EncryptedReplyInbox`, never disk, prefs or log, lost if the process dies) and opens SIS. On iPhone the `SIS_MESSAGE_LOCKED` category has a `UNTextInputNotificationAction` with `.authenticationRequired` and `.foreground`; `AppDelegate.swift` keeps the text in memory the same way. Dart then takes it (channel `sis/encrypted_reply`) and calls the normal send queue, which locks the text on the phone and never sends it plain when locking fails. A reply whose member is not the signed-in member is dropped. Nothing is ever encrypted in a receiver, an extension or a background isolate: an unsaved ratchet step would reuse a message key.
 
 ### Notification picture link
 
@@ -690,7 +705,9 @@ when a collaborator leaves or a dependency is suspected compromised.
 - First-message gap, open until step 7 (security codes): the first message of a chat is sent in plain text when the peer has published no keys (the key lookup returns nothing). A malicious server that withholds the peer's keys can cause this. Any lookup error blocks the send instead of sending plain. There is no "not encrypted" label yet (steps 7 and 9).
 - Plain until step 6: places, polls, contacts, photos and other media with captions, stickers and voice. The link-card picture is not uploaded in a locked chat.
 - The send queue lives in the encrypted on-phone store, with the ciphertext of a locked text, so a retry sends the same bytes.
-- Notifications (4a): the push carries `encrypted: true`. Android shows "🔒 New message" (Turkish "🔒 Yeni mesaj") with the sender's name, and no Reply or Mark as read button. iPhone gets category `SIS_MESSAGE_LOCKED`, registered with no actions. Decrypted notification text and a locked Reply come in step 4b.
+- Notifications: the push carries `encrypted: true`; the locked text is "🔒 New message" (Turkish "🔒 Yeni mesaj") on both platforms, with the sender's name. No Mark as read button. Reply is offered (see "Notification buttons", I2).
+- Notification residue (M5): once the real text is shown it is in the system's hands. Android: a notification listener app, a watch or other wearable, and the notification history (Android 11+) can read or keep it; the lock screen shows only the locked public version (`setPublicVersion`) unless the member chose to show all content, and the app itself writes the text only to memory (never `PushInbox` or SharedPreferences). iPhone: delivered notifications keep the text in the system's notification store until dismissed or cleared by reading the chat, and an Apple Watch or a connected device mirrors it. The member's "Name and message" setting is the switch: any other setting keeps the text out of the push, so none of this applies.
+- iPhone: the push carries category `SIS_MESSAGE_LOCKED` (a foreground Reply only).
 - On the phone, an opened text is stored once. The store's upsert is one atomic statement, so a live row never replaces a deleted one. A hidden or vanished message is dropped from the opener's waiting list, so it cannot come back.
 
 ## Runbook

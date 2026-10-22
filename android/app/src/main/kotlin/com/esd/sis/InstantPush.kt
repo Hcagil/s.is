@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.AudioAttributes
@@ -201,6 +202,17 @@ object InstantPush {
     /** Whether the Reply button is drawn. API 31+ enforces unlock itself (setAuthenticationRequired); below that nothing can, so a phone with a secure lock gets no Reply at all (Mark as read stays). */
     fun replyOffered(sdk: Int, deviceSecure: Boolean): Boolean = sdk >= Build.VERSION_CODES.S || !deviceSecure
 
+    /** The Reply button of a PRIVATE (encrypted) chat's notification. It opens EncryptedReplyActivity (PendingIntent.getActivity, explicit component, exported=false), which hands the typed text to the app in memory; nothing is encrypted or sent here. Mutable only because the system fills in the typed text. Same unlock rule as the plain Reply. Mark as read is not offered. */
+    fun addEncryptedReply(context: Context, builder: NotificationCompat.Builder, conversationId: String, userId: String, id: Int) {
+        if (!replyOffered(Build.VERSION.SDK_INT, (context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isDeviceSecure)) return
+        val open = Intent(context, EncryptedReplyActivity::class.java)
+            .setData(Uri.parse("sis-action://encrypted-reply/" + conversationId))
+            .putExtra(EncryptedReplyActivity.EXTRA_CONVERSATION, conversationId)
+            .putExtra(EncryptedReplyActivity.EXTRA_USER, userId)
+        val reply = PendingIntent.getActivity(context, id, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+        builder.addAction(NotificationCompat.Action.Builder(0, context.getString(R.string.action_reply), reply).setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).setShowsUserInterface(true).setAuthenticationRequired(true).addRemoteInput(androidx.core.app.RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY).setLabel(context.getString(R.string.action_reply_hint)).build()).build())
+    }
+
     /** The two buttons (Mark as read, Reply with a text box) for a chat's notification. The request code is the notification id; the intents differ by data, so chats and buttons never share a PendingIntent. The reply one is mutable because the system fills in the typed text. */
     fun addActions(context: Context, builder: NotificationCompat.Builder, conversationId: String, id: Int, token: String, url: String) {
         val read = PendingIntent.getBroadcast(context, id, NotificationActionReceiver.intentFor(context, conversationId, token, url, false), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -285,7 +297,7 @@ object InstantPush {
             val conversationId = extras.getString("conversation_id")
             val title = extras.getString("title")
             val locked = extras.getString("encrypted") == "true"
-            // An encrypted chat shows no text and offers no Reply: the server body is only a placeholder.
+            // An encrypted chat shows the peeked text or the locked text (the server body is only a placeholder); its Reply goes to the app, see addEncryptedReply.
             val lockedText = context.getString(R.string.notification_locked)
             val text = if (locked) lockedText else extras.getString("body")
             val hasFields = conversationId != null && title != null && text != null
@@ -421,6 +433,9 @@ object InstantPush {
                     val token = extras.getString("action_token")
                     val url = extras.getString("action_url")
                     if (!locked && !token.isNullOrEmpty() && url != null && url.startsWith("https://")) addActions(context, this, conversationId, id, token, url)
+                    // A private chat: Reply only, handed to the app (never the function, never encrypted here).
+                    val userId = extras.getString("user_id")
+                    if (locked && !userId.isNullOrEmpty()) addEncryptedReply(context, this, conversationId, userId, id)
                 }
                 .build()
 

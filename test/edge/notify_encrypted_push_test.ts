@@ -232,7 +232,7 @@ for (const preview of ['sender', 'none'] as const) {
   });
 }
 
-test('action token: an encrypted chat signs only mark_read; a plain chat mark_read and reply', async () => {
+test('action token: an encrypted chat and a plain chat both sign mark_read and reply', async () => {
   const eve = await person('eve');
   const plainConv = await chatWith(eve);
   await deliver(await send(plainConv, null));
@@ -246,7 +246,7 @@ test('action token: an encrypted chat signs only mark_read; a plain chat mark_re
   assertEquals(attempts.length, 1);
   const enc = await verifyActionToken(data(attempts[0]).action_token, serviceKey);
   assert(enc, 'the encrypted token verifies');
-  assertEquals(enc.a, ['mark_read'], 'encrypted chat: mark_read only');
+  assertEquals(enc.a, ['mark_read', 'reply'], 'encrypted chat: mark_read and reply (Group I)');
   assertEquals([enc.u, enc.c], [fay.id, data(attempts[0]).conversation_id]);
 });
 
@@ -270,18 +270,28 @@ test('iPhone, preview full: ct and ot travel and the apns block is the locked on
 
 const apsOf = (a: Attempt) => (a.message.apns as { payload: { aps: Record<string, unknown> } }).payload.aps;
 
-test('iPhone, preview sender: no ct, so no mutable-content', async () => {
+test('iPhone, preview sender: no ct, still mutable-content (the extension draws the locked text)', async () => {
   const p = await person('ivys', { platform: 'ios', preview: 'sender' });
   await deliver(await send(await chatWith(p), cipher(50), 1));
   assertEquals(attempts.length, 1);
   assertEquals(data(attempts[0]).encrypted, 'true', 'fixture: an encrypted push');
   assert(!('ct' in data(attempts[0])), 'fixture: no ct');
-  assert(!('mutable-content' in apsOf(attempts[0])), `no mutable-content: ${attempts[0].raw}`);
+  assertEquals(apsOf(attempts[0])['mutable-content'], 1, `mutable-content: ${attempts[0].raw}`);
+  assertEquals(apsOf(attempts[0]).category, 'SIS_MESSAGE_LOCKED');
+});
+
+test('iPhone, preview none: no ct, still mutable-content and the locked category', async () => {
+  const p = await person('ivyn', { platform: 'ios', preview: 'none' });
+  await deliver(await send(await chatWith(p), cipher(50), 1));
+  assertEquals(attempts.length, 1);
+  assert(!('ct' in data(attempts[0])), 'fixture: no ct');
+  assertEquals(apsOf(attempts[0])['mutable-content'], 1, `mutable-content: ${attempts[0].raw}`);
+  assertEquals(apsOf(attempts[0]).category, 'SIS_MESSAGE_LOCKED');
 });
 
 // The budget. ct and ot add exactly `,"ct":"<n>"` + `,"ot":"1"` = n + 17
-// bytes, and on an iPhone `"mutable-content":1,` (20 bytes) comes and goes
-// with ct. One calibration send gives the size of the rest; each probe is a
+// bytes; on an iPhone `"mutable-content":1,` stays on every encrypted push
+// (Group I), with or without ct, so it is part of the rest. One calibration send gives the size of the rest; each probe is a
 // fresh recipient, so the badge (1) and every id keep their lengths. "The
 // message" is read as the whole request body FCM receives,
 // {"message":{...}} in compact JSON, UTF-8 (the `message` object alone is 12
@@ -314,7 +324,7 @@ async function longestKept(platform: 'android' | 'ios' = 'android') {
 }
 
 for (const platform of ['android', 'ios'] as const) {
-  const withCt = platform === 'ios' ? 17 + 20 : 17; // bytes ct (beyond its chars), ot and mutable-content add
+  const withCt = 17; // bytes ct (beyond its chars) and ot add; mutable-content stays either way
   test(`budget (${platform}): a request of exactly 3500 bytes keeps ct and ot`, async () => {
     const base = await calibrate(platform);
     const { a, ct } = await probe(3500 - base, platform);
@@ -330,7 +340,7 @@ for (const platform of ['android', 'ios'] as const) {
     assert(!('ct' in d) && !('ot' in d), `at 3501 bytes neither ct nor ot: ${Object.keys(d)}`);
     assert(!a.raw.includes(ct), 'the ciphertext is nowhere in the push');
     assertEquals(d.encrypted, 'true');
-    if (platform === 'ios') assert(!('mutable-content' in apsOf(a)), `ct dropped: no mutable-content: ${a.raw}`);
+    if (platform === 'ios') assertEquals(apsOf(a)['mutable-content'], 1, `ct dropped, mutable-content stays: ${a.raw}`);
     assertEquals(bytes(a.raw) + ct.length + withCt, 3501, 'fixture: with ct it would be 3501');
   });
 }
@@ -404,6 +414,17 @@ test('400 too big twice: no third send, the push is not counted as sent, and not
   const everything = [r.text, ...r.errors, ...r.lines].join('\n');
   assert(/sent 0 of 1/.test(everything) || r.errors.length > 0, `the failure was not reported: ${everything}`);
   assert(!everything.includes(ct) && !everything.includes('FCMBODYMARK'), `secret in logs: ${everything}`);
+});
+
+test('iPhone 400 too big: the resend without ct keeps mutable-content and the locked category', async () => {
+  const p = await person('bigios', { platform: 'ios' });
+  answers.push(tooBig('Message is too big'));
+  await deliver(await send(await chatWith(p), cipher(200), 1));
+  answers.length = 0;
+  assertEquals(attempts.length, 2, `the refused send and one resend: ${attempts.length}`);
+  assert('ct' in data(attempts[0]) && !('ct' in data(attempts[1])), 'fixture: the resend dropped ct');
+  assertEquals(apsOf(attempts[1])['mutable-content'], 1, `resend: mutable-content: ${attempts[1].raw}`);
+  assertEquals(apsOf(attempts[1]).category, 'SIS_MESSAGE_LOCKED');
 });
 
 test('400 too big on a push without ct (preview sender): no resend', async () => {

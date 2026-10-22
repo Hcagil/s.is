@@ -118,8 +118,8 @@ async function checkActions(message: Record<string, unknown>) {
     u: data.user_id,
     c: data.conversation_id,
     d: await sha256Hex(String(m.token)),
-    // 4b: an encrypted chat has no inline reply, so its token signs mark_read only.
-    a: data.encrypted === 'true' ? ['mark_read'] : ['mark_read', 'reply'],
+    // 4b Group I: an encrypted chat has Reply too (the app sends it locked), so every token signs both.
+    a: ['mark_read', 'reply'],
     e: 0,
   }, `the token names this recipient, chat and device: ${raw}`);
   assert(Math.abs(claims.e - (now + ACTION_TTL_SECONDS)) <= 60, `expires in an hour: ${claims.e}`);
@@ -1365,6 +1365,7 @@ Deno.test({
         assert(!JSON.stringify({ ...sent[0].message, data: rest }).includes('QUFBQUFB'),
           `${x.name}: the ciphertext appears only as data.ct: ${raw}`);
         if (x === ios) assertEquals(aps.category, 'SIS_MESSAGE_LOCKED', `iPhone: the locked category: ${raw}`);
+        if (x === ios) assertEquals(aps['mutable-content'], 1, `iPhone: mutable-content on an encrypted push: ${raw}`);
       }
     } finally {
       await sql.begin(async (tx) => {

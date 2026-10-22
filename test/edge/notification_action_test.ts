@@ -16,6 +16,7 @@ import {
   type ActionClaims,
   sha256Hex,
   signActionToken,
+  verifyActionToken,
 } from '../../supabase/functions/_shared/action_token.ts';
 
 const apiUrl = Deno.env.get('SUPABASE_TEST_URL') ?? 'http://host.docker.internal:54321';
@@ -367,6 +368,43 @@ Deno.test({
     const [{ claims, me }] = await sql`select coalesce(current_setting('request.jwt.claims', true), '') as claims,
                                               auth.uid() as me`;
     assertEquals([claims, me], ['', null], 'nothing of ann is left on the connection');
+  },
+});
+
+// Group I: an encrypted push now signs reply too (the app sends the typed text
+// locked). The server must still refuse a plain reply into that chat: the
+// ticket from a real encrypted push, a valid reply, 403 and nothing stored.
+Deno.test({
+  ...opts,
+  name: 'encrypted chat: the real push ticket signs reply, but a plain reply is refused (42501) and not stored',
+  fn: async () => {
+    const key = async (s: string, alg = 'SHA-256') =>
+      btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest(alg, new TextEncoder().encode(s)))))
+        .replace(/=+$/, '');
+    for (const x of [p.bob, p.ann]) {
+      const [i, sk, g, o, f] = await Promise.all([key(`${x.email}I`), key(`${x.email}S`), key(x.email, 'SHA-512'),
+        key(`${x.email}1`), key(`${x.email}F`)]);
+      await as(x.id, x.email, x.session, (tx) => tx`select public.publish_olm_keys(${i}, ${sk}, ${g}, ${[o]}::text[], ${f})`);
+    }
+    const [{ id: dm }] = await as(p.bob.id, p.bob.email, p.bob.session,
+      (tx) => tx`select public.start_direct_conversation(${p.ann.id}) as id`);
+    const [{ id: msg }] = await as(p.bob.id, p.bob.email, p.bob.session,
+      (tx) => tx`insert into public.messages(conversation_id, sender_id, body, ciphertext, olm_type)
+                 values (${dm}, ${p.bob.id}, '🔒 Encrypted message', 'QUFBQUFB', 1) returning id`);
+    await deliver(msg);
+    const toAnn = sent.find((m) => m.token === p.ann.token);
+    assert(toAnn, `ann was sent a push: ${JSON.stringify(sent)}`);
+    const data = toAnn.data as Record<string, string>;
+    assertEquals(data.encrypted, 'true', 'fixture: an encrypted push');
+    const claims = await verifyActionToken(data.action_token, serviceKey);
+    assertEquals(claims?.a, ['mark_read', 'reply'], 'the encrypted push signs reply');
+
+    const replyId = crypto.randomUUID();
+    assertEquals(await post({ token: data.action_token, conversation_id: dm, action: 'reply', id: replyId, body: 'plain words' }),
+      403, 'a plain reply into an encrypted chat is refused');
+    assertEquals((await sql`select count(*)::int as n from public.messages where id = ${replyId}`)[0].n, 0, 'nothing stored');
+    assertEquals(await post({ token: data.action_token, conversation_id: dm, action: 'mark_read' }), 200,
+      'control: the same ticket marks the chat read');
   },
 });
 

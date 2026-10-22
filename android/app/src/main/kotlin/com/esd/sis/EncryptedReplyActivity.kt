@@ -36,8 +36,9 @@ class EncryptedReplyActivity : Activity() {
             return
         }
 
-        // Below API 31 the system cannot hold a Reply behind the unlock: refused while the phone is locked (same guard as NotificationActionReceiver).
+        // Below API 31 the system cannot hold a Reply behind the unlock: refused while the phone is locked, nothing is kept or sent, and the existing "not sent" line shows (same guard as NotificationActionReceiver).
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && (getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isDeviceLocked) {
+            NotificationActionReceiver().afterAction(this, conversationId, true, null, false)
             finish()
             return
         }

@@ -82,7 +82,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         afterAction(context, conversationId, reply, text, result == ActionResult.DONE)
     }
 
-    private fun afterAction(context: Context, conversationId: String, reply: Boolean, text: String?, done: Boolean) {
+    internal fun afterAction(context: Context, conversationId: String, reply: Boolean, text: String?, done: Boolean) {
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val owner = prefs.getString("flutter.sis.push_inbox_owner", null) ?: return
         val key = "flutter.sis.push_inbox.$owner"
@@ -96,7 +96,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
             if (chat == null) {
                 manager.cancel(id)
             } else {
-                showLine(context, chat, id, conversationId, context.getString(R.string.action_not_sent) + ": " + text, failed = true)
+                showLine(context, chat, id, conversationId, context.getString(R.string.action_not_sent) + (if (text != null) ": " + text else ""), failed = true)
             }
             return
         }

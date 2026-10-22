@@ -29,6 +29,7 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLooper
 import java.io.File
 import java.util.UUID
 
@@ -315,6 +316,74 @@ class EncryptedReplyTest {
         val a = launch(handIntent("c-er-31lock", OWNER, SECRET))
         assertEquals(SECRET, EncryptedReplyInbox.take().single()["text"])
         assertEquals(MainActivity::class.java.name, shadowOf(a).nextStartedActivity?.component?.className)
+    }
+
+    // ---- Group J: a locked Reply dropped below Android 12 says so ----
+
+    /** The text lines the chat's notification shows now (MessagingStyle, else the plain text). */
+    private fun linesOf(chat: String): List<String>? {
+        val n = shadowOf(manager).getNotification(InstantPush.notificationId(chat)) ?: return null
+        return NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)
+            ?.messages?.map { it.text.toString() }
+            ?: listOf(n.extras.getCharSequence(NotificationCompat.EXTRA_TEXT).toString())
+    }
+
+    /** Every string the chat's notification carries (extras and action titles), to look for the typed text. */
+    private fun everythingIn(chat: String): String {
+        val n = shadowOf(manager).getNotification(InstantPush.notificationId(chat)) ?: return ""
+        return n.extras.toString() + linesOf(chat).orEmpty() + n.tickerText + titles(n)
+    }
+
+    private fun waitForLines(chat: String, check: (List<String>) -> Boolean): List<String> {
+        val until = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < until) {
+            ShadowLooper.idleMainLooper()
+            linesOf(chat)?.let { if (check(it)) return it }
+            Thread.sleep(25)
+        }
+        throw AssertionError("timed out; the notification shows: ${linesOf(chat)}")
+    }
+
+    @Test
+    @Config(sdk = [30])
+    fun `API 30 locked - the dropped Reply replaces the notification with Not sent, without the typed text`() {
+        val chat = "c-er-30ns"
+        val n = draw(chat)
+        locked(true)
+        val a = launch(replyIntent(n, SECRET))
+        assertEquals("nothing in the inbox", emptyList<Map<String, String>>(), EncryptedReplyInbox.take())
+        assertNull("no MainActivity", shadowOf(a).nextStartedActivity)
+        val lines = waitForLines(chat) { l -> l.any { it.contains(app.getString(R.string.action_not_sent)) } }
+        assertTrue("a Not sent line: $lines", lines.any { it.contains("Not sent") })
+        assertFalse("the typed text is not on the notification: ${everythingIn(chat)}", everythingIn(chat).contains(SECRET))
+    }
+
+    @Test
+    @Config(sdk = [30])
+    fun `API 30 unlocked - a Reply is taken, no Not sent line`() {
+        val chat = "c-er-30ok"
+        val a = launch(replyIntent(draw(chat), SECRET))
+        assertEquals(SECRET, EncryptedReplyInbox.take().single()["text"])
+        assertEquals(MainActivity::class.java.name, shadowOf(a).nextStartedActivity?.component?.className)
+        ShadowLooper.idleMainLooper()
+        Thread.sleep(300)
+        ShadowLooper.idleMainLooper()
+        assertFalse("no Not sent: ${linesOf(chat)}", linesOf(chat).orEmpty().any { it.contains("Not sent") })
+    }
+
+    @Test
+    @Config(sdk = [31])
+    fun `API 31 locked - a Reply is taken, no Not sent line`() {
+        val chat = "c-er-31ok"
+        val n = draw(chat)
+        locked(true)
+        val a = launch(replyIntent(n, SECRET))
+        assertEquals(SECRET, EncryptedReplyInbox.take().single()["text"])
+        assertEquals(MainActivity::class.java.name, shadowOf(a).nextStartedActivity?.component?.className)
+        ShadowLooper.idleMainLooper()
+        Thread.sleep(300)
+        ShadowLooper.idleMainLooper()
+        assertFalse("no Not sent: ${linesOf(chat)}", linesOf(chat).orEmpty().any { it.contains("Not sent") })
     }
 
     @Test

@@ -371,12 +371,13 @@ Deno.test({
   },
 });
 
-// Group I: an encrypted push now signs reply too (the app sends the typed text
-// locked). The server must still refuse a plain reply into that chat: the
-// ticket from a real encrypted push, a valid reply, 403 and nothing stored.
+// Group J: the real push of an encrypted chat signs mark_read only, so its
+// ticket cannot reply at all. The server must still refuse a plain reply into
+// that chat even with a ticket that does sign reply (one minted before Group J,
+// valid for up to an hour): the database refuses it (42501), nothing stored.
 Deno.test({
   ...opts,
-  name: 'encrypted chat: the real push ticket signs reply, but a plain reply is refused (42501) and not stored',
+  name: 'encrypted chat: the real push ticket signs mark_read only; a reply-signing ticket is still refused (42501), nothing stored',
   fn: async () => {
     const key = async (s: string, alg = 'SHA-256') =>
       btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest(alg, new TextEncoder().encode(s)))))
@@ -397,11 +398,24 @@ Deno.test({
     const data = toAnn.data as Record<string, string>;
     assertEquals(data.encrypted, 'true', 'fixture: an encrypted push');
     const claims = await verifyActionToken(data.action_token, serviceKey);
-    assertEquals(claims?.a, ['mark_read', 'reply'], 'the encrypted push signs reply');
+    assertEquals(claims?.a, ['mark_read'], 'the encrypted push signs mark_read only');
 
     const replyId = crypto.randomUUID();
     assertEquals(await post({ token: data.action_token, conversation_id: dm, action: 'reply', id: replyId, body: 'plain words' }),
-      403, 'a plain reply into an encrypted chat is refused');
+      403, 'the real ticket cannot reply');
+    // A ticket that signs reply for this chat: past the token gate, so only the database can refuse it.
+    const old = await mint(p.ann, { c: dm });
+    const errors: string[] = [];
+    const saved = console.error;
+    console.error = (...a: unknown[]) => errors.push(a.map(String).join(' '));
+    let status: number;
+    try {
+      status = await post({ token: old, conversation_id: dm, action: 'reply', id: replyId, body: 'plain words' });
+    } finally {
+      console.error = saved;
+    }
+    assertEquals(status, 403, 'a plain reply into an encrypted chat is refused');
+    assert(errors.some((l) => l.includes('42501')), `refused by the database (42501): ${JSON.stringify(errors)}`);
     assertEquals((await sql`select count(*)::int as n from public.messages where id = ${replyId}`)[0].n, 0, 'nothing stored');
     assertEquals(await post({ token: data.action_token, conversation_id: dm, action: 'mark_read' }), 200,
       'control: the same ticket marks the chat read');

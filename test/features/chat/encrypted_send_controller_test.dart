@@ -21,6 +21,8 @@ import 'package:sis/features/chat/application/text_locker.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/encrypted_message_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/message_store.dart'
+    show StoreWriteException;
 import 'package:sis/features/crypto/application/key_directory_controller.dart';
 import 'package:sis/features/crypto/domain/key_directory.dart';
 import 'package:sis/features/crypto/domain/session_engine.dart';
@@ -289,6 +291,39 @@ void main() {
       await t.pump(const Duration(seconds: 1));
       await hop(t);
       expect(a.enc.sends.single.id, m.id);
+      expect(a.chat.sent, isEmpty);
+      expect(a.queued('c1'), isEmpty);
+      await t.pump(const Duration(seconds: 30));
+    });
+
+    // Group J: the queue row must be saved before the text is locked. When the
+    // save fails (StoreWriteException) the send is a retryable failure: nothing
+    // leaves, plain or locked, the item stays queued, and a later retry sends it.
+    testWidgets('the queue row cannot be saved: nothing sent (never plain), '
+        'kept queued, sent locked once the store works', (t) async {
+      final store = MemorySendQueueStore()
+        ..saveError = const StoreWriteException();
+      final a = App(store);
+      await hop(t);
+      final m = a.q.enqueue('c1', body: 'not yet');
+      await hop(t);
+      await t.pump(const Duration(seconds: 1));
+      await hop(t);
+      expect(store.failedSaves, greaterThan(0), reason: 'setup: saves failed');
+      expect(a.chat.sent, isEmpty, reason: 'sent PLAIN after a failed save');
+      expect(a.enc.sends, isEmpty, reason: 'sent before its row was saved');
+      expect(a.queued('c1'), [m.id], reason: 'retryable: stays queued');
+      expect(
+        a.c.read(draftsProvider.notifier).consumeFailure('c1'),
+        isNull,
+        reason: 'retryable: not handed back as a failed send',
+      );
+      store.saveError = null;
+      for (var i = 0; i < 6 && a.enc.sends.isEmpty; i++) {
+        await t.pump(const Duration(seconds: 5));
+        await hop(t);
+      }
+      expect(a.enc.sends.single.id, m.id, reason: 'the queue retried');
       expect(a.chat.sent, isEmpty);
       expect(a.queued('c1'), isEmpty);
       await t.pump(const Duration(seconds: 30));

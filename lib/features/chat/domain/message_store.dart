@@ -23,12 +23,22 @@ final class ChangeCursor {
   final String id;
 }
 
+/// A store write failed after its retries. Carries no message on purpose: the SQL error text can hold the row being written (message text, ciphertext).
+final class StoreWriteException implements Exception {
+  const StoreWriteException();
+
+  @override
+  String toString() => 'StoreWriteException';
+}
+
 /// The messages kept on the phone (encrypted at rest), so a chat can show at
 /// once, before the server answers, and be searched on the phone.
 ///
-/// Every method is best-effort and must never throw: the store is a
-/// convenience for the first frame and for search, never the source of truth.
-/// A failed read returns an empty/null value, a failed write is skipped.
+/// Reads never throw: the store is a convenience for the first frame and for
+/// search, never the source of truth. A failed read returns an empty/null
+/// value. A write that still fails after its retries throws
+/// [StoreWriteException] (never silently skipped); a store that is closed,
+/// erased or has no owner skips writes on purpose and does not throw.
 abstract interface class MessageStore {
   /// Newest [limit] stored messages of [conversationId], oldest first.
   Future<List<Message>> newest(String conversationId, {int limit = 50});

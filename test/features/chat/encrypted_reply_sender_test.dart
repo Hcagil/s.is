@@ -16,6 +16,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
+import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/chat_drafts.dart';
@@ -228,6 +229,46 @@ void main() {
       session.set(const Allowed(me));
       await hop(t);
       expect(queued(c).map((m) => m.id), [id1]);
+    });
+
+    // Group J: the sender's own dependency on the signed-in member is what
+    // re-runs it; mounted without SisApp's session watch, as above.
+    Future<ProviderContainer> bare(WidgetTester t, SessionState initial) async {
+      final c = await start(t, initial: initial, sender: false);
+      await t.pumpWidget(
+        UncontrolledProviderScope(container: c, child: const SizedBox()),
+      );
+      c.listen(encryptedReplySenderProvider, (_, _) {});
+      await hop(t);
+      return c;
+    }
+
+    testWidgets('after sign-out it stops taking replies, mounted without '
+        "SisApp's session watch", (t) async {
+      final c = await bare(t, const Allowed(me));
+      intake.arrive(reply());
+      await hop(t);
+      expect(queued(c).map((m) => m.id), [id1], reason: 'setup: signed in');
+      session.set(const SignedOut());
+      await hop(t);
+      final before = intake.takes;
+      intake.arrive(reply(id: id2));
+      await hop(t);
+      expect(intake.takes, before, reason: 'took a reply while signed out');
+      expect(intake.waiting.map((r) => r.id), [id2], reason: 'left waiting');
+    });
+
+    testWidgets('another member signs in: a reply of the first member is '
+        'dropped, the new member\'s is queued', (t) async {
+      final c = await bare(t, const SignedOut());
+      intake.arrive(reply(userId: 'u1'));
+      await hop(t);
+      session.set(const Allowed(Member(userId: 'u7', displayName: 'Zed')));
+      await hop(t);
+      intake.arrive(reply(id: id2, userId: 'u7'));
+      await hop(t);
+      expect(queued(c).map((m) => m.id), [id2]);
+      expect(chat.asked.map((a) => a.id), [id2]);
     });
 
     testWidgets('the same reply delivered twice is queued once', (t) async {

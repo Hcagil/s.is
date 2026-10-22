@@ -204,3 +204,26 @@ pub unsafe extern "C" fn sis_peek_inbound(key: *const u8, key_len: usize, accoun
         finish(inbound.plaintext, message_id, out, out_cap, out_len)
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::guarded;
+
+    // Group H (owed): a panic inside a C API call must come back as code 6, never unwind across the C boundary.
+    #[test]
+    fn a_panic_inside_the_guard_returns_6() {
+        assert_eq!(guarded(|| panic!("boom inside the C API")), 6);
+    }
+
+    #[test]
+    fn a_panic_with_a_non_string_payload_returns_6() {
+        assert_eq!(guarded(|| std::panic::panic_any(42_u8)), 6);
+    }
+
+    #[test]
+    fn without_a_panic_the_code_passes_through() {
+        for code in [0, 1, 2, 3, 4, 5] {
+            assert_eq!(guarded(move || code), code);
+        }
+    }
+}

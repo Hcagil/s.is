@@ -34,8 +34,7 @@ final RegExp _uuid = RegExp(
 /// for another member than the signed-in one is dropped; with nobody signed in
 /// it waits in the host.
 final encryptedReplySenderProvider = Provider<void>((ref) {
-  // Watched so this provider re-runs by itself when a member signs in (the replies wait natively until then).
-  ref.watch(sessionControllerProvider);
+  // currentUserIdProvider follows the session, so watching it re-runs this provider when a member signs in or out (the replies wait natively until then).
   final userId = ref.watch(currentUserIdProvider);
   final intake = ref.read(encryptedReplyIntakeProvider);
 

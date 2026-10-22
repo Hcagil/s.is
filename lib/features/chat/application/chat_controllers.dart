@@ -60,6 +60,7 @@ import '../domain/video_gallery.dart';
 import '../domain/voice.dart';
 import 'chat_drafts.dart';
 import 'message_opener.dart';
+import 'store_write.dart';
 import 'text_locker.dart';
 
 part 'open_conversation.dart';

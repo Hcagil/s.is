@@ -83,6 +83,7 @@ final class DriftSendQueueStore implements SendQueueStore, QueuedCiphertexts {
               );
         }
       }),
+      write: true,
     );
   }
 

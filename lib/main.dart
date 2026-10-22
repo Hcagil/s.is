@@ -28,11 +28,13 @@ import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/application/link_preview_controller.dart';
+import 'features/chat/application/encrypted_reply_controller.dart';
 import 'features/chat/application/share_controller.dart';
 import 'features/chat/application/message_opener.dart';
 import 'features/chat/application/text_locker.dart';
 import 'features/chat/data/external_picker_channel.dart';
 import 'features/chat/data/file_video_importer.dart';
+import 'features/chat/data/method_channel_encrypted_reply.dart';
 import 'features/chat/data/method_channel_share_intake.dart';
 import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/store/drift_chat_list_snapshot_store.dart';
@@ -421,6 +423,9 @@ Future<void> main() async {
             const ExternalPickerChannel(),
           ),
           shareIntakeProvider.overrideWithValue(MethodChannelShareIntake()),
+          encryptedReplyIntakeProvider.overrideWithValue(
+            MethodChannelEncryptedReply(),
+          ),
           sharedVideoImporterProvider.overrideWithValue(
             FileVideoImporter(deviceFiles),
           ),

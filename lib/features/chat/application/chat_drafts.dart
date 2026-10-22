@@ -215,14 +215,21 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
   /// Queues [body] for [conversationId] and returns the pending bubble at
   /// once. Clears the live reply target and that conversation's draft --
   /// a message just sent is no longer a draft -- and starts (or continues)
-  /// draining that conversation's queue.
+  /// draining that conversation's queue. [id] is the message id when the
+  /// caller made it earlier (a notification Reply); a text already queued
+  /// under that id is returned as is, never queued twice.
   Message enqueue(
     String conversationId, {
     required String body,
     Message? replyTo,
     LinkPreviewDraft? preview,
+    String? id,
   }) {
-    final id = randomMessageId();
+    id ??= randomMessageId();
+    final queued = (_queues[conversationId] ?? const <_QueuedSend>[])
+        .where((q) => q.message.id == id)
+        .firstOrNull;
+    if (queued != null) return queued.message;
     final draft = preview == null
         ? null
         : preview.image == null

@@ -25,6 +25,7 @@ private const val TONE_CHANNEL = "sis/tone_picker"
 private const val NETWORK_CHANNEL = "sis/network"
 private const val SPEECH_CHANNEL = "sis/speech"
 private const val SHARE_CHANNEL = "sis/share_intake"
+private const val REPLY_CHANNEL = "sis/encrypted_reply"
 private const val REQUEST_TONE = 9103
 private const val REQUEST_ATTACHMENTS = 9101
 private const val REQUEST_PICTURE = 9102
@@ -53,6 +54,7 @@ class MainActivity : FlutterActivity() {
     private val stickerCutout by lazy { StickerCutout(this) }
     private val shareReader by lazy { ShareIntakeReader(this) }
     private var shareChannel: MethodChannel? = null
+    private var replyChannel: MethodChannel? = null
     private var pendingShare: Map<String, Any?>? = null
     private var shareParsing = false
     private val shareWaiters = mutableListOf<MethodChannel.Result>()
@@ -95,6 +97,10 @@ class MainActivity : FlutterActivity() {
         shareChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARE_CHANNEL).also {
             it.setMethodCallHandler { call, result -> if (call.method == "take") takeShare(result) else result.notImplemented() }
         }
+        // Replies typed into a private-chat notification (EncryptedReplyActivity): Dart takes them and sends them through the encrypted send queue. Memory only.
+        replyChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, REPLY_CHANNEL).also {
+            it.setMethodCallHandler { call, result -> if (call.method == "take") result.success(EncryptedReplyInbox.take()) else result.notImplemented() }
+        }
         shareReader.cleanStale()
         handleShare(intent)
     }
@@ -103,6 +109,7 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleShare(intent)
+        replyChannel?.invokeMethod("arrived", null) // a Reply may have been left in EncryptedReplyInbox just before this launch
     }
 
     // Dart asks for the share that started or reached the app. A parse still

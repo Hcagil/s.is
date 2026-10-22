@@ -69,6 +69,16 @@ final class PickleKey implements PickleKeyStore {
   Future<bool> exists() async =>
       await _read(_storage) != null || await _read(_legacy) != null;
 
+  /// The saved key bytes, or null; never makes or writes one (a notification must not).
+  Future<List<int>?> read() async {
+    final key = await _read(_storage) ?? await _read(_legacy);
+    if (key == null) return null;
+    return List.generate(
+      32,
+      (i) => int.parse(key.substring(i * 2, i * 2 + 2), radix: 16),
+    );
+  }
+
   /// Forgets the key (sign-out): the pickle is unreadable without it.
   @override
   Future<void> delete() async {

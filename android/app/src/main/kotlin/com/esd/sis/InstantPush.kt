@@ -38,6 +38,11 @@ object InstantPush {
     // One draw or picture update of the stored inbox at a time: the late picture (another thread) must not interleave with a newer push's read-modify-write.
     private val drawLock = Any()
 
+    // Real text of peeked encrypted lines by message id: memory only, never the inbox or SharedPreferences; a restarted process shows those lines locked. Guarded by drawLock.
+    private val peekedTexts = object : LinkedHashMap<String, String>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 50
+    }
+
     /** What one notification does once the chat's choices met the defaults (Dart's EffectiveAlert). [tone] null is the system default and is always null when [sound] is off. */
     data class Alert(val sound: Boolean, val tone: String?, val vibration: Boolean)
 
@@ -281,7 +286,8 @@ object InstantPush {
             val title = extras.getString("title")
             val locked = extras.getString("encrypted") == "true"
             // An encrypted chat shows no text and offers no Reply: the server body is only a placeholder.
-            val text = if (locked) context.getString(R.string.notification_locked) else extras.getString("body")
+            val lockedText = context.getString(R.string.notification_locked)
+            val text = if (locked) lockedText else extras.getString("body")
             val hasFields = conversationId != null && title != null && text != null
             val chat = extras.getString("chat")
             val hasNotificationBlock = extras.keySet().any { it.startsWith("gcm.n.") || it.startsWith("gcm.notification.") }
@@ -312,6 +318,9 @@ object InstantPush {
 
             val id = notificationId(conversationId)
 
+            // The inbox below always gets [text] (locked for an encrypted push); the real text only lives in memory.
+            val peeked = if (locked && !redraw) PeekRunner.peek(context, extras)?.also { t -> extras.getString("message_id")?.let { peekedTexts[it] = t } } else null
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 manager.createNotificationChannel(
@@ -332,7 +341,7 @@ object InstantPush {
             // As before the native takeover: a high-priority push (once drawn by Dart) alerts only when the shade has been quiet; any other push always alerted.
             val loud = !redraw && (extras.getString("google.original_priority") != "high" || isLoud())
 
-            val line = body(text, extras.getString("sender"), !chat.isNullOrEmpty())
+            val line = body(peeked ?: text, extras.getString("sender"), !chat.isNullOrEmpty())
             // The unread total the server computed for this member (see the push
             // payload): shown by launchers that print a number on the icon. No
             // permission involved.
@@ -372,7 +381,7 @@ object InstantPush {
                         if (!isGroup && avatar != null) setIcon(IconCompat.createWithBitmap(avatar))
                     }.build()
                 }
-                val message = NotificationCompat.MessagingStyle.Message(l.optString("x"), l.optLong("a"), person)
+                val message = NotificationCompat.MessagingStyle.Message(peekedTexts[l.optString("m")] ?: l.optString("x"), l.optLong("a"), person)
                 // The picture of a photo/video line, once it has been fetched (NotificationPicture): shown by the system inside the message.
                 NotificationPicture.uri(context, l.optString("i"))?.let { message.setData("image/jpeg", it) }
                 style.addMessage(message)
@@ -393,6 +402,20 @@ object InstantPush {
                 .apply { if (entry.optInt("n", 0) > 1) setSubText("${entry.optInt("n")} new messages") }
                 .apply { if (!loud) setSilent(true).setOnlyAlertOnce(true) }
                 .apply { if (badge > 0) setNumber(badge) }
+                .apply {
+                    // With the default lock-screen setting the lock screen shows this locked public version, not the text; a phone set to "show all content" shows the full notification.
+                    if (locked) {
+                        setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                        setPublicVersion(
+                            NotificationCompat.Builder(context, channel)
+                                .setSmallIcon(R.drawable.ic_launcher_monochrome)
+                                .setColor(ContextCompat.getColor(context, R.color.notification_accent))
+                                .setContentTitle(entry.optString("t"))
+                                .setContentText(lockedText)
+                                .build(),
+                        )
+                    }
+                }
                 .apply {
                     // The buttons need the action token the push carried; an older server sends none.
                     val token = extras.getString("action_token")

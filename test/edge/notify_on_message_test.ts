@@ -118,7 +118,8 @@ async function checkActions(message: Record<string, unknown>) {
     u: data.user_id,
     c: data.conversation_id,
     d: await sha256Hex(String(m.token)),
-    a: ['mark_read', 'reply'],
+    // 4b: an encrypted chat has no inline reply, so its token signs mark_read only.
+    a: data.encrypted === 'true' ? ['mark_read'] : ['mark_read', 'reply'],
     e: 0,
   }, `the token names this recipient, chat and device: ${raw}`);
   assert(Math.abs(claims.e - (now + ACTION_TTL_SECONDS)) <= 60, `expires in an hour: ${claims.e}`);
@@ -1357,7 +1358,12 @@ Deno.test({
         const { data, aps, raw } = only();
         assertEquals(sent[0].message.token, x.token);
         assertEquals(data.encrypted, 'true', `${x.name} encrypted: data.encrypted is the string 'true': ${raw}`);
-        assert(!raw.includes('QUFBQUFB'), `${x.name}: the ciphertext never travels in the push: ${raw}`);
+        // 4b: preview full, small message: the ciphertext travels as data.ct
+        // only, never in a visible field.
+        assertEquals([data.ct, data.ot], ['QUFBQUFB', '1'], `${x.name}: ct and ot in data: ${raw}`);
+        const { ct: _ct, ...rest } = data;
+        assert(!JSON.stringify({ ...sent[0].message, data: rest }).includes('QUFBQUFB'),
+          `${x.name}: the ciphertext appears only as data.ct: ${raw}`);
         if (x === ios) assertEquals(aps.category, 'SIS_MESSAGE_LOCKED', `iPhone: the locked category: ${raw}`);
       }
     } finally {

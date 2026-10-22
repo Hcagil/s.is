@@ -41,6 +41,8 @@ import java.util.UUID
  * - EncryptedReplyActivity hands the trimmed text to EncryptedReplyInbox (memory only) under an id made
  *   at that tap, clears its extras, cancels the notification, opens MainActivity on the chat;
  *   anything missing, blank or over 4000 chars: nothing stored, nothing opened;
+ * - below API 31 on a locked phone (isDeviceLocked) the activity stores nothing and opens nothing;
+ *   from API 31 the lock does not block it (the system asks for the unlock);
  * - EncryptedReplyInbox keeps at most 20 (oldest dropped) and take() empties it.
  * Drives the activity with the intent the drawn notification really carries (the seam).
  */
@@ -72,12 +74,16 @@ class EncryptedReplyTest {
         )
         prefs.edit().clear().putString("flutter.sis.push_inbox_owner", OWNER).commit()
         secureLock(false)
+        locked(false)
         InstantPush.resetPacing()
         EncryptedReplyInbox.take()
     }
 
     private fun secureLock(on: Boolean) =
         shadowOf(app.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).setIsDeviceSecure(on)
+
+    private fun locked(on: Boolean) =
+        shadowOf(app.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).setIsDeviceLocked(on)
 
     private fun draw(chat: String, encrypted: String? = "true", user: String? = OWNER): Notification {
         val b = Bundle().apply {
@@ -280,6 +286,35 @@ class EncryptedReplyTest {
             assertNull("$why: nothing started", shadowOf(a).nextStartedActivity)
             assertTrue("$why: finished", a.isFinishing)
         }
+    }
+
+    @Test
+    @Config(sdk = [30])
+    fun `API 30 on a locked phone - a Reply tap stores nothing and opens nothing`() {
+        locked(true)
+        val chat = "c-er-30lock"
+        val a = launch(handIntent(chat, OWNER, SECRET))
+        assertEquals(emptyList<Map<String, String>>(), EncryptedReplyInbox.take())
+        assertNull("nothing started", shadowOf(a).nextStartedActivity)
+        assertTrue("finished", a.isFinishing)
+    }
+
+    @Test
+    @Config(sdk = [30])
+    fun `API 30 unlocked - a Reply tap is stored and opens the chat`() {
+        locked(false)
+        val a = launch(handIntent("c-er-30open", OWNER, SECRET))
+        assertEquals(SECRET, EncryptedReplyInbox.take().single()["text"])
+        assertEquals(MainActivity::class.java.name, shadowOf(a).nextStartedActivity?.component?.className)
+    }
+
+    @Test
+    @Config(sdk = [31])
+    fun `API 31 on a locked phone - the lock does not block the Reply (system auth handles it)`() {
+        locked(true)
+        val a = launch(handIntent("c-er-31lock", OWNER, SECRET))
+        assertEquals(SECRET, EncryptedReplyInbox.take().single()["text"])
+        assertEquals(MainActivity::class.java.name, shadowOf(a).nextStartedActivity?.component?.className)
     }
 
     @Test

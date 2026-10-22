@@ -211,6 +211,25 @@ void main() {
       expect(queued(c).map((m) => m.id), [id1]);
     });
 
+    // Nothing in the tree watches the session: only the sender's own
+    // dependencies can re-run it on sign-in. (The container sits in a scope,
+    // as in production; an unmounted container never flushes the rebuild.)
+    testWidgets('after sign-in the sender picks up by itself, mounted '
+        "without SisApp's session watch", (t) async {
+      final c = await start(t, initial: const SignedOut(), sender: false);
+      await t.pumpWidget(
+        UncontrolledProviderScope(container: c, child: const SizedBox()),
+      );
+      c.listen(encryptedReplySenderProvider, (_, _) {});
+      await hop(t);
+      intake.arrive(reply());
+      await hop(t);
+      expect(intake.takes, 0, reason: 'took replies while signed out');
+      session.set(const Allowed(me));
+      await hop(t);
+      expect(queued(c).map((m) => m.id), [id1]);
+    });
+
     testWidgets('the same reply delivered twice is queued once', (t) async {
       final c = await start(t);
       intake.arrive(reply());

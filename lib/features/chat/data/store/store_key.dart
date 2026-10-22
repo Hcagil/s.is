@@ -30,6 +30,12 @@ final class StoreKey {
     return hex;
   }
 
+  /// The saved key, or null; never makes or writes one (a notification must not).
+  Future<String?> read() async {
+    final key = await _storage.read(key: _name);
+    return key != null && _hex64.hasMatch(key) ? key : null;
+  }
+
   /// Forgets the key (sign-out): the database file is unreadable without it.
   Future<void> delete() => _storage.delete(key: _name);
 }

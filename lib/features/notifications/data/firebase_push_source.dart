@@ -9,6 +9,9 @@ import '../domain/push.dart';
 import 'local_push_display.dart';
 import 'push_receipt_log.dart';
 
+// The Android receiver starts a second Flutter engine at this entry point (PeekRunner.kt); this export keeps its library in the release build, where only code reachable from main and marked vm:entry-point survives.
+export 'push_peek_entry.dart' show peekMain;
+
 /// A push while the app is in the background or closed. Pushes carry data
 /// only (the chat, and the title and body the server worded for this
 /// member's preview setting). On Android InstantPush.kt (started by

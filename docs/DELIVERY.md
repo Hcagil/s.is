@@ -165,7 +165,7 @@ Distribution: a third job, `distribute`, needs `ios` (it runs only when `ios`
 uploaded) and runs on `ubuntu-24.04`, so the wait for Apple's processing
 (5 to 30 minutes) costs no macOS minutes. It calls
 `tool/asc_signing.py distribute`, which polls until the build is `VALID`
-(cap 60 minutes), answers Apple's per-build export question (the app declares non-exempt encryption, `ITSAppUsesNonExemptEncryption` = YES in `ios/Runner/Info.plist`: standard algorithms only, not offered in France), sets the build's en-US What to Test from the release's
+(cap 60 minutes), sets the build's en-US What to Test from the release's
 `For users:` text (the `publish` job's note step exposes it as an output;
 empty falls back to "Bug fixes and improvements."), adds the build to every
 external TestFlight group named by the repository variable `TESTFLIGHT_GROUPS`

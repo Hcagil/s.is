@@ -25,7 +25,8 @@ import org.robolectric.annotation.Config
  * contract, not the code:
  * - its line is the locked string ("🔒 New message", values-tr "🔒 Yeni mesaj") under the
  *   sender's name, never the server body;
- * - it has no Reply and no Mark as read, even with a valid action ticket;
+ * - it has one Reply (Group I: the app sends it locked) and no Mark as read, even with a valid
+ *   action ticket;
  * - every other push is unchanged: its body, and both buttons.
  */
 private const val TOKEN = "v1.ticket-for-chat.sig"
@@ -97,8 +98,8 @@ class LockedPushDrawTest {
     }
 
     @Test
-    fun `an encrypted push has no Reply and no Mark as read`() =
-        assertEquals(emptyList<String>(), buttons(draw("c-locked-2", "true")))
+    fun `an encrypted push has one Reply and no Mark as read`() =
+        assertEquals(listOf("Reply"), buttons(draw("c-locked-2", "true")))
 
     @Test
     @Config(qualifiers = "tr")

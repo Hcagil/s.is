@@ -46,7 +46,12 @@ final encryptedReplySenderProvider = Provider<void>((ref) {
       if (!_uuid.hasMatch(r.id) || r.text.length > maxMessageLength) continue;
       ref
           .read(sendQueueProvider.notifier)
-          .enqueue(r.conversationId, body: r.text, id: r.id);
+          .enqueue(
+            r.conversationId,
+            body: r.text,
+            id: r.id,
+            keepComposer: true,
+          );
     }
   }
 

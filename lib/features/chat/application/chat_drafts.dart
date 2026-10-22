@@ -217,13 +217,16 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
   /// a message just sent is no longer a draft -- and starts (or continues)
   /// draining that conversation's queue. [id] is the message id when the
   /// caller made it earlier (a notification Reply); a text already queued
-  /// under that id is returned as is, never queued twice.
+  /// under that id is returned as is, never queued twice. [keepComposer] leaves
+  /// the chat's unsent draft and live reply target alone (a notification Reply
+  /// is not the text being typed there).
   Message enqueue(
     String conversationId, {
     required String body,
     Message? replyTo,
     LinkPreviewDraft? preview,
     String? id,
+    bool keepComposer = false,
   }) {
     id ??= randomMessageId();
     final queued = (_queues[conversationId] ?? const <_QueuedSend>[])
@@ -257,8 +260,10 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
         );
     _publish(conversationId);
     _persist();
-    ref.read(replyingToProvider.notifier).clear();
-    ref.read(draftsProvider.notifier).clear(conversationId);
+    if (!keepComposer) {
+      ref.read(replyingToProvider.notifier).clear();
+      ref.read(draftsProvider.notifier).clear(conversationId);
+    }
     unawaited(_drain(conversationId));
     return message;
   }

@@ -28,15 +28,21 @@ import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/application/link_preview_controller.dart';
+import 'features/chat/application/encrypted_reply_controller.dart';
 import 'features/chat/application/share_controller.dart';
+import 'features/chat/application/message_opener.dart';
+import 'features/chat/application/text_locker.dart';
 import 'features/chat/data/external_picker_channel.dart';
 import 'features/chat/data/file_video_importer.dart';
+import 'features/chat/data/method_channel_encrypted_reply.dart';
 import 'features/chat/data/method_channel_share_intake.dart';
 import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/store/drift_chat_list_snapshot_store.dart';
 import 'features/chat/data/store/drift_message_store.dart';
 import 'features/chat/data/store/drift_read_mark_store.dart';
 import 'features/chat/data/store/legacy_chat_list.dart';
+import 'features/chat/data/store/drift_send_queue_store.dart';
+import 'features/chat/data/store/legacy_send_queue.dart';
 import 'features/chat/data/store/store_key.dart';
 import 'features/chat/data/store/store_location.dart';
 import 'features/chat/data/flutter_device_files.dart';
@@ -59,7 +65,6 @@ import 'features/chat/data/share_plus_video_sharer.dart';
 import 'features/chat/data/shared_prefs_contacts_disclosure_store.dart';
 import 'features/chat/data/shared_prefs_played_voice_store.dart';
 import 'features/chat/data/shared_prefs_recent_sticker_store.dart';
-import 'features/chat/data/shared_prefs_send_queue_store.dart';
 import 'features/chat/data/speech_dictation.dart';
 import 'features/chat/data/supabase_admin_chat_repository.dart';
 import 'features/chat/data/supabase_chat_archive_repository.dart';
@@ -68,6 +73,7 @@ import 'features/chat/data/supabase_chat_file_repository.dart';
 import 'features/chat/data/supabase_chat_pin_repository.dart';
 import 'features/chat/data/supabase_group_settings_repository.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
+import 'features/chat/data/supabase_encrypted_message_repository.dart';
 import 'features/chat/data/supabase_location_share_repository.dart';
 import 'features/chat/data/url_launcher_maps_opener.dart';
 import 'features/chat/data/supabase_poll_repository.dart';
@@ -76,8 +82,11 @@ import 'features/chat/data/supabase_sticker_repository.dart';
 import 'features/chat/data/supabase_contacts_repository.dart';
 import 'features/crypto/application/key_directory_controller.dart';
 import 'features/crypto/data/drift_olm_pickle_store.dart';
+import 'features/crypto/data/drift_session_engine.dart';
+import 'features/crypto/data/keychain_group.dart';
 import 'features/crypto/data/olm_key_engine.dart';
 import 'features/crypto/data/pickle_key.dart';
+import 'features/crypto/data/pickle_key_guard.dart';
 import 'features/crypto/data/supabase_key_directory.dart';
 import 'features/chat/data/supabase_contact_share_repository.dart';
 import 'features/chat/data/url_launcher_link_opener.dart';
@@ -168,6 +177,17 @@ Future<void> main() async {
     );
   });
   final config = RuntimeConfig.fromEnvironment();
+  // iPhone: the keychain group of the store and pickle keys (null elsewhere); the app moved the keys there before Flutter started.
+  final keychainGroup = await cryptoKeychainGroup();
+  // Before the store opens: a store whose Olm pickle key is gone is set aside (renamed), never deleted.
+  if (keychainGroup != null) {
+    await guardLostPickleKey(
+      group: keychainGroup,
+      file: await storeFile(),
+      storeKey: StoreKey.inGroup(keychainGroup),
+      pickleKey: PickleKey.inGroup(keychainGroup),
+    );
+  }
   // Read before runApp (like the session marker), so the first frame already
   // has the member's theme, font, text size and language: no flash.
   const appearanceStore = SharedPrefsAppearanceStore();
@@ -224,6 +244,17 @@ Future<void> main() async {
     // The store messageStoreProvider built last: the chat-list store shares that
     // very instance (it rebuilds with it, see below).
     DriftMessageStore? builtStore;
+
+    // A missing pickle key is never replaced while pickles are stored (a new key would lock them for good).
+    final pickleKey = PickleKey.inGroup(
+      keychainGroup,
+      hasPickles: () async =>
+          builtStore != null &&
+          await DriftOlmPickleStore(builtStore!).load() != null,
+    );
+
+    // One Olm engine for key publishing and for sessions.
+    final olm = OlmKeyEngine();
     runApp(
       ProviderScope(
         overrides: [
@@ -231,8 +262,13 @@ Future<void> main() async {
           ...autoDownloadOverrides,
           runtimeConfigProvider.overrideWithValue(config),
           ...platformOverrides(defaultTargetPlatform, client, config),
-          chatRepositoryProvider.overrideWithValue(
-            SupabaseChatRepository(client, cache: attachmentCache),
+          chatRepositoryProvider.overrideWith(
+            (ref) => SupabaseChatRepository(
+              client,
+              cache: attachmentCache,
+              // Every read of server rows opens locked texts here, once.
+              opener: ref.read(messageOpenerProvider),
+            ),
           ),
           groupSettingsRepositoryProvider.overrideWithValue(
             SupabaseGroupSettingsRepository(client),
@@ -294,8 +330,21 @@ Future<void> main() async {
           playedVoiceStoreProvider.overrideWithValue(
             const SharedPrefsPlayedVoiceStore(),
           ),
-          sendQueueStoreProvider.overrideWithValue(
-            const SharedPrefsSendQueueStore(),
+          // The send queue lives in the encrypted store, with the ciphertext of locked texts.
+          sendQueueStoreProvider.overrideWith((ref) {
+            ref.watch(messageStoreProvider);
+            final queue = DriftSendQueueStore(builtStore!);
+            final owner = ref.watch(currentUserIdProvider);
+            // What the old build kept in preferences moves into the store once.
+            if (owner != null) unawaited(moveLegacySendQueue(queue, owner));
+            return queue;
+          }),
+          queuedCiphertextsProvider.overrideWith((ref) {
+            ref.watch(messageStoreProvider);
+            return DriftSendQueueStore(builtStore!);
+          }),
+          encryptedMessageRepositoryProvider.overrideWithValue(
+            SupabaseEncryptedMessageRepository(client),
           ),
           stickerRepositoryProvider.overrideWithValue(
             SupabaseStickerRepository(client),
@@ -320,15 +369,18 @@ Future<void> main() async {
           // watches the user id, so another account gets a fresh instance
           // (and the file's owner check wipes the old rows).
           messageStoreProvider.overrideWith((ref) {
-            const key = StoreKey();
+            final key = StoreKey.inGroup(keychainGroup);
             final store = DriftMessageStore(
               ownerId: ref.watch(currentUserIdProvider) ?? '',
               file: storeFile,
-              key: key.loadOrCreate,
+              // iPhone: a database whose key is gone from both keychain groups is set aside (renamed), never deleted.
+              key: () => key.loadOrCreate(
+                setAsideStore: () async => setAsideStore(await storeFile()),
+              ),
               // Sign-out erases both keys: the store key and the Olm pickle key.
               deleteKey: () async {
                 await key.delete();
-                await const PickleKey().delete();
+                await pickleKey.delete();
               },
             );
             ref.onDispose(store.close);
@@ -350,8 +402,17 @@ Future<void> main() async {
             ref.watch(messageStoreProvider);
             return DriftOlmPickleStore(builtStore!);
           }),
-          pickleKeyStoreProvider.overrideWithValue(const PickleKey()),
-          keyEngineProvider.overrideWithValue(OlmKeyEngine()),
+          pickleKeyStoreProvider.overrideWithValue(pickleKey),
+          keyEngineProvider.overrideWithValue(olm),
+          sessionEngineProvider.overrideWith((ref) {
+            ref.watch(messageStoreProvider);
+            return DriftSessionEngine(
+              store: builtStore!,
+              keys: olm,
+              sessions: olm,
+              pickleKey: pickleKey,
+            );
+          }),
           keyDirectoryProvider.overrideWithValue(SupabaseKeyDirectory(client)),
           lastSessionStoreProvider.overrideWithValue(FileLastSessionStore()),
           galleryProvider.overrideWithValue(const PhotoManagerGallery()),
@@ -362,6 +423,9 @@ Future<void> main() async {
             const ExternalPickerChannel(),
           ),
           shareIntakeProvider.overrideWithValue(MethodChannelShareIntake()),
+          encryptedReplyIntakeProvider.overrideWithValue(
+            MethodChannelEncryptedReply(),
+          ),
           sharedVideoImporterProvider.overrideWithValue(
             FileVideoImporter(deviceFiles),
           ),

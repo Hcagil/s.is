@@ -114,11 +114,16 @@ async function checkActions(message: Record<string, unknown>) {
   const claims = await verifyActionToken(String(data.action_token), serviceKey);
   assert(claims, `action_token does not verify: ${raw}`);
   const now = Math.floor(Date.now() / 1000);
+  // 4b Group J: decided per chat, from the database: a chat that ever held a
+  // locked message (conversations.encrypted_at) signs mark_read only, whatever
+  // this message is; a plain chat signs both.
+  const [chat] = await sql`select encrypted_at from public.conversations where id = ${String(data.conversation_id)}`;
+  assert(chat, `the chat exists: ${raw}`);
   assertEquals({ ...claims, e: 0 }, {
     u: data.user_id,
     c: data.conversation_id,
     d: await sha256Hex(String(m.token)),
-    a: ['mark_read', 'reply'],
+    a: chat.encrypted_at === null ? ['mark_read', 'reply'] : ['mark_read'],
     e: 0,
   }, `the token names this recipient, chat and device: ${raw}`);
   assert(Math.abs(claims.e - (now + ACTION_TTL_SECONDS)) <= 60, `expires in an hour: ${claims.e}`);
@@ -126,8 +131,14 @@ async function checkActions(message: Record<string, unknown>) {
   delete data.action_url;
   const aps = (m.apns as { payload?: { aps?: Record<string, unknown> } } | undefined)?.payload?.aps;
   if (aps) {
-    assertEquals(aps.category, 'SIS_MESSAGE', `an iPhone alert names the category: ${raw}`);
-    delete aps.category;
+    // Step 4a: an encrypted message names the locked category (no inline
+    // Reply); it stays on the message so the encrypted test can see it.
+    if (data.encrypted === 'true') {
+      assertEquals(aps.category, 'SIS_MESSAGE_LOCKED', `an encrypted iPhone alert names the locked category: ${raw}`);
+    } else {
+      assertEquals(aps.category, 'SIS_MESSAGE', `an iPhone alert names the category: ${raw}`);
+      delete aps.category;
+    }
   }
   return m;
 }
@@ -1264,6 +1275,103 @@ Deno.test({
       for (const path of uploaded) {
         await realFetch(`${storage}/attachments/${path}`, { method: 'DELETE', headers: svc }).then((r) => r.body?.cancel()).catch(() => {});
       }
+      await sql.begin(async (tx) => {
+        await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
+      }).catch(() => {});
+    }
+  },
+});
+
+// Private Chats step 4a: push_targets says `encrypted` per message. An
+// encrypted message carries data.encrypted = 'true' (a string: FCM data is
+// string-only) and, on an iPhone, the SIS_MESSAGE_LOCKED category; a plain
+// one carries no `encrypted` key and SIS_MESSAGE. Both from the same sender to
+// the same two phones, so a function that ignores the flag fails one side.
+Deno.test({
+  name: 'encrypted: data.encrypted is the string true and iOS gets SIS_MESSAGE_LOCKED; plain has neither',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const run = Date.now().toString(36);
+    const who = ['sender', 'droid', 'ios'];
+    const people = who.map((w) => ({
+      id: crypto.randomUUID(),
+      session: crypto.randomUUID(),
+      email: `enc${w}-${run}@edge.test`,
+      name: `${w[0].toUpperCase()}${w.slice(1)}`,
+      token: `edge-enc${w}-${run}`.padEnd(16, '0'),
+    }));
+    const [sender, droid, ios] = people;
+    const asP = <T>(x: typeof sender, body: (tx: postgres.TransactionSql) => Promise<T>) =>
+      as(x.id, x.email, x.session, body);
+    const key = async (s: string) =>
+      btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))))
+        .replace(/=+$/, '');
+    const sig = async (s: string) =>
+      btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-512', new TextEncoder().encode(s)))))
+        .replace(/=+$/, '');
+    try {
+      for (const x of people) {
+        await sql`insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+                  values (${x.id}, ${x.email}, now(), ${sql.json({ full_name: x.name })})`;
+        await sql`insert into app_private.allowlist(email) values (${x.email})`;
+        await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+                  values (${x.session}, ${x.id}, now(), now())`;
+        await asP(x, (tx) => tx`select public.activate_session()`);
+        const [i, s, g, o, f] = await Promise.all([key(`${x.email}I`), key(`${x.email}S`), sig(x.email),
+          key(`${x.email}1`), key(`${x.email}F`)]);
+        await asP(x, (tx) => tx`select public.publish_olm_keys(${i}, ${s}, ${g}, ${[o]}::text[], ${f})`);
+      }
+      await asP(droid, (tx) => tx`select public.register_device_token(${droid.token}, 'android', true)`);
+      await asP(ios, (tx) => tx`select public.register_device_token(${ios.token}, 'ios', true)`);
+      await sql`insert into app_private.tag_finds(finder, found_id) values (${sender.id}, ${droid.id}), (${sender.id}, ${ios.id})`;
+      const start = async (x: typeof sender) => {
+        const [{ id }] = await asP(sender, (tx) => tx`select public.start_direct_conversation(${x.id}) as id`);
+        return id as string;
+      };
+      const toDroid = await start(droid);
+      const toIos = await start(ios);
+      const send = async (conv: string, body: string, ciphertext: string | null) => {
+        const [{ id }] = await asP(sender, (tx) => tx`insert into public.messages(conversation_id, sender_id, body, ciphertext, olm_type)
+          values (${conv}, ${sender.id}, ${body}, ${ciphertext}, ${ciphertext === null ? null : 1}) returning id`);
+        return id as string;
+      };
+      const only = () => {
+        assertEquals(sent.length, 1, `exactly one send: ${JSON.stringify(sent)}`);
+        const m = sent[0].message;
+        return {
+          data: m.data as Record<string, unknown>,
+          aps: ((m.apns as { payload?: { aps?: Record<string, unknown> } } | undefined)?.payload?.aps ?? {}),
+          raw: JSON.stringify(m),
+        };
+      };
+
+      // plain first (an encrypted 1:1 takes no plain text afterwards)
+      for (const [conv, x] of [[toDroid, droid], [toIos, ios]] as const) {
+        assertEquals(await deliver(await send(conv, 'enc plain words', null)), { status: 204, text: '' });
+        const { data, aps, raw } = only();
+        assertEquals(sent[0].message.token, x.token);
+        assert(!('encrypted' in data), `${x.name} plain: no encrypted key: ${raw}`);
+        assert(!('category' in aps), `${x.name} plain: the category was SIS_MESSAGE (checked and removed): ${raw}`);
+      }
+      // then encrypted
+      for (const [conv, x] of [[toDroid, droid], [toIos, ios]] as const) {
+        assertEquals(await deliver(await send(conv, '🔒 Encrypted message', 'QUFBQUFB')), { status: 204, text: '' });
+        const { data, aps, raw } = only();
+        assertEquals(sent[0].message.token, x.token);
+        assertEquals(data.encrypted, 'true', `${x.name} encrypted: data.encrypted is the string 'true': ${raw}`);
+        // 4b: preview full, small message: the ciphertext travels as data.ct
+        // only, never in a visible field.
+        assertEquals([data.ct, data.ot], ['QUFBQUFB', '1'], `${x.name}: ct and ot in data: ${raw}`);
+        const { ct: _ct, ...rest } = data;
+        assert(!JSON.stringify({ ...sent[0].message, data: rest }).includes('QUFBQUFB'),
+          `${x.name}: the ciphertext appears only as data.ct: ${raw}`);
+        if (x === ios) assertEquals(aps.category, 'SIS_MESSAGE_LOCKED', `iPhone: the locked category: ${raw}`);
+        if (x === ios) assertEquals(aps['mutable-content'], 1, `iPhone: mutable-content on an encrypted push: ${raw}`);
+      }
+    } finally {
       await sql.begin(async (tx) => {
         await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
         await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((x) => x.id))}`;

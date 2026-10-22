@@ -586,6 +586,19 @@ Nothing contacts the site before that tap.
 
 **Consequences.** New stored data per person (one two-letter code, readable only by the server); it must be added to the store privacy notice, which lives outside this repo. What's new notes carry both languages (`For users:` and `For users (TR):`).
 
+## 2026-10-20 — Private Chats step 4a: one-to-one text is locked
+
+**Decision.** A text between two human members is Olm-locked on the sender's phone. The locked JSON is `{v,i,t,lp}`; `i` is the message id and the receiver rejects a locked text whose id differs from its row. The server stores it in two new nullable columns, `ciphertext` and `olm_type`, with `body` fixed to the placeholder `🔒 Encrypted message`. Each member has one phone: the sender's own copy is the plain text kept on that phone, and own rows are never decrypted. A session and the plain text are saved in one transaction. Each peer has one serial decrypt queue, and only an authentication failure is final. Edits go through `edit_message_encrypted`. Notifications show a fixed "🔒 New message" with the sender's name and no Reply button until step 4b.
+
+**Why.** The server, Supabase, Google and Apple must not be able to read one-to-one texts; this is step 4 of the Private Chats plan of 2026-10-13.
+
+**Consequences.**
+- Places, polls, contacts, media and stickers stay plain until step 6, and the first message of a chat can go out plain until step 7.
+- Notifications show no text and no Reply button until step 4b.
+- 4a and 4b ship together (owner, 2026-10-19), so nothing reaches main or testers before 4b.
+- The send queue now lives in the encrypted on-phone store, with the ciphertext of locked texts.
+- Once a chat has held a locked message the server refuses plain inserts and notification replies into it, so a chat never goes back to plain.
+
 ## 2026-10-20 — iPhone encryption is exempt; Info.plist stays NO
 
 **Decision.** `ios/Runner/Info.plist` keeps `ITSAppUsesNonExemptEncryption = false`, and the release tool sends no per-build encryption answer. The change that set it to `true` (#213) is reverted.

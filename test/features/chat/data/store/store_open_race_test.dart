@@ -172,6 +172,127 @@ void main() {
     });
   });
 
+  group('opens on one file wait for each other, other files do not', () {
+    test('forty stores released at the same instant on a NEW file, 15 '
+        'rounds: each store reads its own save back (no fallback)', () async {
+      // The file() seam is held until every store has asked for it, so all
+      // forty opens start in the same event-loop turn: no timing luck.
+      final lost = <String>[];
+      for (var r = 0; r < 15; r++) {
+        const n = 40;
+        final f = File(p.join(h.dir.path, 'forty_$r.sqlite'));
+        final go = Completer<void>();
+        var asked = 0;
+        final stores = [
+          for (var i = 0; i < n; i++)
+            DriftMessageStore(
+              ownerId: 'owner-1',
+              file: () async {
+                if (++asked == n) go.complete();
+                await go.future;
+                return f;
+              },
+              key: () async => key,
+              deleteKey: () async => h.deleteKeyCalls++,
+            ),
+        ];
+        for (final s in stores) {
+          addTearDown(s.close);
+        }
+        final mine = await Future.wait([
+          for (var i = 0; i < n; i++)
+            stores[i]
+                .upsertAll([msg('r${r}s$i', t: i)])
+                .then((_) => stores[i].newest('c1')),
+        ]);
+        expect(asked, n, reason: 'fixture: every store opened');
+        for (var i = 0; i < n; i++) {
+          // A store that fell back reads an empty list, not its own save.
+          if (!ids(mine[i]).contains('r${r}s$i')) lost.add('r${r}s$i (own)');
+        }
+        expect(await f.exists(), isTrue, reason: 'round $r: file kept');
+        final kept = ids(await storeAt(f).newest('c1')).toSet();
+        for (var i = 0; i < n; i++) {
+          if (!kept.contains('r${r}s$i')) lost.add('r${r}s$i');
+        }
+      }
+      expect(lost, isEmpty, reason: 'lost: $lost');
+      expect(h.deleteKeyCalls, 0, reason: 'deleteKey never called');
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    test('file A held busy: a store on file B opens, saves and reads while '
+        'A is still waiting', () async {
+      final a = File(p.join(h.dir.path, 'a.sqlite'));
+      final b = File(p.join(h.dir.path, 'b.sqlite'));
+      final first = storeAt(a);
+      await first.upsertAll([msg('kept-a')]);
+      await first.close();
+      final raw = holdBusy(a);
+      var released = false;
+      addTearDown(() {
+        if (!released) {
+          raw.execute('COMMIT');
+          raw.close();
+        }
+      });
+      final watch = Stopwatch()..start();
+      var aDoneMs = -1;
+      final readA = storeAt(a).newest('c1').then((r) {
+        aDoneMs = watch.elapsedMilliseconds;
+        return r;
+      });
+      // Let A's open start and hit the lock before B begins.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      final sb = storeAt(b);
+      await sb.upsertAll([msg('b1')]);
+      final readB = await sb.newest('c1');
+      final bDoneMs = watch.elapsedMilliseconds;
+      expect(ids(readB), ['b1'], reason: 'B opened for real, no fallback');
+      expect(
+        aDoneMs,
+        -1,
+        reason:
+            'B finished at $bDoneMs ms while A was still busy (A ended at '
+            '$aDoneMs ms)',
+      );
+      expect(await readA.timeout(const Duration(seconds: 10)), isEmpty);
+      expect(
+        aDoneMs - bDoneMs,
+        greaterThan(300),
+        reason: 'B ($bDoneMs ms) did not wait for A ($aDoneMs ms)',
+      );
+      raw.execute('COMMIT');
+      raw.close();
+      released = true;
+      expect(await a.exists(), isTrue, reason: 'busy A file kept');
+      expect(ids(await storeAt(a).newest('c1')), ['kept-a']);
+    });
+    test('file A slow to open (its key arrives late): a store on file B '
+        'opens, saves and reads meanwhile; A then opens for real', () async {
+      final a = File(p.join(h.dir.path, 'a.sqlite'));
+      final b = File(p.join(h.dir.path, 'b.sqlite'));
+      final slowKey = Completer<String>();
+      final sa = DriftMessageStore(
+        ownerId: 'owner-1',
+        file: () async => a,
+        key: () => slowKey.future,
+        deleteKey: () async => h.deleteKeyCalls++,
+      );
+      addTearDown(sa.close);
+      var aDone = false;
+      final savedA = sa.upsertAll([msg('a1')]).then((_) => aDone = true);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      final sb = storeAt(b);
+      await sb.upsertAll([msg('b1')]).timeout(const Duration(seconds: 5));
+      expect(ids(await sb.newest('c1')), ['b1'], reason: 'B did not wait');
+      expect(aDone, isFalse, reason: 'fixture: A is still opening');
+      slowKey.complete(key);
+      await savedA.timeout(const Duration(seconds: 10));
+      expect(ids(await sa.newest('c1')), ['a1'], reason: 'A opened for real');
+      expect(h.deleteKeyCalls, 0);
+    });
+  });
+
   group('every other error keeps the file, and the open is bounded', () {
     test('a setup error (not owner, NOTADB or CORRUPT) keeps the existing '
         'file and its data', () async {

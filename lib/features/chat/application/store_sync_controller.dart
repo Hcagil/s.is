@@ -99,6 +99,7 @@ class StoreSyncController {
       }
     }
     for (final id in gone) {
+      _ref.read(messageOpenerProvider).forget(id);
       await store.remove(id);
     }
     if (keep.isNotEmpty) await store.upsertAll(keep);

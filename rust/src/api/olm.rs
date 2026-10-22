@@ -111,12 +111,16 @@ impl OlmAccount {
     }
 
     #[frb(sync)]
-    pub fn from_pickle(pickle: String, key: Vec<u8>) -> Result<OlmAccount, String> {
+    pub fn from_pickle(pickle: String, mut key: Vec<u8>) -> Result<OlmAccount, String> {
         if key.len() != 32 {
+            crate::c_api::wipe(&mut key);
             return Err("invalid key length".to_string());
         }
-        let k = <[u8; 32]>::try_from(key.as_slice()).unwrap();
-        let p = AccountPickle::from_encrypted(&pickle, &k).map_err(|_| "invalid pickle")?;
+        let mut k = <[u8; 32]>::try_from(key.as_slice()).unwrap();
+        let decoded = AccountPickle::from_encrypted(&pickle, &k);
+        crate::c_api::wipe(&mut k);
+        crate::c_api::wipe(&mut key);
+        let p = decoded.map_err(|_| "invalid pickle")?;
         Ok(OlmAccount {
             inner: Account::from_pickle(p),
         })
@@ -182,6 +186,11 @@ impl OlmAccount {
 
 impl OlmSession {
     #[frb(sync)]
+    pub fn session_id(&self) -> String {
+        self.inner.session_id()
+    }
+
+    #[frb(sync)]
     pub fn encrypt(&mut self, plaintext: Vec<u8>) -> Result<OlmCiphertext, String> {
         let olm_message = self.inner.encrypt(&plaintext).map_err(|e| e.to_string())?;
         let (message_type, body) = olm_message.to_parts();
@@ -208,12 +217,16 @@ impl OlmSession {
     }
 
     #[frb(sync)]
-    pub fn from_pickle(pickle: String, key: Vec<u8>) -> Result<OlmSession, String> {
+    pub fn from_pickle(pickle: String, mut key: Vec<u8>) -> Result<OlmSession, String> {
         if key.len() != 32 {
+            crate::c_api::wipe(&mut key);
             return Err("invalid key length".to_string());
         }
-        let k = <[u8; 32]>::try_from(key.as_slice()).unwrap();
-        let p = SessionPickle::from_encrypted(&pickle, &k).map_err(|_| "invalid pickle")?;
+        let mut k = <[u8; 32]>::try_from(key.as_slice()).unwrap();
+        let decoded = SessionPickle::from_encrypted(&pickle, &k);
+        crate::c_api::wipe(&mut k);
+        crate::c_api::wipe(&mut key);
+        let p = decoded.map_err(|_| "invalid pickle")?;
         Ok(OlmSession {
             inner: Session::from_pickle(p),
         })
@@ -226,6 +239,16 @@ pub fn olm_verify(signing_key: String, message: String, signature: String) -> Re
     let sig = Ed25519Signature::from_base64(&signature).map_err(|_| "invalid signature")?;
     key.verify(message.as_bytes(), &sig)
         .map_err(|_| "invalid signature".to_string())
+}
+
+#[frb(sync)]
+pub fn olm_pre_key_session_id(message: OlmCiphertext) -> Result<String, String> {
+    match OlmMessage::from_parts(message.message_type as usize, &message.body)
+        .map_err(|e| e.to_string())?
+    {
+        OlmMessage::PreKey(m) => Ok(m.session_id()),
+        _ => Err("not a pre-key message".to_string()),
+    }
 }
 
 #[flutter_rust_bridge::frb(init)]

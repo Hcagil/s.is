@@ -32,6 +32,11 @@ type Target = {
   // Storage path of a small picture for the notification (a photo's or video's `.t` object); null when none or when the recipient's preview setting hides content. thumb_video marks a video. Absent from an old schema.
   thumb_path?: string | null;
   thumb_video?: boolean;
+  // True for an end-to-end encrypted message: the body is only a placeholder and the app must not offer Reply. Absent from an old schema.
+  encrypted?: boolean;
+  // Ciphertext and olm_type of an encrypted message; null unless the recipient preview is full (decided in SQL). Absent from an old schema.
+  ciphertext?: string | null;
+  olm_type?: number | null;
 };
 
 type ServiceAccount = { client_email: string; private_key: string };
@@ -45,6 +50,8 @@ type ServiceAccount = { client_email: string; private_key: string };
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 // How long the signed link to a notification picture lives; the phone fetches it on arrival.
 const THUMB_TTL_SECONDS = 600;
+// Whole serialized FCM message, UTF-8 bytes, above which `ct` is left out: FCM and APNs cap at 4096 B and iOS carries title/body twice.
+const CT_BUDGET_BYTES = 3500;
 let cached: { token: string; expiresAt: number } | null = null;
 let minting: Promise<string> | null = null;
 
@@ -163,6 +170,10 @@ async function send(id: string): Promise<void> {
   const actionKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const actionUrl = `${Deno.env.get('SUPABASE_URL')!}/functions/v1/notification-action`;
 
+  // A chat that ever held a locked message (conversations.encrypted_at, kept after deletes) never gets a reply scope, whatever this message is: decided per chat, not per message. A failed lookup counts as encrypted.
+  const chatRow = await db.from('conversations').select('encrypted_at').eq('id', targets[0].conversation_id).maybeSingle();
+  const chatEncrypted = !!chatRow.error || chatRow.data?.encrypted_at != null || targets.some((t) => t.encrypted);
+
   // A short-lived link to the small picture of a photo/video message, one per path (several recipients share it). The service role signs it; the object is private, so only the recipients push_targets chose (not muted, not archived, preview 'full') ever get the link. A missing object (an old sender never made one) or any error gives null: the push then goes out as text. The link is never logged.
   const thumbLinks = new Map<string, Promise<string | null>>();
   const thumbLink = (path: string): Promise<string | null> => {
@@ -191,7 +202,7 @@ async function send(id: string): Promise<void> {
             u: t.user_id,
             c: t.conversation_id,
             d: await sha256Hex(t.token),
-            a: ['mark_read', 'reply'],
+            a: chatEncrypted ? ['mark_read'] : ['mark_read', 'reply'], // an encrypted chat signs mark_read only; its Reply goes through the app's signed-in send path, never this token
             e: Math.floor(Date.now() / 1000) + ACTION_TTL_SECONDS,
           }, actionKey),
           action_url: actionUrl,
@@ -217,13 +228,7 @@ async function send(id: string): Promise<void> {
       const shown = group
         ? { title: t.chat!, body: `${t.sender}: ${t.body}` }
         : { title: t.title, body: t.body };
-      const post = (bearer: string) => fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${bearer}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
+      const build = (withCt: boolean) => JSON.stringify({
           message: {
             token: t.token,
             // Data only where the app shows pushes itself (0.12+), grouped
@@ -246,6 +251,8 @@ async function send(id: string): Promise<void> {
               title: t.title,
               body: t.body,
               ...(group ? { sender: t.sender!, chat: t.chat! } : {}),
+              ...(t.encrypted ? { encrypted: 'true' } : {}), // FCM data values are strings
+              ...(withCt ? { ct: t.ciphertext!, ot: String(t.olm_type) } : {}),
               ...actionData,
               ...(thumbUrl ? { thumb_url: thumbUrl, thumb_kind: t.thumb_video ? 'video' : 'photo' } : {}),
               // Android has no remote badge: the app's own notification sets
@@ -260,10 +267,11 @@ async function send(id: string): Promise<void> {
                         'thread-id': t.conversation_id,
                         // The buttons AppDelegate.swift registers for this
                         // category; an older build has none and shows none.
-                        category: 'SIS_MESSAGE',
+                        // SIS_MESSAGE_LOCKED has only a foreground Reply (AppDelegate.swift hands the text to the app, which locks and sends it); no Mark as read.
+                        category: t.encrypted ? 'SIS_MESSAGE_LOCKED' : 'SIS_MESSAGE',
                         sound: 'default',
-                        // Lets the iPhone's notification service extension fetch the picture and attach it.
-                        ...(thumbUrl ? { 'mutable-content': 1 } : {}),
+                        // Runs the iPhone's notification service extension: it fetches the picture, decrypts ct into the real text, or sets the one locked text of an encrypted chat.
+                        ...(thumbUrl || withCt || t.encrypted ? { 'mutable-content': 1 } : {}),
                         ...(badge != null ? { badge } : {}),
                       },
                     },
@@ -271,9 +279,19 @@ async function send(id: string): Promise<void> {
                 }
               : { android: { priority: 'high' } }),
           },
-        }),
       });
-      return post(token).then(async (r) => {
+      // ct rides only for a recipient the SQL gave it to (preview full), and only if the whole message fits.
+      const hasCt = !!t.encrypted && !!t.ciphertext && t.olm_type != null;
+      const fits = hasCt && new TextEncoder().encode(build(true)).length <= CT_BUDGET_BYTES;
+      const post = (bearer: string, ct: boolean) => fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${bearer}`,
+          'content-type': 'application/json',
+        },
+        body: build(ct),
+      });
+      return post(token, fits).then(async (r) => {
         // 401: the cached token was refused (revoked, or the clock drifted).
         // Take a fresh one -- another message may already have -- and send
         // once more.
@@ -281,7 +299,11 @@ async function send(id: string): Promise<void> {
           const next = cached && cached.token !== token
             ? cached.token
             : await accessToken(serviceAccount, true);
-          r = await post(next);
+          r = await post(next, fits);
+        }
+        // Too big despite the measure: send once more without the ciphertext (the phone then fetches the message). The response body is read only to match, never logged.
+        if (r.status === 400 && fits && /too big|too large|exceed/i.test(await r.text().catch(() => ''))) {
+          r = await post(cached?.token ?? token, false);
         }
         if (!r.ok) throw new Error(`fcm ${r.status}`);
       });

@@ -8,10 +8,12 @@ import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart' show Database, SqlError, SqliteException;
 
+import '../../domain/encrypted_message_repository.dart';
 import '../../domain/message.dart';
 import '../../domain/message_store.dart';
 import 'message_row_mapper.dart';
 import 'store_database.dart';
+import 'store_location.dart' show deleteOrphanStores;
 
 /// The on-phone message store, one encrypted SQLite file; every method best-effort, never throws.
 final class DriftMessageStore implements MessageStore {
@@ -30,6 +32,21 @@ final class DriftMessageStore implements MessageStore {
 
   /// Bumped by every clear() in the process; an instance whose work began before a bump lost to that erase.
   static int _erasures = 0;
+
+  /// Per file path: opens in this process run one after another, so a new file's schema is created by one opener while the others wait (no create-vs-create race).
+  static final _openGates = <String, Future<void>>{};
+
+  static Future<T> _serial<T>(String path, Future<T> Function() job) {
+    final prev = _openGates[path] ?? Future<void>.value();
+    final run = prev.then((_) => job());
+    final next = run.then<void>((_) {}, onError: (Object _) {});
+    _openGates[path] = next;
+    next.whenComplete(() {
+      if (identical(_openGates[path], next)) _openGates.remove(path);
+    });
+    return run;
+  }
+
   int? _seen;
 
   /// The process-wide erase count (every clear() on any instance raises it).
@@ -61,15 +78,19 @@ final class DriftMessageStore implements MessageStore {
   }
 
   /// Runs [body] on the open database for a sibling store (the chat list
-  /// snapshot); any failure returns [fallback].
-  Future<T> run<T>(T fallback, Future<T> Function(StoreDatabase db) body) =>
-      _run(fallback, body);
+  /// snapshot, the send queue); any failure returns [fallback], or throws [StoreWriteException] when [write] is true.
+  Future<T> run<T>(
+    T fallback,
+    Future<T> Function(StoreDatabase db) body, {
+    bool write = false,
+  }) => _run(fallback, body, write: write);
 
-  /// Runs [body] on the open database; any failure returns [fallback].
+  /// Runs [body] on the open database; any failure returns [fallback], except a [write] that fails after its retries (or cannot open the store), which throws [StoreWriteException] (no message: the SQL error can hold row data). A closed, erased or owner-less store still returns [fallback] for a write: that is on purpose.
   Future<T> _run<T>(
     T fallback,
-    Future<T> Function(StoreDatabase db) body,
-  ) async {
+    Future<T> Function(StoreDatabase db) body, {
+    bool write = false,
+  }) async {
     if (_closed || ownerId.isEmpty) return fallback;
     final opened = _open();
     final done = Completer<void>();
@@ -87,22 +108,34 @@ final class DriftMessageStore implements MessageStore {
         try {
           return await body(db);
         } catch (e) {
-          if (n >= 4 ||
+          if (n >= 9 ||
               !(e is DriftRemoteException ||
                   e is DriftWrappedException ||
                   e is SqliteException)) {
             rethrow;
           }
-          await Future<void>.delayed(Duration(milliseconds: 25 * (n + 1)));
+          // Jitter: dozens of writers retrying on the same beat kept colliding and gave up, dropping their saves.
+          final step = 25 * (n + 1);
+          await Future<void>.delayed(
+            Duration(milliseconds: step + math.Random().nextInt(step)),
+          );
         }
       }
-    } catch (_) {
+    } catch (e, st) {
+      // An erase that won against this write is on purpose, not a failure.
+      if (write && e is! _ErasedWhileOpening) {
+        Error.throwWithStackTrace(const StoreWriteException(), st);
+      }
       return fallback;
     } finally {
       done.complete();
       _inflight.remove(done.future);
     }
   }
+
+  /// [_run] for a write: a failure after the retries throws.
+  Future<void> _write(Future<void> Function(StoreDatabase db) body) =>
+      _run<void>(null, body, write: true);
 
   @override
   Future<List<Message>> newest(String conversationId, {int limit = 50}) =>
@@ -179,18 +212,44 @@ final class DriftMessageStore implements MessageStore {
   });
 
   @override
-  Future<void> upsertAll(List<Message> messages) =>
-      _run<void>(null, (db) async {
-        final stored = [
-          for (final m in messages)
-            if (!m.isPending) messageToCompanion(m),
-        ];
-        await db.batch((b) {
-          for (final c in stored) {
-            b.insert(db.messages, c, onConflict: DoUpdate((_) => c));
-          }
-        });
-      });
+  Future<void> upsertAll(List<Message> messages) => _write((db) async {
+    final stored = await _writable(db, messages);
+    await db.batch((b) {
+      for (final c in stored) {
+        b.insert(db.messages, c, onConflict: _upsertClause(c));
+      }
+    });
+  });
+
+  /// One ON CONFLICT clause for every write: a live row never replaces a deleted one, even when a deletion lands between a read and this write; a deletion row always wins.
+  DoUpdate<$MessagesTable, StoredMessageRow> _upsertClause(
+    MessagesCompanion c,
+  ) => DoUpdate<$MessagesTable, StoredMessageRow>(
+    (_) => c,
+    where: (old) => c.deleted.present && c.deleted.value != null
+        ? const Constant(true)
+        : old.deleted.isNull(),
+  );
+
+  /// The companions to write: a row that only carries the locked placeholder is dropped when the stored row of that id already holds readable text, so a failed open or the echo of the member's own locked row never erases a plaintext.
+  Future<List<MessagesCompanion>> _writable(
+    StoreDatabase db,
+    List<Message> messages,
+  ) async {
+    final out = <MessagesCompanion>[];
+    for (final m in messages) {
+      if (m.isPending) continue;
+      if (m.deletion == null && isLockedPlaceholder(m.body)) {
+        final old = await (db.select(
+          db.messages,
+        )..where((t) => t.id.equals(m.id))).getSingleOrNull();
+        // A placeholder never erases readable text (a deleted old row is refused by the upsert itself).
+        if (old != null && !isLockedPlaceholder(old.body)) continue;
+      }
+      out.add(messageToCompanion(m));
+    }
+    return out;
+  }
 
   /// An erase since this open began wins: remove the file and key it may have re-created.
   Future<Never> _lostToErase(File file) async {
@@ -198,7 +257,7 @@ final class DriftMessageStore implements MessageStore {
     try {
       await _deleteKey();
     } catch (_) {}
-    throw StateError('erased while opening');
+    throw const _ErasedWhileOpening();
   }
 
   Future<StoreDatabase> _create() async {
@@ -234,7 +293,7 @@ final class DriftMessageStore implements MessageStore {
     var reset = false;
     for (var tries = 0; opened == null; tries++) {
       try {
-        opened = await attempt();
+        opened = await _serial(file.path, attempt);
       } catch (e) {
         if (_unusable(e)) {
           // Wrong key, not a database, corrupt, or another owner: start again from nothing, once.
@@ -245,8 +304,12 @@ final class DriftMessageStore implements MessageStore {
           if (seen != _erasures) await _lostToErase(file);
         } else {
           // Busy, locked, or a racing opener got there first: a valid store is never deleted, retry.
-          if (tries >= 5) rethrow;
-          await Future<void>.delayed(Duration(milliseconds: 50 * (tries + 1)));
+          // Herd of openers retried in lockstep and gave up after ~750 ms, silently dropping their saves.
+          if (tries >= 9) rethrow;
+          final step = 50 * (tries + 1);
+          await Future<void>.delayed(
+            Duration(milliseconds: step + math.Random().nextInt(step)),
+          );
         }
       }
     }
@@ -264,8 +327,7 @@ final class DriftMessageStore implements MessageStore {
     String conversationId,
     List<Message> page, {
     required bool reachedStart,
-  }) => _run<void>(
-    null,
+  }) => _write(
     (db) => db.transaction(() async {
       final ids = [for (final m in page) m.id];
       final oldest = page.isEmpty
@@ -282,8 +344,10 @@ final class DriftMessageStore implements MessageStore {
           .go();
       for (final m in page) {
         // one upsert per row, same as upsertAll
-        final c = messageToCompanion(m);
-        await db.into(db.messages).insert(c, onConflict: DoUpdate((_) => c));
+        final writable = await _writable(db, [m]);
+        if (writable.isEmpty) continue;
+        final c = writable.first;
+        await db.into(db.messages).insert(c, onConflict: _upsertClause(c));
       }
       if (oldest == null) {
         if (reachedStart) {
@@ -332,8 +396,7 @@ final class DriftMessageStore implements MessageStore {
     String conversationId,
     List<Message> page, {
     required bool reachedStart,
-  }) => _run<void>(
-    null,
+  }) => _write(
     (db) => db.transaction(() async {
       final prev =
           await (db.select(db.syncStates)
@@ -342,7 +405,7 @@ final class DriftMessageStore implements MessageStore {
       if (prev == null) return;
       for (final m in page) {
         final c = messageToCompanion(m);
-        await db.into(db.messages).insert(c, onConflict: DoUpdate((_) => c));
+        await db.into(db.messages).insert(c, onConflict: _upsertClause(c));
       }
       if (page.isEmpty) {
         if (reachedStart) {
@@ -392,13 +455,12 @@ final class DriftMessageStore implements MessageStore {
       });
 
   @override
-  Future<void> remove(String messageId) => _run<void>(null, (db) async {
+  Future<void> remove(String messageId) => _write((db) async {
     await (db.delete(db.messages)..where((t) => t.id.equals(messageId))).go();
   });
 
   @override
-  Future<void> deleteConversation(String conversationId) => _run<void>(
-    null,
+  Future<void> deleteConversation(String conversationId) => _write(
     (db) => db.transaction(() async {
       await (db.delete(
         db.messages,
@@ -470,7 +532,9 @@ final class DriftMessageStore implements MessageStore {
       if (pending != null) await (await pending).close();
     } catch (_) {}
     try {
-      await _deleteFiles(await _file());
+      final file = await _file();
+      await _deleteFiles(file);
+      await deleteOrphanStores(file);
     } catch (_) {}
     try {
       await _deleteKey();
@@ -517,7 +581,7 @@ final class DriftMessageStore implements MessageStore {
       });
 
   @override
-  Future<void> saveCursor(ChangeCursor c) => _run<void>(null, (db) async {
+  Future<void> saveCursor(ChangeCursor c) => _write((db) async {
     await db
         .into(db.meta)
         .insertOnConflictUpdate(
@@ -558,6 +622,11 @@ bool _unusable(Object e) {
   return e is SqliteException &&
       (e.resultCode == SqlError.SQLITE_NOTADB ||
           e.resultCode == SqlError.SQLITE_CORRUPT);
+}
+
+/// An erase since an open began won against it (see [DriftMessageStore._lostToErase]).
+final class _ErasedWhileOpening implements Exception {
+  const _ErasedWhileOpening();
 }
 
 Future<void> _deleteFiles(File file) async {

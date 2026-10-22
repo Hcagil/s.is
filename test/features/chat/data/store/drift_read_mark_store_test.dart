@@ -1,7 +1,7 @@
 // DriftReadMarkStore over a REAL encrypted store file, written from the
 // ReadMarkStore contract (lib/features/chat/domain/read_mark_store.dart) and
 // the seen-marks-offline brief, never from the implementation. Includes the
-// store schema upgrade 1 -> 2 on a real file made by the production store.
+// store schema upgrade 1 -> 3 on a real file made by the production store.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/chat/data/store/drift_chat_list_snapshot_store.dart';
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
@@ -155,7 +155,7 @@ void main() {
     });
   });
 
-  group('schema upgrade 1 -> 2', () {
+  group('schema upgrade 1 -> 3', () {
     test('a fresh install has read_marks', () async {
       final s = DriftReadMarkStore(messages());
       await s.save('c1', marks);
@@ -165,7 +165,7 @@ void main() {
     test('a real v1 file keeps messages, search, sync state, list and meta, '
         'and gets a usable read_marks', () async {
       // A real file made by the production store, put back in its exact v1
-      // shape: v2 only added read_marks (tables.dart, StoreDatabase).
+      // shape: v2 added read_marks, v3 olm_sessions and send_queue.
       final v1 = messages();
       await v1.reconcilePage('c1', [
         msg('m1', t: 1, body: 'kahvaltı hazır'),
@@ -176,6 +176,8 @@ void main() {
           .save('owner-1', const [Conversation(id: 'c1', title: 'Aile')]);
       await v1.run<void>(null, (db) async {
         await db.customStatement('DROP TABLE read_marks');
+        await db.customStatement('DROP TABLE olm_sessions');
+        await db.customStatement('DROP TABLE send_queue');
         await db.customStatement('PRAGMA user_version = 1');
       });
       await v1.close();
@@ -199,7 +201,7 @@ void main() {
         final r = await db.customSelect('PRAGMA user_version').getSingle();
         return r.read<int>('user_version');
       });
-      expect(version, 2);
+      expect(version, 3, reason: 'not upgraded to the current schema');
 
       final s = DriftReadMarkStore(v2);
       await s.save('c1', marks);

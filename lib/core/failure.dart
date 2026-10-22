@@ -134,6 +134,30 @@ final class DeviceKeysFailure extends Failure {
   String get message => 'Could not verify this contact\'s security keys.';
 }
 
+/// No Olm session with this contact can open the message yet; try again when a session appears (not final).
+final class SessionPendingFailure extends Failure {
+  const SessionPendingFailure();
+
+  @override
+  String get message => 'Waiting for a secure session.';
+}
+
+/// The message failed its integrity check (MAC or authentication) or its session could not be opened; final, never retried.
+final class UnreadableMessageFailure extends Failure {
+  const UnreadableMessageFailure();
+
+  @override
+  String get message => 'Could not unlock this message.';
+}
+
+/// The session or message could not be saved on this phone; nothing was changed.
+final class SessionStoreFailure extends Failure {
+  const SessionStoreFailure();
+
+  @override
+  String get message => 'Could not save the secure session.';
+}
+
 /// Words for any error a screen shows: a Failure's own message, never a raw
 /// SDK error (a platform plugin's text must not reach the member).
 String failureReason(Object error) =>

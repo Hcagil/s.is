@@ -97,9 +97,10 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     message id to be server-generated or unpredictable** — never key an
     authorisation decision, storage path or topic on it. The app treats a
     duplicate-key answer as "already sent" only when the stored row is the
-    caller's own, in the same conversation, with the same body (and, when
-    the retried message is a reply, the same reply target);
-    otherwise the send fails. Accepted leftover risk: a member who already
+    caller's own, in the same conversation, with the same body (a locked text:
+    the same ciphertext, which the queue keeps so a retry sends the same bytes
+    and an encrypted text is never locked twice) (and, when the retried message
+    is a reply, the same reply target); otherwise the send fails. Accepted leftover risk: a member who already
     knows a message id learns whether that message exists.
   - `messages.photo_group` (a uuid, null for every message but the photos of
     an album) is only a grouping label: each photo is its own message with
@@ -110,10 +111,16 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     the value). The app folds photos into one bubble only when they share the
     group AND the sender, so a member cannot pull another member's photos
     into their own album. Nothing filters on it, so it has no index.
-  - Drafts and queued unsent messages live in the app's memory only; if they
-    are ever stored on the phone (not stored; the messages and the chat list are, in the encrypted
-    store — see "On-phone message store"), they are personal data under the on-phone storage
-    posture.
+  - Drafts live in the app's memory only. Queued unsent messages (text, files,
+    videos, places, stickers) are stored in the encrypted on-phone store (table
+    `send_queue`, see "On-phone message store"), never in shared_preferences,
+    so an unsent text is not readable from a copy of the app's files; a locked
+    text waits there as its ciphertext, plus the plain text it was typed as
+    (needed to show it and to retry a refusal). The old preferences key is
+    moved into the store at the first start and removed. The queue is erased
+    with the store at sign-out; files the queue copied into the app's own
+    folders are deleted then too. They are personal data under the on-phone
+    storage posture.
   - `messages.attachment_path` points into the private `attachments` storage
     bucket, keyed `<conversation_id>/<file>`. The storage policies ask the same
     membership question the table policies ask, so there is one access rule and
@@ -417,6 +424,19 @@ fields, and as an iPhone's alert title and body) under the "Name and message"
 and "Only who it is from" settings; "No details" carries neither (DECISIONS
 2026-10-01).
 
+A private (encrypted) chat's push is different. Its `body` is only the
+placeholder. Only when the recipient's preview is "Name and message" does it also
+carry the ciphertext (`ct`, base64) and `ot` (0 or 1), and only if the whole FCM
+message fits the byte budget (else it is resent once without `ct`). FCM and APNs
+see ciphertext, never the text; the text is opened on the phone (Android: a
+read-only peek in a short-lived engine; iPhone: the notification service
+extension), which never saves a ratchet step. `ct` and FCM response bodies are
+never logged, and no session id rides in the push. What the phone shows when it
+cannot open the text is one locked text, identical on both platforms: "🔒 New
+message" (Turkish "🔒 Yeni mesaj"); Android takes it from `notification_locked`,
+the iPhone extension sets it for every encrypted push (mutable-content is set for
+them all).
+
 ### Notification buttons (Mark as read, Reply)
 
 A notification's buttons run where no Supabase session exists (the Android
@@ -446,7 +466,9 @@ signs a short-lived action token into the push and `notification-action`
   user id (UUID) is also in the push data now.
 - A request over 20000 bytes or a reply over 4000 characters is refused (400)
   before the database; every refused ticket is 403, a missing token 400.
-- Lock-screen Reply: decided 2026-10-06 (owner). Reply requires an unlocked phone on Android 12+ (the system enforces it, `setAuthenticationRequired`) and iOS. On Android 11 and older (API below 31) the system cannot enforce it, so a notification drawn natively (`InstantPush`) omits Reply whenever the phone has a secure lock (`KeyguardManager.isDeviceSecure`), locked or not; the check is made when the notification is drawn, so a lock set afterwards applies from the next one. Mark as read stays on every version. Limit: on those versions a phone with a PIN, pattern or password loses Reply in the shade too, because the app cannot tell when the phone locks; a phone with no secure lock (no PIN, pattern or password) keeps Reply below API 31. As a second guard, `NotificationActionReceiver` refuses a Reply on API below 31 while `KeyguardManager.isDeviceLocked` is true (nothing is sent, the "not sent" line shows), which covers a notification drawn by an older build or before a lock was set (finding L1) (the screen-off and user-present broadcasts cannot be declared in the manifest, and a lock-screen-only version of the notification does not hold when the user shows all content on the lock screen). Native `InstantPush` is the only drawer of chat notifications on Android; the Dart handler only keeps the delivery receipt. Therefore, on Android 12+, Reply is behind the unlock for every push, high-priority ones included; there is no Dart-drawn Reply and no `sis.reply_offered` preference. The Android receiver draws on one background thread under `goAsync`, so pacing never blocks the main thread. iOS buttons are drawn by `AppDelegate.swift` (Reply carries `.authenticationRequired`); the Dart side adds no iOS buttons.
+- Lock-screen Reply: decided 2026-10-06 (owner). Reply requires an unlocked phone on Android 12+ (the system enforces it, `setAuthenticationRequired`) and iOS. On Android 11 and older (API below 31) the system cannot enforce it, so a notification drawn natively (`InstantPush`) omits Reply whenever the phone has a secure lock (`KeyguardManager.isDeviceSecure`), locked or not; the check is made when the notification is drawn, so a lock set afterwards applies from the next one. Mark as read stays on every version. Limit: on those versions a phone with a PIN, pattern or password loses Reply in the shade too, because the app cannot tell when the phone locks; a phone with no secure lock (no PIN, pattern or password) keeps Reply below API 31. As a second guard, `NotificationActionReceiver` refuses a Reply on API below 31 while `KeyguardManager.isDeviceLocked` is true (nothing is sent, the "not sent" line shows; the same holds for `EncryptedReplyActivity` of a private chat, which shows the "not sent" line without the typed text and keeps nothing), which covers a notification drawn by an older build or before a lock was set (finding L1) (the screen-off and user-present broadcasts cannot be declared in the manifest, and a lock-screen-only version of the notification does not hold when the user shows all content on the lock screen). Native `InstantPush` is the only drawer of chat notifications on Android; the Dart handler only keeps the delivery receipt. Therefore, on Android 12+, Reply is behind the unlock for every push, high-priority ones included; there is no Dart-drawn Reply and no `sis.reply_offered` preference. The Android receiver draws on one background thread under `goAsync`, so pacing never blocks the main thread. iOS buttons are drawn by `AppDelegate.swift` (Reply carries `.authenticationRequired`); the Dart side adds no iOS buttons.
+
+  Private (encrypted) chats (I2): the action token of a push into a private chat signs `mark_read` only (decided per chat from `conversations.encrypted_at`, not per message; a failed lookup counts as encrypted), because the notification Reply of a private chat never calls `notification-action`, and `notification_action` still refuses a plain reply into an encrypted chat (42501; a direct plain insert gets ENCR1 from the trigger). It is a different button: on Android `InstantPush.addEncryptedReply` offers Reply only (no Mark as read), with `setAuthenticationRequired(true)` and the same API-below-31 rule as above. Its `PendingIntent.getActivity` targets `EncryptedReplyActivity` by explicit component (`exported=false`, no UI, not in recents); only that intent is `FLAG_MUTABLE` (the system fills in the typed text). The activity reads the text, drops the intent (`setIntent(Intent())`, finish, noHistory), makes the message id at tap time, keeps `{id, chat, member, text}` in memory only (`EncryptedReplyInbox`, never disk, prefs or log, lost if the process dies) and opens SIS. On iPhone the `SIS_MESSAGE_LOCKED` category has a `UNTextInputNotificationAction` with `.authenticationRequired` and `.foreground`; `AppDelegate.swift` keeps the text in memory the same way. Dart then takes it (channel `sis/encrypted_reply`) and calls the normal send queue, which locks the text on the phone and never sends it plain when locking fails. A reply whose member is not the signed-in member is dropped. Nothing is ever encrypted in a receiver, an extension or a background isolate: an unsaved ratchet step would reuse a message key.
 
 ### Notification picture link
 
@@ -499,7 +521,8 @@ that owns the store. Until 2026-10-17 the list was a plain file,
 described below, without any message text. At every launch the app keeps that
 file only if it is a valid new feed (version 1, every message field empty) and
 deletes anything else, so an old file with previews is gone after the first
-start. Drafts and queued unsent messages are not stored.
+start. Drafts are not stored; queued unsent messages are, in the same encrypted
+store (table send_queue).
 
 Since 0.30.15 the list is no longer held back until the server has confirmed
 the session. A second file, `last_session.json` (the marker), sits in the app support directory:
@@ -672,6 +695,20 @@ when a collaborator leaves or a dependency is suspected compromised.
 - Known limits: the server could swap one-time or fallback keys (messages then fail; nothing becomes readable); a member can drain another's pool (5 an hour per target), so first messages use the fallback key and lose some forward secrecy, and top-up at app start and resume repairs it; a signed-out target (no live session) gives 42501 and a signed-in target with no keys gives an empty result; refusals roll back so they are not rate-counted (accepted: a reachable member can learn whether the target is signed in); tombstones are pruned after a year.
 - On the phone: the account is an encrypted vodozemac pickle in the encrypted on-phone store (meta row `olm_account`); its 32-byte key is in secure storage as `sis.olm.pickle.key` (this device only) and is deleted with the store key at sign-out. The pickle is saved before publishing and again after marking published; a failed publish is retried (idempotent). No pickle but a server row bound to this same session (olm_key_status same_session) means identity lost (KeysIdentityLost): never a silent new account; a row bound to another session (sign-out and sign-in, new phone) gets a new account and a publish. Pickles, keys and engine errors are never logged or shown.
 - The engine keeps the previous fallback key on rotation (late first messages still decrypt); this step never forgets it.
+
+### Encrypted one-to-one text (Private Chats step 4a)
+
+- A one-to-one text between two human members is locked (Olm) on the sender's phone and opened only on the receiver's phone. The server, Supabase, Google and Apple see ciphertext, never the text. Metadata (who, when, size, type) stays visible.
+- A locked message is a messages row with `ciphertext` and `olm_type` set and `body` fixed to the placeholder `🔒 Encrypted message`. A CHECK forces link_preview, attachments, poll, contact, photo group, sticker and location to be empty on such a row.
+- Only a direct human chat can hold ciphertext; bots never send it. Server search never matches ciphertext rows (search runs on the phone).
+- No downgrade after the first locked message: once a conversation has held one (`conversations.encrypted_at`, kept after deletes), the server refuses a plain insert into it, and `notification_action` refuses a reply into it.
+- First-message gap, open until step 7 (security codes): the first message of a chat is sent in plain text when the peer has published no keys (the key lookup returns nothing). A malicious server that withholds the peer's keys can cause this. Any lookup error blocks the send instead of sending plain. There is no "not encrypted" label yet (steps 7 and 9).
+- Plain until step 6: places, polls, contacts, photos and other media with captions, stickers and voice. The link-card picture is not uploaded in a locked chat.
+- The send queue lives in the encrypted on-phone store, with the ciphertext of a locked text, so a retry sends the same bytes.
+- Notifications: the push carries `encrypted: true`; the locked text is "🔒 New message" (Turkish "🔒 Yeni mesaj") on both platforms, with the sender's name. No Mark as read button. Reply is offered (see "Notification buttons", I2).
+- Notification residue (M5): once the real text is shown it is in the system's hands. Android: a notification listener app, a watch or other wearable, and the notification history (Android 11+) can read or keep it; the lock screen shows only the locked public version (`setPublicVersion`) unless the member chose to show all content, and the app itself writes the text only to memory (never `PushInbox` or SharedPreferences). iPhone: delivered notifications keep the text in the system's notification store until dismissed or cleared by reading the chat, and an Apple Watch or a connected device mirrors it. The member's "Name and message" setting is the switch: any other setting keeps the text out of the push, so none of this applies.
+- iPhone: the push carries category `SIS_MESSAGE_LOCKED` (a foreground Reply only).
+- On the phone, an opened text is stored once. The store's upsert is one atomic statement, so a live row never replaces a deleted one. A hidden or vanished message is dropped from the opener's waiting list, so it cannot come back.
 
 ## Runbook
 

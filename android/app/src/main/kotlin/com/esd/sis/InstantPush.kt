@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.AudioAttributes
@@ -37,6 +38,11 @@ object InstantPush {
 
     // One draw or picture update of the stored inbox at a time: the late picture (another thread) must not interleave with a newer push's read-modify-write.
     private val drawLock = Any()
+
+    // Real text of peeked encrypted lines by message id: memory only, never the inbox or SharedPreferences; a restarted process shows those lines locked. Guarded by drawLock.
+    private val peekedTexts = object : LinkedHashMap<String, String>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 50
+    }
 
     /** What one notification does once the chat's choices met the defaults (Dart's EffectiveAlert). [tone] null is the system default and is always null when [sound] is off. */
     data class Alert(val sound: Boolean, val tone: String?, val vibration: Boolean)
@@ -196,6 +202,17 @@ object InstantPush {
     /** Whether the Reply button is drawn. API 31+ enforces unlock itself (setAuthenticationRequired); below that nothing can, so a phone with a secure lock gets no Reply at all (Mark as read stays). */
     fun replyOffered(sdk: Int, deviceSecure: Boolean): Boolean = sdk >= Build.VERSION_CODES.S || !deviceSecure
 
+    /** The Reply button of a PRIVATE (encrypted) chat's notification. It opens EncryptedReplyActivity (PendingIntent.getActivity, explicit component, exported=false), which hands the typed text to the app in memory; nothing is encrypted or sent here. Mutable only because the system fills in the typed text. Same unlock rule as the plain Reply. Mark as read is not offered. */
+    fun addEncryptedReply(context: Context, builder: NotificationCompat.Builder, conversationId: String, userId: String, id: Int) {
+        if (!replyOffered(Build.VERSION.SDK_INT, (context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isDeviceSecure)) return
+        val open = Intent(context, EncryptedReplyActivity::class.java)
+            .setData(Uri.parse("sis-action://encrypted-reply/" + conversationId))
+            .putExtra(EncryptedReplyActivity.EXTRA_CONVERSATION, conversationId)
+            .putExtra(EncryptedReplyActivity.EXTRA_USER, userId)
+        val reply = PendingIntent.getActivity(context, id, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+        builder.addAction(NotificationCompat.Action.Builder(0, context.getString(R.string.action_reply), reply).setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).setShowsUserInterface(true).setAuthenticationRequired(true).addRemoteInput(androidx.core.app.RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY).setLabel(context.getString(R.string.action_reply_hint)).build()).build())
+    }
+
     /** The two buttons (Mark as read, Reply with a text box) for a chat's notification. The request code is the notification id; the intents differ by data, so chats and buttons never share a PendingIntent. The reply one is mutable because the system fills in the typed text. */
     fun addActions(context: Context, builder: NotificationCompat.Builder, conversationId: String, id: Int, token: String, url: String) {
         val read = PendingIntent.getBroadcast(context, id, NotificationActionReceiver.intentFor(context, conversationId, token, url, false), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -279,7 +296,10 @@ object InstantPush {
         try {
             val conversationId = extras.getString("conversation_id")
             val title = extras.getString("title")
-            val text = extras.getString("body")
+            val locked = extras.getString("encrypted") == "true"
+            // An encrypted chat shows the peeked text or the locked text (the server body is only a placeholder); its Reply goes to the app, see addEncryptedReply.
+            val lockedText = context.getString(R.string.notification_locked)
+            val text = if (locked) lockedText else extras.getString("body")
             val hasFields = conversationId != null && title != null && text != null
             val chat = extras.getString("chat")
             val hasNotificationBlock = extras.keySet().any { it.startsWith("gcm.n.") || it.startsWith("gcm.notification.") }
@@ -310,6 +330,9 @@ object InstantPush {
 
             val id = notificationId(conversationId)
 
+            // The inbox below always gets [text] (locked for an encrypted push); the real text only lives in memory.
+            val peeked = if (locked && !redraw) PeekRunner.peek(context, extras)?.also { t -> extras.getString("message_id")?.let { peekedTexts[it] = t } } else null
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 manager.createNotificationChannel(
@@ -330,7 +353,7 @@ object InstantPush {
             // As before the native takeover: a high-priority push (once drawn by Dart) alerts only when the shade has been quiet; any other push always alerted.
             val loud = !redraw && (extras.getString("google.original_priority") != "high" || isLoud())
 
-            val line = body(text, extras.getString("sender"), !chat.isNullOrEmpty())
+            val line = body(peeked ?: text, extras.getString("sender"), !chat.isNullOrEmpty())
             // The unread total the server computed for this member (see the push
             // payload): shown by launchers that print a number on the icon. No
             // permission involved.
@@ -370,7 +393,7 @@ object InstantPush {
                         if (!isGroup && avatar != null) setIcon(IconCompat.createWithBitmap(avatar))
                     }.build()
                 }
-                val message = NotificationCompat.MessagingStyle.Message(l.optString("x"), l.optLong("a"), person)
+                val message = NotificationCompat.MessagingStyle.Message(peekedTexts[l.optString("m")] ?: l.optString("x"), l.optLong("a"), person)
                 // The picture of a photo/video line, once it has been fetched (NotificationPicture): shown by the system inside the message.
                 NotificationPicture.uri(context, l.optString("i"))?.let { message.setData("image/jpeg", it) }
                 style.addMessage(message)
@@ -392,10 +415,27 @@ object InstantPush {
                 .apply { if (!loud) setSilent(true).setOnlyAlertOnce(true) }
                 .apply { if (badge > 0) setNumber(badge) }
                 .apply {
+                    // With the default lock-screen setting the lock screen shows this locked public version, not the text; a phone set to "show all content" shows the full notification.
+                    if (locked) {
+                        setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                        setPublicVersion(
+                            NotificationCompat.Builder(context, channel)
+                                .setSmallIcon(R.drawable.ic_launcher_monochrome)
+                                .setColor(ContextCompat.getColor(context, R.color.notification_accent))
+                                .setContentTitle(entry.optString("t"))
+                                .setContentText(lockedText)
+                                .build(),
+                        )
+                    }
+                }
+                .apply {
                     // The buttons need the action token the push carried; an older server sends none.
                     val token = extras.getString("action_token")
                     val url = extras.getString("action_url")
-                    if (!token.isNullOrEmpty() && url != null && url.startsWith("https://")) addActions(context, this, conversationId, id, token, url)
+                    if (!locked && !token.isNullOrEmpty() && url != null && url.startsWith("https://")) addActions(context, this, conversationId, id, token, url)
+                    // A private chat: Reply only, handed to the app (never the function, never encrypted here).
+                    val userId = extras.getString("user_id")
+                    if (locked && !userId.isNullOrEmpty()) addEncryptedReply(context, this, conversationId, userId, id)
                 }
                 .build()
 

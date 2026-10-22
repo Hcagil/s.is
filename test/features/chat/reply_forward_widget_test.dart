@@ -422,7 +422,11 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('forward-send')));
       await tester.pumpAndSettle();
 
-      expect(chat.forwarded.single.conversationIds, ['c2', 'c3']);
+      // One old forward per target (a plain text goes through the send path).
+      expect(
+        [for (final f in chat.forwarded) ...f.conversationIds],
+        ['c2', 'c3'],
+      );
       expect(find.text('Forwarded to 2 chats'), findsOneWidget);
       await drainNotice(tester);
     });

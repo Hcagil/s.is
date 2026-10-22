@@ -58,6 +58,9 @@ abstract interface class KeyDirectory {
   /// Claims one key of [userId]'s phone. Ok(null) when that member has no live published phone. Err(DeniedFailure) when not allowed to chat with them (42501).
   Future<Result<ClaimedKeys?>> claim(String userId);
 
+  /// The keys of [userId]'s phone WITHOUT claiming a one-time key (RPC olm_identity: same gates as claim, no rate-limit use, nothing consumed). The result has an empty [ClaimedKeys.oneTimeKey] and isFallback false; it is good for checking the signature and for encrypting on an existing session, never for opening a new one (use claim for that). Ok(null) when that member has no live published phone or is a bot. Err(DeniedFailure) when not allowed to chat with them (42501).
+  Future<Result<ClaimedKeys?>> identity(String userId);
+
   /// This member's own row; Ok(null) when nothing is published yet.
   Future<Result<PublishedStatus?>> status();
 }
@@ -69,6 +72,9 @@ abstract interface class OlmPickleStore {
 
   /// True when the pickle was saved.
   Future<bool> save(String pickle);
+
+  /// Reads the saved pickle (null when none), calls [change] with it, and when [change] returns a pickle saves it - all in ONE database transaction, so no other writer of the account can be lost. Returns true when the transaction finished (also when [change] returned null and nothing was saved); false when it failed or rolled back. [change] must not do network calls.
+  Future<bool> update(Future<String?> Function(String? current) change);
 }
 
 /// The 32-byte key that encrypts the pickle, kept in the platform's secure storage.

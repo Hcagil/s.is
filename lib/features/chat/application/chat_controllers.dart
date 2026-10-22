@@ -21,6 +21,7 @@ import '../domain/chat_delete_repository.dart';
 import '../domain/chat_list_snapshot_store.dart';
 import '../domain/chat_pin_repository.dart';
 import '../domain/chat_repository.dart';
+import '../domain/encrypted_message_repository.dart';
 import '../domain/conversation.dart';
 import '../domain/contact_share_repository.dart';
 import '../domain/contacts_repository.dart';
@@ -58,6 +59,9 @@ import '../domain/video.dart';
 import '../domain/video_gallery.dart';
 import '../domain/voice.dart';
 import 'chat_drafts.dart';
+import 'message_opener.dart';
+import 'store_write.dart';
+import 'text_locker.dart';
 
 part 'open_conversation.dart';
 part 'conversation_list_controller.dart';

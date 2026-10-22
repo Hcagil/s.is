@@ -25,6 +25,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/message_opener.dart';
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
@@ -33,6 +34,7 @@ import 'package:sis/features/chat/domain/message_store.dart';
 
 import '../../support/drift_stores.dart';
 import '../../support/fakes.dart';
+import '../../support/opener_fakes.dart' show ForgetSpyOpener;
 import '../../support/store_spy.dart';
 import '../../support/video_fakes.dart';
 import 'data/store/store_harness.dart';
@@ -158,8 +160,17 @@ class _Spy extends SpyStore {
   int get writes =>
       calls.where((c) => _writeOps.any(c.startsWith)).length + saved.length;
 
+  /// While above zero, each upsertAll fails as the real store does once its
+  /// retries are spent (StoreWriteException), writing nothing.
+  int failUpserts = 0;
+
   @override
   Future<void> upsertAll(List<Message> messages) async {
+    if (failUpserts > 0) {
+      failUpserts--;
+      calls.add('upsert-failed');
+      throw const StoreWriteException();
+    }
     final f = super.upsertAll(messages);
     if (holdUpsert case final g?) await g.future;
     return f;
@@ -371,9 +382,10 @@ void main() {
     /// A stored, complete c1 (no fill noise) and the saved cursor.
     Future<(ProviderContainer, _Spy)> withCursor({
       List<String> listed = const ['c1'],
+      List<Override> more = const [],
     }) async {
       feed.conversationsResult = Ok([for (final id in listed) _chat(id, 100)]);
-      final c = await boot();
+      final c = await boot(more: more);
       final store = storeOf(c);
       for (final id in listed) {
         await store.reconcilePage(id, [
@@ -485,6 +497,35 @@ void main() {
       );
     });
 
+    // Group E: the opener forgets a vanished row BEFORE the store drops it.
+    test('a vanished row is forgotten by the opener, then removed; a '
+        'placeholder is not forgotten', () async {
+      _Spy? spy;
+      final (c, store) = await withCursor(
+        more: [
+          messageOpenerProvider.overrideWithValue(
+            ForgetSpyOpener((id) => spy!.calls.add('forget:$id')),
+          ),
+        ],
+      );
+      spy = store;
+      await store.upsertAll([msg('c1-v', t: 50), msg('c1-p', t: 51)]);
+      store.calls.clear();
+      feed.change(
+        msg('c1-v', t: 50, deletion: MessageDeletion.vanished),
+        at: at(200),
+      );
+      feed.change(
+        msg('c1-p', t: 51, body: '', deletion: MessageDeletion.placeholder),
+        at: at(201),
+      );
+      await run(c);
+      expect(
+        store.calls.where((x) => x.startsWith('forget:') || x == 'remove:c1-v'),
+        ['forget:c1-v', 'remove:c1-v'],
+      );
+    });
+
     test('an Err on the first page leaves the cursor', () async {
       feed.change(msg('c1-new', t: 200));
       feed.changeErrs.add(1);
@@ -492,6 +533,24 @@ void main() {
       await run(c);
       expect((await store.cursor())?.id, cursor.id);
       expect(await store.newest('c1'), hasLength(1), reason: 'only the seed');
+    });
+
+    // Group J: a store write that fails stops the pass before the cursor
+    // moves, so the rows it could not keep are read again next time.
+    test('a failing store write stops the pass before saveCursor; the next '
+        'pass retries and moves it', () async {
+      feed.change(msg('c1-new', t: 200));
+      final (c, store) = await withCursor();
+      store.failUpserts = 1;
+      await run(c);
+      expect(store.calls, contains('upsert-failed'), reason: 'setup');
+      expect(store.saved, isEmpty, reason: 'cursor saved past a lost write');
+      expect((await store.cursor())?.id, cursor.id);
+      expect(ids(await store.newest('c1')), isNot(contains('c1-new')));
+
+      await run(c);
+      expect((await store.cursor())?.id, 'c1-new', reason: 'retried');
+      expect(ids(await store.newest('c1')), contains('c1-new'));
     });
 
     test(

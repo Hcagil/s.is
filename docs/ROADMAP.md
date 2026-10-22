@@ -58,6 +58,7 @@ Source of truth: [DESIGN.md §9](DESIGN.md).
 | v0.37 | pin a message for everyone in the chat (a group setting decides who may pin); pin up to 5 chats on the list |
 | v0.38 | react to a message with an emoji by long press |
 | after v0.36 | **Private Chats**: end-to-end encryption (ADR 2026-10-13) |
+| after Private Chats | Telegram-style photo sheet (t_3f02f45ac6), the first visible batch after Private Chats |
 | later | voice-to-write; public App Store release |
 | next | Private Chats (E2EE) | see ADR 2026-10-13 |
 

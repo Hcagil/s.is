@@ -8,12 +8,16 @@ import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../domain/key_directory.dart';
 import '../domain/key_engine.dart';
+import '../domain/session_engine.dart';
 
 /// The four providers below are null until main wires them; the controller then stays idle.
 final keyDirectoryProvider = Provider<KeyDirectory?>((_) => null);
 final keyEngineProvider = Provider<KeyEngine?>((_) => null);
 final olmPickleStoreProvider = Provider<OlmPickleStore?>((_) => null);
 final pickleKeyStoreProvider = Provider<PickleKeyStore?>((_) => null);
+
+/// The Olm sessions on this phone; null until main wires it (tests, unwired builds).
+final sessionEngineProvider = Provider<SessionEngine?>((_) => null);
 
 /// Where this phone's key publishing stands.
 sealed class KeyDirectoryState {
@@ -42,6 +46,8 @@ final class KeysRetrying extends KeyDirectoryState {
 final class KeysIdentityLost extends KeyDirectoryState {
   const KeysIdentityLost();
 }
+
+enum _Edit { saved, lost, failed }
 
 final keyDirectoryControllerProvider =
     NotifierProvider<KeyDirectoryController, KeyDirectoryState>(
@@ -79,12 +85,14 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
       return;
     }
     _busy = true;
-    final rev = _revision;
     try {
       do {
         _again = false;
-        await _ensure(userId);
-      } while (_again && ref.mounted && rev == _revision);
+        // read the user again: a session change during the run only sets _again
+        final id = _userOf(ref.read(sessionControllerProvider).value);
+        if (id == null) break;
+        await _ensure(id);
+      } while (_again && ref.mounted);
     } finally {
       _busy = false;
     }
@@ -113,7 +121,6 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
     }
     final saved = await pickles.load();
     if (!alive()) return;
-    KeyAccount account;
     if (saved == null) {
       // No pickle: first run, a lost one, or a new sign-in. A server row bound to this same session means the key is lost; never create silently over it.
       final st = await dir.status();
@@ -131,46 +138,50 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
         case Ok():
           break;
       }
-      try {
-        account = await engine.create();
-      } on KeyEngineException {
-        _scheduleRetry(userId, rev);
-        return;
-      }
-      account.generateFallbackKey();
-      account.generateOneTimeKeys(account.maxOneTimeKeys);
-      if (!await _save(account, pickleKey, pickles)) {
-        if (alive()) _scheduleRetry(userId, rev);
-        return;
-      }
-    } else {
-      try {
-        account = await engine.restore(saved, pickleKey);
-      } on KeyEngineException {
-        if (alive()) state = const KeysIdentityLost();
-        return;
-      }
+      final e = await _edit(
+        pickles,
+        engine,
+        pickleKey,
+        onNew: (a) {
+          a.generateFallbackKey();
+          a.generateOneTimeKeys(a.maxOneTimeKeys);
+        },
+      );
+      if (!_editOk(e, userId, rev)) return;
     }
     if (!alive()) return;
     // Publish what is not yet published (an empty list just rebinds this session).
-    var free = await _publish(dir, account, userId, pickleKey, pickles, rev);
+    var free = await _publish(dir, engine, userId, pickleKey, pickles, rev);
     if (free == null) return; // _publish already set the state (retry or idle)
     final st = await dir.status();
+    if (!alive()) return;
     final fallbackUsed = switch (st) {
       Ok(:final value) => value?.fallbackUsed ?? false,
       Err() => false,
     };
-    final room = account.maxOneTimeKeys - account.storedOneTimeKeyCount;
-    final low = free < account.maxOneTimeKeys ~/ 2 && room > 0;
-    if (low || fallbackUsed) {
-      if (low) account.generateOneTimeKeys(room);
-      // The engine keeps the previous fallback key itself so late first messages still decrypt; it is never forgotten here.
-      if (fallbackUsed) account.generateFallbackKey();
-      if (!await _save(account, pickleKey, pickles)) {
-        if (alive()) _scheduleRetry(userId, rev);
-        return;
-      }
-      free = await _publish(dir, account, userId, pickleKey, pickles, rev);
+    final freeNow = free;
+    var gen = false;
+    final e2 = await _edit(
+      pickles,
+      engine,
+      pickleKey,
+      change: (a) {
+        final room = a.maxOneTimeKeys - a.storedOneTimeKeyCount;
+        if (freeNow < a.maxOneTimeKeys ~/ 2 && room > 0) {
+          a.generateOneTimeKeys(room);
+          gen = true;
+        }
+        // The engine keeps the previous fallback key itself so late first messages still decrypt; it is never forgotten here.
+        if (fallbackUsed) {
+          a.generateFallbackKey();
+          gen = true;
+        }
+        return gen;
+      },
+    );
+    if (!_editOk(e2, userId, rev)) return;
+    if (gen) {
+      free = await _publish(dir, engine, userId, pickleKey, pickles, rev);
       if (free == null) return;
     }
     if (!alive()) return;
@@ -178,29 +189,67 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
     state = KeysReady(free);
   }
 
-  /// Publishes the account's unpublished keys. On success marks them published and saves the pickle again; returns the free key count. On failure sets the state (Idle when the session was replaced, else retrying) and returns null.
+  /// True when the edit saved. Otherwise sets the state (identity lost, or retrying) and returns false.
+  bool _editOk(_Edit e, String userId, int rev) {
+    if (e == _Edit.saved) return true;
+    if (!ref.mounted || rev != _revision) return false;
+    if (e == _Edit.lost) {
+      state = const KeysIdentityLost();
+    } else {
+      _scheduleRetry(userId, rev);
+    }
+    return false;
+  }
+
+  /// Publishes the account's unpublished keys. The account is read in one transaction, the network call holds no account, and marking published is a second transaction on a fresh read. Returns the free key count. On failure sets the state (Idle when the session was replaced, else retrying) and returns null.
   Future<int?> _publish(
     KeyDirectory dir,
-    KeyAccount a,
+    KeyEngine engine,
     String userId,
     List<int> pickleKey,
     OlmPickleStore pickles,
     int rev,
   ) async {
+    late String identityKey, signingKey, signature;
+    late List<String> otks;
+    String? fallback;
+    final snap = await _edit(
+      pickles,
+      engine,
+      pickleKey,
+      change: (a) {
+        identityKey = a.identityKey;
+        signingKey = a.signingKey;
+        signature = a.sign(
+          deviceStatement(userId, a.identityKey, a.signingKey),
+        );
+        otks = a.unpublishedOneTimeKeys;
+        fallback = a.unpublishedFallbackKey;
+        return false; // read only, nothing saved
+      },
+    );
+    if (!_editOk(snap, userId, rev)) return null;
+    if (!ref.mounted || rev != _revision) return null;
     final r = await dir.publish(
-      identityKey: a.identityKey,
-      signingKey: a.signingKey,
-      deviceSignature: a.sign(
-        deviceStatement(userId, a.identityKey, a.signingKey),
-      ),
-      oneTimeKeys: a.unpublishedOneTimeKeys,
-      fallbackKey: a.unpublishedFallbackKey,
+      identityKey: identityKey,
+      signingKey: signingKey,
+      deviceSignature: signature,
+      oneTimeKeys: otks,
+      fallbackKey: fallback,
     );
     if (!ref.mounted || rev != _revision) return null;
     switch (r) {
       case Ok(:final value):
-        a.markPublished();
-        await _save(a, pickleKey, pickles); // a failed save only means the next run re-sends the same keys (idempotent)
+        // a failed save only means the next run re-sends the same keys (idempotent)
+        await _edit(
+          pickles,
+          engine,
+          pickleKey,
+          change: (a) {
+            a.markPublished();
+            return true;
+          },
+        );
         return value;
       case Err(failure: DeniedFailure()):
         state = const KeysIdle();
@@ -211,16 +260,49 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
     }
   }
 
-  Future<bool> _save(
-    KeyAccount a,
-    List<int> key,
+  /// The ONLY place the account is changed: read, change and save inside one store transaction. [onNew] makes a first account when none is saved; [change] edits a saved one and returns whether to save it.
+  Future<_Edit> _edit(
     OlmPickleStore pickles,
-  ) async {
-    try {
-      return await pickles.save(a.pickle(key));
-    } on KeyEngineException {
-      return false;
-    }
+    KeyEngine engine,
+    List<int> pickleKey, {
+    void Function(KeyAccount)? onNew,
+    bool Function(KeyAccount)? change,
+  }) async {
+    var r = _Edit.failed;
+    final ok = await pickles.update((cur) async {
+      final KeyAccount a;
+      if (cur == null) {
+        if (onNew == null) {
+          r = _Edit.lost;
+          return null;
+        }
+        try {
+          a = await engine.create();
+        } on KeyEngineException {
+          return null;
+        }
+        onNew(a);
+      } else {
+        try {
+          a = await engine.restore(cur, pickleKey);
+        } on KeyEngineException {
+          r = _Edit.lost;
+          return null;
+        }
+        if (change != null && !change(a)) {
+          r = _Edit.saved;
+          return null;
+        }
+      }
+      try {
+        final pickle = a.pickle(pickleKey);
+        r = _Edit.saved;
+        return pickle;
+      } on KeyEngineException {
+        return null;
+      }
+    });
+    return ok ? r : _Edit.failed;
   }
 
   /// Claims a chat partner's keys and checks the phone's self-signature; a failed check returns Err(DeviceKeysFailure) and no key (no session may be opened).
@@ -231,6 +313,23 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
       return const Err(DeniedFailure());
     }
     final r = await dir.claim(targetUserId);
+    if (r case Ok(:final value?)) {
+      final ok = await engine.verifyDevice(targetUserId, value);
+      if (!ok) {
+        return const Err(DeviceKeysFailure());
+      }
+    }
+    return r;
+  }
+
+  /// Looks a chat partner's keys up WITHOUT claiming a one-time key (KeyDirectory.identity) and checks the phone's self-signature like [claimVerified]; a failed check returns Err(DeviceKeysFailure) and no key. Ok(null): no live phone (a bot, or no keys): nothing to lock for. The keys carry no one-time key, so they cannot open a session.
+  Future<Result<ClaimedKeys?>> identityVerified(String targetUserId) async {
+    final dir = ref.read(keyDirectoryProvider);
+    final engine = ref.read(keyEngineProvider);
+    if (dir == null || engine == null) {
+      return const Err(DeniedFailure());
+    }
+    final r = await dir.identity(targetUserId);
     if (r case Ok(:final value?)) {
       final ok = await engine.verifyDevice(targetUserId, value);
       if (!ok) {
@@ -268,6 +367,7 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
           sessionRetryDelays.length - 1,
         ].reduce(math.min)];
     _attempt++;
+    _retry?.cancel();
     _retry = Timer(delay, () {
       if (ref.mounted && rev == _revision) unawaited(refresh());
     });

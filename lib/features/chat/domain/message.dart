@@ -104,6 +104,9 @@ final class Message {
     this.linkPreview,
     this.adminMsg,
     this.sending = false,
+    this.ciphertext,
+    this.olmType,
+    this.sealed,
   });
 
   final String id;
@@ -111,6 +114,15 @@ final class Message {
   final String senderId;
   final String body;
   final DateTime createdAt;
+
+  /// Base64 Olm message of a locked text as the server holds it (null for plain rows and after it was opened); never stored on the phone.
+  final String? ciphertext;
+
+  /// 0 pre-key, 1 normal; set exactly when [ciphertext] is.
+  final int? olmType;
+
+  /// Hash of the ciphertext this stored plaintext was opened from (null for plain rows and for the sender's own copy); it lets a later copy of the same row be skipped and a changed one (an edit) be opened again.
+  final String? sealed;
 
   /// Storage key of an attached image, or null for a text-only message.
   final String? attachmentPath;
@@ -264,6 +276,7 @@ final class Message {
     location: location,
     file: file,
     sending: sending,
+    sealed: sealed,
   );
 
   /// A copy carrying [bytes] as its [attachmentPreview] (a first read leaves
@@ -293,7 +306,38 @@ final class Message {
     location: location,
     file: file,
     sending: sending,
+    sealed: sealed,
   );
+
+  /// A copy carrying [text] as its body and [card] as its link card, with no ciphertext: the sender's own readable copy of a locked text (whose stored row only holds the placeholder), or a received one opened on this phone ([sealed] = hash of the ciphertext it came from), or the locked placeholder when it could not be opened.
+  Message withPlain(String text, LinkPreview? card, {String? sealed}) =>
+      Message(
+        id: id,
+        conversationId: conversationId,
+        senderId: senderId,
+        body: text,
+        createdAt: createdAt,
+        attachmentPath: attachmentPath,
+        attachmentPreview: attachmentPreview,
+        stickerId: stickerId,
+        albumCard: albumCard,
+        albumId: albumId,
+        photoGroup: photoGroup,
+        linkPreview: card,
+        adminMsg: adminMsg,
+        localImage: localImage,
+        deletion: deletion,
+        deletedBy: deletedBy,
+        editedAt: editedAt,
+        replyTo: replyTo,
+        forwarded: forwarded,
+        poll: poll,
+        contact: contact,
+        location: location,
+        file: file,
+        sending: sending,
+        sealed: sealed,
+      );
 
   /// A copy of this message carrying [group] as its [photoGroup] (null takes it out of any album).
   Message withPhotoGroup(String? group) => Message(
@@ -321,6 +365,7 @@ final class Message {
     location: location,
     file: file,
     sending: sending,
+    sealed: sealed,
   );
 
   /// Whether [userId] wrote this message; decides which side it is drawn on.

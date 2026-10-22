@@ -9,10 +9,13 @@ import '../../auth/domain/session_state.dart';
 import '../domain/file_attachment.dart';
 import '../domain/link_preview.dart';
 import '../domain/message.dart';
+import '../domain/message_store.dart' show StoreWriteException;
 import '../domain/send_queue_store.dart';
 import '../domain/shared_location.dart';
 import '../domain/video.dart';
 import 'chat_controllers.dart';
+import 'store_write.dart';
+import 'text_locker.dart';
 
 /// One conversation's composer state kept while it is off screen: the typed
 /// text and who it replies to, if anyone. Never written to disk -- see
@@ -214,14 +217,24 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
   /// Queues [body] for [conversationId] and returns the pending bubble at
   /// once. Clears the live reply target and that conversation's draft --
   /// a message just sent is no longer a draft -- and starts (or continues)
-  /// draining that conversation's queue.
+  /// draining that conversation's queue. [id] is the message id when the
+  /// caller made it earlier (a notification Reply); a text already queued
+  /// under that id is returned as is, never queued twice. [keepComposer] leaves
+  /// the chat's unsent draft and live reply target alone (a notification Reply
+  /// is not the text being typed there).
   Message enqueue(
     String conversationId, {
     required String body,
     Message? replyTo,
     LinkPreviewDraft? preview,
+    String? id,
+    bool keepComposer = false,
   }) {
-    final id = randomMessageId();
+    id ??= randomMessageId();
+    final queued = (_queues[conversationId] ?? const <_QueuedSend>[])
+        .where((q) => q.message.id == id)
+        .firstOrNull;
+    if (queued != null) return queued.message;
     final draft = preview == null
         ? null
         : preview.image == null
@@ -249,8 +262,10 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
         );
     _publish(conversationId);
     _persist();
-    ref.read(replyingToProvider.notifier).clear();
-    ref.read(draftsProvider.notifier).clear(conversationId);
+    if (!keepComposer) {
+      ref.read(replyingToProvider.notifier).clear();
+      ref.read(draftsProvider.notifier).clear(conversationId);
+    }
     unawaited(_drain(conversationId));
     return message;
   }
@@ -487,7 +502,10 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
   }
 
   /// Saves everything still queued so the app being killed loses nothing.
-  void _persist() {
+  void _persist() => storeWrite(_persistNow());
+
+  /// Like [_persist] but completes when the queue is saved (a locked text needs its queue row to exist before its ciphertext is stored on it).
+  Future<void> _persistNow() async {
     final me = _me;
     if (me == null) return;
     final records = [
@@ -507,7 +525,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
             albumName: i.albumId == null ? null : i.message.body,
           ),
     ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    unawaited(ref.read(sendQueueStoreProvider).save(me, records));
+    await ref.read(sendQueueStoreProvider).save(me, records);
   }
 
   /// Brings back the sends saved before the app was killed, ahead of anything
@@ -664,15 +682,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
                         }
                       : null,
                 )
-          : await ref
-                .read(chatRepositoryProvider)
-                .send(
-                  id: item.message.id,
-                  conversationId: conversationId,
-                  body: item.body,
-                  replyTo: item.message.replyTo,
-                  preview: item.preview,
-                );
+          : await _sendText(conversationId, item);
       if (!ref.mounted) return;
       switch (result) {
         case Ok(:final value):
@@ -789,6 +799,68 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
       Ok() => Ok(item.message.stored()),
       Err(:final failure) => Err(failure),
     };
+  }
+
+  /// Sends a text. A direct human chat whose partner has verified keys gets the text locked on this phone (ciphertext only goes to the server); any other chat gets it plain. When locking fails the text is NOT sent at all (never plain): the Err is handled like any send failure.
+  Future<Result<Message>> _sendText(
+    String conversationId,
+    _QueuedSend item,
+  ) async {
+    final text = item.body.trim();
+    if (!isSendableBody(text)) return const Err(DeniedFailure());
+    // The queue row must exist before the ciphertext is stored on it; when it cannot be saved the text is not sent now (a retryable failure: the queue keeps it and tries again).
+    try {
+      await _persistNow();
+    } on StoreWriteException {
+      return const Err(
+        NetworkFailure(
+          'Could not save the message on this phone.',
+          retryable: true,
+        ),
+      );
+    }
+    if (!ref.mounted) return const Err(DeniedFailure());
+    final lock = await ref
+        .read(textLockerProvider)
+        .lock(
+          conversationId: conversationId,
+          messageId: item.message.id,
+          text: text,
+          card: item.preview?.preview,
+          queued: true,
+        );
+    if (!ref.mounted) return const Err(DeniedFailure());
+    switch (lock) {
+      case Err(:final failure):
+        return Err(failure);
+      case Ok(value: null):
+        return ref
+            .read(chatRepositoryProvider)
+            .send(
+              id: item.message.id,
+              conversationId: conversationId,
+              body: item.body,
+              replyTo: item.message.replyTo,
+              preview: item.preview,
+            );
+      case Ok(:final value?):
+        final repository = ref.read(encryptedMessageRepositoryProvider);
+        if (repository == null) return const Err(DeniedFailure());
+        final sent = await repository.send(
+          id: item.message.id,
+          conversationId: conversationId,
+          ciphertext: value.ciphertext,
+          olmType: value.olmType,
+          replyTo: item.message.replyTo,
+        );
+        // The stored row only holds the placeholder: this phone keeps the text, and the card without its picture (a locked chat never uploads it).
+        return switch (sent) {
+          Ok(:final value) => Ok(
+            value.withPlain(text, item.preview?.preview.withImagePath(null)),
+          ),
+          Err(:final failure) => Err(failure),
+        };
+    }
   }
 
   // ponytail: a fixed delay ladder capped at 5s (owner: 30s left a message

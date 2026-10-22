@@ -4,13 +4,23 @@ import 'tables.dart';
 
 part 'store_database.g.dart';
 
-/// The on-phone message database (see MessageStore). Schema version 2.
-@DriftDatabase(tables: [Messages, Conversations, SyncStates, Meta, ReadMarks])
+/// The on-phone message database (see MessageStore). Schema version 3.
+@DriftDatabase(
+  tables: [
+    Messages,
+    Conversations,
+    SyncStates,
+    Meta,
+    ReadMarks,
+    OlmSessions,
+    SendQueueRows,
+  ],
+)
 class StoreDatabase extends _$StoreDatabase {
   StoreDatabase(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -23,6 +33,11 @@ class StoreDatabase extends _$StoreDatabase {
     onUpgrade: (m, from, to) async {
       // v2 added read_marks (seen ticks offline).
       if (from < 2) await m.createTable(readMarks);
+      // v3 added olm_sessions and the send queue (tables only).
+      if (from < 3) {
+        await m.createTable(olmSessions);
+        await m.createTable(sendQueueRows);
+      }
     },
   );
 }

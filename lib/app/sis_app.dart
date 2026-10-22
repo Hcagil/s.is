@@ -18,6 +18,7 @@ import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/status_screens.dart';
 import '../features/chat/application/chat_controllers.dart';
 import '../features/chat/application/chat_drafts.dart';
+import '../features/chat/application/encrypted_reply_controller.dart';
 import '../features/chat/application/group_controller.dart';
 import '../features/chat/application/share_controller.dart';
 import '../features/chat/presentation/share_page.dart';
@@ -222,6 +223,8 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     // Held from the start, signed in or not: what another app shared waits
     // here until the member has signed in and picks chats (ShareHost).
     ref.listen(pendingShareProvider, (_, _) {});
+    // Replies typed into private-chat notifications are sent from here.
+    ref.watch(encryptedReplySenderProvider);
     // A session that ends -- signed out, or Denied (revoked, replaced, found
     // out only after the stored list was shown) -- leaves no page open: a chat
     // opened from a notification in the unconfirmed window must not stay on

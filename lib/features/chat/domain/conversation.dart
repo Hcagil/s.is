@@ -126,6 +126,27 @@ final class Conversation {
     isAdmin: isAdmin,
   );
 
+  /// The same conversation with [text] as the preview line (same message, same time and sender).
+  Conversation withLastMessage(String text) => Conversation(
+    id: id,
+    title: title,
+    other: other,
+    lastMessage: text,
+    lastMessageAt: lastMessageAt,
+    lastSenderId: lastSenderId,
+    unread: unread,
+    avatarPath: avatarPath,
+    hasLeft: hasLeft,
+    isSystem: isSystem,
+    isAdminChat: isAdminChat,
+    senders: senders,
+    settings: settings,
+    archived: archived,
+    pinned: pinned,
+    pinnedMessageId: pinnedMessageId,
+    isAdmin: isAdmin,
+  );
+
   /// The same conversation with [next] as its settings.
   Conversation withSettings(GroupSettings next) => Conversation(
     id: id,

@@ -140,6 +140,8 @@ jobs:
       # test/data/crypto runs against the real Rust library; RustLib.init() loads it from rust/target/release.
       - name: Build the Rust library for the Dart tests
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo build --release --manifest-path rust/Cargo.toml
+      - name: Rust tests
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo test --manifest-path rust/Cargo.toml
       # A non-UTC zone on purpose: the container defaults to UTC, where a test
       # of local-time formatting passes whether or not the code converts to
       # local time at all. POSIX form, so no tzdata is needed.
@@ -198,12 +200,14 @@ jobs:
       # especially) compete with Realtime's replication for CPU; that contention, not
       # Realtime itself, is why message delivery lags far more here than on a
       # developer machine with cores to spare (see docs/DECISIONS.md).
+      # The CLI pulls its images from the registry named by SUPABASE_INTERNAL_IMAGE_REGISTRY as <registry>/supabase/<name>:<tag>
+      # (public.ecr.aws rate-limits CI). Our copies are made by base-images; DOCKER_CONFIG hands the CLI the ghcr login.
       - name: Start Supabase and replay migrations
-        run: docker compose run --rm supabase start -x imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+        run: docker compose run --rm -e SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io/${{ github.repository_owner }} -e DOCKER_CONFIG=/docker-config -v "$HOME/.docker:/docker-config:ro" supabase start -x imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - name: Lint database
         run: docker compose run --rm supabase db lint --level error
       - name: Test database
-        run: docker compose run --rm supabase test db
+        run: docker compose run --rm -e SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io/${{ github.repository_owner }} -e DOCKER_CONFIG=/docker-config -v "$HOME/.docker:/docker-config:ro" supabase test db
       # Against the real local stack (Deno's own test runner, not Flutter's):
       # what push_targets() says about each recipient -> what the function
       # sends FCM. --add-host: the stack publishes on the runner's host, the

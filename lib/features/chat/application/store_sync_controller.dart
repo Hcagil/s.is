@@ -42,6 +42,12 @@ class StoreSyncController {
         if (store == null) return;
         await _once(store);
       } while (_again && _ref.mounted);
+      // The pass may have stored readable text of locked messages: refresh the list previews from the phone (no network).
+      if (_ref.mounted && _ref.exists(conversationListProvider)) {
+        unawaited(
+          _ref.read(conversationListProvider.notifier).unlockPreviews(),
+        );
+      }
     } catch (e, st) {
       log('$e', name: 'sis.store', error: e, stackTrace: st);
     } finally {

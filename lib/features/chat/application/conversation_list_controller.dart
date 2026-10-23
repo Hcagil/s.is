@@ -214,6 +214,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     );
   }
 
+  /// This member's own just-sent message as the preview (its readable text; the server row of a locked message only holds the placeholder).
+  void showSent(Message message) => _apply(message);
+
   /// Moves [message] into its conversation's preview. A message for a
   /// conversation the list has never seen means someone started one with
   /// this member, so the list is re-read rather than guessed at.
@@ -285,7 +288,17 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     // message delivered twice -- leaves the list exactly as it was. Using
     // "older" here instead would let a duplicate move its conversation above
     // one with a genuinely newer message.
-    if (at != null && !message.createdAt.isAfter(at)) return list;
+    if (at != null && !message.createdAt.isAfter(at)) {
+      // The same message again, now readable (it was opened, or this phone's own copy arrived): the preview text is replaced in place.
+      if (message.createdAt.isAtSameMomentAs(at) &&
+          existing.lastMessage != null &&
+          isLockedPlaceholder(existing.lastMessage!) &&
+          !isLockedPlaceholder(previewText(message))) {
+        return [...list]
+          ..[index] = existing.withLastMessage(previewText(message));
+      }
+      return list;
+    }
     final updated = [...list]..removeAt(index);
     // Unread: someone else's message, in a conversation not on screen.
     final counts =
@@ -325,10 +338,55 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     _purgeGone(list);
     // A chat the member just deleted (undo still possible, or the delete is
     // on its way to the server) stays off the list until [forget].
-    return [
+    return _unlock([
       for (final c in list)
         if (!_hidden.contains(c.id)) c,
+    ]);
+  }
+
+  /// [list] where a preview that is only the locked placeholder shows the readable text this phone holds for that message (own sent text, or a received one already opened). The placeholder stays when the phone has no readable copy. Local reads only; never throws.
+  Future<List<Conversation>> _unlock(List<Conversation> list) async {
+    final store = _storeOf(ref);
+    final at = {
+      for (final c in list)
+        if (c.lastMessage != null &&
+            isLockedPlaceholder(c.lastMessage!) &&
+            c.lastMessageAt != null)
+          c.id: c.lastMessageAt!,
+    };
+    if (store == null || at.isEmpty) return list;
+    final readable = <String, String>{};
+    for (final e in at.entries) {
+      try {
+        for (final m in await store.newest(e.key, limit: 5)) {
+          if (m.createdAt.isAtSameMomentAs(e.value) &&
+              m.deletion == null &&
+              !isLockedPlaceholder(m.body)) {
+            readable[e.key] = previewText(m);
+            break;
+          }
+        }
+      } catch (_) {
+        // best effort: the placeholder stays
+      }
+    }
+    if (readable.isEmpty) return list;
+    return [
+      for (final c in list)
+        readable.containsKey(c.id) ? c.withLastMessage(readable[c.id]!) : c,
     ];
+  }
+
+  /// Re-reads the previews from the phone's own copies (no network): called when new readable text may have landed in the store.
+  Future<void> unlockPreviews() async {
+    final current = state.value;
+    if (current == null || state.isLoading) return;
+    final next = await _unlock(current);
+    if (!ref.mounted || identical(next, current) || state.value != current) {
+      return;
+    }
+    state = AsyncData(next);
+    _scheduleSnapshotSave();
   }
 
   /// Unread here means received on this device: report it delivered, once per

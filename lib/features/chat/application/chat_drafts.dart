@@ -855,12 +855,18 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
         );
         // The stored row only holds the placeholder: this phone keeps the text, and the card without its picture (a locked chat never uploads it).
         return switch (sent) {
-          Ok(:final value) => Ok(
+          Ok(:final value) => _shownSent(
             value.withPlain(text, item.preview?.preview.withImagePath(null)),
           ),
           Err(:final failure) => Err(failure),
         };
     }
+  }
+
+  /// The readable copy of a just-sent locked text becomes the list preview (the server row only holds the placeholder).
+  Result<Message> _shownSent(Message readable) {
+    ref.read(conversationListProvider.notifier).showSent(readable);
+    return Ok(readable);
   }
 
   // ponytail: a fixed delay ladder capped at 5s (owner: 30s left a message

@@ -1,4 +1,5 @@
-FROM ubuntu:24.04
+# Copy of the Docker Official Image in our own registry (made by tool/ensure_base_images.sh, same digest); Docker Hub rate-limits anonymous pulls from CI.
+FROM ghcr.io/hcagil/base-ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
 
 ARG FLUTTER_VERSION=3.47.2
 ARG ANDROID_TOOLS_VERSION=15859902
@@ -53,12 +54,18 @@ ENV PATH=/home/ubuntu/.cargo/bin:${PATH}
 # Rust for the encryption engine (rust/): pinned toolchain, Android targets, and the flutter_rust_bridge code generator at the same version as the Dart package.
 ARG RUSTUP_VERSION=1.28.2
 ARG RUSTUP_INIT_SHA256=20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c
+# CI restores prebuilt codegen binaries here (keyed on this file) so they are not compiled on every run; empty elsewhere.
+COPY --chown=ubuntu:ubuntu cargo-tools/ /tmp/cargo-tools/
 RUN curl -fsSL --retry 5 -o /tmp/rustup-init "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu/rustup-init" \
     && echo "${RUSTUP_INIT_SHA256}  /tmp/rustup-init" | sha256sum -c - \
     && chmod +x /tmp/rustup-init \
     && /tmp/rustup-init -y --profile minimal --default-toolchain "${RUST_VERSION}" \
     -c rustfmt -t aarch64-linux-android -t armv7-linux-androideabi -t x86_64-linux-android \
-    && cargo install flutter_rust_bridge_codegen --version "${FRB_VERSION}" --locked \
-    && cargo install cbindgen --version 0.29.4 --locked
+    && if [ -x /tmp/cargo-tools/flutter_rust_bridge_codegen ] && [ -x /tmp/cargo-tools/cbindgen ]; then \
+         cp /tmp/cargo-tools/flutter_rust_bridge_codegen /tmp/cargo-tools/cbindgen "${CARGO_HOME}/bin/"; \
+       else \
+         cargo install flutter_rust_bridge_codegen --version "${FRB_VERSION}" --locked \
+         && cargo install cbindgen --version 0.29.4 --locked; \
+       fi
 WORKDIR /workspace
 CMD ["flutter", "doctor", "-v"]

@@ -47,3 +47,7 @@ skill-updates/
 
 # iOS Google Maps key: written from the MAPS_API_KEY_IOS secret.
 /ios/Flutter/Secrets.xcconfig
+
+# Prebuilt codegen binaries restored by CI (docker/Dockerfile).
+docker/cargo-tools/*
+!docker/cargo-tools/.gitkeep

@@ -27,6 +27,13 @@ object PeekRunner {
     /** Test seam: when set, replaces the engine (unit tests cannot start Flutter). */
     @Volatile var override: ((Bundle) -> String?)? = null
 
+    @Volatile private var reason: String? = null
+
+    /** The reason code of the last peek() call, read once by the receiver; null when no peek was attempted. */
+    fun takeReason(): String? = synchronized(this) { val r = reason; reason = null; r }
+
+    private fun fail(code: String): String? { synchronized(this) { reason = code }; return null }
+
     /** Test seam: the clock for every budget time read. */
     @VisibleForTesting @Volatile var now: () -> Long = { System.currentTimeMillis() }
 
@@ -50,23 +57,27 @@ object PeekRunner {
 
     /** The message text, or null (= stay locked) on any failure, timeout, or when called on the main thread. Blocks the caller up to TIMEOUT_MS; call it from the draw thread only. */
     fun peek(context: Context, extras: Bundle): String? {
-        if (!wanted(extras)) return null
+        synchronized(this) { reason = null }
+        if (!wanted(extras)) return fail("not_wanted")
         override?.let { return it(extras) }
-        if (Looper.myLooper() == Looper.getMainLooper()) return null
+        if (Looper.myLooper() == Looper.getMainLooper()) return fail("main_thread")
         val timeout = synchronized(this) {
             if (now() - lastPeekEnd > QUIET_GAP_MS) burstSpentMs = 0L
             minOf(PUSH_CAP_MS, BURST_BUDGET_MS - burstSpentMs)
         }
-        if (timeout < 500L) return null
+        if (timeout < 500L) return fail("budget")
         val startedAt = now()
         engine?.let { fake ->
             val text = try { fake(extras, timeout) } finally { charge(startedAt) }
-            return text?.takeIf { it.isNotEmpty() }
+            val seamText = text?.takeIf { it.isNotEmpty() } ?: return fail("other:seam")
+            synchronized(this) { reason = "ok" }
+            return seamText
         }
 
         val args = listOf("user_id", "conversation_id", "message_id", "ct", "ot").associateWith { extras.getString(it) }
         val latch = CountDownLatch(1)
         val result = AtomicReference<String?>(null)
+        val dartReason = AtomicReference<String?>(null)
         val engineRef = AtomicReference<FlutterEngine?>(null)
         val main = Handler(Looper.getMainLooper())
 
@@ -87,7 +98,9 @@ object PeekRunner {
                     when (call.method) {
                         "take" -> res.success(args)
                         "done" -> {
-                            result.set(call.arguments as? String)
+                            val m = call.arguments as? Map<*, *>
+                            result.set(m?.get("text") as? String)
+                            dartReason.set(m?.get("reason") as? String)
                             res.success(null)
                             latch.countDown()
                         }
@@ -99,6 +112,7 @@ object PeekRunner {
                 )
             } catch (t: Throwable) {
                 android.util.Log.w("PeekRunner", "engine failed: ${t.javaClass.simpleName}")
+                dartReason.set("other:" + t.javaClass.simpleName.take(40).replace(Regex("[^A-Za-z0-9_]"), "_"))
                 latch.countDown()
             }
         }
@@ -106,7 +120,17 @@ object PeekRunner {
         val finished = latch.await(timeout, TimeUnit.MILLISECONDS)
         main.post { engineRef.get()?.destroy() }
         charge(startedAt)
-        return if (finished) result.get()?.takeIf { it.isNotEmpty() } else null
+        if (!finished) return fail("timeout")
+        val text = result.get()?.takeIf { it.isNotEmpty() }
+        val r = dartReason.get()
+        synchronized(this) {
+            reason = when {
+                text != null -> "ok"
+                r != null && r.matches(Regex("^[a-z_]{1,24}(:[A-Za-z0-9_]{1,40})?$")) -> r
+                else -> "other:unknown"
+            }
+        }
+        return text
     }
 
     private fun charge(startedAt: Long) = synchronized(this) {

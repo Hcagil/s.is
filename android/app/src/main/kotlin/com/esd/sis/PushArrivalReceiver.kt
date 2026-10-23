@@ -55,7 +55,8 @@ class PushArrivalReceiver : BroadcastReceiver() {
                 var handedOff = false
                 try {
                     val drawn = InstantPush.show(context, extras, postSummaryNow = queued.get() <= 1, paced = depth <= PACE_CAP)
-                    if (prefs.contains(key)) prefs.edit().putString(key, if (drawn) "$head,n" else head).apply()
+                    val peekReason = PeekRunner.takeReason()
+                    if (prefs.contains(key)) prefs.edit().putString(key, if (drawn) "$head,n" + (peekReason?.let { ",peek=$it" } ?: "") else head).apply()
                     // The picture of a photo or video is fetched on its own thread, so the next push is not held up behind a download; the receiver stays open until that thread is done.
                     if (drawn && pending != null && InstantPush.wantsPicture(extras)) {
                         pictureExecutor.execute {

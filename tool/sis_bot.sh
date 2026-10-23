@@ -138,9 +138,13 @@ case "$cmd" in
     q="/rest/v1/messages?select=id,conversation_id,sender_id,body,created_at,reply_to,deleted,attachment_path,attachment_mime,attachment_duration_ms&order=created_at.asc&limit=500"
     [ -z "$since" ] || q="$q&created_at=gt.$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))' "$since")"
     call GET "$q"
-    NAMES="$names" python3 - "$TMP" "$WORK/convs" >"$WORK/out" <<'PY'
+    cp "$TMP" "$WORK/msgs"
+    ids=$(python3 -c 'import json,sys;print(",".join(sorted({m["reply_to"] for m in json.load(open(sys.argv[1])) if m["reply_to"]})))' "$WORK/msgs")
+    if [ -n "$ids" ]; then call GET "/rest/v1/messages?select=id,body&id=in.($ids)"; cp "$TMP" "$WORK/replied"; else echo '[]' >"$WORK/replied"; fi
+    NAMES="$names" python3 - "$WORK/msgs" "$WORK/convs" "$WORK/replied" >"$WORK/out" <<'PY'
 import json, os, sys
 names = {p["user_id"]: p["display_name"] for p in json.loads(os.environ["NAMES"])}
+rb = {r["id"]: r["body"] for r in json.load(open(sys.argv[3]))}
 convs = []
 for m in json.load(open(sys.argv[1])):
     if m.get("deleted"):
@@ -151,7 +155,7 @@ for m in json.load(open(sys.argv[1])):
         convs.append(m["conversation_id"])
     print(json.dumps({"id": m["id"], "conversation_id": m["conversation_id"],
                       "sender_id": m["sender_id"], "sender_name": names.get(m["sender_id"]),
-                      "body": body, "created_at": m["created_at"], "reply_to": m["reply_to"]},
+                      "body": body, "created_at": m["created_at"], "reply_to": m["reply_to"], "reply_body": rb.get(m["reply_to"])},
                      ensure_ascii=False))
 open(sys.argv[2], "w").write("\n".join(convs))
 PY

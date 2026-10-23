@@ -81,6 +81,10 @@ for line in sys.stdin:
     who = clean(name if isinstance(name, str) and name else sender_id, False)
     body = clean(body, True)
     mid = m.get("id")
+    rep = None
+    if isinstance(m.get("reply_to"), str):
+        t = clean((m.get("reply_body") or "").replace("\n", " "), False).strip()
+        rep = t[:80] if t else "(message not found)"
     pic = re.search(r"\[image ([0-9a-fA-F-]{36})\]\s*$", body)
     pic = bool(pic) and pic.group(1) == mid
     if pic:  # download first (sis_bot.sh attachments); on failure keep the cursor so the next poll retries
@@ -99,10 +103,11 @@ for line in sys.stdin:
         elif os.path.exists(rpath):
             os.remove(rpath)
     fence = "`" * max(3, max([len(x) for x in re.findall(r"`+", body)] + [0]) + 1)
+    rl = "reply to: %s\n" % rep if rep is not None else ""
     with open(os.environ["INBOX"], "a", encoding="utf-8") as f:
-        f.write("## %s — %s\nconversation: %s\n\n%s\n%s\n%s\n\n" % (ts, who, conv, fence, body, fence))
+        f.write("## %s — %s\nconversation: %s\n%s\n%s\n%s\n%s\n\n" % (ts, who, conv, rl, fence, body, fence))
     if not pic:
-        print("%s: %s" % (who, body[:80].replace("\n", " ")))
+        print("%s: %s%s" % (who, body[:80].replace("\n", " "), "" if rep is None else " (reply to: %s)" % rep))
     save(ts)
 '
 }
@@ -177,6 +182,15 @@ FAKE
   t "cursor moved after handling" "$TS" "$(cat "$T/.private/tester-inbox.seen")"
   t "attachments called with the message id" yes "$(grep -qx "attachments $PID" "$T/calls" && echo yes || echo no)"
   t "heartbeat is ISO time" yes "$([[ $(cat "$T/.orchestra/bot-watch.heartbeat" 2>/dev/null) =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$ ]] && echo yes || echo no)"
+  # replies: inbox gets a "reply to:" line, the log line carries the same short text
+  rm -f "$T/.private/tester-inbox.md"; echo 2000-01-01T00:00:00Z >"$T/.private/tester-inbox.seen"
+  printf '%s\n%s\n' \
+    '{"id":"22222222-2222-4222-8222-222222222222","conversation_id":"c","sender_id":"u","sender_name":"Bob","body":"yes","created_at":"2030-02-01T00:00:00.000000+00:00","reply_to":"11111111-1111-4111-8111-111111111111","reply_body":"short original"}' \
+    '{"id":"33333333-3333-4333-8333-333333333333","conversation_id":"c","sender_id":"u","sender_name":"Bob","body":"no","created_at":"2030-02-02T00:00:00.000000+00:00","reply_to":"44444444-4444-4444-8444-444444444444","reply_body":null}' >"$T/mailbox"
+  out=$(run)
+  t "log line carries the replied text" "Bob: yes (reply to: short original)" "$(printf '%s\n' "$out" | sed -n 1p)"
+  t "inbox has the reply line" 1 "$(grep -cx 'reply to: short original' "$T/.private/tester-inbox.md")"
+  t "missing replied message" 1 "$(grep -cx 'reply to: (message not found)' "$T/.private/tester-inbox.md")"
   exit $fail
 }
 

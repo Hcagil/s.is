@@ -22,6 +22,8 @@
 # extension from name, path, mime or bytes, only the path printed; exit 1 for
 # another chat, an unknown id, a video, a non-image file, text only and a gone
 # object, writing nothing; 2 bad uuid; 4 OFF) and read's [image <id>] marker.
+# Also read's reply_body: the replied-to text for originals older than --since,
+# null for a reply to a message the bot cannot see (before its history_from) and a non-reply.
 # While the tools run, a poller checks that no token or key is in any argv and
 # that sis_bot.sh keeps its temp files in one mode-700 directory it removes.
 set -euo pipefail
@@ -52,6 +54,7 @@ PASS=0; FAIL=0
 ok()   { PASS=$((PASS+1)); echo "ok - $1"; }
 bad()  { FAIL=$((FAIL+1)); echo "not ok - $1"; }
 check() { local name=$1; shift; if "$@"; then ok "$name"; else bad "$name"; fi; }
+same() { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1: want [$2], got [$3]"; fi; }
 # expect_exit CODE NAME cmd...
 expect_exit() {
   local want=$1 name=$2; shift 2
@@ -234,6 +237,30 @@ check "read showed exactly two chats: Debug, then the 1:1 with dan" \
   test "$(jq -r .conversation_id "$BOX/out" | awk '!seen[$0]++' | tr '\n' ' ')" = "$DEBUG $DAN_CHAT "
 check "read marked the first chat (Debug) read" marked "$DEBUG"
 check "read marked the last chat (the 1:1 with dan) read" marked "$DAN_CHAT"
+# read gives each line reply_body: the replied-to text, null when the bot cannot see it.
+# The originals are older than --since, so the lookup cannot come from the batch itself.
+SINCE=$(jq -r .created_at "$BOX/out" | sort | tail -1)
+O1=$(sql "select id from public.messages where conversation_id = '$DEBUG' and body = 'hello from ann'")
+O2=$(sql "select id from public.messages where conversation_id = '$DEBUG' and body = 'piped body'")
+O3=$(sql "insert into public.messages (conversation_id, sender_id, body, created_at)
+          values ('$DEBUG', '$ANN', 'before the bot joined', '2000-01-01') returning id" | head -1)
+post_reply() {  # BODY REPLY_TO
+  curl -fsS -o /dev/null -X POST "$SIS_URL/rest/v1/messages" -H "apikey: $SIS_ANON_KEY" -H "Authorization: Bearer $ANN_JWT" \
+    -H 'content-type: application/json' -d "$(jq -nc --arg c "$DEBUG" --arg s "$ANN" --arg b "$1" --arg r "$2" \
+      '{conversation_id:$c, sender_id:$s, body:$b, reply_to:$r}')"
+}
+post_reply "reply one 5b" "$O1"; post_reply "reply two 5b" "$O2"; post_reply "reply hidden 5b" "$O3"
+curl -fsS -o /dev/null -X POST "$SIS_URL/rest/v1/messages" -H "apikey: $SIS_ANON_KEY" -H "Authorization: Bearer $ANN_JWT" \
+  -H 'content-type: application/json' -d "{\"conversation_id\":\"$DEBUG\",\"sender_id\":\"$ANN\",\"body\":\"no reply 5b\"}"
+watch 0 "read --since with replies" "$(jq -r .refresh_token "$STATE")" "$BOT" read --since "$SINCE"
+rb_of() { jq -r --arg b "$1" 'select(.body == $b) | [.reply_to, (.reply_body | tojson)] | join(" ")' "$BOX/out"; }
+same "read: a reply carries the replied-to text" "$O1 \"hello from ann\"" "$(rb_of 'reply one 5b')"
+same "read: a second reply in the batch carries its own original" "$O2 \"piped body\"" "$(rb_of 'reply two 5b')"
+same "read: a reply to a message the bot cannot see has reply_body null" "$O3 null" "$(rb_of 'reply hidden 5b')"
+same "read: a non-reply has reply_to and reply_body null" " null" "$(rb_of 'no reply 5b')"
+check "read: the hidden original itself is not shown" bash -c "! grep -qF 'before the bot joined' '$BOX/out'"
+check "read: the originals before --since are not printed as lines" \
+  test "$(jq -r 'select(.body == "hello from ann" or .body == "piped body") | .id' "$BOX/out" | wc -l)" = 0
 BOB_TAG=$(sql "select tag from public.profiles where user_id = '$BOB'")
 expect_exit 0 "start a 1:1 with a listed contact by @tag" "$BOT" start "@$BOB_TAG" "hi bob"
 

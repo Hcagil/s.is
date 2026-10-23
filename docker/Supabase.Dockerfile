@@ -1,7 +1,7 @@
-# Base images come from the AWS ECR Public mirror of Docker Official Images (same digests); Docker Hub rate-limits anonymous pulls from CI.
-FROM public.ecr.aws/docker/library/docker:29.8.0-cli AS docker
+# Base images are copies in our own registry (made by tool/ensure_base_images.sh, same digests); Docker Hub rate-limits anonymous pulls from CI.
+FROM ghcr.io/hcagil/base-docker:29.8.0-cli@sha256:eccaacfeed644c7de222ff047483568cb988dde95476fbaaf10ea2d04921bb66 AS docker
 
-FROM public.ecr.aws/docker/library/node:22.20.0-bookworm-slim
+FROM ghcr.io/hcagil/base-node:22.20.0-bookworm-slim@sha256:b21fe589dfbe5cc39365d0544b9be3f1f33f55f3c86c87a76ff65a02f8f5848e
 
 ARG SUPABASE_CLI_VERSION=2.117.0
 

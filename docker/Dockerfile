@@ -1,5 +1,5 @@
-# AWS ECR Public mirror of Docker Official Images (same digest as Docker Hub); Docker Hub rate-limits anonymous pulls from CI.
-FROM public.ecr.aws/docker/library/ubuntu:24.04
+# Copy of the Docker Official Image in our own registry (made by tool/ensure_base_images.sh, same digest); Docker Hub rate-limits anonymous pulls from CI.
+FROM ghcr.io/hcagil/base-ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
 
 ARG FLUTTER_VERSION=3.47.2
 ARG ANDROID_TOOLS_VERSION=15859902

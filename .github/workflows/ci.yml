@@ -67,6 +67,22 @@ jobs:
               - '.github/compose.ci.yaml'
               - '.github/workflows/**'
 
+  base-images:
+    name: Base images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Log in to the base image registry
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Copy missing base images
+        run: tool/ensure_base_images.sh
+
   documentation:
     name: Documentation check
     needs: changes
@@ -78,12 +94,19 @@ jobs:
 
   android:
     name: Android checks
-    needs: changes
+    needs: [changes, base-images]
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Log in to the base image registry
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Prepare cache directories
         run: mkdir -p .ci-cache/pub .ci-cache/gradle .ci-cache/m2
       - name: Restore dependency caches
@@ -148,12 +171,19 @@ jobs:
 
   database:
     name: Database checks
-    needs: changes
+    needs: [changes, base-images]
     if: needs.changes.outputs.database == 'true'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Log in to the base image registry
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build Supabase tooling image
         run: docker compose build supabase
       # `start`, not `db start`: the integration tests need the API, auth and
@@ -185,7 +215,7 @@ jobs:
           test -n "$SUPABASE_TEST_SERVICE_KEY"
           docker run --rm --add-host host.docker.internal:host-gateway \
             -v "$PWD":/w -w /w -e SUPABASE_TEST_SERVICE_KEY="$SUPABASE_TEST_SERVICE_KEY" \
-            ghcr.io/denoland/deno:2.9.7@sha256:fa335acdf6b72106eda2cb6a8cb5f4187e7630e357467489db4b2e7352d5e432 \
+            ghcr.io/hcagil/base-deno:2.9.7@sha256:fa335acdf6b72106eda2cb6a8cb5f4187e7630e357467489db4b2e7352d5e432 \
             test --no-check --no-lock --allow-all test/edge/
       - name: Prepare cache directories
         run: mkdir -p .ci-cache/pub .ci-cache/gradle

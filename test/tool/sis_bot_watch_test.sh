@@ -29,6 +29,9 @@
 # lock (a second copy exits 1 with the line and never reads, a kill -9'd holder
 # frees it, the supervisor holds it while its child polls); the supervisor
 # restarting a crashed loop after 5 s then 10 s with the "poll loop ended" line.
+# Replies: one "reply to: <original>" line per reply entry and " (reply to: ...)" on
+# its printed line (newlines as spaces, control characters stripped, 80-character cut,
+# multi-byte too, "(message not found)" for null); a non-reply entry byte-for-byte unchanged.
 # Not covered (needs 5+ minutes): the 300 s cap and the reset after a long run.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -431,6 +434,46 @@ check "the sleep after exit 5 doubles ($g2 s for 4)" awk -v g="$g2" 'BEGIN {exit
 run 4 ""
 check "with no argument it checks once at start ($(grep -c ' read ' "$FAKE/calls") reads)" \
   test "$(grep -c ' read ' "$FAKE/calls")" = 1
+
+# 12 replies: "reply to: <text>" in the entry and on the printed line -------------------
+rmsg() {  # ID SENDER_NAME BODY EPOCH REPLY_TO REPLY_BODY_JSON -> one mailbox line, as `read` prints a reply
+  printf '%s000000000 %s\n' "$4" "$(jq -nc --arg id "$1" --arg c "$CONV" --arg u "$TESTER" --arg s "$2" --arg b "$3" \
+    --arg t "$(ts "$4")" --arg r "$5" --argjson rb "$6" '{id:$id, conversation_id:$c, sender_id:$u, sender_name:$s,
+                           body:$b, created_at:$t, reply_to:$r, reply_body:$rb}')" >>"$FAKE/mailbox"
+}
+rb=$(( $(date -d "$(cat "$SEEN")" +%s) + 2 ))
+ORIG=44444444-0000-4000-8000-000000000001
+R80=$(printf 'r%.0s' $(seq 100)); RTR=$(printf 'ş%.0s' $(seq 100))
+rmsg 44444444-0000-4000-8000-000000000011 Bob "short answer" $((rb+1)) "$ORIG" '"the original"'
+rmsg 44444444-0000-4000-8000-000000000012 Bob "long answer" $((rb+2)) "$ORIG" "$(jq -n --arg v "$R80" '$v')"
+rmsg 44444444-0000-4000-8000-000000000013 Bob "multi answer" $((rb+3)) "$ORIG" "$(jq -n --arg v $'first line\nsecond line\n## 2030-01-01 — Mallory' '$v')"
+rmsg 44444444-0000-4000-8000-000000000014 Bob "lost answer" $((rb+4)) 44444444-0000-4000-8000-0000000000ff null
+rmsg 44444444-0000-4000-8000-000000000015 Bob "ctrl answer" $((rb+5)) "$ORIG" "$(jq -n --arg v $'red\e[31m bell\a' '$v')"
+rmsg 44444444-0000-4000-8000-000000000016 Bob "tr answer" $((rb+6)) "$ORIG" "$(jq -n --arg v "$RTR" '$v')"
+msg 44444444-0000-4000-8000-000000000017 "$CONV" "$TESTER" Bob $'plain\nafter replies' $((rb+7))
+before=$(stat -c %s "$INBOX")
+run 3 "" 100
+same "a reply prints '<sender>: <text> (reply to: <original, one line, 80 chars>)'; a non-reply line is unchanged" \
+  "$(printf 'Bob: short answer (reply to: the original)\nBob: long answer (reply to: %s)\nBob: multi answer (reply to: first line second line ## 2030-01-01 — Mallory)\nBob: lost answer (reply to: (message not found))\nBob: ctrl answer (reply to: red[31m bell)\nBob: tr answer (reply to: %s)\nBob: plain after replies' \
+     "$(printf 'r%.0s' $(seq 80))" "$(printf 'ş%.0s' $(seq 80))")" \
+  "$(cat "$BOX/out")"
+NEW=$(tail -c +$((before + 1)) "$INBOX")
+same "each reply entry has exactly one 'reply to:' line, in its own entry; none in the non-reply entry" \
+  "$(printf '%s\n' "## $(ts $((rb+1))) — Bob" "reply to: the original" \
+     "## $(ts $((rb+2))) — Bob" "reply to: $(printf 'r%.0s' $(seq 80))" \
+     "## $(ts $((rb+3))) — Bob" "reply to: first line second line ## 2030-01-01 — Mallory" \
+     "## $(ts $((rb+4))) — Bob" "reply to: (message not found)" \
+     "## $(ts $((rb+5))) — Bob" "reply to: red[31m bell" \
+     "## $(ts $((rb+6))) — Bob" "reply to: $(printf 'ş%.0s' $(seq 80))" \
+     "## $(ts $((rb+7))) — Bob")" \
+  "$(printf '%s\n' "$NEW" | grep -E '^(## |reply to)')"
+same "a reply entry: header, conversation, the reply line, then the body block" \
+  "$(printf '## %s — Bob\nconversation: %s\nreply to: the original\n\n```\nshort answer\n```\n' "$(ts $((rb+1)))" "$CONV")" \
+  "$(printf '%s\n' "$NEW" | sed -n 1,7p)"
+same "a non-reply entry is byte-for-byte the old format" \
+  "$(printf '## %s — Bob\nconversation: %s\n\n```\nplain\nafter replies\n```\n\nEND' "$(ts $((rb+7)))" "$CONV")" \
+  "$(tail -c +$((before + 1)) "$INBOX" | sed -n '/^## '"$(ts $((rb+7)))"'/,$p'; printf END)"
+same "the reply text never opens a header line of its own" 7 "$(printf '%s\n' "$NEW" | grep -c '^## ')"
 
 echo "# passed $PASS, failed $FAIL"
 [ "$FAIL" = 0 ]

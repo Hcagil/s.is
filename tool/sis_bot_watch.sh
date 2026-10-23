@@ -187,10 +187,15 @@ FAKE
   printf '%s\n%s\n' \
     '{"id":"22222222-2222-4222-8222-222222222222","conversation_id":"c","sender_id":"u","sender_name":"Bob","body":"yes","created_at":"2030-02-01T00:00:00.000000+00:00","reply_to":"11111111-1111-4111-8111-111111111111","reply_body":"short original"}' \
     '{"id":"33333333-3333-4333-8333-333333333333","conversation_id":"c","sender_id":"u","sender_name":"Bob","body":"no","created_at":"2030-02-02T00:00:00.000000+00:00","reply_to":"44444444-4444-4444-8444-444444444444","reply_body":null}' >"$T/mailbox"
+  printf '{"id":"55555555-5555-4555-8555-555555555555","conversation_id":"c","sender_id":"u","sender_name":"Bob","body":"long","created_at":"2030-02-03T00:00:00.000000+00:00","reply_to":"%s","reply_body":"line1\\nline2 %s"}\n' "$PID" "$(printf 'x%.0s' $(seq 90))" >>"$T/mailbox"
+  echo '{"id":"66666666-6666-4666-8666-666666666666","conversation_id":"c","sender_id":"u","sender_name":"Bob","body":"plain","created_at":"2030-02-04T00:00:00.000000+00:00","reply_to":null,"reply_body":null}' >>"$T/mailbox"
   out=$(run)
   t "log line carries the replied text" "Bob: yes (reply to: short original)" "$(printf '%s\n' "$out" | sed -n 1p)"
   t "inbox has the reply line" 1 "$(grep -cx 'reply to: short original' "$T/.private/tester-inbox.md")"
   t "missing replied message" 1 "$(grep -cx 'reply to: (message not found)' "$T/.private/tester-inbox.md")"
+  t "replied text on one line, cut at 80" 1 "$(grep -cx "reply to: line1 line2 $(printf 'x%.0s' $(seq 68))" "$T/.private/tester-inbox.md")"
+  t "a non-reply gets no reply line" 3 "$(grep -c '^reply to:' "$T/.private/tester-inbox.md")"
+  t "a non-reply log line is unchanged" "Bob: plain" "$(printf '%s\n' "$out" | sed -n 4p)"
   exit $fail
 }
 

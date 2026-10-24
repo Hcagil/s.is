@@ -416,7 +416,6 @@ void main() {
           '🦊',
         );
         expect(decodeEnvelope(call.plaintext, 'm1'), isNull);
-        // RED-EXPECTED until the fix round (F3: fixed 192 bytes).
         expect(utf8.encode(call.plaintext).length, 192);
       },
     );
@@ -436,7 +435,6 @@ void main() {
       final lengths = {
         for (final c in w.engine.encrypts) utf8.encode(c.plaintext).length,
       };
-      // RED-EXPECTED until the fix round (F3).
       expect(
         lengths,
         {192},
@@ -449,7 +447,6 @@ void main() {
         'nothing locked (F3)', () async {
       final w = World()..session();
       final r = await react(w, 'c1', emoji: '${'😀' * 16}a');
-      // RED-EXPECTED until the fix round (F3).
       expect(failureOf(r), isNotNull);
       expect(w.engine.encrypts, isEmpty);
     });

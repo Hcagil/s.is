@@ -13,7 +13,7 @@ void main() {
   // Helper to assert length and padding
   void checkLengthAndPadding(String jsonStr) {
     final bytes = utf8.encode(jsonStr);
-    expect(bytes.length, equals(192)); // RED-EXPECTED until the fix round (F3)
+    expect(bytes.length, equals(192)); // F3
     final map = jsonDecode(jsonStr) as Map<String, dynamic>;
     expect(map['p'], isA<String>());
     final padding = map['p'] as String;

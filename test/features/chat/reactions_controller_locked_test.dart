@@ -7,7 +7,7 @@
 //      Err       -> returned, rolled back, NOTHING sent (no plain fallback);
 //      locked    -> setLockedReaction, and rememberOwn of those bytes; a
 //                   failed try never replaces the earlier saved copy and
-//                   never adds to the usage counts ((b), RED-EXPECTED);
+//                   never adds to the usage counts ((b));
 //  * one retry on a retryable NetworkFailure, with the very same bytes; any
 //    other failure (or a second one) rolls back;
 //  * nothing logs the emoji or the ciphertext.
@@ -27,6 +27,9 @@ import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/reaction.dart';
 import 'package:sis/features/chat/domain/reaction_opener.dart';
 import 'package:sis/features/chat/domain/send_queue_store.dart';
+
+import '../../support/store_spy.dart' show eventually;
+import '../../support/video_fakes.dart' show videoOverrides;
 
 import 'package:sis/features/chat/data/store/drift_reaction_store.dart';
 
@@ -112,16 +115,18 @@ class World {
       };
     c = ProviderContainer.test(
       overrides: [
-        chatRepositoryProvider.overrideWithValue(ChatFake()),
+        chatRepositoryProvider.overrideWithValue(chat),
         reactionRepositoryProvider.overrideWithValue(fake),
         sessionControllerProvider.overrideWith(_SignedIn.new),
         textLockerProvider.overrideWithValue(locker),
         reactionOpenerProvider.overrideWithValue(realOpener ?? opener),
+        ...videoOverrides(),
       ],
     );
   }
 
   final log = <String>[];
+  final chat = ChatFake();
   final fake = ReactionFake();
   late final locker = _Locker(log);
   late final opener = _Opener(log);
@@ -301,7 +306,7 @@ void main() {
   );
 
   group('S5: own plain reactions in a private chat are re-locked by this '
-      'build (RED-EXPECTED until the fix round)', () {
+      'build', () {
     test('opening the private chat re-locks my plain reaction with the same '
         'emoji; another member\'s plain row is left alone', () async {
       final w = World();
@@ -312,9 +317,52 @@ void main() {
       await w.loaded();
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(w.locker.calls, contains(('c1', 'm1', '❤️')));
-      expect(w.fake.lockedCalls, contains(('m1', ct, 1)));
+      expect(w.fake.relockCalls, [('m1', ct, 1)]);
+      expect(
+        w.fake.lockedCalls,
+        isEmpty,
+        reason:
+            'R2: a re-lock is the compare-and-set relockPlain, never a '
+            'plain overwrite',
+      );
       expect([for (final c in w.locker.calls) c.$2], isNot(contains('m2')));
       expect(w.fake.setCalls, isEmpty, reason: 'no plain re-send');
+    });
+
+    test('R2: the server re-locked it (true): the saved copy of those bytes '
+        'is written', () async {
+      final w = World();
+      await w.loaded();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(w.fake.relockCalls, [('m1', ct, 1)]);
+      expect(w.opener.remembered, [('m1', 'u1', ct, '❤️')]);
+    });
+
+    test('R2: the row changed meanwhile (false): no saved copy, nothing else '
+        'sent', () async {
+      final w = World();
+      w.fake.onRelock = (_, _, _) async {
+        await Future<void>.delayed(Duration.zero);
+        return const Ok(false);
+      };
+      await w.loaded();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(w.fake.relockCalls, [('m1', ct, 1)]);
+      expect(w.opener.remembered, isEmpty);
+      expect(w.fake.lockedCalls, isEmpty);
+      expect(w.fake.setCalls, isEmpty);
+    });
+
+    test('R2: the re-lock fails (Err): no saved copy', () async {
+      final w = World();
+      w.fake.onRelock = (_, _, _) async {
+        await Future<void>.delayed(Duration.zero);
+        return const Err(NetworkFailure('offline'));
+      };
+      await w.loaded();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(w.fake.relockCalls, isNotEmpty);
+      expect(w.opener.remembered, isEmpty);
     });
 
     test('control: in a plain chat (locker answers Ok(null)) nothing is '
@@ -365,30 +413,31 @@ void main() {
       olmType: 1,
     );
 
-    test('a failed change keeps the earlier saved copy and the usage counts '
-        '(RED-EXPECTED until the fix round)', () async {
-      final (w, opener) = await world();
-      expect(await w.react('👍'), isA<Ok<void>>());
-      expect((await opener.open([own('Q1Q1')])).single.emoji, '👍');
-      expect(await opener.ownUsage('u1'), {'👍': 1});
+    test(
+      'a failed change keeps the earlier saved copy and the usage counts',
+      () async {
+        final (w, opener) = await world();
+        expect(await w.react('👍'), isA<Ok<void>>());
+        expect((await opener.open([own('Q1Q1')])).single.emoji, '👍');
+        expect(await opener.ownUsage('u1'), {'👍': 1});
 
-      w.lockedAnswers.add(const Err(DeniedFailure()));
-      expect(failureOf(await w.react('❤️')), isA<DeniedFailure>());
-      // The server still holds Q1Q1: it must still open to 👍.
-      expect(
-        (await opener.open([own('Q1Q1')])).single.emoji,
-        '👍',
-        reason:
-            'the earlier good copy was overwritten before the server '
-            'accepted the change',
-      );
-      expect(await opener.ownUsage('u1'), {
-        '👍': 1,
-      }, reason: 'a failed try added to the usage counts');
-    });
+        w.lockedAnswers.add(const Err(DeniedFailure()));
+        expect(failureOf(await w.react('❤️')), isA<DeniedFailure>());
+        // The server still holds Q1Q1: it must still open to 👍.
+        expect(
+          (await opener.open([own('Q1Q1')])).single.emoji,
+          '👍',
+          reason:
+              'the earlier good copy was overwritten before the server '
+              'accepted the change',
+        );
+        expect(await opener.ownUsage('u1'), {
+          '👍': 1,
+        }, reason: 'a failed try added to the usage counts');
+      },
+    );
 
-    test('a first set that fails leaves no usage behind '
-        '(RED-EXPECTED until the fix round)', () async {
+    test('a first set that fails leaves no usage behind', () async {
       final (w, opener) = await world();
       w.lockedAnswers.add(const Err(DeniedFailure()));
       expect(failureOf(await w.react('🦊')), isA<DeniedFailure>());
@@ -401,6 +450,40 @@ void main() {
       expect(await w.react('❤️'), isA<Ok<void>>());
       expect((await opener.open([own('Q1Q2')])).single.emoji, '❤️');
       expect(await opener.ownUsage('u1'), {'❤️': 1});
+    });
+  });
+
+  group('R1: reactions load after the messages', () {
+    test('a failed message load fails the reactions load; once the messages '
+        'load, the reactions reload and show', () async {
+      final w = World();
+      w.chat.messagesResult = const Err(NetworkFailure('offline'));
+      await settled(w.c);
+      w.c.listen(messagesProvider, (_, _) {});
+      w.c.listen(reactionsProvider, (_, _) {});
+      w.c.read(openConversationProvider.notifier).open('c1');
+      await eventually(
+        () => !w.c.read(messagesProvider).isLoading,
+        reason: 'messages answered',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      final failed = w.c.read(reactionsProvider);
+      expect(failed.hasError, isTrue, reason: 'state: $failed');
+      expect(w.mine(), isNull);
+
+      w.chat.messagesResult = const Ok([]);
+      w.c.invalidate(messagesProvider);
+      await eventually(
+        () => w.mine() == '❤️',
+        reason: 'reactions reloaded after the messages loaded',
+      );
+      expect(w.c.read(reactionsProvider).hasError, isFalse);
+    });
+
+    test('control: messages load, reactions load', () async {
+      final w = World();
+      await w.loaded();
+      expect(w.mine(), '❤️');
     });
   });
 }

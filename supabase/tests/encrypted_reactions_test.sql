@@ -1,5 +1,5 @@
 begin;
-select plan(108);
+select plan(145);
 
 -- Locked reactions in private chats (20261104120000_encrypted_reactions.sql).
 --
@@ -415,7 +415,7 @@ select is(row_of(mid('an1'), 'ann'), '👍|<null>|<null>', 'and in another plain
 -- it waits for (and then sees) a first locked message or reaction committing
 -- in the same instant. Read from the row's own lock bits (pgrowlocks): a
 -- fresh plain 1:1 holds only the KEY SHARE its foreign keys take, until the
--- plain set. RED-EXPECTED until the fix round (F2).
+-- plain set.
 create extension if not exists pgrowlocks;
 create function modes(c uuid) returns text language sql as $$
   select coalesce((select array_to_string(array(select unnest(modes) order by 1), ',')
@@ -434,6 +434,92 @@ reset role;
 select is(enc_at(g('AE')), null, 'fixture: AE is still plain');
 select ok(modes(g('AE')) ~ 'For (Share|No Key Update|Update)',
           'F2: the plain set share-locked the conversation row of a plain chat (' || modes(g('AE')) || ')');
+
+-- 9 R2: relock_reaction(message, ciphertext, olm_type) is a compare-and-set of
+-- the caller's own PLAIN row: replaced only while emoji is not null; true when
+-- it replaced, false otherwise; encrypted_at set only when it replaced; a
+-- removed, already locked, missing or foreign row is left as it was.
+create function rl(m uuid, x text, t int) returns text language plpgsql as $$
+declare v boolean;
+begin
+  execute format('select public.relock_reaction(%L, %L, %L::smallint)', m, x, t) into v;
+  perform commit_check();
+  return coalesce(v::text, '<null>');
+exception when others then return sqlstate;
+end $$;
+grant execute on function rl(uuid, text, int) to authenticated, anon;
+select ok(has_function_privilege('authenticated', 'public.relock_reaction(uuid, text, smallint)', 'execute'),
+          'authenticated may call relock_reaction');
+select ok(not has_function_privilege('anon', 'public.relock_reaction(uuid, text, smallint)', 'execute'),
+          'anon may not call relock_reaction');
+select is((select array[prosecdef::text, array_to_string(proconfig, ',')] from pg_proc
+            where oid = 'public.relock_reaction(uuid, text, smallint)'::regprocedure),
+          array['true', 'search_path=""'], 'relock_reaction: security definer, empty search_path');
+select as_('ann');
+select msg(g('AE'), mid('ae2'), 'ae two');
+select msg(g('AE'), mid('ae3'), 'ae three');
+reset role;
+-- AE is still plain; eve: plain on ae1 (from 8), removed on ae2; ann: plain on ae3;
+-- cat (not in AE) holds a stale plain row on ae2; ann: plain on g1 (group G).
+select is(put_row(mid('ae2'), 'eve', null, null, null), 'ok', 'fixture: eve''s removed row on ae2');
+select is(put_row(mid('ae3'), 'ann', '❤️', null, null), 'ok', 'fixture: ann plain on ae3');
+select is(put_row(mid('ae2'), 'cat', '🙂', null, null), 'ok', 'fixture: a non-member''s plain row on ae2');
+select is(put_row(mid('g1'), 'ann', '👍', null, null), 'ok', 'fixture: ann plain on g1 in the group');
+select as_('ann');
+select is(rl(mid('ae1'), ct(20, 'X'), 1), 'false', 'another member''s plain row: false');
+select is(rl(mid('ae2'), ct(20, 'X'), 1), 'false', 'no own row on the message: false');
+reset role;
+select is(row_of(mid('ae1'), 'eve'), '😺|<null>|<null>', 'eve''s row is untouched');
+select is(row_of(mid('ae2'), 'ann'), '<no row>', 'no row was made for ann');
+select as_('eve');
+select is(rl(mid('ae2'), ct(20, 'X'), 1), 'false', 'an own removed row: false');
+reset role;
+select is(row_of(mid('ae2'), 'eve'), '<null>|<null>|<null>', 'the removed row stays removed');
+select as_('cat');
+select isnt(rl(mid('ae2'), ct(20, 'X'), 1), 'true', 'a non-member''s own plain row is not re-locked');
+reset role;
+select is(row_of(mid('ae2'), 'cat'), '🙂|<null>|<null>', 'and stays as it was');
+select as_('ann');
+select isnt(rl(mid('g1'), ct(20, 'X'), 1), 'true', 'an own plain row in a group (cannot be locked) is not re-locked');
+select is(rl(mid('ae3'), ct(1025), 1), '22023', 'an over-long ciphertext is 22023');
+select is(rl(mid('ae3'), ct(20), 2), '22023', 'olm_type 2 is 22023');
+reset role;
+select is(row_of(mid('g1'), 'ann'), '👍|<null>|<null>', 'the group row is untouched');
+select is(row_of(mid('ae3'), 'ann'), '❤️|<null>|<null>', 'the refused calls left ann''s row');
+select is(enc_at(g('G')), null, 'the group stays plain');
+select is(enc_at(g('AE')), null, 'no false or refused call locked AE');
+select as_('eve');
+select is(rl(mid('ae1'), ct(20, 'X'), 1), 'true', 'eve re-locks her own plain row: true');
+reset role;
+select is(row_of(mid('ae1'), 'eve'), '<null>|' || ct(20, 'X') || '|1', 'the emoji is gone, the ciphertext stored');
+select is(enc_at(g('AE')), now(), 'the replacing call set AE.encrypted_at');
+select as_('eve');
+select is(rl(mid('ae1'), ct(20, 'Y'), 0), 'false', 'an already locked row: false');
+reset role;
+select is(row_of(mid('ae1'), 'eve'), '<null>|' || ct(20, 'X') || '|1', 'the locked row is unchanged');
+select as_('ann');
+select is(rl(mid('ae3'), ct(20, 'Z'), 0), 'true', 'ann re-locks her old plain row in the now locked chat: true');
+reset role;
+select is(row_of(mid('ae3'), 'ann'), '<null>|' || ct(20, 'Z') || '|0', 'stored locked');
+-- app access: out (off the allowlist since 6, keys live) and bob share OB
+update public.message_reactions set emoji = '👀', ciphertext = null, olm_type = null
+ where message_id = mid('ob1') and user_id = u('out');
+select is(put_row(mid('ob1'), 'bob', '👀', null, null), 'ok', 'fixture: bob plain on ob1');
+select as_('out');
+select is(rl(mid('ob1'), ct(20), 0), '42501', 'a caller without app access is refused');
+reset role;
+select is(row_of(mid('ob1'), 'out'), '👀|<null>|<null>', 'and the row is unchanged');
+select as_('bob');
+select is(rl(mid('ob1'), ct(20), 0), 'true', 'control: bob (allowed) re-locks his own row in OB');
+reset role;
+select is(put_row(mid('abdel'), 'bob', '👍', null, null), 'ok', 'fixture: bob plain on the deleted abdel');
+select as_('bob');
+select isnt(rl(mid('abdel'), ct(20), 0), 'true', 'a plain row on a deleted message is not re-locked');
+reset role;
+select is(row_of(mid('abdel'), 'bob'), '👍|<null>|<null>', 'and stays as it was');
+set local role anon;
+select is(rl(mid('ae3'), ct(20), 0), '42501', 'anon cannot call relock_reaction');
+reset role;
 
 select * from finish();
 rollback;

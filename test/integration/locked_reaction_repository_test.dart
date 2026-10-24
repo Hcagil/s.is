@@ -14,6 +14,7 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/data/supabase_reaction_repository.dart';
 import 'package:sis/features/chat/domain/reaction.dart';
 import 'package:sis/features/chat/domain/reaction_envelope.dart';
+import 'package:sis/features/chat/domain/reaction_repository.dart';
 import 'package:sis/features/crypto/data/drift_olm_pickle_store.dart';
 import 'package:sis/features/crypto/data/drift_session_engine.dart';
 import 'package:sis/features/crypto/data/olm_key_engine.dart';
@@ -33,7 +34,11 @@ import '../support/reach.dart';
 ///  * DeniedFailure in a chat that cannot be locked (a member without keys);
 ///  * reactions() / reactionUpdates() hand out OPENED reactions; a row that
 ///    cannot be opened is absent from reactions() and a removal on the feed;
-///  * myReactionUsage adds this phone's own locked reactions.
+///  * myReactionUsage adds this phone's own locked reactions;
+///  * relockPlain (ReactionRelocker) is a compare-and-set on the caller's own
+///    plain row: Ok(true) replaced it with the ciphertext, Ok(false) for a
+///    removed or already locked row (unchanged); DeniedFailure where the chat
+///    cannot be locked.
 ///
 /// Fixtures (supabase/seed.sql allowlist): lr-ana, lr-ben publish keys;
 /// lr-cy never does. Needs the Rust library built and a freshly reset stack.
@@ -184,6 +189,12 @@ void main() {
     m2 = await _message(ben, ab);
     m3 = await _message(ben, ab);
     mc = await _message(cy, ac);
+    // ben's own plain rows from before the lock (for relockPlain): one live
+    // on m1, one removed on m2.
+    final benRepo = SupabaseReactionRepository(ben);
+    _ok(await benRepo.setReaction(m1, '👍'));
+    _ok(await benRepo.setReaction(m2, '😂'));
+    _ok(await benRepo.setReaction(m2, null));
   });
 
   tearDownAll(() async {
@@ -331,5 +342,49 @@ void main() {
     await opener.rememberOwn(m2, _id(ana), 'TE9DS0VE', '🦉');
     final after = _ok(await repo.myReactionUsage());
     expect(after['🦉'], (before['🦉'] ?? 0) + 1);
+  });
+
+  test('relockPlain: ben\'s old plain row is re-locked once (true), then '
+      'false; a removed row stays removed (false); a chat that cannot be '
+      'locked is DeniedFailure', () async {
+    final x = base64.encode(List.filled(60, 5));
+    final y = base64.encode(List.filled(60, 6));
+    final repo = benPhone.repo();
+    expect(repo, isA<ReactionRelocker>());
+    final relocker = repo as ReactionRelocker;
+    expect(await _row(ana, m1, _id(ben)), {
+      'emoji': '👍',
+      'ciphertext': null,
+      'olm_type': null,
+    }, reason: 'fixture: ben\'s plain row from before the lock');
+
+    expect(_ok(await relocker.relockPlain(m1, x, 1)), isTrue);
+    expect(await _row(ana, m1, _id(ben)), {
+      'emoji': null,
+      'ciphertext': x,
+      'olm_type': 1,
+    });
+    expect(_ok(await relocker.relockPlain(m1, y, 0)), isFalse);
+    expect(
+      (await _row(ana, m1, _id(ben)))!['ciphertext'],
+      x,
+      reason: 'an already locked row is never replaced',
+    );
+
+    expect(_ok(await relocker.relockPlain(m2, y, 0)), isFalse);
+    expect(await _row(ana, m2, _id(ben)), {
+      'emoji': null,
+      'ciphertext': null,
+      'olm_type': null,
+    }, reason: 'a removal is never undone');
+
+    expect((await _row(cy, mc, _id(ana)))!['emoji'], '👍');
+    expect(
+      _failure(
+        await (anaPhone.repo() as ReactionRelocker).relockPlain(mc, x, 1),
+      ),
+      isA<DeniedFailure>(),
+    );
+    expect((await _row(cy, mc, _id(ana)))!['emoji'], '👍');
   });
 }

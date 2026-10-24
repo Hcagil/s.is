@@ -71,7 +71,13 @@ Future<String?> peekDecrypt({
           return null;
         }
         final restored = await engine.restoreSession(session.pickle, pickleKey);
-        final plain = restored.decrypt(cipher);
+        final List<int> plain;
+        try {
+          plain = restored.decrypt(cipher);
+        } on KeyEngineException {
+          onFail?.call('decrypt_fail');
+          return null;
+        }
         final text = decodeEnvelope(utf8.decode(plain), messageId);
         if (text == null) onFail?.call('decrypt_fail');
         return text?.text;
@@ -101,8 +107,13 @@ Future<String?> peekDecrypt({
           rows.account!,
           pickleKey,
         );
-        final inbound = account.createInbound(identityKey, cipher);
-        final plain = inbound.plaintext;
+        final List<int> plain;
+        try {
+          plain = account.createInbound(identityKey, cipher).plaintext;
+        } on KeyEngineException {
+          onFail?.call('decrypt_fail');
+          return null;
+        }
         final text = decodeEnvelope(utf8.decode(plain), messageId);
         if (text == null) onFail?.call('decrypt_fail');
         return text?.text;

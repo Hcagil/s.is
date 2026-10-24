@@ -14,6 +14,7 @@ import '../domain/message.dart';
 import '../domain/timeline.dart';
 import 'chat_controllers.dart';
 import 'chat_drafts.dart';
+import 'security_code_controller.dart';
 
 /// Mirrors chat_controllers.dart's own `_never`: no automatic retry on a
 /// failed build, so a refusal settles on [AsyncError] instead of spinning
@@ -152,7 +153,46 @@ final chatTimelineProvider = Provider.autoDispose<List<TimelineEntry>>((ref) {
   final pins =
       ref.watch(pinEventsProvider(conversationId)).value ??
       const <GroupEvent>[];
-  if (!isGroup) return buildTimeline(messages, pins);
+  if (!isGroup) {
+    // A direct human chat: the one other member's key change shows as a line.
+    final peerId = ref.watch(
+      conversationListProvider.select(
+        (s) => (s.value ?? const <Conversation>[])
+            .where(
+              (c) =>
+                  c.id == conversationId &&
+                  c.title == null &&
+                  !c.isSystem &&
+                  !c.isAdminChat,
+            )
+            .firstOrNull
+            ?.other
+            ?.userId,
+      ),
+    );
+    final change = peerId == null
+        ? null
+        : ref.watch(keyChangeProvider(peerId)).value;
+    // Once the contact is verified again for the current keys, the line no longer says "no longer verified".
+    final reverified =
+        peerId != null &&
+        switch (ref.watch(securityCodeProvider(peerId)).value) {
+          SecurityCodeReady(:final verified) => verified,
+          _ => false,
+        };
+    return buildTimeline(
+      messages,
+      pins,
+      keyChanges: [
+        if (peerId != null && change != null)
+          KeyChangeEntry(
+            peerUserId: peerId,
+            changedAt: change.at,
+            wasVerified: change.wasVerified && !reverified,
+          ),
+      ],
+    );
+  }
   final events =
       ref.watch(groupEventsProvider(conversationId)).value ??
       const <GroupEvent>[];

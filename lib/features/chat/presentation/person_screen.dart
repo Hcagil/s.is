@@ -89,6 +89,8 @@ class PersonScreen extends ConsumerWidget {
               ),
             const SizedBox(height: 8),
             _ContactButton(userId),
+            // Only with a 1:1: the security code of that chat's phone key.
+            if (direct != null) EncryptionRow(userId: userId, name: name),
             // Muting a person silences them in every chat, groups included.
             MuteTile(kind: MuteKind.person, target: userId),
             // Your 1:1 with them: its own sound and vibration.

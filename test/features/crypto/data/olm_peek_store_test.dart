@@ -210,6 +210,64 @@ void main() {
     expect(r.sessions.first.peerIdentityKey, alice.identityKey);
   });
 
+  // Audit L3 (t_a9ef0f411f Fix 3): the name a notification shows comes from
+  // the phone's own copy of the chat (json other.name), not from the push.
+  group('peer name from the phone\'s own copy', () {
+    test('readPeekRows.peerName is the chat partner of that chat', () async {
+      await normalMessage();
+      await bob.store.close();
+      PeekRows? rows(String conv) => readPeekRows(
+        path: bob.h.file.path,
+        keyHex: bob.keyHex,
+        conversationId: conv,
+        messageId: 'm2',
+      );
+      expect(rows('c1')?.peerName, 'Alice');
+      expect(rows('c2')?.peerName, 'Carol');
+      expect(rows('c9')?.peerName, isNull);
+    });
+
+    test('an empty name in the copy is null', () async {
+      await DriftChatListSnapshotStore(bob.store).save('bob', const [
+        Conversation(
+          id: 'c1',
+          other: Member(userId: 'alice', displayName: ''),
+        ),
+      ]);
+      await normalMessage();
+      await bob.store.close();
+      final r = readPeekRows(
+        path: bob.h.file.path,
+        keyHex: bob.keyHex,
+        conversationId: 'c1',
+        messageId: 'm2',
+      );
+      expect(r?.peerUserId, 'alice');
+      expect(r?.peerName, isNull);
+    });
+
+    test(
+      'peekEncryptedText hands that name to onPeerName with the text',
+      () async {
+        final m2 = await normalMessage();
+        final names = <String>[];
+        final text = await peekEncryptedText(
+          storePath: bob.h.file.path,
+          storeKeyHex: bob.keyHex,
+          pickleKey: bob.pk,
+          ownerId: 'bob',
+          conversationId: 'c1',
+          messageId: 'm2',
+          ciphertext: m2.ciphertext,
+          olmType: m2.olmType,
+          onPeerName: names.add,
+        );
+        expect(text, 'secret words');
+        expect(names, ['Alice']);
+      },
+    );
+  });
+
   test('a placeholder row is peeked: the text comes back, the store file '
       'is byte-for-byte unchanged, and the real decrypt still works', () async {
     final m2 = await normalMessage();

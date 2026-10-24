@@ -16,8 +16,11 @@ final class NotificationService: UNNotificationServiceExtension, URLSessionDownl
     }
     lock.lock(); handler = contentHandler; content = mutable; lock.unlock()
     // An encrypted chat's push: the real text from this phone's own store when it can be read (PushPeek.swift), else the locked text the server sent.
-    if let text = PushPeek.text(for: mutable.userInfo) {
-      mutable.body = PushPeek.shownBody(text: text, sender: mutable.userInfo["sender"] as? String)
+    let peek = PushPeek.peek(for: mutable.userInfo)
+    // The name comes from this phone's own copy of the chat when it has one, not from the push.
+    if let name = peek.name { mutable.title = name }
+    if let text = peek.text {
+      mutable.body = PushPeek.shownBody(text: text, sender: peek.name ?? (mutable.userInfo["sender"] as? String))
     } else if (mutable.userInfo["encrypted"] as? String) == "true" {
       // The one locked text, the same words as Android's notification_locked string (res/values/strings.xml, values-tr).
       let turkish = Locale.preferredLanguages.first?.hasPrefix("tr") ?? false

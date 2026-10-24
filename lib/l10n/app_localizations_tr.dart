@@ -367,6 +367,72 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String get encryptionRowTitle => 'Şifreleme';
+
+  @override
+  String get encryptionRowSubtitle =>
+      'Mesajlar uçtan uca şifrelidir. Doğrulamak için dokun.';
+
+  @override
+  String get securityCodeTitle => 'Güvenlik kodunu doğrula';
+
+  @override
+  String securityCodeIntro(String name) {
+    return 'Bu kodu $name kişisinin telefonundaki kodla yüz yüze ya da bir aramada karşılaştır. İkisi aynıysa Eşleşiyor\'a dokun. Bu sadece bu telefonda kayıtlı. Bundan sonra göndereceğin mesajlar iki telefonunuz arasında uçtan uca şifrelidir.';
+  }
+
+  @override
+  String securityCodeChanged(String name) {
+    return '$name ile güvenlik kodun değişti. Doğrulamak için dokun.';
+  }
+
+  @override
+  String securityCodeChangedUnverified(String name) {
+    return '$name ile güvenlik kodun değişti ve artık doğrulanmış değil. Doğrulamak için dokun.';
+  }
+
+  @override
+  String get securityCodeMatches => 'Eşleşiyor';
+
+  @override
+  String get securityCodeDiffers => 'Eşleşmiyor';
+
+  @override
+  String get securityCodeVerified => 'Doğrulandı';
+
+  @override
+  String securityCodeVerifiedNote(String name) {
+    return 'Sadece bu telefonda kayıtlı. $name kişisine haber verilmez.';
+  }
+
+  @override
+  String get securityCodeUnverify => 'Doğrulanmadı olarak işaretle';
+
+  @override
+  String get securityCodeMismatchTitle => 'Kodlar farklı';
+
+  @override
+  String securityCodeMismatchBody(String name) {
+    return '$name yeni bir telefon aldıysa ya da SIS\'i yeniden kurduysa böyle olabilir. Aranızda biri olduğu anlamına da gelebilir. $name ile yüz yüze ya da bir aramada kontrol et. Öğrenene kadar özel bir şey gönderme. Hiçbir şey doğrulanmış olarak işaretlenmedi.';
+  }
+
+  @override
+  String get securityCodeOk => 'Tamam';
+
+  @override
+  String get encryptionRowVerified => 'Doğrulandı';
+
+  @override
+  String securityCodeUnavailable(String name) {
+    return 'Gösterilecek güvenlik kodu henüz yok. $name ile ilk güvenli mesajından sonra görünür.';
+  }
+
+  @override
+  String securityCodeNewPhoneNote(String name) {
+    return '$name yeni bir telefon alırsa kod değişir ve yeniden kontrol etmen gerekir.';
+  }
+
+  @override
   String get pinnedBarTitle => 'Sabitlenmiş mesaj';
 
   @override

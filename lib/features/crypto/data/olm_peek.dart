@@ -136,6 +136,7 @@ Future<String?> peekEncryptedText({
   required String ciphertext,
   required int olmType,
   void Function(String reason)? onFail,
+  void Function(String name)? onPeerName,
   String? senderKey,
   String? senderId,
 }) async {
@@ -155,6 +156,9 @@ Future<String?> peekEncryptedText({
     onFail?.call('owner_mismatch');
     return null;
   }
+  // The name shown for this chat comes from the phone's own copy, not from the push.
+  final name = rows.peerName;
+  if (name != null) onPeerName?.call(name);
   if (rows.storedBody != null && !isLockedPlaceholder(rows.storedBody!)) {
     return rows.storedBody;
   }

@@ -8,6 +8,7 @@ import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../crypto/application/key_directory_controller.dart';
 import '../../crypto/domain/key_directory.dart';
+import '../../crypto/domain/security_code_store.dart';
 import '../../crypto/domain/session_engine.dart';
 import '../domain/encrypted_message_repository.dart';
 import '../domain/message.dart';
@@ -16,6 +17,7 @@ import '../domain/message_opener.dart';
 import '../domain/message_store.dart';
 import 'chat_controllers.dart';
 import 'open_queue.dart';
+import 'security_code_controller.dart';
 
 /// The one step that opens locked texts read from the server; main gives it to the chat repository.
 final messageOpenerProvider = Provider<MessageOpener>((ref) {
@@ -31,11 +33,14 @@ final messageOpenerProvider = Provider<MessageOpener>((ref) {
     },
     peerKey: (id) =>
         ref.read(keyDirectoryControllerProvider.notifier).identityVerified(id),
+    memory: () => ref.read(cipherChatMemoryProvider),
     queue: ref.read(openQueueProvider),
   );
   ref.onDispose(opener.dispose);
   return opener;
 });
+
+CipherChatMemory? _noMemory() => null;
 
 /// Opens locked texts one after the other (all peers on one queue), once each, and keeps the plaintext in the on-phone store.
 class StoreMessageOpener implements MessageOpener {
@@ -44,13 +49,16 @@ class StoreMessageOpener implements MessageOpener {
     required this._engine,
     required this._store,
     required this._peerKey,
+    CipherChatMemory? Function()? memory,
     OpenQueue? queue,
-  }) : _queue = queue ?? OpenQueue();
+  }) : _memory = memory ?? _noMemory,
+       _queue = queue ?? OpenQueue();
 
   final String? Function() _me;
   final SessionEngine? Function() _engine;
   final MessageStore? Function() _store;
   final Future<Result<ClaimedKeys?>> Function(String userId) _peerKey;
+  final CipherChatMemory? Function() _memory;
   final OpenQueue _queue;
 
   final _reopened = StreamController<Message>.broadcast();
@@ -81,11 +89,14 @@ class StoreMessageOpener implements MessageOpener {
 
   @override
   Future<List<Message>> open(List<Message> rows) {
-    if (rows.every((m) => !_locked(m))) {
+    final memory = _memory();
+    if (rows.every((m) => !_locked(m)) &&
+        (memory == null || !rows.any(_plainSuspect))) {
       return Future.value(rows);
     }
     return _serial<List<Message>>(() async {
       final out = List<Message>.of(rows);
+      await _markHeld(rows, memory);
       final keys = <String, Result<ClaimedKeys?>>{};
       // Oldest first, so a pre-key message makes its session before the normal ones behind it.
       final order =
@@ -114,13 +125,66 @@ class StoreMessageOpener implements MessageOpener {
           await _retryPending(peer, inBatch);
         } catch (_) {}
       }
-      return out;
+      return _guardPlain(out, rows, memory);
     }).catchError((_) {
       return [
         for (final m in rows)
           _locked(m) ? m.withPlain(lockedBodyPlaceholder, null) : m,
       ];
     });
+  }
+
+  /// A plain text from someone else: no ciphertext, no attachment, not deleted, and not a kind the server allows plain in an encrypted chat (poll, contact, location, sticker, album card, admin note).
+  bool _plainSuspect(Message m) =>
+      m.ciphertext == null &&
+      m.olmType == null &&
+      m.deletion == null &&
+      !m.hasAttachment &&
+      !m.poll &&
+      !m.contact &&
+      m.location == null &&
+      !m.albumCard &&
+      m.stickerId == null &&
+      m.adminMsg == null &&
+      m.body.isNotEmpty &&
+      !isLockedPlaceholder(m.body) &&
+      m.senderId != _me();
+
+  /// Remembers per chat when it first held a locked text.
+  Future<void> _markHeld(List<Message> rows, CipherChatMemory? memory) async {
+    if (memory == null) return;
+    for (final m in rows) {
+      if (!_locked(m)) continue;
+      try {
+        await memory.markHeld(m.conversationId, m.createdAt);
+      } catch (_) {}
+    }
+  }
+
+  /// A plain text created after its chat first held a locked text is not trusted: it gets the locked look (a server could slip a plain text under a person's name).
+  Future<List<Message>> _guardPlain(
+    List<Message> out,
+    List<Message> rows,
+    CipherChatMemory? memory,
+  ) async {
+    if (memory == null) return out;
+    final since = <String, DateTime?>{};
+    for (var i = 0; i < rows.length; i++) {
+      final m = rows[i];
+      if (!_plainSuspect(m)) continue;
+      if (!since.containsKey(m.conversationId)) {
+        try {
+          since[m.conversationId] = await memory.heldSince(m.conversationId);
+        } catch (_) {
+          since[m.conversationId] = null;
+        }
+      }
+      final first = since[m.conversationId];
+      if (first != null && m.createdAt.isAfter(first)) {
+        out[i] = m.withPlain(lockedBodyPlaceholder, null);
+      }
+    }
+    return out;
   }
 
   /// Opens one locked row [m]; never decrypts the same ciphertext twice (the memory of this run, then the stored copy, answer first). [keys] holds the peers' checked keys already looked up in this call.
@@ -139,6 +203,8 @@ class StoreMessageOpener implements MessageOpener {
     }
     // A deleted row stays deleted: never decrypted, never written over.
     if (stored?.deletion != null) return stored!;
+    // The server may not move a stored text to another sender: the stored row is shown as it is, never relabelled.
+    if (stored != null && stored.senderId != m.senderId) return stored;
     final have = stored != null && !isLockedPlaceholder(stored.body)
         ? stored
         : null;

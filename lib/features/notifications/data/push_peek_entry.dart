@@ -15,14 +15,17 @@ const peekChannel = MethodChannel('com.esd.sis/peek');
 /// for the push fields ('take' returns a Map with String keys user_id,
 /// conversation_id, message_id, ct and ot (ot is a String like "0"), plus
 /// optional sk and si: a pre-key push's sender key and id, never logged), peeks,
-/// and always answers 'done' with a Map {text, reason}: the text, or null plus
-/// a fixed reason code (never text, ids or keys). Never throws; writes nothing.
+/// and always answers 'done' with a Map {text, reason, name}: the text, or null
+/// plus a fixed reason code (never text, ids or keys), and the chat partner's
+/// name from the phone's own copy of the chat (null when unknown). Never
+/// throws; writes nothing.
 @pragma('vm:entry-point')
 Future<void> peekMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
   String? text;
   String? reason;
+  String? peerName;
   try {
     final a = await peekChannel.invokeMapMethod<String, String>('take');
     final key = await StoreKey().read();
@@ -46,6 +49,7 @@ Future<void> peekMain() async {
         senderKey: a['sk'],
         senderId: a['si'],
         onFail: (r) => reason = r,
+        onPeerName: (n) => peerName = n,
       );
     }
   } catch (e) {
@@ -60,5 +64,6 @@ Future<void> peekMain() async {
   await peekChannel.invokeMethod<void>('done', {
     'text': text,
     'reason': reason,
+    'name': peerName,
   });
 }

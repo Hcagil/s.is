@@ -62,28 +62,33 @@ enum PushPeek {
 
   /// Extracts the text from a push notification using the given decryptor.
   static func text(for userInfo: [AnyHashable: Any], decryptor: PeekDecryptor = RustPeekDecryptor()) -> String? {
-    guard let push = PeekPush(userInfo: userInfo) else { return nil }
+    peek(for: userInfo, decryptor: decryptor).text
+  }
 
-    guard let store = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?.appendingPathComponent(storeFileName) else { return nil }
-    guard FileManager.default.fileExists(atPath: store.path) else { return nil }
+  /// The text of an encrypted push (nil when it cannot be opened) and the chat partner's name from the phone's own copy of the chat (nil when the phone has none).
+  static func peek(for userInfo: [AnyHashable: Any], decryptor: PeekDecryptor = RustPeekDecryptor()) -> (text: String?, name: String?) {
+    guard let push = PeekPush(userInfo: userInfo) else { return (nil, nil) }
 
-    guard let group = PeekKeychain.cryptoGroup() else { return nil }
+    guard let store = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?.appendingPathComponent(storeFileName) else { return (nil, nil) }
+    guard FileManager.default.fileExists(atPath: store.path) else { return (nil, nil) }
+
+    guard let group = PeekKeychain.cryptoGroup() else { return (nil, nil) }
 
     guard let storeKeyHex = PeekKeychain.value(account: "sis.store.key", group: group),
           let pickleHex = PeekKeychain.value(account: "sis.olm.pickle.key", group: group),
           isHex64(storeKeyHex),
           isHex64(pickleHex) else {
-      return nil
+      return (nil, nil)
     }
 
     var pickleKey = bytes(fromHex: pickleHex)
     defer { pickleKey.withUnsafeMutableBytes { _ = memset_s($0.baseAddress, $0.count, 0, $0.count) } }
 
     guard let data = PeekStoreReader.read(path: store.path, keyHex: storeKeyHex, conversationId: push.conversationId, messageId: push.messageId, senderKey: push.senderKey, senderId: push.senderId) else {
-      return nil
+      return (nil, nil)
     }
 
-    return PeekCore.text(push: push, data: data, pickleKey: pickleKey, decryptor: decryptor)
+    return (PeekCore.text(push: push, data: data, pickleKey: pickleKey, decryptor: decryptor), data.peerName)
   }
 
   /// Formats the shown body of a notification.

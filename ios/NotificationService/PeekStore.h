@@ -5,6 +5,7 @@
 typedef struct {
   char *owner_id;       /* meta 'owner_id', or NULL */
   char *peer_user_id;   /* json_extract(conversations.json, '$.other.id'), or NULL */
+  char *peer_name;      /* json_extract(conversations.json, '$.other.name'), or NULL */
   char *stored_body;    /* messages.body of (id, conversation_id) when not deleted, or NULL */
   char *account;        /* meta 'olm_account' (account pickle), or NULL */
   char *key_elsewhere;  /* "1" when a stored session with sender_key belongs to a peer other than sender_id, else NULL */

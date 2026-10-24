@@ -387,3 +387,305 @@ final class PeekCoreTests: XCTestCase {
     XCTAssertFalse(dec.log.contains { $0.hasPrefix("inbound") }, "\(dec.log)")
   }
 }
+
+// MARK: - The first-message unlock (push sk/si)
+
+// The iPhone first-message unlock (push sk/si) in PeekCore.text and
+// PeekPush(userInfo:), driven through FakeDecryptor (KeychainPeekTests.swift).
+// Written from the contract (t_af9e46f598, security P1-P6), never from the code.
+
+final class PeekSenderKeyTests: XCTestCase {
+  // MARK: - Helpers
+  let key: [UInt8] = Array(repeating: 7, count: 32)
+  let peer = "6f1c2a4e-8b3d-4c5e-9f70-1a2b3c4d5e6f"
+  let other = "0a9b8c7d-6e5f-4a3b-8c2d-1e0f9a8b7c6d"
+  let validSk = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789+/AbCdE"
+  let otherSk = "ZyXwVuTsRqPoNmLkJiHgFeDcBa9876543210/+ZyXwV"
+
+  func push(ot: String = "0", sk: String? = nil, si: String? = nil) -> PeekPush {
+    var userInfo: [AnyHashable: Any] = [
+      "encrypted": "true",
+      "message_id": "m1",
+      "conversation_id": "c1",
+      "user_id": "me",
+      "ct": "CT",
+      "ot": ot
+    ]
+    if let sk = sk { userInfo["sk"] = sk }
+    if let si = si { userInfo["si"] = si }
+    return PeekPush(userInfo: userInfo)!
+  }
+
+  func data(peer: String? = nil, account: String? = "ACC", sessions: [PeekSessionRow] = [], keyElsewhere: Bool = false) -> PeekData {
+    PeekData(ownerId: "me", peerUserId: peer, storedBody: PeekCore.lockedPlaceholder, account: account, sessions: sessions, keyElsewhere: keyElsewhere)
+  }
+
+  func text(_ p: PeekPush, _ d: PeekData, _ dec: FakeDecryptor) -> String? {
+    PeekCore.text(push: p, data: d, pickleKey: key, decryptor: dec)
+  }
+
+  // MARK: - Tests
+
+  func testPeekPushKeepsSkAndSi() {
+    // Valid sk and si
+    let pushValid = push(sk: validSk, si: peer)
+    XCTAssertEqual(pushValid.senderKey, validSk)
+    XCTAssertEqual(pushValid.senderId, peer)
+
+    // Malformed sk and si
+    let pushMalformed = push(sk: "short", si: "bob")
+    XCTAssertEqual(pushMalformed.senderKey, "short")
+    XCTAssertEqual(pushMalformed.senderId, "bob")
+
+    // Empty strings
+    let pushEmpty = push(sk: "", si: "")
+    XCTAssertNil(pushEmpty.senderKey)
+    XCTAssertNil(pushEmpty.senderId)
+
+    // Nil values
+    let pushNil = push(sk: nil, si: nil)
+    XCTAssertNil(pushNil.senderKey)
+    XCTAssertNil(pushNil.senderId)
+
+    // Sk present, si nil
+    let pushSkOnly = push(sk: "short", si: nil)
+    XCTAssertEqual(pushSkOnly.senderKey, "short")
+    XCTAssertNil(pushSkOnly.senderId)
+
+    // Sk nil, si present
+    let pushSiOnly = push(sk: nil, si: "bob")
+    XCTAssertNil(pushSiOnly.senderKey)
+    XCTAssertEqual(pushSiOnly.senderId, "bob")
+  }
+
+  func testOt0NoSessionsValidSk() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "new"
+    dec.inboundTexts["ACC+\(validSk)"] = "inbound text"
+
+    let p = push(ot: "0", sk: validSk, si: peer)
+    let d = data(peer: peer)
+    let result = text(p, d, dec)
+
+    XCTAssertEqual(result, "inbound text")
+    XCTAssertEqual(dec.log, ["prekey CT", "inbound ACC \(validSk) m1"])
+  }
+
+  func testOt0PeerUserIdNil() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "new"
+    dec.inboundTexts["ACC+\(validSk)"] = "inbound text"
+
+    let p = push(ot: "0", sk: validSk, si: peer)
+    let d = data(peer: nil)
+    let result = text(p, d, dec)
+
+    XCTAssertEqual(result, "inbound text")
+    XCTAssertEqual(dec.log, ["prekey CT", "inbound ACC \(validSk) m1"])
+  }
+
+  func testOt0StoredSessionOverridesSk() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "new"
+    dec.inboundTexts["ACC+IK-stored"] = "stored inbound"
+
+    let session = PeekSessionRow(sessionId: "a", peerUserId: peer, identityKey: "IK-stored", pickle: "P-a")
+    let p = push(ot: "0", sk: otherSk, si: peer)
+    let d = data(peer: peer, sessions: [session])
+    let result = text(p, d, dec)
+
+    XCTAssertEqual(result, "stored inbound")
+    XCTAssertTrue(dec.log.contains("prekey CT"))
+    XCTAssertTrue(dec.log.contains("inbound ACC IK-stored m1"))
+    XCTAssertFalse(dec.log.contains(where: { $0.contains(otherSk) }), "\(dec.log)")
+  }
+
+  func testOt0SiNotPeerNilInbound() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "new"
+    dec.inboundTexts["ACC+\(validSk)"] = "inbound text"
+
+    let p = push(ot: "0", sk: validSk, si: other)
+    let d = data(peer: peer)
+    let result = text(p, d, dec)
+
+    XCTAssertNil(result)
+    XCTAssertFalse(dec.log.contains(where: { $0.contains("inbound") || $0.contains("decrypt") }))
+
+    // ot 1 with session decrypt
+    let session = PeekSessionRow(sessionId: "s1", peerUserId: peer, identityKey: "IK-s1", pickle: "P-s1")
+    dec.sessionTexts["P-s1"] = "hi"
+    let p1 = push(ot: "1", sk: validSk, si: other)
+    let d1 = data(peer: peer, sessions: [session])
+    let result1 = text(p1, d1, dec)
+
+    XCTAssertNil(result1)
+    XCTAssertFalse(dec.log.contains(where: { $0.contains("inbound") || $0.contains("decrypt") }))
+  }
+
+  func testBadShape() {
+    let sk42 = String(repeating: "a", count: 42)
+    let sk44 = String(repeating: "a", count: 44)
+    let sk43Dash = String(repeating: "a", count: 42) + "-"
+    let sk43Equals = String(repeating: "a", count: 42) + "="
+    let sk43Space = String(repeating: "a", count: 42) + " "
+    let badSkCases = [
+      ("42 chars", sk42),
+      ("44 chars", sk44),
+      ("43 chars with dash", sk43Dash),
+      ("43 chars with equals", sk43Equals),
+      ("43 chars with space", sk43Space),
+      ("43 chars with a non-ASCII letter", String(repeating: "a", count: 42) + "é")
+    ]
+
+    let badSiCases = [
+      ("not-a-uuid", "not-a-uuid"),
+      ("missing one char", String(peer.dropLast())),
+      ("one hex digit too many at the end", peer + "0"),
+      ("one hex digit too many at the start", "0" + peer),
+      ("hex digit replaced with g", peer.replacingOccurrences(of: "a", with: "g"))
+    ]
+
+    // Each bad value is the ONLY thing wrong: si equals the peer (or the
+    // chat has none) and the fake would decrypt with whatever key it gets.
+    for (desc, badSk) in badSkCases {
+      let dec = FakeDecryptor()
+      dec.prekeyIds["CT"] = "new"
+      dec.inboundTexts["ACC+\(badSk)"] = "opened with a bad key"
+      XCTAssertNil(text(push(ot: "0", sk: badSk, si: peer), data(peer: peer), dec), "Bad sk case: \(desc)")
+      XCTAssertFalse(dec.log.contains(where: { $0.hasPrefix("inbound") }), "Bad sk case: \(desc): \(dec.log)")
+    }
+
+    for (desc, badSi) in badSiCases {
+      for known in [nil, badSi] as [String?] {
+        let dec = FakeDecryptor()
+        dec.prekeyIds["CT"] = "new"
+        dec.inboundTexts["ACC+\(validSk)"] = "opened for a bad sender id"
+        XCTAssertNil(text(push(ot: "0", sk: validSk, si: badSi), data(peer: known), dec), "Bad si case: \(desc), known peer \(known ?? "none")")
+        XCTAssertFalse(dec.log.contains(where: { $0.hasPrefix("inbound") }), "Bad si case: \(desc): \(dec.log)")
+      }
+    }
+  }
+
+  func testKeyElsewhereTrue() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "new"
+    dec.inboundTexts["ACC+\(validSk)"] = "inbound text"
+
+    let p = push(ot: "0", sk: validSk, si: peer)
+    let d = data(peer: peer, keyElsewhere: true)
+    let result = text(p, d, dec)
+
+    XCTAssertNil(result)
+    XCTAssertFalse(dec.log.contains(where: { $0.contains("inbound") }))
+  }
+
+  func testAccountNil() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "new"
+    dec.inboundTexts["ACC+\(validSk)"] = "inbound text"
+
+    let p = push(ot: "0", sk: validSk, si: peer)
+    let d = data(peer: peer, account: nil)
+    let result = text(p, d, dec)
+
+    XCTAssertNil(result)
+    XCTAssertFalse(dec.log.contains(where: { $0.contains("inbound") }))
+  }
+
+  func testMissingSkOrSi() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "new"
+    dec.inboundTexts["ACC+\(validSk)"] = "inbound text"
+
+    // Missing sk
+    let p1 = push(ot: "0", sk: nil, si: peer)
+    let d1 = data(peer: peer)
+    let result1 = text(p1, d1, dec)
+    XCTAssertNil(result1)
+    XCTAssertFalse(dec.log.contains(where: { $0.contains("inbound") }))
+
+    // Missing si
+    let p2 = push(ot: "0", sk: validSk, si: nil)
+    let d2 = data(peer: peer)
+    let result2 = text(p2, d2, dec)
+    XCTAssertNil(result2)
+    XCTAssertFalse(dec.log.contains(where: { $0.contains("inbound") }))
+  }
+
+  func testOt1IgnoresSkSi() {
+    let session = PeekSessionRow(sessionId: "s1", peerUserId: peer, identityKey: "IK-s1", pickle: "P-s1")
+    func fresh() -> FakeDecryptor {
+      let dec = FakeDecryptor()
+      dec.prekeyIds["CT"] = "new"
+      dec.sessionTexts["P-s1"] = "hi"
+      dec.inboundTexts["ACC+\(validSk)"] = "sk must not be used"
+      return dec
+    }
+
+    // A stored session opens it; sk plays no part.
+    let d1 = fresh()
+    XCTAssertEqual(text(push(ot: "1", sk: validSk, si: peer), data(peer: peer, sessions: [session]), d1), "hi")
+    XCTAssertEqual(d1.log, ["decrypt P-s1 m1 1"])
+
+    // No session: nothing opens it, sk is not used for an inbound session.
+    let d2 = fresh()
+    XCTAssertNil(text(push(ot: "1", sk: validSk, si: peer), data(peer: peer, sessions: []), d2))
+    XCTAssertFalse(d2.log.contains(where: { $0.hasPrefix("inbound") || $0.hasPrefix("prekey") }), "\(d2.log)")
+
+    // No known chat peer: si does not become the peer for a normal message.
+    let d3 = fresh()
+    XCTAssertNil(text(push(ot: "1", sk: validSk, si: peer), data(peer: nil, sessions: [session]), d3))
+    XCTAssertTrue(d3.log.isEmpty, "\(d3.log)")
+  }
+
+  func testDecryptFailure() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "new"
+    // inboundTexts empty
+
+    let p = push(ot: "0", sk: validSk, si: peer)
+    let d = data(peer: peer)
+    let result = text(p, d, dec)
+
+    XCTAssertNil(result)
+    XCTAssertEqual(dec.log, ["prekey CT", "inbound ACC \(validSk) m1"], "the decrypt was tried and failed")
+  }
+
+  func testOt0NoKnownPeerUsesTheSendersStoredSessionNotSk() {
+    // The store reader returns the sender id's sessions when the chat has no known peer.
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "new"
+    dec.inboundTexts["ACC+IK-stored"] = "stored inbound"
+    dec.inboundTexts["ACC+\(validSk)"] = "sk must not be used"
+    let session = PeekSessionRow(sessionId: "a", peerUserId: peer, identityKey: "IK-stored", pickle: "P-a")
+
+    XCTAssertEqual(text(push(ot: "0", sk: validSk, si: peer), data(peer: nil, sessions: [session]), dec), "stored inbound")
+    XCTAssertEqual(dec.log, ["prekey CT", "inbound ACC IK-stored m1"])
+  }
+
+  func testOt0StoredSessionIdOfTheSenderDecryptsThatSession() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "a"
+    dec.sessionTexts["P-a"] = "from a"
+    dec.inboundTexts["ACC+\(validSk)"] = "sk must not be used"
+    let session = PeekSessionRow(sessionId: "a", peerUserId: peer, identityKey: "IK-a", pickle: "P-a")
+
+    XCTAssertEqual(text(push(ot: "0", sk: validSk, si: peer), data(peer: peer, sessions: [session]), dec), "from a")
+    XCTAssertEqual(dec.log, ["prekey CT", "decrypt P-a m1 0"])
+  }
+
+  func testTheValidCaseAlsoPassesThePickleKey() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "new"
+    dec.inboundTexts["ACC+\(validSk)"] = "x"
+    _ = text(push(ot: "0", sk: validSk, si: peer), data(peer: peer), dec)
+    XCTAssertEqual(dec.seenKeys, [key])
+  }
+
+  func testValidSkLength() {
+    XCTAssertEqual(validSk.count, 43, "validSk should be 43 characters")
+    XCTAssertEqual(otherSk.count, 43)
+    XCTAssertNotEqual(otherSk, validSk)
+  }
+}

@@ -79,7 +79,7 @@ enum PushPeek {
     var pickleKey = bytes(fromHex: pickleHex)
     defer { pickleKey.withUnsafeMutableBytes { _ = memset_s($0.baseAddress, $0.count, 0, $0.count) } }
 
-    guard let data = PeekStoreReader.read(path: store.path, keyHex: storeKeyHex, conversationId: push.conversationId, messageId: push.messageId) else {
+    guard let data = PeekStoreReader.read(path: store.path, keyHex: storeKeyHex, conversationId: push.conversationId, messageId: push.messageId, senderKey: push.senderKey, senderId: push.senderId) else {
       return nil
     }
 

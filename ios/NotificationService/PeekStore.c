@@ -29,6 +29,7 @@ void sis_peek_free(SisPeekRows *rows) {
   wipe_free(rows->peer_user_id);
   wipe_free(rows->stored_body);
   wipe_free(rows->account);
+  wipe_free(rows->key_elsewhere);
   memset(rows, 0, sizeof *rows);
 }
 
@@ -132,14 +133,16 @@ static int cipher_present(sqlite3 *db) {
   return ok;
 }
 
-static int read_all(sqlite3 *db, const char *conversation_id, const char *message_id, SisPeekRows *out) {
+static int read_all(sqlite3 *db, const char *conversation_id, const char *message_id, const char *sender_key, const char *sender_id, SisPeekRows *out) {
   int rc = sqlite3_exec(db, "BEGIN;", 0, 0, 0);
   if (rc != SQLITE_OK) return rc;
   rc = query_text(db, "SELECT value FROM meta WHERE key = ?1", "owner_id", NULL, &out->owner_id);
   if (rc == SQLITE_OK) rc = query_text(db, "SELECT value FROM meta WHERE key = ?1", "olm_account", NULL, &out->account);
   if (rc == SQLITE_OK) rc = query_text(db, "SELECT json_extract(json, '$.other.id') FROM conversations WHERE id = ?1", conversation_id, NULL, &out->peer_user_id);
   if (rc == SQLITE_OK) rc = query_text(db, "SELECT body FROM messages WHERE id = ?1 AND conversation_id = ?2 AND deleted IS NULL", message_id, conversation_id, &out->stored_body);
-  if (rc == SQLITE_OK && out->peer_user_id != NULL) rc = read_sessions(db, out->peer_user_id, out);
+  const char *peer = out->peer_user_id != NULL ? out->peer_user_id : sender_id;
+  if (rc == SQLITE_OK && peer != NULL) rc = read_sessions(db, peer, out);
+  if (rc == SQLITE_OK && sender_key != NULL && sender_id != NULL) rc = query_text(db, "SELECT '1' WHERE EXISTS (SELECT 1 FROM olm_sessions WHERE peer_identity_key = ?1 AND peer_user_id <> ?2)", sender_key, sender_id, &out->key_elsewhere);
   sqlite3_exec(db, "ROLLBACK;", 0, 0, 0);  /* read only: nothing to commit */
   return rc;
 }
@@ -152,7 +155,7 @@ static int valid_key_hex(const char *s) {
   return 1;
 }
 
-int sis_peek_read(const char *path, const char *key_hex, const char *conversation_id, const char *message_id, SisPeekRows *out) {
+int sis_peek_read(const char *path, const char *key_hex, const char *conversation_id, const char *message_id, const char *sender_key, const char *sender_id, SisPeekRows *out) {
   struct timespec start, now;
   memset(out, 0, sizeof *out);
   if (!path || !key_hex || !conversation_id || !message_id || !valid_key_hex(key_hex)) return 1;
@@ -165,7 +168,7 @@ int sis_peek_read(const char *path, const char *key_hex, const char *conversatio
         sqlite3_close(db);
         return 1;
       }
-      rc = read_all(db, conversation_id, message_id, out);
+      rc = read_all(db, conversation_id, message_id, sender_key, sender_id, out);
       sqlite3_close(db);
     }
     if (rc == SQLITE_OK) return 0;

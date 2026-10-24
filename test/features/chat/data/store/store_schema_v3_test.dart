@@ -101,7 +101,7 @@ void main() {
       final r = await db.customSelect('PRAGMA user_version').getSingle();
       return r.read<int>('user_version');
     });
-    expect(version, 3);
+    expect(version, 4); // schema v4: reaction_plains
 
     final tableSet = await tables(v3);
     expect(tableSet.contains('olm_sessions'), isTrue);
@@ -174,7 +174,7 @@ void main() {
       final r = await db.customSelect('PRAGMA user_version').getSingle();
       return r.read<int>('user_version');
     });
-    expect(version2, 3);
+    expect(version2, 4);
 
     final tableSet2 = await tables(v3b);
     expect(tableSet2.contains('read_marks'), isTrue);
@@ -187,16 +187,17 @@ void main() {
     expect(rows(await rmStore.load('c1')), rows(marks));
   });
 
-  test('a fresh install is version 3 with the new tables', () async {
+  test('a fresh install is the current version (4) with the new tables', () async {
     final fresh = messages();
 
     final version3 = await fresh.run<int>(-1, (db) async {
       final r = await db.customSelect('PRAGMA user_version').getSingle();
       return r.read<int>('user_version');
     });
-    expect(version3, 3);
+    expect(version3, 4);
 
     final tableSet3 = await tables(fresh);
+    expect(tableSet3.contains('reaction_plains'), isTrue);
     expect(tableSet3.contains('olm_sessions'), isTrue);
     expect(tableSet3.contains('send_queue'), isTrue);
   });

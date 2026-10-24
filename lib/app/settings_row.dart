@@ -10,13 +10,17 @@ class SisSettingsRow extends StatelessWidget {
     required this.icon,
     required this.title,
     this.value,
+    this.subtitle,
     this.onTap,
+    this.iconColor,
   });
 
   final IconData icon;
   final String title;
   final String? value;
+  final String? subtitle;
   final VoidCallback? onTap;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -33,9 +37,25 @@ class SisSettingsRow extends StatelessWidget {
             padding: SisTokens.settingsRowPadding,
             child: Row(
               children: [
-                Icon(icon, color: t.muted),
+                Icon(icon, color: iconColor ?? t.muted),
                 const SizedBox(width: 16),
-                Expanded(child: Text(title, style: style)),
+                Expanded(
+                  child: subtitle == null
+                      ? Text(title, style: style)
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title, style: style),
+                            Text(
+                              subtitle!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: t.muted),
+                            ),
+                          ],
+                        ),
+                ),
                 if (value != null)
                   ConstrainedBox(
                     constraints: BoxConstraints(

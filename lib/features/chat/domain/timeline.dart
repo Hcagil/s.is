@@ -34,6 +34,22 @@ final class EventEntry extends TimelineEntry {
   DateTime get at => event.createdAt;
 }
 
+/// A "security code changed" line in a 1:1: the contact's key changed on this phone at [changedAt]. [wasVerified]: the contact was marked verified before.
+final class KeyChangeEntry extends TimelineEntry {
+  const KeyChangeEntry({
+    required this.peerUserId,
+    required this.changedAt,
+    required this.wasVerified,
+  });
+
+  final String peerUserId;
+  final DateTime changedAt;
+  final bool wasVerified;
+
+  @override
+  DateTime get at => changedAt;
+}
+
 /// [messages] (oldest first) merged with [events] (any order; empty for
 /// anyone but a current admin, since the server already refuses the rows to
 /// everyone else), sorted by time. Stable for equal timestamps -- a message
@@ -44,8 +60,9 @@ final class EventEntry extends TimelineEntry {
 /// folded into one [MessageEntry] carrying the whole album.
 List<TimelineEntry> buildTimeline(
   List<Message> messages,
-  List<GroupEvent> events,
-) {
+  List<GroupEvent> events, {
+  List<KeyChangeEntry> keyChanges = const [],
+}) {
   var i = 0;
   final folded = <MessageEntry>[];
   while (i < messages.length) {
@@ -72,6 +89,7 @@ List<TimelineEntry> buildTimeline(
   final entries = <TimelineEntry>[
     ...folded,
     for (final e in events) EventEntry(e),
+    ...keyChanges,
   ];
   entries.sort((a, b) => a.at.compareTo(b.at));
   return entries;

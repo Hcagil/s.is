@@ -770,6 +770,108 @@ abstract class AppLocalizations {
   /// **'{name} pinned a message'**
   String eventPinned(String name);
 
+  /// Profile row title, opens the security code page
+  ///
+  /// In en, this message translates to:
+  /// **'Encryption'**
+  String get encryptionRowTitle;
+
+  /// Profile row subtitle under Encryption
+  ///
+  /// In en, this message translates to:
+  /// **'Messages are end-to-end encrypted. Tap to verify.'**
+  String get encryptionRowSubtitle;
+
+  /// Title of the security code page
+  ///
+  /// In en, this message translates to:
+  /// **'Verify security code'**
+  String get securityCodeTitle;
+
+  /// Explanation under the security code
+  ///
+  /// In en, this message translates to:
+  /// **'Compare this code with {name}\'s phone, in person or on a call. If both match, tap Matches. This is saved on this phone only. After that, messages you send from now on are end-to-end encrypted between your two phones.'**
+  String securityCodeIntro(String name);
+
+  /// Chat line in a 1:1 when the security code changed
+  ///
+  /// In en, this message translates to:
+  /// **'Your security code with {name} changed. Tap to verify.'**
+  String securityCodeChanged(String name);
+
+  /// Chat line in a 1:1 when a verified person's code changed
+  ///
+  /// In en, this message translates to:
+  /// **'Your security code with {name} changed and is no longer verified. Tap to verify.'**
+  String securityCodeChangedUnverified(String name);
+
+  /// No description provided for @securityCodeMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'Matches'**
+  String get securityCodeMatches;
+
+  /// No description provided for @securityCodeDiffers.
+  ///
+  /// In en, this message translates to:
+  /// **'Doesn\'t match'**
+  String get securityCodeDiffers;
+
+  /// No description provided for @securityCodeVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified'**
+  String get securityCodeVerified;
+
+  /// No description provided for @securityCodeVerifiedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved on this phone only. {name} is not told.'**
+  String securityCodeVerifiedNote(String name);
+
+  /// No description provided for @securityCodeUnverify.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as not verified'**
+  String get securityCodeUnverify;
+
+  /// No description provided for @securityCodeMismatchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The codes are different'**
+  String get securityCodeMismatchTitle;
+
+  /// No description provided for @securityCodeMismatchBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This can happen if {name} got a new phone or reinstalled SIS. It can also mean someone is in between you. Check with {name} in person or on a call, and do not send anything private until you know. Nothing was marked as verified.'**
+  String securityCodeMismatchBody(String name);
+
+  /// No description provided for @securityCodeOk.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get securityCodeOk;
+
+  /// No description provided for @encryptionRowVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified'**
+  String get encryptionRowVerified;
+
+  /// No description provided for @securityCodeUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No security code to show yet. It appears after your first secure message with {name}.'**
+  String securityCodeUnavailable(String name);
+
+  /// No description provided for @securityCodeNewPhoneNote.
+  ///
+  /// In en, this message translates to:
+  /// **'If {name} gets a new phone, the code changes and you need to check it again.'**
+  String securityCodeNewPhoneNote(String name);
+
   /// Bar under the chat header
   ///
   /// In en, this message translates to:

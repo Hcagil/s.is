@@ -27,6 +27,7 @@ final class PeekRows {
     required this.account,
     required this.sessions,
     this.keyPeers = const [],
+    this.peerName,
   });
 
   /// Meta key 'owner_id'.
@@ -34,6 +35,9 @@ final class PeekRows {
 
   /// The conversation's other member id, null if unknown.
   final String? peerUserId;
+
+  /// The other member's display name from the phone's own copy of the chat (json other.name), null if unknown or empty.
+  final String? peerName;
 
   /// messages.body of the message id; null if no such row or the row is deleted.
   final String? storedBody;
@@ -103,6 +107,7 @@ PeekRows? _readPeekRows(
         }
 
         String? peerUserId;
+        String? peerName;
         final conv = db.select('SELECT json FROM conversations WHERE id = ?;', [
           conversationId,
         ]);
@@ -112,6 +117,8 @@ PeekRows? _readPeekRows(
             final other = json is Map ? json['other'] : null;
             final id = other is Map ? other['id'] : null;
             if (id is String) peerUserId = id;
+            final name = other is Map ? other['name'] : null;
+            if (name is String && name.isNotEmpty) peerName = name;
           } on FormatException {
             // An unreadable snapshot means an unknown peer, not a failure.
           }
@@ -158,6 +165,7 @@ PeekRows? _readPeekRows(
         return PeekRows(
           ownerId: meta('owner_id'),
           peerUserId: peerUserId,
+          peerName: peerName,
           storedBody: storedBody,
           account: meta('olm_account'),
           sessions: sessions,

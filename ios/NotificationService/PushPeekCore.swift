@@ -54,6 +54,8 @@ struct PeekData: Equatable {
   let sessions: [PeekSessionRow]
   /// A stored session with the push's sender key belongs to a peer other than the push's sender id.
   var keyElsewhere = false
+  /// The chat partner's display name from the phone's own copy of the chat, or nil.
+  var peerName: String? = nil
 }
 
 enum PeekCore {

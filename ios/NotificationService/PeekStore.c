@@ -27,6 +27,7 @@ void sis_peek_free(SisPeekRows *rows) {
   free(rows->session_pickles);
   wipe_free(rows->owner_id);
   wipe_free(rows->peer_user_id);
+  wipe_free(rows->peer_name);
   wipe_free(rows->stored_body);
   wipe_free(rows->account);
   wipe_free(rows->key_elsewhere);
@@ -139,6 +140,7 @@ static int read_all(sqlite3 *db, const char *conversation_id, const char *messag
   rc = query_text(db, "SELECT value FROM meta WHERE key = ?1", "owner_id", NULL, &out->owner_id);
   if (rc == SQLITE_OK) rc = query_text(db, "SELECT value FROM meta WHERE key = ?1", "olm_account", NULL, &out->account);
   if (rc == SQLITE_OK) rc = query_text(db, "SELECT json_extract(json, '$.other.id') FROM conversations WHERE id = ?1", conversation_id, NULL, &out->peer_user_id);
+  if (rc == SQLITE_OK) rc = query_text(db, "SELECT json_extract(json, '$.other.name') FROM conversations WHERE id = ?1", conversation_id, NULL, &out->peer_name);
   if (rc == SQLITE_OK) rc = query_text(db, "SELECT body FROM messages WHERE id = ?1 AND conversation_id = ?2 AND deleted IS NULL", message_id, conversation_id, &out->stored_body);
   const char *peer = out->peer_user_id != NULL ? out->peer_user_id : sender_id;
   if (rc == SQLITE_OK && peer != NULL) rc = read_sessions(db, peer, out);

@@ -303,12 +303,14 @@ reset role;
 -- exactly one request, so the queue is observable here. Then an edit must
 -- queue nothing more.
 select vault.create_secret('https://ed-test.local/hook', 'notify_on_message_url');
+-- Count from here: rows other runs left in the queue are not ours.
+create temp table q0 as select count(*) as n from net.http_request_queue;
 select test_as('00000000-0000-0000-0000-0000000ed001', 'ed000000-0000-0000-0000-0000000ed001');
 select lives_ok(format($$insert into public.messages(conversation_id, sender_id, body) values (%L, %L, 'ed control')$$,
                        (select ann from _c), '00000000-0000-0000-0000-0000000ed001'),
                 'ann sends one message with the notify URL configured');
 reset role;
-select is((select count(*) from net.http_request_queue), 1::bigint,
+select is((select count(*) from net.http_request_queue) - (select n from q0), 1::bigint,
           'control: a send queues exactly one push request');
 -- Move the control message out of the way (older than every fixture), so
 -- the preview and unread checks below are about 'ed newest' alone.
@@ -321,7 +323,7 @@ select test_as('00000000-0000-0000-0000-0000000ed001', 'ed000000-0000-0000-0000-
 select lives_ok(format($$select public.edit_message(%L, 'ed newest, edited')$$, (select newest from _m)),
                 'ann edits her newest message');
 reset role;
-select is((select count(*) from net.http_request_queue), 1::bigint,
+select is((select count(*) from net.http_request_queue) - (select n from q0), 1::bigint,
           'the edit queued no push request: nothing new in the pg_net queue');
 select is((select count(*) from app_private.push_sent where message_id = (select newest from _m)), 0::bigint,
           'and claimed no push for the edited message');

@@ -222,10 +222,12 @@ select is((select (v->0->>'help')::boolean from r where name = 'bad'), true, 'ba
 select is((select count(*) from app_private.allowlist where email like 'not-an-email%'), 0::bigint,
           'a bad email adds nothing');
 
+-- Count from here: cards other runs left behind are not ours.
+create temp table p0 as select count(*) as n from app_private.admin_pending;
 insert into r select 'nolist', say('/removetester nobody@mail.test');
 select ok((select v @> '[{"k":"nolist","help":true}]' from r where name = 'nolist'),
           'removing an address not on the list -> nolist with help');
-select is((select count(*) from app_private.admin_pending), 0::bigint, 'and no confirm card is made');
+select is((select count(*) from app_private.admin_pending) - (select n from p0), 0::bigint, 'and no confirm card is made');
 select is(leaks('nobody@mail.test'), 0::bigint, 'nolist masks the email (reply and log)');
 
 -- Android without the Play link: nolink. Then with it: andOk + fwd.

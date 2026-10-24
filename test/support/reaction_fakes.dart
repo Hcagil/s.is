@@ -17,7 +17,7 @@ import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/domain/reaction.dart';
 import 'package:sis/features/chat/domain/reaction_repository.dart';
 
-class ReactionFake implements ReactionRepository, ReactionRelocker {
+class ReactionFake implements ReactionRepository {
   ReactionFake({this.me = 'u1', Map<String, String>? conversationOf})
     : conversationOf = conversationOf ?? {};
 
@@ -140,7 +140,7 @@ class ReactionFake implements ReactionRepository, ReactionRelocker {
     return const Ok(null);
   }
 
-  // ---- relockPlain() (ReactionRelocker) ----
+  // ---- relockPlain() ----
   final relockCalls = <(String, String, int)>[];
 
   /// When set, answers relockPlain instead of the server rules below.

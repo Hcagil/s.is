@@ -14,7 +14,6 @@ import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/data/supabase_reaction_repository.dart';
 import 'package:sis/features/chat/domain/reaction.dart';
 import 'package:sis/features/chat/domain/reaction_envelope.dart';
-import 'package:sis/features/chat/domain/reaction_repository.dart';
 import 'package:sis/features/crypto/data/drift_olm_pickle_store.dart';
 import 'package:sis/features/crypto/data/drift_session_engine.dart';
 import 'package:sis/features/crypto/data/olm_key_engine.dart';
@@ -35,7 +34,7 @@ import '../support/reach.dart';
 ///  * reactions() / reactionUpdates() hand out OPENED reactions; a row that
 ///    cannot be opened is absent from reactions() and a removal on the feed;
 ///  * myReactionUsage adds this phone's own locked reactions;
-///  * relockPlain (ReactionRelocker) is a compare-and-set on the caller's own
+///  * relockPlain is a compare-and-set on the caller's own
 ///    plain row: Ok(true) replaced it with the ciphertext, Ok(false) for a
 ///    removed or already locked row (unchanged); DeniedFailure where the chat
 ///    cannot be locked.
@@ -350,28 +349,26 @@ void main() {
     final x = base64.encode(List.filled(60, 5));
     final y = base64.encode(List.filled(60, 6));
     final repo = benPhone.repo();
-    expect(repo, isA<ReactionRelocker>());
-    final relocker = repo as ReactionRelocker;
     expect(await _row(ana, m1, _id(ben)), {
       'emoji': '👍',
       'ciphertext': null,
       'olm_type': null,
     }, reason: 'fixture: ben\'s plain row from before the lock');
 
-    expect(_ok(await relocker.relockPlain(m1, x, 1)), isTrue);
+    expect(_ok(await repo.relockPlain(m1, x, 1)), isTrue);
     expect(await _row(ana, m1, _id(ben)), {
       'emoji': null,
       'ciphertext': x,
       'olm_type': 1,
     });
-    expect(_ok(await relocker.relockPlain(m1, y, 0)), isFalse);
+    expect(_ok(await repo.relockPlain(m1, y, 0)), isFalse);
     expect(
       (await _row(ana, m1, _id(ben)))!['ciphertext'],
       x,
       reason: 'an already locked row is never replaced',
     );
 
-    expect(_ok(await relocker.relockPlain(m2, y, 0)), isFalse);
+    expect(_ok(await repo.relockPlain(m2, y, 0)), isFalse);
     expect(await _row(ana, m2, _id(ben)), {
       'emoji': null,
       'ciphertext': null,
@@ -380,9 +377,7 @@ void main() {
 
     expect((await _row(cy, mc, _id(ana)))!['emoji'], '👍');
     expect(
-      _failure(
-        await (anaPhone.repo() as ReactionRelocker).relockPlain(mc, x, 1),
-      ),
+      _failure(await anaPhone.repo().relockPlain(mc, x, 1)),
       isA<DeniedFailure>(),
     );
     expect((await _row(cy, mc, _id(ana)))!['emoji'], '👍');

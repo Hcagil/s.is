@@ -2399,4 +2399,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cropRotateLabel => 'Rotate';
+
+  @override
+  String get noticeNewMessage => 'New message';
 }

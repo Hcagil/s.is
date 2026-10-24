@@ -2375,4 +2375,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get cropRotateLabel => 'Döndür';
+
+  @override
+  String get noticeNewMessage => 'Yeni mesaj';
 }

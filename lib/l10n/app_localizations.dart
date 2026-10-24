@@ -4225,6 +4225,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Rotate'**
   String get cropRotateLabel;
+
+  /// Top card for a message from another chat when its text is hidden (private chat not opened on this phone, or the preview setting hides text)
+  ///
+  /// In en, this message translates to:
+  /// **'New message'**
+  String get noticeNewMessage;
 }
 
 class _AppLocalizationsDelegate

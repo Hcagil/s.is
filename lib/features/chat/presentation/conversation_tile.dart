@@ -26,8 +26,8 @@ import '../../notifications/domain/notification_settings.dart';
 import 'admin_reply_bubble.dart';
 import 'chat_row_actions.dart';
 
-/// The stored preview, with the poll or contact prefix in the app language.
-String _preview(AppLocalizations l, String text) =>
+/// The stored preview [text] of a chat as one line in the app language (poll, contact, location, voice and sticker prefixes translated).
+String chatPreviewLine(AppLocalizations l, String text) =>
     text.startsWith(adminPreviewPrefix)
     ? adminPreviewLine(
         l,
@@ -159,7 +159,8 @@ class ConversationTile extends ConsumerWidget {
                       ),
                     ),
                     TextSpan(
-                      text: ': ${_preview(l, conversation.lastMessage!)}',
+                      text:
+                          ': ${chatPreviewLine(l, conversation.lastMessage!)}',
                     ),
                   ],
                 ),
@@ -171,8 +172,10 @@ class ConversationTile extends ConsumerWidget {
             : Text(
                 conversation.lastSenderId != null &&
                         conversation.lastSenderId == me
-                    ? l.listYouPrefix(_preview(l, conversation.lastMessage!))
-                    : _preview(l, conversation.lastMessage!),
+                    ? l.listYouPrefix(
+                        chatPreviewLine(l, conversation.lastMessage!),
+                      )
+                    : chatPreviewLine(l, conversation.lastMessage!),
                 key: ValueKey('preview-${conversation.id}'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

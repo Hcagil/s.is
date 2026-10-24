@@ -99,10 +99,16 @@ enum PeekCore {
   }
 
   private static func isSenderKey(_ s: String) -> Bool {
-    s.utf8.count == 43 && s.utf8.allSatisfy { (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0) || $0 == 43 || $0 == 47 }
+    guard s.utf8.count == 43 else { return false }
+    for byte in s.utf8 {
+      if (byte < 65 || byte > 90) && (byte < 97 || byte > 122) && (byte < 48 || byte > 57) && byte != 43 && byte != 47 {
+        return false
+      }
+    }
+    return true
   }
 
   private static func isUuid(_ s: String) -> Bool {
-    s.range(of: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", options: .regularExpression) != nil
+    return s.range(of: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", options: .regularExpression) != nil
   }
 }

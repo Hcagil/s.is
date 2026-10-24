@@ -502,7 +502,7 @@ Nothing contacts the site before that tap.
 **SIS messages become end-to-end encrypted: locked on the sender's phone, unlocked only on the receivers' phones.** The engine is Matrix's `vodozemac` (Olm for one-to-one sessions, Megolm for groups). It is Apache-2.0, externally audited by Least Authority, and it runs behind our own `flutter_rust_bridge` binding. SIS stays closed source.
 
 - Not chosen: `libsignal` is AGPL, which would force SIS to be open source, and Signal does not support it outside Signal. Writing our own ratchet is ruled out: Matrix retired its older `libolm` over flaws (CVE-2024-45191/45192).
-- The server still sees metadata: who talks to whom and when, group members, message size and type, and read marks. The privacy notice says so.
+- The server still sees metadata: who talks to whom and when, group members, message size and type, read marks, and who reacted to which message and when (the reaction's content is locked in one-to-one chats). The privacy notice says so.
 - Groups: the app makes random Megolm group keys and rotates them when members change. No person ever chooses a group key.
 - Search moves onto the phone, on a new on-phone message store. Notification text and pictures are unlocked on the phone, including in the iPhone notification extension. Link cards, polls, media, voice and location travel inside the encrypted message; the server can still count poll votes.
 - Bot chats (the Debug group and the tester one-to-one chats) stay unencrypted. They carry a label and need the tester's OK, with the warning "This chat is not end-to-end encrypted: an AI and the developer read it. Please don't write passwords or private things here." System chats (What's new, Admin) stay unencrypted as well.

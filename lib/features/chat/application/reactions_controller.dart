@@ -104,9 +104,7 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
     final generation = _generation;
     _apply(Reaction(messageId: messageId, userId: me, emoji: emoji));
 
-    final result = await ref
-        .read(reactionRepositoryProvider)
-        .setReaction(messageId, emoji);
+    final result = await _send(messageId, emoji, me);
     // Closed or switched meanwhile: the new state is not ours to touch.
     if (generation != _generation) return result;
     switch (result) {
@@ -119,6 +117,45 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
         ref.invalidate(reactionUsageProvider);
     }
     return result;
+  }
+
+  /// Sends the change. A clear is always the plain call. A set is locked first ([TextLocker.lockReaction]); the locked bytes are saved on the phone before they are sent, and a retryable network failure is retried once with the same bytes. Ok(null) from the locker (a group, a bot chat, a person with no published keys) sends the plain call, which the server refuses in a chat that is already private. A locking failure is returned as it is: never a fallback to plain.
+  Future<Result<void>> _send(String messageId, String? emoji, String me) async {
+    final repo = ref.read(reactionRepositoryProvider);
+    final conversationId = ref.read(openConversationProvider);
+    if (emoji == null || conversationId == null) {
+      return repo.setReaction(messageId, emoji);
+    }
+    final locked = await ref
+        .read(textLockerProvider)
+        .lockReaction(
+          conversationId: conversationId,
+          messageId: messageId,
+          emoji: emoji,
+        );
+    switch (locked) {
+      case Err(:final failure):
+        return Err(failure);
+      case Ok(value: null):
+        return repo.setReaction(messageId, emoji);
+      case Ok(:final value?):
+        await ref
+            .read(reactionOpenerProvider)
+            .rememberOwn(messageId, me, value.ciphertext, emoji);
+        var result = await repo.setLockedReaction(
+          messageId,
+          value.ciphertext,
+          value.olmType,
+        );
+        if (result case Err(failure: NetworkFailure(retryable: true))) {
+          result = await repo.setLockedReaction(
+            messageId,
+            value.ciphertext,
+            value.olmType,
+          );
+        }
+        return result;
+    }
   }
 
   /// Once, after the join: re-reads the reactions and merges them in. The

@@ -2838,6 +2838,368 @@ class SendQueueRowsCompanion extends UpdateCompanion<StoredSendQueueRow> {
   }
 }
 
+class $ReactionPlainsTable extends ReactionPlains
+    with TableInfo<$ReactionPlainsTable, StoredReactionPlainRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ReactionPlainsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _messageIdMeta = const VerificationMeta(
+    'messageId',
+  );
+  @override
+  late final GeneratedColumn<String> messageId = GeneratedColumn<String>(
+    'message_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sealedMeta = const VerificationMeta('sealed');
+  @override
+  late final GeneratedColumn<String> sealed = GeneratedColumn<String>(
+    'sealed',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _emojiMeta = const VerificationMeta('emoji');
+  @override
+  late final GeneratedColumn<String> emoji = GeneratedColumn<String>(
+    'emoji',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _savedAtMeta = const VerificationMeta(
+    'savedAt',
+  );
+  @override
+  late final GeneratedColumn<int> savedAt = GeneratedColumn<int>(
+    'saved_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    messageId,
+    userId,
+    sealed,
+    emoji,
+    savedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'reaction_plains';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredReactionPlainRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('message_id')) {
+      context.handle(
+        _messageIdMeta,
+        messageId.isAcceptableOrUnknown(data['message_id']!, _messageIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_messageIdMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('sealed')) {
+      context.handle(
+        _sealedMeta,
+        sealed.isAcceptableOrUnknown(data['sealed']!, _sealedMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sealedMeta);
+    }
+    if (data.containsKey('emoji')) {
+      context.handle(
+        _emojiMeta,
+        emoji.isAcceptableOrUnknown(data['emoji']!, _emojiMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_emojiMeta);
+    }
+    if (data.containsKey('saved_at')) {
+      context.handle(
+        _savedAtMeta,
+        savedAt.isAcceptableOrUnknown(data['saved_at']!, _savedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_savedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {messageId, userId};
+  @override
+  StoredReactionPlainRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredReactionPlainRow(
+      messageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}message_id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      sealed: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sealed'],
+      )!,
+      emoji: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}emoji'],
+      )!,
+      savedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}saved_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ReactionPlainsTable createAlias(String alias) {
+    return $ReactionPlainsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredReactionPlainRow extends DataClass
+    implements Insertable<StoredReactionPlainRow> {
+  final String messageId;
+  final String userId;
+  final String sealed;
+  final String emoji;
+  final int savedAt;
+  const StoredReactionPlainRow({
+    required this.messageId,
+    required this.userId,
+    required this.sealed,
+    required this.emoji,
+    required this.savedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['message_id'] = Variable<String>(messageId);
+    map['user_id'] = Variable<String>(userId);
+    map['sealed'] = Variable<String>(sealed);
+    map['emoji'] = Variable<String>(emoji);
+    map['saved_at'] = Variable<int>(savedAt);
+    return map;
+  }
+
+  ReactionPlainsCompanion toCompanion(bool nullToAbsent) {
+    return ReactionPlainsCompanion(
+      messageId: Value(messageId),
+      userId: Value(userId),
+      sealed: Value(sealed),
+      emoji: Value(emoji),
+      savedAt: Value(savedAt),
+    );
+  }
+
+  factory StoredReactionPlainRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredReactionPlainRow(
+      messageId: serializer.fromJson<String>(json['messageId']),
+      userId: serializer.fromJson<String>(json['userId']),
+      sealed: serializer.fromJson<String>(json['sealed']),
+      emoji: serializer.fromJson<String>(json['emoji']),
+      savedAt: serializer.fromJson<int>(json['savedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'messageId': serializer.toJson<String>(messageId),
+      'userId': serializer.toJson<String>(userId),
+      'sealed': serializer.toJson<String>(sealed),
+      'emoji': serializer.toJson<String>(emoji),
+      'savedAt': serializer.toJson<int>(savedAt),
+    };
+  }
+
+  StoredReactionPlainRow copyWith({
+    String? messageId,
+    String? userId,
+    String? sealed,
+    String? emoji,
+    int? savedAt,
+  }) => StoredReactionPlainRow(
+    messageId: messageId ?? this.messageId,
+    userId: userId ?? this.userId,
+    sealed: sealed ?? this.sealed,
+    emoji: emoji ?? this.emoji,
+    savedAt: savedAt ?? this.savedAt,
+  );
+  StoredReactionPlainRow copyWithCompanion(ReactionPlainsCompanion data) {
+    return StoredReactionPlainRow(
+      messageId: data.messageId.present ? data.messageId.value : this.messageId,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      sealed: data.sealed.present ? data.sealed.value : this.sealed,
+      emoji: data.emoji.present ? data.emoji.value : this.emoji,
+      savedAt: data.savedAt.present ? data.savedAt.value : this.savedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReactionPlainRow(')
+          ..write('messageId: $messageId, ')
+          ..write('userId: $userId, ')
+          ..write('sealed: $sealed, ')
+          ..write('emoji: $emoji, ')
+          ..write('savedAt: $savedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(messageId, userId, sealed, emoji, savedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredReactionPlainRow &&
+          other.messageId == this.messageId &&
+          other.userId == this.userId &&
+          other.sealed == this.sealed &&
+          other.emoji == this.emoji &&
+          other.savedAt == this.savedAt);
+}
+
+class ReactionPlainsCompanion extends UpdateCompanion<StoredReactionPlainRow> {
+  final Value<String> messageId;
+  final Value<String> userId;
+  final Value<String> sealed;
+  final Value<String> emoji;
+  final Value<int> savedAt;
+  final Value<int> rowid;
+  const ReactionPlainsCompanion({
+    this.messageId = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.sealed = const Value.absent(),
+    this.emoji = const Value.absent(),
+    this.savedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ReactionPlainsCompanion.insert({
+    required String messageId,
+    required String userId,
+    required String sealed,
+    required String emoji,
+    required int savedAt,
+    this.rowid = const Value.absent(),
+  }) : messageId = Value(messageId),
+       userId = Value(userId),
+       sealed = Value(sealed),
+       emoji = Value(emoji),
+       savedAt = Value(savedAt);
+  static Insertable<StoredReactionPlainRow> custom({
+    Expression<String>? messageId,
+    Expression<String>? userId,
+    Expression<String>? sealed,
+    Expression<String>? emoji,
+    Expression<int>? savedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (messageId != null) 'message_id': messageId,
+      if (userId != null) 'user_id': userId,
+      if (sealed != null) 'sealed': sealed,
+      if (emoji != null) 'emoji': emoji,
+      if (savedAt != null) 'saved_at': savedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ReactionPlainsCompanion copyWith({
+    Value<String>? messageId,
+    Value<String>? userId,
+    Value<String>? sealed,
+    Value<String>? emoji,
+    Value<int>? savedAt,
+    Value<int>? rowid,
+  }) {
+    return ReactionPlainsCompanion(
+      messageId: messageId ?? this.messageId,
+      userId: userId ?? this.userId,
+      sealed: sealed ?? this.sealed,
+      emoji: emoji ?? this.emoji,
+      savedAt: savedAt ?? this.savedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (messageId.present) {
+      map['message_id'] = Variable<String>(messageId.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (sealed.present) {
+      map['sealed'] = Variable<String>(sealed.value);
+    }
+    if (emoji.present) {
+      map['emoji'] = Variable<String>(emoji.value);
+    }
+    if (savedAt.present) {
+      map['saved_at'] = Variable<int>(savedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ReactionPlainsCompanion(')
+          ..write('messageId: $messageId, ')
+          ..write('userId: $userId, ')
+          ..write('sealed: $sealed, ')
+          ..write('emoji: $emoji, ')
+          ..write('savedAt: $savedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$StoreDatabase extends GeneratedDatabase {
   _$StoreDatabase(QueryExecutor e) : super(e);
   $StoreDatabaseManager get managers => $StoreDatabaseManager(this);
@@ -2848,6 +3210,7 @@ abstract class _$StoreDatabase extends GeneratedDatabase {
   late final $ReadMarksTable readMarks = $ReadMarksTable(this);
   late final $OlmSessionsTable olmSessions = $OlmSessionsTable(this);
   late final $SendQueueRowsTable sendQueueRows = $SendQueueRowsTable(this);
+  late final $ReactionPlainsTable reactionPlains = $ReactionPlainsTable(this);
   late final Index messagesConversationCreated = Index(
     'messages_conversation_created',
     'CREATE INDEX messages_conversation_created ON messages (conversation_id, created_at)',
@@ -2864,6 +3227,7 @@ abstract class _$StoreDatabase extends GeneratedDatabase {
     readMarks,
     olmSessions,
     sendQueueRows,
+    reactionPlains,
     messagesConversationCreated,
   ];
 }
@@ -4455,6 +4819,227 @@ typedef $$SendQueueRowsTableProcessedTableManager =
       StoredSendQueueRow,
       PrefetchHooks Function()
     >;
+typedef $$ReactionPlainsTableCreateCompanionBuilder =
+    ReactionPlainsCompanion Function({
+      required String messageId,
+      required String userId,
+      required String sealed,
+      required String emoji,
+      required int savedAt,
+      Value<int> rowid,
+    });
+typedef $$ReactionPlainsTableUpdateCompanionBuilder =
+    ReactionPlainsCompanion Function({
+      Value<String> messageId,
+      Value<String> userId,
+      Value<String> sealed,
+      Value<String> emoji,
+      Value<int> savedAt,
+      Value<int> rowid,
+    });
+
+class $$ReactionPlainsTableFilterComposer
+    extends Composer<_$StoreDatabase, $ReactionPlainsTable> {
+  $$ReactionPlainsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get messageId => $composableBuilder(
+    column: $table.messageId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sealed => $composableBuilder(
+    column: $table.sealed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get emoji => $composableBuilder(
+    column: $table.emoji,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get savedAt => $composableBuilder(
+    column: $table.savedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ReactionPlainsTableOrderingComposer
+    extends Composer<_$StoreDatabase, $ReactionPlainsTable> {
+  $$ReactionPlainsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get messageId => $composableBuilder(
+    column: $table.messageId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sealed => $composableBuilder(
+    column: $table.sealed,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get emoji => $composableBuilder(
+    column: $table.emoji,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get savedAt => $composableBuilder(
+    column: $table.savedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ReactionPlainsTableAnnotationComposer
+    extends Composer<_$StoreDatabase, $ReactionPlainsTable> {
+  $$ReactionPlainsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get messageId =>
+      $composableBuilder(column: $table.messageId, builder: (column) => column);
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<String> get sealed =>
+      $composableBuilder(column: $table.sealed, builder: (column) => column);
+
+  GeneratedColumn<String> get emoji =>
+      $composableBuilder(column: $table.emoji, builder: (column) => column);
+
+  GeneratedColumn<int> get savedAt =>
+      $composableBuilder(column: $table.savedAt, builder: (column) => column);
+}
+
+class $$ReactionPlainsTableTableManager
+    extends
+        RootTableManager<
+          _$StoreDatabase,
+          $ReactionPlainsTable,
+          StoredReactionPlainRow,
+          $$ReactionPlainsTableFilterComposer,
+          $$ReactionPlainsTableOrderingComposer,
+          $$ReactionPlainsTableAnnotationComposer,
+          $$ReactionPlainsTableCreateCompanionBuilder,
+          $$ReactionPlainsTableUpdateCompanionBuilder,
+          (
+            StoredReactionPlainRow,
+            BaseReferences<
+              _$StoreDatabase,
+              $ReactionPlainsTable,
+              StoredReactionPlainRow
+            >,
+          ),
+          StoredReactionPlainRow,
+          PrefetchHooks Function()
+        > {
+  $$ReactionPlainsTableTableManager(
+    _$StoreDatabase db,
+    $ReactionPlainsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ReactionPlainsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ReactionPlainsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ReactionPlainsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> messageId = const Value.absent(),
+                Value<String> userId = const Value.absent(),
+                Value<String> sealed = const Value.absent(),
+                Value<String> emoji = const Value.absent(),
+                Value<int> savedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ReactionPlainsCompanion(
+                messageId: messageId,
+                userId: userId,
+                sealed: sealed,
+                emoji: emoji,
+                savedAt: savedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String messageId,
+                required String userId,
+                required String sealed,
+                required String emoji,
+                required int savedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => ReactionPlainsCompanion.insert(
+                messageId: messageId,
+                userId: userId,
+                sealed: sealed,
+                emoji: emoji,
+                savedAt: savedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ReactionPlainsTable, StoredReactionPlainRow>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$StoreDatabase,
+                    $ReactionPlainsTable,
+                    StoredReactionPlainRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ReactionPlainsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$StoreDatabase,
+      $ReactionPlainsTable,
+      StoredReactionPlainRow,
+      $$ReactionPlainsTableFilterComposer,
+      $$ReactionPlainsTableOrderingComposer,
+      $$ReactionPlainsTableAnnotationComposer,
+      $$ReactionPlainsTableCreateCompanionBuilder,
+      $$ReactionPlainsTableUpdateCompanionBuilder,
+      (
+        StoredReactionPlainRow,
+        BaseReferences<
+          _$StoreDatabase,
+          $ReactionPlainsTable,
+          StoredReactionPlainRow
+        >,
+      ),
+      StoredReactionPlainRow,
+      PrefetchHooks Function()
+    >;
 
 class $StoreDatabaseManager {
   final _$StoreDatabase _db;
@@ -4472,4 +5057,6 @@ class $StoreDatabaseManager {
       $$OlmSessionsTableTableManager(_db, _db.olmSessions);
   $$SendQueueRowsTableTableManager get sendQueueRows =>
       $$SendQueueRowsTableTableManager(_db, _db.sendQueueRows);
+  $$ReactionPlainsTableTableManager get reactionPlains =>
+      $$ReactionPlainsTableTableManager(_db, _db.reactionPlains);
 }

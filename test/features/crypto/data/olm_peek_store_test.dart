@@ -344,6 +344,169 @@ void main() {
     expect(text, 'secret words');
     expect(sw.elapsedMilliseconds, greaterThanOrEqualTo(150));
   });
+
+  // The sender key of a pre-key push (fix C contract): sk/si open a first
+  // message with no stored session, read-only; a stored session of si wins;
+  // a key already stored for another person is refused. Ids are uuids here
+  // (si must be one).
+  group('pre-key push with sender key (sk) and sender id (si)', () {
+    const aId = '0000a11c-0000-4000-8000-0000000000a1';
+    const bId = '0000a11c-0000-4000-8000-0000000000b2';
+    const cId = '0000a11c-0000-4000-8000-0000000000c3';
+    late Phone a, b, c;
+
+    setUp(() async {
+      a = await Phone.make(aId);
+      b = await Phone.make(bId);
+      c = await Phone.make(cId);
+      // k1: 1:1 with alice in the snapshot. k3: not in the snapshot.
+      await DriftChatListSnapshotStore(b.store).save(bId, const [
+        Conversation(
+          id: 'k1',
+          other: Member(userId: aId, displayName: 'Alice'),
+        ),
+      ]);
+    });
+
+    Future<LockedText> send(Phone from, String id, String text) async {
+      ok(await from.engine.createOutbound(bId, b.keys()));
+      final m = ok(
+        await from.engine.encrypt(
+          bId,
+          encodeEnvelope(id: id, text: text),
+          peerIdentityKey: b.identityKey,
+        ),
+      );
+      expect(m.olmType, 0, reason: 'fixture: a pre-key message');
+      return m;
+    }
+
+    Future<String?> peekK(
+      LockedText m,
+      String id, {
+      String conv = 'k1',
+      String? sk,
+      String? si,
+    }) => peekEncryptedText(
+      storePath: b.h.file.path,
+      storeKeyHex: b.keyHex,
+      pickleKey: b.pk,
+      ownerId: bId,
+      conversationId: conv,
+      messageId: id,
+      ciphertext: m.ciphertext,
+      olmType: m.olmType,
+      senderKey: sk,
+      senderId: si,
+    );
+
+    Future<void> placeholder(String id, {String conv = 'k1'}) =>
+        b.store.upsertAll([
+          msg(id, conv: conv, sender: aId, body: lockedBodyPlaceholder),
+        ]);
+
+    test('first message, no session on the phone: sk/si open it, the store '
+        'file is byte-for-byte unchanged, and the app still opens it '
+        '(one-time key not consumed)', () async {
+      final m = await send(a, 'f1', 'first ever');
+      await placeholder('f1');
+      await b.store.close();
+      final before = await b.h.file.readAsBytes();
+      final mtime = await b.h.file.lastModified();
+
+      expect(
+        await peekK(m, 'f1'),
+        isNull,
+        reason: 'without sk/si it stays locked',
+      );
+      expect(await peekK(m, 'f1', sk: a.identityKey, si: aId), 'first ever');
+      expect(await peekK(m, 'f1', sk: a.identityKey, si: aId), 'first ever');
+
+      expect(await b.h.file.readAsBytes(), before);
+      expect(await b.h.file.lastModified(), mtime);
+      b.reopen();
+      final opened = ok(
+        await b.engine.decrypt(
+          peerUserId: aId,
+          peerIdentityKey: a.identityKey,
+          ciphertext: m.ciphertext,
+          olmType: m.olmType,
+        ),
+      );
+      expect(opened, contains('first ever'));
+    });
+
+    test('a chat not in the snapshot: si is the peer for this peek', () async {
+      final m = await send(a, 'f3', 'no snapshot');
+      await placeholder('f3', conv: 'k3');
+      await b.store.close();
+      expect(
+        await peekK(m, 'f3', conv: 'k3', sk: a.identityKey, si: aId),
+        'no snapshot',
+      );
+    });
+
+    test('a stored session of si wins over sk, also with no snapshot peer '
+        '(sessions are looked up by si)', () async {
+      // Bob opened alice's first message: a stored session with her key.
+      final first = await send(a, 'o1', 'old phone');
+      ok(
+        await b.engine.decrypt(
+          peerUserId: aId,
+          peerIdentityKey: a.identityKey,
+          ciphertext: first.ciphertext,
+          olmType: first.olmType,
+        ),
+      );
+      // Alice's new phone: same user id, a new identity key.
+      final a2 = await Phone.make(aId);
+      final m = await send(a2, 'n1', 'new phone');
+      await placeholder('n1', conv: 'k3');
+      await b.store.close();
+      expect(
+        await peekK(m, 'n1', conv: 'k3', sk: a2.identityKey, si: aId),
+        isNull,
+      );
+    });
+
+    test("sk already stored for another person (carol's key, si alice): "
+        'keyPeers names carol and the peek is refused', () async {
+      final fromCarol = await send(c, 'c1m', 'carol here');
+      ok(
+        await b.engine.decrypt(
+          peerUserId: cId,
+          peerIdentityKey: c.identityKey,
+          ciphertext: fromCarol.ciphertext,
+          olmType: fromCarol.olmType,
+        ),
+      );
+      final m = await send(a, 'f2', 'alice first');
+      await placeholder('f2');
+      await b.store.close();
+
+      final r = readPeekRows(
+        path: b.h.file.path,
+        keyHex: b.keyHex,
+        conversationId: 'k1',
+        messageId: 'f2',
+        senderKey: c.identityKey,
+        senderId: aId,
+      );
+      expect(r!.keyPeers, [cId]);
+      final clean = readPeekRows(
+        path: b.h.file.path,
+        keyHex: b.keyHex,
+        conversationId: 'k1',
+        messageId: 'f2',
+        senderKey: a.identityKey,
+        senderId: aId,
+      );
+      expect(clean!.keyPeers, isEmpty);
+      expect(await peekK(m, 'f2', sk: c.identityKey, si: aId), isNull);
+      // Control: the right key opens the same push.
+      expect(await peekK(m, 'f2', sk: a.identityKey, si: aId), 'alice first');
+    });
+  });
 }
 
 /// Another connection (the app writing) holds an EXCLUSIVE lock for 300 ms.

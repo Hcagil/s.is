@@ -37,6 +37,9 @@ type Target = {
   // Ciphertext and olm_type of an encrypted message; null unless the recipient preview is full (decided in SQL). Absent from an old schema.
   ciphertext?: string | null;
   olm_type?: number | null;
+  // Public identity key and id of the sender of a pre-key message; null otherwise (decided in SQL). Absent from an old schema.
+  sender_key?: string | null;
+  sender_id?: string | null;
 };
 
 type ServiceAccount = { client_email: string; private_key: string };
@@ -52,6 +55,8 @@ const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 const THUMB_TTL_SECONDS = 600;
 // Whole serialized FCM message, UTF-8 bytes, above which `ct` is left out: FCM and APNs cap at 4096 B and iOS carries title/body twice.
 const CT_BUDGET_BYTES = 3500;
+const SENDER_KEY_RE = /^[A-Za-z0-9+/]{43}$/;
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 let cached: { token: string; expiresAt: number } | null = null;
 let minting: Promise<string> | null = null;
 
@@ -252,7 +257,8 @@ async function send(id: string): Promise<void> {
               body: t.body,
               ...(group ? { sender: t.sender!, chat: t.chat! } : {}),
               ...(t.encrypted ? { encrypted: 'true' } : {}), // FCM data values are strings
-              ...(withCt ? { ct: t.ciphertext!, ot: String(t.olm_type) } : {}),
+              // sk/si (pre-key sender key and id) ride only with ct, checked by shape; never logged (as ct).
+              ...(withCt ? { ct: t.ciphertext!, ot: String(t.olm_type), ...(t.sender_key && t.sender_id && SENDER_KEY_RE.test(t.sender_key) && UUID_RE.test(t.sender_id) ? { sk: t.sender_key, si: t.sender_id } : {}) } : {}),
               ...actionData,
               ...(thumbUrl ? { thumb_url: thumbUrl, thumb_kind: t.thumb_video ? 'video' : 'photo' } : {}),
               // Android has no remote badge: the app's own notification sets

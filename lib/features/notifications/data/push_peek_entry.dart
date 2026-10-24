@@ -13,19 +13,27 @@ const peekChannel = MethodChannel('com.esd.sis/peek');
 
 /// Entry of the headless engine started for one encrypted push: asks Kotlin
 /// for the push fields ('take' returns a Map with String keys user_id,
-/// conversation_id, message_id, ct and ot (ot is a String like "0")), peeks,
-/// and always answers 'done' with the text or null. Never throws; writes
-/// nothing.
+/// conversation_id, message_id, ct and ot (ot is a String like "0"), plus
+/// optional sk and si: a pre-key push's sender key and id, never logged), peeks,
+/// and always answers 'done' with a Map {text, reason}: the text, or null plus
+/// a fixed reason code (never text, ids or keys). Never throws; writes nothing.
 @pragma('vm:entry-point')
 Future<void> peekMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
   String? text;
+  String? reason;
   try {
     final a = await peekChannel.invokeMapMethod<String, String>('take');
     final key = await StoreKey().read();
     final pickle = await PickleKey().read();
-    if (a != null && key != null && pickle != null) {
+    if (a == null) {
+      reason = 'no_args';
+    } else if (key == null) {
+      reason = 'no_store_key';
+    } else if (pickle == null) {
+      reason = 'no_pickle_key';
+    } else {
       text = await peekEncryptedText(
         storePath: (await storeFile()).path,
         storeKeyHex: key,
@@ -35,10 +43,22 @@ Future<void> peekMain() async {
         messageId: a['message_id']!,
         ciphertext: a['ct']!,
         olmType: int.parse(a['ot']!),
+        senderKey: a['sk'],
+        senderId: a['si'],
+        onFail: (r) => reason = r,
       );
     }
-  } catch (_) {
+  } catch (e) {
     text = null; // any failure leaves the notification locked
+    reason = 'other:${e.runtimeType}';
   }
-  await peekChannel.invokeMethod<void>('done', text);
+  if (text != null) {
+    reason = null;
+  } else {
+    reason ??= 'decrypt_fail';
+  }
+  await peekChannel.invokeMethod<void>('done', {
+    'text': text,
+    'reason': reason,
+  });
 }

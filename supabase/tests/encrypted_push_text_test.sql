@@ -5,8 +5,8 @@ select plan(25);
 --
 -- Contract (written from the contract, not the function body):
 --   public.push_targets(message_id) keeps its columns and adds
---   `ciphertext text, olm_type smallint` right before the last column
---   `encrypted boolean`. They carry the row's ciphertext and olm_type only for
+--   `ciphertext text, olm_type smallint` (then sender_key, sender_id, see
+--   push_sender_key_test.sql) before the last column `encrypted boolean`. They carry the row's ciphertext and olm_type only for
 --   an encrypted row to a recipient whose preview is 'full' (or who never set
 --   one). Preview 'sender' or 'none', and every plain row: both null.
 --   Callable by service_role only; anon, authenticated and PUBLIC refused.
@@ -105,8 +105,8 @@ reset role;
 
 -- 1 the shape ----------------------------------------------------------------
 select ok(pg_get_function_result('public.push_targets(uuid)'::regprocedure)
-            like '%, ciphertext text, olm_type smallint, encrypted boolean)',
-  'push_targets ends with ciphertext text, olm_type smallint, encrypted boolean');
+            like '%, ciphertext text, olm_type smallint, sender_key text, sender_id uuid, encrypted boolean)',
+  'push_targets ends with ciphertext text, olm_type smallint, sender_key text, sender_id uuid, encrypted boolean');
 select ok(pg_get_function_result('public.push_targets(uuid)'::regprocedure) like
   'TABLE(user_id uuid, token text, platform text, conversation_id uuid, title text, body text, shows_itself boolean, sender text, chat text, badge integer, thumb_path text, thumb_video boolean, %',
   'the earlier columns are unchanged and in order');

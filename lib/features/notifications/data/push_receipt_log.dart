@@ -130,6 +130,8 @@ final class PushReceiptLog {
       label == null ? '${e.runtimeType}' : '$label: ${e.runtimeType}';
 
   static final _priorityWord = RegExp(r'^[a-z?]{1,10}$');
+  // Optional 5th field of a drawn push's note: the peek reason code (PeekRunner.kt), `...,n,peek=<code>`.
+  static final _peekCode = RegExp(r'^peek=[a-z_]{1,24}(:[A-Za-z0-9_]{1,40})?$');
 
   /// What the Android side noted when [messageId]'s push reached the phone
   /// (PushArrivalReceiver.kt), as `native=ms prio=delivered/original`, plus
@@ -148,7 +150,8 @@ final class PushReceiptLog {
       final p = raw.split(',');
       final ms = int.tryParse(p[0]);
       // 'n': the native receiver drew the push; 'q': it queued the push to be drawn (paced) and has not finished yet.
-      final fast = p.length == 4 && (p[3] == 'n' || p[3] == 'q');
+      final peek = p.length == 5 && p[3] == 'n' && _peekCode.hasMatch(p[4]);
+      final fast = (p.length == 4 && (p[3] == 'n' || p[3] == 'q')) || peek;
       if ((p.length != 3 && !fast) ||
           ms == null ||
           ms <= 0 ||
@@ -156,7 +159,7 @@ final class PushReceiptLog {
           !_priorityWord.hasMatch(p[2])) {
         return null;
       }
-      return 'native=$ms prio=${p[1]}/${p[2]}${fast ? ' fast=native' : ''}';
+      return 'native=$ms prio=${p[1]}/${p[2]}${fast ? ' fast=native' : ''}${peek ? ' ${p[4]}' : ''}';
     } catch (_) {
       return null;
     }

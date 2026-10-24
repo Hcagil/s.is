@@ -26,6 +26,7 @@ final class PeekRows {
     required this.storedBody,
     required this.account,
     required this.sessions,
+    this.keyPeers = const [],
   });
 
   /// Meta key 'owner_id'.
@@ -42,6 +43,9 @@ final class PeekRows {
 
   /// Sessions of [peerUserId], newest lastUsedAt first; empty if [peerUserId] is null.
   final List<PeekSession> sessions;
+
+  /// peer_user_id of every stored session whose peer_identity_key equals the senderKey given to readPeekRows; empty when none or no senderKey.
+  final List<String> keyPeers;
 }
 
 /// Null on ANY failure (missing file, wrong key, busy, corrupt, no cipher build). Never throws, never writes.
@@ -50,12 +54,21 @@ PeekRows? readPeekRows({
   required String keyHex,
   required String conversationId,
   required String messageId,
+  String? senderKey,
+  String? senderId,
 }) {
   // A busy or locked store (SQLITE_BUSY 5, SQLITE_LOCKED 6) is retried for at most about 1 s in total; PRAGMA busy_timeout alone fails at once on this build.
   final clock = Stopwatch()..start();
   while (true) {
     try {
-      return _readPeekRows(path, keyHex, conversationId, messageId);
+      return _readPeekRows(
+        path,
+        keyHex,
+        conversationId,
+        messageId,
+        senderKey,
+        senderId,
+      );
     } on SqliteException catch (e) {
       final busy = e.resultCode == 5 || e.resultCode == 6;
       if (!busy || clock.elapsedMilliseconds >= 1000) return null;
@@ -71,6 +84,8 @@ PeekRows? _readPeekRows(
   String keyHex,
   String conversationId,
   String messageId,
+  String? senderKey,
+  String? senderId,
 ) {
   {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
@@ -110,14 +125,15 @@ PeekRows? _readPeekRows(
             ? msg.first['body'] as String
             : null;
 
-        final sessions = peerUserId == null
+        final lookupPeer = peerUserId ?? senderId;
+        final sessions = lookupPeer == null
             ? <PeekSession>[]
             : [
                 for (final row in db.select(
                   'SELECT session_id, peer_user_id, peer_identity_key, pickle '
                   'FROM olm_sessions WHERE peer_user_id = ? '
                   'ORDER BY last_used_at DESC;',
-                  [peerUserId],
+                  [lookupPeer],
                 ))
                   PeekSession(
                     sessionId: row['session_id'] as String,
@@ -127,12 +143,25 @@ PeekRows? _readPeekRows(
                   ),
               ];
 
+        // The stored sessions that already carry this key, for any peer (the peek refuses a key that belongs to someone else).
+        final keyPeers = senderKey == null
+            ? <String>[]
+            : [
+                for (final row in db.select(
+                  'SELECT DISTINCT peer_user_id FROM olm_sessions '
+                  'WHERE peer_identity_key = ?;',
+                  [senderKey],
+                ))
+                  row['peer_user_id'] as String,
+              ];
+
         return PeekRows(
           ownerId: meta('owner_id'),
           peerUserId: peerUserId,
           storedBody: storedBody,
           account: meta('olm_account'),
           sessions: sessions,
+          keyPeers: keyPeers,
         );
       } finally {
         db.execute('COMMIT;');

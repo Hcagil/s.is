@@ -6,7 +6,14 @@ import '../domain/key_engine.dart';
 import 'olm_key_engine.dart';
 import 'olm_peek_store.dart';
 
+// Shapes of the sender key (43-char base64) and id (uuid) a pre-key push carries.
+final _senderKeyShape = RegExp(r'^[A-Za-z0-9+/]{43}$');
+final _uuidShape = RegExp(
+  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+);
+
 /// Decrypts a message using session data from [rows] without persisting the result. [onFail] gets a fixed reason code (never text, ids or keys) when it returns null.
+/// [senderKey] and [senderId] (from a pre-key push) are used only for olmType 0 with no stored session of that peer; they are never returned or logged.
 Future<String?> peekDecrypt({
   required PeekRows rows,
   required List<int> pickleKey,
@@ -15,10 +22,19 @@ Future<String?> peekDecrypt({
   required int olmType,
   SessionKeyEngine? engine,
   void Function(String reason)? onFail,
+  String? senderKey,
+  String? senderId,
 }) async {
   try {
-    final peer = rows.peerUserId;
+    final peer = rows.peerUserId ?? (olmType == 0 ? senderId : null);
     if (peer == null) {
+      onFail?.call('no_peer');
+      return null;
+    }
+    // The push names someone other than the chat's peer: refuse.
+    if (senderId != null &&
+        rows.peerUserId != null &&
+        senderId != rows.peerUserId) {
       onFail?.call('no_peer');
       return null;
     }
@@ -60,11 +76,27 @@ Future<String?> peekDecrypt({
         if (text == null) onFail?.call('decrypt_fail');
         return text?.text;
       } else {
-        if (rows.sessions.isEmpty || rows.account == null) {
+        if (rows.account == null) {
           onFail?.call('no_session');
           return null;
         }
-        final identityKey = rows.sessions.first.peerIdentityKey;
+        final String identityKey;
+        if (rows.sessions.isNotEmpty) {
+          // A stored session of this peer wins; the push's key is ignored (a key change goes through the app).
+          identityKey = rows.sessions.first.peerIdentityKey;
+        } else if (senderKey == null || senderId == null) {
+          onFail?.call('no_session');
+          return null;
+        } else if (!_senderKeyShape.hasMatch(senderKey) ||
+            !_uuidShape.hasMatch(senderId) ||
+            senderId != peer ||
+            rows.keyPeers.any((p) => p != peer)) {
+          // Bad shape, or the key is already stored for another person.
+          onFail?.call('decrypt_fail');
+          return null;
+        } else {
+          identityKey = senderKey;
+        }
         final account = await engine.restoreSessionAccount(
           rows.account!,
           pickleKey,
@@ -93,12 +125,16 @@ Future<String?> peekEncryptedText({
   required String ciphertext,
   required int olmType,
   void Function(String reason)? onFail,
+  String? senderKey,
+  String? senderId,
 }) async {
   final rows = readPeekRows(
     path: storePath,
     keyHex: storeKeyHex,
     conversationId: conversationId,
     messageId: messageId,
+    senderKey: senderKey,
+    senderId: senderId,
   );
   if (rows == null) {
     onFail?.call('rows_null');
@@ -118,5 +154,7 @@ Future<String?> peekEncryptedText({
     ciphertext: ciphertext,
     olmType: olmType,
     onFail: onFail,
+    senderKey: senderKey,
+    senderId: senderId,
   );
 }

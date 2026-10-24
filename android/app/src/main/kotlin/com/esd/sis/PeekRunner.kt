@@ -74,7 +74,8 @@ object PeekRunner {
             return seamText
         }
 
-        val args = listOf("user_id", "conversation_id", "message_id", "ct", "ot").associateWith { extras.getString(it) }
+        // sk/si (a pre-key push's sender key and id) ride along only when present: the Dart side casts this map to Map<String, String>. Never logged.
+        val args = (listOf("user_id", "conversation_id", "message_id", "ct", "ot") + listOf("sk", "si").filter { !extras.getString(it).isNullOrEmpty() }).associateWith { extras.getString(it)!! }
         val latch = CountDownLatch(1)
         val result = AtomicReference<String?>(null)
         val dartReason = AtomicReference<String?>(null)

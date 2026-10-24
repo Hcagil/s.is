@@ -431,7 +431,7 @@ message fits the byte budget (else it is resent once without `ct`). FCM and APNs
 see ciphertext, never the text; the text is opened on the phone (Android: a
 read-only peek in a short-lived engine; iPhone: the notification service
 extension), which never saves a ratchet step. `ct` and FCM response bodies are
-never logged, and no session id rides in the push. What the phone shows when it
+never logged, and no session id rides in the push. For a first (pre-key, `ot` 0) message the sender's id (`si`) and public identity key (`sk`) also ride beside `ct`, from the same SQL gate (preview full, live allowed non-bot sender device) and dropped together with `ct` when the message is over the byte budget. The phone uses them only when it has no stored session with that sender, only after a shape check, and refuses a key already stored for another person or an id other than the chat's peer; with a stored session it ignores them. The peek still builds the session on an in-memory copy and never saves. The key is public and FCM already sees the sender's name. An evil server could substitute its own key (the same trust as the first contact in the app); this is an accepted residual, fixed by the Step 7 security codes. The iPhone ignores `sk` and `si` (it reads only named keys, PushPeekCore.swift). What the phone shows when it
 cannot open the text is one locked text, identical on both platforms: "🔒 New
 message" (Turkish "🔒 Yeni mesaj"); Android takes it from `notification_locked`,
 the iPhone extension sets it for every encrypted push (mutable-content is set for

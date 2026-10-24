@@ -228,6 +228,9 @@ Future<void> main() async {
     StartupMarks.mark('supabase-ready');
     // Push is set up after the first frame (see below); everything that asks
     // the push source waits for it (DeferredPushSource).
+    // Realtime re-joins and foreground pushes reach the app through these (LiveCatchUp).
+    final rejoined = StreamController<void>.broadcast();
+    final foregroundPush = StreamController<String>.broadcast();
     final pushReady = Completer<PushSource>();
     // A failed setup is logged by _setUpPush and surfaces in each waiting call.
     pushReady.future.ignore();
@@ -264,10 +267,13 @@ Future<void> main() async {
           ...autoDownloadOverrides,
           runtimeConfigProvider.overrideWithValue(config),
           ...platformOverrides(defaultTargetPlatform, client, config),
+          realtimeRejoinedProvider.overrideWithValue(rejoined.stream),
+          foregroundPushProvider.overrideWithValue(foregroundPush.stream),
           chatRepositoryProvider.overrideWith(
             (ref) => SupabaseChatRepository(
               client,
               cache: attachmentCache,
+              onRejoin: () => rejoined.add(null),
               // Every read of server rows opens locked texts here, once.
               opener: ref.read(messageOpenerProvider),
             ),
@@ -485,7 +491,7 @@ Future<void> main() async {
     unawaited(
       WidgetsBinding.instance.waitUntilFirstFrameRasterized.then((_) {
         StartupMarks.mark('first-frame');
-        return _setUpPush(pushReady);
+        return _setUpPush(pushReady, foregroundPush.add);
       }),
     );
   } catch (e) {
@@ -508,14 +514,22 @@ Future<void> main() async {
 /// on screen: nothing on that frame needs them, and they cost start-up time.
 /// Android pushes are data only (the app shows them itself, grouped); iOS is
 /// sent a regular notification and shows it through the system.
-Future<void> _setUpPush(Completer<PushSource> ready) async {
+Future<void> _setUpPush(
+  Completer<PushSource> ready,
+  void Function(String) onForeground,
+) async {
   try {
     // Reads android/app/google-services.json (Android) or
     // ios/Runner/GoogleService-Info.plist (iOS), bundled at build time.
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(onBackgroundPush);
     await LocalPushDisplay.init(onTap: FirebasePushSource.tapped);
-    ready.complete(FirebasePushSource(FirebaseMessaging.instance));
+    ready.complete(
+      FirebasePushSource(
+        FirebaseMessaging.instance,
+        onForeground: onForeground,
+      ),
+    );
     // Drops the pre-0.26 'messages' channel and any combination now unused.
     await LocalPushDisplay.pruneChannels();
   } catch (e) {

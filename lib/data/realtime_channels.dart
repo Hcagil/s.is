@@ -12,13 +12,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Fails on `channelError`, `timedOut`, any reported error, or after
 /// [timeout] -- a refused private channel and an unreachable server both end
 /// here instead of hanging.
+/// [onRejoin] runs each time the channel confirms a join AFTER the first (a reconnect).
 Future<void> joinChannel(
   RealtimeChannel channel, {
   Duration timeout = const Duration(seconds: 15),
+  void Function()? onRejoin,
 }) {
   final joined = Completer<void>();
   channel.subscribe((status, error) {
-    if (joined.isCompleted) return;
+    if (joined.isCompleted) {
+      // The client re-joins the channel by itself after a dropped socket: tell the caller, which must catch up on what it missed.
+      if (status == RealtimeSubscribeStatus.subscribed) onRejoin?.call();
+      return;
+    }
     if (status == RealtimeSubscribeStatus.subscribed) {
       joined.complete();
     } else if (status == RealtimeSubscribeStatus.channelError ||

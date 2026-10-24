@@ -83,10 +83,16 @@ part 'polls_controller.dart';
 part 'phone_book_controller.dart';
 part 'chat_search_controller.dart';
 part 'chat_list_search_controller.dart';
+part 'live_catch_up.dart';
 part 'store_sync_controller.dart';
 
 final chatRepositoryProvider = Provider<ChatRepository>(
   (_) => throw UnimplementedError('override in main'),
+);
+
+/// Fires each time a Realtime message channel re-joins after a dropped connection; main overrides it. Empty in tests.
+final realtimeRejoinedProvider = Provider<Stream<void>>(
+  (_) => const Stream<void>.empty(),
 );
 final reactionRepositoryProvider = Provider<ReactionRepository>(
   (_) => throw UnimplementedError('override in main'),

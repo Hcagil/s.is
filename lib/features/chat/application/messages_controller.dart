@@ -215,6 +215,9 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       }
       return opened;
     });
+    // What the join answered, once it has (null while it is still out).
+    Result<Stream<Message>>? joinAnswer;
+    joining.then((j) => joinAnswer = j).ignore();
     // The server read starts now; the stored newest page shows meanwhile (only
     // when this chat shows nothing yet), so a cold open is not blank.
     final reading = repo.messages(conversationId);
@@ -231,8 +234,10 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         ]);
       }
     }
-    final (joined, read) = await (joining, reading).wait;
+    // The read alone decides the first paint: a join still out (a cold start, up to its 15 s timeout) must not hold the newest rows back. It is handled after the paint, below.
+    final read = await reading;
     if (!alive) return const []; // replaced or closed mid-open: drop it all
+    final joined = joinAnswer;
     // A catch-up that cannot reach the server (resume while offline) keeps
     // the list on screen and tries again a little later; only a first open,
     // with nothing to show, is an error. A refusal is never retried.
@@ -258,8 +263,32 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       return offline;
     }
     _catchUpRetries = 0;
+    if (joined == null) {
+      // The join answers after the paint: a row sent before it took effect is read in at once; a refused join retries as a failed open does.
+      unawaited(
+        joining.then((j) {
+          if (!alive || !ref.mounted) return;
+          if (j is Ok) {
+            unawaited(
+              _verify(
+                conversationId,
+                _ownEdits,
+                () => alive,
+              ).then((_) => _fillPreviews(conversationId, () => alive)),
+            );
+          } else if (j is Err<Stream<Message>> &&
+              j.failure is! DeniedFailure &&
+              _catchUpRetries < _maxCatchUpRetries) {
+            _catchUpRetries++;
+            Future<void>.delayed(const Duration(seconds: 5), () {
+              if (alive && ref.mounted) ref.invalidateSelf();
+            }).ignore();
+          }
+        }),
+      );
+    }
 
-    // Both answered Ok here (a failure returned or threw above).
+    // The read answered Ok here (a failure returned or threw above).
     final value = (read as Ok<List<Message>>).value;
     loaded = true;
     final known = {
@@ -440,17 +469,20 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// The member is back at the newest message: a Realtime row missed while the
   /// connection was down (no resume event) is read in by _verify. At most once
   /// per 20 s, never on a search window, never while a build is loading.
-  void verifyNewest() {
+  /// [force] (a Realtime re-join, a foreground push) skips the 20 s limit and also reads an empty chat.
+  void verifyNewest({bool force = false}) {
     final conversationId = ref.read(openConversationProvider);
     if (conversationId == null ||
         _jumped ||
         state.isLoading ||
         state.hasError ||
-        (state.value?.isEmpty ?? true)) {
+        (state.value == null || (state.value!.isEmpty && !force))) {
       return;
     }
     final now = DateTime.now();
-    if (now.difference(_verifiedAt) < const Duration(seconds: 20)) return;
+    if (!force && now.difference(_verifiedAt) < const Duration(seconds: 20)) {
+      return;
+    }
     _verifiedAt = now;
     final epoch = _epoch;
     bool alive() => ref.mounted && epoch == _epoch;

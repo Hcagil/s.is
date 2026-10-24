@@ -37,14 +37,21 @@ import 'link_image_shrink.dart';
 /// filters for authorisation. A refusal arrives as a [PostgrestException] with
 /// SQLSTATE 42501 and is reported as [DeniedFailure].
 final class SupabaseChatRepository implements ChatRepository {
-  SupabaseChatRepository(this._client, {AttachmentCache? cache, this._opener})
-    : _cache = cache ?? const _NoCache();
+  SupabaseChatRepository(
+    this._client, {
+    AttachmentCache? cache,
+    this._opener,
+    this._onRejoin,
+  }) : _cache = cache ?? const _NoCache();
 
   final SupabaseClient _client;
   final AttachmentCache _cache;
 
   /// Opens locked texts of rows read from the server (null: rows pass as they are).
   final MessageOpener? _opener;
+
+  /// Called each time a message channel re-joins after a dropped connection (rows sent meanwhile never arrived on it).
+  final void Function()? _onRejoin;
 
   /// Live rows are opened one after the other so they keep their order.
   Future<void> _tail = Future<void>.value();
@@ -816,7 +823,7 @@ final class SupabaseChatRepository implements ChatRepository {
 
     try {
       // A dead subscription must fail loudly rather than hang the screen.
-      await joinChannel(channel);
+      await joinChannel(channel, onRejoin: _onRejoin);
     } catch (e) {
       // An unreachable server throws an SDK type (WebSocketChannelException,
       // SocketException, TimeoutException). Left unmapped it would be printed

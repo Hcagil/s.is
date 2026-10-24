@@ -71,7 +71,7 @@ create function spent() returns text language sql stable as $$
   select concat_ws('|',
     (select count(*) from app_private.olm_one_time_keys where user_id = u('bob') and claimed_at is not null),
     (select count(*) from app_private.olm_one_time_keys where user_id = u('bob')),
-    (select count(*) from app_private.olm_claims),
+    (select count(*) from app_private.olm_claims where u('bob') in (claimer, target)),
     (select fallback_used::text from app_private.olm_devices where user_id = u('bob')))
 $$;
 
@@ -109,6 +109,8 @@ select ok(exists(select 1 from app_private.active_sessions where user_id = u('na
   'fixture: nal keeps its live session; only the allowlist row is gone');
 select is((select session_id::text from app_private.active_sessions where user_id = u('stl')),
   '013d0000-0000-0000-0000-0000013df005', 'fixture: stl''s new phone holds the active session');
+-- Claims that are not bob's, as other runs leave behind: spent() must ignore them.
+insert into app_private.olm_claims(claimer, target) values (u('far'), u('nal')), (u('nac'), u('ann'));
 create temp table before as select spent() as s;
 
 -- 1 privileges --------------------------------------------------------------

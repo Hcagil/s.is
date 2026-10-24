@@ -56,7 +56,9 @@ class MessageNoticeController extends Notifier<MessageNoticeData?> {
     final open = ref.read(openConversationProvider);
     if (open == null || open == message.conversationId) return;
     if (conversation.archived) return;
-    final mutes = ref.read(mutesProvider).value ?? const <Mute>[];
+    // Mutes not loaded (loading or failed): no card, it could be muted.
+    final mutes = ref.read(mutesProvider).value;
+    if (mutes == null) return;
     final now = DateTime.now();
     if (activeMute(mutes, MuteKind.conversation, message.conversationId, now) !=
             null ||
@@ -65,10 +67,10 @@ class MessageNoticeController extends Notifier<MessageNoticeData?> {
     }
     final raw = previewText(message);
     final locked = isLockedPlaceholder(raw);
+    final settings = ref.read(notificationSettingsProvider).value;
+    if (settings?.enabled == false) return;
     // Settings not loaded yet compares false: the text stays hidden.
-    final full =
-        ref.read(notificationSettingsProvider).value?.preview ==
-        NotificationPreview.full;
+    final full = settings?.preview == NotificationPreview.full;
     final old = state;
     final count = old != null && old.conversationId == message.conversationId
         ? old.count + 1

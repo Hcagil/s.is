@@ -48,6 +48,8 @@ class MessageNoticeCard extends ConsumerWidget {
         child: Semantics(
           liveRegion: true,
           label: '$title: $body',
+          excludeSemantics: true,
+          onTap: onTap,
           child: GestureDetector(
             onTap: onTap,
             child: Container(

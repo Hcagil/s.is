@@ -93,6 +93,48 @@ class ReactionFake implements ReactionRepository {
     return const Ok(null);
   }
 
+  // ---- setLockedReaction() ----
+  final lockedCalls = <(String, String, int)>[];
+
+  /// When set, answers setLockedReaction instead of the server rules below.
+  Future<Result<void>> Function(
+    String messageId,
+    String ciphertext,
+    int olmType,
+  )?
+  onSetLocked;
+
+  /// What this phone opens a locked row of its own to (see setLockedReaction).
+  String? Function(String ciphertext)? openLocked;
+
+  @override
+  Future<Result<void>> setLockedReaction(
+    String messageId,
+    String ciphertext,
+    int olmType,
+  ) async {
+    lockedCalls.add((messageId, ciphertext, olmType));
+    final hook = onSetLocked;
+    if (hook != null) return hook(messageId, ciphertext, olmType);
+    await Future<void>.delayed(Duration.zero);
+    final user = me;
+    if (user == null) return const Err(DeniedFailure());
+    // The server stores the ciphertext only (emoji NULL). The repository
+    // returns opened reactions, so the echo carries the emoji only when the
+    // test says what this phone opens it to ([openLocked]); else no echo.
+    final cid = _cid(messageId);
+    server
+        .putIfAbsent(cid, () => [])
+        .removeWhere((r) => r.messageId == messageId && r.userId == user);
+    final emoji = openLocked?.call(ciphertext);
+    if (emoji != null) {
+      final r = Reaction(messageId: messageId, userId: user, emoji: emoji);
+      server[cid]!.insert(0, r);
+      _publish(cid, r);
+    }
+    return const Ok(null);
+  }
+
   // ---- reactionUpdates() ----
   final joinCalls = <String>[];
 

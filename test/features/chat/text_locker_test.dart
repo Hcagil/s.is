@@ -16,6 +16,7 @@ import 'package:sis/features/chat/application/text_locker.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/message_envelope.dart';
+import 'package:sis/features/chat/domain/reaction_envelope.dart';
 import 'package:sis/features/chat/domain/send_queue_store.dart';
 import 'package:sis/features/crypto/application/key_directory_controller.dart';
 import 'package:sis/features/crypto/domain/key_directory.dart';
@@ -384,5 +385,97 @@ void main() {
     w.engine.encryptAnswers.add(const Err(SessionStoreFailure()));
     expect(failureOf(await w.lock('c1')), isA<SessionStoreFailure>());
     expect(w.dir.claims, isEmpty);
+  });
+  group('lockReaction (locked reactions, E1/E2/E5/F3)', () {
+    Future<Result<QueuedCiphertext?>> react(
+      World w,
+      String conv, {
+      String id = 'm1',
+      String emoji = '🦊',
+    }) async {
+      await w.c.read(sessionControllerProvider.future);
+      w.c.listen(currentUserIdProvider, (_, _) {});
+      return w.c
+          .read(textLockerProvider)
+          .lockReaction(conversationId: conv, messageId: id, emoji: emoji);
+    }
+
+    test(
+      'direct chat: locks a reaction envelope bound to the message and to '
+      'me, padded to 192 bytes, never a message envelope, nothing queued',
+      () async {
+        final w = World()..session();
+        final r = await react(w, 'c1');
+        expect(lockedOf(r), isNotNull);
+        final call = w.engine.encrypts.single;
+        expect(call.peer, 'u2');
+        expect(call.peerIdentityKey, 'idk-bob');
+        expect(call.queue, isNull, reason: 'a reaction is not queued');
+        expect(
+          decodeReactionEnvelope(call.plaintext, messageId: 'm1', userId: 'u1'),
+          '🦊',
+        );
+        expect(decodeEnvelope(call.plaintext, 'm1'), isNull);
+        // RED-EXPECTED until the fix round (F3: fixed 192 bytes).
+        expect(utf8.encode(call.plaintext).length, 192);
+      },
+    );
+
+    test('every allowed emoji locks to the same plaintext length (F3)', () async {
+      final w = World()..session();
+      for (final e in [
+        'a',
+        '👍',
+        '👍🏽',
+        '👨‍👩‍👧',
+        '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+        '😀' * 16,
+      ]) {
+        expect(lockedOf(await react(w, 'c1', emoji: e)), isNotNull, reason: e);
+      }
+      final lengths = {
+        for (final c in w.engine.encrypts) utf8.encode(c.plaintext).length,
+      };
+      // RED-EXPECTED until the fix round (F3).
+      expect(
+        lengths,
+        {192},
+        reason:
+            '${w.engine.encrypts.length} locks: ${[for (final c in w.engine.encrypts) utf8.encode(c.plaintext).length]}',
+      );
+    });
+
+    test('an emoji over 64 UTF-8 bytes is refused on the phone: Err, '
+        'nothing locked (F3)', () async {
+      final w = World()..session();
+      final r = await react(w, 'c1', emoji: '${'😀' * 16}a');
+      // RED-EXPECTED until the fix round (F3).
+      expect(failureOf(r), isNotNull);
+      expect(w.engine.encrypts, isEmpty);
+    });
+
+    for (final (name, conv) in [('a group', 'g1'), ('the system chat', 's1')]) {
+      test('$name: Ok(null), plain, nothing locked', () async {
+        final w = World()..session();
+        final r = await react(w, conv);
+        expect(r, isA<Ok<QueuedCiphertext?>>());
+        expect(lockedOf(r), isNull);
+        expect(w.engine.encrypts, isEmpty);
+      });
+    }
+
+    test('the key lookup fails: Err, never plain (E5)', () async {
+      final w = World()..session();
+      w.dir.identityAnswer = const Err(NetworkFailure('No connection'));
+      final r = await react(w, 'c1');
+      expect(failureOf(r), isNotNull);
+      expect(w.engine.encrypts, isEmpty);
+    });
+
+    test('the engine fails: Err, never plain (E5)', () async {
+      final w = World()..session();
+      w.engine.encryptAnswers.add(const Err(SessionStoreFailure()));
+      expect(failureOf(await react(w, 'c1')), isA<SessionStoreFailure>());
+    });
   });
 }

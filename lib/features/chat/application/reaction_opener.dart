@@ -13,6 +13,8 @@ import '../domain/reaction.dart';
 import '../domain/reaction_envelope.dart';
 import '../domain/reaction_opener.dart';
 import '../domain/reaction_store.dart';
+import 'catch_up_mark.dart';
+import 'chat_controllers.dart';
 import 'open_queue.dart';
 
 /// The on-phone store of opened locked reactions; null until main wires it.
@@ -27,6 +29,8 @@ final reactionOpenerProvider = Provider<ReactionOpener>((ref) {
     peerKey: (id) =>
         ref.read(keyDirectoryControllerProvider.notifier).identityVerified(id),
     queue: ref.read(openQueueProvider),
+    mark: ref.read(catchUpMarkProvider),
+    onHeld: () => ref.read(storeSyncProvider).run(),
   );
 });
 
@@ -38,6 +42,8 @@ class StoreReactionOpener implements ReactionOpener {
     required this._store,
     required this._peerKey,
     OpenQueue? queue,
+    this._mark,
+    this._onHeld,
   }) : _queue = queue ?? OpenQueue();
 
   final String? Function() _me;
@@ -45,6 +51,11 @@ class StoreReactionOpener implements ReactionOpener {
   final ReactionStore? Function() _store;
   final Future<Result<ClaimedKeys?>> Function(String userId) _peerKey;
   final OpenQueue _queue;
+  final CatchUpMark? _mark;
+  final void Function()? _onHeld;
+
+  /// Stamp of the first read of each peer locked row that is waiting for the message catch-up.
+  final Map<String, int> _heldAt = {};
 
   final Map<String, String> _done = {};
 
@@ -121,6 +132,18 @@ class StoreReactionOpener implements ReactionOpener {
       Err() => null,
     };
     if (peerKey == null) return _shown(r, null);
+    // Older messages of this person must be opened first (same Olm chain): wait for a complete message catch-up that began after this row was first read. Hidden meanwhile, never shown as text; the reactions controller reads it again after the pass.
+    final mark = _mark;
+    if (mark != null) {
+      if (_heldAt.length > 1000) _heldAt.clear();
+      final at = _heldAt[slot] ??= mark.stamp();
+      if (!mark.covers(at)) {
+        mark.hold();
+        _onHeld?.call();
+        return _shown(r, null);
+      }
+      _heldAt.remove(slot);
+    }
     final result = await engine.decrypt(
       peerUserId: r.userId,
       peerIdentityKey: peerKey.identityKey,

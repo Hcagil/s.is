@@ -112,6 +112,36 @@ end $$;
 revoke all on function public.set_reaction_encrypted(uuid, text, smallint) from public, anon;
 grant execute on function public.set_reaction_encrypted(uuid, text, smallint) to authenticated;
 
+-- Re-lock of the caller's own OLD plain reaction: compare-and-set. Only a row that is still plain is replaced, so a newer change or a removal (from this or a second phone) is never undone. Returns true when a row was re-locked.
+create function public.relock_reaction(message uuid, ciphertext text, olm_type smallint) returns boolean
+language plpgsql security definer set search_path = '' as $$
+declare
+  m public.messages;
+  n int;
+begin
+  if not app_private.has_app_access() then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
+  select * into m from public.messages where id = message for update;
+  if not found or m.deleted is not null or not app_private.is_member(m.conversation_id) or not app_private.message_readable(m) or app_private.is_system_conversation(m.conversation_id) then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
+  if app_private.is_bot(auth.uid()) or not app_private.chat_lockable(m.conversation_id) then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
+  if relock_reaction.ciphertext is null or char_length(relock_reaction.ciphertext) not between 1 and 1024 or relock_reaction.olm_type is null or relock_reaction.olm_type not in (0, 1) then
+    raise exception 'invalid ciphertext' using errcode = '22023';
+  end if;
+  update public.message_reactions r set emoji = null, ciphertext = relock_reaction.ciphertext, olm_type = relock_reaction.olm_type, updated_at = now() where r.message_id = message and r.user_id = auth.uid() and r.emoji is not null;
+  get diagnostics n = row_count;
+  if n = 1 then
+    update public.conversations set encrypted_at = coalesce(encrypted_at, now()) where id = m.conversation_id;
+  end if;
+  return n = 1;
+end $$;
+revoke all on function public.relock_reaction(uuid, text, smallint) from public, anon;
+grant execute on function public.relock_reaction(uuid, text, smallint) to authenticated;
+
 -- Plain reactions made at or after the chat became private are cleared; the update is
 -- published, so phones drop the chip. Rows from before encrypted_at stay (sent before
 -- encryption). Backups and point-in-time recovery keep the old plain values until they expire.

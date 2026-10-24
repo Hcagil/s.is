@@ -28,6 +28,9 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
   // state so the fetch never overwrites something newer. Null otherwise.
   List<Reaction>? _since;
 
+  // A reconcile asked for while one is running: run once more after it.
+  bool _rerun = false;
+
   // Bumped by every build: an answer that lands after the chat closed or
   // switched must not touch the new state.
   int _generation = 0;
@@ -42,6 +45,7 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
   Future<ReactionsByMessage> build() async {
     _early.clear();
     _since = null;
+    _rerun = false;
     _touched.clear();
     final generation = ++_generation;
     // Closing or switching the chat bumps it too, so a late answer is dropped.
@@ -57,6 +61,12 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
     // buffered by _saw.
     var live = true;
     ref.onDispose(() => live = false);
+    // Locked reactions the opener kept hidden (their older messages may not be open yet) are read again after each complete message catch-up.
+    final mark = ref.read(catchUpMarkProvider);
+    final passes = mark.passes.listen((_) {
+      if (mark.takeHolding()) unawaited(_reconcile(conversationId, generation));
+    });
+    ref.onDispose(passes.cancel);
     unawaited(
       repo.reactionUpdates(conversationId).then((joined) {
         if (joined case Ok(:final value)) {
@@ -70,14 +80,13 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
         }
       }),
     );
-    // Locked reactions share the Olm chains with locked texts: let the chat's messages open first (one shared queue, messages before reactions). A slow or failed message load must not hold the reactions back for long.
+    // Locked reactions share the Olm chains with locked texts: the chat's messages open first. No timeout: a slow load only delays the reactions. A failed message load fails this load too (locked reactions stay unopened; nothing is shown as text) and the load runs again once the messages are there.
     // Only when the chat screen already holds the messages (ref.exists): nothing is built just to wait for it.
     if (ref.exists(messagesProvider)) {
-      try {
-        await ref
-            .read(messagesProvider.future)
-            .timeout(const Duration(seconds: 5));
-      } catch (_) {}
+      ref.listen(messagesProvider, (_, next) {
+        if (state.hasError && next.hasValue) ref.invalidateSelf();
+      });
+      await ref.read(messagesProvider.future);
     }
     if (generation != _generation) return const {};
     final loaded = switch (await repo.reactions(conversationId)) {
@@ -121,10 +130,24 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
             emoji: r.emoji!,
           );
       if (locked case Ok(:final value?)) {
-        final sent = await ref
-            .read(reactionRepositoryProvider)
-            .setLockedReaction(r.messageId, value.ciphertext, value.olmType);
-        if (sent is Ok<void>) {
+        final repo = ref.read(reactionRepositoryProvider);
+        // Compare-and-set on the server (only a row still plain is replaced), so a newer change or removal, from this or a second phone, is never undone. A repository without that call (a test double) falls back to the plain locked set.
+        final applied = switch (repo) {
+          final ReactionRelocker relocker => switch (await relocker.relockPlain(
+            r.messageId,
+            value.ciphertext,
+            value.olmType,
+          )) {
+            Ok(value: final done) => done,
+            Err() => false,
+          },
+          _ => await repo.setLockedReaction(
+            r.messageId,
+            value.ciphertext,
+            value.olmType,
+          ) is Ok<void>,
+        };
+        if (applied) {
           await ref
               .read(reactionOpenerProvider)
               .rememberOwn(r.messageId, me, value.ciphertext, r.emoji!);
@@ -236,6 +259,10 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
       return; // the load failed; nothing to reconcile
     }
     if (generation != _generation) return;
+    if (_since != null) {
+      _rerun = true;
+      return;
+    }
     _since = [];
     final fetched = await ref
         .read(reactionRepositoryProvider)
@@ -247,6 +274,10 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
       state = AsyncData(
         since.fold<ReactionsByMessage>(groupReactions(value), applyReaction),
       );
+    }
+    if (_rerun && generation == _generation) {
+      _rerun = false;
+      await _reconcile(conversationId, generation);
     }
   }
 }

@@ -18,7 +18,8 @@ import '../domain/reaction_repository.dart';
 ///
 /// Locked reactions (ciphertext rows) go through [opener] before anything
 /// shows them; without one they are hidden.
-final class SupabaseReactionRepository implements ReactionRepository {
+final class SupabaseReactionRepository
+    implements ReactionRepository, ReactionRelocker {
   SupabaseReactionRepository(this._client, {this._opener});
 
   final SupabaseClient _client;
@@ -111,6 +112,27 @@ final class SupabaseReactionRepository implements ReactionRepository {
         },
       );
       return const Ok(null);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<bool>> relockPlain(
+    String messageId,
+    String ciphertext,
+    int olmType,
+  ) async {
+    try {
+      final done = await _client.rpc(
+        'relock_reaction',
+        params: {
+          'message': messageId,
+          'ciphertext': ciphertext,
+          'olm_type': olmType,
+        },
+      );
+      return Ok(done == true);
     } catch (e) {
       return Err(_asFailure(e));
     }

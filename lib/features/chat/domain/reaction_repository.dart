@@ -22,3 +22,12 @@ abstract interface class ReactionRepository {
   /// How many times the caller used each emoji, over their most recent 300 reactions; feeds the reactions bar. Locked reactions are counted from this phone's own saved copies.
   Future<Result<Map<String, int>>> myReactionUsage();
 }
+
+/// Optional second capability of a [ReactionRepository]: re-locks an OLD plain reaction of the caller (RPC relock_reaction). Compare-and-set on the server: only a row that is still plain is replaced, so a newer change or a removal is never undone. Ok(true) when re-locked, Ok(false) when the row had changed meanwhile.
+abstract interface class ReactionRelocker {
+  Future<Result<bool>> relockPlain(
+    String messageId,
+    String ciphertext,
+    int olmType,
+  );
+}

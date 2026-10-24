@@ -182,6 +182,29 @@ void main() {
     await elapse(t, const Duration(seconds: 1));
   });
 
+  testWidgets('after the 5th failed late join: the read list stays, no '
+      'error, nothing more is asked', (t) async {
+    chat.holdSubscription();
+    await open(t);
+    chat.incomingResult = const Err(_offline);
+    // Every join fails 100 ms after it is made; the next one is held again.
+    for (var ms = 0; ms < 60000; ms += 100) {
+      chat.confirmSubscription();
+      chat.holdSubscription();
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    chat.confirmSubscription();
+    await elapse(t, const Duration(seconds: 1));
+    expect(state().hasError, isFalse, reason: 'no full-screen error');
+    expect(state().hasValue, isTrue);
+    expect(shown().last, 'c1-59', reason: 'the read list stays');
+    final (j, r) = (joins(), reads());
+    await elapse(t, const Duration(seconds: 60));
+    expect((joins(), reads()), (j, r), reason: 'nothing more after the 5th');
+    expect(state().hasError, isFalse);
+    expect(shown().last, 'c1-59');
+  });
+
   testWidgets('a join refused later (Denied) is not retried', (t) async {
     chat.holdSubscription();
     await open(t);

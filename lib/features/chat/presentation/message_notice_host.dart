@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/route_stack.dart';
 import '../../notifications/application/notification_settings_controller.dart';
 import '../application/message_notice_controller.dart';
 import 'message_notice.dart';
@@ -93,12 +94,19 @@ class _MessageNoticeHostState extends ConsumerState<MessageNoticeHost>
                     onVerticalDragEnd: (d) {
                       if ((d.primaryVelocity ?? 0) < -100) _close();
                     },
-                    child: MessageNoticeCard(
-                      data: _shown!,
-                      onTap: () {
-                        widget.onOpen?.call(_shown!.conversationId);
-                        _close();
-                      },
+                    // Hidden under a full-screen viewer; the 4 s timer keeps
+                    // running, so the card comes back only if still due.
+                    child: ValueListenableBuilder<bool>(
+                      valueListenable: ref.read(routeStackProvider).mediaOnTop,
+                      builder: (_, mediaOnTop, card) =>
+                          mediaOnTop ? const SizedBox.shrink() : card!,
+                      child: MessageNoticeCard(
+                        data: _shown!,
+                        onTap: () {
+                          widget.onOpen?.call(_shown!.conversationId);
+                          _close();
+                        },
+                      ),
                     ),
                   ),
                 ),

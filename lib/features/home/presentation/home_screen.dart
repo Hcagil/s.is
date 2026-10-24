@@ -35,7 +35,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     _taps = ref.read(notificationTapsProvider).listen((id) {
-      if (mounted) unawaited(_openFromNotification(context, ref, id));
+      if (mounted) unawaited(openFromNotification(context, ref, id));
     });
   }
 
@@ -89,8 +89,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 }
 
 /// Opens the conversation a tapped notification is about, at once, with no
-/// network wait; see below for a chat the list does not hold yet.
-Future<void> _openFromNotification(
+/// network wait; see below for a chat the list does not hold yet. Also the
+/// way the in-app top card opens its chat.
+Future<void> openFromNotification(
   BuildContext context,
   WidgetRef ref,
   String id,

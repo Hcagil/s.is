@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/loading.dart';
+import '../../../app/route_stack.dart';
 import '../../../core/failure.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/chat_controllers.dart';
@@ -18,6 +19,7 @@ Future<void> openPhotoViewer(
 }) => Navigator.of(context).push(
   // Not opaque: the chat shows through while a swipe-down fades the black.
   PageRouteBuilder<void>(
+    settings: fullScreenMedia,
     opaque: false,
     transitionDuration: const Duration(milliseconds: 200),
     reverseTransitionDuration: const Duration(milliseconds: 200),

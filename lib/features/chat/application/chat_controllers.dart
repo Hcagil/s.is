@@ -21,6 +21,7 @@ import '../domain/chat_delete_repository.dart';
 import '../domain/chat_list_snapshot_store.dart';
 import '../domain/chat_pin_repository.dart';
 import '../domain/chat_repository.dart';
+import '../domain/join_cancellable.dart';
 import '../domain/encrypted_message_repository.dart';
 import '../domain/conversation.dart';
 import '../domain/contact_share_repository.dart';
@@ -90,10 +91,14 @@ final chatRepositoryProvider = Provider<ChatRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 
-/// Ends the Realtime join of a conversation's channel that is still out (the screen closed first); main overrides it. A no-op in tests.
-final cancelPendingJoinProvider = Provider<void Function(String)>(
-  (_) => (_) {},
-);
+/// Ends the Realtime join of a conversation's channel that is still out (the screen closed first), when the chat repository can ([JoinCancellable]); a no-op for any other.
+final cancelPendingJoinProvider = Provider<void Function(String)>((ref) {
+  final repo = ref.watch(chatRepositoryProvider);
+  return (id) {
+    // A cast, not a promotion: the two types are unrelated interfaces.
+    if (repo is JoinCancellable) (repo as JoinCancellable).cancelJoin(id);
+  };
+});
 
 /// Fires each time a Realtime message channel re-joins after a dropped connection; main overrides it. Empty in tests.
 final realtimeRejoinedProvider = Provider<Stream<void>>(

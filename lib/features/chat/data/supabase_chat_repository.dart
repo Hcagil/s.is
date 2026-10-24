@@ -14,6 +14,7 @@ import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
 import '../domain/group_colors.dart';
+import '../domain/join_cancellable.dart';
 import '../domain/group_event.dart';
 import '../domain/group_member.dart';
 import '../domain/file_attachment.dart';
@@ -36,7 +37,7 @@ import 'link_image_shrink.dart';
 /// Row-level security decides what any of these queries return; nothing here
 /// filters for authorisation. A refusal arrives as a [PostgrestException] with
 /// SQLSTATE 42501 and is reported as [DeniedFailure].
-final class SupabaseChatRepository implements ChatRepository {
+final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
   SupabaseChatRepository(
     this._client, {
     AttachmentCache? cache,
@@ -57,6 +58,7 @@ final class SupabaseChatRepository implements ChatRepository {
   final _pendingJoins = <String, Completer<void>>{};
 
   /// Ends the join of [conversationId]'s channel if it is still out (the screen closed first): the timeout timer stops, the channel is left, nothing is delivered. No effect once the join has answered.
+  @override
   void cancelJoin(String conversationId) {
     final c = _pendingJoins.remove(conversationId);
     if (c != null && !c.isCompleted) c.complete();

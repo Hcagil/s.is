@@ -268,12 +268,6 @@ Future<void> main() async {
           runtimeConfigProvider.overrideWithValue(config),
           ...platformOverrides(defaultTargetPlatform, client, config),
           realtimeRejoinedProvider.overrideWithValue(rejoined.stream),
-          cancelPendingJoinProvider.overrideWith(
-            (ref) =>
-                (id) =>
-                    (ref.read(chatRepositoryProvider) as SupabaseChatRepository)
-                        .cancelJoin(id),
-          ),
           foregroundPushProvider.overrideWithValue(foregroundPush.stream),
           chatRepositoryProvider.overrideWith(
             (ref) => SupabaseChatRepository(

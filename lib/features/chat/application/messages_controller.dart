@@ -261,11 +261,11 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         throw failed;
       }
       _catchUpRetries++;
-      unawaited(
-        Future<void>.delayed(const Duration(seconds: 5), () {
-          if (alive && ref.mounted) ref.invalidateSelf();
-        }),
-      );
+      // Cancelled with the build: no timer outlives the chat.
+      final retry = Timer(const Duration(seconds: 5), () {
+        if (alive && ref.mounted) ref.invalidateSelf();
+      });
+      ref.onDispose(retry.cancel);
       return offline;
     }
     // Only a confirmed JOIN clears the count: a good read must not, or a join that keeps timing out would retry forever.
@@ -288,9 +288,11 @@ class MessagesController extends AsyncNotifier<List<Message>> {
               j.failure is! DeniedFailure &&
               _catchUpRetries < _maxCatchUpRetries) {
             _catchUpRetries++;
-            Future<void>.delayed(const Duration(seconds: 5), () {
+            // Cancelled with the build: no timer outlives the chat.
+            final retry = Timer(const Duration(seconds: 5), () {
               if (alive && ref.mounted) ref.invalidateSelf();
-            }).ignore();
+            });
+            ref.onDispose(retry.cancel);
           }
         }),
       );

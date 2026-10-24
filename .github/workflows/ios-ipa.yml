@@ -26,6 +26,11 @@ on:
         description: Upload the .ipa to TestFlight (false = signing proof only)
         required: true
         type: boolean
+      enabled:
+        description: Run the build (false = skip; the job still reports a result)
+        required: false
+        type: boolean
+        default: true
     secrets:
       APP_STORE_CONNECT_API_KEY:
         description: App Store Connect API key (.p8 content)
@@ -52,6 +57,7 @@ permissions:
 jobs:
   ipa:
     name: Signed iPhone build
+    if: inputs.enabled
     # macos-26: its default Xcode is 26.x; App Store Connect refuses anything
     # built with an older iOS SDK.
     runs-on: macos-26

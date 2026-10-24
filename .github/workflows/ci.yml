@@ -387,17 +387,15 @@ jobs:
   ios-signed:
     name: iOS signed build
     needs: changes
-    if: >-
-      needs.changes.outputs.app == 'true' &&
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login != 'dependabot[bot]'
+    # The caller always runs; the inner job is skipped through `enabled`. A skipped inner job reports
+    # "iOS signed build / Signed iPhone build" as success; a skipped caller reports nothing and blocks the required check.
     uses: ./.github/workflows/ios-ipa.yml
     with:
       ref: ${{ github.sha }}
       build-number: ${{ github.run_number }}
       build-name: 0.0.0
       upload: false
+      enabled: ${{ needs.changes.outputs.app == 'true' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
     secrets:
       APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
       APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}

@@ -71,6 +71,9 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   bool _loadingNewer = false;
   int _catchUpRetries = 0;
   static const _maxCatchUpRetries = 5;
+
+  /// How long a first paint waits for a join after the read has answered: a warm join lands within this and no timer outlives the chat; a cold one is handled after the paint.
+  static const _joinGrace = Duration(milliseconds: 250);
   DateTime _verifiedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// The live list shown just before the first [jumpToAround] of a jump run:
@@ -237,8 +240,18 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     }
     // The read alone decides the first paint: a join still out (a cold start, up to its 15 s timeout) must not hold the newest rows back. It is handled after the paint, below.
     final read = await reading;
-    if (!alive) return const []; // replaced or closed mid-open: drop it all
+    // What the join had answered when the read did decides the old failed path; the grace below only lets a warm join settle.
     final joined = joinAnswer;
+    if (joined == null) {
+      final grace = Completer<void>();
+      final timer = Timer(_joinGrace, grace.complete);
+      await Future.any([
+        joining.then((_) {}, onError: (Object _) {}),
+        grace.future,
+      ]);
+      timer.cancel();
+    }
+    if (!alive) return const []; // replaced or closed mid-open: drop it all
     // A catch-up that cannot reach the server (resume while offline) keeps
     // the list on screen and tries again a little later; only a first open,
     // with nothing to show, is an error. A refusal is never retried.

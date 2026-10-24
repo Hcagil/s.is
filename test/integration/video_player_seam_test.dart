@@ -116,6 +116,22 @@ void main() {
     if (await tempRoot.exists()) await tempRoot.delete(recursive: true);
   });
 
+  /// Lets real time pass (the socket is real) while fake time steps along,
+  /// until [done] holds.
+  Future<void> realUntil(
+    WidgetTester t,
+    bool Function() done,
+    String reason,
+  ) async {
+    for (var i = 0; i < 150 && !done(); i++) {
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await t.pump(const Duration(milliseconds: 50));
+    }
+    expect(done(), isTrue, reason: reason);
+  }
+
   Future<String> sendVideo(String url) async {
     final id = randomMessageId();
     _ok(
@@ -204,6 +220,12 @@ void main() {
     }
     expect(card(m1), findsOneWidget);
     expect(card(m2), findsOneWidget);
+    // The first paint no longer waits for Realtime: let the screen's joins
+    // answer, so none is still out (with its timers) when the screen closes.
+    await realUntil(t, () {
+      final chs = benClient.getChannels();
+      return chs.isNotEmpty && chs.every((c) => c.canPush);
+    }, 'the screen never joined its Realtime channels');
     bool plays(String id) => t.getSemantics(card(id)).label.contains('Play');
     expect(plays(m1), isTrue);
     expect(plays(m2), isTrue);
@@ -228,6 +250,13 @@ void main() {
     // Unmount and let the screen's own timers run out, as message_screen_seam.
     await t.pumpWidget(const SizedBox());
     container.dispose();
+    // Every channel is left before the clock runs, so the client's deferred
+    // disconnect (and its close timer) fits inside the pump below.
+    await realUntil(
+      t,
+      () => benClient.getChannels().isEmpty,
+      'the closed screen left a Realtime channel behind',
+    );
     await t.pump(const Duration(seconds: 61));
   });
 }

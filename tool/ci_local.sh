@@ -5,8 +5,8 @@
 #
 # Not replayed: the iOS jobs (build, signed build; need macOS and Apple secrets,
 # GitHub CI only), the classify/documentation jobs, and the "Restore Firebase
-# config" secret step (android/app/google-services.json must already exist
-# locally).
+# config" secret step (android/app/google-services.json is copied from the main
+# checkout's .private/firebase/ when missing).
 #
 # The database job starts from zero like CI: any leftover stack and its data
 # are wiped first, and the stack is stopped at the end (never `down -v`).
@@ -17,6 +17,16 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # Create the bind-mounted caches as the user, before any docker call, so Docker never makes them root-owned.
 mkdir -p .ci-cache/pub .ci-cache/gradle .ci-cache/m2
+
+# Fresh worktrees lack the git-ignored Firebase config: take the owner's copy from the main checkout.
+if [ ! -f android/app/google-services.json ]; then
+  main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+  src="$main/.private/firebase/google-services.json"
+  if [ -f "$src" ]; then
+    cp "$src" android/app/google-services.json
+    echo 'copied android/app/google-services.json from the main checkout (.private/firebase)'
+  fi
+fi
 
 export LOCAL_UID="${LOCAL_UID:-$(id -u)}" LOCAL_GID="${LOCAL_GID:-$(id -g)}"
 CI=(docker compose -f compose.yaml -f .github/compose.ci.yaml)
@@ -90,6 +100,9 @@ job_android() {
 }
 
 job_database() {
+  # One database run per machine: the Supabase stack is shared, and a second run's wipe step would kill the first.
+  exec 9>"${XDG_RUNTIME_DIR:-/tmp}/sis-ci-db.lock"
+  flock -n 9 || { echo 'waiting for another database run'; flock 9; }
   step "Build Supabase tooling image" docker compose build supabase || return 1
   # Zero state: --no-backup drops the stack's data volumes (not the SDK ones).
   step "Wipe leftover Supabase stack" docker compose run --rm supabase stop --no-backup || return 1

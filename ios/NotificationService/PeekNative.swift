@@ -29,10 +29,10 @@ struct RustPeekDecryptor: PeekDecryptor {
 
 /// Reads what a push needs from the app's encrypted store (PeekStore.c): read-only, small cache, nil when it cannot be read.
 enum PeekStoreReader {
-  static func read(path: String, keyHex: String, conversationId: String, messageId: String) -> PeekData? {
+  static func read(path: String, keyHex: String, conversationId: String, messageId: String, senderKey: String?, senderId: String?) -> PeekData? {
     var rows = SisPeekRows()
     defer { sis_peek_free(&rows) }
-    guard sis_peek_read(path, keyHex, conversationId, messageId, &rows) == 0 else { return nil }
+    guard sis_peek_read(path, keyHex, conversationId, messageId, senderKey, senderId, &rows) == 0 else { return nil }
 
     var sessions: [PeekSessionRow] = []
     for i in 0..<Int(rows.session_count) {
@@ -42,7 +42,7 @@ enum PeekStoreReader {
             let pickle = text(rows.session_pickles?[i]) else { continue }
       sessions.append(PeekSessionRow(sessionId: id, peerUserId: peer, identityKey: key, pickle: pickle))
     }
-    return PeekData(ownerId: text(rows.owner_id), peerUserId: text(rows.peer_user_id), storedBody: text(rows.stored_body), account: text(rows.account), sessions: sessions)
+    return PeekData(ownerId: text(rows.owner_id), peerUserId: text(rows.peer_user_id), storedBody: text(rows.stored_body), account: text(rows.account), sessions: sessions, keyElsewhere: rows.key_elsewhere != nil)
   }
 
   private static func text(_ p: UnsafeMutablePointer<CChar>?) -> String? {

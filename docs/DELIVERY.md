@@ -193,8 +193,10 @@ job is skipped only when it equals `off`, unset means on.
 
 Pull requests: `ci.yml` calls the same `ios-ipa.yml` with the upload disabled
 (job `iOS signed build`), so a signing problem shows on the pull request and
-not after the merge. It runs only for pull requests from this repository,
-never for forks or Dependabot.
+not after the merge. The job always reports, so it can stay a required check:
+the signed build runs for app changes in pull requests from this repository,
+and is skipped (reported as passed) for docs-only changes, forks and
+Dependabot. `release.yml` always runs the signed build before publishing.
 
 #### Share Extension (Share into SIS)
 

@@ -187,18 +187,21 @@ void main() {
     expect(rows(await rmStore.load('c1')), rows(marks));
   });
 
-  test('a fresh install is the current version (4) with the new tables', () async {
-    final fresh = messages();
+  test(
+    'a fresh install is the current version (4) with the new tables',
+    () async {
+      final fresh = messages();
 
-    final version3 = await fresh.run<int>(-1, (db) async {
-      final r = await db.customSelect('PRAGMA user_version').getSingle();
-      return r.read<int>('user_version');
-    });
-    expect(version3, 4);
+      final version3 = await fresh.run<int>(-1, (db) async {
+        final r = await db.customSelect('PRAGMA user_version').getSingle();
+        return r.read<int>('user_version');
+      });
+      expect(version3, 4);
 
-    final tableSet3 = await tables(fresh);
-    expect(tableSet3.contains('reaction_plains'), isTrue);
-    expect(tableSet3.contains('olm_sessions'), isTrue);
-    expect(tableSet3.contains('send_queue'), isTrue);
-  });
+      final tableSet3 = await tables(fresh);
+      expect(tableSet3.contains('reaction_plains'), isTrue);
+      expect(tableSet3.contains('olm_sessions'), isTrue);
+      expect(tableSet3.contains('send_queue'), isTrue);
+    },
+  );
 }

@@ -7,6 +7,9 @@
 //   and badge. It adds `ct` (the row's ciphertext) and `ot` ('0' / '1') only
 //   when the recipient's preview is full AND the whole serialized FCM message
 //   stays within 3500 UTF-8 bytes; otherwise neither key is there.
+// - With ct on an ot 0 (pre-key) row and a live sender device, also `sk` (the
+//   sender's identity key) and `si` (the sender's id); they count against the
+//   same budget and are dropped together with ct. Never logged.
 // - FCM 400 saying too big / too large / exceed, after a send that carried
 //   ct: exactly one resend without ct and ot. 401: one retry with a fresh
 //   token. Any other FCM error: no resend.
@@ -203,8 +206,10 @@ test('preview full (unset): data keeps every key and adds ct = the row ciphertex
     assertEquals(attempts.length, 1, `one send: ${attempts.length}`);
     const d = data(attempts[0]);
     assertEquals(attempts[0].message.token, bob.token);
+    // A pre-key (ot 0) push also carries the sender's key and id (sk, si; see the sender key tests below).
     assertEquals(Object.keys(d).sort(),
-      ['action_token', 'action_url', 'badge', 'body', 'conversation_id', 'ct', 'encrypted', 'message_id', 'ot', 'title', 'user_id'],
+      ['action_token', 'action_url', 'badge', 'body', 'conversation_id', 'ct', 'encrypted', 'message_id', 'ot',
+        ...(ot === 0 ? ['si', 'sk'] : []), 'title', 'user_id'],
       `the key set: ${attempts[0].raw}`);
     assertEquals([d.user_id, d.message_id, d.conversation_id, d.encrypted, d.body, d.title],
       [bob.id, id, conv, 'true', PLACEHOLDER, sender.name]);
@@ -534,6 +539,91 @@ test('a successful push with ct logs no ct', async () => {
   const r = await deliver(await send(await chatWith(p), ct, 1));
   assertEquals(data(attempts[0]).ct, ct, 'fixture: ct travelled');
   assert(!r.lines.join('\n').includes(ct), `ct was logged: ${r.lines}`);
+});
+
+// ---- the sender key of a pre-key push (sk, si) -----------------------------
+const senderKey = (p: Person) => b64('SHA-256', `${p.email}I`);
+/** Runs [body] with [s] as the sender, then restores the shared sender. */
+async function withSender<T>(s: Person, body: () => Promise<T>) {
+  const saved = sender;
+  sender = s;
+  try { return await body(); } finally { sender = saved; }
+}
+
+test('ot 0, preview full: sk = the sender identity key, si = the sender id; ot 1: neither', async () => {
+  const p = await person('sk');
+  const conv = await chatWith(p);
+  await deliver(await send(conv, cipher(120), 0));
+  const d0 = data(attempts[0]);
+  assertEquals([d0.sk, d0.si], [await senderKey(sender), sender.id], `sk/si: ${attempts[0].raw}`);
+  await deliver(await send(conv, cipher(120), 1));
+  const d1 = data(attempts[0]);
+  assert('ct' in d1 && !('sk' in d1) && !('si' in d1), `ot 1 carries ct only: ${Object.keys(d1)}`);
+});
+
+for (const preview of ['sender', 'none'] as const) {
+  test(`ot 0, preview ${preview}: no ct, sk or si`, async () => {
+    const p = await person(`sk-${preview}`, { preview });
+    await deliver(await send(await chatWith(p), cipher(120), 0));
+    const d = data(attempts[0]);
+    assert(!('ct' in d) && !('sk' in d) && !('si' in d), `keys: ${Object.keys(d)}`);
+    assert(!attempts[0].raw.includes(await senderKey(sender)), 'the sender key is nowhere in the push');
+  });
+}
+
+test('ot 0 from a sender whose device is gone: ct and ot travel, sk and si do not', async () => {
+  const lone = await person('lone');
+  const p = await person('sk-lone');
+  const id = await withSender(lone, async () => await send(await chatWith(p), cipher(120), 0));
+  await sql`delete from app_private.olm_devices where user_id = ${lone.id}`;
+  await deliver(id);
+  const d = data(attempts[0]);
+  assert('ct' in d && d.ot === '0', `ct still travels: ${Object.keys(d)}`);
+  assert(!('sk' in d) && !('si' in d), `no sk/si without a device: ${attempts[0].raw}`);
+});
+
+// sk and si add `,"sk":"<43>"` + `,"si":"<36>"` = 51 + 44 = 95 bytes on top of
+// ct and ot (whose '0' is as long as '1', so calibrate() still gives the rest).
+async function probe0(n: number) {
+  const p = await person('probe0');
+  const ct = cipher(n);
+  await deliver(await send(await chatWith(p), ct, 0));
+  assertEquals(attempts.length, 1);
+  return { a: attempts[0], ct };
+}
+test('budget with sk/si: a 3500-byte request keeps all four; 3501 bytes drops ct, ot, sk and si together', async () => {
+  const base = await calibrate();
+  const fit = await probe0(3500 - base - 95);
+  assertEquals(bytes(fit.a.raw), 3500, `fixture: the request with all four is exactly 3500 bytes: ${Object.keys(data(fit.a))}`);
+  assertEquals([data(fit.a).ct, data(fit.a).ot, data(fit.a).si], [fit.ct, '0', sender.id]);
+  const over = await probe0(3501 - base - 95);
+  const d = data(over.a);
+  assert(!('ct' in d) && !('ot' in d) && !('sk' in d) && !('si' in d), `at 3501 bytes none of the four: ${Object.keys(d)}`);
+  assert(!over.a.raw.includes(await senderKey(sender)), 'the sender key is nowhere in the push');
+  assertEquals(d.encrypted, 'true');
+});
+
+test('ot 0, 400 too big: the one resend has none of ct, ot, sk, si, and nothing of them is logged', async () => {
+  const p = await person('sk-big');
+  const ct = cipher(200);
+  answers.push(tooBig('Message is too big'));
+  const r = await deliver(await send(await chatWith(p), ct, 0));
+  answers.length = 0;
+  assertEquals(attempts.length, 2, `the refused send and one resend: ${attempts.length}`);
+  assertEquals(data(attempts[0]).sk, await senderKey(sender), 'fixture: the first send carried sk');
+  const d = data(attempts[1]);
+  assert(!('ct' in d) && !('ot' in d) && !('sk' in d) && !('si' in d), `resend keys: ${Object.keys(d)}`);
+  const logs = [r.text, ...r.errors, ...r.lines].join('\n');
+  for (const secret of [ct, await senderKey(sender)]) assert(!logs.includes(secret), `logged: ${logs}`);
+});
+
+test('a successful ot 0 push logs neither ct nor sk', async () => {
+  const p = await person('sk-quiet');
+  const ct = cipher(150);
+  const r = await deliver(await send(await chatWith(p), ct, 0));
+  assertEquals(data(attempts[0]).sk, await senderKey(sender), 'fixture: sk travelled');
+  const logs = [r.text, ...r.errors, ...r.lines].join('\n');
+  for (const secret of [ct, await senderKey(sender)]) assert(!logs.includes(secret), `logged: ${logs}`);
 });
 
 test('cleanup and close the database connection', async () => {

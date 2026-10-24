@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/notice.dart';
+import '../../../app/route_stack.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/chat_controllers.dart';
 import '../domain/video.dart';
@@ -17,6 +18,7 @@ final videoSurfaceProvider = Provider<Widget Function(VideoPlayback)>(
 Future<void> openVideoPlayer(BuildContext context, String path) =>
     Navigator.of(context).push(
       PageRouteBuilder<void>(
+        settings: fullScreenMedia,
         transitionDuration: const Duration(milliseconds: 200),
         reverseTransitionDuration: const Duration(milliseconds: 200),
         pageBuilder: (_, _, _) => VideoPlayerPage(path: path),

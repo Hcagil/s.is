@@ -21,6 +21,7 @@ import '../features/chat/application/chat_drafts.dart';
 import '../features/chat/application/encrypted_reply_controller.dart';
 import '../features/chat/application/group_controller.dart';
 import '../features/chat/application/share_controller.dart';
+import '../features/chat/presentation/message_notice_host.dart';
 import '../features/chat/presentation/share_page.dart';
 import '../features/crypto/application/key_directory_controller.dart';
 import '../features/home/presentation/home_screen.dart';
@@ -38,6 +39,9 @@ import 'loading.dart';
 import 'route_stack.dart';
 import 'theme.dart';
 
+/// The app's Navigator, so code above it (the top card) can open a chat.
+final navigatorKey = GlobalKey<NavigatorState>();
+
 /// Set by main() when bootstrap itself fails; the gate shows the reason.
 final startupErrorProvider = Provider<StartupFailure?>((_) => null);
 
@@ -51,6 +55,7 @@ class SisApp extends ConsumerWidget {
     final custom = look.activeCustomTheme;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey,
       title: 'SIS',
       localizationsDelegates: const [
         AppLocalizations.delegate,
@@ -108,7 +113,15 @@ class SisApp extends ConsumerWidget {
             look.appTextSize.scale,
           ),
         ),
-        child: child!,
+        child: MessageNoticeHost(
+          onOpen: (id) {
+            final navContext = navigatorKey.currentContext;
+            if (navContext != null) {
+              unawaited(openFromNotification(navContext, ref, id));
+            }
+          },
+          child: child!,
+        ),
       ),
       home: const SessionGate(),
     );

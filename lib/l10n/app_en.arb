@@ -1638,5 +1638,7 @@
   "cropButtonLabel": "Crop photo",
   "@cropButtonLabel": {"description": "Accessibility label of the crop button in the send preview"},
   "cropRotateLabel": "Rotate",
-  "@cropRotateLabel": {"description": "Accessibility label of the rotate button"}
+  "@cropRotateLabel": {"description": "Accessibility label of the rotate button"},
+  "noticeNewMessage": "New message",
+  "@noticeNewMessage": {"description": "Top card for a message from another chat when its text is hidden (private chat not opened on this phone, or the preview setting hides text)"}
 }

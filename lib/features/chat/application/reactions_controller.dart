@@ -131,21 +131,14 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
           );
       if (locked case Ok(:final value?)) {
         final repo = ref.read(reactionRepositoryProvider);
-        // Compare-and-set on the server (only a row still plain is replaced), so a newer change or removal, from this or a second phone, is never undone. A repository without that call (a test double) falls back to the plain locked set.
-        final applied = switch (repo) {
-          final ReactionRelocker relocker => switch (await relocker.relockPlain(
-            r.messageId,
-            value.ciphertext,
-            value.olmType,
-          )) {
-            Ok(value: final done) => done,
-            Err() => false,
-          },
-          _ => await repo.setLockedReaction(
-            r.messageId,
-            value.ciphertext,
-            value.olmType,
-          ) is Ok<void>,
+        // Compare-and-set on the server (only a row still plain is replaced), so a newer change or removal, from this or a second phone, is never undone.
+        final applied = switch (await repo.relockPlain(
+          r.messageId,
+          value.ciphertext,
+          value.olmType,
+        )) {
+          Ok(value: final done) => done,
+          Err() => false,
         };
         if (applied) {
           await ref

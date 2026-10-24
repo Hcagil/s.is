@@ -18,8 +18,7 @@ import '../domain/reaction_repository.dart';
 ///
 /// Locked reactions (ciphertext rows) go through [opener] before anything
 /// shows them; without one they are hidden.
-final class SupabaseReactionRepository
-    implements ReactionRepository, ReactionRelocker {
+final class SupabaseReactionRepository implements ReactionRepository {
   SupabaseReactionRepository(this._client, {this._opener});
 
   final SupabaseClient _client;

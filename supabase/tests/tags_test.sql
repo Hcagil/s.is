@@ -44,6 +44,11 @@ create or replace function tag_of(uid uuid) returns text language sql as $$
   select tag from public.profiles where user_id = uid
 $$;
 
+-- Profiles left by other runs must not hold a tag this file expects to be
+-- free (a leftover 'member' turned test 18 into member_a10000). Move them to
+-- a tag no fixture uses; the rollback at the end restores them.
+update public.profiles set tag = 'x' || left(replace(user_id::text, '-', ''), 19);
+
 -- 1 generation ---------------------------------------------------------------
 -- Every insert is its own lives_ok: a trigger that raises aborts the sign-up.
 select lives_ok($$insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values

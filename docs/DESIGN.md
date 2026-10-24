@@ -17,8 +17,9 @@ rules the code is held to. Decisions and their dates are in
   minimum supported build, which is raised only by an explicit, recorded
   decision.
 
-Out of scope until explicitly scheduled: iOS, end-to-end encryption, web,
-analytics, monetisation, public sign-up.
+Out of scope until explicitly scheduled: web, analytics, monetisation,
+public sign-up. End-to-end encryption covers private one-to-one chats only
+(text and reactions; see `docs/SECURITY.md`).
 
 ## 2. System shape
 
@@ -267,7 +268,7 @@ installed on the workstation. `.private/` and `.orchestra/` are local-only.
 | v0.11 | Read status (mutual, like last seen; group "read by"); 1:1 header says just "typing…" | Your message turns from grey to normal when it is read |
 | v0.12 | One SIS notification grouping every chat, expandable like Telegram | Several messages from several chats arrive as one expandable notification |
 | after v0.9 | iOS | scheduled after v0.9 |
-| later | E2EE | scheduled individually |
+| shipped | E2EE for private one-to-one chats (text, reactions) | media, polls and group chats scheduled individually |
 
 ## 10. Visual design
 

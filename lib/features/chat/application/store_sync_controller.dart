@@ -68,23 +68,26 @@ class StoreSyncController {
     if (_ref.read(sessionControllerProvider).value is! Allowed) return;
     final ids = await _chatIds();
     if (ids == null || _halted(store)) return;
+    final mark = _ref.read(catchUpMarkProvider);
+    final start = mark.stamp();
     final cursor = await store.cursor();
-    if (cursor == null) {
-      await _startFeed(store);
-    } else {
-      await _applyChanges(store, cursor, ids.toSet());
-    }
+    final complete = cursor == null
+        ? await _startFeed(store)
+        : await _applyChanges(store, cursor, ids.toSet());
+    // The feed was read to its end: locked reactions read before this pass began may now be opened (their older messages are open).
+    if (complete && !_halted(store)) mark.passDone(start);
     if (!_halted(store)) await _backfill(store, ids);
   }
 
   /// A new phone: the feed starts at the newest change that exists now,
   /// taken BEFORE the history fill, so anything changing meanwhile is caught
   /// by the next pass.
-  Future<void> _startFeed(MessageStore store) async {
+  Future<bool> _startFeed(MessageStore store) async {
     final r = await _ref.read(chatRepositoryProvider).newestChange();
     if (r is Ok<ChangeCursor?> && r.value != null && !_halted(store)) {
       await store.saveCursor(r.value!);
     }
+    return r is Ok<ChangeCursor?> && !_halted(store);
   }
 
   /// Writes changed rows of the member's current chats; a legacy vanished row
@@ -112,8 +115,9 @@ class StoreSyncController {
   }
 
   /// Reads the change feed after [from] page by page and writes it; the saved
-  /// cursor only moves forward, after each page is written.
-  Future<void> _applyChanges(
+  /// cursor only moves forward, after each page is written. Returns true when
+  /// the feed was read to its end.
+  Future<bool> _applyChanges(
     MessageStore store,
     ChangeCursor from,
     Set<String> chats,
@@ -125,9 +129,9 @@ class StoreSyncController {
       final r = await _ref
           .read(chatRepositoryProvider)
           .changesSince(at, limit: _feedPage);
-      if (r is! Ok<ChangePage> || _halted(store)) return;
+      if (r is! Ok<ChangePage> || _halted(store)) return false;
       final last = r.value.last;
-      if (last == null) return;
+      if (last == null) return true;
       await _write(store, r.value.messages, chats);
       final ahead =
           last.updatedAt.isAfter(high.updatedAt) ||
@@ -137,9 +141,10 @@ class StoreSyncController {
         high = last;
         await store.saveCursor(high);
       }
-      if (r.value.messages.length < _feedPage) return;
+      if (r.value.messages.length < _feedPage) return true;
       at = last;
     }
+    return false;
   }
 
   /// The open chat comes first: waits (at most about 3 seconds) while it is

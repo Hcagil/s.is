@@ -24,6 +24,7 @@ import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
+import 'package:sis/features/chat/application/catch_up_mark.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/message_opener.dart';
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
@@ -397,6 +398,87 @@ void main() {
       feed.calls.clear();
       return (c, store);
     }
+
+    // R1: the catch-up mark. A pass counts only when the feed was read to its
+    // end; a failed or partial read does not mark it; a stamp taken after a
+    // pass began is not covered by that pass.
+    group('R1 catch-up mark', () {
+      Future<(CatchUpMark, List<int>)> markOf(ProviderContainer c) async {
+        final mark = c.read(catchUpMarkProvider);
+        final fired = <int>[];
+        final sub = mark.passes.listen((_) => fired.add(1));
+        addTearDown(sub.cancel);
+        return (mark, fired);
+      }
+
+      test('a feed read to its end covers a stamp taken before the pass, '
+          'and fires passes', () async {
+        feed.change(msg('c1-new', t: 200));
+        final (c, _) = await withCursor();
+        final (mark, fired) = await markOf(c);
+        final s = mark.stamp();
+        expect(mark.covers(s), isFalse, reason: 'no pass yet');
+        await run(c);
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(mark.covers(s), isTrue);
+        expect(fired, isNotEmpty);
+      });
+
+      test('an Err on the first page does not mark the pass', () async {
+        feed.change(msg('c1-new', t: 200));
+        feed.changeErrs.addAll([1, 2, 3, 4, 5, 6]);
+        final (c, _) = await withCursor();
+        final (mark, fired) = await markOf(c);
+        final s = mark.stamp();
+        await run(c);
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(mark.covers(s), isFalse);
+        expect(fired, isEmpty);
+      });
+
+      test(
+        'a partial read (page 1 kept, then Err) does not mark the pass',
+        () async {
+          final rows = [
+            for (var i = 0; i < 600; i++)
+              msg('c1-p${i.toString().padLeft(4, '0')}', t: 101 + i),
+          ];
+          rows.forEach(feed.change);
+          feed.changeErrs.addAll([2, 3, 4, 5, 6]);
+          final (c, store) = await withCursor();
+          final (mark, fired) = await markOf(c);
+          final s = mark.stamp();
+          await run(c);
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          expect(
+            (await store.cursor())?.id,
+            rows[499].id,
+            reason: 'fixture: the first page was applied',
+          );
+          expect(mark.covers(s), isFalse);
+          expect(fired, isEmpty);
+        },
+      );
+
+      test('a stamp taken while a pass is in flight is not covered by it; '
+          'the next full pass covers it', () async {
+        feed.change(msg('c1-new', t: 200));
+        feed.changeGates[1] = Completer<void>();
+        final (c, _) = await withCursor();
+        final (mark, _) = await markOf(c);
+        final first = c.read(storeSyncProvider).run();
+        await eventually(
+          () => feed.feedCalls.length == 1,
+          reason: 'the pass is reading the feed',
+        );
+        final s = mark.stamp();
+        feed.changeGates[1]!.complete();
+        await first.timeout(const Duration(seconds: 20));
+        expect(mark.covers(s), isFalse, reason: 'that pass began earlier');
+        await run(c);
+        expect(mark.covers(s), isTrue);
+      });
+    });
 
     test(
       'the first read starts 5 s before the cursor with the nil id',

@@ -31,6 +31,7 @@ import 'features/chat/application/link_preview_controller.dart';
 import 'features/chat/application/encrypted_reply_controller.dart';
 import 'features/chat/application/share_controller.dart';
 import 'features/chat/application/message_opener.dart';
+import 'features/chat/application/reaction_opener.dart';
 import 'features/chat/application/text_locker.dart';
 import 'features/chat/data/external_picker_channel.dart';
 import 'features/chat/data/file_video_importer.dart';
@@ -40,6 +41,7 @@ import 'features/chat/data/file_attachment_cache.dart';
 import 'features/chat/data/store/drift_chat_list_snapshot_store.dart';
 import 'features/chat/data/store/drift_message_store.dart';
 import 'features/chat/data/store/drift_read_mark_store.dart';
+import 'features/chat/data/store/drift_reaction_store.dart';
 import 'features/chat/data/store/legacy_chat_list.dart';
 import 'features/chat/data/store/drift_send_queue_store.dart';
 import 'features/chat/data/store/legacy_send_queue.dart';
@@ -282,8 +284,12 @@ Future<void> main() async {
           chatDeleteRepositoryProvider.overrideWithValue(
             SupabaseChatDeleteRepository(client),
           ),
-          reactionRepositoryProvider.overrideWithValue(
-            SupabaseReactionRepository(client),
+          reactionRepositoryProvider.overrideWith(
+            (ref) => SupabaseReactionRepository(
+              client,
+              // Locked reactions are opened here, once.
+              opener: ref.read(reactionOpenerProvider),
+            ),
           ),
           adminChatRepositoryProvider.overrideWithValue(
             SupabaseAdminChatRepository(client),
@@ -392,6 +398,10 @@ Future<void> main() async {
             // is built, and that build has just set builtStore.
             ref.watch(messageStoreProvider);
             return DriftChatListSnapshotStore(builtStore!);
+          }),
+          reactionStoreProvider.overrideWith((ref) {
+            ref.watch(messageStoreProvider);
+            return DriftReactionStore(builtStore!);
           }),
           readMarkStoreProvider.overrideWith((ref) {
             ref.watch(messageStoreProvider);

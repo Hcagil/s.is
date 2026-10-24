@@ -15,6 +15,7 @@ import '../domain/message_envelope.dart';
 import '../domain/message_opener.dart';
 import '../domain/message_store.dart';
 import 'chat_controllers.dart';
+import 'open_queue.dart';
 
 /// The one step that opens locked texts read from the server; main gives it to the chat repository.
 final messageOpenerProvider = Provider<MessageOpener>((ref) {
@@ -30,6 +31,7 @@ final messageOpenerProvider = Provider<MessageOpener>((ref) {
     },
     peerKey: (id) =>
         ref.read(keyDirectoryControllerProvider.notifier).identityVerified(id),
+    queue: ref.read(openQueueProvider),
   );
   ref.onDispose(opener.dispose);
   return opener;
@@ -42,15 +44,16 @@ class StoreMessageOpener implements MessageOpener {
     required this._engine,
     required this._store,
     required this._peerKey,
-  });
+    OpenQueue? queue,
+  }) : _queue = queue ?? OpenQueue();
 
   final String? Function() _me;
   final SessionEngine? Function() _engine;
   final MessageStore? Function() _store;
   final Future<Result<ClaimedKeys?>> Function(String userId) _peerKey;
+  final OpenQueue _queue;
 
   final _reopened = StreamController<Message>.broadcast();
-  Future<void> _tail = Future<void>.value();
   final Map<String, Message> _done = {};
   final Map<String, Message> _pending = {};
 
@@ -71,11 +74,7 @@ class StoreMessageOpener implements MessageOpener {
     unawaited(_reopened.close());
   }
 
-  Future<T> _serial<T>(Future<T> Function() job) {
-    final r = _tail.then((_) => job());
-    _tail = r.then<void>((_) {}, onError: (_) {});
-    return r;
-  }
+  Future<T> _serial<T>(Future<T> Function() job) => _queue.run(job);
 
   bool _locked(Message m) =>
       m.ciphertext != null && m.olmType != null && m.deletion == null;

@@ -4,7 +4,7 @@ import 'tables.dart';
 
 part 'store_database.g.dart';
 
-/// The on-phone message database (see MessageStore). Schema version 3.
+/// The on-phone message database (see MessageStore). Schema version 4.
 @DriftDatabase(
   tables: [
     Messages,
@@ -14,13 +14,14 @@ part 'store_database.g.dart';
     ReadMarks,
     OlmSessions,
     SendQueueRows,
+    ReactionPlains,
   ],
 )
 class StoreDatabase extends _$StoreDatabase {
   StoreDatabase(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -38,6 +39,8 @@ class StoreDatabase extends _$StoreDatabase {
         await m.createTable(olmSessions);
         await m.createTable(sendQueueRows);
       }
+      // v4 added reaction_plains (opened locked reactions).
+      if (from < 4) await m.createTable(reactionPlains);
     },
   );
 }

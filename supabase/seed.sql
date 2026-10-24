@@ -336,5 +336,11 @@ insert into app_private.allowlist(email) values
   ('es-ben@mail.test'),
   ('es-cy@mail.test'),
   ('es-dan@mail.test'),
+  -- locked reactions (test/integration/locked_reaction_repository_test.dart):
+  -- ana and ben publish keys and react locked; cy never publishes, so ana's
+  -- chat with her stays plain
+  ('lr-ana@mail.test'),
+  ('lr-ben@mail.test'),
+  ('lr-cy@mail.test'),
   ('sis-destek-bot@example.com')
 on conflict do nothing;

@@ -150,7 +150,7 @@ select 'SYSM', m.id from public.messages m join public.conversations c on c.id =
 -- 1 schema and grants -----------------------------------------------------------
 select has_table('public', 'message_reactions', 'public.message_reactions exists');
 select columns_are('public', 'message_reactions',
-                   array['message_id', 'user_id', 'conversation_id', 'emoji', 'created_at', 'updated_at'],
+                   array['message_id', 'user_id', 'conversation_id', 'emoji', 'ciphertext', 'olm_type', 'created_at', 'updated_at'],
                    'message_reactions has exactly the contract columns');
 select col_is_pk('public', 'message_reactions', array['message_id', 'user_id'],
                  'the primary key is (message_id, user_id)');
@@ -176,9 +176,9 @@ select ok(not has_function_privilege('anon', 'app_private.bot_send_charge(uuid)'
 select ok(not has_function_privilege('authenticated', 'app_private.bot_send_charge(uuid)', 'execute'),
           'authenticated holds no execute on bot_send_charge');
 select is((select array_agg(c order by c) from unnest(array['message_id','user_id','conversation_id','emoji',
-                                                             'created_at','updated_at']) c
+                                                             'ciphertext','olm_type','created_at','updated_at']) c
             where has_column_privilege('authenticated', 'public.message_reactions', c, 'select')),
-          array['conversation_id','emoji','message_id','updated_at','user_id'],
+          array['ciphertext','conversation_id','emoji','message_id','olm_type','updated_at','user_id'],
           'authenticated selects every column but created_at');
 select is_empty(
   $$select r || ' ' || p from unnest(array['anon','authenticated']) r,

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
@@ -9,6 +11,7 @@ import '../domain/conversation.dart';
 import '../domain/encrypted_message_repository.dart';
 import '../domain/link_preview.dart';
 import '../domain/message_envelope.dart';
+import '../domain/reaction_envelope.dart';
 import '../domain/send_queue_store.dart';
 import 'chat_controllers.dart';
 
@@ -60,6 +63,19 @@ class TextLocker {
     required String text,
     LinkPreview? card,
     bool queued = false,
+  }) => _seal(
+    conversationId: conversationId,
+    messageId: messageId,
+    queued: queued,
+    envelope: () => encodeEnvelope(id: messageId, text: text, card: card),
+  );
+
+  /// The shared body of [lock] and [lockReaction]: [envelope] builds the JSON that is locked.
+  Future<Result<QueuedCiphertext?>> _seal({
+    required String conversationId,
+    required String messageId,
+    required String Function() envelope,
+    bool queued = false,
   }) async {
     final engine = _ref.read(sessionEngineProvider);
     if (engine == null) return const Ok(null);
@@ -92,11 +108,11 @@ class TextLocker {
       case Ok(:final value?):
         known = value;
     }
-    final envelope = encodeEnvelope(id: messageId, text: text, card: card);
+    final json = envelope();
     final target = queued ? QueueTarget(me, messageId) : null;
     var locked = await engine.encrypt(
       peer,
-      envelope,
+      json,
       peerIdentityKey: known.identityKey,
       queue: target,
     );
@@ -119,7 +135,7 @@ class TextLocker {
       if (opened case Err(:final failure)) return Err(failure);
       locked = await engine.encrypt(
         peer,
-        envelope,
+        json,
         peerIdentityKey: known.identityKey,
         queue: target,
       );
@@ -128,5 +144,28 @@ class TextLocker {
       Ok(:final value) => Ok(QueuedCiphertext(value.ciphertext, value.olmType)),
       Err(:final failure) => Err(failure),
     };
+  }
+
+  /// Locks the emoji of the caller's reaction on [messageId] for the other member of the direct chat [conversationId] (envelope: encodeReactionEnvelope, bound to the message and to the caller). Same answers as [lock] (Ok(null): the chat takes a plain reaction, and the server refuses a plain one in a chat already private; Err: do NOT send, never a fallback to plain) but nothing is queued.
+  Future<Result<QueuedCiphertext?>> lockReaction({
+    required String conversationId,
+    required String messageId,
+    required String emoji,
+  }) {
+    final me = _ref.read(currentUserIdProvider);
+    if (me == null) return Future.value(const Err(DeniedFailure()));
+    // The server caps an emoji at 64 bytes; a longer one would also break the fixed envelope length, so it is refused before anything is locked.
+    if (utf8.encode(emoji).length > maxReactionEmojiBytes) {
+      return Future.value(const Err(DeniedFailure()));
+    }
+    return _seal(
+      conversationId: conversationId,
+      messageId: messageId,
+      envelope: () => encodeReactionEnvelope(
+        messageId: messageId,
+        userId: me,
+        emoji: emoji,
+      ),
+    );
   }
 }

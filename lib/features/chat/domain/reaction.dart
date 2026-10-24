@@ -4,6 +4,10 @@ final class Reaction {
     required this.messageId,
     required this.userId,
     required this.emoji,
+    this.ciphertext,
+    this.olmType,
+    this.updatedAt,
+    this.locked = false,
   });
 
   final String messageId;
@@ -11,6 +15,18 @@ final class Reaction {
 
   /// null = the reaction was removed.
   final String? emoji;
+
+  /// The locked emoji as read from the server (base64 Olm message); null once opened or when the reaction is plain.
+  final String? ciphertext;
+
+  /// Olm message type of [ciphertext]: 0 pre-key, 1 normal.
+  final int? olmType;
+
+  /// Server time of the last change; locked rows are opened oldest first.
+  final DateTime? updatedAt;
+
+  /// True when the emoji was opened from a locked row on this phone or saved from the caller's own locked send; false for a plain row. Only plain rows of the caller are re-locked.
+  final bool locked;
 }
 
 /// The ten emojis the reactions bar offers a member who has not used any yet.

@@ -93,6 +93,104 @@ class ReactionFake implements ReactionRepository {
     return const Ok(null);
   }
 
+  // ---- setLockedReaction() ----
+  final lockedCalls = <(String, String, int)>[];
+
+  /// When set, answers setLockedReaction instead of the server rules below.
+  Future<Result<void>> Function(
+    String messageId,
+    String ciphertext,
+    int olmType,
+  )?
+  onSetLocked;
+
+  /// What this phone opens a locked row of its own to (see setLockedReaction).
+  String? Function(String ciphertext)? openLocked;
+
+  @override
+  Future<Result<void>> setLockedReaction(
+    String messageId,
+    String ciphertext,
+    int olmType,
+  ) async {
+    lockedCalls.add((messageId, ciphertext, olmType));
+    final hook = onSetLocked;
+    if (hook != null) return hook(messageId, ciphertext, olmType);
+    await Future<void>.delayed(Duration.zero);
+    final user = me;
+    if (user == null) return const Err(DeniedFailure());
+    // The server stores the ciphertext only (emoji NULL). The repository
+    // returns opened reactions, so the echo carries the emoji only when the
+    // test says what this phone opens it to ([openLocked]); else no echo.
+    final cid = _cid(messageId);
+    server
+        .putIfAbsent(cid, () => [])
+        .removeWhere((r) => r.messageId == messageId && r.userId == user);
+    final emoji = openLocked?.call(ciphertext);
+    if (emoji != null) {
+      final r = Reaction(
+        messageId: messageId,
+        userId: user,
+        emoji: emoji,
+        locked: true,
+      );
+      server[cid]!.insert(0, r);
+      _publish(cid, r);
+    }
+    return const Ok(null);
+  }
+
+  // ---- relockPlain() ----
+  final relockCalls = <(String, String, int)>[];
+
+  /// When set, answers relockPlain instead of the server rules below.
+  Future<Result<bool>> Function(
+    String messageId,
+    String ciphertext,
+    int olmType,
+  )?
+  onRelock;
+
+  /// relock_reaction: a compare-and-set. Only the caller's own row that is
+  /// still plain is replaced (Ok(true)); a removed, locked or missing row is
+  /// left as it is (Ok(false)). The echo follows the setLockedReaction rule.
+  @override
+  Future<Result<bool>> relockPlain(
+    String messageId,
+    String ciphertext,
+    int olmType,
+  ) async {
+    relockCalls.add((messageId, ciphertext, olmType));
+    final hook = onRelock;
+    if (hook != null) return hook(messageId, ciphertext, olmType);
+    await Future<void>.delayed(Duration.zero);
+    final user = me;
+    if (user == null) return const Err(DeniedFailure());
+    final cid = _cid(messageId);
+    final rows = server.putIfAbsent(cid, () => []);
+    final i = rows.indexWhere(
+      (r) =>
+          r.messageId == messageId &&
+          r.userId == user &&
+          r.emoji != null &&
+          !r.locked,
+    );
+    if (i < 0) return const Ok(false);
+    rows.removeAt(i);
+    final emoji = openLocked?.call(ciphertext);
+    if (emoji != null) {
+      final r = Reaction(
+        messageId: messageId,
+        userId: user,
+        emoji: emoji,
+        locked: true,
+      );
+      rows.insert(0, r);
+      _publish(cid, r);
+    }
+    return const Ok(true);
+  }
+
   // ---- reactionUpdates() ----
   final joinCalls = <String>[];
 

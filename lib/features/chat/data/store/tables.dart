@@ -112,6 +112,26 @@ class ReadMarks extends Table {
   String get tableName => 'read_marks';
 }
 
+/// Opened locked reaction: the emoji of one member's reaction on one message, keyed by the sha256 of the ciphertext it came from.
+@DataClassName('StoredReactionPlainRow')
+class ReactionPlains extends Table {
+  TextColumn get messageId => text()();
+
+  TextColumn get userId => text()();
+
+  TextColumn get sealed => text()();
+
+  TextColumn get emoji => text()();
+
+  IntColumn get savedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {messageId, userId};
+
+  @override
+  String get tableName => 'reaction_plains';
+}
+
 /// Stored Olm session with one contact (pickle encrypted with the pickle key).
 @DataClassName('StoredOlmSessionRow')
 class OlmSessions extends Table {

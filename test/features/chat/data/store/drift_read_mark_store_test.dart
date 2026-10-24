@@ -201,7 +201,7 @@ void main() {
         final r = await db.customSelect('PRAGMA user_version').getSingle();
         return r.read<int>('user_version');
       });
-      expect(version, 3, reason: 'not upgraded to the current schema');
+      expect(version, 4, reason: 'not upgraded to the current schema');
 
       final s = DriftReadMarkStore(v2);
       await s.save('c1', marks);

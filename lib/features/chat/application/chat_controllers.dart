@@ -90,6 +90,11 @@ final chatRepositoryProvider = Provider<ChatRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 
+/// Ends the Realtime join of a conversation's channel that is still out (the screen closed first); main overrides it. A no-op in tests.
+final cancelPendingJoinProvider = Provider<void Function(String)>(
+  (_) => (_) {},
+);
+
 /// Fires each time a Realtime message channel re-joins after a dropped connection; main overrides it. Empty in tests.
 final realtimeRejoinedProvider = Provider<Stream<void>>(
   (_) => const Stream<void>.empty(),

@@ -7,16 +7,23 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// a teardown awaited on a failure path hangs the path meant to stop the
 /// screen hanging.
 
+/// The join was ended by its caller (the screen closed first): not a failure.
+class JoinCancelled implements Exception {
+  const JoinCancelled();
+}
+
 /// Subscribes [channel] and completes once the server confirms the join.
 ///
 /// Fails on `channelError`, `timedOut`, any reported error, or after
 /// [timeout] -- a refused private channel and an unreachable server both end
 /// here instead of hanging.
 /// [onRejoin] runs each time the channel confirms a join AFTER the first (a reconnect).
+/// [cancelled] completing ends a join still out at once: the timeout timer is cancelled and the result fails with [JoinCancelled].
 Future<void> joinChannel(
   RealtimeChannel channel, {
   Duration timeout = const Duration(seconds: 15),
   void Function()? onRejoin,
+  Future<void>? cancelled,
 }) {
   final joined = Completer<void>();
   channel.subscribe((status, error) {
@@ -33,6 +40,13 @@ Future<void> joinChannel(
       joined.completeError(error ?? status);
     }
   });
+  if (cancelled != null) {
+    unawaited(
+      cancelled.then((_) {
+        if (!joined.isCompleted) joined.completeError(const JoinCancelled());
+      }),
+    );
+  }
   return joined.future.timeout(timeout);
 }
 

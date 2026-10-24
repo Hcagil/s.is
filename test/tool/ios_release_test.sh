@@ -30,10 +30,11 @@
 #     'off' (unset = on), calls ios-ipa.yml with the scope version and
 #     upload: true;
 #   ci.yml
-#   - `ios-signed` calls the same workflow with upload: false, only for
-#     same-repository pull requests with app changes not opened by Dependabot
-#     (pull_request.user.login, not github.actor: a human re-run of a
-#     Dependabot PR must still skip);
+#   - `ios-signed` calls the same workflow with upload: false and no job-level
+#     if; it passes enabled = same-repository pull request with app changes not
+#     opened by Dependabot (pull_request.user.login, not github.actor: a human
+#     re-run of a Dependabot PR must still skip), and ios-ipa.yml's job ipa is
+#     if: inputs.enabled (input optional, default true; release.yml omits it);
 #   both callers pass exactly the six declared secrets by name (the sixth:
 #   IOS_DISTRIBUTION_KEY), and no workflow uses `secrets: inherit`;
 #   ios-ipa.yml
@@ -267,15 +268,21 @@ if grep -n 'set -x\|xtrace' "$tmp/distribute"; then fail "tracing would print th
 
 # ---- ci.yml ----------------------------------------------------------------
 # 4 ios-signed: pull requests from this repository, not Dependabot, app changes; no upload.
+# The caller has no job-level if (a skipped caller leaves the required check
+# missing on docs-only PRs); the condition goes in as `enabled`.
 [ "$(key "$tmp/ios-signed" needs)" = changes ] || fail "ios-signed must need changes"
-signed_if=$(norm "$(key "$tmp/ios-signed" if)")
+[ -z "$(key "$tmp/ios-signed" if)" ] || fail "ios-signed must have no job-level if (it gates through enabled): [$(key "$tmp/ios-signed" if)]"
+signed_en=$(with "$tmp/ios-signed" enabled)
+[[ "$signed_en" == '${{ '*' }}' ]] || fail "ios-signed enabled must be one \${{ }} expression: [$signed_en]"
+signed_if=${signed_en#'${{ '}; signed_if=$(norm "${signed_if%' }}'}")
 for clause in "needs.changes.outputs.app == 'true'" "github.event_name == 'pull_request'" \
   "github.event.pull_request.head.repo.full_name == github.repository" "github.event.pull_request.user.login != 'dependabot[bot]'"; do
-  [[ " $signed_if " == *" $clause "* ]] || fail "ios-signed if lacks [$clause]: [$signed_if]"
+  [[ " $signed_if " == *" $clause "* ]] || fail "ios-signed enabled lacks [$clause]: [$signed_if]"
 done
-[[ "$signed_if" != *"github.actor"* ]] || fail "ios-signed if must not use github.actor (a re-run by a human is not Dependabot): [$signed_if]"
-[[ "$signed_if" != *"||"* ]] || fail "ios-signed if must be a pure conjunction: [$signed_if]"
+[[ "$signed_if" != *"github.actor"* ]] || fail "ios-signed enabled must not use github.actor (a re-run by a human is not Dependabot): [$signed_if]"
+[[ "$signed_if" != *"||"* ]] || fail "ios-signed enabled must be a pure conjunction: [$signed_if]"
 [ "$(key "$tmp/ios-signed" uses)" = ./.github/workflows/ios-ipa.yml ] || fail "ios-signed does not call ios-ipa.yml"
+[ -z "$(with "$tmp/ios" enabled)" ] || fail "release ios must not pass enabled (the signed build always runs on release): [$(with "$tmp/ios" enabled)]"
 [ "$(with "$tmp/ios-signed" upload)" = false ] || fail "a pull request must never upload to TestFlight"
 [ "$(passed_secrets "$tmp/ios-signed")" = "$want_passed" ] || fail "ios-signed must pass exactly the six secrets by name, got [$(passed_secrets "$tmp/ios-signed")]"
 if grep -nE 'secrets: *inherit' .github/workflows/*.yml; then fail "secrets: inherit hands every repository secret to the callee"; fi
@@ -289,6 +296,14 @@ for input in ref build-number build-name upload; do
 done
 grep -q '^ *type: boolean$' <<<"$(awk '$0 == "      upload:" { f = 1; next } f && /^      [a-z]/ { exit } f' "$ipa_wf")" \
   || fail "input upload is not a boolean (a string 'false' is truthy in if:)"
+# enabled: optional boolean, default true (release.yml omits it); job ipa obeys it.
+awk '$0 == "      enabled:" { f = 1; next } f && /^      [a-z]/ { exit } f && /^    [a-z]/ { exit } f' "$ipa_wf" > "$tmp/input"
+grep -q '^ *type: boolean$' "$tmp/input" || fail "input enabled is not a boolean"
+grep -q '^ *default: true$' "$tmp/input" || fail "input enabled must default to true (release.yml does not pass it)"
+grep -q '^ *required: true$' "$tmp/input" && fail "input enabled must be optional"
+job "$ipa_wf" ipa > "$tmp/ipa"
+[ "$(key "$tmp/ipa" name)" = "Signed iPhone build" ] || fail "job ipa must be the Signed iPhone build"
+[ "$(norm "$(key "$tmp/ipa" if)")" = "inputs.enabled" ] || fail "job ipa must be if: inputs.enabled, got [$(key "$tmp/ipa" if)]"
 # Exactly the five secrets are declared, each required.
 declared=$(awk '/^    secrets:$/ { f = 1; next } f && /^    [^ ]/ { exit } f && /^      [A-Z_]+:$/ { sub(/^ +/, ""); sub(/:$/, ""); print }' "$ipa_wf" | sort)
 [ "$declared" = "$(printf '%s\n' "${SECRETS[@]}" | sort)" ] || fail "ios-ipa.yml must declare exactly the six secrets, got [$declared]"

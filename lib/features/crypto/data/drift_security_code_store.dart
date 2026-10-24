@@ -12,6 +12,9 @@ String verifiedMetaKey(String peerUserId) => 'verified:$peerUserId';
 /// Returns the meta key for a key change of a peer.
 String keyChangeMetaKey(String peerUserId) => 'keychange:$peerUserId';
 
+/// The meta key of the time a chat first held a locked text.
+String heldMetaKey(String conversationId) => 'held:$conversationId';
+
 /// Encodes a key change timestamp and verification status.
 String encodeKeyChange(DateTime at, bool wasVerified) =>
     '${at.microsecondsSinceEpoch}|${wasVerified ? 1 : 0}';
@@ -120,9 +123,10 @@ class DriftSecurityCodeStore implements SecurityCodeStore, CipherChatMemory {
   @override
   Future<DateTime?> heldSince(String conversationId) {
     return _store.run<DateTime?>(null, (db) async {
-      final row = await (db.select(
-        db.meta,
-      )..where((m) => m.key.equals('held:$conversationId'))).getSingleOrNull();
+      final row =
+          await (db.select(db.meta)
+                ..where((m) => m.key.equals(heldMetaKey(conversationId))))
+              .getSingleOrNull();
       final micros = row == null ? null : int.tryParse(row.value);
       return micros == null
           ? null
@@ -136,7 +140,7 @@ class DriftSecurityCodeStore implements SecurityCodeStore, CipherChatMemory {
       await db.transaction(() async {
         final row =
             await (db.select(db.meta)
-                  ..where((m) => m.key.equals('held:$conversationId')))
+                  ..where((m) => m.key.equals(heldMetaKey(conversationId))))
                 .getSingleOrNull();
         final old = row == null ? null : int.tryParse(row.value);
         if (old != null && old <= at.microsecondsSinceEpoch) return;
@@ -144,7 +148,7 @@ class DriftSecurityCodeStore implements SecurityCodeStore, CipherChatMemory {
             .into(db.meta)
             .insertOnConflictUpdate(
               MetaCompanion.insert(
-                key: 'held:$conversationId',
+                key: heldMetaKey(conversationId),
                 value: at.microsecondsSinceEpoch.toString(),
               ),
             );

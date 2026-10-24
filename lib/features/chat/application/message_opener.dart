@@ -134,12 +134,18 @@ class StoreMessageOpener implements MessageOpener {
     });
   }
 
-  /// A plain text from someone else: no ciphertext, no attachment, not deleted.
+  /// A plain text from someone else: no ciphertext, no attachment, not deleted, and not a kind the server allows plain in an encrypted chat (poll, contact, location, sticker, album card, admin note).
   bool _plainSuspect(Message m) =>
       m.ciphertext == null &&
       m.olmType == null &&
       m.deletion == null &&
       !m.hasAttachment &&
+      !m.poll &&
+      !m.contact &&
+      m.location == null &&
+      !m.albumCard &&
+      m.stickerId == null &&
+      m.adminMsg == null &&
       m.body.isNotEmpty &&
       !isLockedPlaceholder(m.body) &&
       m.senderId != _me();

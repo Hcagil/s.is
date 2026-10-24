@@ -173,6 +173,13 @@ final chatTimelineProvider = Provider.autoDispose<List<TimelineEntry>>((ref) {
     final change = peerId == null
         ? null
         : ref.watch(keyChangeProvider(peerId)).value;
+    // Once the contact is verified again for the current keys, the line no longer says "no longer verified".
+    final reverified =
+        peerId != null &&
+        switch (ref.watch(securityCodeProvider(peerId)).value) {
+          SecurityCodeReady(:final verified) => verified,
+          _ => false,
+        };
     return buildTimeline(
       messages,
       pins,
@@ -181,7 +188,7 @@ final chatTimelineProvider = Provider.autoDispose<List<TimelineEntry>>((ref) {
           KeyChangeEntry(
             peerUserId: peerId,
             changedAt: change.at,
-            wasVerified: change.wasVerified,
+            wasVerified: change.wasVerified && !reverified,
           ),
       ],
     );

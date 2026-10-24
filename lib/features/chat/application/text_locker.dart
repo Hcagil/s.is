@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
@@ -152,6 +154,10 @@ class TextLocker {
   }) {
     final me = _ref.read(currentUserIdProvider);
     if (me == null) return Future.value(const Err(DeniedFailure()));
+    // The server caps an emoji at 64 bytes; a longer one would also break the fixed envelope length, so it is refused before anything is locked.
+    if (utf8.encode(emoji).length > maxReactionEmojiBytes) {
+      return Future.value(const Err(DeniedFailure()));
+    }
     return _seal(
       conversationId: conversationId,
       messageId: messageId,

@@ -1,9 +1,12 @@
 import 'dart:convert';
 
-/// The exact UTF-8 length of a reaction envelope; shorter ones are padded so the ciphertext length reveals nothing about the emoji.
-const int reactionEnvelopeBytes = 128;
+/// The exact UTF-8 length of every reaction envelope. The envelope without the emoji is 115 bytes and an emoji is at most [maxReactionEmojiBytes], so 192 always fits; every envelope is padded to it, so the ciphertext length (the cipher rounds to 16-byte blocks) reveals nothing about the emoji.
+const int reactionEnvelopeBytes = 192;
 
-/// The JSON text that is locked for a reaction: `{"v":1,"k":"r","i":messageId,"u":userId,"e":emoji,"p":padding}`. The padding is spaces inside the string `p`, so the UTF-8 length is exactly [reactionEnvelopeBytes] (ids are 36 characters and the server caps an emoji at 64 bytes, so it always fits). A reaction envelope has no `t`, so decodeEnvelope refuses it.
+/// The longest emoji (UTF-8 bytes) a reaction may carry; the server refuses more, and the phone refuses it before locking.
+const int maxReactionEmojiBytes = 64;
+
+/// The JSON text that is locked for a reaction: `{"v":1,"k":"r","i":messageId,"u":userId,"e":emoji,"p":padding}`. The padding is spaces inside the string `p`, so the UTF-8 length is exactly [reactionEnvelopeBytes] (an emoji over [maxReactionEmojiBytes] bytes is refused by the caller; this function would then send it unpadded). A reaction envelope has no `t`, so decodeEnvelope refuses it.
 String encodeReactionEnvelope({
   required String messageId,
   required String userId,

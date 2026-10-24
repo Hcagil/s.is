@@ -47,6 +47,7 @@ create or replace function public.set_reaction(message uuid, emoji text) returns
 language plpgsql security definer set search_path = '' as $$
 declare
   m public.messages;
+  locked_at timestamptz;
 begin
   if not app_private.has_app_access() then
     raise exception 'not permitted' using errcode = '42501';
@@ -63,8 +64,9 @@ begin
     update public.message_reactions r set emoji = null, ciphertext = null, olm_type = null, updated_at = now() where r.message_id = message and r.user_id = auth.uid() and (r.emoji is not null or r.ciphertext is not null);
     return;
   end if;
-  -- No plain set once the chat is encrypted. FOR SHARE: cannot race the first locked message or reaction that sets encrypted_at.
-  if exists (select 1 from public.conversations c where c.id = m.conversation_id and c.encrypted_at is not null for share) then
+  -- No plain set once the chat is encrypted. The conversation row is share-locked unconditionally (a condition in the WHERE would lock nothing while encrypted_at is null), so a first locked message or reaction that is still running is waited for.
+  select c.encrypted_at into locked_at from public.conversations c where c.id = m.conversation_id for share;
+  if locked_at is not null then
     raise exception 'not permitted' using errcode = '42501';
   end if;
   if octet_length(emoji) not between 1 and 64 or emoji ~ '[[:space:][:cntrl:]]' then

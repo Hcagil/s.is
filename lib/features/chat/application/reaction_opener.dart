@@ -13,6 +13,7 @@ import '../domain/reaction.dart';
 import '../domain/reaction_envelope.dart';
 import '../domain/reaction_opener.dart';
 import '../domain/reaction_store.dart';
+import 'open_queue.dart';
 
 /// The on-phone store of opened locked reactions; null until main wires it.
 final reactionStoreProvider = Provider<ReactionStore?>((_) => null);
@@ -25,6 +26,7 @@ final reactionOpenerProvider = Provider<ReactionOpener>((ref) {
     store: () => ref.read(reactionStoreProvider),
     peerKey: (id) =>
         ref.read(keyDirectoryControllerProvider.notifier).identityVerified(id),
+    queue: ref.read(openQueueProvider),
   );
 });
 
@@ -35,23 +37,20 @@ class StoreReactionOpener implements ReactionOpener {
     required this._engine,
     required this._store,
     required this._peerKey,
-  });
+    OpenQueue? queue,
+  }) : _queue = queue ?? OpenQueue();
 
   final String? Function() _me;
   final SessionEngine? Function() _engine;
   final ReactionStore? Function() _store;
   final Future<Result<ClaimedKeys?>> Function(String userId) _peerKey;
+  final OpenQueue _queue;
 
-  Future<void> _tail = Future<void>.value();
   final Map<String, String> _done = {};
 
   static final _epoch = DateTime.fromMillisecondsSinceEpoch(0);
 
-  Future<T> _serial<T>(Future<T> Function() job) {
-    final r = _tail.then((_) => job());
-    _tail = r.then<void>((_) {}, onError: (_) {});
-    return r;
-  }
+  Future<T> _serial<T>(Future<T> Function() job) => _queue.run(job);
 
   bool _locked(Reaction r) => r.ciphertext != null && r.emoji == null;
 
@@ -93,6 +92,7 @@ class StoreReactionOpener implements ReactionOpener {
     userId: r.userId,
     emoji: emoji,
     updatedAt: r.updatedAt,
+    locked: emoji != null,
   );
 
   /// Opens one locked reaction [r]; never decrypts the same ciphertext twice (the stored copy, then the memory of this run, answer first). [keys] holds the peers' checked keys already looked up in this call.

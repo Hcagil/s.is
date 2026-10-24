@@ -7,6 +7,7 @@ final class Reaction {
     this.ciphertext,
     this.olmType,
     this.updatedAt,
+    this.locked = false,
   });
 
   final String messageId;
@@ -23,6 +24,9 @@ final class Reaction {
 
   /// Server time of the last change; locked rows are opened oldest first.
   final DateTime? updatedAt;
+
+  /// True when the emoji was opened from a locked row on this phone or saved from the caller's own locked send; false for a plain row. Only plain rows of the caller are re-locked.
+  final bool locked;
 }
 
 /// The ten emojis the reactions bar offers a member who has not used any yet.

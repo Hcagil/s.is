@@ -32,10 +32,17 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
   // switched must not touch the new state.
   int _generation = 0;
 
+  // Messages the member changed in this opening: never re-locked behind their back.
+  final _touched = <String>{};
+
+  // Waits a moment before re-locking the member's older plain reactions, so the first paint and the member's own first tap go first.
+  static const _relockDelay = Duration(milliseconds: 40);
+
   @override
   Future<ReactionsByMessage> build() async {
     _early.clear();
     _since = null;
+    _touched.clear();
     final generation = ++_generation;
     // Closing or switching the chat bumps it too, so a late answer is dropped.
     ref.onDispose(() => _generation++);
@@ -63,14 +70,69 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
         }
       }),
     );
+    // Locked reactions share the Olm chains with locked texts: let the chat's messages open first (one shared queue, messages before reactions). A slow or failed message load must not hold the reactions back for long.
+    // Only when the chat screen already holds the messages (ref.exists): nothing is built just to wait for it.
+    if (ref.exists(messagesProvider)) {
+      try {
+        await ref
+            .read(messagesProvider.future)
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {}
+    }
+    if (generation != _generation) return const {};
     final loaded = switch (await repo.reactions(conversationId)) {
       Ok(:final value) => value,
       Err(:final failure) => throw failure,
     };
+    final relock = Timer(_relockDelay, () {
+      unawaited(_relockPlain(conversationId, generation, loaded));
+    });
+    ref.onDispose(relock.cancel);
     return _early.fold<ReactionsByMessage>(
       groupReactions(loaded),
       applyReaction,
     );
+  }
+
+  /// Once per opened chat: the caller's own PLAIN reactions (not [Reaction.locked]) are locked and sent again with set_reaction_encrypted, so reactions made before this build do not stay readable on the server (the server clears plain ones of a private chat later). Stops at the first Err or Ok(null) from the locker (a plain chat, no keys, offline): nothing is ever sent plain here. At most 100 per opening. The saved copy is written only after the server accepted the bytes.
+  Future<void> _relockPlain(
+    String conversationId,
+    int generation,
+    List<Reaction> loaded,
+  ) async {
+    final me = ref.read(currentUserIdProvider);
+    if (me == null) return;
+    final mine = [
+      for (final r in loaded)
+        if (r.userId == me &&
+            r.emoji != null &&
+            !r.locked &&
+            !_touched.contains(r.messageId))
+          r,
+    ];
+    for (final r in mine.take(100)) {
+      if (generation != _generation) return;
+      if (_touched.contains(r.messageId)) continue;
+      final locked = await ref
+          .read(textLockerProvider)
+          .lockReaction(
+            conversationId: conversationId,
+            messageId: r.messageId,
+            emoji: r.emoji!,
+          );
+      if (locked case Ok(:final value?)) {
+        final sent = await ref
+            .read(reactionRepositoryProvider)
+            .setLockedReaction(r.messageId, value.ciphertext, value.olmType);
+        if (sent is Ok<void>) {
+          await ref
+              .read(reactionOpenerProvider)
+              .rememberOwn(r.messageId, me, value.ciphertext, r.emoji!);
+        }
+      } else {
+        return;
+      }
+    }
   }
 
   void _saw(Reaction reaction) {
@@ -102,6 +164,7 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
     final before = myReaction(current[messageId] ?? const <Reaction>[], me);
     if (before == emoji) return const Ok(null);
     final generation = _generation;
+    _touched.add(messageId);
     _apply(Reaction(messageId: messageId, userId: me, emoji: emoji));
 
     final result = await _send(messageId, emoji, me);
@@ -114,12 +177,14 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
           _apply(Reaction(messageId: messageId, userId: me, emoji: before));
         }
       case Ok():
+        // The live echo of our own locked row can arrive before the copy is saved and then reads as a removal; show the accepted change again.
+        _apply(Reaction(messageId: messageId, userId: me, emoji: emoji));
         ref.invalidate(reactionUsageProvider);
     }
     return result;
   }
 
-  /// Sends the change. A clear is always the plain call. A set is locked first ([TextLocker.lockReaction]); the locked bytes are saved on the phone before they are sent, and a retryable network failure is retried once with the same bytes. Ok(null) from the locker (a group, a bot chat, a person with no published keys) sends the plain call, which the server refuses in a chat that is already private. A locking failure is returned as it is: never a fallback to plain.
+  /// Sends the change. A clear is always the plain call. A set is locked first ([TextLocker.lockReaction]); the locked bytes are saved on the phone once the server accepted them, and a retryable network failure is retried once with the same bytes. Ok(null) from the locker (a group, a bot chat, a person with no published keys) sends the plain call, which the server refuses in a chat that is already private. A locking failure is returned as it is: never a fallback to plain.
   Future<Result<void>> _send(String messageId, String? emoji, String me) async {
     final repo = ref.read(reactionRepositoryProvider);
     final conversationId = ref.read(openConversationProvider);
@@ -139,9 +204,6 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
       case Ok(value: null):
         return repo.setReaction(messageId, emoji);
       case Ok(:final value?):
-        await ref
-            .read(reactionOpenerProvider)
-            .rememberOwn(messageId, me, value.ciphertext, emoji);
         var result = await repo.setLockedReaction(
           messageId,
           value.ciphertext,
@@ -153,6 +215,12 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
             value.ciphertext,
             value.olmType,
           );
+        }
+        // Saved only once the server accepted these bytes: a failed try must not replace the earlier good copy or count as used.
+        if (result is Ok<void>) {
+          await ref
+              .read(reactionOpenerProvider)
+              .rememberOwn(messageId, me, value.ciphertext, emoji);
         }
         return result;
     }

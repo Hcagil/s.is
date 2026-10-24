@@ -119,6 +119,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       final left = _stateFor;
       if (left != null && !wasJumped) _remember(left, state.value);
       _stateFor = conversationId;
+      _catchUpRetries = 0; // a new chat open starts its own count
       // Launder the carried value, as ConversationListController.build does:
       // the AsyncData is replaced by AsyncLoading before the first await, so
       // only a loading state is ever observed -- never the last chat's
@@ -262,13 +263,15 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       );
       return offline;
     }
-    _catchUpRetries = 0;
+    // Only a confirmed JOIN clears the count: a good read must not, or a join that keeps timing out would retry forever.
+    if (joined is Ok) _catchUpRetries = 0;
     if (joined == null) {
       // The join answers after the paint: a row sent before it took effect is read in at once; a refused join retries as a failed open does.
       unawaited(
         joining.then((j) {
           if (!alive || !ref.mounted) return;
           if (j is Ok) {
+            _catchUpRetries = 0;
             unawaited(
               _verify(
                 conversationId,

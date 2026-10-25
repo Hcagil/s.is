@@ -61,11 +61,12 @@ RUN curl -fsSL --retry 5 -o /tmp/rustup-init "https://static.rust-lang.org/rustu
     && chmod +x /tmp/rustup-init \
     && /tmp/rustup-init -y --profile minimal --default-toolchain "${RUST_VERSION}" \
     -c rustfmt -t aarch64-linux-android -t armv7-linux-androideabi -t x86_64-linux-android \
-    && if [ -x /tmp/cargo-tools/flutter_rust_bridge_codegen ] && [ -x /tmp/cargo-tools/cbindgen ]; then \
-         cp /tmp/cargo-tools/flutter_rust_bridge_codegen /tmp/cargo-tools/cbindgen "${CARGO_HOME}/bin/"; \
+    && if [ -x /tmp/cargo-tools/flutter_rust_bridge_codegen ] && [ -x /tmp/cargo-tools/cbindgen ] && [ -x /tmp/cargo-tools/cargo-deny ]; then \
+         cp /tmp/cargo-tools/flutter_rust_bridge_codegen /tmp/cargo-tools/cbindgen /tmp/cargo-tools/cargo-deny "${CARGO_HOME}/bin/"; \
        else \
          cargo install flutter_rust_bridge_codegen --version "${FRB_VERSION}" --locked \
-         && cargo install cbindgen --version 0.29.4 --locked; \
+         && cargo install cbindgen --version 0.29.4 --locked \
+         && cargo install cargo-deny --version 0.20.2 --locked; \
        fi
 WORKDIR /workspace
 CMD ["flutter", "doctor", "-v"]

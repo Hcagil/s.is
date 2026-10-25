@@ -113,7 +113,7 @@ jobs:
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose build flutter
       - name: Keep the Rust codegen tools for the next run
         if: steps.cargo-tools.outputs.cache-hit != 'true'
-        run: docker compose run --rm -T flutter sh -c 'cp "$CARGO_HOME/bin/flutter_rust_bridge_codegen" "$CARGO_HOME/bin/cbindgen" /workspace/docker/cargo-tools/'
+        run: docker compose run --rm -T flutter sh -c 'cp "$CARGO_HOME/bin/flutter_rust_bridge_codegen" "$CARGO_HOME/bin/cbindgen" "$CARGO_HOME/bin/cargo-deny" /workspace/docker/cargo-tools/'
       # The sqlite3 build hook downloads a prebuilt library (hash-checked) from github.com; keep it between runs.
       - name: Restore the sqlite3 library cache
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3

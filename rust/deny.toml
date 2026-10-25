@@ -1,0 +1,8 @@
+# Known-vulnerability gate for rust/Cargo.lock (docs/DELIVERY.md).
+# Vulnerabilities always fail. An ignore needs its RUSTSEC id and a one-line reason above it.
+[advisories]
+unsound = "all"
+# cargo-deny 0.20 has no warn level for unmaintained: it can only fail or ignore. Ignored so they never block a build.
+unmaintained = "none"
+yanked = "warn"
+ignore = []

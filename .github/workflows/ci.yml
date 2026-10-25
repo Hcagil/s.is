@@ -7,9 +7,9 @@ on:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  # Only a pull request's superseded run is cancelled. A run on main is the
-  # trigger for Release: cancelling it when a second merge lands minutes later
-  # would leave the first merge unpublished.
+  # Only a pull request's superseded run is cancelled. A run on main is never
+  # cancelled: the daily Release takes the newest main commit whose CI run
+  # passed, and a cancelled run would leave that commit unreleasable.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:

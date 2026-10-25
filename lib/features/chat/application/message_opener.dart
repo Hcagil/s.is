@@ -215,6 +215,7 @@ class StoreMessageOpener implements MessageOpener {
       }
       final first = since[m.conversationId];
       // shortcut: history older than what this phone holds trusts backdated plain rows (a fresh install holds nothing); closing it needs the sender to sign the lock fact (Private Chats step 6)
+      // If the server leaves a chat out of the list, deleteConversation wipes its rows and sync_state; the held mark survives, so only rows backdated before the first locked message pass, the same limit as a fresh install.
       // A plain text the server refuses after the first locked text: one that is new to the phone, sits in the range it holds, or was shut before is not trusted by its date.
       if (first != null &&
           (m.createdAt.isAfter(first) || await _doubted(m, fresh))) {

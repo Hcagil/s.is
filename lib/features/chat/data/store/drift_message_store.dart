@@ -330,11 +330,11 @@ final class DriftMessageStore implements MessageStore {
   }) => _write(
     (db) => db.transaction(() async {
       final ids = [for (final m in page) m.id];
-      // Held = the chat ever held a locked text: the page or a stored row is a placeholder, or the meta mark held:<id> (heldMetaKey) is set.
+      // Held = the chat ever held a locked text: the page or a stored row is a placeholder, or its held meta mark is set.
       final held =
           page.any((m) => isLockedPlaceholder(m.body)) ||
           await (db.select(db.meta)
-                    ..where((m) => m.key.equals('held:$conversationId')))
+                    ..where((m) => m.key.equals(heldMetaKey(conversationId))))
                   .getSingleOrNull() !=
               null ||
           await (db.select(db.messages)
@@ -641,6 +641,9 @@ final class _OtherOwner implements Exception {
 /// True when the file itself cannot be used, so it may be deleted: another owner, SQLITE_NOTADB (26, wrong key
 /// or not a database) or SQLITE_CORRUPT (11). Anything else (busy, locked, constraint) is a passing failure.
 /// Drift's background isolate may wrap the SqliteException, so look through the wrappers.
+/// The meta key of the time a chat first held a locked text.
+String heldMetaKey(String conversationId) => 'held:$conversationId';
+
 bool _unusable(Object e) {
   if (e is _OtherOwner) return true;
   if (e is DriftRemoteException) return _unusable(e.remoteCause);

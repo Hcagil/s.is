@@ -314,6 +314,12 @@ jobs:
         run: |
           test -n "$GOOGLE_SERVICE_INFO_PLIST" || { echo 'GOOGLE_SERVICE_INFO_PLIST secret is empty' >&2; exit 1; }
           printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" > ios/Runner/GoogleService-Info.plist
+      # The Cargokit build and the notification extension build the encryption engine (rust/) with the compiler pinned in rust/rust-toolchain.toml; install it up front, as ios-ipa.yml does.
+      - name: Install Rust
+        run: |
+          channel=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust/rust-toolchain.toml)
+          test -n "$channel"
+          rustup toolchain install "$channel" --profile minimal --target aarch64-apple-ios --target aarch64-apple-ios-sim
       - name: Resolve dependencies
         run: flutter pub get
       - name: Build iOS (no codesign)

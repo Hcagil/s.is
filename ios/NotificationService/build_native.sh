@@ -16,6 +16,16 @@ if ! command -v cargo > /dev/null 2>&1; then
 fi
 RUST_LIB_DEST="$OUT/$PLATFORM_NAME/librust_lib_sis.a"
 RUST_TARGET_DIR="$OUT/rust-target"
+# Xcode runs cargo from ios/, so rustup would not see rust/rust-toolchain.toml; pin the compiler by hand and stop if it cannot be read.
+TOOLCHAIN_FILE="$SRCROOT/../rust/rust-toolchain.toml"
+channel=""
+if [ -f "$TOOLCHAIN_FILE" ]; then
+  channel=$(sed -n 's/^channel = "\(.*\)"/\1/p' "$TOOLCHAIN_FILE")
+fi
+if [ -z "$channel" ]; then
+  echo "error: cannot read the Rust compiler version (channel = \"x.y.z\" under [toolchain]) from $TOOLCHAIN_FILE" >&2
+  exit 1
+fi
 ARCHS_ARRAY=($ARCHS)
 RUST_LIBS=()
 for arch in "${ARCHS_ARRAY[@]}"; do
@@ -29,9 +39,9 @@ for arch in "${ARCHS_ARRAY[@]}"; do
       ;;
   esac
   if command -v rustup > /dev/null 2>&1; then
-    rustup target add "$triple"
+    rustup target add --toolchain "$channel" "$triple"
   fi
-  CARGO_TARGET_DIR="$RUST_TARGET_DIR" cargo build --release --locked --target "$triple" --manifest-path "$SRCROOT/../rust/Cargo.toml"
+  CARGO_TARGET_DIR="$RUST_TARGET_DIR" cargo +"$channel" build --release --locked --target "$triple" --manifest-path "$SRCROOT/../rust/Cargo.toml"
   RUST_LIBS+=("$RUST_TARGET_DIR/$triple/release/librust_lib_sis.a")
 done
 if [ "${#RUST_LIBS[@]}" -eq 1 ]; then

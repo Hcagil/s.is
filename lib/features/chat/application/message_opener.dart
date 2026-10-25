@@ -116,7 +116,7 @@ class StoreMessageOpener implements MessageOpener {
       m.ciphertext != null && m.olmType != null && m.deletion == null;
 
   @override
-  Future<List<Message>> open(List<Message> rows) {
+  Future<List<Message>> open(List<Message> rows, {bool fresh = false}) {
     final memory = _memory();
     if (rows.every((m) => !_locked(m)) &&
         (memory == null || !rows.any(_plainSuspect))) {
@@ -141,7 +141,7 @@ class StoreMessageOpener implements MessageOpener {
             return c != 0 ? c : a.compareTo(b);
           });
       final inBatch = {for (final i in order) rows[i].id};
-      final fresh = <String>{};
+      final preKeyPeers = <String>{};
       for (final i in order) {
         try {
           out[i] = await _openOne(rows[i], keys);
@@ -149,16 +149,16 @@ class StoreMessageOpener implements MessageOpener {
           out[i] = rows[i].withPlain(lockedBodyPlaceholder, null);
         }
         if (rows[i].olmType == 0 && !isLockedPlaceholder(out[i].body)) {
-          fresh.add(rows[i].senderId);
+          preKeyPeers.add(rows[i].senderId);
         }
       }
       // A pre-key message opened: rows that waited for that peer's session may open now.
-      for (final peer in fresh) {
+      for (final peer in preKeyPeers) {
         try {
           await _retryPending(peer, inBatch);
         } catch (_) {}
       }
-      return _guardPlain(out, rows, memory);
+      return _guardPlain(out, rows, memory, fresh);
     }).catchError((_) {
       return [
         for (final m in rows)
@@ -199,6 +199,7 @@ class StoreMessageOpener implements MessageOpener {
     List<Message> out,
     List<Message> rows,
     CipherChatMemory? memory,
+    bool fresh,
   ) async {
     if (memory == null) return out;
     final since = <String, DateTime?>{};
@@ -213,11 +214,30 @@ class StoreMessageOpener implements MessageOpener {
         }
       }
       final first = since[m.conversationId];
-      if (first != null && m.createdAt.isAfter(first)) {
+      // shortcut: history older than what this phone holds trusts backdated plain rows (a fresh install holds nothing); closing it needs the sender to sign the lock fact (Private Chats step 6)
+      // A plain text the server refuses after the first locked text: one that is new to the phone, sits in the range it holds, or was shut before is not trusted by its date.
+      if (first != null &&
+          (m.createdAt.isAfter(first) || await _doubted(m, fresh))) {
         out[i] = m.withPlain(lockedBodyPlaceholder, null);
       }
     }
     return out;
+  }
+
+  /// True when a plain text [m] should be doubted for a reason other than its date: its stored copy is the locked placeholder (the guard shut it before); or it is not stored with readable text and it just arrived ([fresh]) or lies inside the range of the chat this phone already holds. Store missing or failing: false (the date rule alone decides). A fresh install has no range, so history older than what it holds stays on the date rule.
+  Future<bool> _doubted(Message m, bool fresh) async {
+    final store = _store();
+    if (store == null) return false;
+    try {
+      final near = await store.around(m.conversationId, m.id, each: 0);
+      final stored = near.where((s) => s.id == m.id).firstOrNull;
+      if (stored != null) return isLockedPlaceholder(stored.body);
+      if (fresh) return true;
+      final from = (await store.syncState(m.conversationId))?.contiguousFrom;
+      return from != null && !m.createdAt.isBefore(from);
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Opens one locked row [m]; never decrypts the same ciphertext twice (the memory of this run, then the stored copy, answer first). [keys] holds the peers' checked keys already looked up in this call.

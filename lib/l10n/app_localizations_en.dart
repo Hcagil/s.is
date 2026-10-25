@@ -371,6 +371,72 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get encryptionRowTitle => 'Encryption';
+
+  @override
+  String get encryptionRowSubtitle =>
+      'Messages are end-to-end encrypted. Tap to verify.';
+
+  @override
+  String get securityCodeTitle => 'Verify security code';
+
+  @override
+  String securityCodeIntro(String name) {
+    return 'Compare this code with $name\'s phone, in person or on a call. If both match, tap Matches. This is saved on this phone only. After that, messages you send from now on are end-to-end encrypted between your two phones.';
+  }
+
+  @override
+  String securityCodeChanged(String name) {
+    return 'Your security code with $name changed. Tap to verify.';
+  }
+
+  @override
+  String securityCodeChangedUnverified(String name) {
+    return 'Your security code with $name changed and is no longer verified. Tap to verify.';
+  }
+
+  @override
+  String get securityCodeMatches => 'Matches';
+
+  @override
+  String get securityCodeDiffers => 'Doesn\'t match';
+
+  @override
+  String get securityCodeVerified => 'Verified';
+
+  @override
+  String securityCodeVerifiedNote(String name) {
+    return 'Saved on this phone only. $name is not told.';
+  }
+
+  @override
+  String get securityCodeUnverify => 'Mark as not verified';
+
+  @override
+  String get securityCodeMismatchTitle => 'The codes are different';
+
+  @override
+  String securityCodeMismatchBody(String name) {
+    return 'This can happen if $name got a new phone or reinstalled SIS. It can also mean someone is in between you. Check with $name in person or on a call, and do not send anything private until you know. Nothing was marked as verified.';
+  }
+
+  @override
+  String get securityCodeOk => 'OK';
+
+  @override
+  String get encryptionRowVerified => 'Verified';
+
+  @override
+  String securityCodeUnavailable(String name) {
+    return 'No security code to show yet. It appears after your first secure message with $name.';
+  }
+
+  @override
+  String securityCodeNewPhoneNote(String name) {
+    return 'If $name gets a new phone, the code changes and you need to check it again.';
+  }
+
+  @override
   String get pinnedBarTitle => 'Pinned message';
 
   @override
@@ -2399,4 +2465,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cropRotateLabel => 'Rotate';
+
+  @override
+  String get noticeNewMessage => 'New message';
 }

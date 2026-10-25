@@ -61,6 +61,7 @@ import '../domain/video_gallery.dart';
 import '../domain/voice.dart';
 import 'catch_up_mark.dart';
 import 'chat_drafts.dart';
+import 'message_notice_controller.dart';
 import 'message_opener.dart';
 import 'reaction_opener.dart';
 import 'store_write.dart';

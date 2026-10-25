@@ -9,6 +9,7 @@ import '../../chat/domain/message.dart' show foldSearch;
 import '../domain/key_directory.dart';
 import '../domain/key_engine.dart';
 import '../domain/session_engine.dart';
+import 'drift_security_code_store.dart';
 
 /// Olm sessions in the encrypted on-phone store: every call that changes state writes its session pickle, the account pickle when it changed, and the plaintext in ONE database transaction.
 final class DriftSessionEngine implements SessionEngine {
@@ -69,17 +70,66 @@ final class DriftSessionEngine implements SessionEngine {
   }
 
   /// Deletes the peer's sessions made for any other identity key (the contact's key changed).
+  /// Also records the key change (and clears the verified mark) so the chat can show a security code changed line.
   Future<void> _retireOthers(
     StoreDatabase db,
     String peerUserId,
     String identityKey,
   ) async {
+    final sessions =
+        await (db.select(db.olmSessions)..where(
+              (t) =>
+                  t.peerUserId.equals(peerUserId) &
+                  t.peerIdentityKey.equals(identityKey).not(),
+            ))
+            .get();
+
+    if (sessions.isNotEmpty) {
+      final verifiedRow =
+          await (db.select(db.meta)
+                ..where((m) => m.key.equals(verifiedMetaKey(peerUserId))))
+              .getSingleOrNull();
+
+      await db
+          .into(db.meta)
+          .insertOnConflictUpdate(
+            MetaCompanion.insert(
+              key: keyChangeMetaKey(peerUserId),
+              value: encodeKeyChange(_now(), verifiedRow != null),
+            ),
+          );
+
+      if (verifiedRow != null) {
+        await (db.delete(
+          db.meta,
+        )..where((m) => m.key.equals(verifiedMetaKey(peerUserId)))).go();
+      }
+    }
+
     await (db.delete(db.olmSessions)..where(
           (t) =>
               t.peerUserId.equals(peerUserId) &
               t.peerIdentityKey.equals(identityKey).not(),
         ))
         .go();
+  }
+
+  /// True when [identityKey] is already stored for a different member: one phone key belongs to one member only.
+  Future<bool> _boundToOther(
+    StoreDatabase db,
+    String peerUserId,
+    String identityKey,
+  ) async {
+    final rows =
+        await (db.select(db.olmSessions)
+              ..where(
+                (t) =>
+                    t.peerIdentityKey.equals(identityKey) &
+                    t.peerUserId.equals(peerUserId).not(),
+              )
+              ..limit(1))
+            .get();
+    return rows.isNotEmpty;
   }
 
   Future<void> _putSession(
@@ -141,6 +191,9 @@ final class DriftSessionEngine implements SessionEngine {
       return const Err(DeviceKeysFailure());
     }
     return _tx<String>((db, key) async {
+      if (await _boundToOther(db, peerUserId, keys.identityKey)) {
+        return const Err(DeviceKeysFailure());
+      }
       final account = await _account(db, key);
       if (account == null) return const Err(SessionStoreFailure());
       final KeySession session;
@@ -286,6 +339,9 @@ final class DriftSessionEngine implements SessionEngine {
           return const Err(UnreadableMessageFailure());
         }
         return _tryRows(db, key, [existing], cipher, save);
+      }
+      if (await _boundToOther(db, peerUserId, peerIdentityKey)) {
+        return const Err(UnreadableMessageFailure());
       }
       final account = await _account(db, key);
       if (account == null) return const Err(SessionStoreFailure());

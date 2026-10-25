@@ -24,6 +24,7 @@ import '../domain/group_member.dart';
 import '../domain/message.dart';
 import 'add_members_page.dart';
 import 'avatar_card.dart';
+import 'encryption_row.dart';
 import 'group_gone_guard.dart';
 import 'member_name.dart';
 import 'message_menu_card.dart';

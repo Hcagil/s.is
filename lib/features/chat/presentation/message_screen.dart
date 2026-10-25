@@ -58,6 +58,8 @@ import 'voice_record_button.dart';
 import 'location_card.dart';
 import 'location_share_page.dart';
 import 'group_event_line.dart';
+import 'security_code_changed_line.dart';
+import 'security_code_page.dart';
 import 'group_gone_guard.dart';
 import 'sticker_album_card.dart';
 import 'sticker_message.dart';
@@ -820,6 +822,24 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                     entry.event,
                                     names: names,
                                     key: ValueKey('event-${entry.event.id}'),
+                                  );
+                                }
+                                if (entry is KeyChangeEntry) {
+                                  final peerName =
+                                      listed?.other?.displayName ?? title ?? '';
+                                  return SecurityCodeChangedLine(
+                                    key: ValueKey(
+                                      'key-change-${entry.peerUserId}',
+                                    ),
+                                    name: peerName,
+                                    verifiedBefore: entry.wasVerified,
+                                    onTap: () => unawaited(
+                                      showSecurityCodePage(
+                                        context,
+                                        peerUserId: entry.peerUserId,
+                                        name: peerName,
+                                      ),
+                                    ),
                                   );
                                 }
                                 final messageEntry = entry as MessageEntry;

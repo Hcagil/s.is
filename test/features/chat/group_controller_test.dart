@@ -15,17 +15,20 @@ import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/chat_drafts.dart';
 import 'package:sis/features/chat/application/group_controller.dart';
+import 'package:sis/features/chat/application/security_code_controller.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/timeline.dart';
+import 'package:sis/features/crypto/domain/security_code_store.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 import 'package:sis/features/profile/application/profile_controller.dart';
 import 'package:sis/features/profile/domain/own_profile.dart';
 
 import '../../support/fakes.dart';
 import '../../support/held_send_chat.dart';
+import '../../support/security_code_fakes.dart';
 import '../../support/video_fakes.dart';
 
 class _SignedIn extends SessionController {
@@ -79,12 +82,16 @@ Future<ProviderContainer> start(WidgetTester t, ChatFake chat) async {
 
 /// The same container, for tests on the real clock: providers that are
 /// invalidated rebuild on the real event loop, not the test's fake one.
-Future<ProviderContainer> startReal(ChatFake chat) async {
+Future<ProviderContainer> startReal(
+  ChatFake chat, {
+  SecurityCodeStore? codes,
+}) async {
   final c = ProviderContainer.test(
     overrides: [
       ...videoOverrides(),
       chatRepositoryProvider.overrideWithValue(chat),
       sessionControllerProvider.overrideWith(_SignedIn.new),
+      if (codes != null) securityCodeStoreProvider.overrideWithValue(codes),
     ],
   );
   await settled(c);
@@ -504,6 +511,7 @@ void main() {
     String label(TimelineEntry e) => switch (e) {
       MessageEntry(:final message) => 'm:${message.id}',
       EventEntry(:final event) => 'e:${event.id}',
+      KeyChangeEntry(:final peerUserId) => 'k:$peerUserId',
     };
 
     test('a group\'s messages and its admin events, merged by time', () async {
@@ -532,6 +540,55 @@ void main() {
       await settle();
       expect(c.read(chatTimelineProvider).map(label), ['m:m1']);
       expect(chat.calls.where((x) => x.startsWith('groupEvents')), isEmpty);
+    });
+
+    // t_a9ef0f411f: the contact's key change shows as one line in a direct
+    // chat, placed at the time this phone saw it.
+    FakeSecurityCodeStore changedAt(int minute) => FakeSecurityCodeStore()
+      ..changes['u2'] = KeyChange(
+        at: t0.add(Duration(minutes: minute)),
+        wasVerified: true,
+      );
+
+    test(
+      'a 1:1 with a key change: one line at the time of the change',
+      () async {
+        final chat = groups()
+          ..conversationsResult = const Ok([Conversation(id: 'c1', other: bob)])
+          ..history['c1'] = [msg('m1', 0, 'c1'), msg('m2', 10, 'c1')];
+        final c = await startReal(chat, codes: changedAt(5));
+        c.read(openConversationProvider.notifier).open('c1');
+        c.listen(chatTimelineProvider, (_, _) {});
+        await settle();
+        expect(c.read(chatTimelineProvider).map(label), [
+          'm:m1',
+          'k:u2',
+          'm:m2',
+        ]);
+        final line = c.read(chatTimelineProvider).whereType<KeyChangeEntry>();
+        expect(line.single.wasVerified, isTrue);
+      },
+    );
+
+    test('a 1:1 with no key change has no line', () async {
+      final chat = groups()
+        ..conversationsResult = const Ok([Conversation(id: 'c1', other: bob)])
+        ..history['c1'] = [msg('m1', 0, 'c1')];
+      final c = await startReal(chat, codes: FakeSecurityCodeStore());
+      c.read(openConversationProvider.notifier).open('c1');
+      c.listen(chatTimelineProvider, (_, _) {});
+      await settle();
+      expect(c.read(chatTimelineProvider).map(label), ['m:m1']);
+    });
+
+    test('a group never shows a key change line', () async {
+      final chat = groups()
+        ..history['g1'] = [msg('m1', 0, 'g1'), msg('m2', 10, 'g1')];
+      final c = await startReal(chat, codes: changedAt(5));
+      c.read(openConversationProvider.notifier).open('g1');
+      c.listen(chatTimelineProvider, (_, _) {});
+      await settle();
+      expect(c.read(chatTimelineProvider).whereType<KeyChangeEntry>(), isEmpty);
     });
   });
 }

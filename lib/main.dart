@@ -31,6 +31,7 @@ import 'features/chat/application/link_preview_controller.dart';
 import 'features/chat/application/encrypted_reply_controller.dart';
 import 'features/chat/application/share_controller.dart';
 import 'features/chat/application/message_opener.dart';
+import 'features/chat/application/security_code_controller.dart';
 import 'features/chat/application/reaction_opener.dart';
 import 'features/chat/application/text_locker.dart';
 import 'features/chat/data/external_picker_channel.dart';
@@ -84,6 +85,7 @@ import 'features/chat/data/supabase_sticker_repository.dart';
 import 'features/chat/data/supabase_contacts_repository.dart';
 import 'features/crypto/application/key_directory_controller.dart';
 import 'features/crypto/data/drift_olm_pickle_store.dart';
+import 'features/crypto/data/drift_security_code_store.dart';
 import 'features/crypto/data/drift_session_engine.dart';
 import 'features/crypto/data/keychain_group.dart';
 import 'features/crypto/data/olm_key_engine.dart';
@@ -425,6 +427,22 @@ Future<void> main() async {
             return DriftSessionEngine(
               store: builtStore!,
               keys: olm,
+              sessions: olm,
+              pickleKey: pickleKey,
+            );
+          }),
+          securityCodeStoreProvider.overrideWith((ref) {
+            ref.watch(messageStoreProvider);
+            return DriftSecurityCodeStore(
+              store: builtStore!,
+              sessions: olm,
+              pickleKey: pickleKey,
+            );
+          }),
+          cipherChatMemoryProvider.overrideWith((ref) {
+            ref.watch(messageStoreProvider);
+            return DriftSecurityCodeStore(
+              store: builtStore!,
               sessions: olm,
               pickleKey: pickleKey,
             );

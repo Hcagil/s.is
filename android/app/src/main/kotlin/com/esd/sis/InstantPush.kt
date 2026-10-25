@@ -332,6 +332,10 @@ object InstantPush {
 
             // The inbox below always gets [text] (locked for an encrypted push); the real text only lives in memory.
             val peeked = if (locked && !redraw) PeekRunner.peek(context, extras)?.also { t -> extras.getString("message_id")?.let { peekedTexts[it] = t } } else null
+            // The name comes from this phone's own copy of the chat when it has one, never from the push alone.
+            val localName = if (locked && !redraw) PeekRunner.takeName() else null
+            val shownTitle = localName ?: title
+            val shownSender = localName ?: extras.getString("sender")
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -353,7 +357,7 @@ object InstantPush {
             // As before the native takeover: a high-priority push (once drawn by Dart) alerts only when the shade has been quiet; any other push always alerted.
             val loud = !redraw && (extras.getString("google.original_priority") != "high" || isLoud())
 
-            val line = body(peeked ?: text, extras.getString("sender"), !chat.isNullOrEmpty())
+            val line = body(peeked ?: text, shownSender, !chat.isNullOrEmpty())
             // The unread total the server computed for this member (see the push
             // payload): shown by launchers that print a number on the icon. No
             // permission involved.
@@ -364,8 +368,8 @@ object InstantPush {
             val inbox = if (redraw) (prefs.getString(inboxKey, null) ?: return false) else PushInbox.add(
                 prefs.getString(inboxKey, null),
                 conversationId,
-                title,
-                extras.getString("sender"),
+                shownTitle,
+                shownSender,
                 chat,
                 text,
                 System.currentTimeMillis(),

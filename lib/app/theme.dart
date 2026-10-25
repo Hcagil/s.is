@@ -95,7 +95,8 @@ ThemeData sisTheme(
           FilledButton.styleFrom(
             minimumSize: const Size(64, 50),
             shape: const RoundedRectangleBorder(borderRadius: r12),
-            textStyle: const TextStyle(
+            textStyle: TextStyle(
+              fontFamily: family,
               fontWeight: FontWeight.w700,
               fontSize: 16,
             ),

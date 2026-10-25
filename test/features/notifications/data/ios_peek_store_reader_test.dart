@@ -42,6 +42,7 @@ const _flags = [
 final class SisPeekRows extends Struct {
   external Pointer<Uint8> ownerId;
   external Pointer<Uint8> peerUserId;
+  external Pointer<Uint8> peerName;
   external Pointer<Uint8> storedBody;
   external Pointer<Uint8> account;
   external Pointer<Uint8> keyElsewhere;
@@ -105,6 +106,7 @@ class Rows {
   Rows(this.rc, SisPeekRows r)
     : ownerId = _s(r.ownerId),
       peerUserId = _s(r.peerUserId),
+      peerName = _s(r.peerName),
       storedBody = _s(r.storedBody),
       account = _s(r.account),
       keyElsewhere = _s(r.keyElsewhere),
@@ -115,7 +117,8 @@ class Rows {
         for (var i = 0; i < r.sessionCount; i++) _s(r.sessionIdentityKeys[i]),
       ];
   final int rc;
-  final String? ownerId, peerUserId, storedBody, account, keyElsewhere;
+  final String? ownerId, peerUserId, peerName, storedBody, account;
+  final String? keyElsewhere;
   final List<String?> sessionPeers, sessionKeys;
 }
 
@@ -290,6 +293,17 @@ void main() {
     expect(r.sessionPeers, everyElement('alice'));
     expect(r.sessionKeys, everyElement(alice.identityKey));
     expect(r.keyElsewhere, isNull, reason: 'no sender key was given');
+  });
+
+  // Audit L3 (t_a9ef0f411f Fix 3): the notification name comes from the
+  // phone's own copy of the chat (json other.name), not from the push.
+  test("peer_name is the chat partner's name from the phone's own copy", () {
+    expect(peek().peerName, 'Alice');
+    expect(peek(conv: 'c2', id: 'none').peerName, 'Carol');
+  });
+
+  test('peer_name is NULL for a chat not in the copy', () {
+    expect(peek(conv: 'c9', id: 'none').peerName, isNull);
   });
 
   test('a wrong store key is "not readable" (1)', () {

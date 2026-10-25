@@ -29,6 +29,11 @@ object PeekRunner {
 
     @Volatile private var reason: String? = null
 
+    @Volatile private var peerName: String? = null
+
+    /** The chat partner's name from this phone's own copy of the chat, read once after peek(); null when the phone has no copy or no peek ran. */
+    fun takeName(): String? = synchronized(this) { val n = peerName; peerName = null; n }
+
     /** The reason code of the last peek() call, read once by the receiver; null when no peek was attempted. */
     fun takeReason(): String? = synchronized(this) { val r = reason; reason = null; r }
 
@@ -57,7 +62,7 @@ object PeekRunner {
 
     /** The message text, or null (= stay locked) on any failure, timeout, or when called on the main thread. Blocks the caller up to TIMEOUT_MS; call it from the draw thread only. */
     fun peek(context: Context, extras: Bundle): String? {
-        synchronized(this) { reason = null }
+        synchronized(this) { reason = null; peerName = null }
         if (!wanted(extras)) return fail("not_wanted")
         override?.let { return it(extras) }
         if (Looper.myLooper() == Looper.getMainLooper()) return fail("main_thread")
@@ -79,6 +84,7 @@ object PeekRunner {
         val latch = CountDownLatch(1)
         val result = AtomicReference<String?>(null)
         val dartReason = AtomicReference<String?>(null)
+        val dartName = AtomicReference<String?>(null)
         val engineRef = AtomicReference<FlutterEngine?>(null)
         val main = Handler(Looper.getMainLooper())
 
@@ -102,6 +108,7 @@ object PeekRunner {
                             val m = call.arguments as? Map<*, *>
                             result.set(m?.get("text") as? String)
                             dartReason.set(m?.get("reason") as? String)
+                            dartName.set(m?.get("name") as? String)
                             res.success(null)
                             latch.countDown()
                         }
@@ -124,6 +131,7 @@ object PeekRunner {
         if (!finished) return fail("timeout")
         val text = result.get()?.takeIf { it.isNotEmpty() }
         val r = dartReason.get()
+        synchronized(this) { peerName = dartName.get()?.takeIf { it.isNotEmpty() }?.take(200) }
         synchronized(this) {
             reason = when {
                 text != null -> "ok"

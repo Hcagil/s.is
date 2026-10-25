@@ -253,12 +253,22 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     if (message.senderId != me) {
       _reportDelivered(message.conversationId, message.createdAt);
     }
+    final before = current
+        .where((c) => c.id == message.conversationId)
+        .firstOrNull
+        ?.lastMessageAt;
     final next = _withMessage(current, message);
     if (next == null) {
       reloadQuietly();
     } else {
       state = AsyncData(next);
       _scheduleSnapshotSave();
+      // A really newer message of someone else: the top card for a member who
+      // is inside another chat. next.first is that chat (moved up above).
+      if (message.senderId != me &&
+          (before == null || message.createdAt.isAfter(before))) {
+        ref.read(messageNoticeProvider.notifier).consider(next.first, message);
+      }
     }
   }
 

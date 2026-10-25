@@ -426,6 +426,53 @@
       }
     }
   },
+  "encryptionRowTitle": "Encryption",
+  "@encryptionRowTitle": {
+    "description": "Profile row title, opens the security code page"
+  },
+  "encryptionRowSubtitle": "Messages are end-to-end encrypted. Tap to verify.",
+  "@encryptionRowSubtitle": {
+    "description": "Profile row subtitle under Encryption"
+  },
+  "securityCodeTitle": "Verify security code",
+  "@securityCodeTitle": {
+    "description": "Title of the security code page"
+  },
+  "securityCodeIntro": "Compare this code with {name}'s phone, in person or on a call. If both match, tap Matches. This is saved on this phone only. After that, messages you send from now on are end-to-end encrypted between your two phones.",
+  "@securityCodeIntro": {
+    "description": "Explanation under the security code",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "securityCodeChanged": "Your security code with {name} changed. Tap to verify.",
+  "@securityCodeChanged": {
+    "description": "Chat line in a 1:1 when the security code changed",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "securityCodeChangedUnverified": "Your security code with {name} changed and is no longer verified. Tap to verify.",
+  "@securityCodeChangedUnverified": {"description": "Chat line in a 1:1 when a verified person's code changed", "placeholders": {"name": {"type": "String"}}},
+  "securityCodeMatches": "Matches",
+  "securityCodeDiffers": "Doesn't match",
+  "securityCodeVerified": "Verified",
+  "securityCodeVerifiedNote": "Saved on this phone only. {name} is not told.",
+  "@securityCodeVerifiedNote": {"placeholders": {"name": {"type": "String"}}},
+  "securityCodeUnverify": "Mark as not verified",
+  "securityCodeMismatchTitle": "The codes are different",
+  "securityCodeMismatchBody": "This can happen if {name} got a new phone or reinstalled SIS. It can also mean someone is in between you. Check with {name} in person or on a call, and do not send anything private until you know. Nothing was marked as verified.",
+  "@securityCodeMismatchBody": {"placeholders": {"name": {"type": "String"}}},
+  "securityCodeOk": "OK",
+  "encryptionRowVerified": "Verified",
+  "securityCodeUnavailable": "No security code to show yet. It appears after your first secure message with {name}.",
+  "@securityCodeUnavailable": {"placeholders": {"name": {"type": "String"}}},
+  "securityCodeNewPhoneNote": "If {name} gets a new phone, the code changes and you need to check it again.",
+  "@securityCodeNewPhoneNote": {"placeholders": {"name": {"type": "String"}}},
   "pinnedBarTitle": "Pinned message",
   "@pinnedBarTitle": {
     "description": "Bar under the chat header"
@@ -1638,5 +1685,7 @@
   "cropButtonLabel": "Crop photo",
   "@cropButtonLabel": {"description": "Accessibility label of the crop button in the send preview"},
   "cropRotateLabel": "Rotate",
-  "@cropRotateLabel": {"description": "Accessibility label of the rotate button"}
+  "@cropRotateLabel": {"description": "Accessibility label of the rotate button"},
+  "noticeNewMessage": "New message",
+  "@noticeNewMessage": {"description": "Top card for a message from another chat when its text is hidden (private chat not opened on this phone, or the preview setting hides text)"}
 }

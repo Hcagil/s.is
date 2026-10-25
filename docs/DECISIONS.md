@@ -5,6 +5,7 @@ Entries before 2026-10-03 are in [DECISIONS-archive.md](DECISIONS-archive.md); s
 
 ## Current decisions
 
+- 2026-10-25 — [One release per day at noon, Turkey time](#2026-10-25--one-release-per-day-at-noon-turkey-time): Merges land on `main` all day; one release at 12:00 Istanbul ships them together; an urgent fix may release at once
 - 2026-10-20 — [iPhone encryption is exempt; Info.plist stays NO](#2026-10-20--iphone-encryption-is-exempt-infoplist-stays-no): App Store Connect's own encryption questionnaire found SIS exempt, so `ITSAppUsesNonExemptEncryption` stays `false` and builds carry no per-build answer.
 - 2026-10-17 — [The server knows the app language](#2026-10-17--the-server-knows-the-app-language): The server stores the app language (profiles.app_language, en or tr) for the app's own messages
 - 2026-10-17 — [Version names follow the date and change count](#2026-10-17--version-names-follow-the-date-and-change-count): Version names are yy.month.commit-count in UTC; the build number is unchanged
@@ -607,3 +608,19 @@ Nothing contacts the site before that tap.
 **Why.** App Store Connect's App Encryption Documentation questionnaire (answered 2026-10-20: standard algorithms only, none proprietary, not offered in France) returned "you don't need to upload any documents" and pointed to the Info.plist key for skipping the per-build questions. The earlier `true` came from reading Apple's documentation table instead of running the questionnaire; with `true` and no compliance code every upload failed with altool error 90592.
 
 **Consequences.** iPhone uploads work again with no manual step. A store or build setting that depends on a legal reading is changed only after the platform's own form gives the answer. The US yearly self-classification question (5D992) is separate and open with a lawyer; it does not change this key.
+
+## 2026-10-25 — One release per day at noon, Turkey time
+
+**Decision.** `release.yml` no longer starts after every merge. It runs once a day at 09:00 UTC (12:00 Europe/Istanbul, which keeps UTC+3 all year) and by hand (*Run workflow*, with a required reason) for an urgent fix. Each run releases the newest `main` commit whose `ci.yml` run on `main` passed, and only when the commits since the last release tag change something that ships; otherwise it ends green and publishes nothing. Pull requests keep merging during the day. Urgent means a security hole or a crash for everyone; the manager starts that run and tells the owner.
+
+**Why.** The owner (2026-10-25): one release per day at noon, so testers get one update a day with every change of that day in it, and urgent fixes stay flexible.
+
+**Consequences.**
+- Migrations, edge functions and the app still go out together from the same commit; a server fix merged in the morning goes live at noon, not at merge.
+- The What's new note already joins every pull request since the last release tag, so a noon release carries all of that day's lines.
+- A merge after noon waits for the next day unless it is urgent.
+- GitHub may start a scheduled run late (minutes, sometimes an hour); the range starts at the last tag, so a late or missed run loses nothing, and *Run workflow* covers a missed day.
+- A commit whose CI failed is never released; the run takes the newest green commit, so one red merge does not hold back the earlier ones.
+- `versionCode` stays `run_number + 100` of `release.yml` and only rises; the minimum supported build is untouched; nothing is forced.
+- Testers get their tasks once a day after the noon release; an urgent release gets its own task at once.
+

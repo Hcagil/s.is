@@ -205,20 +205,19 @@ Future<String?> peekEncryptedText({
   );
   final peer = rows.peerUserId;
   if (text != null && storedKey && budgetLeftMs != null && peer != null) {
-    onInbox?.call(
-      writePushInbox(
-        path: storePath,
-        keyHex: storeKeyHex,
-        conversationId: conversationId,
-        messageId: messageId,
-        peerUserId: peer,
-        body: text,
-        // Same hash as the app's own opener (message_opener.dart _openOne).
-        sealed: sha256.convert(utf8.encode(ciphertext)).toString(),
-        receivedAtMicros: DateTime.now().microsecondsSinceEpoch,
-        budgetMs: budgetLeftMs(),
-      ),
+    final code = writePushInbox(
+      path: storePath,
+      keyHex: storeKeyHex,
+      conversationId: conversationId,
+      messageId: messageId,
+      peerUserId: peer,
+      body: text,
+      // Same hash as the app's own opener (message_opener.dart _openOne).
+      sealed: sha256.convert(utf8.encode(ciphertext)).toString(),
+      receivedAtMicros: DateTime.now().microsecondsSinceEpoch,
+      budgetMs: budgetLeftMs(),
     );
+    onInbox?.call(code);
   }
   return text;
 }

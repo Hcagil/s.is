@@ -6,11 +6,8 @@
 #                    and contents: read;
 #                    ::add-mask:: of the email before any other output; the
 #                    email never in argv; no step summary, artifacts or set -x.
-#   release.yml      a first attempt of both runs always proceeds; a re-run
-#                    of Release (run_attempt >= 2) or of the CI run it follows
-#                    (workflow_run.run_attempt >= 2) is refused unless head_sha
-#                    is the live main tip (an empty tip refuses); the step's
-#                    script is RUN here against a stubbed git;
+#   release.yml      runs on a schedule and by hand: no workflow_run trigger
+#                    and no tip-of-main check anywhere;
 #                    deploys admin-apple and admin-apple-report; creates the
 #                    vault secret admin_apple_url in `where not exists` form.
 #   admin-apple.yml  RUN (A8-A12): the "Run the job" script runs in bash with
@@ -22,10 +19,14 @@
 #                    tool only as TESTER_EMAIL; the exit code maps to finish.
 #                    A failed token fetch stops the job on the claim, is
 #                    ignored on progress and swallowed on finish.
-#   release.yml, ios-ipa.yml  RUN (R1c, R1d): the tip check is the first step
-#                    of publish, distribute and ipa (and comes first in scope),
-#                    with its env and `if:` resolved as GitHub would; ipa
-#                    skips it for CI's call (upload false).
+#   release.yml, ios-ipa.yml  RUN (R1c, R1d): "Refuse a commit older than the
+#                    last release" is the first step of publish, distribute and
+#                    ipa, with its env and `if:` resolved as GitHub would, against
+#                    a stubbed gh: attempt 1 always proceeds; attempt 2+ proceeds
+#                    only when no release exists or the compare of the last tag
+#                    with scope's sha is identical/ahead (behind, diverged or an
+#                    unreadable compare refuses); ipa skips it for CI's call
+#                    (upload false).
 #   ios-signing-bootstrap.yml  its job runs behind environment apple-signing.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -104,52 +105,12 @@ a6() {
 }
 a7() { ! grep -qE 'GITHUB_STEP_SUMMARY|upload-artifact|set -x|set -o xtrace|bash -x|set -[a-wyz]*x' "$F"; }
 
+# --- R1: no workflow_run trigger, no tip-of-main check left in any workflow --
 r1() {
-  grep -q 'workflow_run.head_sha' "$R" && grep -qE 'ls-remote|origin/main' "$R" || return 1
-  awk '
-    /^[[:space:]]*- name:/ { if (hit && ex) found = 1; hit = 0; ex = 0 }
-    /workflow_run\.head_sha/ { hit = 1 }
-    /ls-remote|origin\/main/ { if (hit) live = 1 }
-    /exit 1/ { ex = 1 }
-    END { if (hit && ex) found = 1; exit !(found && live) }' "$R"
+  ! grep -qE 'workflow_run|tip of main|ls-remote' "$R" "$I" || return 1
+  grep -qE '^  schedule:' "$R" && grep -qE '^  workflow_dispatch:' "$R"
 }
-# The tip-check step's script, run with a stubbed `git ls-remote` printing $TIP.
-tip_script() {
-  awk '
-    function ind(s) { match(s, /^ */); return RLENGTH }
-    /^[[:space:]]*- name:/ { instep = ($0 ~ /tip of main/) }
-    instep && /^[[:space:]]*run:[[:space:]]*\|/ { inr = 1; base = ind($0); next }
-    inr { if ($0 !~ /^[[:space:]]*$/ && ind($0) <= base) { inr = 0; instep = 0 } else print }' "$R"
-}
-tip_run() {  # tip_run ATTEMPT TIP HEAD [WF_ATTEMPT=1] -> the step's exit status
-  local d rc
-  d=$(mktemp -d)
-  printf '#!/bin/sh\n[ -n "$TIP" ] && printf "%%s\\trefs/heads/main\\n" "$TIP"\nexit 0\n' > "$d/git"
-  chmod +x "$d/git"
-  tip_script > "$d/step.sh"
-  [ -s "$d/step.sh" ] || { echo "no tip-check script found" >&2; return 99; }
-  PATH="$d:$PATH" TIP=$2 RUN_ATTEMPT=$1 WF_ATTEMPT=${4:-1} HEAD_SHA=$3 GITHUB_REPOSITORY=o/r bash -e "$d/step.sh" >/dev/null 2>&1
-  rc=$?
-  rm -f "$d/git" "$d/step.sh"; rmdir "$d"
-  return $rc
-}
-r1b() {
-  grep -qE 'RUN_ATTEMPT:[[:space:]]*\$\{\{[[:space:]]*github\.run_attempt[[:space:]]*\}\}' "$R" || return 1
-  grep -qE 'WF_ATTEMPT:[[:space:]]*\$\{\{[[:space:]]*github\.event\.workflow_run\.run_attempt[[:space:]]*\}\}' "$R" || return 1
-  local a=aaaaaaa b=bbbbbbb
-  tip_run 1 "$b" "$a" || return 1          # a first attempt always proceeds
-  tip_run 1 "" "$a" || return 1            # ... even when the tip cannot be read
-  tip_run 1 "$b" "$a" 1 || return 1
-  ! tip_run 1 "$b" "$a" 2 || return 1      # a re-run of CI starts Release attempt 1 with the old sha: refused
-  ! tip_run 1 "" "$a" 2 || return 1
-  tip_run 1 "$a" "$a" 2 || return 1        # ... unless it is the live tip
-  tip_run 2 "$a" "$a" || return 1          # a re-run of the live tip proceeds
-  ! tip_run 2 "$b" "$a" || return 1        # a re-run of an older commit is refused
-  ! tip_run 3 "$b" "$a" || return 1
-  ! tip_run 2 "" "$a" || return 1          # a re-run with no readable tip is refused
-  ! tip_run 2 "" ""                        # ... even if head_sha came through empty
-}
-# --- R1c: the tip check in every deploying job, run as GitHub would --------
+# --- R1c: the release guard in every deploying job, run as GitHub would ---
 # job_step FILE JOB SEL -> the lines of step SEL (a number, or a name regex)
 # of job JOB.
 job_step() {
@@ -170,30 +131,33 @@ with_of() {
     inj && inw && /^    [^ ]/ { inw = 0 }
     inj && inw && $0 ~ "^      " key ":" { v = $0; sub(/^[^:]*:[[:space:]]*/, "", v); print v; exit }' "$1"
 }
-# An expression as GitHub resolves it for a Release run: workflow_run event
-# with head_sha $HEAD and run_attempt $WA, own attempt $RA; inside ios-ipa.yml
-# the inputs are what release.yml's `ios` job (or ci.yml's call) passes.
+# An expression as GitHub resolves it for a Release run: own attempt $RA, the
+# release commit scope picked $HEAD; inside ios-ipa.yml the inputs are what
+# release.yml's `ios` job (or ci.yml's call) passes.
 resolve() {
   local e=$1
   e=$(printf %s "$e" | sed -E 's/^[[:space:]]*(\$\{\{)?[[:space:]]*//; s/[[:space:]]*(\}\})?[[:space:]]*$//')
   case $e in
     github.run_attempt) printf %s "$RA";;
-    github.event.workflow_run.run_attempt) printf %s "$WA";;
-    github.event.workflow_run.head_sha) printf %s "$HEAD";;
+    needs.scope.outputs.sha) printf %s "$HEAD";;
+    github.token) printf %s qa-token;;
+    github.repository) printf %s o/r;;
     inputs.*) resolve "$(with_of "$CALLER" "$CALLER_JOB" "${e#inputs.}")";;
     true|false) printf %s "$e";;
     *) echo "unresolved: $e" >&2; return 1;;
   esac
 }
-# tipj FILE JOB SEL RA WA TIP HEAD -> the step's status as GitHub would run it
-# (an `if:` that is false skips it: status 0). Sets TIPJ_RAN and TIPJ_ERR.
-tipj() {
+# guardj FILE JOB SEL RA PREV STATUS HEAD -> the step's status as GitHub would
+# run it (an `if:` that is false skips it: status 0). gh answers `release list`
+# with $PREV and `api repos/o/r/compare/$PREV...$HEAD` with $STATUS ("!" = the
+# call fails); any other gh call fails. Sets GUARD_RAN and GUARD_ERR.
+guardj() {
   local f=$1 job=$2 sel=$3 d blk cond v rc envs=() line k
-  RA=$4 WA=$5 HEAD=$7
+  RA=$4 HEAD=$7
   d=$(mktemp -d); blk=$d/step
   job_step "$f" "$job" "$sel" > "$blk"
-  grep -qE '^      - name:.*tip of main' "$blk" || { echo "$f/$job step $sel is not the tip check" >&2; rm -rf "$d"; return 99; }
-  TIPJ_RAN=0; TIPJ_ERR=
+  grep -qE '^      - name: Refuse a commit older than the last release$' "$blk" || { echo "$f/$job step $sel is not the release guard" >&2; rm -rf "$d"; return 99; }
+  GUARD_RAN=0; GUARD_ERR=
   cond=$(sed -nE 's/^        if:[[:space:]]*//p' "$blk")
   if [ -n "$cond" ]; then
     v=$(resolve "$cond") || { rm -rf "$d"; return 98; }
@@ -207,45 +171,52 @@ tipj() {
   awk 'function ind(s) { match(s, /^ */); return RLENGTH }
     /^        run:[[:space:]]*\|/ { r = 1; next }
     r { if ($0 !~ /^[[:space:]]*$/ && ind($0) <= 8) exit; print substr($0, 11) }' "$blk" > "$d/step.sh"
-  printf '#!/bin/sh\n[ "$1 $3" = "ls-remote refs/heads/main" ] || exit 2\n[ -n "$TIP" ] && printf "%%s\\trefs/heads/main\\n" "$TIP"\nexit 0\n' > "$d/git"
-  chmod +x "$d/git"
-  TIPJ_RAN=1
-  env -i PATH="$d:/usr/bin:/bin" TIP=$6 GITHUB_REPOSITORY=o/r "${envs[@]}" bash -e "$d/step.sh" >/dev/null 2>"$d/err"
-  rc=$?; TIPJ_ERR=$(cat "$d/err"); rm -rf "$d"
+  cat > "$d/gh" <<'GH'
+#!/bin/sh
+[ "$GH_TOKEN" = qa-token ] && [ "$GH_REPO" = o/r ] || exit 3
+if [ "$*" = "release list --limit 1 --json tagName --jq .[0].tagName // empty" ]; then printf '%s' "${PREV:+$PREV
+}"; exit 0; fi
+if [ "$*" = "api repos/o/r/compare/$PREV...$HEAD_SHA --jq .status" ] && [ "$HEAD_SHA" = "$WANT_HEAD" ]; then
+  [ "$STATUS" = "!" ] && exit 1
+  echo "$STATUS"; exit 0
+fi
+echo "gh stub: unexpected: $*" >&2; exit 2
+GH
+  chmod +x "$d/gh"
+  GUARD_RAN=1
+  env -i PATH="$d:/usr/bin:/bin" PREV=$5 STATUS=$6 WANT_HEAD=$HEAD GITHUB_REPOSITORY=o/r "${envs[@]}" bash -e "$d/step.sh" >/dev/null 2>"$d/err"
+  rc=$?; GUARD_ERR=$(cat "$d/err"); rm -rf "$d"
   return $rc
 }
-# The full table for one deploying job: first attempts proceed, re-runs of
-# either run proceed only on the live tip, the refusal says why.
-tip_table() {
-  local f=$1 job=$2 sel=$3 a=aaaaaaa b=bbbbbbb msg='This commit is not the tip of main: nothing is deployed.'
-  tipj "$f" "$job" "$sel" 1 1 "$b" "$a" && [ "$TIPJ_RAN" = 1 ] || return 1
-  tipj "$f" "$job" "$sel" 1 "" "$b" "$a" || return 1      # WF attempt absent = 1
-  tipj "$f" "$job" "$sel" 1 1 "" "$a" || return 1
-  tipj "$f" "$job" "$sel" 2 1 "$a" "$a" || return 1
-  tipj "$f" "$job" "$sel" 1 2 "$a" "$a" || return 1
-  local c
-  for c in "2 1 $b" "3 1 $b" "1 2 $b" "2 2 $b" "2 1 -" "1 2 -"; do
-    set -- $c; [ "$3" = - ] && set -- "$1" "$2" ""
-    tipj "$f" "$job" "$sel" "$1" "$2" "$3" "$a" && return 1
-    [ "$TIPJ_ERR" = "$msg" ] || { echo "$job: refusal said: $TIPJ_ERR" >&2; return 1; }
+# The full table for one deploying job: a first attempt always proceeds; a
+# re-run proceeds for the last release's commit or a newer one, or when no
+# release exists yet; anything else (older, diverged, unreadable) is refused.
+guard_table() {
+  local f=$1 job=$2 sel=$3 a=aaaaaaa msg='This commit is older than the last release: nothing is deployed.' c
+  for c in "1 v1 behind" "1 v1 diverged" "1 v1 identical" "2 v1 identical" "3 v1 ahead" "2 - behind"; do
+    set -- $c; [ "$2" = - ] && set -- "$1" "" "$3"
+    guardj "$f" "$job" "$sel" "$1" "$2" "$3" "$a" && [ "$GUARD_RAN" = 1 ] || { echo "$job: [$c] refused: $GUARD_ERR" >&2; return 1; }
   done
-  ! tipj "$f" "$job" "$sel" 2 1 "" ""      # no readable tip refuses even if the sha came through empty
+  for c in "2 v1 behind" "3 v1 behind" "2 v1 diverged"; do
+    set -- $c
+    ! guardj "$f" "$job" "$sel" "$1" "$2" "$3" "$a" || { echo "$job: [$c] proceeded" >&2; return 1; }
+    [ "$GUARD_ERR" = "$msg" ] || { echo "$job: [$c] refusal said: $GUARD_ERR" >&2; return 1; }
+  done
+  ! guardj "$f" "$job" "$sel" 2 v1 '!' "$a" || { echo "$job: unreadable compare proceeded" >&2; return 1; }
 }
 r1c() {
   CALLER=$R CALLER_JOB=ios
-  tip_table "$R" scope 'tip of main' || { echo "R1c scope" >&2; return 1; }
-  # scope: the check comes before anything decides or computes the release
-  [ "$(job_step "$R" scope 2 | head -1 | grep -c 'tip of main')" = 1 ] || { echo "R1c scope order" >&2; return 1; }
-  tip_table "$R" publish 1 || { echo "R1c publish" >&2; return 1; }
-  tip_table "$R" distribute 1 || { echo "R1c distribute" >&2; return 1; }
+  guard_table "$R" publish 1 || { echo "R1c publish" >&2; return 1; }
+  guard_table "$R" distribute 1 || { echo "R1c distribute" >&2; return 1; }
   [ "$(with_of "$R" ios upload)" = true ] || { echo "R1c ios upload" >&2; return 1; }
-  tip_table "$I" ipa 1 || { echo "R1c ipa" >&2; return 1; }
+  [ "$(with_of "$R" ios ref)" = '${{ needs.scope.outputs.sha }}' ] || { echo "R1c ios ref" >&2; return 1; }
+  guard_table "$I" ipa 1 || { echo "R1c ipa" >&2; return 1; }
 }
 r1d() {
-  # CI's call uploads nothing: the step is skipped even for an off-tip re-run
+  # CI's call uploads nothing: the guard is skipped even for an older re-run
   CALLER=$C CALLER_JOB=ios-signed
   [ "$(with_of "$C" ios-signed upload)" = false ] || return 1
-  tipj "$I" ipa 1 2 2 bbbbbbb aaaaaaa && [ "$TIPJ_RAN" = 0 ]
+  guardj "$I" ipa 1 2 v1 behind aaaaaaa && [ "$GUARD_RAN" = 0 ]
 }
 r2() { grep -qE 'functions deploy admin-apple( |$)' "$R" && grep -qE 'functions deploy admin-apple-report( |$)' "$R"; }
 r3() {
@@ -416,10 +387,9 @@ check "A9 admin-apple: tool exit 1 -> rejected, 75 x3 -> timeout, remove passes 
 check "A10 admin-apple: claim token fetch fails: the job stops, nothing reported, tool never runs" a10
 check "A11 admin-apple: progress token fetch fails: ignored, retries and finish go on" a11
 check "A12 admin-apple: finish token fetch fails: swallowed, tool's exit code kept, no false reason" a12
-check "R1 release: refuses a head_sha that is not the live main tip" r1
-check "R1b release: first attempt proceeds; a re-run only for the live tip" r1b
-check "R1c release scope/publish/distribute + ios-ipa ipa (upload true): first step is the tip check; re-runs only on the tip" r1c
-check "R1d ios-ipa: CI's call (upload false) skips the tip check" r1d
+check "R1 release: daily schedule and dispatch, no workflow_run, no tip-of-main check left" r1
+check "R1c release publish/distribute + ios-ipa ipa (upload true): first step is the release guard; a re-run never deploys a commit older than the last release" r1c
+check "R1d ios-ipa: CI's call (upload false) skips the release guard" r1d
 check "R2 release: deploys admin-apple and admin-apple-report" r2
 check "R3 release: vault admin_apple_url created where not exists" r3
 check "B1 bootstrap: job behind environment apple-signing" b1

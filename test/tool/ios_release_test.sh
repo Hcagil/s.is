@@ -21,7 +21,7 @@
 #     `tool/asc_signing.py distribute com.esd.sis BUILD GROUPS NOTE` with the
 #     groups from vars.TESTFLIGHT_GROUPS through env (empty = bacanaks) and the
 #     note decoded from publish's note_b64, byte for byte; its steps are exactly
-#     the tip-of-main check, the key, distribute and the key removal: it
+#     the release guard, the key, distribute and the key removal: it
 #     revokes nothing (Apple checks
 #     a build's signature again in beta review, up to about 48 hours later:
 #     ITMS-90721 / ITMS-90035), reads no certificate or profile id and no ios
@@ -42,7 +42,7 @@
 #     required;
 #   - checkout does not persist the token; no ${{ inputs|vars|secrets }} is
 #     pasted into any run: text (they reach steps through env:);
-#   - the steps, exactly in this order: the tip-of-main check (only when
+#   - the steps, exactly in this order: the release guard (only when
 #     uploading), checkout, Flutter, Rust, the sqlite3 library cache, Firebase config,
 #     pub get, config-only build, the key, the archive, the ad-hoc signature,
 #     the certificate import, the export, the explicit requirement, the
@@ -185,6 +185,11 @@ for j in scope publish ios distribute ios-signed; do [ -s "$tmp/$j" ] || fail "j
 # 1 scope owns the version: its outputs, and the numbers its step computes.
 grep -qE '^      code: \$\{\{ steps\.v\.outputs\.code \}\}$' "$tmp/scope" || fail "scope does not output code from steps.v"
 grep -qE '^      name: \$\{\{ steps\.v\.outputs\.name \}\}$' "$tmp/scope" || fail "scope does not output name from steps.v"
+# The release commit: scope picks it (steps.pick), checks it out, and every
+# deploying job builds that same commit, never main's moving tip.
+grep -qE '^      sha: \$\{\{ steps\.pick\.outputs\.sha \}\}$' "$tmp/scope" || fail "scope does not output sha from steps.pick"
+[ "$(grep -cE '^ *ref: ' "$tmp/scope")" = 1 ] && grep -qE '^ *ref: \$\{\{ steps\.pick\.outputs\.sha \}\}$' "$tmp/scope" || fail "scope does not check out the picked commit"
+[ "$(grep -cE '^ *ref: ' "$tmp/publish")" = 1 ] && grep -qE '^ *ref: \$\{\{ needs\.scope\.outputs\.sha \}\}$' "$tmp/publish" || fail "publish does not check out scope's commit"
 grep -qE '^ *id: v$' <<<"$(step_keys "$release" "Compute version")" || fail "Compute version is not step id v"
 step_run "$release" "Compute version" "$tmp/version.sh"
 sed -i 's/\${{ github\.run_number }}/77/g' "$tmp/version.sh"
@@ -231,7 +236,7 @@ done
 [ "$(with "$tmp/ios" upload)" = true ] || fail "the release ios job must upload"
 [ "$(with "$tmp/ios" build-number)" = '${{ needs.scope.outputs.code }}' ] || fail "ios build number is not scope's code"
 [ "$(with "$tmp/ios" build-name)" = '${{ needs.scope.outputs.name }}' ] || fail "ios build name is not scope's name"
-[ "$(with "$tmp/ios" ref)" = '${{ github.event.workflow_run.head_sha }}' ] || fail "ios does not build the commit CI passed"
+[ "$(with "$tmp/ios" ref)" = '${{ needs.scope.outputs.sha }}' ] || fail "ios does not build the commit scope picked"
 [ "$(passed_secrets "$tmp/ios")" = "$want_passed" ] || fail "ios must pass exactly the six secrets by name, got [$(passed_secrets "$tmp/ios")]"
 
 # 3b distribute: shape. It waits for publish only for the note.
@@ -254,8 +259,8 @@ grep -qE '^ *TF_GROUPS: \$\{\{ vars\.TESTFLIGHT_GROUPS \}\}$' "$tmp/distribute" 
 grep -qE '^ *NOTE_B64: \$\{\{ needs\.publish\.outputs\.note_b64 \}\}$' "$tmp/distribute" || fail "the note must come from publish's note_b64"
 grep -qE '^ *BUILD: \$\{\{ needs\.scope\.outputs\.code \}\}$' "$tmp/distribute" || fail "the build number must be scope's code"
 mapfile -t dsteps < <(sed -n 's/^      - name: //p' "$tmp/distribute")
-[ "$(printf '%s\n' "${dsteps[@]}")" = "$(printf '%s\n' "Refuse a commit that is not the tip of main" "Write the App Store Connect key" "Distribute the build to the TestFlight groups" "Remove the App Store Connect key")" ] \
-  || fail "distribute must be exactly the tip check, the key, distribute and the key removal (nothing revoked): ${dsteps[*]}"
+[ "$(printf '%s\n' "${dsteps[@]}")" = "$(printf '%s\n' "Refuse a commit older than the last release" "Write the App Store Connect key" "Distribute the build to the TestFlight groups" "Remove the App Store Connect key")" ] \
+  || fail "distribute must be exactly the release guard, the key, distribute and the key removal (nothing revoked): ${dsteps[*]}"
 dgate() { awk -v n="      - name: $1" '$0 == n { f = 1; next } f && (/^ *run:/ || /^ *- /) { exit } f' "$tmp/distribute" | sed -n 's/^ *if: *//p'; }
 [ "$(dgate "Remove the App Store Connect key")" = 'always()' ] || fail "distribute key removal must be if: always()"
 for s in "${dsteps[@]}"; do
@@ -351,7 +356,7 @@ asc_signing.py fetch "sis ci distribution notify" "$dir/notify"'
   || fail "the asc_signing.py calls are not all in the import step"
 # Step order, exactly the contract's; the gates on validate, upload and cleanup.
 mapfile -t steps < <(sed -n 's/^      - name: //p' "$ipa_wf")
-want_steps=("Refuse a commit that is not the tip of main" "Check out source" "Install Flutter" "Install Rust" "Restore the sqlite3 library cache" "Restore Firebase config" "Restore Maps key" "Resolve dependencies"
+want_steps=("Refuse a commit older than the last release" "Check out source" "Install Flutter" "Install Rust" "Restore the sqlite3 library cache" "Restore Firebase config" "Restore Maps key" "Resolve dependencies"
   "Configure the Xcode build" "Write the App Store Connect key" "Archive (signed)"
   "Sign the archive with its entitlements" "Import the signing certificate"
   "Export for App Store Connect"
@@ -369,7 +374,7 @@ done
 [ "$(pos "Write the App Store Connect key")" -lt "$(pos "Import the signing certificate")" ] || fail "the certificate import runs before the API key exists"
 gate() { step_keys "$ipa_wf" "$1" | sed -n 's/^ *if: *//p' | sed 's/^\${{ *//; s/ *}}$//'; }
 [ "$(gate "Upload to TestFlight")" = inputs.upload ] || fail "upload is not gated on inputs.upload: [$(gate "Upload to TestFlight")]"
-[ "$(gate "Refuse a commit that is not the tip of main")" = inputs.upload ] || fail "the tip check must run only when uploading: [$(gate "Refuse a commit that is not the tip of main")]"
+[ "$(gate "Refuse a commit older than the last release")" = inputs.upload ] || fail "the release guard must run only when uploading: [$(gate "Refuse a commit older than the last release")]"
 [ "$(gate "Validate with App Store Connect")" = '!inputs.upload' ] || fail "validate must run only when not uploading: [$(gate "Validate with App Store Connect")]"
 [ "$(gate "Remove the signing material")" = 'always()' ] || fail "the signing material removal must run even after a failure (if: always())"
 step_run "$ipa_wf" "Remove the signing material" "$tmp/rm.sh"
@@ -381,7 +386,7 @@ grep -nE '^ *id: cert$' "$ipa_wf" && fail "ios-ipa.yml has a step id cert"
 [ "$(gate "Remove the App Store Connect key")" = 'always()' ] || fail "key removal must run even after a failure (if: always())"
 [ "${steps[-1]}" = "Remove the App Store Connect key" ] || fail "key removal is not the last step (last: ${steps[-1]})"
 for s in "${want_steps[@]}"; do
-  case "$s" in "Refuse a commit that is not the tip of main"|"Upload to TestFlight"|"Validate with App Store Connect"|"Remove the signing material"|"Remove the App Store Connect key") continue ;; esac
+  case "$s" in "Refuse a commit older than the last release"|"Upload to TestFlight"|"Validate with App Store Connect"|"Remove the signing material"|"Remove the App Store Connect key") continue ;; esac
   [ -z "$(gate "$s")" ] || fail "'$s' is gated [$(gate "$s")]: every other step must run on every call"
 done
 for s in "${want_steps[@]}"; do
@@ -485,8 +490,8 @@ run_job() {
   local s g ok=1 rc
   failed_step= ran=() upload_outcome=skipped
   for s in "${steps[@]}"; do
-    # The tip check is run, with its gate, by test/tool/admin_apple_workflow_test.sh (R1c, R1d).
-    case "$s" in "Refuse a commit that is not the tip of main"|"Check out source"|"Install Flutter"|"Restore the sqlite3 library cache"|"Resolve dependencies") continue ;; esac
+    # The release guard is run, with its gate, by test/tool/admin_apple_workflow_test.sh (R1c, R1d).
+    case "$s" in "Refuse a commit older than the last release"|"Check out source"|"Install Flutter"|"Restore the sqlite3 library cache"|"Resolve dependencies") continue ;; esac
     g=$(gate "$s")
     case "$g" in
       "") [ "$ok" = 1 ] || continue ;;
@@ -828,7 +833,7 @@ run_dist() { # [VAR=value ...]: sets $failed_step, $ran
   failed_step= ran=()
   for s in "${dsteps[@]}"; do
     # run, with its env, by test/tool/admin_apple_workflow_test.sh (R1c)
-    [ "$s" = "Refuse a commit that is not the tip of main" ] && continue
+    [ "$s" = "Refuse a commit older than the last release" ] && continue
     [ "$ok" = 1 ] || [ "$(dgate "$s")" = 'always()' ] || continue
     ran+=("$s"); rc=0
     RUN_WF=$release run "$s" KEY="$key_text" BUILD=4242 "$@" || rc=$?

@@ -68,18 +68,22 @@ jobs:
       TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       # A re-run of this job alone skips the release workflow's `scope` job, so it
-      # re-checks that its commit is still main's tip (same rule as release.yml).
-      - name: Refuse a commit that is not the tip of main
+      # re-checks that its commit is not older than the last release (same rule as release.yml).
+      - name: Refuse a commit older than the last release
         if: inputs.upload
         env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           HEAD_SHA: ${{ inputs.ref }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
-          WF_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
         run: |
-          tip=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY" refs/heads/main | cut -f1)
-          if { [ "$RUN_ATTEMPT" -gt 1 ] || [ "${WF_ATTEMPT:-1}" -gt 1 ]; } && { [ -z "$tip" ] || [ "$tip" != "$HEAD_SHA" ]; }; then
-            echo 'This commit is not the tip of main: nothing is deployed.' >&2
-            exit 1
+          prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
+          if [ "$RUN_ATTEMPT" -gt 1 ] && [ -n "$prev" ]; then
+            status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$prev...$HEAD_SHA" --jq .status)
+            case "$status" in
+              identical|ahead) ;;
+              *) echo 'This commit is older than the last release: nothing is deployed.' >&2; exit 1 ;;
+            esac
           fi
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

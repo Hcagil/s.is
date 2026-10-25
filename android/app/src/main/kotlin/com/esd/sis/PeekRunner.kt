@@ -27,17 +27,18 @@ object PeekRunner {
     /** Test seam: when set, replaces the engine (unit tests cannot start Flutter). */
     @Volatile var override: ((Bundle) -> String?)? = null
 
-    @Volatile private var reason: String? = null
+    // Reason codes by message_id, so two overlapping pushes never read each other's; each is taken once by the receiver.
+    private val reasons = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     @Volatile private var peerName: String? = null
 
     /** The chat partner's name from this phone's own copy of the chat, read once after peek(); null when the phone has no copy or no peek ran. */
     fun takeName(): String? = synchronized(this) { val n = peerName; peerName = null; n }
 
-    /** The reason code of the last peek() call, read once by the receiver; null when no peek was attempted. */
-    fun takeReason(): String? = synchronized(this) { val r = reason; reason = null; r }
+    /** The reason code of the peek() of the push with [messageId], read once by the receiver; null when no peek was attempted for it. */
+    fun takeReason(messageId: String): String? = reasons.remove(messageId)
 
-    private fun fail(code: String): String? { synchronized(this) { reason = code }; return null }
+    private fun fail(messageId: String?, code: String): String? { if (messageId != null) reasons[messageId] = code; return null }
 
     /** Test seam: the clock for every budget time read. */
     @VisibleForTesting @Volatile var now: () -> Long = { System.currentTimeMillis() }
@@ -62,20 +63,22 @@ object PeekRunner {
 
     /** The message text, or null (= stay locked) on any failure, timeout, or when called on the main thread. Blocks the caller up to TIMEOUT_MS; call it from the draw thread only. */
     fun peek(context: Context, extras: Bundle): String? {
-        synchronized(this) { reason = null; peerName = null }
-        if (!wanted(extras)) return fail("not_wanted")
+        val mid = extras.getString("message_id")
+        mid?.let { reasons.remove(it) }
+        synchronized(this) { peerName = null }
+        if (!wanted(extras)) return fail(mid, "not_wanted")
         override?.let { return it(extras) }
-        if (Looper.myLooper() == Looper.getMainLooper()) return fail("main_thread")
+        if (Looper.myLooper() == Looper.getMainLooper()) return fail(mid, "main_thread")
         val timeout = synchronized(this) {
             if (now() - lastPeekEnd > QUIET_GAP_MS) burstSpentMs = 0L
             minOf(PUSH_CAP_MS, BURST_BUDGET_MS - burstSpentMs)
         }
-        if (timeout < 500L) return fail("budget")
+        if (timeout < 500L) return fail(mid, "budget")
         val startedAt = now()
         engine?.let { fake ->
             val text = try { fake(extras, timeout) } finally { charge(startedAt) }
-            val seamText = text?.takeIf { it.isNotEmpty() } ?: return fail("other:seam")
-            synchronized(this) { reason = "ok" }
+            val seamText = text?.takeIf { it.isNotEmpty() } ?: return fail(mid, "other:seam")
+            mid?.let { reasons[it] = "ok" }
             return seamText
         }
 
@@ -128,12 +131,12 @@ object PeekRunner {
         val finished = latch.await(timeout, TimeUnit.MILLISECONDS)
         main.post { engineRef.get()?.destroy() }
         charge(startedAt)
-        if (!finished) return fail("timeout")
+        if (!finished) return fail(mid, "timeout")
         val text = result.get()?.takeIf { it.isNotEmpty() }
         val r = dartReason.get()
         synchronized(this) { peerName = dartName.get()?.takeIf { it.isNotEmpty() }?.take(200) }
-        synchronized(this) {
-            reason = when {
+        mid?.let {
+            reasons[it] = when {
                 text != null -> "ok"
                 r != null && r.matches(Regex("^[a-z_]{1,24}(:[A-Za-z0-9_]{1,40})?$")) -> r
                 else -> "other:unknown"

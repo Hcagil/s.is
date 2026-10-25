@@ -16,6 +16,7 @@ import '../domain/reaction_store.dart';
 import 'catch_up_mark.dart';
 import 'chat_controllers.dart';
 import 'open_queue.dart';
+import 'peer_key_cache.dart';
 
 /// The on-phone store of opened locked reactions; null until main wires it.
 final reactionStoreProvider = Provider<ReactionStore?>((_) => null);
@@ -26,8 +27,8 @@ final reactionOpenerProvider = Provider<ReactionOpener>((ref) {
     me: () => ref.read(currentUserIdProvider),
     engine: () => ref.read(sessionEngineProvider),
     store: () => ref.read(reactionStoreProvider),
-    peerKey: (id) =>
-        ref.read(keyDirectoryControllerProvider.notifier).identityVerified(id),
+    // Always fresh (a reaction can be a pre-key message) but with the cache's time limit, so a slow server cannot hold the queue.
+    peerKey: (id) => ref.read(peerKeyCacheProvider).get(id, fresh: true),
     queue: ref.read(openQueueProvider),
     mark: ref.read(catchUpMarkProvider),
     onHeld: () => ref.read(storeSyncProvider).run(),
@@ -61,7 +62,8 @@ class StoreReactionOpener implements ReactionOpener {
 
   static final _epoch = DateTime.fromMillisecondsSinceEpoch(0);
 
-  Future<T> _serial<T>(Future<T> Function() job) => _queue.run(job);
+  // Reactions wait behind texts in the shared queue.
+  Future<T> _serial<T>(Future<T> Function() job) => _queue.run(job, low: true);
 
   bool _locked(Reaction r) => r.ciphertext != null && r.emoji == null;
 

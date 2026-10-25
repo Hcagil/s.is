@@ -17,6 +17,7 @@ import '../domain/message_opener.dart';
 import '../domain/message_store.dart';
 import 'chat_controllers.dart';
 import 'open_queue.dart';
+import 'peer_key_cache.dart';
 import 'security_code_controller.dart';
 
 /// The one step that opens locked texts read from the server; main gives it to the chat repository.
@@ -35,6 +36,7 @@ final messageOpenerProvider = Provider<MessageOpener>((ref) {
         ref.read(keyDirectoryControllerProvider.notifier).identityVerified(id),
     memory: () => ref.read(cipherChatMemoryProvider),
     queue: ref.read(openQueueProvider),
+    cache: ref.read(peerKeyCacheProvider),
   );
   ref.onDispose(opener.dispose);
   return opener;
@@ -51,6 +53,7 @@ class StoreMessageOpener implements MessageOpener {
     required this._peerKey,
     CipherChatMemory? Function()? memory,
     OpenQueue? queue,
+    this._cache,
   }) : _memory = memory ?? _noMemory,
        _queue = queue ?? OpenQueue();
 
@@ -60,10 +63,21 @@ class StoreMessageOpener implements MessageOpener {
   final Future<Result<ClaimedKeys?>> Function(String userId) _peerKey;
   final CipherChatMemory? Function() _memory;
   final OpenQueue _queue;
+  final PeerKeyCache? _cache;
 
   final _reopened = StreamController<Message>.broadcast();
   final Map<String, Message> _done = {};
   final Map<String, Message> _pending = {};
+  Timer? _timer;
+  int _tries = 0;
+  bool _disposed = false;
+  static const _retryDelays = [
+    Duration(seconds: 5),
+    Duration(seconds: 15),
+    Duration(seconds: 45),
+    Duration(minutes: 2),
+    Duration(minutes: 5),
+  ];
 
   @override
   Stream<Message> get reopened => _reopened.stream;
@@ -79,6 +93,8 @@ class StoreMessageOpener implements MessageOpener {
 
   /// Closes the [reopened] stream.
   void dispose() {
+    _disposed = true;
+    _timer?.cancel();
     unawaited(_reopened.close());
   }
 
@@ -95,6 +111,7 @@ class StoreMessageOpener implements MessageOpener {
       return Future.value(rows);
     }
     return _serial<List<Message>>(() async {
+      _tries = 0;
       final out = List<Message>.of(rows);
       await _markHeld(rows, memory);
       final keys = <String, Result<ClaimedKeys?>>{};
@@ -228,7 +245,13 @@ class StoreMessageOpener implements MessageOpener {
     }
     final engine = _engine();
     if (engine == null) return fallback;
-    final looked = keys[m.senderId] ??= await _peerKey(m.senderId);
+    final cache = _cache;
+    // A pre-key message can create a session (and drop the old ones), so it always asks the server; a normal message may use the kept keys.
+    final looked = cache == null
+        ? (keys[m.senderId] ??= await _peerKey(m.senderId))
+        : m.olmType == 0
+        ? await cache.get(m.senderId, fresh: true)
+        : (keys[m.senderId] ??= await cache.get(m.senderId));
     final peerKey = switch (looked) {
       Ok(:final value) => value,
       Err() => null,
@@ -268,6 +291,7 @@ class StoreMessageOpener implements MessageOpener {
         _wait(m);
         return fallback;
       case Err(failure: UnreadableMessageFailure()):
+        _cache?.drop(m.senderId);
         _remember(slot, unreadable);
         return fallback;
       case Err():
@@ -282,11 +306,38 @@ class StoreMessageOpener implements MessageOpener {
   }
 
   void _wait(Message m) {
+    _cache?.drop(m.senderId);
     if (!_pending.containsKey(m.id) && _pending.length >= 200) {
       _pending.remove(_pending.keys.first);
     }
     _pending[m.id] = m;
+    _schedule();
   }
+
+  /// Waits longer after each try (5 s up to 5 min), five tries, then stops until the next open.
+  void _schedule() {
+    if (_disposed || _timer != null || _tries >= _retryDelays.length) return;
+    _timer = Timer(_retryDelays[_tries++], () {
+      _timer = null;
+      unawaited(_retryAll());
+    });
+  }
+
+  Future<void> _retryAll() => _serial<void>(() async {
+    if (_disposed) return;
+    for (final peer in {for (final m in _pending.values) m.senderId}) {
+      if (_disposed) return;
+      try {
+        await _retryPending(peer, const {});
+      } catch (_) {}
+    }
+    if (_disposed) return;
+    if (_pending.isEmpty) {
+      _tries = 0;
+    } else {
+      _schedule();
+    }
+  });
 
   /// Opens the rows of [peer] that waited for a session (except [skip], the rows of the call in progress) and sends each one that opened on [reopened].
   Future<void> _retryPending(String peer, Set<String> skip) async {

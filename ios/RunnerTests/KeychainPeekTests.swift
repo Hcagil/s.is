@@ -725,3 +725,199 @@ final class PeekSenderKeyTests: XCTestCase {
     XCTAssertNotEqual(otherSk, validSk)
   }
 }
+
+// MARK: - What may be saved (PeekCore.opened, slice 3)
+
+// PeekCore.opened storedKey: only a key already on the phone (stored session,
+// stored session id, inbound with the stored peer key) may lead to a save; the
+// push sk (first contact) and a stored body never do. text() == opened()?.text.
+// Written from the contract (t_176cbd956f), never from the code. Draft: test_writer.
+
+final class PeekOpenedTests: XCTestCase {
+  // MARK: - Helpers
+
+  let key: [UInt8] = Array(repeating: 7, count: 32)
+  let peer = "6f1c2a4e-8b3d-4c5e-9f70-1a2b3c4d5e6f"
+  let validSk = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789+/AbCdE"
+
+  func push(ot: String, sk: String? = nil, si: String? = nil) -> PeekPush {
+    var u: [AnyHashable: Any] = ["encrypted": "true",
+                                 "message_id": "m1",
+                                 "conversation_id": "c1",
+                                 "user_id": "me",
+                                 "ct": "CT",
+                                 "ot": ot]
+    if let sk = sk { u["sk"] = sk }
+    if let si = si { u["si"] = si }
+    return PeekPush(userInfo: u)!
+  }
+
+  func row(_ id: String, peer p: String? = nil, ik: String? = nil) -> PeekSessionRow {
+    PeekSessionRow(sessionId: id,
+                   peerUserId: p ?? peer,
+                   identityKey: ik ?? "IK-\(id)",
+                   pickle: "P-\(id)")
+  }
+
+  func data(noPeer: Bool = false,
+            body: String? = PeekCore.lockedPlaceholder,
+            sender: String? = nil,
+            sessions: [PeekSessionRow] = []) -> PeekData {
+    let peerUserId: String? = noPeer ? nil : peer
+    return PeekData(ownerId: "me",
+                    peerUserId: peerUserId,
+                    storedBody: body,
+                    account: "ACC",
+                    sessions: sessions,
+                    storedSenderId: sender)
+  }
+
+  func opened(_ p: PeekPush, _ d: PeekData, _ dec: FakeDecryptor) -> PeekOpened? {
+    PeekCore.opened(push: p, data: d, pickleKey: key, decryptor: dec)
+  }
+
+  // MARK: - Tests
+
+  func testOt1StoredSessionIsStoredKey() {
+    let dec = FakeDecryptor()
+    dec.sessionTexts["P-s1"] = "hi"
+    let p = push(ot: "1")
+    let d = data(sessions: [row("s1")])
+    let result = opened(p, d, dec)
+    XCTAssertEqual(result, PeekOpened(text: "hi", storedKey: true))
+  }
+
+  func testOt0StoredSessionIdIsStoredKey() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "s1"
+    dec.sessionTexts["P-s1"] = "pre"
+    let p = push(ot: "0")
+    let d = data(sessions: [row("s1")])
+    let result = opened(p, d, dec)
+    XCTAssertEqual(result, PeekOpened(text: "pre", storedKey: true))
+  }
+
+  func testOt0InboundWithStoredPeerSessionIsStoredKey() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "new"
+    dec.inboundTexts["ACC+IK-a"] = "fresh"
+    let p = push(ot: "0")
+    let d = data(sessions: [row("a")])
+    let result = opened(p, d, dec)
+    XCTAssertEqual(result, PeekOpened(text: "fresh", storedKey: true))
+  }
+
+  func testOt0InboundWithPushSenderKeyIsNotStoredKey() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "new"
+    dec.inboundTexts["ACC+\(validSk)"] = "first"
+    let p = push(ot: "0", sk: validSk, si: peer)
+
+    // Peer known
+    let d1 = data(sessions: [])
+    let result1 = opened(p, d1, dec)
+    XCTAssertEqual(result1, PeekOpened(text: "first", storedKey: false))
+
+    // No peer
+    let d2 = data(noPeer: true, sessions: [])
+    let result2 = opened(p, d2, dec)
+    XCTAssertEqual(result2, PeekOpened(text: "first", storedKey: false))
+  }
+
+  func testAStoredBodyIsNotStoredKey() {
+    let dec = FakeDecryptor()
+    dec.sessionTexts["P-s1"] = "olm"
+    let p = push(ot: "1")
+    let d = data(body: "stored text", sender: peer, sessions: [row("s1")])
+    let result = opened(p, d, dec)
+    XCTAssertEqual(result, PeekOpened(text: "stored text", storedKey: false))
+  }
+
+  func testNothingOpensGivesNil() {
+    // ot1 with no sessionTexts
+    let dec1 = FakeDecryptor()
+    let p1 = push(ot: "1")
+    let d1 = data(sessions: [row("s1")])
+    let result1 = opened(p1, d1, dec1)
+    XCTAssertNil(result1)
+
+    // ot0 with no prekeyIds
+    let dec2 = FakeDecryptor()
+    let p2 = push(ot: "0")
+    let d2 = data(sessions: [])
+    let result2 = opened(p2, d2, dec2)
+    XCTAssertNil(result2)
+  }
+
+  func testTextEqualsOpenedText() {
+    let cases: [(PeekPush, PeekData, (FakeDecryptor) -> Void)] = [
+      // 1
+      (push(ot: "1"),
+       data(sessions: [row("s1")]),
+       { dec in dec.sessionTexts["P-s1"] = "hi" }),
+
+      // 2
+      (push(ot: "0"),
+       data(sessions: [row("s1")]),
+       { dec in
+          dec.prekeyIds["CT"] = "s1"
+          dec.sessionTexts["P-s1"] = "pre"
+       }),
+
+      // 3
+      (push(ot: "0"),
+       data(sessions: [row("a")]),
+       { dec in
+          dec.prekeyIds["CT"] = "new"
+          dec.inboundTexts["ACC+IK-a"] = "fresh"
+       }),
+
+      // 4a
+      (push(ot: "0", sk: validSk, si: peer),
+       data(sessions: []),
+       { dec in
+          dec.prekeyIds["CT"] = "new"
+          dec.inboundTexts["ACC+\(validSk)"] = "first"
+       }),
+
+      // 4b
+      (push(ot: "0", sk: validSk, si: peer),
+       data(noPeer: true, sessions: []),
+       { dec in
+          dec.prekeyIds["CT"] = "new"
+          dec.inboundTexts["ACC+\(validSk)"] = "first"
+       }),
+
+      // 5
+      (push(ot: "1"),
+       data(body: "stored text", sender: peer, sessions: [row("s1")]),
+       { dec in dec.sessionTexts["P-s1"] = "olm" }),
+
+      // 6a nil
+      (push(ot: "1"),
+       data(sessions: [row("s1")]),
+       { _ in }),
+
+      // 6b nil
+      (push(ot: "0"),
+       data(sessions: []),
+       { _ in })
+    ]
+
+    for (p, d, setup) in cases {
+      let decText = FakeDecryptor()
+      setup(decText)
+      let decOpened = FakeDecryptor()
+      setup(decOpened)
+
+      let text = PeekCore.text(push: p, data: d, pickleKey: key, decryptor: decText)
+      let opened = PeekCore.opened(push: p, data: d, pickleKey: key, decryptor: decOpened)
+
+      if let opened = opened {
+        XCTAssertEqual(text, opened.text)
+      } else {
+        XCTAssertNil(text)
+      }
+    }
+  }
+}

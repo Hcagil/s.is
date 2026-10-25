@@ -130,10 +130,12 @@ os.replace(tmp, path)' "$FILE"
 call POST /rest/v1/rpc/activate_session '{}'
 [ "$(tr -d ' \n' <"$TMP")" = "true" ] || die 3 "session superseded: the owner runs tool/sis_bot_admin.sh mint"
 
-send_message() { # conversation text
+send_message() { # conversation text [attachment_path]
   local id payload
   id=$(python3 -c 'import uuid;print(uuid.uuid4())')
-  payload=$(python3 -c 'import json,sys;print(json.dumps({"id":sys.argv[1],"conversation_id":sys.argv[2],"sender_id":sys.argv[3],"body":sys.argv[4],**({"attachment_path":sys.argv[5]} if sys.argv[5] else {})}))' "$id" "$1" "$ME" "$2" "${3:-}")
+  payload=$(python3 -c 'import json,sys;d={"id":sys.argv[1],"conversation_id":sys.argv[2],"sender_id":sys.argv[3],"body":sys.argv[4]}
+if sys.argv[5]: d["attachment_path"]=sys.argv[5]
+print(json.dumps(d))' "$id" "$1" "$ME" "$2" "${3:-}")
   call POST /rest/v1/messages "$payload"
   echo "sent $id"
 }
@@ -181,11 +183,17 @@ PY
     [[ $1 =~ $UUID_RE ]] || die 2 "not a conversation id"
     if [ -n "$IMG" ]; then
       path="$1/$(python3 -c 'import time;print(int(time.time()*1000000))')-${ME:0:8}.$EXT"
-      # Headers go in a config on stdin (as api() does) so the token never shows in argv.
-      status=$(CFG_ANON="$ANON" CFG_TOKEN="$ACCESS" CFG_BODY="" python3 -c "$CURL_CFG" | sed '/Content-Type: application\/json/d' \
+      # Upload: headers go to curl as a config on stdin so the token never shows in argv.
+      STATUS=$(CFG_ANON="$ANON" CFG_TOKEN="$ACCESS" CFG_BODY="" python3 -c "$CURL_CFG" | sed '/Content-Type: application\/json/d' \
         | { cat; echo "header = \"Content-Type: $MIME\""; } \
         | curl -sS --max-time 120 -K - --data-binary "@$IMG" -o "$TMP" -w '%{http_code}' -X POST "$URL/storage/v1/object/attachments/$path") || die 1 "network error"
-      case "$status" in 2??) ;; 401|403) die 4 "not permitted (not allowed, or the bot is switched off)" ;; 429) die 5 "rate limited, try again later" ;; *) die 1 "upload failed (http $status)" ;; esac
+      case "$STATUS" in
+        2??) ;;
+        400|401|403) die 4 "not permitted (not allowed, the bot is switched off, not a member of that chat, or too many uploads)" ;;
+        413) die 2 "the image is too large" ;;
+        429) die 5 "rate limited, try again later" ;;
+        *) die 1 "upload failed (http $STATUS)" ;;
+      esac
       send_message "$1" "$TEXT" "$path"
     else
       send_message "$1" "$TEXT"

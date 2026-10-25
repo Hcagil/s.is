@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import Security
 
@@ -91,8 +90,8 @@ enum PushPeek {
 
     let opened = PeekCore.opened(push: push, data: data, pickleKey: pickleKey, decryptor: decryptor)
     // Save only a text a STORED session or key opened, for the chat partner the store knows (never the push's own sender key or id). Runs here, before the extension hands its content to the system, so the store connection is already closed.
-    if let opened = opened, opened.storedKey, let peer = data.peerUserId {
-      _ = PeekStoreReader.save(path: store.path, keyHex: storeKeyHex, conversationId: push.conversationId, messageId: push.messageId, peerUserId: peer, body: opened.text, sealed: sealedHash(push.ct), receivedAtMicros: Int64(Date().timeIntervalSince1970 * 1_000_000))
+    if let row = PeekCore.saveRow(push: push, data: data, opened: opened) {
+      _ = PeekStoreReader.save(path: store.path, keyHex: storeKeyHex, conversationId: push.conversationId, messageId: push.messageId, peerUserId: row.peerUserId, body: row.body, sealed: row.sealed, receivedAtMicros: Int64(Date().timeIntervalSince1970 * 1_000_000))
     }
     return (opened?.text, data.peerName)
   }
@@ -101,11 +100,6 @@ enum PushPeek {
   static func shownBody(text: String, sender: String?) -> String {
     let body = (sender?.isEmpty == false) ? "\(sender!): \(text)" : text
     return String(body.prefix(1000))
-  }
-
-  /// The same hash the app's opener keeps in `sealed`: SHA-256 of the ciphertext string's UTF-8 bytes, lowercase hex.
-  static func sealedHash(_ ct: String) -> String {
-    SHA256.hash(data: Data(ct.utf8)).map { String(format: "%02x", $0) }.joined()
   }
 
   /// Checks if a string is a valid hex64 string.

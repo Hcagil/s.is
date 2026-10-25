@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// The three Olm steps the extension needs; the real one calls the Rust C API, tests use a fake.
@@ -111,6 +112,17 @@ enum PeekCore {
     let storedKey = !data.sessions.isEmpty  // false when the key came from the push's sk
     guard let text = decryptor.decryptInbound(accountPickle: account, pickleKey: pickleKey, identityKey: identityKey, messageId: push.messageId, ct: push.ct) else { return nil }
     return PeekOpened(text: text, storedKey: storedKey)
+  }
+
+  /// What the extension may save into push_inbox, or nil. Only a text opened by a STORED key (opened.storedKey) for a chat partner the store knows (data.peerUserId non-nil) is saved; the sender is that store peer, never the push's senderId.
+  static func saveRow(push: PeekPush, data: PeekData, opened: PeekOpened?) -> (peerUserId: String, body: String, sealed: String)? {
+    guard let opened = opened, opened.storedKey, let peer = data.peerUserId else { return nil }
+    return (peer, opened.text, sealedHash(push.ct))
+  }
+
+  /// The same hash the app's opener keeps in `sealed`: SHA-256 of the ciphertext string's UTF-8 bytes, lowercase hex.
+  static func sealedHash(_ ct: String) -> String {
+    SHA256.hash(data: Data(ct.utf8)).map { String(format: "%02x", $0) }.joined()
   }
 
   static func text(push: PeekPush, data: PeekData, pickleKey: [UInt8], decryptor: PeekDecryptor) -> String? {

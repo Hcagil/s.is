@@ -58,7 +58,13 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
     // Subscribed before the read, so a read in between is not lost; a
     // failed subscription only costs the live part.
     final updates = await repo.readUpdates(conversationId);
-    if (gen != _gen) return const [];
+    if (gen != _gen || !ref.mounted) {
+      // The chat closed while the join was out: listen and cancel at once so the stream's onCancel leaves the channel (an unlistened stream never fires it).
+      if (updates case Ok(:final value)) {
+        unawaited(value.listen((_) {}).cancel());
+      }
+      return const [];
+    }
     if (updates case Ok(:final value)) {
       final sub = value.listen((m) => _saw(m, gen));
       ref.onDispose(sub.cancel);
@@ -66,8 +72,7 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
     // Delivery is a separate topic; a failed or slow join only costs the live
     // ticks, so the marks load without waiting for it. Events before the load
     // lands are buffered by _saw.
-    // Per-build flag: the provider rebuilds (it is not disposed) when the chat
-    // closes or another opens, so `ref.mounted` cannot tell a stale join.
+    // Per-build flag: on a rebuild (chat closes or another opens) the provider stays mounted, so `ref.mounted` cannot tell a stale join there; a dispose is caught by `!ref.mounted` above.
     var live = true;
     ref.onDispose(() => live = false);
     unawaited(

@@ -344,14 +344,10 @@ final class DriftMessageStore implements MessageStore {
       final oldest = page.isEmpty
           ? null
           : page.first.createdAt.microsecondsSinceEpoch;
-      // Stored rows the server no longer returns for the range this page covers; a held chat keeps its placeholders.
+      // Stored rows the server no longer returns for the range this page covers.
       await (db.delete(db.messages)..where((t) {
             final stale =
-                t.conversationId.equals(conversationId) &
-                t.id.isNotIn(ids) &
-                (held
-                    ? t.body.equals(lockedBodyPlaceholder).not()
-                    : const Constant(true));
+                t.conversationId.equals(conversationId) & t.id.isNotIn(ids);
             return reachedStart || oldest == null
                 ? stale
                 : stale & t.createdAt.isBiggerOrEqualValue(oldest);

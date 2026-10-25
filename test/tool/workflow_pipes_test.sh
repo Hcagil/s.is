@@ -26,6 +26,11 @@
 #     clock before "Xcode build done" (a slow build is not a hang); after it,
 #     no result within VIDEO_PREP_AFTER_BUILD_S -> flutter is stopped and the
 #     step fails at once with an ::error:: line;
+#   release.yml `publish` / "Tag and publish release notes"
+#   - creates release v<name>+<code> targeting $SHA (scope's picked commit);
+#     up to 3 tries, waiting 10 s after the 1st failure and 30 s after the 2nd;
+#     after a failed create, an existing release (`gh release view` succeeds)
+#     ends the step with 0; 3 failures and no release -> a message, exit 1;
 #   ios-ipa.yml "Check the signature"
 #   - authority = the text after the FIRST `Authority=` line of
 #     `codesign -dvv` (stderr included); signed only when it begins with
@@ -275,6 +280,63 @@ for sh in "${SHELLS[@]}"; do
   done
   sig "$sh" "$tmp/a-adhoc" || true
   grep -qxF "Runner.app: unsigned or ad-hoc" "$tmp/out" || fail "no Authority line is not reported as unsigned under '$sh'"
+done
+
+# ---- 4 release tag: retried, and a release that already exists is success ----
+# "Tag and publish release notes" as written; gh fails the first $FAILS creates
+# ("all" = every one) and `release view` of the tag succeeds from view call
+# number $VIEW_FROM on (0 = never); sleep is a stand-in that only logs.
+grep -A3 -- '- name: Tag and publish release notes' .github/workflows/release.yml | grep -qE '^ *GH_TOKEN: \$\{\{ github\.token \}\}$' \
+  || fail "the tag step does not get GH_TOKEN"
+awk '/^  publish:/ { f = 1; next } f && /^  [a-z-]+:/ { exit } f && /^    env:/ { e = 1; next } e && !/^      / { exit } e' .github/workflows/release.yml \
+  | grep -qE '^      SHA: \$\{\{ needs\.scope\.outputs\.sha \}\}$' || fail "publish's SHA is not scope's picked commit"
+awk -v n="- name: Tag and publish release notes" '
+  index($0, n) && substr($0, index($0, n) + length(n)) == "" { found = 1; next }
+  found && !inrun && /^ *- / { exit }
+  found && !inrun && /^ *run: \|/ { inrun = 1; match($0, /^ */); ind = RLENGTH; next }
+  inrun { if ($0 ~ /^ *$/) { print ""; next }; match($0, /^ */); if (RLENGTH <= ind) exit; if (!body) body = RLENGTH; print substr($0, body + 1) }' \
+  .github/workflows/release.yml | sed 's/\${{ needs\.scope\.outputs\.name }}/26.10.5/g; s/\${{ needs\.scope\.outputs\.code }}/177/g' > "$tmp/tag.sh"
+[ -s "$tmp/tag.sh" ] || fail "step 'Tag and publish release notes' not found"
+! grep -q '\${{' "$tmp/tag.sh" || fail "the tag step reads an unexpected expression: $(cat "$tmp/tag.sh")"
+TAG='v26.10.5+177'; PICK=0123abcd0123abcd0123abcd0123abcd0123abcd
+stub gh 'echo "gh $*" >> "$CALLS"
+case "$1 $2" in
+  "release create")
+    [ "$3" = "$TAG" ] || { echo "gh stub: create of [$3]" >&2; exit 2; }
+    t=; for a in "$@"; do [ "$t" = 1 ] && { [ "$a" = "$PICK" ] || exit 2; t=2; }; [ "$a" = --target ] && t=1; done
+    [ "$t" = 2 ] || { echo "gh stub: create without --target $PICK: $*" >&2; exit 2; }
+    n=$(grep -c "^gh release create" "$CALLS")
+    [ "$FAILS" = all ] && exit 1; [ "$n" -le "$FAILS" ] && exit 1; exit 0 ;;
+  "release view")
+    [ "$3" = "$TAG" ] || exit 1
+    n=$(grep -c "^gh release view" "$CALLS")
+    [ "$VIEW_FROM" != 0 ] && [ "$n" -ge "$VIEW_FROM" ] && exit 0; exit 1 ;;
+esac
+echo "gh stub: unexpected: $*" >&2; exit 2'
+stub sleep 'echo "sleep $*" >> "$CALLS"'
+tagrun() { # <shell> <fails> <view_from> -> sets rc; $tmp/calls
+  : > "$tmp/calls"; set +e
+  PATH="$tmp/bin:$PATH" CALLS="$tmp/calls" TAG=$TAG PICK=$PICK SHA=$PICK FAILS=$2 VIEW_FROM=$3 $1 "$tmp/tag.sh" >> "$tmp/calls" 2>&1; rc=$?; set -e
+}
+seq_of() { grep -E '^(gh release create|sleep)' "$tmp/calls" | awk '{ print $1 == "sleep" ? "sleep" $2 : "create" }' | tr '\n' ' '; }
+for sh in "${SHELLS[@]}"; do
+  while read -r fails view_from want_rc want_seq; do
+    tagrun "$sh" "$fails" "$view_from"
+    got=$(seq_of)
+    [ "$rc" = "$want_rc" ] && [ "$got" = "${want_seq//_/ } " ] \
+      || fail "tag under '$sh', $fails failed creates, view ok from call $view_from: rc $rc, calls [$got], want rc $want_rc [${want_seq//_/ }]; log: $(tr '\n' ';' < "$tmp/calls")"
+  done <<'TABLE'
+0 0 0 create
+1 0 0 create_sleep10_create
+2 0 0 create_sleep10_create_sleep30_create
+1 1 0 create
+all 3 0 create_sleep10_create_sleep30_create
+all 0 1 create_sleep10_create_sleep30_create
+TABLE
+  # Always failing: a message of the step's own after the last try (the step's
+  # output is interleaved with the stand-ins' log, which prints nothing else).
+  tagrun "$sh" all 0; ! grep -qE '^(gh|sleep) ' <<<"$(tail -1 "$tmp/calls")" \
+    || fail "a tag step that gave up printed no message after its last try under '$sh': $(tr '\n' ';' < "$tmp/calls")"
 done
 
 echo "workflow pipes: OK"

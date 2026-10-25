@@ -51,10 +51,23 @@ String readPinnedToolchain(String manifestDir) {
     throw BuildException(
         'Missing ${file.path}: it must pin the Rust compiler with channel = "x.y.z" under [toolchain].');
   }
-  final m = RegExp(r'''^\s*channel\s*=\s*(?:"([^"]+)"|'([^']+)')\s*(?:#.*)?$''',
-          multiLine: true)
-      .firstMatch(file.readAsStringSync());
-  final channel = m?.group(1) ?? m?.group(2);
+  var inToolchain = false;
+  String? channel;
+  for (final line in file.readAsLinesSync()) {
+    final trimmed = line.trim();
+    if (trimmed == '[toolchain]') {
+      inToolchain = true;
+    } else if (trimmed.startsWith('[')) {
+      if (inToolchain) break;
+    } else if (inToolchain) {
+      final m = RegExp(r'''^\s*channel\s*=\s*(?:"([^"]+)"|'([^']+)')\s*(?:#.*)?$''')
+          .firstMatch(line);
+      if (m != null) {
+        channel = m.group(1) ?? m.group(2);
+        break;
+      }
+    }
+  }
   if (channel == null) {
     throw BuildException(
         'Cannot read the compiler version from ${file.path}: expected a line channel = "x.y.z" (double or single quoted) under [toolchain].');

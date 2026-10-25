@@ -921,3 +921,56 @@ final class PeekOpenedTests: XCTestCase {
     }
   }
 }
+
+// MARK: - The save decision (PeekCore.saveRow / sealedHash, slice 3 fix round 1)
+
+// Save only a text opened with a stored key, only for a known store peer (never
+// the push si); sealed = Dart sha256 hex of the UTF-8 ciphertext (vectors from
+// hashlib, the standard SHA-256 Dart package:crypto implements).
+// Written from the contract (t_176cbd956f), never from the code. Draft: test_writer.
+final class PeekSaveRowTests: XCTestCase {
+  let peer = "6f1c2a4e-8b3d-4c5e-9f70-1a2b3c4d5e6f"
+  let other = "0a9b8c7d-6e5f-4a3b-8c2d-1e0f9a8b7c6d"
+  func push(ct: String = "AwogQ+/xyz==", si: String? = nil) -> PeekPush {
+    var u: [AnyHashable: Any] = ["encrypted": "true", "message_id": "m1", "conversation_id": "c1", "user_id": "me", "ct": ct, "ot": "0"]
+    if let si = si { u["si"] = si }
+    return PeekPush(userInfo: u)!
+  }
+  func data(peer p: String?) -> PeekData {
+    PeekData(ownerId: "me", peerUserId: p, storedBody: nil, account: "ACC", sessions: [])
+  }
+
+  func testAStoredKeyTextIsSavedWithTheStorePeerAndTheCiphertextHash() {
+    let r = PeekCore.saveRow(push: push(), data: data(peer: peer), opened: PeekOpened(text: "merhaba", storedKey: true))
+    XCTAssertEqual(r?.peerUserId, peer)
+    XCTAssertEqual(r?.body, "merhaba")
+    XCTAssertEqual(r?.sealed, "71722cc5f9acf0dbcd5a3dafeee05b7a4b508564b39edc2914fdf91b8d7a55f7")
+  }
+
+  func testATextNotOpenedWithAStoredKeyIsNeverSaved() {
+    let r1 = PeekCore.saveRow(push: push(si: peer), data: data(peer: peer), opened: PeekOpened(text: "first", storedKey: false))
+    XCTAssertNil(r1)
+    let r2 = PeekCore.saveRow(push: push(si: peer), data: data(peer: peer), opened: nil)
+    XCTAssertNil(r2)
+  }
+
+  func testTheSenderIsTheStorePeerEvenWhenThePushSenderIdDiffers() {
+    let r = PeekCore.saveRow(push: push(si: other), data: data(peer: peer), opened: PeekOpened(text: "test", storedKey: true))
+    XCTAssertEqual(r?.peerUserId, peer)
+    XCTAssertNotEqual(r?.peerUserId, other)
+  }
+
+  func testNoKnownPeerIsNeverSavedEvenWithAStoredKey() {
+    let r1 = PeekCore.saveRow(push: push(si: peer), data: data(peer: nil), opened: PeekOpened(text: "x", storedKey: true))
+    XCTAssertNil(r1)
+    let r2 = PeekCore.saveRow(push: push(si: nil), data: data(peer: nil), opened: PeekOpened(text: "x", storedKey: true))
+    XCTAssertNil(r2)
+  }
+
+  func testSealedHashIsTheDartSha256HexOfTheUtf8Ciphertext() {
+    XCTAssertEqual(PeekCore.sealedHash("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    XCTAssertEqual(PeekCore.sealedHash(""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    XCTAssertEqual(PeekCore.sealedHash("Günaydın 🔒"), "3b874d5e72d79187fa863a851df66557e16116892f21f00d5f13ed76bc173c4a")
+    XCTAssertEqual(PeekCore.sealedHash("AwogQ+/xyz=="), "71722cc5f9acf0dbcd5a3dafeee05b7a4b508564b39edc2914fdf91b8d7a55f7")
+  }
+}

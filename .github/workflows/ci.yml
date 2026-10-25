@@ -142,6 +142,10 @@ jobs:
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo build --release --manifest-path rust/Cargo.toml
       - name: Rust tests
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo test --manifest-path rust/Cargo.toml
+      # Each file runs as a program: the pinned test 1.24.6 cannot load files
+      # with `dart test` on the current Dart SDK.
+      - name: Cargokit build tool tests
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter sh -c 'cd rust_builder/cargokit/build_tool && dart pub get && for t in test/*_test.dart; do dart run "$t" || exit 1; done'
       # A non-UTC zone on purpose: the container defaults to UTC, where a test
       # of local-time formatting passes whether or not the code converts to
       # local time at all. POSIX form, so no tzdata is needed.

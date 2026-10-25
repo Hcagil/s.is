@@ -23,7 +23,7 @@ final reactionStoreProvider = Provider<ReactionStore?>((_) => null);
 
 /// The one step that opens locked reactions read from the server; main gives it to the reaction repository.
 final reactionOpenerProvider = Provider<ReactionOpener>((ref) {
-  return StoreReactionOpener(
+  final opener = StoreReactionOpener(
     me: () => ref.read(currentUserIdProvider),
     engine: () => ref.read(sessionEngineProvider),
     store: () => ref.read(reactionStoreProvider),
@@ -33,6 +33,8 @@ final reactionOpenerProvider = Provider<ReactionOpener>((ref) {
     mark: ref.read(catchUpMarkProvider),
     onHeld: () => ref.read(storeSyncProvider).run(),
   );
+  ref.listen(currentUserIdProvider, (_, _) => opener.reset());
+  return opener;
 });
 
 /// Opens locked reactions one after the other (all peers on one queue), once each, and keeps the emoji in the on-phone store.
@@ -59,6 +61,12 @@ class StoreReactionOpener implements ReactionOpener {
   final Map<String, int> _heldAt = {};
 
   final Map<String, String> _done = {};
+
+  /// Forgets what was kept for the previous member (opened emoji, catch-up stamps).
+  void reset() {
+    _heldAt.clear();
+    _done.clear();
+  }
 
   static final _epoch = DateTime.fromMillisecondsSinceEpoch(0);
 

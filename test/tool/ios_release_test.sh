@@ -8,7 +8,8 @@
 #
 #   release.yml
 #   - `scope` computes the version once: code = run_number + 100, name =
-#     yy.m.<commit count> (UTC date, full history: fetch-depth 0); outputs
+#     yy.m.<commit count at the picked commit> (UTC date, full history:
+#     fetch-depth 0); it checks out the workflow's own commit (no ref:); outputs
 #     code and name;
 #   - `publish` needs scope only, reads the version from scope and computes
 #     none of its own; only `distribute` needs `ios` (Play never waits on
@@ -185,31 +186,40 @@ for j in scope publish ios distribute ios-signed; do [ -s "$tmp/$j" ] || fail "j
 # 1 scope owns the version: its outputs, and the numbers its step computes.
 grep -qE '^      code: \$\{\{ steps\.v\.outputs\.code \}\}$' "$tmp/scope" || fail "scope does not output code from steps.v"
 grep -qE '^      name: \$\{\{ steps\.v\.outputs\.name \}\}$' "$tmp/scope" || fail "scope does not output name from steps.v"
-# The release commit: scope picks it (steps.pick), checks it out, and every
-# deploying job builds that same commit, never main's moving tip.
+# The release commit: scope picks it (steps.pick) and every deploying job
+# builds that same commit, never main's moving tip. Scope itself checks out the
+# workflow's own commit (no ref:), so tool/release_scope.sh exists even when the
+# picked commit predates it; full history keeps the picked commit reachable.
 grep -qE '^      sha: \$\{\{ steps\.pick\.outputs\.sha \}\}$' "$tmp/scope" || fail "scope does not output sha from steps.pick"
-[ "$(grep -cE '^ *ref: ' "$tmp/scope")" = 1 ] && grep -qE '^ *ref: \$\{\{ steps\.pick\.outputs\.sha \}\}$' "$tmp/scope" || fail "scope does not check out the picked commit"
+grep -qE '^ *- uses: actions/checkout@' "$tmp/scope" || fail "scope has no checkout"
+! grep -qE '^ *ref:' "$tmp/scope" || fail "scope checks out a ref; it must check out the workflow's own commit (github.sha)"
+grep -qE '^ *fetch-depth: 0$' <<<"$(awk '/- uses: actions\/checkout@/ { f = 1; next } f && /^ *- / { exit } f' "$tmp/scope")" || fail "scope checkout lacks fetch-depth: 0"
+step_run "$release" "Decide whether the commits since the last release ship" "$tmp/decide.sh"
+grep -qF 'tool/release_scope.sh "$prev" "$SHA"' "$tmp/decide.sh" || fail "the ship decision does not run tool/release_scope.sh \"\$prev\" \"\$SHA\""
+[ "$(grep -cE '^ *ref: ' "$tmp/distribute")" = 1 ] && grep -qE '^ *ref: \$\{\{ needs\.scope\.outputs\.sha \}\}$' "$tmp/distribute" || fail "distribute does not check out scope's commit"
 [ "$(grep -cE '^ *ref: ' "$tmp/publish")" = 1 ] && grep -qE '^ *ref: \$\{\{ needs\.scope\.outputs\.sha \}\}$' "$tmp/publish" || fail "publish does not check out scope's commit"
 grep -qE '^ *id: v$' <<<"$(step_keys "$release" "Compute version")" || fail "Compute version is not step id v"
 step_run "$release" "Compute version" "$tmp/version.sh"
-sed -i 's/\${{ github\.run_number }}/77/g' "$tmp/version.sh"
+sed -i 's/\${{ github\.run_number }}/77/g; s/\${{ steps\.pick\.outputs\.sha }}/PICKED_SHA/g' "$tmp/version.sh"
 grep -q '\${{' "$tmp/version.sh" && fail "Compute version reads an unexpected expression: $(cat "$tmp/version.sh")"
 grep -qE '^ *fetch-depth: 0$' "$tmp/scope" || fail "scope checkout lacks fetch-depth: 0 (the commit count needs full history)"
-# Fixture: a git repo with exactly 3 commits, and a date pinned through a
+# Fixture: a git repo with exactly 3 commits (the picked commit is the 2nd, so
+# a count taken at HEAD instead gives 3, not 2), and a date pinned through a
 # stand-in that runs the real date at a fixed instant. Run under TZ=JST-9 so a
 # dropped -u moves 2026-10-31 22:30 UTC into November.
 mkdir -p "$tmp/v" "$tmp/vbin"
 git -C "$tmp/v" init -q
 for i in 1 2 3; do git -C "$tmp/v" -c user.name=t -c user.email=t@sis.test -c commit.gpgsign=false commit -q --allow-empty -m "c$i"; done
+sed -i "s/PICKED_SHA/$(git -C "$tmp/v" rev-parse HEAD~1)/g" "$tmp/version.sh"
 realdate=$(command -v date)
-for case in "1793485800|26.10.3" "1804248000|27.3.3"; do
+for case in "1793485800|26.10.2" "1804248000|27.3.2"; do
   printf '#!/bin/sh\nexec %s -d @%s "$@"\n' "$realdate" "${case%%|*}" > "$tmp/vbin/date"; chmod +x "$tmp/vbin/date"
   : > "$tmp/v/out"
   (cd "$tmp/v" && PATH="$tmp/vbin:$PATH" TZ=JST-9 GITHUB_OUTPUT="$tmp/v/out" bash -e "$tmp/version.sh") > "$tmp/out" 2>&1 || fail "Compute version failed"
   got=$(sed -n 's/^name=//p' "$tmp/v/out")
   [[ $got =~ ^[0-9]{2}\.[0-9]{1,2}\.[0-9]+$ ]] || fail "name [$got] is not yy.m.count"
   [ "$(sort "$tmp/v/out")" = "$(printf 'code=177\nname=%s' "${case#*|}")" ] \
-    || fail "at @${case%%|*}, 3 commits, run 77 gave [$(tr '\n' ' ' < "$tmp/v/out")], want code=177 name=${case#*|}"
+    || fail "at @${case%%|*}, picked commit 2 of 3, run 77 gave [$(tr '\n' ' ' < "$tmp/v/out")], want code=177 name=${case#*|}"
 done
 
 # 2 publish: needs scope only, uses scope's version, computes none itself.

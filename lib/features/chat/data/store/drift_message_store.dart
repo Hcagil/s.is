@@ -8,6 +8,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart' show Database, SqlError, SqliteException;
 
+import '../../../../core/startup_marks.dart';
 import '../../domain/encrypted_message_repository.dart';
 import '../../domain/message.dart';
 import '../../domain/message_store.dart';
@@ -265,6 +266,7 @@ final class DriftMessageStore implements MessageStore {
     final file = await _file();
     await file.parent.create(recursive: true);
     final key = await _key();
+    StartupMarks.mark('store-key');
 
     Future<StoreDatabase> attempt() async {
       final db = StoreDatabase(
@@ -275,6 +277,7 @@ final class DriftMessageStore implements MessageStore {
         final owner = await (db.select(
           db.meta,
         )..where((t) => t.key.equals('owner_id'))).getSingleOrNull();
+        StartupMarks.mark('store-open');
         if (owner == null) {
           await db
               .into(db.meta)
@@ -627,6 +630,8 @@ void Function(Database) _keyed(String key) {
     // A second connection (the future iOS notification extension) waits for a
     // lock instead of failing at once.
     raw.execute('PRAGMA busy_timeout = 5000;');
+    // Android only: WAL lets reads run while the sync writes. Not on iOS, where a held -shm lock in the App Group can get a suspended app killed (security decision, t_0f04c69ee7).
+    if (Platform.isAndroid) raw.execute('PRAGMA journal_mode = WAL;');
     if (raw.select('PRAGMA cipher;').isEmpty) {
       throw StateError('SQLite3 Multiple Ciphers is not loaded');
     }

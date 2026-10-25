@@ -54,7 +54,7 @@ class ConversationList extends ConsumerWidget {
     final selecting = ref.watch(
       chatSelectionProvider.select((s) => s.isNotEmpty),
     );
-    // Debug timing only (label, never data): first build that has rows.
+    // Timing only (label, never data): first build that has rows.
     if (conversations.value?.isNotEmpty ?? false) {
       StartupMarks.mark('list-rows');
     }

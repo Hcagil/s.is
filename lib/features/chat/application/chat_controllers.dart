@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
 import '../../../core/platform_features.dart';
+import '../../../core/startup_marks.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/member.dart';
 import '../../auth/domain/session_state.dart';

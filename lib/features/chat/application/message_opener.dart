@@ -116,7 +116,7 @@ class StoreMessageOpener implements MessageOpener {
       m.ciphertext != null && m.olmType != null && m.deletion == null;
 
   @override
-  Future<List<Message>> open(List<Message> rows) {
+  Future<List<Message>> open(List<Message> rows, {bool fresh = false}) {
     final memory = _memory();
     if (rows.every((m) => !_locked(m)) &&
         (memory == null || !rows.any(_plainSuspect))) {
@@ -129,7 +129,6 @@ class StoreMessageOpener implements MessageOpener {
       _tries = 0;
       if (_pending.isNotEmpty) _schedule();
       final out = List<Message>.of(rows);
-      await _markHeld(rows, memory);
       final keys = <String, Result<ClaimedKeys?>>{};
       // Oldest first, so a pre-key message makes its session before the normal ones behind it.
       final order =
@@ -141,7 +140,7 @@ class StoreMessageOpener implements MessageOpener {
             return c != 0 ? c : a.compareTo(b);
           });
       final inBatch = {for (final i in order) rows[i].id};
-      final fresh = <String>{};
+      final preKeyPeers = <String>{};
       for (final i in order) {
         try {
           out[i] = await _openOne(rows[i], keys);
@@ -149,16 +148,16 @@ class StoreMessageOpener implements MessageOpener {
           out[i] = rows[i].withPlain(lockedBodyPlaceholder, null);
         }
         if (rows[i].olmType == 0 && !isLockedPlaceholder(out[i].body)) {
-          fresh.add(rows[i].senderId);
+          preKeyPeers.add(rows[i].senderId);
         }
       }
       // A pre-key message opened: rows that waited for that peer's session may open now.
-      for (final peer in fresh) {
+      for (final peer in preKeyPeers) {
         try {
           await _retryPending(peer, inBatch);
         } catch (_) {}
       }
-      return _guardPlain(out, rows, memory);
+      return _guardPlain(out, rows, memory, fresh);
     }).catchError((_) {
       return [
         for (final m in rows)
@@ -183,22 +182,12 @@ class StoreMessageOpener implements MessageOpener {
       !isLockedPlaceholder(m.body) &&
       m.senderId != _me();
 
-  /// Remembers per chat when it first held a locked text.
-  Future<void> _markHeld(List<Message> rows, CipherChatMemory? memory) async {
-    if (memory == null) return;
-    for (final m in rows) {
-      if (!_locked(m)) continue;
-      try {
-        await memory.markHeld(m.conversationId, m.createdAt);
-      } catch (_) {}
-    }
-  }
-
   /// A plain text created after its chat first held a locked text is not trusted: it gets the locked look (a server could slip a plain text under a person's name).
   Future<List<Message>> _guardPlain(
     List<Message> out,
     List<Message> rows,
     CipherChatMemory? memory,
+    bool fresh,
   ) async {
     if (memory == null) return out;
     final since = <String, DateTime?>{};
@@ -213,11 +202,26 @@ class StoreMessageOpener implements MessageOpener {
         }
       }
       final first = since[m.conversationId];
-      if (first != null && m.createdAt.isAfter(first)) {
+      // shortcut: a fresh install trusts backdated plain history pages; closing it needs the sender to sign the lock fact (Private Chats step 6)
+      // A just-arrived row the phone does not hold yet cannot be a plain text from before the lock (the server refuses those after it), so its date is not trusted.
+      if (first != null &&
+          (m.createdAt.isAfter(first) || (fresh && !await _isStored(m)))) {
         out[i] = m.withPlain(lockedBodyPlaceholder, null);
       }
     }
     return out;
+  }
+
+  /// True when the row is already in the on-phone store; also true when the store cannot answer (then the date rule alone decides).
+  Future<bool> _isStored(Message m) async {
+    final store = _store();
+    if (store == null) return true;
+    try {
+      final near = await store.around(m.conversationId, m.id, each: 0);
+      return near.any((s) => s.id == m.id);
+    } catch (_) {
+      return true;
+    }
   }
 
   /// Opens one locked row [m]; never decrypts the same ciphertext twice (the memory of this run, then the stored copy, answer first). [keys] holds the peers' checked keys already looked up in this call.
@@ -296,6 +300,10 @@ class StoreMessageOpener implements MessageOpener {
         final plain = m.withPlain(env.text, env.card, sealed: hash);
         _pending.remove(m.id);
         _remember(slot, plain);
+        // Only a text that really decrypted proves the chat holds locked texts (a forged locked row must not move the date).
+        try {
+          await _memory()?.markHeld(m.conversationId, m.createdAt);
+        } catch (_) {}
         // The ratchet moved, so this message can never be opened again: saved before it is shown, kept in memory even if the write fails.
         try {
           await store?.upsertAll([plain]);

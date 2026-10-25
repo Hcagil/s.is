@@ -16,22 +16,25 @@ import '../domain/reaction_store.dart';
 import 'catch_up_mark.dart';
 import 'chat_controllers.dart';
 import 'open_queue.dart';
+import 'peer_key_cache.dart';
 
 /// The on-phone store of opened locked reactions; null until main wires it.
 final reactionStoreProvider = Provider<ReactionStore?>((_) => null);
 
 /// The one step that opens locked reactions read from the server; main gives it to the reaction repository.
 final reactionOpenerProvider = Provider<ReactionOpener>((ref) {
-  return StoreReactionOpener(
+  final opener = StoreReactionOpener(
     me: () => ref.read(currentUserIdProvider),
     engine: () => ref.read(sessionEngineProvider),
     store: () => ref.read(reactionStoreProvider),
-    peerKey: (id) =>
-        ref.read(keyDirectoryControllerProvider.notifier).identityVerified(id),
+    // Always fresh (a reaction can be a pre-key message) but with the cache's time limit, so a slow server cannot hold the queue.
+    peerKey: (id) => ref.read(peerKeyCacheProvider).get(id, fresh: true),
     queue: ref.read(openQueueProvider),
     mark: ref.read(catchUpMarkProvider),
     onHeld: () => ref.read(storeSyncProvider).run(),
   );
+  ref.listen(currentUserIdProvider, (_, _) => opener.reset());
+  return opener;
 });
 
 /// Opens locked reactions one after the other (all peers on one queue), once each, and keeps the emoji in the on-phone store.
@@ -59,9 +62,16 @@ class StoreReactionOpener implements ReactionOpener {
 
   final Map<String, String> _done = {};
 
+  /// Forgets what was kept for the previous member (opened emoji, catch-up stamps).
+  void reset() {
+    _heldAt.clear();
+    _done.clear();
+  }
+
   static final _epoch = DateTime.fromMillisecondsSinceEpoch(0);
 
-  Future<T> _serial<T>(Future<T> Function() job) => _queue.run(job);
+  // Reactions wait behind texts in the shared queue.
+  Future<T> _serial<T>(Future<T> Function() job) => _queue.run(job, low: true);
 
   bool _locked(Reaction r) => r.ciphertext != null && r.emoji == null;
 

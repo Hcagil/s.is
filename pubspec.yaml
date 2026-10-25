@@ -65,6 +65,8 @@ dev_dependencies:
   build_runner: 2.16.2
   # Generates the on-phone store's drift code (output is checked in).
   drift_dev: 2.35.1
+  # Fake time for timer tests (already pulled in by flutter_test).
+  fake_async: 1.3.3
   flutter_test:
     sdk: flutter
   integration_test:

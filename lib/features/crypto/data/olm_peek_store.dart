@@ -28,6 +28,7 @@ final class PeekRows {
     required this.sessions,
     this.keyPeers = const [],
     this.peerName,
+    this.storedSenderId,
   });
 
   /// Meta key 'owner_id'.
@@ -41,6 +42,9 @@ final class PeekRows {
 
   /// messages.body of the message id; null if no such row or the row is deleted.
   final String? storedBody;
+
+  /// messages.sender_id of that same row; null when no row or deleted.
+  final String? storedSenderId;
 
   /// Meta key 'olm_account' (account pickle).
   final String? account;
@@ -125,11 +129,14 @@ PeekRows? _readPeekRows(
         }
 
         final msg = db.select(
-          'SELECT body, deleted FROM messages WHERE id = ? AND conversation_id = ?;',
+          'SELECT body, deleted, sender_id FROM messages WHERE id = ? AND conversation_id = ?;',
           [messageId, conversationId],
         );
         final storedBody = msg.isNotEmpty && msg.first['deleted'] == null
             ? msg.first['body'] as String
+            : null;
+        final storedSenderId = msg.isNotEmpty && msg.first['deleted'] == null
+            ? msg.first['sender_id'] as String
             : null;
 
         final lookupPeer = peerUserId ?? senderId;
@@ -167,6 +174,7 @@ PeekRows? _readPeekRows(
           peerUserId: peerUserId,
           peerName: peerName,
           storedBody: storedBody,
+          storedSenderId: storedSenderId,
           account: meta('olm_account'),
           sessions: sessions,
           keyPeers: keyPeers,

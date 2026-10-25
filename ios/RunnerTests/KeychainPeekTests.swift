@@ -239,9 +239,9 @@ final class PeekCoreTests: XCTestCase {
 
   func data(
     owner: String? = "me", peer: String? = "peer", body: String? = PeekCore.lockedPlaceholder,
-    account: String? = "ACC", sessions: [PeekSessionRow] = []
+    account: String? = "ACC", sessions: [PeekSessionRow] = [], sender: String? = nil
   ) -> PeekData {
-    PeekData(ownerId: owner, peerUserId: peer, storedBody: body, account: account, sessions: sessions)
+    PeekData(ownerId: owner, peerUserId: peer, storedBody: body, account: account, sessions: sessions, storedSenderId: sender)
   }
 
   func text(_ p: PeekPush, _ d: PeekData, _ dec: FakeDecryptor) -> String? {
@@ -301,10 +301,34 @@ final class PeekCoreTests: XCTestCase {
     XCTAssertTrue(dec.log.isEmpty, "\(dec.log)")
   }
 
+  // t_5d6bdca09e: only a stored text the chat's known peer sent is shown as is.
   func testAStoredRealBodyIsShownWithoutOlm() {
     let dec = FakeDecryptor()
-    XCTAssertEqual(text(push(), data(peer: nil, body: "already open"), dec), "already open")
+    XCTAssertEqual(text(push(), data(body: "already open", sender: "peer"), dec), "already open")
     XCTAssertTrue(dec.log.isEmpty, "\(dec.log)")
+  }
+
+  func testAStoredBodyNotSentByTheKnownPeerGoesToOlm() {
+    let cases: [(String, String?, String?)] = [
+      ("sent by me", "peer", "me"),
+      ("sent by a third id", "peer", "intruder"),
+      ("sender unknown", "peer", nil),
+    ]
+    for (desc, peer, sender) in cases {
+      let dec = FakeDecryptor()
+      dec.sessionTexts["P-s1"] = "real"
+      XCTAssertEqual(text(push(), data(peer: peer, body: "forged", sessions: [row("s1")], sender: sender), dec), "real", desc)
+      // Olm cannot open it: locked, never the stored text.
+      let none = FakeDecryptor()
+      XCTAssertNil(text(push(), data(peer: peer, body: "forged", sessions: [row("s1")], sender: sender), none), desc)
+    }
+  }
+
+  func testAStoredBodyWithNoKnownPeerIsNotShown() {
+    for sender in ["peer", nil] as [String?] {
+      let dec = FakeDecryptor()
+      XCTAssertNil(text(push(), data(peer: nil, body: "forged", sender: sender), dec), "sender \(sender ?? "nil")")
+    }
   }
 
   func testThePlaceholderOrNoStoredRowGoesToOlm() {
@@ -376,6 +400,16 @@ final class PeekCoreTests: XCTestCase {
     XCTAssertEqual(text(push(ot: "0"), data(sessions: sessions), dec), "fresh")
     XCTAssertEqual(dec.log, ["prekey CT", "inbound ACC IK-newest m1"])
     XCTAssertEqual(dec.seenKeys, [key])
+  }
+
+  // t_5d6bdca09e: the newest stored session lends its identity key only when it is the peer's.
+  func testPreKeyMessageForANewSessionWhoseNewestSessionIsAnotherUsersGivesNil() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds["CT"] = "new"
+    dec.inboundTexts["ACC+IK-a"] = "opened with another user's key"
+    let sessions = [row("a", peer: "intruder"), row("b")]
+    XCTAssertNil(text(push(ot: "0"), data(sessions: sessions), dec))
+    XCTAssertFalse(dec.log.contains { $0.hasPrefix("inbound") }, "\(dec.log)")
   }
 
   func testPreKeyMessageForANewSessionNeedsSessionsAndAnAccount() {
@@ -543,7 +577,9 @@ final class PeekSenderKeyTests: XCTestCase {
       ("missing one char", String(peer.dropLast())),
       ("one hex digit too many at the end", peer + "0"),
       ("one hex digit too many at the start", "0" + peer),
-      ("hex digit replaced with g", peer.replacingOccurrences(of: "a", with: "g"))
+      ("hex digit replaced with g", peer.replacingOccurrences(of: "a", with: "g")),
+      // t_5d6bdca09e: only the lowercase form a uuid column prints.
+      ("uppercase", peer.uppercased())
     ]
 
     // Each bad value is the ONLY thing wrong: si equals the peer (or the

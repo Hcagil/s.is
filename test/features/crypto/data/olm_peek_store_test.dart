@@ -18,6 +18,7 @@ import 'package:sis/features/chat/data/store/store_key.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/encrypted_message_repository.dart';
 import 'package:sis/features/auth/domain/member.dart';
+import 'package:sis/features/chat/domain/message.dart' show MessageDeletion;
 import 'package:sis/features/chat/domain/message_envelope.dart';
 import 'package:sis/features/crypto/data/drift_olm_pickle_store.dart';
 import 'package:sis/features/crypto/data/drift_session_engine.dart';
@@ -325,6 +326,83 @@ void main() {
     expect(await peek(junk, id: 'm9', conv: 'c1'), isNull);
     // Same id, its own conversation: the stored text comes back.
     expect(await peek(junk, id: 'm9', conv: 'c2'), 'text from chat B');
+  });
+
+  // t_5d6bdca09e: the stored text is reused only when its row's sender is the
+  // chat's peer; the reader hands that sender over as storedSenderId.
+  group('stored text and its sender', () {
+    const junk = LockedText(ciphertext: '!!', olmType: 1, sessionId: 'x');
+
+    PeekRows? read(String id, {String conv = 'c1'}) => readPeekRows(
+      path: bob.h.file.path,
+      keyHex: bob.keyHex,
+      conversationId: conv,
+      messageId: id,
+    );
+
+    test('readPeekRows.storedSenderId is the sender of that row, null '
+        'without a row', () async {
+      await bob.store.upsertAll([
+        msg('m9', sender: 'alice', body: 'from alice'),
+        msg('m8', sender: 'bob', body: 'from me'),
+        msg(
+          'm7',
+          sender: 'alice',
+          body: 'gone',
+          deletion: MessageDeletion.placeholder,
+        ),
+      ]);
+      await bob.store.close();
+      expect(read('m9')?.storedSenderId, 'alice');
+      expect(read('m8')?.storedSenderId, 'bob');
+      expect(read('none')?.storedSenderId, isNull);
+      expect(read('m7')?.storedSenderId, isNull, reason: 'a deleted row');
+    });
+
+    for (final sender in ['bob', 'carol']) {
+      test('a stored text whose row sender is $sender (not the peer alice) '
+          'is never shown', () async {
+        await bob.store.upsertAll([
+          msg('m9', sender: sender, body: 'forged text'),
+        ]);
+        await bob.store.close();
+        expect(await peek(junk, id: 'm9'), isNull);
+      });
+    }
+
+    test('a chat not in the snapshot (unknown peer): a stored text is never '
+        'shown', () async {
+      await bob.store.upsertAll([
+        msg('m9', conv: 'c9', sender: 'dave', body: 'unknown chat text'),
+      ]);
+      await bob.store.close();
+      expect(await peek(junk, id: 'm9', conv: 'c9'), isNull);
+    });
+
+    test('a deleted row in a chat not in the snapshot (no sender, no peer) '
+        'is never shown', () async {
+      await bob.store.upsertAll([
+        msg(
+          'm9',
+          conv: 'c9',
+          sender: 'dave',
+          body: 'deleted text',
+          deletion: MessageDeletion.placeholder,
+        ),
+      ]);
+      await bob.store.close();
+      expect(await peek(junk, id: 'm9', conv: 'c9'), isNull);
+    });
+
+    test('a row stored as sent by me falls through to Olm: the real text, '
+        'not the stored one', () async {
+      final m2 = await normalMessage();
+      await bob.store.upsertAll([
+        msg('m2', sender: 'bob', body: 'forged text'),
+      ]);
+      await bob.store.close();
+      expect(await peek(m2), 'secret words');
+    });
   });
 
   test(

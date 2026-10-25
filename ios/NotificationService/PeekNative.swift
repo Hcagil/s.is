@@ -42,7 +42,7 @@ enum PeekStoreReader {
             let pickle = text(rows.session_pickles?[i]) else { continue }
       sessions.append(PeekSessionRow(sessionId: id, peerUserId: peer, identityKey: key, pickle: pickle))
     }
-    return PeekData(ownerId: text(rows.owner_id), peerUserId: text(rows.peer_user_id), storedBody: text(rows.stored_body), account: text(rows.account), sessions: sessions, keyElsewhere: rows.key_elsewhere != nil, peerName: text(rows.peer_name))
+    return PeekData(ownerId: text(rows.owner_id), peerUserId: text(rows.peer_user_id), storedBody: text(rows.stored_body), account: text(rows.account), sessions: sessions, keyElsewhere: rows.key_elsewhere != nil, peerName: text(rows.peer_name), storedSenderId: text(rows.stored_sender))
   }
 
   private static func text(_ p: UnsafeMutablePointer<CChar>?) -> String? {

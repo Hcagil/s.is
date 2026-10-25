@@ -40,7 +40,7 @@ before any release beyond internal testing.
 
 | Trigger | Workflow | Holds secrets | Does |
 |---|---|---|---|
-| pull request, push to `main` | `ci.yml` | no | pattern check, format, analyze, tests, release bundle signed with a throwaway key; pgTAP and integration tests on database changes |
+| pull request, push to `main` | `ci.yml` | no | pattern check, format, analyze, Rust advisories (cargo deny), tests, release bundle signed with a throwaway key; pgTAP and integration tests on database changes |
 | `ci.yml` passed on a push to `main` | `release.yml` | yes | see below |
 
 `release.yml` starts only when CI has passed on the exact commit it

@@ -127,7 +127,7 @@ jobs:
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml build
       - name: Keep the Rust codegen tools for the next run
         if: steps.cargo-tools.outputs.cache-hit != 'true'
-        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -T flutter sh -c 'cp "$CARGO_HOME/bin/flutter_rust_bridge_codegen" "$CARGO_HOME/bin/cbindgen" /workspace/docker/cargo-tools/'
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -T flutter sh -c 'cp "$CARGO_HOME/bin/flutter_rust_bridge_codegen" "$CARGO_HOME/bin/cbindgen" "$CARGO_HOME/bin/cargo-deny" /workspace/docker/cargo-tools/'
       - name: Resolve dependencies
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter pub get
       - name: Layer rules
@@ -142,6 +142,8 @@ jobs:
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo build --release --manifest-path rust/Cargo.toml
       - name: Rust tests
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo test --manifest-path rust/Cargo.toml
+      - name: Rust advisories
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo deny --manifest-path rust/Cargo.toml check advisories
       # A non-UTC zone on purpose: the container defaults to UTC, where a test
       # of local-time formatting passes whether or not the code converts to
       # local time at all. POSIX form, so no tzdata is needed.
@@ -239,7 +241,7 @@ jobs:
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml build flutter
       - name: Keep the Rust codegen tools for the next run
         if: steps.cargo-tools.outputs.cache-hit != 'true'
-        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -T flutter sh -c 'cp "$CARGO_HOME/bin/flutter_rust_bridge_codegen" "$CARGO_HOME/bin/cbindgen" /workspace/docker/cargo-tools/'
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -T flutter sh -c 'cp "$CARGO_HOME/bin/flutter_rust_bridge_codegen" "$CARGO_HOME/bin/cbindgen" "$CARGO_HOME/bin/cargo-deny" /workspace/docker/cargo-tools/'
       # Skipped by the ordinary `flutter test` run; this is the only job with a
       # database for them to talk to.
       #

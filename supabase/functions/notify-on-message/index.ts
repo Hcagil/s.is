@@ -56,7 +56,7 @@ const THUMB_TTL_SECONDS = 600;
 // Whole serialized FCM message, UTF-8 bytes, above which `ct` is left out: FCM and APNs cap at 4096 B and iOS carries title/body twice.
 const CT_BUDGET_BYTES = 3500;
 const SENDER_KEY_RE = /^[A-Za-z0-9+/]{43}$/;
-const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 let cached: { token: string; expiresAt: number } | null = null;
 let minting: Promise<string> | null = null;
 

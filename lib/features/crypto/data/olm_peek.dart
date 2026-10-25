@@ -9,7 +9,7 @@ import 'olm_peek_store.dart';
 // Shapes of the sender key (43-char base64) and id (uuid) a pre-key push carries.
 final _senderKeyShape = RegExp(r'^[A-Za-z0-9+/]{43}$');
 final _uuidShape = RegExp(
-  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
 );
 
 /// Decrypts a message using session data from [rows] without persisting the result. [onFail] gets a fixed reason code (never text, ids or keys) when it returns null.
@@ -88,6 +88,10 @@ Future<String?> peekDecrypt({
         }
         final String identityKey;
         if (rows.sessions.isNotEmpty) {
+          if (rows.sessions.first.peerUserId != peer) {
+            onFail?.call('decrypt_fail');
+            return null;
+          }
           // A stored session of this peer wins; the push's key is ignored (a key change goes through the app).
           identityKey = rows.sessions.first.peerIdentityKey;
         } else if (senderKey == null || senderId == null) {
@@ -159,7 +163,11 @@ Future<String?> peekEncryptedText({
   // The name shown for this chat comes from the phone's own copy, not from the push.
   final name = rows.peerName;
   if (name != null) onPeerName?.call(name);
-  if (rows.storedBody != null && !isLockedPlaceholder(rows.storedBody!)) {
+  // A stored text is the peer's preview only when the peer sent it; otherwise fall through to the decrypt path.
+  if (rows.storedBody != null &&
+      !isLockedPlaceholder(rows.storedBody!) &&
+      rows.peerUserId != null &&
+      rows.storedSenderId == rows.peerUserId) {
     return rows.storedBody;
   }
   return peekDecrypt(

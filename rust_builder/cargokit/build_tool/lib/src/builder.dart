@@ -43,6 +43,38 @@ class BuildException implements Exception {
   }
 }
 
+/// Reads `channel` from `<manifestDir>/rust-toolchain.toml` ([toolchain] table, double or single quoted string).
+/// Throws [BuildException] naming the file when it is missing or has no readable channel.
+String readPinnedToolchain(String manifestDir) {
+  final file = File(path.join(manifestDir, 'rust-toolchain.toml'));
+  if (!file.existsSync()) {
+    throw BuildException(
+        'Missing ${file.path}: it must pin the Rust compiler with channel = "x.y.z" under [toolchain].');
+  }
+  var inToolchain = false;
+  String? channel;
+  for (final line in file.readAsLinesSync()) {
+    final trimmed = line.trim();
+    if (trimmed == '[toolchain]') {
+      inToolchain = true;
+    } else if (trimmed.startsWith('[')) {
+      if (inToolchain) break;
+    } else if (inToolchain) {
+      final m = RegExp(r'''^\s*channel\s*=\s*(?:"([^"]+)"|'([^']+)')\s*(?:#.*)?$''')
+          .firstMatch(line);
+      if (m != null) {
+        channel = m.group(1) ?? m.group(2);
+        break;
+      }
+    }
+  }
+  if (channel == null) {
+    throw BuildException(
+        'Cannot read the compiler version from ${file.path}: expected a line channel = "x.y.z" (double or single quoted) under [toolchain].');
+  }
+  return channel;
+}
+
 class BuildEnvironment {
   final BuildConfiguration configuration;
   final CargokitCrateOptions crateOptions;
@@ -147,16 +179,8 @@ class RustBuilder {
   CargoBuildOptions? get _buildOptions =>
       environment.crateOptions.cargo[environment.configuration];
 
-  // The crate's rust-toolchain.toml pins the compiler; honour it, else fall back to cargokit.yaml / stable.
-  String get _toolchain {
-    final file = File(path.join(environment.manifestDir, 'rust-toolchain.toml'));
-    if (file.existsSync()) {
-      final m = RegExp(r'^\s*channel\s*=\s*"([^"]+)"', multiLine: true)
-          .firstMatch(file.readAsStringSync());
-      if (m != null) return m.group(1)!;
-    }
-    return _buildOptions?.toolchain.name ?? 'stable';
-  }
+  // Diverges from upstream cargokit: no silent fallback to cargokit.yaml/stable, an unpinned compiler must fail the build.
+  String get _toolchain => readPinnedToolchain(environment.manifestDir);
   String get _effectiveToolchain => _resolvedToolchain ?? _toolchain;
 
   /// Returns the path of directory containing build artifacts.

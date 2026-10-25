@@ -129,6 +129,7 @@ class StoreMessageOpener implements MessageOpener {
       _tries = 0;
       if (_pending.isNotEmpty) _schedule();
       final out = List<Message>.of(rows);
+      await _markHeld(rows, memory);
       final keys = <String, Result<ClaimedKeys?>>{};
       // Oldest first, so a pre-key message makes its session before the normal ones behind it.
       final order =
@@ -182,6 +183,17 @@ class StoreMessageOpener implements MessageOpener {
       !isLockedPlaceholder(m.body) &&
       m.senderId != _me();
 
+  /// Remembers per chat when it first held a locked text.
+  Future<void> _markHeld(List<Message> rows, CipherChatMemory? memory) async {
+    if (memory == null) return;
+    for (final m in rows) {
+      if (!_locked(m)) continue;
+      try {
+        await memory.markHeld(m.conversationId, m.createdAt);
+      } catch (_) {}
+    }
+  }
+
   /// A plain text created after its chat first held a locked text is not trusted: it gets the locked look (a server could slip a plain text under a person's name).
   Future<List<Message>> _guardPlain(
     List<Message> out,
@@ -202,25 +214,29 @@ class StoreMessageOpener implements MessageOpener {
         }
       }
       final first = since[m.conversationId];
-      // shortcut: a fresh install trusts backdated plain history pages; closing it needs the sender to sign the lock fact (Private Chats step 6)
-      // A just-arrived row the phone does not hold yet cannot be a plain text from before the lock (the server refuses those after it), so its date is not trusted.
+      // shortcut: history older than what this phone holds trusts backdated plain rows (a fresh install holds nothing); closing it needs the sender to sign the lock fact (Private Chats step 6)
+      // A plain text the server refuses after the first locked text: one that is new to the phone, sits in the range it holds, or was shut before is not trusted by its date.
       if (first != null &&
-          (m.createdAt.isAfter(first) || (fresh && !await _isStored(m)))) {
+          (m.createdAt.isAfter(first) || await _doubted(m, fresh))) {
         out[i] = m.withPlain(lockedBodyPlaceholder, null);
       }
     }
     return out;
   }
 
-  /// True when the row is already in the on-phone store; also true when the store cannot answer (then the date rule alone decides).
-  Future<bool> _isStored(Message m) async {
+  /// True when a plain text [m] should be doubted for a reason other than its date: its stored copy is the locked placeholder (the guard shut it before); or it is not stored with readable text and it just arrived ([fresh]) or lies inside the range of the chat this phone already holds. Store missing or failing: false (the date rule alone decides). A fresh install has no range, so history older than what it holds stays on the date rule.
+  Future<bool> _doubted(Message m, bool fresh) async {
     final store = _store();
-    if (store == null) return true;
+    if (store == null) return false;
     try {
       final near = await store.around(m.conversationId, m.id, each: 0);
-      return near.any((s) => s.id == m.id);
+      final stored = near.where((s) => s.id == m.id).firstOrNull;
+      if (stored != null) return isLockedPlaceholder(stored.body);
+      if (fresh) return true;
+      final from = (await store.syncState(m.conversationId))?.contiguousFrom;
+      return from != null && !m.createdAt.isBefore(from);
     } catch (_) {
-      return true;
+      return false;
     }
   }
 
@@ -300,10 +316,6 @@ class StoreMessageOpener implements MessageOpener {
         final plain = m.withPlain(env.text, env.card, sealed: hash);
         _pending.remove(m.id);
         _remember(slot, plain);
-        // Only a text that really decrypted proves the chat holds locked texts (a forged locked row must not move the date).
-        try {
-          await _memory()?.markHeld(m.conversationId, m.createdAt);
-        } catch (_) {}
         // The ratchet moved, so this message can never be opened again: saved before it is shown, kept in memory even if the write fails.
         try {
           await store?.upsertAll([plain]);

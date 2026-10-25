@@ -14,6 +14,7 @@ import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
 import '../domain/group_colors.dart';
+import '../domain/join_cancellable.dart';
 import '../domain/group_event.dart';
 import '../domain/group_member.dart';
 import '../domain/file_attachment.dart';
@@ -36,15 +37,32 @@ import 'link_image_shrink.dart';
 /// Row-level security decides what any of these queries return; nothing here
 /// filters for authorisation. A refusal arrives as a [PostgrestException] with
 /// SQLSTATE 42501 and is reported as [DeniedFailure].
-final class SupabaseChatRepository implements ChatRepository {
-  SupabaseChatRepository(this._client, {AttachmentCache? cache, this._opener})
-    : _cache = cache ?? const _NoCache();
+final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
+  SupabaseChatRepository(
+    this._client, {
+    AttachmentCache? cache,
+    this._opener,
+    this._onRejoin,
+  }) : _cache = cache ?? const _NoCache();
 
   final SupabaseClient _client;
   final AttachmentCache _cache;
 
   /// Opens locked texts of rows read from the server (null: rows pass as they are).
   final MessageOpener? _opener;
+
+  /// Called each time a message channel re-joins after a dropped connection (rows sent meanwhile never arrived on it).
+  final void Function()? _onRejoin;
+
+  /// Joins of single-chat channels that are still out, by conversation id: [cancelJoin] ends one.
+  final _pendingJoins = <String, Completer<void>>{};
+
+  /// Ends the join of [conversationId]'s channel if it is still out (the screen closed first): the timeout timer stops, the channel is left, nothing is delivered. No effect once the join has answered.
+  @override
+  void cancelJoin(String conversationId) {
+    final c = _pendingJoins.remove(conversationId);
+    if (c != null && !c.isCompleted) c.complete();
+  }
 
   /// Live rows are opened one after the other so they keep their order.
   Future<void> _tail = Future<void>.value();
@@ -779,6 +797,8 @@ final class SupabaseChatRepository implements ChatRepository {
   }) async {
     final channel = _client.channel(topic);
     final controller = StreamController<Message>();
+    final cancel = Completer<void>();
+    if (only != null) _pendingJoins[only] = cancel;
 
     // Inserts are new messages; updates are deletions for everyone, which
     // arrive as the wiped row.
@@ -816,8 +836,19 @@ final class SupabaseChatRepository implements ChatRepository {
 
     try {
       // A dead subscription must fail loudly rather than hang the screen.
-      await joinChannel(channel);
+      await joinChannel(channel, onRejoin: _onRejoin, cancelled: cancel.future);
+      if (only != null && identical(_pendingJoins[only], cancel)) {
+        _pendingJoins.remove(only);
+      }
     } catch (e) {
+      if (only != null && identical(_pendingJoins[only], cancel)) {
+        _pendingJoins.remove(only);
+      }
+      if (e is JoinCancelled) {
+        leaveChannel(_client, channel, controller);
+        return const Err(NetworkFailure('Cancelled.'));
+      }
+
       // An unreachable server throws an SDK type (WebSocketChannelException,
       // SocketException, TimeoutException). Left unmapped it would be printed
       // on screen verbatim.

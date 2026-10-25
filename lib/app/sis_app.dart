@@ -238,6 +238,8 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     ref.listen(pendingShareProvider, (_, _) {});
     // Replies typed into private-chat notifications are sent from here.
     ref.watch(encryptedReplySenderProvider);
+    // A Realtime re-join or a push while the app is open fetches what was missed at once.
+    ref.watch(liveCatchUpProvider);
     // A session that ends -- signed out, or Denied (revoked, replaced, found
     // out only after the stored list was shown) -- leaves no page open: a chat
     // opened from a notification in the unconfirmed window must not stay on

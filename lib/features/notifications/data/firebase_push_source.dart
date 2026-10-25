@@ -89,7 +89,7 @@ Future<String> _deliver(
 /// on a device. While the app is open nothing is shown: the chat list already
 /// says what is new.
 final class FirebasePushSource implements PushSource {
-  FirebasePushSource(this._messaging) {
+  FirebasePushSource(this._messaging, {this.onForeground}) {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       // While the app is open nothing is shown, as on Android: pin the system
       // alert off so an iPhone shows nothing on top of the app.
@@ -102,9 +102,17 @@ final class FirebasePushSource implements PushSource {
       final id = _conversationOf(m);
       if (id != null) _taps.add(id);
     });
+    // A push that arrives while the app is open proves a message exists: the app fetches it at once instead of waiting for Realtime.
+    FirebaseMessaging.onMessage.listen((m) {
+      final id = _conversationOf(m);
+      if (id != null) onForeground?.call(id);
+    });
   }
 
   final FirebaseMessaging _messaging;
+
+  /// Told the conversation of each push received while the app is in the foreground.
+  final void Function(String conversationId)? onForeground;
 
   static final _taps = StreamController<String>.broadcast();
 

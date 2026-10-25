@@ -151,6 +151,11 @@ class NotificationExplainer extends Notifier<void> {
   }
 }
 
+/// The conversation of each push that arrives while the app is in the foreground; main overrides it. Empty in tests.
+final foregroundPushProvider = Provider<Stream<String>>(
+  (_) => const Stream<String>.empty(),
+);
+
 /// Conversations the member opened by tapping a notification -- the one that
 /// launched the app, then each later tap.
 final openedFromNotificationProvider = StreamProvider<String>((ref) async* {

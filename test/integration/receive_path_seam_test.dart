@@ -14,6 +14,7 @@ import 'package:sis/features/chat/domain/encrypted_message_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/message_envelope.dart';
 import 'package:sis/features/chat/domain/message_opener.dart';
+import 'package:sis/features/chat/domain/message_store.dart';
 import 'package:sis/features/crypto/data/drift_olm_pickle_store.dart';
 import 'package:sis/features/crypto/data/drift_session_engine.dart';
 import 'package:sis/features/crypto/data/olm_key_engine.dart';
@@ -132,9 +133,15 @@ class _Phone {
 /// Hands rows back untouched and keeps what it was given.
 class _Recording implements MessageOpener {
   final seen = <Message>[];
+
+  /// Message id -> the fresh flag of every open that carried it.
+  final freshOf = <String, List<bool>>{};
   @override
-  Future<List<Message>> open(List<Message> rows) async {
+  Future<List<Message>> open(List<Message> rows, {bool fresh = false}) async {
     seen.addAll(rows);
+    for (final m in rows) {
+      (freshOf[m.id] ??= []).add(fresh);
+    }
     return rows;
   }
 
@@ -156,15 +163,17 @@ class _Scripted implements MessageOpener {
   void reopen(Message m) => _reopened.add(m);
 
   @override
-  Future<List<Message>> open(List<Message> rows) async => [
-    for (final m in rows)
-      if (boom.contains(m.id))
-        throw StateError('open failed')
-      else if (delay[m.id] case final d?)
-        await Future<void>.delayed(d).then((_) => m.withPlain('opened', null))
-      else
-        m,
-  ];
+  Future<List<Message>> open(List<Message> rows, {bool fresh = false}) async =>
+      [
+        for (final m in rows)
+          if (boom.contains(m.id))
+            throw StateError('open failed')
+          else if (delay[m.id] case final d?)
+            await Future<void>.delayed(d)
+                .then((_) => m.withPlain('opened', null))
+          else
+            m,
+      ];
 
   @override
   Stream<Message> get reopened => _reopened.stream;
@@ -329,4 +338,68 @@ void main() {
       expect(all.map((x) => x.body), ['elsewhere', 'opened later']);
     },
   );
+
+  test('only rows that just arrived are opened as fresh: live inserts and '
+      'the change feed; the first page, older pages and the page around a '
+      'message are not', () async {
+    final rec = _Recording();
+    final repo = SupabaseChatRepository(ben, opener: rec);
+    final live = _ok(await repo.incoming(ab));
+    final got = <String>[];
+    final sub = live.listen((m) => got.add(m.id));
+    addTearDown(sub.cancel);
+    final cursor = ChangeCursor(
+      DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
+      '00000000-0000-0000-0000-000000000000',
+    );
+    final sent = await send('fresh or not');
+    final end = DateTime.now().add(const Duration(seconds: 20));
+    while (!got.contains(sent.id) && DateTime.now().isBefore(end)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    expect(got, contains(sent.id), reason: 'the live insert arrived');
+    expect(rec.freshOf[sent.id], [true], reason: 'live insert');
+
+    Future<List<bool>> flags(Future<void> Function() read) async {
+      rec.freshOf.clear();
+      await read();
+      expect(rec.freshOf, contains(sent.id), reason: 'the read returned it');
+      return rec.freshOf[sent.id]!;
+    }
+
+    var page = <Message>[];
+    expect(await flags(() async => page = _ok(await repo.messages(ab))), [
+      false,
+    ], reason: 'messages (first page)');
+    expect(
+      await flags(
+        () async => _ok(
+          await repo.messagesBefore(
+            ab,
+            DateTime.now().toUtc().add(const Duration(hours: 1)),
+          ),
+        ),
+      ),
+      [false],
+      reason: 'messagesBefore',
+    );
+    final anchor = page.firstWhere((m) => m.id == sent.id);
+    expect(
+      await flags(() async => _ok(await repo.messagesAround(ab, anchor))),
+      everyElement(isFalse),
+      reason: 'messagesAround',
+    );
+    expect(
+      await flags(() async {
+        var c = cursor;
+        while (true) {
+          final p = _ok(await repo.changesSince(c));
+          if (p.last == null) break;
+          c = p.last!;
+        }
+      }),
+      everyElement(isTrue),
+      reason: 'changesSince',
+    );
+  });
 }

@@ -67,8 +67,8 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
   /// Live rows are opened one after the other so they keep their order.
   Future<void> _tail = Future<void>.value();
 
-  Future<List<Message>> _open(List<Message> rows) =>
-      _opener?.open(rows) ?? Future.value(rows);
+  Future<List<Message>> _open(List<Message> rows, {bool fresh = false}) =>
+      _opener?.open(rows, fresh: fresh) ?? Future.value(rows);
 
   /// The cap of the shared photos and links reads; a conversation screen reads
   /// pages instead (see [messagePageSize]).
@@ -817,7 +817,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
         final message = _toMessage(row);
         _tail = _tail
             .then((_) async {
-              final opened = await _open([message]);
+              final opened = await _open([message], fresh: true);
               if (!controller.isClosed) controller.add(opened.first);
             })
             .catchError((_) {});
@@ -1448,7 +1448,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
           .retriedOnce();
       return Ok(
         ChangePage(
-          await _open([for (final r in rows) _toMessage(r)]),
+          await _open([for (final r in rows) _toMessage(r)], fresh: true),
           rows.isEmpty
               ? null
               : ChangeCursor(

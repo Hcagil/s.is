@@ -333,7 +333,7 @@ object InstantPush {
             // The inbox below always gets [text] (locked for an encrypted push); the real text only lives in memory.
             val peeked = if (locked && !redraw) PeekRunner.peek(context, extras)?.also { t -> extras.getString("message_id")?.let { peekedTexts[it] = t } } else null
             // The name comes from this phone's own copy of the chat when it has one, never from the push alone.
-            val localName = if (locked && !redraw) PeekRunner.takeName() else null
+            val localName = if (locked && !redraw) extras.getString("message_id")?.let { PeekRunner.takeName(it) } else null
             val shownTitle = localName ?: title
             val shownSender = localName ?: extras.getString("sender")
 

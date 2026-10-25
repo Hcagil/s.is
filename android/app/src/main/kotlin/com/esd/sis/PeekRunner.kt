@@ -30,10 +30,11 @@ object PeekRunner {
     // Reason codes by message_id, so two overlapping pushes never read each other's; each is taken once by the receiver.
     private val reasons = java.util.concurrent.ConcurrentHashMap<String, String>()
 
-    @Volatile private var peerName: String? = null
+    // Peer names by message_id, like [reasons].
+    private val names = java.util.concurrent.ConcurrentHashMap<String, String>()
 
-    /** The chat partner's name from this phone's own copy of the chat, read once after peek(); null when the phone has no copy or no peek ran. */
-    fun takeName(): String? = synchronized(this) { val n = peerName; peerName = null; n }
+    /** The chat partner's name from this phone's own copy of the chat, read once after peek() of the push with that message id; null when the phone has no copy or no peek ran. */
+    fun takeName(messageId: String): String? = names.remove(messageId)
 
     /** The reason code of the peek() of the push with [messageId], read once by the receiver; null when no peek was attempted for it. */
     fun takeReason(messageId: String): String? = reasons.remove(messageId)
@@ -65,7 +66,7 @@ object PeekRunner {
     fun peek(context: Context, extras: Bundle): String? {
         val mid = extras.getString("message_id")
         mid?.let { reasons.remove(it) }
-        synchronized(this) { peerName = null }
+        mid?.let { names.remove(it) }
         if (!wanted(extras)) return fail(mid, "not_wanted")
         override?.let { return it(extras) }
         if (Looper.myLooper() == Looper.getMainLooper()) return fail(mid, "main_thread")
@@ -134,7 +135,7 @@ object PeekRunner {
         if (!finished) return fail(mid, "timeout")
         val text = result.get()?.takeIf { it.isNotEmpty() }
         val r = dartReason.get()
-        synchronized(this) { peerName = dartName.get()?.takeIf { it.isNotEmpty() }?.take(200) }
+        mid?.let { m -> dartName.get()?.takeIf { it.isNotEmpty() }?.take(200)?.let { names[m] = it } }
         mid?.let {
             reasons[it] = when {
                 text != null -> "ok"

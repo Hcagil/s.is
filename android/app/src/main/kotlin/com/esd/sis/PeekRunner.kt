@@ -13,7 +13,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
-/** For an encrypted push that carries ciphertext, ask Dart (a short-lived headless Flutter engine) for the message text. Nothing is written anywhere: the text comes back in memory only. */
+/** For an encrypted push that carries ciphertext, ask Dart (a short-lived headless Flutter engine) for the message text. The text comes back in memory; Dart may also save it into the phone store (push_inbox) before it answers 'done', so the engine is never destroyed before 'done' while the push time lasts (plus a short grace). */
 object PeekRunner {
     private const val CHANNEL = "com.esd.sis/peek"
     private const val ENTRY_LIBRARY = "package:sis/features/notifications/data/push_peek_entry.dart"
@@ -21,6 +21,8 @@ object PeekRunner {
     private const val PUSH_CAP_MS = 3000L
     private const val BURST_BUDGET_MS = 6000L
     private const val QUIET_GAP_MS = 15000L
+    // Extra wait after the push cap, so an engine that is in the middle of its store write (committing, closing) is not destroyed under it.
+    private const val WRITE_GRACE_MS = 300L
     private var burstSpentMs = 0L
     private var lastPeekEnd = 0L
 
@@ -107,7 +109,8 @@ object PeekRunner {
                 flutter.plugins.add(com.github.dart_lang.jni_flutter.JniFlutterPlugin())
                 MethodChannel(flutter.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, res ->
                     when (call.method) {
-                        "take" -> res.success(args)
+                        // budget_ms: the push time Dart may still use; it saves the text into the store only with at least 500 ms left.
+                        "take" -> res.success(args + ("budget_ms" to (timeout - (now() - startedAt)).coerceAtLeast(0L).toString()))
                         "done" -> {
                             val m = call.arguments as? Map<*, *>
                             result.set(m?.get("text") as? String)
@@ -129,7 +132,7 @@ object PeekRunner {
             }
         }
 
-        val finished = latch.await(timeout, TimeUnit.MILLISECONDS)
+        val finished = latch.await(timeout, TimeUnit.MILLISECONDS) || latch.await(WRITE_GRACE_MS, TimeUnit.MILLISECONDS)
         main.post { engineRef.get()?.destroy() }
         charge(startedAt)
         if (!finished) return fail(mid, "timeout")

@@ -82,6 +82,10 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
         cached = null;
       }
     }
+    if (cached != null) {
+      // Text the notification saved while the app was closed shows in the first frame too.
+      cached = await _withPushRows(cached);
+    }
     if (cached != null && alive && ref.mounted) {
       state = AsyncData(cached);
       StartupMarks.mark('list-cached');
@@ -170,6 +174,22 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     if (ownerId != null && alive) _saveSnapshot(ownerId, list);
     StartupMarks.mark('list-fresh');
     return list;
+  }
+
+  /// [list] with the text the notification saved while the app was closed (push_inbox) as previews and unread counts. Best effort: any failure leaves [list] as it is.
+  Future<List<Conversation>> _withPushRows(List<Conversation> list) async {
+    final store = _pushInboxOf(ref);
+    if (store == null) return list;
+    try {
+      var next = list;
+      for (final m in await store.pushInbox()) {
+        next = _withMessage(next, m) ?? next;
+      }
+      if (!identical(next, list)) StartupMarks.mark('list-push-rows');
+      return next;
+    } catch (_) {
+      return list;
+    }
   }
 
   /// Fire-and-forget: the store itself never throws once read (see

@@ -1,10 +1,13 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
+
 import '../../chat/domain/encrypted_message_repository.dart';
 import '../../chat/domain/message_envelope.dart';
 import '../domain/key_engine.dart';
 import 'olm_key_engine.dart';
 import 'olm_peek_store.dart';
+import 'push_inbox_writer.dart';
 
 // Shapes of the sender key (43-char base64) and id (uuid) a pre-key push carries.
 final _senderKeyShape = RegExp(r'^[A-Za-z0-9+/]{43}$');
@@ -13,6 +16,7 @@ final _uuidShape = RegExp(
 );
 
 /// Decrypts a message using session data from [rows] without persisting the result. [onFail] gets a fixed reason code (never text, ids or keys) when it returns null.
+/// [onStoredKey] is called when the text was opened by a session, or a peer key, already stored on the phone (not by the push's own [senderKey]); only then may the text be saved by the push.
 /// [senderKey] and [senderId] (from a pre-key push) are used only for olmType 0 with no stored session of that peer; they are never returned or logged.
 Future<String?> peekDecrypt({
   required PeekRows rows,
@@ -24,6 +28,7 @@ Future<String?> peekDecrypt({
   void Function(String reason)? onFail,
   String? senderKey,
   String? senderId,
+  void Function()? onStoredKey,
 }) async {
   try {
     final peer = rows.peerUserId ?? (olmType == 0 ? senderId : null);
@@ -54,7 +59,11 @@ Future<String?> peekDecrypt({
           final session = await engine.restoreSession(s.pickle, pickleKey);
           final plain = session.decrypt(cipher);
           final text = decodeEnvelope(utf8.decode(plain), messageId);
-          if (text == null) onFail?.call('decrypt_fail');
+          if (text == null) {
+            onFail?.call('decrypt_fail');
+          } else {
+            onStoredKey?.call();
+          }
           return text?.text;
         } on KeyEngineException {
           continue;
@@ -79,7 +88,11 @@ Future<String?> peekDecrypt({
           return null;
         }
         final text = decodeEnvelope(utf8.decode(plain), messageId);
-        if (text == null) onFail?.call('decrypt_fail');
+        if (text == null) {
+          onFail?.call('decrypt_fail');
+        } else {
+          onStoredKey?.call();
+        }
         return text?.text;
       } else {
         if (rows.account == null) {
@@ -119,7 +132,11 @@ Future<String?> peekDecrypt({
           return null;
         }
         final text = decodeEnvelope(utf8.decode(plain), messageId);
-        if (text == null) onFail?.call('decrypt_fail');
+        if (text == null) {
+          onFail?.call('decrypt_fail');
+        } else if (rows.sessions.isNotEmpty) {
+          onStoredKey?.call();
+        }
         return text?.text;
       }
     }
@@ -130,6 +147,8 @@ Future<String?> peekDecrypt({
 }
 
 /// Reads peek rows and decrypts a message using them without persisting the result.
+/// When [budgetLeftMs] is given (Android: the push time left, read at write time) and the text was opened by an already stored session or peer key (never by the push's own key), the text is also saved into push_inbox of the store; [onInbox] gets the fixed result code of that write (see writePushInbox).
+/// The saved sender is the chat's peer from the store, never the push's sender.
 Future<String?> peekEncryptedText({
   required String storePath,
   required String storeKeyHex,
@@ -143,6 +162,8 @@ Future<String?> peekEncryptedText({
   void Function(String name)? onPeerName,
   String? senderKey,
   String? senderId,
+  int Function()? budgetLeftMs,
+  void Function(String code)? onInbox,
 }) async {
   final rows = readPeekRows(
     path: storePath,
@@ -170,7 +191,8 @@ Future<String?> peekEncryptedText({
       rows.storedSenderId == rows.peerUserId) {
     return rows.storedBody;
   }
-  return peekDecrypt(
+  var storedKey = false;
+  final text = await peekDecrypt(
     rows: rows,
     pickleKey: pickleKey,
     messageId: messageId,
@@ -179,5 +201,24 @@ Future<String?> peekEncryptedText({
     onFail: onFail,
     senderKey: senderKey,
     senderId: senderId,
+    onStoredKey: () => storedKey = true,
   );
+  final peer = rows.peerUserId;
+  if (text != null && storedKey && budgetLeftMs != null && peer != null) {
+    onInbox?.call(
+      writePushInbox(
+        path: storePath,
+        keyHex: storeKeyHex,
+        conversationId: conversationId,
+        messageId: messageId,
+        peerUserId: peer,
+        body: text,
+        // Same hash as the app's own opener (message_opener.dart _openOne).
+        sealed: sha256.convert(utf8.encode(ciphertext)).toString(),
+        receivedAtMicros: DateTime.now().microsecondsSinceEpoch,
+        budgetMs: budgetLeftMs(),
+      ),
+    );
+  }
+  return text;
 }

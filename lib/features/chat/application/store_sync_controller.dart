@@ -68,12 +68,18 @@ class StoreSyncController {
     if (_ref.read(sessionControllerProvider).value is! Allowed) return;
     final mark = _ref.read(catchUpMarkProvider);
     final start = mark.stamp();
+    final began = DateTime.now();
     final cursor = await store.cursor();
     final complete = cursor == null
         ? await _startFeed(store)
         : await _applyChanges(store, cursor);
     // The feed was read to its end: locked reactions read before this pass began may now be opened (their older messages are open).
     if (complete && !_halted(store)) mark.passDone(start);
+    // Rows the notification saved that the server feed (read to its end) never confirmed: gone, hidden or never real.
+    final inbox = _pushInboxOf(_ref);
+    if (complete && cursor != null && !_halted(store) && inbox != null) {
+      await inbox.sweepPushInbox(began);
+    }
     if (_halted(store)) return;
     final ids = await _chatIds();
     if (ids == null || _halted(store)) return;

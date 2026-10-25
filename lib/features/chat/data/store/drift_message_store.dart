@@ -330,13 +330,28 @@ final class DriftMessageStore implements MessageStore {
   }) => _write(
     (db) => db.transaction(() async {
       final ids = [for (final m in page) m.id];
+      final held =
+          page.any((m) => isLockedPlaceholder(m.body)) ||
+          await (db.select(db.messages)
+                    ..where(
+                      (t) =>
+                          t.conversationId.equals(conversationId) &
+                          t.body.equals(lockedBodyPlaceholder),
+                    )
+                    ..limit(1))
+                  .getSingleOrNull() !=
+              null;
       final oldest = page.isEmpty
           ? null
           : page.first.createdAt.microsecondsSinceEpoch;
-      // Stored rows the server no longer returns for the range this page covers.
+      // Stored rows the server no longer returns for the range this page covers; a held chat keeps its placeholders.
       await (db.delete(db.messages)..where((t) {
             final stale =
-                t.conversationId.equals(conversationId) & t.id.isNotIn(ids);
+                t.conversationId.equals(conversationId) &
+                t.id.isNotIn(ids) &
+                (held
+                    ? t.body.equals(lockedBodyPlaceholder).not()
+                    : const Constant(true));
             return reachedStart || oldest == null
                 ? stale
                 : stale & t.createdAt.isBiggerOrEqualValue(oldest);
@@ -350,7 +365,7 @@ final class DriftMessageStore implements MessageStore {
         await db.into(db.messages).insert(c, onConflict: _upsertClause(c));
       }
       if (oldest == null) {
-        if (reachedStart) {
+        if (reachedStart && !held) {
           await db
               .into(db.syncStates)
               .insertOnConflictUpdate(
@@ -373,10 +388,17 @@ final class DriftMessageStore implements MessageStore {
           prev.newestAt != null &&
           prev.contiguousFrom != null &&
           prev.newestAt! >= oldest;
-      final from = reachedStart
-          ? oldest
-          : (joined ? math.min(prev.contiguousFrom!, oldest) : oldest);
-      final complete = reachedStart || (joined && prev.complete);
+      // A held chat never lifts contiguousFrom or completeness from a page the server may have cut short.
+      final from = held
+          ? (prev?.contiguousFrom == null
+                ? oldest
+                : math.min(prev!.contiguousFrom!, oldest))
+          : (reachedStart
+                ? oldest
+                : (joined ? math.min(prev.contiguousFrom!, oldest) : oldest));
+      final complete = held
+          ? (prev?.complete ?? false)
+          : (reachedStart || (joined && prev.complete));
       await db
           .into(db.syncStates)
           .insertOnConflictUpdate(
@@ -403,8 +425,7 @@ final class DriftMessageStore implements MessageStore {
                 ..where((t) => t.conversationId.equals(conversationId)))
               .getSingleOrNull();
       if (prev == null) return;
-      for (final m in page) {
-        final c = messageToCompanion(m);
+      for (final c in await _writable(db, page)) {
         await db.into(db.messages).insert(c, onConflict: _upsertClause(c));
       }
       if (page.isEmpty) {

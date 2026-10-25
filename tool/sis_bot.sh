@@ -4,6 +4,7 @@
 #
 #   tool/sis_bot.sh read [--since ISO8601]       new messages as JSON lines, then marks them read
 #   tool/sis_bot.sh send <conversation_id> [text|-]
+#   tool/sis_bot.sh send --image <file> <conversation_id> [caption]   one picture (jpg, jpeg, png, webp, gif; up to 10 MB)
 #   tool/sis_bot.sh start <user_id|@tag> [text|-]  open a 1:1 with a listed tester (and say hello)
 #   tool/sis_bot.sh status
 #   tool/sis_bot.sh revoke                         sign this session out everywhere, delete the file
@@ -28,7 +29,7 @@ UUID_RE='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F
 die() { echo "$2" >&2; exit "$1"; }
 cmd=${1:-}; [ $# -gt 0 ] && shift
 case "$cmd" in read|send|start|status|revoke|edit|delete|attachments) ;;
-  *) die 2 "usage: tool/sis_bot.sh read [--since ISO] | send <conversation_id> [text|-] | start <user_id|@tag> [text|-] | status | revoke | edit <message_id> <text|-> | delete <message_id> | attachments <message_id>" ;;
+  *) die 2 "usage: tool/sis_bot.sh read [--since ISO] | send [--image <file>] <conversation_id> [text|-] | start <user_id|@tag> [text|-] | status | revoke | edit <message_id> <text|-> | delete <message_id> | attachments <message_id>" ;;
 esac
 
 # Body text from the first remaining argument or stdin ('-' or missing).
@@ -45,8 +46,19 @@ body_arg() {
 
 # Read the body text BEFORE the lock so a slow stdin never holds it.
 TEXT=""
+IMG=""; MIME=""; EXT=""
+if [ "$cmd" = send ] && [ "${1:-}" = "--image" ]; then
+  [ $# -ge 3 ] || die 2 "send --image needs a file and a conversation id"
+  IMG=$2; shift 2
+  [ -f "$IMG" ] || die 2 "no such image file"
+  EXT=$(printf '%s' "${IMG##*.}" | tr 'A-Z' 'a-z')
+  case "$EXT" in jpg|jpeg) MIME=image/jpeg ;; png) MIME=image/png ;; webp) MIME=image/webp ;; gif) MIME=image/gif ;;
+    *) die 2 "the image must be jpg, jpeg, png, webp or gif" ;; esac
+  [ "$(stat -c %s "$IMG")" -le 10485760 ] || die 2 "the image is larger than 10 MB"
+fi
 case "$cmd" in
-  send) [ $# -ge 1 ] || die 2 "send needs a conversation id"; TEXT=$(body_arg "${2:--}") ;;
+  send) [ $# -ge 1 ] || die 2 "send needs a conversation id"
+        if [ -n "$IMG" ]; then TEXT=${2:-}; [ "${#TEXT}" -le 4000 ] || die 2 "the caption must be at most 4000 characters"; else TEXT=$(body_arg "${2:--}"); fi ;;
   start) [ $# -ge 1 ] || die 2 "start needs a user id or @tag"
          if [ $# -ge 2 ]; then TEXT=$(body_arg "$2"); fi ;;
   edit) [ $# -ge 2 ] && [ -n "$2" ] || die 2 "edit needs a message id and the new text (or - for stdin)"; TEXT=$(body_arg "$2") ;;
@@ -121,7 +133,7 @@ call POST /rest/v1/rpc/activate_session '{}'
 send_message() { # conversation text
   local id payload
   id=$(python3 -c 'import uuid;print(uuid.uuid4())')
-  payload=$(python3 -c 'import json,sys;print(json.dumps({"id":sys.argv[1],"conversation_id":sys.argv[2],"sender_id":sys.argv[3],"body":sys.argv[4]}))' "$id" "$1" "$ME" "$2")
+  payload=$(python3 -c 'import json,sys;print(json.dumps({"id":sys.argv[1],"conversation_id":sys.argv[2],"sender_id":sys.argv[3],"body":sys.argv[4],**({"attachment_path":sys.argv[5]} if sys.argv[5] else {})}))' "$id" "$1" "$ME" "$2" "${3:-}")
   call POST /rest/v1/messages "$payload"
   echo "sent $id"
 }
@@ -167,7 +179,17 @@ PY
 
   send)
     [[ $1 =~ $UUID_RE ]] || die 2 "not a conversation id"
-    send_message "$1" "$TEXT"
+    if [ -n "$IMG" ]; then
+      path="$1/$(python3 -c 'import time;print(int(time.time()*1000000))')-${ME:0:8}.$EXT"
+      # Headers go in a config on stdin (as api() does) so the token never shows in argv.
+      status=$(CFG_ANON="$ANON" CFG_TOKEN="$ACCESS" CFG_BODY="" python3 -c "$CURL_CFG" | sed '/Content-Type: application\/json/d' \
+        | { cat; echo "header = \"Content-Type: $MIME\""; } \
+        | curl -sS --max-time 120 -K - --data-binary "@$IMG" -o "$TMP" -w '%{http_code}' -X POST "$URL/storage/v1/object/attachments/$path") || die 1 "network error"
+      case "$status" in 2??) ;; 401|403) die 4 "not permitted (not allowed, or the bot is switched off)" ;; 429) die 5 "rate limited, try again later" ;; *) die 1 "upload failed (http $status)" ;; esac
+      send_message "$1" "$TEXT" "$path"
+    else
+      send_message "$1" "$TEXT"
+    fi
     ;;
 
   start)

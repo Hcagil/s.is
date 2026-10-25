@@ -60,9 +60,17 @@ const answers: Answer[] = []; // next FCM answers, in order; empty = 200
 let mints = 0;
 let failChatLookup = false;
 let chatLookups = 0;
+// The real push_targets answer with sender_id upper-cased, as a malformed server answer would be.
+let upperSenderId = false;
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  if (upperSenderId && url.includes('/rest/v1/rpc/push_targets')) {
+    const res = await realFetch(input, init);
+    const rows = await res.json();
+    assert(Array.isArray(rows) && rows.every((r) => typeof r.sender_id === 'string'), `fixture: push_targets rows carry sender_id: ${JSON.stringify(rows)}`);
+    return Response.json(rows.map((r: Record<string, string>) => ({ ...r, sender_id: r.sender_id.toUpperCase() })), { status: res.status });
+  }
   // The function's read of the chat row (conversations.encrypted_at) made to fail, as a database error would.
   if (failChatLookup && url.includes('/rest/v1/conversations')) {
     chatLookups++;
@@ -580,6 +588,19 @@ test('ot 0 from a sender whose device is gone: ct and ot travel, sk and si do no
   const d = data(attempts[0]);
   assert('ct' in d && d.ot === '0', `ct still travels: ${Object.keys(d)}`);
   assert(!('sk' in d) && !('si' in d), `no sk/si without a device: ${attempts[0].raw}`);
+});
+
+// t_5d6bdca09e: si is only the lowercase uuid form; anything else drops sk and si.
+test('ot 0 whose sender id comes back upper-cased: ct and ot travel, sk and si do not', async () => {
+  const p = await person('sk-upper');
+  const id = await send(await chatWith(p), cipher(120), 0);
+  upperSenderId = true;
+  try { await deliver(id); } finally { upperSenderId = false; }
+  assertEquals(attempts.length, 1, 'one push is still sent');
+  const d = data(attempts[0]);
+  assert('ct' in d && d.ot === '0', `ct still travels: ${Object.keys(d)}`);
+  assert(!('sk' in d) && !('si' in d), `no sk/si for an upper-case sender id: ${attempts[0].raw}`);
+  assert(!attempts[0].raw.includes(sender.id.toUpperCase()), 'the upper-case id is nowhere in the push');
 });
 
 // sk and si add `,"sk":"<43>"` + `,"si":"<36>"` = 51 + 44 = 95 bytes on top of

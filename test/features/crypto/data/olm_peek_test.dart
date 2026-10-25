@@ -67,6 +67,7 @@ Future<String?> peek(
   String? ciphertext,
   int? type,
   List<int>? key,
+  List<String>? reasons,
 }) => peekDecrypt(
   rows: r,
   pickleKey: key ?? pk,
@@ -74,6 +75,7 @@ Future<String?> peek(
   ciphertext: ciphertext ?? b64(c),
   olmType: type ?? c.type,
   engine: olm,
+  onFail: reasons?.add,
 );
 
 void main() {
@@ -274,5 +276,17 @@ void main() {
         isNull,
       );
     });
+  });
+
+  // t_5d6bdca09e: on the pre-key path the first stored session lends its
+  // identity key only when that session belongs to the chat's peer.
+  test("pre-key on a new session: the first stored session belongs to "
+      "another user => null, 'decrypt_fail'", () async {
+    final reasons = <String>[];
+    final r = rows(sessions: [session(bobSessionNow, peer: 'carol')]);
+    expect(await peek(r, id: 'm2', c: c2, reasons: reasons), isNull);
+    expect(reasons, ['decrypt_fail']);
+    // Control: the same session owned by the peer opens it.
+    expect(await peek(rows(), id: 'm2', c: c2), 'new session');
   });
 }

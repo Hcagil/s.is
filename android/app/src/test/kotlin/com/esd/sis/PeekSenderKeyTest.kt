@@ -28,7 +28,7 @@ class PeekSenderKeyTest {
         PeekRunner.override = null
         PeekRunner.resetBudget()
         PeekRunner.engine = { _, _ -> engineCalls++; "text" }
-        PeekRunner.takeReason()
+        PeekRunner.takeReason("m-sk-1")
     }
 
     @After
@@ -77,7 +77,7 @@ class PeekSenderKeyTest {
         val app = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
         assertNull(offMain { PeekRunner.peek(app, push(ct = null)) })
         assertEquals(0, engineCalls)
-        assertEquals("not_wanted", PeekRunner.takeReason())
+        assertEquals("not_wanted", PeekRunner.takeReason("m-sk-1"))
     }
 
     @Test
@@ -85,6 +85,6 @@ class PeekSenderKeyTest {
         val app = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
         assertEquals("text", offMain { PeekRunner.peek(app, push()) })
         assertEquals(1, engineCalls)
-        assertEquals("ok", PeekRunner.takeReason())
+        assertEquals("ok", PeekRunner.takeReason("m-sk-1"))
     }
 }

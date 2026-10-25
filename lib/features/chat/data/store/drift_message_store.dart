@@ -485,9 +485,15 @@ final class DriftMessageStore implements MessageStore, PushInboxStore {
       });
 
   @override
-  Future<void> remove(String messageId) => _write((db) async {
-    await (db.delete(db.messages)..where((t) => t.id.equals(messageId))).go();
-  });
+  Future<void> remove(String messageId) => _write(
+    (db) => db.transaction(() async {
+      await (db.delete(db.messages)..where((t) => t.id.equals(messageId))).go();
+      // A withdrawn message must not come back from the notification's copy.
+      await (db.delete(
+        db.pushInbox,
+      )..where((t) => t.messageId.equals(messageId))).go();
+    }),
+  );
 
   @override
   Future<void> deleteConversation(String conversationId) => _write(

@@ -35,6 +35,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     final gen = ++_gen;
     _hidden
         .clear(); // a new build is a new owner: nothing of theirs stays hidden
+    _pushCounted.clear();
     ref.onDispose(() => unawaited(_live?.cancel()));
     // Riverpod 3 ALWAYS carries a previous value into a new AsyncLoading (or
     // a later AsyncError) via copyWithPrevious -- including one assigned
@@ -176,6 +177,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     return list;
   }
 
+  /// Ids of notification-saved messages already counted as unread: the real row, which arrives later with the server's time, must not count the same message again.
+  final _pushCounted = <String>{};
+
   /// [list] with the text the notification saved while the app was closed (push_inbox) as previews and unread counts. Best effort: any failure leaves [list] as it is.
   Future<List<Conversation>> _withPushRows(List<Conversation> list) async {
     final store = _pushInboxOf(ref);
@@ -183,7 +187,11 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     try {
       var next = list;
       for (final m in await store.pushInbox()) {
-        next = _withMessage(next, m) ?? next;
+        final applied = _withMessage(next, m);
+        if (applied != null) {
+          next = applied;
+          _pushCounted.add(m.id);
+        }
       }
       if (!identical(next, list)) StartupMarks.mark('list-push-rows');
       return next;
@@ -352,7 +360,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     }
     final updated = [...list]..removeAt(index);
     // Unread: someone else's message, in a conversation not on screen.
+    final counted = _pushCounted.remove(message.id);
     final counts =
+        !counted &&
         message.senderId != me &&
         ref.read(openConversationProvider) != message.conversationId;
     return [existing.withPreview(message, counts: counts), ...updated];

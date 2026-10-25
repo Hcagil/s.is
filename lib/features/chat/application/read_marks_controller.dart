@@ -58,7 +58,13 @@ class ReadMarksController extends AsyncNotifier<List<ReadMark>> {
     // Subscribed before the read, so a read in between is not lost; a
     // failed subscription only costs the live part.
     final updates = await repo.readUpdates(conversationId);
-    if (gen != _gen) return const [];
+    if (gen != _gen) {
+      // The chat closed while the join was out: listen and cancel at once so the stream's onCancel leaves the channel (an unlistened stream never fires it).
+      if (updates case Ok(:final value)) {
+        unawaited(value.listen((_) {}).cancel());
+      }
+      return const [];
+    }
     if (updates case Ok(:final value)) {
       final sub = value.listen((m) => _saw(m, gen));
       ref.onDispose(sub.cancel);

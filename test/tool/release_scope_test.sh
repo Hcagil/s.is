@@ -65,7 +65,8 @@ expect 'same commit given as a commit id' false 'no new commits' "$v1" "$v1"
 
 # --- non-shipping paths, each alone, then all together
 for p in docs/guide.txt .github/workflows/x.yml test/a_test.dart integration_test/b.dart \
-         supabase/tests/c.sql tool/d.sh notes.md lib/deep/CHANGES.md .gitignore .gitattributes; do
+         supabase/tests/c.sql tool/d.sh notes.md lib/deep/CHANGES.md .gitignore .gitattributes \
+         CHANGELOG.md docs/a.png .github/dependabot.yml; do
   git checkout -q --detach "$v1"
   commit "only $p" "$p"
   expect "only $p" false '.' v1 HEAD
@@ -78,7 +79,9 @@ expect 'every non-shipping kind in one range' false '.' v1 HEAD
 # --- shipping paths, each alone (anchored prefixes: lib/docs/ and tooling/ ship)
 for p in lib/a.dart android/app/build.gradle ios/Runner/Info.plist supabase/migrations/1_x.sql \
          supabase/functions/f/index.ts pubspec.yaml rust/src/lib.rs docker/Dockerfile \
-         lib/docs/x.dart tooling/x.sh supabase/config.toml lib/a.mdx; do
+         lib/docs/x.dart tooling/x.sh supabase/config.toml lib/a.mdx \
+         lib/tool/x.dart lib/test/x.dart assets/icon.png sub/.gitignore .gitignore.bak README.mdx \
+         .githubx/y Docs/x README.MD x.md.orig; do
   git checkout -q --detach "$v1"
   commit "ship $p" "$p"
   expect "ship $p" true '^[0-9]+ files? ships?' v1 HEAD
@@ -93,6 +96,16 @@ commit d3 .github/c.yml
 commit d4 tool/t.sh
 mixed=$(git rev-parse HEAD)
 expect 'docs + one lib file over five commits' true '^[0-9]+ files? ships?' v1 "$mixed"
+
+# --- many files: one shipping path among thousands that do not (no early exit loses it)
+git checkout -q --detach "$v1"
+mkdir -p docs/many; for ((i = 0; i < 3000; i++)); do echo "$i" > "docs/many/p$i.md"; done
+echo big > lib/big.dart; git add docs/many lib/big.dart; git commit -q -m 'many docs and one app file'
+expect 'one app file among 3000 docs' true '^[0-9]+ files? ships?' v1 HEAD
+git checkout -q --detach "$v1"
+mkdir -p docs/many; for ((i = 0; i < 3000; i++)); do echo "$i" > "docs/many/p$i.md"; done
+git add docs/many; git commit -q -m 'many docs only'
+expect '3000 docs files only' false '.' v1 HEAD
 
 # --- a shipping file removed or moved out of the app ships too
 git checkout -q --detach "$v1"

@@ -1,6 +1,7 @@
 @Tags(['integration'])
 library;
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -131,7 +132,17 @@ class _Wired implements ChatRepository {
     DateTime before, {
     int limit = 500,
   }) => live.messagesBefore(conversationId, before, limit: limit);
-  _Wired(this.live, {this.marks, this.updates, this.delivered});
+  _Wired(
+    this.live, {
+    this.marks,
+    this.updates,
+    this.delivered,
+    this.updatesAnswered,
+  });
+
+  /// Runs after the real readUpdates() answered, before the answer is handed
+  /// back: the moment a chat can close while its join is still out.
+  final Future<void> Function()? updatesAnswered;
   final ChatRepository live;
   final ChatRepository? marks;
   final ChatRepository? updates;
@@ -157,8 +168,11 @@ class _Wired implements ChatRepository {
   }
 
   @override
-  Future<Result<Stream<ReadMark>>> readUpdates(String id) =>
-      (updates ?? live).readUpdates(id);
+  Future<Result<Stream<ReadMark>>> readUpdates(String id) async {
+    final r = await (updates ?? live).readUpdates(id);
+    await updatesAnswered?.call();
+    return r;
+  }
 
   @override
   Future<Result<List<Member>>> members() => live.members();
@@ -566,6 +580,62 @@ void main() {
       },
       timeout: const Timeout(Duration(minutes: 2)),
     );
+
+    for (final (how, closeIt) in [
+      (
+        'the chat closed',
+        (ProviderContainer c, ProviderSubscription<Object?> _) =>
+            c.read(openConversationProvider.notifier).close(),
+      ),
+      (
+        'the read marks disposed',
+        (ProviderContainer _, ProviderSubscription<Object?> sub) => sub.close(),
+      ),
+    ]) {
+      test('$how while its reads join was out: no reads channel stays '
+          'subscribed', () async {
+        final answered = Completer<void>();
+        final release = Completer<void>();
+        final c = ProviderContainer.test(
+          overrides: _production(
+            sanaClient,
+            'Sana',
+            chat: _Wired(
+              sana,
+              updatesAnswered: () {
+                answered.complete();
+                return release.future;
+              },
+            ),
+          ),
+        );
+        addTearDown(() async {
+          c.dispose();
+          await sanaClient.removeAllChannels();
+        });
+        bool reads() => sanaClient.getChannels().any(
+          // ignore: invalid_use_of_internal_member
+          (ch) => ch.topic.endsWith('reads:$direct'),
+        );
+        await settled(c);
+        c.listen(ownProfileProvider, (_, _) {});
+        await c.read(ownProfileProvider.future);
+        c.read(openConversationProvider.notifier).open(direct);
+        final sub = c.listen(readMarksProvider, (_, _) {});
+        await answered.future.timeout(const Duration(seconds: 30));
+        expect(reads(), isTrue, reason: 'fixture: the reads channel is joined');
+
+        closeIt(c, sub);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        release.complete();
+
+        await eventually(
+          () => !reads(),
+          'the reads:$direct channel was never left',
+          within: const Duration(seconds: 10),
+        );
+      }, timeout: const Timeout(Duration(minutes: 2)));
+    }
 
     test('read updates unreachable: what was loaded still shows', () async {
       expect(await theo.markRead(direct), isA<Ok<void>>());

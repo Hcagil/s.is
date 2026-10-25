@@ -101,7 +101,7 @@ void main() {
       final r = await db.customSelect('PRAGMA user_version').getSingle();
       return r.read<int>('user_version');
     });
-    expect(version, 4); // schema v4: reaction_plains
+    expect(version, 5); // schema v5: push_inbox
 
     final tableSet = await tables(v3);
     expect(tableSet.contains('olm_sessions'), isTrue);
@@ -174,12 +174,13 @@ void main() {
       final r = await db.customSelect('PRAGMA user_version').getSingle();
       return r.read<int>('user_version');
     });
-    expect(version2, 4);
+    expect(version2, 5);
 
     final tableSet2 = await tables(v3b);
     expect(tableSet2.contains('read_marks'), isTrue);
     expect(tableSet2.contains('olm_sessions'), isTrue);
     expect(tableSet2.contains('send_queue'), isTrue);
+    expect(tableSet2.contains('push_inbox'), isTrue);
 
     // Read marks round trip
     final rmStore = DriftReadMarkStore(v3b);
@@ -188,7 +189,7 @@ void main() {
   });
 
   test(
-    'a fresh install is the current version (4) with the new tables',
+    'a fresh install is the current version (5) with the new tables',
     () async {
       final fresh = messages();
 
@@ -196,10 +197,11 @@ void main() {
         final r = await db.customSelect('PRAGMA user_version').getSingle();
         return r.read<int>('user_version');
       });
-      expect(version3, 4);
+      expect(version3, 5);
 
       final tableSet3 = await tables(fresh);
       expect(tableSet3.contains('reaction_plains'), isTrue);
+      expect(tableSet3.contains('push_inbox'), isTrue);
       expect(tableSet3.contains('olm_sessions'), isTrue);
       expect(tableSet3.contains('send_queue'), isTrue);
     },

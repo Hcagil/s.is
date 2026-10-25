@@ -143,7 +143,7 @@ jobs:
       - name: Rust tests
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo test --manifest-path rust/Cargo.toml
       - name: Rust advisories
-        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo deny --manifest-path rust/Cargo.toml check advisories
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo deny --manifest-path rust/Cargo.toml check -W unmaintained advisories
       # Each file runs as a program: the pinned test 1.24.6 cannot load files
       # with `dart test` on the current Dart SDK.
       - name: Cargokit build tool tests

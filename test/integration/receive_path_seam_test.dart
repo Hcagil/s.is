@@ -133,7 +133,7 @@ class _Phone {
 class _Recording implements MessageOpener {
   final seen = <Message>[];
   @override
-  Future<List<Message>> open(List<Message> rows) async {
+  Future<List<Message>> open(List<Message> rows, {bool fresh = false}) async {
     seen.addAll(rows);
     return rows;
   }
@@ -156,15 +156,17 @@ class _Scripted implements MessageOpener {
   void reopen(Message m) => _reopened.add(m);
 
   @override
-  Future<List<Message>> open(List<Message> rows) async => [
-    for (final m in rows)
-      if (boom.contains(m.id))
-        throw StateError('open failed')
-      else if (delay[m.id] case final d?)
-        await Future<void>.delayed(d).then((_) => m.withPlain('opened', null))
-      else
-        m,
-  ];
+  Future<List<Message>> open(List<Message> rows, {bool fresh = false}) async =>
+      [
+        for (final m in rows)
+          if (boom.contains(m.id))
+            throw StateError('open failed')
+          else if (delay[m.id] case final d?)
+            await Future<void>.delayed(d)
+                .then((_) => m.withPlain('opened', null))
+          else
+            m,
+      ];
 
   @override
   Stream<Message> get reopened => _reopened.stream;

@@ -217,7 +217,8 @@ class ForgetSpyOpener implements MessageOpener {
   final void Function(String id) onForget;
 
   @override
-  Future<List<Message>> open(List<Message> rows) async => rows;
+  Future<List<Message>> open(List<Message> rows, {bool fresh = false}) async =>
+      rows;
 
   @override
   Stream<Message> get reopened => const Stream.empty();

@@ -1,23 +1,24 @@
 -- SIS Bot: lets the bot upload a plain photo into chats it belongs to
+-- The upload must also declare an image mime type (metadata is set at RLS time, size is not).
 -- limits are 10 uploads / 10 min and 50 / 24 h, counted under a lock like bot_send_charge.
-create function app_private.bot_upload_ok(object_name text) returns boolean
+create function app_private.bot_upload_ok(object_name text, mime text) returns boolean
 language plpgsql volatile security definer set search_path = '' as $$
 declare uid uuid := auth.uid(); n10 int; n24 int;
 begin
-  if uid is null or object_name !~ '^[0-9a-f-]{36}/[0-9]{1,20}-[0-9a-f]{8}\.(jpg|jpeg|png|webp|gif)$' then return false; end if;
+  if uid is null or mime is null or mime not in ('image/jpeg','image/png','image/webp','image/gif') or object_name !~ '^[0-9a-f-]{36}/[0-9]{1,20}-[0-9a-f]{8}\.(jpg|jpeg|png|webp|gif)$' then return false; end if;
   if substring(object_name from '-([0-9a-f]{8})\.[a-z]+$') <> left(uid::text, 8) then return false; end if;
   perform pg_advisory_xact_lock(hashtextextended('bot_upload:' || uid::text, 0));
   select count(*) filter (where o.created_at >= now() - interval '10 minutes'), count(*) into n10, n24 from storage.objects o where o.bucket_id = 'attachments' and o.owner_id = uid::text and o.created_at >= now() - interval '24 hours';
   return n10 < 10 and n24 < 50;
 end $$;
-revoke all on function app_private.bot_upload_ok(text) from public, anon; grant execute on function app_private.bot_upload_ok(text) to authenticated;
+revoke all on function app_private.bot_upload_ok(text, text) from public, anon; grant execute on function app_private.bot_upload_ok(text, text) to authenticated;
 
 -- only the bot line changed; the bot may upload only a photo-shaped name into a chat it is a member of.
 drop policy attachments_write on storage.objects;
 create policy attachments_write on storage.objects for insert to authenticated
   with check (bucket_id = 'attachments'
               and (select app_private.has_app_access())
-              and (not app_private.is_bot((select auth.uid())) or app_private.bot_upload_ok(name))
+              and (not app_private.is_bot((select auth.uid())) or app_private.bot_upload_ok(name, metadata->>'mimetype'))
               and app_private.is_member_of_path(name)
               and owner_id = (select auth.uid())::text);
 

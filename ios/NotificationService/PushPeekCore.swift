@@ -60,6 +60,12 @@ struct PeekData: Equatable {
   var storedSenderId: String? = nil
 }
 
+/// A text a push opened, and whether a key already stored on the phone opened it (a stored session, or an inbound session built with the stored peer key). Only such a text may be saved; the push's own sender key (first contact) and an already stored body never qualify.
+struct PeekOpened: Equatable {
+  let text: String
+  let storedKey: Bool
+}
+
 enum PeekCore {
   /// The stand-in body every locked row holds (lib/features/chat/domain/encrypted_message_repository.dart lockedBodyPlaceholder).
   static let lockedPlaceholder = "🔒 Encrypted message"
@@ -70,17 +76,17 @@ enum PeekCore {
   /// 3. data.peerUserId must be non-nil, else nil; for olmType 0 it falls back to push.senderId. A push senderId that differs from a known peer => nil.
   /// 4. olmType 1: try each session whose peerUserId == the peer, in order; the first non-nil decrypt wins; none => nil.
   /// 5. olmType 0: id = decryptor.prekeySessionId(ct) (nil => nil). If a session has sessionId == id: it must have peerUserId == the peer (else nil); return decryptor.decrypt for it. Otherwise data.account must be non-nil and the result is decryptor.decryptInbound with the newest session's identity key; with no session, push.senderKey is used only if it and senderId are well-formed, senderId == peer and data.keyElsewhere is false.
-  static func text(push: PeekPush, data: PeekData, pickleKey: [UInt8], decryptor: PeekDecryptor) -> String? {
+  static func opened(push: PeekPush, data: PeekData, pickleKey: [UInt8], decryptor: PeekDecryptor) -> PeekOpened? {
     guard data.ownerId == push.userId else { return nil }
     // A stored text is the peer's preview only when the peer sent it; else go on to decrypt.
-    if let body = data.storedBody, body != lockedPlaceholder, let known = data.peerUserId, data.storedSenderId == known { return body }
+    if let body = data.storedBody, body != lockedPlaceholder, let known = data.peerUserId, data.storedSenderId == known { return PeekOpened(text: body, storedKey: false) }
     guard let peer = data.peerUserId ?? (push.olmType == 0 ? push.senderId : nil) else { return nil }
     if let si = push.senderId, let known = data.peerUserId, si != known { return nil }
 
     if push.olmType == 1 {
       for session in data.sessions where session.peerUserId == peer {
         if let text = decryptor.decrypt(sessionPickle: session.pickle, pickleKey: pickleKey, messageId: push.messageId, ct: push.ct, olmType: 1) {
-          return text
+          return PeekOpened(text: text, storedKey: true)
         }
       }
       return nil
@@ -89,7 +95,8 @@ enum PeekCore {
     guard let id = decryptor.prekeySessionId(ct: push.ct) else { return nil }
     if let session = data.sessions.first(where: { $0.sessionId == id }) {
       guard session.peerUserId == peer else { return nil }
-      return decryptor.decrypt(sessionPickle: session.pickle, pickleKey: pickleKey, messageId: push.messageId, ct: push.ct, olmType: 0)
+      guard let text = decryptor.decrypt(sessionPickle: session.pickle, pickleKey: pickleKey, messageId: push.messageId, ct: push.ct, olmType: 0) else { return nil }
+      return PeekOpened(text: text, storedKey: true)
     }
     guard let account = data.account else { return nil }
     let identityKey: String
@@ -101,7 +108,13 @@ enum PeekCore {
     } else {
       return nil
     }
-    return decryptor.decryptInbound(accountPickle: account, pickleKey: pickleKey, identityKey: identityKey, messageId: push.messageId, ct: push.ct)
+    let storedKey = !data.sessions.isEmpty  // false when the key came from the push's sk
+    guard let text = decryptor.decryptInbound(accountPickle: account, pickleKey: pickleKey, identityKey: identityKey, messageId: push.messageId, ct: push.ct) else { return nil }
+    return PeekOpened(text: text, storedKey: storedKey)
+  }
+
+  static func text(push: PeekPush, data: PeekData, pickleKey: [UInt8], decryptor: PeekDecryptor) -> String? {
+    opened(push: push, data: data, pickleKey: pickleKey, decryptor: decryptor)?.text
   }
 
   private static func isSenderKey(_ s: String) -> Bool {

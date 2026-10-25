@@ -29,6 +29,11 @@ struct RustPeekDecryptor: PeekDecryptor {
 
 /// Reads what a push needs from the app's encrypted store (PeekStore.c): read-only, small cache, nil when it cannot be read.
 enum PeekStoreReader {
+  /// Saves an opened message into push_inbox through PeekStore.c (read-write, one short transaction, connection closed before it returns). Returns the C code: 0 saved, 1 old schema, 2 busy, 3 skipped, 4 other error. Never throws, never creates a file or table.
+  static func save(path: String, keyHex: String, conversationId: String, messageId: String, peerUserId: String, body: String, sealed: String, receivedAtMicros: Int64) -> Int32 {
+    sis_peek_save(path, keyHex, conversationId, messageId, peerUserId, body, sealed, receivedAtMicros)
+  }
+
   static func read(path: String, keyHex: String, conversationId: String, messageId: String, senderKey: String?, senderId: String?) -> PeekData? {
     var rows = SisPeekRows()
     defer { sis_peek_free(&rows) }

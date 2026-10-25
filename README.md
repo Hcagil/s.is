@@ -57,4 +57,4 @@ docker compose run --rm flutter flutter run \
 
 ## Ship
 
-Merge to `main`. The Release workflow signs the bundle, applies migrations and publishes to the Play internal track. See [docs/DELIVERY.md](docs/DELIVERY.md).
+Merge to `main`. Once a day at 12:00 Turkey time (09:00 UTC) the Release workflow ships everything merged since the last release: it signs the bundle, applies migrations and publishes to the Play internal track. An urgent fix can be released at once by hand. See [docs/DELIVERY.md](docs/DELIVERY.md).

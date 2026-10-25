@@ -123,7 +123,11 @@ class StoreMessageOpener implements MessageOpener {
       return Future.value(rows);
     }
     return _serial<List<Message>>(() async {
+      // A real open restarts the backoff: the old (maybe 5-minute) timer is replaced by a 5 s one.
+      _timer?.cancel();
+      _timer = null;
       _tries = 0;
+      if (_pending.isNotEmpty) _schedule();
       final out = List<Message>.of(rows);
       await _markHeld(rows, memory);
       final keys = <String, Result<ClaimedKeys?>>{};
@@ -264,6 +268,8 @@ class StoreMessageOpener implements MessageOpener {
         : m.olmType == 0
         ? (keys[m.senderId] = await cache.get(m.senderId, fresh: true))
         : (keys[m.senderId] ??= await cache.get(m.senderId));
+    // Disposed while the key lookup ran: never decrypt (it would use up the one-time message on a dead opener).
+    if (_disposed) return fallback;
     final peerKey = switch (looked) {
       Ok(:final value) => value,
       Err() => null,

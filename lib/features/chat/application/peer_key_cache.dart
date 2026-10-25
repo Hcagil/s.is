@@ -41,6 +41,9 @@ class PeerKeyCache {
 
   /// Forgets the kept keys of [userId] (a row failed to open, so the key may have changed).
   void drop(String userId) => _hits.remove(userId);
+
+  /// Forgets every kept key (the signed-in member changed).
+  void clear() => _hits.clear();
 }
 
 /// The one cache shared by the message and reaction openers.

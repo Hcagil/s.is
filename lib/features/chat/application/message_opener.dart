@@ -39,6 +39,7 @@ final messageOpenerProvider = Provider<MessageOpener>((ref) {
     cache: ref.read(peerKeyCacheProvider),
   );
   ref.onDispose(opener.dispose);
+  ref.listen(currentUserIdProvider, (_, _) => opener.reset());
   return opener;
 });
 
@@ -96,6 +97,17 @@ class StoreMessageOpener implements MessageOpener {
     _disposed = true;
     _timer?.cancel();
     unawaited(_reopened.close());
+  }
+
+  /// Forgets everything kept for the previous member (waiting rows, opened copies, hidden ids, the retry timer).
+  void reset() {
+    _timer?.cancel();
+    _timer = null;
+    _tries = 0;
+    _pending.clear();
+    _done.clear();
+    _forgotten.clear();
+    _cache?.clear();
   }
 
   Future<T> _serial<T>(Future<T> Function() job) => _queue.run(job);
@@ -250,7 +262,7 @@ class StoreMessageOpener implements MessageOpener {
     final looked = cache == null
         ? (keys[m.senderId] ??= await _peerKey(m.senderId))
         : m.olmType == 0
-        ? await cache.get(m.senderId, fresh: true)
+        ? (keys[m.senderId] = await cache.get(m.senderId, fresh: true))
         : (keys[m.senderId] ??= await cache.get(m.senderId));
     final peerKey = switch (looked) {
       Ok(:final value) => value,
@@ -347,6 +359,7 @@ class StoreMessageOpener implements MessageOpener {
     ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final keys = <String, Result<ClaimedKeys?>>{};
     for (final m in waiting) {
+      if (_disposed) return;
       final opened = await _openOne(m, keys);
       if (opened.deletion != null) {
         _pending.remove(m.id);

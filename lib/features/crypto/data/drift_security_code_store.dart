@@ -12,9 +12,6 @@ String verifiedMetaKey(String peerUserId) => 'verified:$peerUserId';
 /// Returns the meta key for a key change of a peer.
 String keyChangeMetaKey(String peerUserId) => 'keychange:$peerUserId';
 
-/// The meta key of the time a chat first held a locked text.
-String heldMetaKey(String conversationId) => 'held:$conversationId';
-
 /// Encodes a key change timestamp and verification status.
 String encodeKeyChange(DateTime at, bool wasVerified) =>
     '${at.microsecondsSinceEpoch}|${wasVerified ? 1 : 0}';

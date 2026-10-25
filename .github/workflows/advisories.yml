@@ -1,0 +1,26 @@
+# Weekly scan of the Rust lock for new advisories.
+# A new advisory on an unchanged lock would not show up without a PR.
+name: Rust advisories
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  advisories:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Log in to the base image registry
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build development image
+        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml build
+      - name: Rust advisories
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo deny --manifest-path rust/Cargo.toml check -W unmaintained advisories

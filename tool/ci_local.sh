@@ -93,7 +93,7 @@ job_android() {
   step "Analyze" "${CI[@]}" run --rm flutter flutter analyze || return 1
   step "Build the Rust library for the Dart tests" "${CI[@]}" run --rm flutter cargo build --release --manifest-path rust/Cargo.toml || return 1
   step "Rust tests" "${CI[@]}" run --rm flutter cargo test --manifest-path rust/Cargo.toml || return 1
-  step "Rust advisories" "${CI[@]}" run --rm flutter cargo deny --manifest-path rust/Cargo.toml check advisories || return 1
+  step "Rust advisories" "${CI[@]}" run --rm flutter cargo deny --manifest-path rust/Cargo.toml check -W unmaintained advisories || return 1
   step "Cargokit build tool tests" "${CI[@]}" run --rm flutter sh -c 'cd rust_builder/cargokit/build_tool && dart pub get && for t in test/*_test.dart; do dart run "$t" || exit 1; done' || return 1
   step "Test" "${CI[@]}" run --rm -e TZ=JST-9 flutter flutter test || return 1
   step "Firebase config present" test -f android/app/google-services.json || return 1

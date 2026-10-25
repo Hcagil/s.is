@@ -182,7 +182,8 @@ PY
   send)
     [[ $1 =~ $UUID_RE ]] || die 2 "not a conversation id"
     if [ -n "$IMG" ]; then
-      path="$1/$(python3 -c 'import time;print(int(time.time()*1000000))')-${ME:0:8}.$EXT"
+      conv=${1,,}   # the storage name rule is lower-case only
+      path="$conv/$(python3 -c 'import time;print(int(time.time()*1000000))')-${ME:0:8}.$EXT"
       # Upload: headers go to curl as a config on stdin so the token never shows in argv.
       STATUS=$(CFG_ANON="$ANON" CFG_TOKEN="$ACCESS" CFG_BODY="" python3 -c "$CURL_CFG" | sed '/Content-Type: application\/json/d' \
         | { cat; echo "header = \"Content-Type: $MIME\""; } \
@@ -194,7 +195,7 @@ PY
         429) die 5 "rate limited, try again later" ;;
         *) die 1 "upload failed (http $STATUS)" ;;
       esac
-      send_message "$1" "$TEXT" "$path"
+      send_message "$conv" "$TEXT" "$path"
     else
       send_message "$1" "$TEXT"
     fi

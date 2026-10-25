@@ -44,9 +44,9 @@ jobs:
             exit 1
           fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      # No ref: the script runs from the workflow's own commit, so an older release commit never lacks it; history is full, so the release commit is still reachable.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ steps.pick.outputs.sha }}
           fetch-depth: 0
       # Docs, CI, tests and tool scripts cannot affect the artefact or the database, so they do not publish
       # a build: publishing for them burns a versionCode. The range is the last release tag up to the
@@ -69,7 +69,7 @@ jobs:
         id: v
         run: |
           echo "code=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_OUTPUT"
-          echo "name=$(date -u +%y.%-m).$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+          echo "name=$(date -u +%y.%-m).$(git rev-list --count "${{ steps.pick.outputs.sha }}")" >> "$GITHUB_OUTPUT"
 
   publish:
     needs: scope
@@ -239,9 +239,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v${{ needs.scope.outputs.name }}+${{ needs.scope.outputs.code }}" \
-            --target "$SHA" --generate-notes \
-            --title "SIS ${{ needs.scope.outputs.name }}"
+          tag="v${{ needs.scope.outputs.name }}+${{ needs.scope.outputs.code }}"
+          # A GitHub error once failed this step after the build was already uploaded: retry, waiting 10 s then 30 s.
+          for wait in 10 30 0; do
+            gh release create "$tag" --target "$SHA" --generate-notes \
+              --title "SIS ${{ needs.scope.outputs.name }}" && exit 0
+            # An earlier try may have created it before the error came back.
+            gh release view "$tag" >/dev/null 2>&1 && exit 0
+            [ "$wait" -gt 0 ] && { echo "Release create failed, retrying in $wait s." >&2; sleep "$wait"; }
+          done
+          echo "Release $tag could not be created after 3 tries." >&2
+          exit 1
       - name: Remove signing key
         if: always()
         run: rm -f .private/upload-keystore.jks

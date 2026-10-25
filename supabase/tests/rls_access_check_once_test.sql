@@ -35,6 +35,8 @@ select plan(30);
 --     profiles_update_own (USING), realtime_receive, realtime_send and
 --     attachments_write also refuse the bot, `and not is_bot(auth.uid())`
 --     after the access check (sis_bot_test.sql proves each clause); since
+--     the bot photo send, attachments_write lets the bot through only via
+--     bot_upload_ok(name, mimetype) (bot_photo_send_test.sql proves it); since
 --     Update 1 (delivery marks) realtime_receive also opens
 --     delivered:<conversation> broadcasts to current members, not gated on
 --     read-status sharing (delivery_marks_test.sql proves it);
@@ -121,7 +123,7 @@ END)$e$),
   ('realtime', 'messages', 'realtime_send', $e$PERMISSIVE|{authenticated}|INSERT|<null>|(app_private.has_app_access() AND (NOT app_private.is_bot(auth.uid())) AND (((realtime.topic() = 'presence:members'::text) AND (extension = 'presence'::text) AND app_private.shares_presence()) OR ((extension = 'broadcast'::text) AND app_private.is_member(app_private.typing_conversation(realtime.topic())) AND app_private.shares_typing())))$e$),
   ('storage', 'objects', 'attachments_read', $e$PERMISSIVE|{authenticated}|SELECT|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND (app_private.attachment_readable(name, owner_id) OR app_private.may_remove_attachment(name)))|<null>$e$),
   ('storage', 'objects', 'attachments_remove_deleted', $e$PERMISSIVE|{authenticated}|DELETE|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND app_private.may_remove_attachment(name))|<null>$e$),
-  ('storage', 'objects', 'attachments_write', $e$PERMISSIVE|{authenticated}|INSERT|<null>|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND (NOT app_private.is_bot(auth.uid())) AND app_private.is_member_of_path(name) AND (owner_id = (auth.uid())::text))$e$);
+  ('storage', 'objects', 'attachments_write', $e$PERMISSIVE|{authenticated}|INSERT|<null>|((bucket_id = 'attachments'::text) AND app_private.has_app_access() AND ((NOT app_private.is_bot(auth.uid())) OR app_private.bot_upload_ok(name, (metadata ->> 'mimetype'::text))) AND app_private.is_member_of_path(name) AND (owner_id = (auth.uid())::text))$e$);
 
 select is(
   (select pg_temp.bare(concat_ws('|', p.permissive, p.roles::text, p.cmd,

@@ -1,3 +1,5 @@
+import 'package:flutter/services.dart';
+
 import '../domain/push.dart';
 
 /// Push channel whose Firebase setup finishes after the first frame
@@ -6,6 +8,8 @@ import '../domain/push.dart';
 /// surfaces as the error of each call.
 final class DeferredPushSource implements PushSource {
   DeferredPushSource(this._ready);
+
+  static const _launchTap = MethodChannel('sis/launch_tap');
 
   final Future<PushSource> _ready;
 
@@ -24,9 +28,19 @@ final class DeferredPushSource implements PushSource {
     yield* (await _ready).tokenRefreshes;
   }
 
+  /// Android hands the chat id of a cold-start notification tap over at once
+  /// (MainActivity, channel `sis/launch_tap`), so the chat opens without
+  /// waiting for Firebase. Other platforms, or no tap: the Firebase source.
   @override
-  Future<String?> launchConversation() async =>
-      (await _ready).launchConversation();
+  Future<String?> launchConversation() async {
+    try {
+      final early = await _launchTap.invokeMethod<String>('take');
+      if (early != null && early.isNotEmpty) return early;
+    } catch (_) {
+      // No native side here (iOS, tests): fall through.
+    }
+    return (await _ready).launchConversation();
+  }
 
   @override
   Stream<String> get openedConversations async* {

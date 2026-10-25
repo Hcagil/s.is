@@ -62,21 +62,22 @@ class StoreSyncController {
     return r is Ok<List<Conversation>> ? [for (final c in r.value) c.id] : null;
   }
 
-  /// One pass: the change feed first (or its start on a new phone), then the
-  /// history fill.
+  /// One pass: the change feed first (one round trip), then the chat list for
+  /// the history fill.
   Future<void> _once(MessageStore store) async {
     if (_ref.read(sessionControllerProvider).value is! Allowed) return;
-    final ids = await _chatIds();
-    if (ids == null || _halted(store)) return;
     final mark = _ref.read(catchUpMarkProvider);
     final start = mark.stamp();
     final cursor = await store.cursor();
     final complete = cursor == null
         ? await _startFeed(store)
-        : await _applyChanges(store, cursor, ids.toSet());
+        : await _applyChanges(store, cursor);
     // The feed was read to its end: locked reactions read before this pass began may now be opened (their older messages are open).
     if (complete && !_halted(store)) mark.passDone(start);
-    if (!_halted(store)) await _backfill(store, ids);
+    if (_halted(store)) return;
+    final ids = await _chatIds();
+    if (ids == null || _halted(store)) return;
+    await _backfill(store, ids);
   }
 
   /// A new phone: the feed starts at the newest change that exists now,
@@ -91,16 +92,12 @@ class StoreSyncController {
   }
 
   /// Writes changed rows of the member's current chats; a legacy vanished row
-  /// leaves the phone.
-  Future<void> _write(
-    MessageStore store,
-    List<Message> rows,
-    Set<String> chats,
-  ) async {
+  /// leaves the phone. The server (RLS) only returns rows of the member's own
+  /// chats.
+  Future<void> _write(MessageStore store, List<Message> rows) async {
     final keep = <Message>[];
     final gone = <String>[];
     for (final m in rows) {
-      if (!chats.contains(m.conversationId)) continue;
       if (m.deletion == MessageDeletion.vanished) {
         gone.add(m.id);
       } else {
@@ -117,11 +114,7 @@ class StoreSyncController {
   /// Reads the change feed after [from] page by page and writes it; the saved
   /// cursor only moves forward, after each page is written. Returns true when
   /// the feed was read to its end.
-  Future<bool> _applyChanges(
-    MessageStore store,
-    ChangeCursor from,
-    Set<String> chats,
-  ) async {
+  Future<bool> _applyChanges(MessageStore store, ChangeCursor from) async {
     var high = from;
     // The first page starts a few seconds back (late commits).
     var at = ChangeCursor(from.updatedAt.subtract(_overlap), _nilId);
@@ -132,7 +125,13 @@ class StoreSyncController {
       if (r is! Ok<ChangePage> || _halted(store)) return false;
       final last = r.value.last;
       if (last == null) return true;
-      await _write(store, r.value.messages, chats);
+      await _write(store, r.value.messages);
+      // The list shows the new previews and unread counts at once, not after its own server read.
+      if (_ref.mounted && _ref.exists(conversationListProvider)) {
+        _ref
+            .read(conversationListProvider.notifier)
+            .applyFromStore(r.value.messages);
+      }
       final ahead =
           last.updatedAt.isAfter(high.updatedAt) ||
           (last.updatedAt.isAtSameMomentAs(high.updatedAt) &&

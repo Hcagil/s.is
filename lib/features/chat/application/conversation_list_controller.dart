@@ -82,7 +82,10 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
         cached = null;
       }
     }
-    if (cached != null && alive && ref.mounted) state = AsyncData(cached);
+    if (cached != null && alive && ref.mounted) {
+      state = AsyncData(cached);
+      StartupMarks.mark('list-cached');
+    }
     final buffered = <Message>[];
     var loaded = false;
     ref.onDispose(() => _snapshotDebounce?.cancel());
@@ -165,6 +168,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       return list;
     }
     if (ownerId != null && alive) _saveSnapshot(ownerId, list);
+    StartupMarks.mark('list-fresh');
     return list;
   }
 
@@ -216,6 +220,23 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
 
   /// This member's own just-sent message as the preview (its readable text; the server row of a locked message only holds the placeholder).
   void showSent(Message message) => _apply(message);
+
+  /// Rows the change feed just wrote to the phone: previews and unread counts move at once, without waiting for the server list. Deleted or edited rows and chats the list does not know are left to the next full read.
+  void applyFromStore(List<Message> rows) {
+    final current = state.value;
+    if (current == null) return;
+    final fresh = [
+      for (final m in rows)
+        if (!m.isDeleted && m.editedAt == null) m,
+    ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    var next = current;
+    for (final m in fresh) {
+      next = _withMessage(next, m) ?? next;
+    }
+    if (identical(next, current)) return;
+    state = AsyncData(next);
+    _scheduleSnapshotSave();
+  }
 
   /// Moves [message] into its conversation's preview. A message for a
   /// conversation the list has never seen means someone started one with

@@ -18,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/chat/data/store/drift_chat_list_snapshot_store.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/encrypted_message_repository.dart';
+import 'package:sis/features/chat/domain/message.dart' show MessageDeletion;
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/domain/message_envelope.dart';
 
@@ -52,6 +53,7 @@ final class SisPeekRows extends Struct {
   external Pointer<Pointer<Uint8>> sessionPeerIds;
   external Pointer<Pointer<Uint8>> sessionIdentityKeys;
   external Pointer<Pointer<Uint8>> sessionPickles;
+  external Pointer<Uint8> storedSender;
 }
 
 typedef _ReadC = Int32 Function(
@@ -110,6 +112,7 @@ class Rows {
       storedBody = _s(r.storedBody),
       account = _s(r.account),
       keyElsewhere = _s(r.keyElsewhere),
+      storedSender = _s(r.storedSender),
       sessionPeers = [
         for (var i = 0; i < r.sessionCount; i++) _s(r.sessionPeerIds[i]),
       ],
@@ -118,7 +121,7 @@ class Rows {
       ];
   final int rc;
   final String? ownerId, peerUserId, peerName, storedBody, account;
-  final String? keyElsewhere;
+  final String? keyElsewhere, storedSender;
   final List<String?> sessionPeers, sessionKeys;
 }
 
@@ -308,6 +311,36 @@ void main() {
 
   test('a wrong store key is "not readable" (1)', () {
     expect(peek(key: 'ab' * 32).rc, 1);
+  });
+
+  // t_5d6bdca09e: stored_sender is messages.sender_id of the stored_body row.
+  group('stored_sender', () {
+    test("is the row's sender, NULL when there is no row", () {
+      expect(peek().storedSender, 'alice');
+      expect(peek(id: 'none').storedSender, isNull);
+      expect(peek(conv: 'c2').storedSender, isNull, reason: 'm2 is in c1');
+    });
+
+    test('is my own id for a row I sent, and NULL for a deleted row', () async {
+      bob.reopen();
+      await bob.store.upsertAll([
+        msg('m7', conv: 'c1', sender: 'bob', body: 'mine'),
+        msg(
+          'm6',
+          conv: 'c1',
+          sender: 'alice',
+          body: 'gone',
+          deletion: MessageDeletion.placeholder,
+        ),
+      ]);
+      await bob.store.close();
+      final mine = peek(id: 'm7');
+      expect(mine.storedBody, 'mine');
+      expect(mine.storedSender, 'bob');
+      final gone = peek(id: 'm6');
+      expect(gone.storedBody, isNull);
+      expect(gone.storedSender, isNull);
+    });
   });
 
   group('key_elsewhere', () {

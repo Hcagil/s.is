@@ -308,6 +308,8 @@ void main() {
       ('si not a uuid', null, 'alice'),
       ('si uuid without dashes', null, aliceId.replaceAll('-', '')),
       ('si empty', null, ''),
+      // t_5d6bdca09e: only the lowercase form a uuid column prints.
+      ('si uppercase uuid', null, aliceId.toUpperCase()),
     ]) {
       test("malformed: $label => null 'decrypt_fail'", () async {
         // A bad si is tried with no snapshot peer, so it cannot be a no_peer.

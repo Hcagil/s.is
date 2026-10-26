@@ -12,6 +12,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'app/rust_licences.dart';
 import 'app/sis_app.dart';
 import 'core/runtime_config.dart';
 import 'core/startup_failure.dart';
@@ -180,6 +181,8 @@ Future<void> main() async {
       ),
     );
   });
+  // The Rust crates in the native lib (vodozemac, ...): read only when the licence page opens.
+  registerRustLicences();
   final config = RuntimeConfig.fromEnvironment();
   // iPhone: the keychain group of the store and pickle keys (null elsewhere); the app moved the keys there before Flutter started.
   final keychainGroup = await cryptoKeychainGroup();

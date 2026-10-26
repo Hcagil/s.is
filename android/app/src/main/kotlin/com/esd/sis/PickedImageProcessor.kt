@@ -11,6 +11,8 @@ import java.io.FileOutputStream
 import kotlin.math.roundToInt
 
 private const val JPEG_QUALITY = 85
+// The largest photo source copied (same 50 MiB as lib/features/chat/domain/file_attachment.dart maxFileBytes).
+private const val MAX_PHOTO_BYTES = 50L * 1024 * 1024
 
 class NotImageException : Exception()
 
@@ -29,10 +31,20 @@ class PickedImageProcessor(private val context: Context) {
         if (type != null && !type.startsWith("image/")) throw NotImageException()
         val raw = File(context.cacheDir, "picked_raw_${System.nanoTime()}")
         val input = resolver.openInputStream(uri) ?: throw NotImageException()
-        input.use { stream ->
-            FileOutputStream(raw).use { output -> stream.copyTo(output) }
-        }
         try {
+            input.use { stream ->
+                FileOutputStream(raw).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var total = 0L
+                    while (true) {
+                        val n = stream.read(buffer)
+                        if (n < 0) break
+                        total += n
+                        if (total > MAX_PHOTO_BYTES) throw NotImageException() // too big: refused like a non-photo
+                        output.write(buffer, 0, n)
+                    }
+                }
+            }
             val orientation = try {
                 ExifInterface(raw.absolutePath)
                     .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)

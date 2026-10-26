@@ -5,9 +5,11 @@
 // implementation: the file is opened read-only, nothing is ever written, any
 // failure is null, and a held lock gives null after about 1 s, never a hang.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,6 +22,7 @@ import 'package:sis/features/chat/domain/encrypted_message_repository.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/domain/message.dart' show MessageDeletion;
 import 'package:sis/features/chat/domain/message_envelope.dart';
+import 'package:sis/features/chat/domain/push_inbox_store.dart';
 import 'package:sis/features/crypto/data/drift_olm_pickle_store.dart';
 import 'package:sis/features/crypto/data/drift_session_engine.dart';
 import 'package:sis/features/crypto/data/olm_key_engine.dart';
@@ -481,6 +484,229 @@ void main() {
     expect(sw.elapsedMilliseconds, greaterThanOrEqualTo(150));
   });
 
+  // Slice 2 (t_428ad7c883): with budgetLeftMs the peek also saves the opened
+  // text into push_inbox, only when a STORED session or peer key opened it
+  // (W1), the chat is in the store (W2), with the store's peer as sender (W3)
+  // and sealed = sha256 hex of the ciphertext string. The ratchet is never
+  // saved: the app opens the same ciphertext afterwards.
+  group('push_inbox write (Android)', () {
+    List<Map<String, Object?>> inboxRows(Phone p) {
+      final db = sqlite3.open(p.h.file.path);
+      try {
+        db.execute("PRAGMA key = \"x'${p.keyHex}'\";");
+        return [
+          for (final r in db.select('SELECT * FROM push_inbox')) {...r},
+        ];
+      } finally {
+        db.close();
+      }
+    }
+
+    Future<String?> peekSave(
+      LockedText m, {
+      String id = 'm2',
+      String conv = 'c1',
+      int budget = 3000,
+      String? si,
+      List<String>? codes,
+    }) => peekEncryptedText(
+      storePath: bob.h.file.path,
+      storeKeyHex: bob.keyHex,
+      pickleKey: bob.pk,
+      ownerId: 'bob',
+      conversationId: conv,
+      messageId: id,
+      ciphertext: m.ciphertext,
+      olmType: m.olmType,
+      senderId: si,
+      budgetLeftMs: () => budget,
+      onInbox: codes?.add,
+    );
+
+    /// normalMessage, but the push came before any sync: no messages row.
+    Future<LockedText> pushedFirst({String conv = 'c1'}) async {
+      final m2 = await normalMessage(conv: conv);
+      await bob.store.remove('m2');
+      await bob.store.close();
+      return m2;
+    }
+
+    test('a normal message (type 1) on a stored session is saved with the '
+        'store peer as sender and sealed = sha256 of the ciphertext; the app '
+        'opens the same ciphertext afterwards and its row replaces the '
+        'inbox row', () async {
+      final m2 = await pushedFirst();
+      final codes = <String>[];
+      expect(await peekSave(m2, codes: codes), 'secret words');
+      expect(codes, ['saved']);
+      final row = inboxRows(bob).single;
+      expect(row['message_id'], 'm2');
+      expect(row['conversation_id'], 'c1');
+      expect(row['sender_id'], 'alice');
+      expect(row['body'], 'secret words', reason: 'envelope text only');
+      expect(
+        row['sealed'],
+        sha256.convert(utf8.encode(m2.ciphertext)).toString(),
+      );
+
+      bob.reopen();
+      expect(ok(await bobOpens(m2)), contains('secret words'));
+      await bob.store.upsertAll([
+        msg('m2', sender: 'alice', body: 'secret words'),
+      ]);
+      expect(await (bob.store as PushInboxStore).pushInbox(), isEmpty);
+    });
+
+    test('a pre-key message on a new session with the stored peer key is '
+        'saved; the one-time key is used up only by the app', () async {
+      ok(await alice.engine.createOutbound('bob', bob.keys()));
+      ok(await bobOpens(await aliceSends('m1', 'first')));
+      ok(await alice.engine.createOutbound('bob', bob.keys()));
+      final m3 = await aliceSends('m3', 'fresh start');
+      expect(m3.olmType, 0);
+      await bob.store.close();
+      final codes = <String>[];
+      expect(await peekSave(m3, id: 'm3', codes: codes), 'fresh start');
+      expect(codes, ['saved']);
+      expect(inboxRows(bob).single['sender_id'], 'alice');
+      bob.reopen();
+      expect(ok(await bobOpens(m3)), contains('fresh start'));
+    });
+
+    test('without budgetLeftMs nothing is written (file byte-for-byte '
+        'unchanged)', () async {
+      final m2 = await pushedFirst();
+      final before = await bob.h.file.readAsBytes();
+      final codes = <String>[];
+      expect(
+        await peekEncryptedText(
+          storePath: bob.h.file.path,
+          storeKeyHex: bob.keyHex,
+          pickleKey: bob.pk,
+          ownerId: 'bob',
+          conversationId: 'c1',
+          messageId: 'm2',
+          ciphertext: m2.ciphertext,
+          olmType: m2.olmType,
+          onInbox: codes.add,
+        ),
+        'secret words',
+      );
+      expect(codes, isEmpty, reason: 'no write attempted');
+      expect(inboxRows(bob), isEmpty);
+      expect(await bob.h.file.readAsBytes(), before);
+    });
+
+    test('budgetLeftMs given and no onInbox listener: the text is still '
+        'saved (onInbox only reports the code)', () async {
+      final m2 = await pushedFirst();
+      expect(
+        await peekEncryptedText(
+          storePath: bob.h.file.path,
+          storeKeyHex: bob.keyHex,
+          pickleKey: bob.pk,
+          ownerId: 'bob',
+          conversationId: 'c1',
+          messageId: 'm2',
+          ciphertext: m2.ciphertext,
+          olmType: m2.olmType,
+          budgetLeftMs: () => 3000,
+        ),
+        'secret words',
+      );
+      expect(inboxRows(bob).map((r) => r['message_id']), ['m2']);
+    });
+
+    test('under 500 ms left: the text is still shown, inbox_budget, no '
+        'row', () async {
+      final m2 = await pushedFirst();
+      final codes = <String>[];
+      expect(await peekSave(m2, budget: 499, codes: codes), 'secret words');
+      expect(codes, ['inbox_budget']);
+      expect(inboxRows(bob), isEmpty);
+    });
+
+    test('the lock placeholder already stored (the app could not open it): '
+        'the app\'s row wins, no inbox row', () async {
+      final m2 = await normalMessage();
+      await bob.store.close();
+      final codes = <String>[];
+      expect(await peekSave(m2, codes: codes), 'secret words');
+      expect(codes, ['inbox_skip']);
+      expect(inboxRows(bob), isEmpty);
+    });
+
+    test('a failed decrypt writes nothing', () async {
+      final m2 = await pushedFirst();
+      final bad = LockedText(
+        ciphertext: m2.ciphertext.replaceRange(20, 24, 'AAAA'),
+        olmType: 1,
+        sessionId: m2.sessionId,
+      );
+      final codes = <String>[];
+      expect(await peekSave(bad, codes: codes), isNull);
+      expect(codes, isNot(contains('saved')));
+      expect(inboxRows(bob), isEmpty);
+    });
+
+    test('W2: a chat whose peer is not in the store gives no row', () async {
+      // c2 is carol's chat; the session is alice's: refused, nothing saved.
+      final m2 = await pushedFirst(conv: 'c2');
+      expect(await peekSave(m2, conv: 'c2'), isNull);
+      expect(inboxRows(bob), isEmpty);
+      // A conversation id not in the store at all.
+      expect(await peekSave(m2, conv: 'c9'), isNull);
+      expect(inboxRows(bob), isEmpty);
+    });
+
+    // Slice 1 Android WAL: the read-only peek and the push write on a WAL
+    // file, with the app's connection open (-shm present) and cold (none).
+    for (final appOpen in [true, false]) {
+      test(
+        'WAL store, app ${appOpen ? 'open (-shm present)' : 'closed (no '
+                  '-shm)'}: readPeekRows and the peek work, the push row is saved',
+        () async {
+          final m2 = await pushedFirst();
+          final raw = sqlite3.open(bob.h.file.path);
+          raw.execute("PRAGMA key = \"x'${bob.keyHex}'\";");
+          expect(
+            raw.select('PRAGMA journal_mode = WAL').first.values.first,
+            'wal',
+          );
+          raw.close();
+          if (appOpen) {
+            bob.reopen();
+            await bob.store.upsertAll([msg('w0', sender: 'alice', t: -5)]);
+            expect(bob.h.shm.existsSync(), isTrue, reason: 'fixture: -shm');
+          } else {
+            expect(bob.h.shm.existsSync(), isFalse, reason: 'fixture: no -shm');
+          }
+          final r = readPeekRows(
+            path: bob.h.file.path,
+            keyHex: bob.keyHex,
+            conversationId: 'c1',
+            messageId: 'm2',
+          );
+          expect(r?.peerUserId, 'alice');
+          expect(r!.sessions, isNotEmpty);
+          final codes = <String>[];
+          expect(await peekSave(m2, codes: codes), 'secret words');
+          expect(codes, ['saved']);
+          expect(inboxRows(bob).single['message_id'], 'm2');
+        },
+      );
+    }
+
+    test('W3: a push sender id (si) that is not the stored peer never '
+        'becomes the saved sender', () async {
+      final m2 = await pushedFirst();
+      await peekSave(m2, si: '0000a11c-0000-4000-8000-0000000000ee');
+      for (final r in inboxRows(bob)) {
+        expect(r['sender_id'], 'alice');
+      }
+    });
+  });
+
   // The sender key of a pre-key push (fix C contract): sk/si open a first
   // message with no stored session, read-only; a stored session of si wins;
   // a key already stored for another person is refused. Ids are uuids here
@@ -641,6 +867,103 @@ void main() {
       expect(await peekK(m, 'f2', sk: c.identityKey, si: aId), isNull);
       // Control: the right key opens the same push.
       expect(await peekK(m, 'f2', sk: a.identityKey, si: aId), 'alice first');
+    });
+
+    // Slice 2 W1/W2: text opened with the push's own key (first contact) is
+    // shown but NEVER saved; a chat not in the store is never saved.
+    group('push_inbox write', () {
+      List<Map<String, Object?>> rowsOf() {
+        final db = sqlite3.open(b.h.file.path);
+        try {
+          db.execute("PRAGMA key = \"x'${b.keyHex}'\";");
+          return [
+            for (final r in db.select('SELECT * FROM push_inbox')) {...r},
+          ];
+        } finally {
+          db.close();
+        }
+      }
+
+      Future<String?> save(
+        LockedText m,
+        String id,
+        List<String> codes, {
+        String conv = 'k1',
+        String? sk,
+        String? si,
+      }) => peekEncryptedText(
+        storePath: b.h.file.path,
+        storeKeyHex: b.keyHex,
+        pickleKey: b.pk,
+        ownerId: bId,
+        conversationId: conv,
+        messageId: id,
+        ciphertext: m.ciphertext,
+        olmType: m.olmType,
+        senderKey: sk,
+        senderId: si,
+        budgetLeftMs: () => 3000,
+        onInbox: codes.add,
+      );
+
+      test('W1: a first-contact push opened with sk/si shows the text and '
+          'writes nothing; the store file is unchanged', () async {
+        final m = await send(a, 'w1', 'first ever');
+        await b.store.close();
+        final before = await b.h.file.readAsBytes();
+        final codes = <String>[];
+        expect(
+          await save(m, 'w1', codes, sk: a.identityKey, si: aId),
+          'first ever',
+        );
+        expect(codes, isNot(contains('saved')));
+        expect(rowsOf(), isEmpty);
+        expect(await b.h.file.readAsBytes(), before);
+      });
+
+      test('control: once the session is stored, the next pre-key message '
+          'on it is saved', () async {
+        final first = await send(a, 'w0', 'opened by app');
+        ok(
+          await b.engine.decrypt(
+            peerUserId: aId,
+            peerIdentityKey: a.identityKey,
+            ciphertext: first.ciphertext,
+            olmType: first.olmType,
+          ),
+        );
+        // Same outbound session (no reply yet): still a pre-key message
+        // whose session id is stored.
+        final m = ok(
+          await a.engine.encrypt(
+            bId,
+            encodeEnvelope(id: 'w2', text: 'second'),
+            peerIdentityKey: b.identityKey,
+          ),
+        );
+        expect(m.olmType, 0);
+        await b.store.close();
+        final codes = <String>[];
+        expect(
+          await save(m, 'w2', codes, sk: a.identityKey, si: aId),
+          'second',
+        );
+        expect(codes, ['saved']);
+        expect(rowsOf().single['sender_id'], aId);
+      });
+
+      test('W2: a chat not in the store (si is the peer) is shown, not '
+          'saved', () async {
+        final m = await send(a, 'w3', 'no snapshot');
+        await b.store.close();
+        final codes = <String>[];
+        expect(
+          await save(m, 'w3', codes, conv: 'k3', sk: a.identityKey, si: aId),
+          'no snapshot',
+        );
+        expect(codes, isNot(contains('saved')));
+        expect(rowsOf(), isEmpty);
+      });
     });
   });
 }

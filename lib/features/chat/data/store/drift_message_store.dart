@@ -12,12 +12,13 @@ import '../../../../core/startup_marks.dart';
 import '../../domain/encrypted_message_repository.dart';
 import '../../domain/message.dart';
 import '../../domain/message_store.dart';
+import '../../domain/push_inbox_store.dart';
 import 'message_row_mapper.dart';
 import 'store_database.dart';
 import 'store_location.dart' show deleteOrphanStores;
 
 /// The on-phone message store, one encrypted SQLite file; every method best-effort, never throws.
-final class DriftMessageStore implements MessageStore {
+final class DriftMessageStore implements MessageStore, PushInboxStore {
   DriftMessageStore({
     required this.ownerId,
     required this._file,
@@ -484,9 +485,15 @@ final class DriftMessageStore implements MessageStore {
       });
 
   @override
-  Future<void> remove(String messageId) => _write((db) async {
-    await (db.delete(db.messages)..where((t) => t.id.equals(messageId))).go();
-  });
+  Future<void> remove(String messageId) => _write(
+    (db) => db.transaction(() async {
+      await (db.delete(db.messages)..where((t) => t.id.equals(messageId))).go();
+      // A withdrawn message must not come back from the notification's copy.
+      await (db.delete(
+        db.pushInbox,
+      )..where((t) => t.messageId.equals(messageId))).go();
+    }),
+  );
 
   @override
   Future<void> deleteConversation(String conversationId) => _write(
@@ -500,6 +507,9 @@ final class DriftMessageStore implements MessageStore {
       await (db.delete(
         db.conversations,
       )..where((t) => t.id.equals(conversationId))).go();
+      await (db.delete(
+        db.pushInbox,
+      )..where((t) => t.conversationId.equals(conversationId))).go();
     }),
   );
 
@@ -530,6 +540,31 @@ final class DriftMessageStore implements MessageStore {
       return [for (final r in rows) messageFromRow(db.messages.map(r.data))];
     });
   }
+
+  @override
+  Future<List<Message>> pushInbox() => _run(const [], (db) async {
+    final rows = await (db.select(
+      db.pushInbox,
+    )..orderBy([(t) => OrderingTerm.asc(t.receivedAt)])).get();
+    return [
+      for (final r in rows)
+        Message(
+          id: r.messageId,
+          conversationId: r.conversationId,
+          senderId: r.senderId,
+          body: r.body,
+          createdAt: DateTime.fromMicrosecondsSinceEpoch(r.receivedAt),
+        ),
+    ];
+  });
+
+  @override
+  Future<void> sweepPushInbox(DateTime before) => _run<void>(null, (db) async {
+    await (db.delete(db.pushInbox)..where(
+          (t) => t.receivedAt.isSmallerThanValue(before.microsecondsSinceEpoch),
+        ))
+        .go();
+  });
 
   /// Waits for the work already running before closing, so no transaction is
   /// abandoned in the database isolate; work started later waits for the clear.

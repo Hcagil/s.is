@@ -624,3 +624,14 @@ Nothing contacts the site before that tap.
 - `versionCode` stays `run_number + 100` of `release.yml` and only rises; the minimum supported build is untouched; nothing is forced.
 - Testers get their tasks once a day after the noon release; an urgent release gets its own task at once.
 
+## 2026-10-26 — The notification saves the opened text into a separate push_inbox table
+
+**Decision.** On Android, when a private-chat push is opened with a session or key already stored on the phone, the headless engine also writes the text into a new table `push_inbox` of the encrypted store (schema 5). It never writes into `messages`. The app reads `push_inbox` once when a chat or the list loads and shows its rows after the stored ones. A trigger on `messages` (insert and update) deletes the row when the real one lands; a finished sync deletes rows the server never confirmed.
+
+**Why.** The owner wants a notification tap to show the new message on the first frame. Writing into `messages` would let a body the app cannot verify stay on screen, and a ciphertext hash set by the push would make the app skip its own decrypt and never use up the one-time key. The decrypt in the push works on a copy, so the ratchet is still only saved by the app.
+
+**Consequences.**
+- The save is skipped for a first contact (the key came in the push), for a chat not in the store, and on a store not yet migrated to schema 5; the writer never creates a file or table.
+- The engine is not destroyed while the write runs: Kotlin passes the remaining push time, Dart writes only with at least 500 ms left, and Kotlin waits a short grace.
+- iOS and plain (unencrypted) group messages are separate, later slices.
+

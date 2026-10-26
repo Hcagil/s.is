@@ -3200,6 +3200,435 @@ class ReactionPlainsCompanion extends UpdateCompanion<StoredReactionPlainRow> {
   }
 }
 
+class $PushInboxTable extends PushInbox
+    with TableInfo<$PushInboxTable, StoredPushInboxRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PushInboxTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _messageIdMeta = const VerificationMeta(
+    'messageId',
+  );
+  @override
+  late final GeneratedColumn<String> messageId = GeneratedColumn<String>(
+    'message_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _conversationIdMeta = const VerificationMeta(
+    'conversationId',
+  );
+  @override
+  late final GeneratedColumn<String> conversationId = GeneratedColumn<String>(
+    'conversation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _senderIdMeta = const VerificationMeta(
+    'senderId',
+  );
+  @override
+  late final GeneratedColumn<String> senderId = GeneratedColumn<String>(
+    'sender_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bodyMeta = const VerificationMeta('body');
+  @override
+  late final GeneratedColumn<String> body = GeneratedColumn<String>(
+    'body',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sealedMeta = const VerificationMeta('sealed');
+  @override
+  late final GeneratedColumn<String> sealed = GeneratedColumn<String>(
+    'sealed',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _receivedAtMeta = const VerificationMeta(
+    'receivedAt',
+  );
+  @override
+  late final GeneratedColumn<int> receivedAt = GeneratedColumn<int>(
+    'received_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    messageId,
+    conversationId,
+    senderId,
+    body,
+    sealed,
+    receivedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'push_inbox';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredPushInboxRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('message_id')) {
+      context.handle(
+        _messageIdMeta,
+        messageId.isAcceptableOrUnknown(data['message_id']!, _messageIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_messageIdMeta);
+    }
+    if (data.containsKey('conversation_id')) {
+      context.handle(
+        _conversationIdMeta,
+        conversationId.isAcceptableOrUnknown(
+          data['conversation_id']!,
+          _conversationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_conversationIdMeta);
+    }
+    if (data.containsKey('sender_id')) {
+      context.handle(
+        _senderIdMeta,
+        senderId.isAcceptableOrUnknown(data['sender_id']!, _senderIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_senderIdMeta);
+    }
+    if (data.containsKey('body')) {
+      context.handle(
+        _bodyMeta,
+        body.isAcceptableOrUnknown(data['body']!, _bodyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bodyMeta);
+    }
+    if (data.containsKey('sealed')) {
+      context.handle(
+        _sealedMeta,
+        sealed.isAcceptableOrUnknown(data['sealed']!, _sealedMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sealedMeta);
+    }
+    if (data.containsKey('received_at')) {
+      context.handle(
+        _receivedAtMeta,
+        receivedAt.isAcceptableOrUnknown(data['received_at']!, _receivedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_receivedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {messageId};
+  @override
+  StoredPushInboxRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredPushInboxRow(
+      messageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}message_id'],
+      )!,
+      conversationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}conversation_id'],
+      )!,
+      senderId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sender_id'],
+      )!,
+      body: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body'],
+      )!,
+      sealed: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sealed'],
+      )!,
+      receivedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}received_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PushInboxTable createAlias(String alias) {
+    return $PushInboxTable(attachedDatabase, alias);
+  }
+}
+
+class StoredPushInboxRow extends DataClass
+    implements Insertable<StoredPushInboxRow> {
+  final String messageId;
+  final String conversationId;
+  final String senderId;
+  final String body;
+
+  /// sha256 hex of the ciphertext the body was opened from.
+  final String sealed;
+
+  /// Local clock, microseconds since epoch.
+  final int receivedAt;
+  const StoredPushInboxRow({
+    required this.messageId,
+    required this.conversationId,
+    required this.senderId,
+    required this.body,
+    required this.sealed,
+    required this.receivedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['message_id'] = Variable<String>(messageId);
+    map['conversation_id'] = Variable<String>(conversationId);
+    map['sender_id'] = Variable<String>(senderId);
+    map['body'] = Variable<String>(body);
+    map['sealed'] = Variable<String>(sealed);
+    map['received_at'] = Variable<int>(receivedAt);
+    return map;
+  }
+
+  PushInboxCompanion toCompanion(bool nullToAbsent) {
+    return PushInboxCompanion(
+      messageId: Value(messageId),
+      conversationId: Value(conversationId),
+      senderId: Value(senderId),
+      body: Value(body),
+      sealed: Value(sealed),
+      receivedAt: Value(receivedAt),
+    );
+  }
+
+  factory StoredPushInboxRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredPushInboxRow(
+      messageId: serializer.fromJson<String>(json['messageId']),
+      conversationId: serializer.fromJson<String>(json['conversationId']),
+      senderId: serializer.fromJson<String>(json['senderId']),
+      body: serializer.fromJson<String>(json['body']),
+      sealed: serializer.fromJson<String>(json['sealed']),
+      receivedAt: serializer.fromJson<int>(json['receivedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'messageId': serializer.toJson<String>(messageId),
+      'conversationId': serializer.toJson<String>(conversationId),
+      'senderId': serializer.toJson<String>(senderId),
+      'body': serializer.toJson<String>(body),
+      'sealed': serializer.toJson<String>(sealed),
+      'receivedAt': serializer.toJson<int>(receivedAt),
+    };
+  }
+
+  StoredPushInboxRow copyWith({
+    String? messageId,
+    String? conversationId,
+    String? senderId,
+    String? body,
+    String? sealed,
+    int? receivedAt,
+  }) => StoredPushInboxRow(
+    messageId: messageId ?? this.messageId,
+    conversationId: conversationId ?? this.conversationId,
+    senderId: senderId ?? this.senderId,
+    body: body ?? this.body,
+    sealed: sealed ?? this.sealed,
+    receivedAt: receivedAt ?? this.receivedAt,
+  );
+  StoredPushInboxRow copyWithCompanion(PushInboxCompanion data) {
+    return StoredPushInboxRow(
+      messageId: data.messageId.present ? data.messageId.value : this.messageId,
+      conversationId: data.conversationId.present
+          ? data.conversationId.value
+          : this.conversationId,
+      senderId: data.senderId.present ? data.senderId.value : this.senderId,
+      body: data.body.present ? data.body.value : this.body,
+      sealed: data.sealed.present ? data.sealed.value : this.sealed,
+      receivedAt: data.receivedAt.present
+          ? data.receivedAt.value
+          : this.receivedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredPushInboxRow(')
+          ..write('messageId: $messageId, ')
+          ..write('conversationId: $conversationId, ')
+          ..write('senderId: $senderId, ')
+          ..write('body: $body, ')
+          ..write('sealed: $sealed, ')
+          ..write('receivedAt: $receivedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    messageId,
+    conversationId,
+    senderId,
+    body,
+    sealed,
+    receivedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredPushInboxRow &&
+          other.messageId == this.messageId &&
+          other.conversationId == this.conversationId &&
+          other.senderId == this.senderId &&
+          other.body == this.body &&
+          other.sealed == this.sealed &&
+          other.receivedAt == this.receivedAt);
+}
+
+class PushInboxCompanion extends UpdateCompanion<StoredPushInboxRow> {
+  final Value<String> messageId;
+  final Value<String> conversationId;
+  final Value<String> senderId;
+  final Value<String> body;
+  final Value<String> sealed;
+  final Value<int> receivedAt;
+  final Value<int> rowid;
+  const PushInboxCompanion({
+    this.messageId = const Value.absent(),
+    this.conversationId = const Value.absent(),
+    this.senderId = const Value.absent(),
+    this.body = const Value.absent(),
+    this.sealed = const Value.absent(),
+    this.receivedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PushInboxCompanion.insert({
+    required String messageId,
+    required String conversationId,
+    required String senderId,
+    required String body,
+    required String sealed,
+    required int receivedAt,
+    this.rowid = const Value.absent(),
+  }) : messageId = Value(messageId),
+       conversationId = Value(conversationId),
+       senderId = Value(senderId),
+       body = Value(body),
+       sealed = Value(sealed),
+       receivedAt = Value(receivedAt);
+  static Insertable<StoredPushInboxRow> custom({
+    Expression<String>? messageId,
+    Expression<String>? conversationId,
+    Expression<String>? senderId,
+    Expression<String>? body,
+    Expression<String>? sealed,
+    Expression<int>? receivedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (messageId != null) 'message_id': messageId,
+      if (conversationId != null) 'conversation_id': conversationId,
+      if (senderId != null) 'sender_id': senderId,
+      if (body != null) 'body': body,
+      if (sealed != null) 'sealed': sealed,
+      if (receivedAt != null) 'received_at': receivedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PushInboxCompanion copyWith({
+    Value<String>? messageId,
+    Value<String>? conversationId,
+    Value<String>? senderId,
+    Value<String>? body,
+    Value<String>? sealed,
+    Value<int>? receivedAt,
+    Value<int>? rowid,
+  }) {
+    return PushInboxCompanion(
+      messageId: messageId ?? this.messageId,
+      conversationId: conversationId ?? this.conversationId,
+      senderId: senderId ?? this.senderId,
+      body: body ?? this.body,
+      sealed: sealed ?? this.sealed,
+      receivedAt: receivedAt ?? this.receivedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (messageId.present) {
+      map['message_id'] = Variable<String>(messageId.value);
+    }
+    if (conversationId.present) {
+      map['conversation_id'] = Variable<String>(conversationId.value);
+    }
+    if (senderId.present) {
+      map['sender_id'] = Variable<String>(senderId.value);
+    }
+    if (body.present) {
+      map['body'] = Variable<String>(body.value);
+    }
+    if (sealed.present) {
+      map['sealed'] = Variable<String>(sealed.value);
+    }
+    if (receivedAt.present) {
+      map['received_at'] = Variable<int>(receivedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PushInboxCompanion(')
+          ..write('messageId: $messageId, ')
+          ..write('conversationId: $conversationId, ')
+          ..write('senderId: $senderId, ')
+          ..write('body: $body, ')
+          ..write('sealed: $sealed, ')
+          ..write('receivedAt: $receivedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$StoreDatabase extends GeneratedDatabase {
   _$StoreDatabase(QueryExecutor e) : super(e);
   $StoreDatabaseManager get managers => $StoreDatabaseManager(this);
@@ -3211,6 +3640,7 @@ abstract class _$StoreDatabase extends GeneratedDatabase {
   late final $OlmSessionsTable olmSessions = $OlmSessionsTable(this);
   late final $SendQueueRowsTable sendQueueRows = $SendQueueRowsTable(this);
   late final $ReactionPlainsTable reactionPlains = $ReactionPlainsTable(this);
+  late final $PushInboxTable pushInbox = $PushInboxTable(this);
   late final Index messagesConversationCreated = Index(
     'messages_conversation_created',
     'CREATE INDEX messages_conversation_created ON messages (conversation_id, created_at)',
@@ -3228,6 +3658,7 @@ abstract class _$StoreDatabase extends GeneratedDatabase {
     olmSessions,
     sendQueueRows,
     reactionPlains,
+    pushInbox,
     messagesConversationCreated,
   ];
 }
@@ -5040,6 +5471,240 @@ typedef $$ReactionPlainsTableProcessedTableManager =
       StoredReactionPlainRow,
       PrefetchHooks Function()
     >;
+typedef $$PushInboxTableCreateCompanionBuilder = PushInboxCompanion Function({
+  required String messageId,
+  required String conversationId,
+  required String senderId,
+  required String body,
+  required String sealed,
+  required int receivedAt,
+  Value<int> rowid,
+});
+typedef $$PushInboxTableUpdateCompanionBuilder = PushInboxCompanion Function({
+  Value<String> messageId,
+  Value<String> conversationId,
+  Value<String> senderId,
+  Value<String> body,
+  Value<String> sealed,
+  Value<int> receivedAt,
+  Value<int> rowid,
+});
+
+class $$PushInboxTableFilterComposer
+    extends Composer<_$StoreDatabase, $PushInboxTable> {
+  $$PushInboxTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get messageId => $composableBuilder(
+    column: $table.messageId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get senderId => $composableBuilder(
+    column: $table.senderId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sealed => $composableBuilder(
+    column: $table.sealed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get receivedAt => $composableBuilder(
+    column: $table.receivedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PushInboxTableOrderingComposer
+    extends Composer<_$StoreDatabase, $PushInboxTable> {
+  $$PushInboxTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get messageId => $composableBuilder(
+    column: $table.messageId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get senderId => $composableBuilder(
+    column: $table.senderId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sealed => $composableBuilder(
+    column: $table.sealed,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get receivedAt => $composableBuilder(
+    column: $table.receivedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PushInboxTableAnnotationComposer
+    extends Composer<_$StoreDatabase, $PushInboxTable> {
+  $$PushInboxTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get messageId =>
+      $composableBuilder(column: $table.messageId, builder: (column) => column);
+
+  GeneratedColumn<String> get conversationId => $composableBuilder(
+    column: $table.conversationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get senderId =>
+      $composableBuilder(column: $table.senderId, builder: (column) => column);
+
+  GeneratedColumn<String> get body =>
+      $composableBuilder(column: $table.body, builder: (column) => column);
+
+  GeneratedColumn<String> get sealed =>
+      $composableBuilder(column: $table.sealed, builder: (column) => column);
+
+  GeneratedColumn<int> get receivedAt => $composableBuilder(
+    column: $table.receivedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$PushInboxTableTableManager
+    extends
+        RootTableManager<
+          _$StoreDatabase,
+          $PushInboxTable,
+          StoredPushInboxRow,
+          $$PushInboxTableFilterComposer,
+          $$PushInboxTableOrderingComposer,
+          $$PushInboxTableAnnotationComposer,
+          $$PushInboxTableCreateCompanionBuilder,
+          $$PushInboxTableUpdateCompanionBuilder,
+          (
+            StoredPushInboxRow,
+            BaseReferences<
+              _$StoreDatabase,
+              $PushInboxTable,
+              StoredPushInboxRow
+            >,
+          ),
+          StoredPushInboxRow,
+          PrefetchHooks Function()
+        > {
+  $$PushInboxTableTableManager(_$StoreDatabase db, $PushInboxTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PushInboxTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PushInboxTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PushInboxTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> messageId = const Value.absent(),
+                Value<String> conversationId = const Value.absent(),
+                Value<String> senderId = const Value.absent(),
+                Value<String> body = const Value.absent(),
+                Value<String> sealed = const Value.absent(),
+                Value<int> receivedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PushInboxCompanion(
+                messageId: messageId,
+                conversationId: conversationId,
+                senderId: senderId,
+                body: body,
+                sealed: sealed,
+                receivedAt: receivedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String messageId,
+                required String conversationId,
+                required String senderId,
+                required String body,
+                required String sealed,
+                required int receivedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => PushInboxCompanion.insert(
+                messageId: messageId,
+                conversationId: conversationId,
+                senderId: senderId,
+                body: body,
+                sealed: sealed,
+                receivedAt: receivedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$PushInboxTable, StoredPushInboxRow>(table),
+                  BaseReferences<
+                    _$StoreDatabase,
+                    $PushInboxTable,
+                    StoredPushInboxRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PushInboxTableProcessedTableManager =
+    ProcessedTableManager<
+      _$StoreDatabase,
+      $PushInboxTable,
+      StoredPushInboxRow,
+      $$PushInboxTableFilterComposer,
+      $$PushInboxTableOrderingComposer,
+      $$PushInboxTableAnnotationComposer,
+      $$PushInboxTableCreateCompanionBuilder,
+      $$PushInboxTableUpdateCompanionBuilder,
+      (
+        StoredPushInboxRow,
+        BaseReferences<_$StoreDatabase, $PushInboxTable, StoredPushInboxRow>,
+      ),
+      StoredPushInboxRow,
+      PrefetchHooks Function()
+    >;
 
 class $StoreDatabaseManager {
   final _$StoreDatabase _db;
@@ -5059,4 +5724,6 @@ class $StoreDatabaseManager {
       $$SendQueueRowsTableTableManager(_db, _db.sendQueueRows);
   $$ReactionPlainsTableTableManager get reactionPlains =>
       $$ReactionPlainsTableTableManager(_db, _db.reactionPlains);
+  $$PushInboxTableTableManager get pushInbox =>
+      $$PushInboxTableTableManager(_db, _db.pushInbox);
 }

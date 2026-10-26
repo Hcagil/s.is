@@ -18,7 +18,7 @@ const peekChannel = MethodChannel('com.esd.sis/peek');
 /// and always answers 'done' with a Map {text, reason, name}: the text, or null
 /// plus a fixed reason code (never text, ids or keys), and the chat partner's
 /// name from the phone's own copy of the chat (null when unknown). Never
-/// throws; writes nothing.
+/// throws. It writes only through peekEncryptedText (see there): the opened text of a chat the phone already knows, into push_inbox, and only when 'take' carried budget_ms. 'done' is answered after that write has committed and its connection is closed.
 @pragma('vm:entry-point')
 Future<void> peekMain() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +28,9 @@ Future<void> peekMain() async {
   String? peerName;
   try {
     final a = await peekChannel.invokeMapMethod<String, String>('take');
+    // Push time Kotlin still allows when it answered 'take' (ms); the text is saved into the store only when enough is left.
+    final budget = int.tryParse(a?['budget_ms'] ?? '');
+    final took = Stopwatch()..start();
     final key = await StoreKey().read();
     final pickle = await PickleKey().read();
     if (a == null) {
@@ -50,6 +53,11 @@ Future<void> peekMain() async {
         senderId: a['si'],
         onFail: (r) => reason = r,
         onPeerName: (n) => peerName = n,
+        budgetLeftMs: budget == null
+            ? null
+            : () => budget - took.elapsedMilliseconds,
+        // A fixed code, never text, ids or keys.
+        onInbox: (c) => debugPrint('sis.peek inbox $c'),
       );
     }
   } catch (e) {

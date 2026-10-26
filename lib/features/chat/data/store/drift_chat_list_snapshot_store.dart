@@ -50,6 +50,12 @@ class DriftChatListSnapshotStore implements ChatListSnapshotStore {
     final wrote = await _store.run(false, (db) async {
       await db.transaction(() async {
         await db.delete(db.conversations).go();
+        await (db.delete(db.pushInbox)..where(
+              (t) => t.conversationId.isNotIn([
+                for (final c in conversations) c.id,
+              ]),
+            ))
+            .go();
         final inserts = <ConversationsCompanion>[];
         for (int i = 0; i < conversations.length; i++) {
           final c = conversations[i];
@@ -88,6 +94,7 @@ class DriftChatListSnapshotStore implements ChatListSnapshotStore {
     await _store.run(null, (db) async {
       await db.transaction(() async {
         await db.delete(db.conversations).go();
+        await db.delete(db.pushInbox).go();
         await (db.delete(
           db.meta,
         )..where((m) => m.key.equals('chat_list_saved'))).go();

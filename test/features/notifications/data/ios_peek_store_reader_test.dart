@@ -24,21 +24,7 @@ import 'package:sis/features/chat/domain/message_envelope.dart';
 
 import '../../chat/data/store/store_harness.dart';
 import '../../crypto/data/olm_peek_store_test.dart' show Phone, ok;
-
-// Pinned exactly as build_native.sh pins it.
-const _version = '2.6.1';
-const _sqlite = '3.54.0';
-const _sha256 =
-    '3f25af603566a23c821d8e581778b5ece2a541d2435776de57b8d845c176815a';
-const _flags = [
-  '-DSQLITE_THREADSAFE=1',
-  '-DSQLITE_TEMP_STORE=2',
-  '-DSQLITE_DQS=0',
-  '-DSQLITE_OMIT_LOAD_EXTENSION',
-  '-DSQLITE_DEFAULT_MEMSTATUS=0',
-  '-DSQLITE_OMIT_SHARED_CACHE',
-  '-DSQLITE_OMIT_DEPRECATED',
-];
+import 'peek_c_build.dart';
 
 final class SisPeekRows extends Struct {
   external Pointer<Uint8> ownerId;
@@ -125,69 +111,6 @@ class Rows {
   final List<String?> sessionPeers, sessionKeys;
 }
 
-Future<void> _run(String exe, List<String> args) async {
-  final r = await Process.run(exe, args);
-  if (r.exitCode != 0) {
-    fail('$exe ${args.join(' ')}\n${r.stdout}\n${r.stderr}');
-  }
-}
-
-/// Builds the reader fresh (the C file may change between runs) on top of a
-/// cached SQLite3 Multiple Ciphers object file.
-Future<String> _buildReader() async {
-  final dir = Directory('.dart_tool/sis_peek_c')..createSync(recursive: true);
-  final obj = '${dir.path}/sqlite3mc-$_version.o';
-  if (!File(obj).existsSync()) {
-    final zip = '${dir.path}/amalgamation.zip';
-    await _run('curl', [
-      '-fsSL',
-      '--retry',
-      '3',
-      '-o',
-      zip,
-      'https://github.com/utelle/SQLite3MultipleCiphers/releases/download/'
-          'v$_version/sqlite3mc-$_version-sqlite-$_sqlite-amalgamation.zip',
-    ]);
-    final sum = await Process.run('sha256sum', [zip]);
-    expect((sum.stdout as String).split(' ').first, _sha256);
-    await _run('unzip', [
-      '-q',
-      '-o',
-      zip,
-      'sqlite3mc_amalgamation.c',
-      'sqlite3.h',
-      '-d',
-      dir.path,
-    ]);
-    await _run('clang', [
-      '-c',
-      '-fPIC',
-      '-O1',
-      '-w',
-      ..._flags,
-      '${dir.path}/sqlite3mc_amalgamation.c',
-      '-o',
-      obj,
-    ]);
-  }
-  final so = '${dir.path}/libpeek-$pid.so';
-  await _run('clang', [
-    '-shared',
-    '-fPIC',
-    '-O1',
-    '-Wl,-Bsymbolic',
-    '-I',
-    dir.path,
-    'ios/NotificationService/PeekStore.c',
-    obj,
-    '-lm',
-    '-lpthread',
-    '-o',
-    so,
-  ]);
-  return so;
-}
-
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   late _Read read;
@@ -197,7 +120,7 @@ void main() {
   late Phone carol;
 
   setUpAll(() async {
-    final so = await _buildReader();
+    final so = await buildPeekLib();
     final lib = DynamicLibrary.open(so);
     read = lib.lookupFunction<_ReadC, _Read>('sis_peek_read');
     free = lib

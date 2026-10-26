@@ -102,18 +102,18 @@ static int read_sessions(sqlite3 *db, const char *peer, SisPeekRows *out) {
   return rc == SQLITE_DONE ? SQLITE_OK : rc;
 }
 
-/* Opens read-only and unlocks with the raw key; the pragmas keep memory small and forbid writes. */
-static int open_keyed(const char *path, const char *key_hex, sqlite3 **db) {
+/* Opens read-only (or read-write when writable, never creating a file) and unlocks with the raw key; the read-only pragmas forbid writes. */
+static int open_keyed(const char *path, const char *key_hex, sqlite3 **db, int writable) {
   char pragma[96];
   *db = NULL;
-  int rc = sqlite3_open_v2(path, db, SQLITE_OPEN_READONLY, NULL);
+  int rc = sqlite3_open_v2(path, db, writable ? SQLITE_OPEN_READWRITE : SQLITE_OPEN_READONLY, NULL);
   if (rc == SQLITE_OK) {
     snprintf(pragma, sizeof pragma, "PRAGMA key = \"x'%s'\";", key_hex);
     rc = sqlite3_exec(*db, pragma, 0, 0, 0);
     { volatile char *w = pragma; for (size_t i = 0; i < sizeof pragma; i++) w[i] = 0; }
   }
   if (rc == SQLITE_OK) {
-    rc = sqlite3_exec(*db, "PRAGMA busy_timeout = 1000; PRAGMA query_only = 1; PRAGMA cache_size = -256; PRAGMA mmap_size = 0;", 0, 0, 0);
+    rc = sqlite3_exec(*db, writable ? "PRAGMA busy_timeout = 100; PRAGMA cache_size = -256; PRAGMA mmap_size = 0;" : "PRAGMA busy_timeout = 1000; PRAGMA query_only = 1; PRAGMA cache_size = -256; PRAGMA mmap_size = 0;", 0, 0, 0);
   }
   if (rc != SQLITE_OK && *db != NULL) {
     sqlite3_close(*db);
@@ -159,14 +159,92 @@ static int valid_key_hex(const char *s) {
   return 1;
 }
 
-int sis_peek_read(const char *path, const char *key_hex, const char *conversation_id, const char *message_id, const char *sender_key, const char *sender_id, SisPeekRows *out) {
+/* One INSERT in one BEGIN IMMEDIATE transaction; *result is 0 saved, 3 skipped, 4 other (only meaningful when SQLITE_OK is returned). */
+static int save_once(sqlite3 *db, const char *conversation_id, const char *message_id, const char *peer_user_id, const char *body, const char *sealed, long long received_at_micros, int *result) {
+  sqlite3_stmt *stmt;
+  *result = 4;
+  int rc = sqlite3_exec(db, "BEGIN IMMEDIATE;", 0, 0, 0);
+  if (rc != SQLITE_OK) return rc;
+  rc = sqlite3_prepare_v2(db, "INSERT OR IGNORE INTO push_inbox(message_id, conversation_id, sender_id, body, sealed, received_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE NOT EXISTS (SELECT 1 FROM messages WHERE id = ?7) AND EXISTS (SELECT 1 FROM conversations WHERE id = ?8);", -1, &stmt, NULL);
+  if (rc != SQLITE_OK) {
+    sqlite3_exec(db, "ROLLBACK;", 0, 0, 0);
+    return rc;
+  }
+  rc = sqlite3_bind_text(stmt, 1, message_id, -1, SQLITE_TRANSIENT);
+  if (rc == SQLITE_OK) rc = sqlite3_bind_text(stmt, 2, conversation_id, -1, SQLITE_TRANSIENT);
+  if (rc == SQLITE_OK) rc = sqlite3_bind_text(stmt, 3, peer_user_id, -1, SQLITE_TRANSIENT);
+  if (rc == SQLITE_OK) rc = sqlite3_bind_text(stmt, 4, body, -1, SQLITE_TRANSIENT);
+  if (rc == SQLITE_OK) rc = sqlite3_bind_text(stmt, 5, sealed, -1, SQLITE_TRANSIENT);
+  if (rc == SQLITE_OK) rc = sqlite3_bind_int64(stmt, 6, received_at_micros);
+  if (rc == SQLITE_OK) rc = sqlite3_bind_text(stmt, 7, message_id, -1, SQLITE_TRANSIENT);
+  if (rc == SQLITE_OK) rc = sqlite3_bind_text(stmt, 8, conversation_id, -1, SQLITE_TRANSIENT);
+  if (rc == SQLITE_OK) rc = sqlite3_step(stmt);
+  sqlite3_finalize(stmt);
+  if (rc != SQLITE_DONE) {
+    sqlite3_exec(db, "ROLLBACK;", 0, 0, 0);
+    return rc == SQLITE_OK ? SQLITE_ERROR : rc;
+  }
+  int saved = sqlite3_changes(db) == 1;
+  rc = sqlite3_exec(db, "COMMIT;", 0, 0, 0);
+  if (rc != SQLITE_OK) {
+    sqlite3_exec(db, "ROLLBACK;", 0, 0, 0);
+    return rc;
+  }
+  *result = saved ? 0 : 3;
+  return SQLITE_OK;
+}
+
+/* Open, cipher check, schema check, then the insert; *result as in sis_peek_save. The connection is closed before this returns. */
+static int save_try(const char *path, const char *key_hex, const char *conversation_id, const char *message_id, const char *peer_user_id, const char *body, const char *sealed, long long received_at_micros, int *result) {
+  sqlite3 *db = NULL;
+  *result = 4;
+  int rc = open_keyed(path, key_hex, &db, 1);
+  if (rc != SQLITE_OK) return rc;
+  if (!cipher_present(db)) {
+    sqlite3_close(db);
+    return SQLITE_OK;  /* result stays 4 */
+  }
+  sqlite3_stmt *stmt;
+  rc = sqlite3_prepare_v2(db, "PRAGMA user_version;", -1, &stmt, NULL);
+  if (rc == SQLITE_OK) {
+    rc = sqlite3_step(stmt);
+    int version = rc == SQLITE_ROW ? sqlite3_column_int(stmt, 0) : 0;
+    sqlite3_finalize(stmt);
+    if (rc == SQLITE_ROW && version < 5) {
+      sqlite3_close(db);
+      *result = 1;  /* the app has not migrated yet: never create or migrate a table here */
+      return SQLITE_OK;
+    }
+    rc = rc == SQLITE_ROW ? save_once(db, conversation_id, message_id, peer_user_id, body, sealed, received_at_micros, result) : rc;
+  }
+  sqlite3_close(db);
+  return rc;
+}
+
+int sis_peek_save(const char *path, const char *key_hex, const char *conversation_id, const char *message_id, const char *peer_user_id, const char *body, const char *sealed, long long received_at_micros) {
+  struct timespec start, now;
+  if (!path || !key_hex || !conversation_id || !message_id || !peer_user_id || !body || !sealed || !valid_key_hex(key_hex)) return 4;
+  clock_gettime(CLOCK_MONOTONIC, &start);
+  for (;;) {
+    int result;
+    int rc = save_try(path, key_hex, conversation_id, message_id, peer_user_id, body, sealed, received_at_micros, &result);
+    if (rc == SQLITE_OK) return result;
+    if (rc != SQLITE_BUSY && rc != SQLITE_LOCKED) return 4;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    if ((now.tv_sec - start.tv_sec) * 1000 + (now.tv_nsec - start.tv_nsec) / 1000000 > 500) return 2;
+    struct timespec nap = {0, 25000000};
+    nanosleep(&nap, NULL);
+  }
+}
+
+int sis_peek_read(const char *path,const char *key_hex, const char *conversation_id, const char *message_id, const char *sender_key, const char *sender_id, SisPeekRows *out) {
   struct timespec start, now;
   memset(out, 0, sizeof *out);
   if (!path || !key_hex || !conversation_id || !message_id || !valid_key_hex(key_hex)) return 1;
   clock_gettime(CLOCK_MONOTONIC, &start);
   for (;;) {
     sqlite3 *db = NULL;
-    int rc = open_keyed(path, key_hex, &db);
+    int rc = open_keyed(path, key_hex, &db, 0);
     if (rc == SQLITE_OK) {
       if (!cipher_present(db)) {
         sqlite3_close(db);

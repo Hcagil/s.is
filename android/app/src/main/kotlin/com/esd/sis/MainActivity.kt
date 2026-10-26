@@ -60,6 +60,12 @@ class MainActivity : FlutterActivity() {
     private var shareParsing = false
     private val shareWaiters = mutableListOf<MethodChannel.Result>()
 
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        // Before super: the Flutter plugins read the launch intent from there. A tap without our proof is dropped.
+        TapProof.admit(this, intent)
+        super.onCreate(savedInstanceState)
+    }
+
     override fun onDestroy() {
         pickExecutor.shutdown()
         super.onDestroy()
@@ -112,6 +118,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onNewIntent(intent: Intent) {
+        TapProof.admit(this, intent)
         super.onNewIntent(intent)
         setIntent(intent)
         handleShare(intent)

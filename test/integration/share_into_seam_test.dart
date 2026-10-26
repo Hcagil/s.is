@@ -509,6 +509,30 @@ void main() {
     );
   }
 
+  testWidgets('shared text whose unit 3999 is a lead surrogate arrives cut to '
+      '3999 units', (t) async {
+    final stamp = DateTime.now().microsecondsSinceEpoch;
+    final g1 = (await t.runAsync(() => group('SS1 $stamp')))!;
+    final head = 'S$stamp ';
+    final text = '$head${'x' * (3999 - head.length)}\u{1F600}${'y' * 100}';
+    expect(text.codeUnitAt(3999), inInclusiveRange(0xD800, 0xDBFF));
+    final intake = _Intake(SharedContent(text: text));
+    final container = await mount(t, intake, _Importer(dir), _Fetcher());
+    await tick(t, 'SS1 $stamp', g1);
+    await t.tap(find.byKey(const ValueKey('forward-send')));
+    final got = await untilSeen(
+      t,
+      g1,
+      (ms) => ms.any((m) => m.body.startsWith(head)),
+      'the surrogate-cut text',
+    );
+    expect(
+      got.singleWhere((m) => m.body.startsWith(head)).body,
+      text.substring(0, 3999),
+    );
+    await unmount(t, container);
+  });
+
   testWidgets('the caption arrives even when the first photo is unreadable', (
     t,
   ) async {

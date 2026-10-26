@@ -258,6 +258,10 @@ class EncryptedReplyTest {
         assertEquals(InstantPush.notificationId(chat), started.getIntExtra("notificationId", -1))
         assertEquals(chat, started.getStringExtra("payload"))
         assertFalse("the text never rides to MainActivity", started.extras.toString().contains(SECRET))
+        // MainActivity admits it: the activity stamps the intent it starts.
+        TapProof.admit(app, started)
+        assertEquals("SELECT_NOTIFICATION", started.action)
+        assertEquals(chat, started.getStringExtra("payload"))
     }
 
     @Test

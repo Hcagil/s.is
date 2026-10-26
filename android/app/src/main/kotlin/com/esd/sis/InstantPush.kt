@@ -196,7 +196,7 @@ object InstantPush {
         launch.action = "SELECT_NOTIFICATION"
         launch.putExtra("notificationId", id)
         launch.putExtra("payload", conversationId)
-        return PendingIntent.getActivity(context, id, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        return PendingIntent.getActivity(context, id, TapProof.stamp(context, launch), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
     /** Whether the Reply button is drawn. API 31+ enforces unlock itself (setAuthenticationRequired); below that nothing can, so a phone with a secure lock gets no Reply at all (Mark as read stays). */

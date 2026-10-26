@@ -132,6 +132,10 @@ class PushArrivalReceiverTest {
         assertTrue(tap.isActivityIntent)
         assertEquals("SELECT_NOTIFICATION", tap.savedIntent.action)
         assertEquals(chat, tap.savedIntent.getStringExtra("payload"))
+        // MainActivity admits it: the drawn tap carries the proof.
+        val admitted = Intent(tap.savedIntent).also { TapProof.admit(app, it) }
+        assertEquals("SELECT_NOTIFICATION", admitted.action)
+        assertEquals(chat, admitted.getStringExtra("payload"))
 
         assertTrue("the receipt learns the receiver drew it: ${note()}", note()!!.endsWith(",n"))
     }

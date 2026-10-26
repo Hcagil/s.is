@@ -55,7 +55,7 @@ class EncryptedReplyActivity : Activity() {
             .putExtra("notificationId", notificationId)
             .putExtra("payload", conversationId)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        startActivity(open)
+        startActivity(TapProof.stamp(this, open))
         finish()
     }
 }

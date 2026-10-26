@@ -106,6 +106,24 @@ Future<ProviderContainer> pump(
     await tester.pump(const Duration(milliseconds: 20));
   }
   await settleImages(tester);
+  // A photo has a size only once its real decode ends, outside the fake
+  // clock; on a busy machine that outlasts settleImages, and a tap on the
+  // still-empty photo misses it.
+  for (final path in messages.map((m) => m.attachmentPath).nonNulls) {
+    final photo = find.byKey(ValueKey('attachment-$path'));
+    for (var i = 0; i < 400; i++) {
+      if (photo.evaluate().isNotEmpty && !tester.getSize(photo).isEmpty) break;
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+    }
+    expect(
+      tester.getSize(photo).isEmpty,
+      isFalse,
+      reason: 'precondition: $path decoded and sized',
+    );
+  }
   await tester.pumpAndSettle();
   return container;
 }

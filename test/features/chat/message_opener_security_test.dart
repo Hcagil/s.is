@@ -182,11 +182,12 @@ void main() {
       await o.open([for (var i = 0; i < 200; i++) locked('w$i', t: i)]);
       await o.open([locked('w199', t: 199)]); // seen again: still waiting
       await o.open([locked('k0', t: 999, olmType: 0)]);
-      final end = DateTime.now().add(const Duration(seconds: 5));
+      final end = DateTime.now().add(const Duration(seconds: 60));
       while (got.length < 200 && DateTime.now().isBefore(end)) {
         await Future<void>.delayed(const Duration(milliseconds: 20));
       }
       expect(got, ids.toSet());
-    });
+      // 200 real encrypted saves: ~7 s alone, ~17 s on a busy 4-core runner.
+    }, timeout: const Timeout(Duration(minutes: 3)));
   });
 }

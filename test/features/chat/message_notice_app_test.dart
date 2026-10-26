@@ -43,14 +43,14 @@ List<Conversation> twoChats() {
   final now = DateTime.now().toUtc();
   return [
     Conversation(
-      id: 'c1',
+      id: '00000000-0000-4000-8000-0000000000c1',
       other: bob,
       lastMessage: 'hi',
       lastMessageAt: now.subtract(const Duration(minutes: 1)),
       lastSenderId: bob.userId,
     ),
     Conversation(
-      id: 'c2',
+      id: '00000000-0000-4000-8000-0000000000c2',
       other: cem,
       lastMessage: 'yo',
       lastMessageAt: now.subtract(const Duration(minutes: 2)),
@@ -61,7 +61,7 @@ List<Conversation> twoChats() {
 
 Message fromCem(String body) => Message(
   id: 'm-$body',
-  conversationId: 'c2',
+  conversationId: '00000000-0000-4000-8000-0000000000c2',
   senderId: cem.userId,
   body: body,
   createdAt: DateTime.now().toUtc(),
@@ -81,8 +81,12 @@ Future<void> steps(WidgetTester t, int n) async {
 }
 
 /// The app on the chat list, then chat c1 opened by a tap on its row.
-Future<App> openC1(WidgetTester t, {List<Mute> mutes = const []}) async {
-  final chat = ChatFake()..conversationsResult = Ok(twoChats());
+Future<App> openC1(
+  WidgetTester t, {
+  List<Mute> mutes = const [],
+  List<Conversation> extra = const [],
+}) async {
+  final chat = ChatFake()..conversationsResult = Ok([...twoChats(), ...extra]);
   final push = PushSourceFake();
   await t.pumpWidget(
     ProviderScope(
@@ -122,11 +126,18 @@ Future<App> openC1(WidgetTester t, {List<Mute> mutes = const []}) async {
     ),
   );
   await t.pumpAndSettle();
-  expect(byKey('conversation-c2'), findsOneWidget, reason: 'no list');
+  expect(
+    byKey('conversation-00000000-0000-4000-8000-0000000000c2'),
+    findsOneWidget,
+    reason: 'no list',
+  );
   final c = ProviderScope.containerOf(t.element(find.byType(SisApp)));
-  await t.tap(byKey('conversation-c1'));
+  await t.tap(byKey('conversation-00000000-0000-4000-8000-0000000000c1'));
   await steps(t, 20);
-  expect(c.read(openConversationProvider), 'c1');
+  expect(
+    c.read(openConversationProvider),
+    '00000000-0000-4000-8000-0000000000c1',
+  );
   return App(chat, push, c);
 }
 
@@ -142,7 +153,9 @@ Future<(String?, int, bool)> afterOpen(WidgetTester t, App a) async {
   await steps(t, 20);
   final backOnList =
       find.byType(MessageScreen).evaluate().isEmpty &&
-      byKey('conversation-c2').evaluate().isNotEmpty;
+      byKey('conversation-00000000-0000-4000-8000-0000000000c2')
+          .evaluate()
+          .isNotEmpty;
   return (open, screens, backOnList);
 }
 
@@ -167,22 +180,68 @@ void main() {
     final byCard = await afterOpen(t, a);
 
     // The same, by a notification tap, from c1 again.
-    await t.tap(byKey('conversation-c1'));
+    await t.tap(byKey('conversation-00000000-0000-4000-8000-0000000000c1'));
     await steps(t, 20);
-    a.push.openConversation('c2');
+    a.push.openConversation('00000000-0000-4000-8000-0000000000c2');
     await steps(t, 20);
     final byPush = await afterOpen(t, a);
 
-    expect(byCard.$1, 'c2');
+    expect(byCard.$1, '00000000-0000-4000-8000-0000000000c2');
     expect(byCard.$2, 1, reason: 'c2 alone on top of the list, c1 gone');
     expect(byCard.$3, isTrue, reason: 'back from c2 should be the list');
     expect(byCard, byPush, reason: 'card tap and notification tap differ');
   });
 
+  testWidgets('a card for a chat whose id is not a chat id opens nothing and '
+      'goes back to the list', (t) async {
+    const bad = 'not-a-chat-id';
+    final a = await openC1(
+      t,
+      extra: [
+        Conversation(
+          id: bad,
+          other: cem,
+          lastMessage: 'yo',
+          lastMessageAt: DateTime.now().toUtc().subtract(
+            const Duration(minutes: 3),
+          ),
+          lastSenderId: cem.userId,
+        ),
+      ],
+    );
+
+    a.chat.deliver(
+      Message(
+        id: 'm-bad',
+        conversationId: bad,
+        senderId: cem.userId,
+        body: 'odd',
+        createdAt: DateTime.now().toUtc(),
+      ),
+    );
+    await steps(t, 2);
+    expect(cardFinder, findsOneWidget, reason: 'no card to tap');
+
+    await t.tap(cardFinder);
+    await steps(t, 20);
+    expect(find.byType(MessageScreen, skipOffstage: false), findsNothing);
+    expect(a.c.read(openConversationProvider), isNull);
+    expect(
+      byKey('conversation-00000000-0000-4000-8000-0000000000c2'),
+      findsOneWidget,
+      reason: 'home with the list',
+    );
+  });
+
   testWidgets('a muted chat raises no card in the real app', (t) async {
     final a = await openC1(
       t,
-      mutes: const [Mute(kind: MuteKind.conversation, target: 'c2')],
+      mutes: const [
+        Mute(
+          kind: MuteKind.conversation,
+          target: '00000000-0000-4000-8000-0000000000c2',
+        ),
+      ],
     );
     a.chat.deliver(fromCem('quiet'));
     await steps(t, 4);

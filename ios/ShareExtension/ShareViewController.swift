@@ -11,8 +11,9 @@ final class ShareViewController: UIViewController {
   private let appGroup = "group.com.esd.sis"
   private let openScheme = "sisshare://open"
   private let maxItems = 10
-  // Caps so a huge share cannot fill the phone: the largest video source copied (bytes) and the app's message length limit.
+  // Caps so a huge share cannot fill the phone: the largest video source and photo source copied (bytes; the photo cap is lib/features/chat/domain/file_attachment.dart maxFileBytes) and the app's message length limit.
   private let maxVideoBytes = 1 << 30
+  private let maxPhotoBytes = 50 * 1024 * 1024
   private let maxTextChars = 4000
   private var collected = false
   private let lock = NSLock()
@@ -51,8 +52,10 @@ final class ShareViewController: UIViewController {
           // The url is only valid inside this closure: copy it now.
           let ext = url.pathExtension.isEmpty ? (isVideo ? "mov" : "img") : url.pathExtension
           let target = folder.appendingPathComponent("\(index).\(ext)")
-          let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
-          if isVideo && size > self.maxVideoBytes { return }
+          // An unreadable size counts as too big.
+          guard let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize,
+            size <= (isVideo ? self.maxVideoBytes : self.maxPhotoBytes)
+          else { return }
           guard (try? FileManager.default.copyItem(at: url, to: target)) != nil else { return }
           self.lock.lock()
           self.results[index] = ["file": target.lastPathComponent, "name": url.lastPathComponent, "video": isVideo]

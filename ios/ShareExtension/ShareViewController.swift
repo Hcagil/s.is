@@ -11,10 +11,6 @@ final class ShareViewController: UIViewController {
   private let appGroup = "group.com.esd.sis"
   private let openScheme = "sisshare://open"
   private let maxItems = 10
-  // Caps so a huge share cannot fill the phone: the largest video source and photo source copied (bytes; the photo cap is lib/features/chat/domain/file_attachment.dart maxFileBytes) and the app's message length limit.
-  private let maxVideoBytes = 1 << 30
-  private let maxPhotoBytes = 50 * 1024 * 1024
-  private let maxTextChars = 4000
   private var collected = false
   private let lock = NSLock()
   private var results: [[String: Any]?] = []
@@ -52,10 +48,9 @@ final class ShareViewController: UIViewController {
           // The url is only valid inside this closure: copy it now.
           let ext = url.pathExtension.isEmpty ? (isVideo ? "mov" : "img") : url.pathExtension
           let target = folder.appendingPathComponent("\(index).\(ext)")
-          // An unreadable size counts as too big.
-          guard let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize,
-            size <= (isVideo ? self.maxVideoBytes : self.maxPhotoBytes)
-          else { return }
+          // An unreadable size counts as too big (ShareRules).
+          let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+          guard ShareRules.allowsFile(size: size, isVideo: isVideo) else { return }
           guard (try? FileManager.default.copyItem(at: url, to: target)) != nil else { return }
           self.lock.lock()
           self.results[index] = ["file": target.lastPathComponent, "name": url.lastPathComponent, "video": isVideo]
@@ -90,10 +85,7 @@ final class ShareViewController: UIViewController {
       }
       var manifest: [String: Any] = ["items": items]
       if !self.textList.isEmpty {
-        // maxTextChars UTF-16 units like the app's limit, never in the middle of a surrogate pair.
-        var units = Array(self.textList.joined(separator: "\n").utf16.prefix(self.maxTextChars))
-        if let last = units.last, UTF16.isLeadSurrogate(last) { units.removeLast() }
-        manifest["text"] = String(decoding: units, as: UTF16.self)
+        manifest["text"] = ShareRules.clippedText(self.textList)
       }
       if let data = try? JSONSerialization.data(withJSONObject: manifest) {
         try? data.write(to: folder.appendingPathComponent("manifest.json"), options: .atomic)

@@ -877,7 +877,7 @@ final class PeekOpenedTests: XCTestCase {
        data(sessions: []),
        { dec in
           dec.prekeyIds["CT"] = "new"
-          dec.inboundTexts["ACC+\(validSk)"] = "first"
+          dec.inboundTexts["ACC+\(self.validSk)"] = "first"
        }),
 
       // 4b
@@ -885,7 +885,7 @@ final class PeekOpenedTests: XCTestCase {
        data(noPeer: true, sessions: []),
        { dec in
           dec.prekeyIds["CT"] = "new"
-          dec.inboundTexts["ACC+\(validSk)"] = "first"
+          dec.inboundTexts["ACC+\(self.validSk)"] = "first"
        }),
 
       // 5

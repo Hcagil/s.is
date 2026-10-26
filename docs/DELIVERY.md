@@ -40,7 +40,7 @@ before any release beyond internal testing.
 
 | Trigger | Workflow | Holds secrets | Does |
 |---|---|---|---|
-| pull request, push to `main` | `ci.yml` | no | pattern check, format, analyze, Rust advisories (cargo deny), tests, release bundle signed with a throwaway key; pgTAP and integration tests on database changes |
+| pull request, push to `main` | `ci.yml` | no | pattern check, format, analyze, Rust advisories and licences (cargo deny), tests, release bundle signed with a throwaway key; pgTAP and integration tests on database changes |
 | daily 09:00 UTC (12:00 Istanbul), or by hand for an urgent fix | `release.yml` | yes | see below |
 
 `release.yml` runs once a day at 09:00 UTC (12:00 Turkey time) and by

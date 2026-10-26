@@ -96,6 +96,8 @@ Future<String> buildPeekLib() async {
 // extension; POSIX locks never conflict inside one process, so a lock must be
 // held, and a leftover lock seen, from outside).
 //   lock <path> <keyhex> hold <ms> IMMEDIATE|EXCLUSIVE  prints locked/released
+//     with busy_timeout 5000 like the app (drift_message_store.dart): its
+//     COMMIT waits out a save's brief read lock instead of failing at once.
 //   lock <path> <keyhex> write  one write with busy_timeout 0, prints written
 const _lockTool = r'''
 #include <stdio.h>
@@ -110,7 +112,8 @@ int main(int argc, char **argv) {
   if (sqlite3_exec(db, q, 0, 0, &err)) { printf("key_fail %s\n", err); return 2; }
   if (!strcmp(argv[3], "hold")) {
     snprintf(q, sizeof q, "BEGIN %s;", argv[5]);
-    if (sqlite3_exec(db, q, 0, 0, &err) ||
+    if (sqlite3_exec(db, "PRAGMA busy_timeout = 5000;", 0, 0, &err) ||
+        sqlite3_exec(db, q, 0, 0, &err) ||
         sqlite3_exec(db, "UPDATE meta SET value = value WHERE key = 'owner_id';", 0, 0, &err)) {
       printf("hold_fail %s\n", err); return 3;
     }

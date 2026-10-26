@@ -47,20 +47,29 @@ final _licenceFile = RegExp(
 
 /// The licence texts shipped inside a crate's directory, joined; '' when none.
 String _licenceText(String name, String manifestPath) {
+  final dir = File(manifestPath).parent;
+  final dirs = [dir, if (name == 'dart-sys') Directory('${dir.path}/dart-sdk')];
   final files = [
-    for (final e in File(manifestPath).parent.listSync())
-      if (e is File && _licenceFile.hasMatch(e.uri.pathSegments.last)) e,
+    for (final d in dirs)
+      if (d.existsSync())
+        for (final e in d.listSync())
+          if (e is File && _licenceFile.hasMatch(e.uri.pathSegments.last)) e,
   ]..sort((a, b) => a.uri.pathSegments.last.compareTo(b.uri.pathSegments.last));
   // Some published crates leave their licence out: the upstream copy is kept in tool/rust_licence_extras.
   final extra = File('tool/rust_licence_extras/$name.txt');
-  if (files.isEmpty && extra.existsSync()) files.add(extra);
+  if ((files.isEmpty || name == 'dart-sys') && extra.existsSync()) {
+    files.add(extra);
+  }
   return files
       .map(
         (f) => f
             .readAsStringSync()
             .replaceAll('\r\n', '\n')
-            // Contact addresses in copyright lines are personal data: the name stays.
-            .replaceAll(RegExp(r'\s*<[^<>\s]+@[^<>\s]+>'), '')
+            // A contact address in a copyright line is written "name at domain": still readable, no scraping.
+            .replaceAllMapped(
+              RegExp(r'<([^<>\s]+)@([^<>\s]+)>'),
+              (m) => '<${m[1]} at ${m[2]}>',
+            )
             .trim(),
       )
       .join('\n\n');
@@ -108,7 +117,17 @@ void main() {
       }
     }
   }
+  // The Rust standard library is linked into the native lib; its text is kept in tool/rust_licence_extras/rust-std.txt (from the pinned 1.99.0 toolchain).
+  final packages = [
+    ...byId.values,
+    {
+      'name': 'rust-std',
+      'version': '1.99.0',
+      'license': 'MIT OR Apache-2.0',
+      'manifest_path': 'tool/rust_licence_extras/std/Cargo.toml',
+    },
+  ];
   File('assets/licenses/RUST-LICENSES.txt')
-      .writeAsStringSync(_render(byId.values.toList()));
+      .writeAsStringSync(_render(packages));
   stdout.writeln('${byId.length} crates');
 }

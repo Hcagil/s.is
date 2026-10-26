@@ -1,4 +1,4 @@
-# Weekly scan of the Rust lock for new advisories.
+# Weekly scan of the Rust lock for new advisories and licences.
 # A new advisory on an unchanged lock would not show up without a PR.
 name: Rust advisories
 on:
@@ -23,3 +23,5 @@ jobs:
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml build
       - name: Rust advisories
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo deny --manifest-path rust/Cargo.toml check -W unmaintained advisories
+      - name: Rust licences
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo deny --manifest-path rust/Cargo.toml check licenses

@@ -523,8 +523,17 @@ void main() {
         findsNothing,
         reason: 'the stock licence page is Android-looking UI, not ours',
       );
-      expect(find.text('manrope'), findsOneWidget);
-      expect(find.text('sora'), findsOneWidget);
+      // A lazy list with ~200 packages: scroll each name into view first.
+      final list = find
+          .descendant(
+            of: find.byType(SisLicencesPage),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      for (final font in ['manrope', 'sora']) {
+        await t.scrollUntilVisible(find.text(font), 300, scrollable: list);
+        expect(find.text(font), findsOneWidget);
+      }
 
       // Grouped by package: a package opens onto its own licence text.
       await t.tap(find.text('sora'));

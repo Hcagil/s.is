@@ -92,14 +92,12 @@ final _chatIdShape = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
 );
 
-/// Whether a tapped notification's [id] may open a chat: a lowercase UUID and,
-/// once the list is known ([listed] not null), one of its chats. Any other app
-/// can send the exported activity a tap with any text, so anything else opens
-/// only the home screen. While the list is not loaded yet only the shape is
-/// checked and the open screen is dropped later if the id is unknown.
-bool isOpenableChatId(String id, List<Conversation>? listed) =>
-    _chatIdShape.hasMatch(id) &&
-    (listed == null || listed.any((c) => c.id == id));
+/// Whether a tapped notification's [id] may open a chat: a lowercase UUID. Any
+/// other app can send the exported activity a tap with any text, so anything
+/// else opens only the home screen. Shape only: a chat the stored list does not
+/// hold yet must still open at once; an unknown id is closed again by
+/// [_dropIfUnknown] and the server refuses non-members.
+bool isOpenableChatId(String id) => _chatIdShape.hasMatch(id);
 
 /// Opens the conversation a tapped notification is about, at once, with no
 /// network wait; see below for a chat the list does not hold yet. Also the
@@ -109,7 +107,7 @@ Future<void> openFromNotification(
   WidgetRef ref,
   String id,
 ) async {
-  if (!isOpenableChatId(id, ref.read(conversationListProvider).value)) {
+  if (!isOpenableChatId(id)) {
     Navigator.of(context).popUntil((route) => route.isFirst);
     return;
   }

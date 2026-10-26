@@ -10,6 +10,7 @@ object TapProof {
     private const val PREFS = "sis_tap_proof"
     private const val KEY = "secret"
     private const val EXTRA = "sisTapProof"
+    private val TAP_ACTIONS = setOf("SELECT_NOTIFICATION", "SELECT_FOREGROUND_NOTIFICATION") // both are taps to flutter_local_notifications
 
     @Synchronized
     private fun secret(context: Context): String {
@@ -32,7 +33,7 @@ object TapProof {
 
     /** Drops a tap (action cleared) that lacks the proof, so the app just opens normally; the proof never travels on. */
     fun admit(context: Context, intent: Intent?) {
-        if (intent == null || intent.action != "SELECT_NOTIFICATION") return
+        if (intent == null || intent.action !in TAP_ACTIONS) return
         val extra = intent.getStringExtra(EXTRA)
         if (extra == null || !MessageDigest.isEqual(extra.toByteArray(Charsets.UTF_8), secret(context).toByteArray(Charsets.UTF_8))) {
             intent.action = null

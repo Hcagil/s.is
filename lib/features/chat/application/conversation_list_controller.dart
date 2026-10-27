@@ -35,6 +35,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     final gen = ++_gen;
     _hidden
         .clear(); // a new build is a new owner: nothing of theirs stays hidden
+    _pushCounted.clear();
     ref.onDispose(() => unawaited(_live?.cancel()));
     // Riverpod 3 ALWAYS carries a previous value into a new AsyncLoading (or
     // a later AsyncError) via copyWithPrevious -- including one assigned
@@ -82,7 +83,14 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
         cached = null;
       }
     }
-    if (cached != null && alive && ref.mounted) state = AsyncData(cached);
+    if (cached != null) {
+      // Text the notification saved while the app was closed shows in the first frame too.
+      cached = await _withPushRows(cached);
+    }
+    if (cached != null && alive && ref.mounted) {
+      state = AsyncData(cached);
+      StartupMarks.mark('list-cached');
+    }
     final buffered = <Message>[];
     var loaded = false;
     ref.onDispose(() => _snapshotDebounce?.cancel());
@@ -165,7 +173,31 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
       return list;
     }
     if (ownerId != null && alive) _saveSnapshot(ownerId, list);
+    StartupMarks.mark('list-fresh');
     return list;
+  }
+
+  /// Ids of notification-saved messages already counted as unread: the real row, which arrives later with the server's time, must not count the same message again.
+  final _pushCounted = <String>{};
+
+  /// [list] with the text the notification saved while the app was closed (push_inbox) as previews and unread counts. Best effort: any failure leaves [list] as it is.
+  Future<List<Conversation>> _withPushRows(List<Conversation> list) async {
+    final store = _pushInboxOf(ref);
+    if (store == null) return list;
+    try {
+      var next = list;
+      for (final m in await store.pushInbox()) {
+        final applied = _withMessage(next, m);
+        if (applied != null) {
+          next = applied;
+          _pushCounted.add(m.id);
+        }
+      }
+      if (!identical(next, list)) StartupMarks.mark('list-push-rows');
+      return next;
+    } catch (_) {
+      return list;
+    }
   }
 
   /// Fire-and-forget: the store itself never throws once read (see
@@ -216,6 +248,23 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
 
   /// This member's own just-sent message as the preview (its readable text; the server row of a locked message only holds the placeholder).
   void showSent(Message message) => _apply(message);
+
+  /// Rows the change feed just wrote to the phone: previews and unread counts move at once, without waiting for the server list. Deleted or edited rows and chats the list does not know are left to the next full read.
+  void applyFromStore(List<Message> rows) {
+    final current = state.value;
+    if (current == null) return;
+    final fresh = [
+      for (final m in rows)
+        if (!m.isDeleted && m.editedAt == null) m,
+    ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    var next = current;
+    for (final m in fresh) {
+      next = _withMessage(next, m) ?? next;
+    }
+    if (identical(next, current)) return;
+    state = AsyncData(next);
+    _scheduleSnapshotSave();
+  }
 
   /// Moves [message] into its conversation's preview. A message for a
   /// conversation the list has never seen means someone started one with
@@ -311,7 +360,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     }
     final updated = [...list]..removeAt(index);
     // Unread: someone else's message, in a conversation not on screen.
+    final counted = _pushCounted.remove(message.id);
     final counts =
+        !counted &&
         message.senderId != me &&
         ref.read(openConversationProvider) != message.conversationId;
     return [existing.withPreview(message, counts: counts), ...updated];

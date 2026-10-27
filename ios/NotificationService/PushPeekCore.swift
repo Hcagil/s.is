@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// The three Olm steps the extension needs; the real one calls the Rust C API, tests use a fake.
@@ -60,6 +61,12 @@ struct PeekData: Equatable {
   var storedSenderId: String? = nil
 }
 
+/// A text a push opened, and whether it may be saved into push_inbox: opened by a stored session, or by an inbound session built with a stored peer key or with the push's own sender key after the shape, peer and key checks (first contact). Only an already stored body never qualifies.
+struct PeekOpened: Equatable {
+  let text: String
+  let storedKey: Bool
+}
+
 enum PeekCore {
   /// The stand-in body every locked row holds (lib/features/chat/domain/encrypted_message_repository.dart lockedBodyPlaceholder).
   static let lockedPlaceholder = "🔒 Encrypted message"
@@ -70,17 +77,17 @@ enum PeekCore {
   /// 3. data.peerUserId must be non-nil, else nil; for olmType 0 it falls back to push.senderId. A push senderId that differs from a known peer => nil.
   /// 4. olmType 1: try each session whose peerUserId == the peer, in order; the first non-nil decrypt wins; none => nil.
   /// 5. olmType 0: id = decryptor.prekeySessionId(ct) (nil => nil). If a session has sessionId == id: it must have peerUserId == the peer (else nil); return decryptor.decrypt for it. Otherwise data.account must be non-nil and the result is decryptor.decryptInbound with the newest session's identity key; with no session, push.senderKey is used only if it and senderId are well-formed, senderId == peer and data.keyElsewhere is false.
-  static func text(push: PeekPush, data: PeekData, pickleKey: [UInt8], decryptor: PeekDecryptor) -> String? {
+  static func opened(push: PeekPush, data: PeekData, pickleKey: [UInt8], decryptor: PeekDecryptor) -> PeekOpened? {
     guard data.ownerId == push.userId else { return nil }
     // A stored text is the peer's preview only when the peer sent it; else go on to decrypt.
-    if let body = data.storedBody, body != lockedPlaceholder, let known = data.peerUserId, data.storedSenderId == known { return body }
+    if let body = data.storedBody, body != lockedPlaceholder, let known = data.peerUserId, data.storedSenderId == known { return PeekOpened(text: body, storedKey: false) }
     guard let peer = data.peerUserId ?? (push.olmType == 0 ? push.senderId : nil) else { return nil }
     if let si = push.senderId, let known = data.peerUserId, si != known { return nil }
 
     if push.olmType == 1 {
       for session in data.sessions where session.peerUserId == peer {
         if let text = decryptor.decrypt(sessionPickle: session.pickle, pickleKey: pickleKey, messageId: push.messageId, ct: push.ct, olmType: 1) {
-          return text
+          return PeekOpened(text: text, storedKey: true)
         }
       }
       return nil
@@ -89,7 +96,8 @@ enum PeekCore {
     guard let id = decryptor.prekeySessionId(ct: push.ct) else { return nil }
     if let session = data.sessions.first(where: { $0.sessionId == id }) {
       guard session.peerUserId == peer else { return nil }
-      return decryptor.decrypt(sessionPickle: session.pickle, pickleKey: pickleKey, messageId: push.messageId, ct: push.ct, olmType: 0)
+      guard let text = decryptor.decrypt(sessionPickle: session.pickle, pickleKey: pickleKey, messageId: push.messageId, ct: push.ct, olmType: 0) else { return nil }
+      return PeekOpened(text: text, storedKey: true)
     }
     guard let account = data.account else { return nil }
     let identityKey: String
@@ -101,7 +109,24 @@ enum PeekCore {
     } else {
       return nil
     }
-    return decryptor.decryptInbound(accountPickle: account, pickleKey: pickleKey, identityKey: identityKey, messageId: push.messageId, ct: push.ct)
+    let storedKey = true  // the push's own sk passed the shape, peer and key checks above; the app re-opens the message itself and replaces the saved text
+    guard let text = decryptor.decryptInbound(accountPickle: account, pickleKey: pickleKey, identityKey: identityKey, messageId: push.messageId, ct: push.ct) else { return nil }
+    return PeekOpened(text: text, storedKey: storedKey)
+  }
+
+  /// What the extension may save into push_inbox, or nil. Only a text that was opened (opened.storedKey, which also covers the first-contact sk path) for a chat partner the store knows (data.peerUserId non-nil) is saved; the sender is that store peer, never the push's senderId.
+  static func saveRow(push: PeekPush, data: PeekData, opened: PeekOpened?) -> (peerUserId: String, body: String, sealed: String)? {
+    guard let opened = opened, opened.storedKey, let peer = data.peerUserId else { return nil }
+    return (peer, opened.text, sealedHash(push.ct))
+  }
+
+  /// The same hash the app's opener keeps in `sealed`: SHA-256 of the ciphertext string's UTF-8 bytes, lowercase hex.
+  static func sealedHash(_ ct: String) -> String {
+    SHA256.hash(data: Data(ct.utf8)).map { String(format: "%02x", $0) }.joined()
+  }
+
+  static func text(push: PeekPush, data: PeekData, pickleKey: [UInt8], decryptor: PeekDecryptor) -> String? {
+    opened(push: push, data: data, pickleKey: pickleKey, decryptor: decryptor)?.text
   }
 
   private static func isSenderKey(_ s: String) -> Bool {

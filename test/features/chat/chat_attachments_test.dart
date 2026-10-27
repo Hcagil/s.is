@@ -105,20 +105,19 @@ Future<ProviderContainer> pump(
 /// Opens the attachment grid from the composer (0.30.10: no menu between).
 Future<void> openSheet(WidgetTester tester) => openGrid(tester);
 
-/// Opens the grid, ticks the phone's one photo and taps Send N photos: the
-/// photo loads and, once it has, the preview page opens.
+/// Opens the grid, ticks the phone's one photo with its tick circle and taps
+/// Send N photos: the photo loads and, once it has, goes out at once.
 Future<void> choosePhoto(WidgetTester tester) async {
   await openSheet(tester);
-  await tester.tap(find.byKey(const ValueKey('sheet-photo-p1')));
+  await tester.tap(find.byKey(const ValueKey('sheet-tick-p1')));
   await tester.pump();
   await tester.tap(find.byKey(const ValueKey('sheet-send')));
 }
 
-/// [choosePhoto], then Send on the preview page.
+/// [choosePhoto], then the frames the load and the send take.
 Future<void> choosePhotoAndSend(WidgetTester tester) async {
   await choosePhoto(tester);
   await frames(tester);
-  await previewSend(tester);
 }
 
 String composerText(WidgetTester tester) => tester
@@ -402,10 +401,13 @@ void main() {
 
       gallery.releaseLoad();
       await frames(tester);
-      expect(chat.sentImages, isEmpty, reason: 'the preview page sends');
-      await previewSend(tester);
       await settleImages(tester);
       expect(chat.sentImages.single.image.bytes, pngBytes);
+      expect(
+        find.byKey(const ValueKey('preview-page')),
+        findsNothing,
+        reason: 'no preview step',
+      );
     });
 
     testWidgets('a photo that cannot be opened says so in a notice', (
@@ -588,7 +590,6 @@ void main() {
       // the screen. Nothing here is held yet, so settling is safe.
       await choosePhoto(tester);
       await frames(tester);
-      await tester.tap(find.byKey(const ValueKey('preview-send')));
       // Let the photo load and the pending message get appended, without
       // the (held) upload ever answering.
       for (var i = 0; i < 5; i++) {

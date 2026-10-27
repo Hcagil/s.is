@@ -5,6 +5,7 @@ Entries before 2026-10-03 are in [DECISIONS-archive.md](DECISIONS-archive.md); s
 
 ## Current decisions
 
+- 2026-10-25 — [One release per day at noon, Turkey time](#2026-10-25--one-release-per-day-at-noon-turkey-time): Merges land on `main` all day; one release at 12:00 Istanbul ships them together; an urgent fix may release at once
 - 2026-10-20 — [iPhone encryption is exempt; Info.plist stays NO](#2026-10-20--iphone-encryption-is-exempt-infoplist-stays-no): App Store Connect's own encryption questionnaire found SIS exempt, so `ITSAppUsesNonExemptEncryption` stays `false` and builds carry no per-build answer.
 - 2026-10-17 — [The server knows the app language](#2026-10-17--the-server-knows-the-app-language): The server stores the app language (profiles.app_language, en or tr) for the app's own messages
 - 2026-10-17 — [Version names follow the date and change count](#2026-10-17--version-names-follow-the-date-and-change-count): Version names are yy.month.commit-count in UTC; the build number is unchanged
@@ -607,3 +608,43 @@ Nothing contacts the site before that tap.
 **Why.** App Store Connect's App Encryption Documentation questionnaire (answered 2026-10-20: standard algorithms only, none proprietary, not offered in France) returned "you don't need to upload any documents" and pointed to the Info.plist key for skipping the per-build questions. The earlier `true` came from reading Apple's documentation table instead of running the questionnaire; with `true` and no compliance code every upload failed with altool error 90592.
 
 **Consequences.** iPhone uploads work again with no manual step. A store or build setting that depends on a legal reading is changed only after the platform's own form gives the answer. The US yearly self-classification question (5D992) is separate and open with a lawyer; it does not change this key.
+
+## 2026-10-25 — One release per day at noon, Turkey time
+
+**Decision.** `release.yml` no longer starts after every merge. It runs once a day at 09:00 UTC (12:00 Europe/Istanbul, which keeps UTC+3 all year) and by hand (*Run workflow*, with a required reason) for an urgent fix. Each run releases the newest `main` commit whose `ci.yml` run on `main` passed, and only when the commits since the last release tag change something that ships; otherwise it ends green and publishes nothing. Pull requests keep merging during the day. Urgent means a security hole or a crash for everyone; the manager starts that run and tells the owner.
+
+**Why.** The owner (2026-10-25): one release per day at noon, so testers get one update a day with every change of that day in it, and urgent fixes stay flexible.
+
+**Consequences.**
+- Migrations, edge functions and the app still go out together from the same commit; a server fix merged in the morning goes live at noon, not at merge.
+- The What's new note already joins every pull request since the last release tag, so a noon release carries all of that day's lines.
+- A merge after noon waits for the next day unless it is urgent.
+- GitHub may start a scheduled run late (minutes, sometimes an hour); the range starts at the last tag, so a late or missed run loses nothing, and *Run workflow* covers a missed day.
+- 2026-10-27 — GitHub's schedule is best effort and `0 9` is its busiest minute (2026-10-26 ran 6.5 h late, 2026-10-27 did not run). The cron is now `17 9` with a fallback at `43 10`; the scope step lets only the first schedule run of a UTC day ship (lowest run id). A day GitHub drops entirely is covered by a manual run.
+- A commit whose CI failed is never released; the run takes the newest green commit, so one red merge does not hold back the earlier ones.
+- `versionCode` stays `run_number + 100` of `release.yml` and only rises; the minimum supported build is untouched; nothing is forced.
+- Testers get their tasks once a day after the noon release; an urgent release gets its own task at once.
+
+## 2026-10-26 — The notification saves the opened text into a separate push_inbox table
+
+**Decision.** On Android, when a private-chat push is opened with a session or key already stored on the phone, the headless engine also writes the text into a new table `push_inbox` of the encrypted store (schema 5). It never writes into `messages`. The app reads `push_inbox` once when a chat or the list loads and shows its rows after the stored ones. A trigger on `messages` (insert and update) deletes the row when the real one lands; a finished sync deletes rows the server never confirmed.
+
+**Why.** The owner wants a notification tap to show the new message on the first frame. Writing into `messages` would let a body the app cannot verify stay on screen, and a ciphertext hash set by the push would make the app skip its own decrypt and never use up the one-time key. The decrypt in the push works on a copy, so the ratchet is still only saved by the app.
+
+**Consequences.**
+- The save is skipped for a first contact (the key came in the push), for a chat not in the store, and on a store not yet migrated to schema 5; the writer never creates a file or table.
+- The engine is not destroyed while the write runs: Kotlin passes the remaining push time, Dart writes only with at least 500 ms left, and Kotlin waits a short grace.
+- iOS and plain (unencrypted) group messages are separate, later slices.
+
+## 2026-10-27 — A notification keeps its text after the app process dies
+
+**Decision.** When Android redraws a private-chat notification after the app process died, the peek engine reads the earlier lines' texts back from the encrypted store (`push_inbox`, else the stored message) into memory. A first message opened with the push's own `sk` is now also saved to `push_inbox`, after the same checks as the notification text. The peek still never saves a session, the account or a one-time key.
+
+**Why.** On the test phone, earlier lines turned into "🔒 New message" after the system killed the app, and a first message took about 2 s to show after a tap. The owner wants notifications and the chat to show text at once.
+
+**Consequences.**
+- No new copy of a text at rest: the older texts live only in memory; `push_inbox` stays display-only and is replaced when the real row is written.
+- A first message's text in `push_inbox` has the same trust as the notification itself (an evil server could substitute `sk` until the security codes are compared); accepted, as for the notification.
+- If the peek does not run or times out, older lines show the locked text as before. After a process death between a text push and its picture, older lines stay locked until the next push.
+- iOS saves the first message the same way in its notification service extension.
+

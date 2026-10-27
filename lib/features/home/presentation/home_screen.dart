@@ -88,6 +88,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
+final _chatIdShape = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+);
+
+/// Whether a tapped notification's [id] may open a chat: a lowercase UUID. Any
+/// other app can send the exported activity a tap with any text, so anything
+/// else opens only the home screen. Shape only: a chat the stored list does not
+/// hold yet must still open at once; an unknown id is closed again by
+/// [_dropIfUnknown] and the server refuses non-members.
+bool isOpenableChatId(String id) => _chatIdShape.hasMatch(id);
+
 /// Opens the conversation a tapped notification is about, at once, with no
 /// network wait; see below for a chat the list does not hold yet. Also the
 /// way the in-app top card opens its chat.
@@ -96,6 +107,10 @@ Future<void> openFromNotification(
   WidgetRef ref,
   String id,
 ) async {
+  if (!isOpenableChatId(id)) {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    return;
+  }
   // Already on screen: opening it again would stack a second copy; the same
   // catch-up as coming back to the app instead.
   if (ref.read(openConversationProvider) == id) {

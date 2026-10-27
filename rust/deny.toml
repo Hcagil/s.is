@@ -6,3 +6,10 @@ unsound = "all"
 unmaintained = "all"
 yanked = "warn"
 ignore = []
+
+# Licence gate: only the licences shipped today are allowed, so a GPL/LGPL/MPL crate fails the build.
+# A dual-licensed crate (for example "MIT OR LGPL-2.1-or-later") passes through its allowed side.
+[licenses]
+allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "0BSD", "Unlicense", "Zlib", "Unicode-DFS-2016"]
+# Our own crate is proprietary and unpublished.
+private = { ignore = true }

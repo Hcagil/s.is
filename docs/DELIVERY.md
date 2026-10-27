@@ -40,12 +40,15 @@ before any release beyond internal testing.
 
 | Trigger | Workflow | Holds secrets | Does |
 |---|---|---|---|
-| pull request, push to `main` | `ci.yml` | no | pattern check, format, analyze, Rust advisories (cargo deny), tests, release bundle signed with a throwaway key; pgTAP and integration tests on database changes |
-| `ci.yml` passed on a push to `main` | `release.yml` | yes | see below |
+| pull request, push to `main` | `ci.yml` | no | pattern check, format, analyze, Rust advisories and licences (cargo deny), tests, release bundle signed with a throwaway key; pgTAP and integration tests on database changes |
+| daily 09:00 UTC (12:00 Istanbul), or by hand for an urgent fix | `release.yml` | yes | see below |
 
-`release.yml` starts only when CI has passed on the exact commit it
-publishes, and skips commits that touch nothing but docs, Markdown or
-`.github/`. In order:
+`release.yml` runs once a day at 09:00 UTC (12:00 Turkey time) and by
+hand (*Actions → Release → Run workflow*, with a reason) for an urgent fix:
+a security hole or a crash for everyone (docs/DECISIONS.md, 2026-10-25).
+It releases the newest `main` commit whose CI passed on `main`, and only
+when the commits since the last release tag touch more than docs, Markdown
+or `.github/`; otherwise it ends green and publishes nothing. In order:
 
 1. `versionCode` = GitHub Actions run number **+ 100** (monotonic, never
    reused; the offset keeps codes above builds published before the pipeline
@@ -61,8 +64,8 @@ publishes, and skips commits that touch nothing but docs, Markdown or
 
 Validation jobs never hold publishing or signing secrets and never mutate
 cloud state. Failed checks and pull requests cannot publish — including a
-merge an administrator forced past a red check, because the release waits for
-CI on `main`. The `play-internal` environment, which holds the secrets, only
+merge an administrator forced past a red check, because the release takes only
+a commit whose CI passed on `main`. The `play-internal` environment, which holds the secrets, only
 deploys from protected branches.
 
 ### Secrets inventory (names only)
@@ -265,10 +268,11 @@ tool/ci_local.sh --database
 
 ## Runbook
 
-- **Ship:** merge a pull request into `main`. Nothing else. CI runs again on `main` first (about ten minutes), then *Actions → Release* starts; the Play Console *Internal testing* track shows the new build within minutes of that. Phones receive it as a flexible in-app update.
+- **Ship:** merge a pull request into `main`. Nothing else. CI runs again on `main` (about ten minutes); the next day's 12:00 Istanbul release (09:00 UTC) ships every change merged since the last release, and the Play Console *Internal testing* track shows the new build within minutes of that. Phones receive it as a flexible in-app update.
+- **Ship an urgent fix now** (a security hole or a crash for everyone): after it merges and CI on `main` is green, *Actions → Release → Run workflow* on `main` with the reason. It ships everything merged since the last release, like the noon run.
 - **A release failed:** read the failed step first. A failure before *Apply database migrations* changed nothing anywhere — re-run the failed job (*Re-run failed jobs*; it keeps the same `versionCode`). A failure at the migration or upload step is also safe to re-run: `db push` skips migrations that are already applied. A failure only at *Tag and publish release notes* means the build is already on Play — do not re-run (Play rejects the same `versionCode` twice); create the tag by hand.
-- **The iOS job failed but Play succeeded:** the Play build is fine. Do not re-run the whole workflow (Play rejects the same `versionCode` twice); use *Re-run failed jobs*, which runs only `ios` again with the same build number. A build number App Store Connect has already accepted is never reused: if the upload itself got that far, ship the next merge instead.
-- **Distribution to TestFlight groups failed** (job `distribute`; the build is uploaded, Play and `ios` are fine): re-run only that job (*Re-run failed jobs*). It is idempotent: a build already in a group or already submitted for beta review is not an error. A build App Store Connect could not process (`INVALID`) needs the next merge. "Test Information" in the error means the owner fills in TestFlight, Test Information in App Store Connect once, then re-runs the job.
+- **The iOS job failed but Play succeeded:** the Play build is fine. Do not re-run the whole workflow (Play rejects the same `versionCode` twice); use *Re-run failed jobs*, which runs only `ios` again with the same build number. A build number App Store Connect has already accepted is never reused: if the upload itself got that far, ship the next release instead.
+- **Distribution to TestFlight groups failed** (job `distribute`; the build is uploaded, Play and `ios` are fine): re-run only that job (*Re-run failed jobs*). It is idempotent: a build already in a group or already submitted for beta review is not an error. A build App Store Connect could not process (`INVALID`) needs the next release. "Test Information" in the error means the owner fills in TestFlight, Test Information in App Store Connect once, then re-runs the job.
 - **Turn iOS releases off or on:** set the repository variable `IOS_RELEASE` to `off` (Settings, Secrets and variables, Actions, Variables); delete it to turn them back on. Build numbers only rise, so a gap in the TestFlight builds is normal.
 - **A phone does not see a new build:** the app asks Play on launch and on
   every return to the foreground, but Play answers from the Play Store's own

@@ -258,6 +258,10 @@ class NotificationActionTest {
             posted()?.let { n -> lines(n).any { it.contains("Not sent") } } == true
         }
         assertTrue("logs nothing: ${ShadowLog.getLogs()}", ShadowLog.getLogs().isEmpty())
+        // Tapping the Not sent notification still opens the chat: MainActivity admits its intent.
+        val tap = Intent(shadowOf(posted()!!.contentIntent).savedIntent)
+        TapProof.admit(app, tap)
+        assertEquals("SELECT_NOTIFICATION", tap.action)
     }
 
     @Test

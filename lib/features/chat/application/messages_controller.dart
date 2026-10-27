@@ -231,6 +231,20 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     final store = shownBefore.isEmpty ? _storeOf(ref) : null;
     if (store != null) {
       stored = await store.newest(conversationId, limit: messagePageSize);
+      // Text the notification saved while the app was closed (push_inbox) follows the stored rows, so the first frame already shows it.
+      final inbox = _pushInboxOf(ref);
+      if (inbox != null) {
+        final saved = [
+          for (final m in await inbox.pushInbox())
+            if (m.conversationId == conversationId &&
+                !stored.any((s) => s.id == m.id))
+              m,
+        ];
+        if (saved.isNotEmpty) {
+          stored = [...stored, ...saved];
+          StartupMarks.mark('chat-push-rows');
+        }
+      }
       if (alive && ref.mounted && stored.isNotEmpty) {
         final queued = ref.read(sendQueueProvider)[conversationId] ?? const [];
         state = AsyncData([

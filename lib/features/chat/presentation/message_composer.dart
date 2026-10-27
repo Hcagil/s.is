@@ -303,18 +303,15 @@ class _ComposerState extends ConsumerState<_Composer>
     if (choice != 'photo') return;
     // Close the keyboard while the photo grid and caption page are open.
     _focus.unfocus();
-    final picked = await showAttachmentSheet(context);
-    if (picked.images.isEmpty || !mounted) return;
-    final reviewed = await showAttachmentPreview(
+    final picked = await showAttachmentSheet(
       context,
-      images: picked.images,
       caption: _controller.text,
     );
-    if (reviewed == null || reviewed.images.isEmpty || !mounted) return;
+    if (picked.images.isEmpty || !mounted) return;
     setState(() => _sending = true);
     final result = await ref
         .read(messagesProvider.notifier)
-        .sendImages(reviewed.images, body: reviewed.caption);
+        .sendImages(picked.images, body: picked.caption);
     if (!mounted) return;
     setState(() => _sending = false);
     switch (result) {
@@ -578,7 +575,10 @@ class _ComposerState extends ConsumerState<_Composer>
                                           _send();
                                           _focus.requestFocus();
                                         },
-                                  icon: const Icon(Icons.arrow_upward_rounded),
+                                  icon: Icon(
+                                    Icons.arrow_upward_rounded,
+                                    semanticLabel: l.commonSend,
+                                  ),
                                 )
                               : (id == null
                                     ? const SizedBox(width: 48, height: 48)

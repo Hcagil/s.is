@@ -7,9 +7,9 @@ on:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  # Only a pull request's superseded run is cancelled. A run on main is the
-  # trigger for Release: cancelling it when a second merge lands minutes later
-  # would leave the first merge unpublished.
+  # Only a pull request's superseded run is cancelled. A run on main is never
+  # cancelled: the daily Release takes the newest main commit whose CI run
+  # passed, and a cancelled run would leave that commit unreleasable.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -131,7 +131,7 @@ jobs:
       - name: Resolve dependencies
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter pub get
       - name: Layer rules
-        run: tool/check_pattern.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/check_pr_body_test.py
+        run: tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/check_pr_body_test.py && test/tool/release_scope_test.sh && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh
 
       - name: Check formatting
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter dart format --output=none --set-exit-if-changed lib test
@@ -144,6 +144,8 @@ jobs:
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo test --manifest-path rust/Cargo.toml
       - name: Rust advisories
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo deny --manifest-path rust/Cargo.toml check -W unmaintained advisories
+      - name: Rust licences
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo deny --manifest-path rust/Cargo.toml check licenses
       # Each file runs as a program: the pinned test 1.24.6 cannot load files
       # with `dart test` on the current Dart SDK.
       - name: Cargokit build tool tests
@@ -284,6 +286,12 @@ jobs:
         run: |
           export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
           SIS_BOT_TEST_COMPOSE="docker compose -f compose.yaml -f .github/compose.ci.yaml" test/tool/sis_bot_tool_test.sh
+      # The test sender account (push-sender@sis.test) through
+      # tool/sis_test_account_admin.sh, with the stack's own local keys only.
+      - name: Test sender admin tool test
+        run: |
+          export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
+          SIS_BOT_TEST_COMPOSE="docker compose -f compose.yaml -f .github/compose.ci.yaml" test/tool/sis_test_account_admin_test.sh
 
   # Proves the iOS project compiles (unsigned). Signing is proved by ios-signed below.
   ios:

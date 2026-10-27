@@ -36,7 +36,10 @@ const config = RuntimeConfig(
   supabasePublishableKey: 'k',
   googleWebClientId: 'c',
 );
-const bob = Conversation(id: 'c1', lastMessage: 'where are you');
+const bob = Conversation(
+  id: '00000000-0000-4000-8000-0000000000c1',
+  lastMessage: 'where are you',
+);
 const noticeText = "Can't reach SIS. Showing your saved chats; trying again.";
 final notice = find.byKey(const ValueKey('offline-notice'));
 final noticeTexts = find.text(noticeText);
@@ -45,7 +48,9 @@ final oldNotices = [
   find.byKey(const ValueKey('session-check-notice')),
   find.byKey(const ValueKey('chat-list-stale-notice')),
 ];
-final row = find.byKey(const ValueKey('conversation-c1'));
+final row = find.byKey(
+  const ValueKey('conversation-00000000-0000-4000-8000-0000000000c1'),
+);
 
 /// The offline strip of every past version, its text included, is absent.
 void noStrip(String why) {
@@ -192,7 +197,7 @@ void main() {
     testWidgets('a chat opened by the notification that launched the app', (
       t,
     ) async {
-      final w = World(launchChat: 'c1');
+      final w = World(launchChat: '00000000-0000-4000-8000-0000000000c1');
       await t.pumpWidget(w.app());
       await frames(t);
       await replacedWithChatOpen(t, w);

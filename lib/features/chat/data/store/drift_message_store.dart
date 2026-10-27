@@ -8,15 +8,17 @@ import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart' show Database, SqlError, SqliteException;
 
+import '../../../../core/startup_marks.dart';
 import '../../domain/encrypted_message_repository.dart';
 import '../../domain/message.dart';
 import '../../domain/message_store.dart';
+import '../../domain/push_inbox_store.dart';
 import 'message_row_mapper.dart';
 import 'store_database.dart';
 import 'store_location.dart' show deleteOrphanStores;
 
 /// The on-phone message store, one encrypted SQLite file; every method best-effort, never throws.
-final class DriftMessageStore implements MessageStore {
+final class DriftMessageStore implements MessageStore, PushInboxStore {
   DriftMessageStore({
     required this.ownerId,
     required this._file,
@@ -265,6 +267,7 @@ final class DriftMessageStore implements MessageStore {
     final file = await _file();
     await file.parent.create(recursive: true);
     final key = await _key();
+    StartupMarks.mark('store-key');
 
     Future<StoreDatabase> attempt() async {
       final db = StoreDatabase(
@@ -275,6 +278,7 @@ final class DriftMessageStore implements MessageStore {
         final owner = await (db.select(
           db.meta,
         )..where((t) => t.key.equals('owner_id'))).getSingleOrNull();
+        StartupMarks.mark('store-open');
         if (owner == null) {
           await db
               .into(db.meta)
@@ -330,13 +334,33 @@ final class DriftMessageStore implements MessageStore {
   }) => _write(
     (db) => db.transaction(() async {
       final ids = [for (final m in page) m.id];
+      // Held = the chat ever held a locked text: the page or a stored row is a placeholder, or its held meta mark is set.
+      final held =
+          page.any((m) => isLockedPlaceholder(m.body)) ||
+          await (db.select(db.meta)
+                    ..where((m) => m.key.equals(heldMetaKey(conversationId))))
+                  .getSingleOrNull() !=
+              null ||
+          await (db.select(db.messages)
+                    ..where(
+                      (t) =>
+                          t.conversationId.equals(conversationId) &
+                          t.body.equals(lockedBodyPlaceholder),
+                    )
+                    ..limit(1))
+                  .getSingleOrNull() !=
+              null;
       final oldest = page.isEmpty
           ? null
           : page.first.createdAt.microsecondsSinceEpoch;
-      // Stored rows the server no longer returns for the range this page covers.
+      // Stored rows the server no longer returns for the range this page covers; a held chat keeps its placeholders.
       await (db.delete(db.messages)..where((t) {
             final stale =
-                t.conversationId.equals(conversationId) & t.id.isNotIn(ids);
+                t.conversationId.equals(conversationId) &
+                t.id.isNotIn(ids) &
+                (held
+                    ? t.body.equals(lockedBodyPlaceholder).not()
+                    : const Constant(true));
             return reachedStart || oldest == null
                 ? stale
                 : stale & t.createdAt.isBiggerOrEqualValue(oldest);
@@ -350,7 +374,7 @@ final class DriftMessageStore implements MessageStore {
         await db.into(db.messages).insert(c, onConflict: _upsertClause(c));
       }
       if (oldest == null) {
-        if (reachedStart) {
+        if (reachedStart && !held) {
           await db
               .into(db.syncStates)
               .insertOnConflictUpdate(
@@ -373,10 +397,17 @@ final class DriftMessageStore implements MessageStore {
           prev.newestAt != null &&
           prev.contiguousFrom != null &&
           prev.newestAt! >= oldest;
-      final from = reachedStart
-          ? oldest
-          : (joined ? math.min(prev.contiguousFrom!, oldest) : oldest);
-      final complete = reachedStart || (joined && prev.complete);
+      // A held chat never lifts contiguousFrom or completeness from a page the server may have cut short.
+      final from = held
+          ? (prev?.contiguousFrom == null
+                ? oldest
+                : math.min(prev!.contiguousFrom!, oldest))
+          : (reachedStart
+                ? oldest
+                : (joined ? math.min(prev.contiguousFrom!, oldest) : oldest));
+      final complete = held
+          ? (prev?.complete ?? false)
+          : (reachedStart || (joined && prev.complete));
       await db
           .into(db.syncStates)
           .insertOnConflictUpdate(
@@ -403,8 +434,7 @@ final class DriftMessageStore implements MessageStore {
                 ..where((t) => t.conversationId.equals(conversationId)))
               .getSingleOrNull();
       if (prev == null) return;
-      for (final m in page) {
-        final c = messageToCompanion(m);
+      for (final c in await _writable(db, page)) {
         await db.into(db.messages).insert(c, onConflict: _upsertClause(c));
       }
       if (page.isEmpty) {
@@ -455,9 +485,15 @@ final class DriftMessageStore implements MessageStore {
       });
 
   @override
-  Future<void> remove(String messageId) => _write((db) async {
-    await (db.delete(db.messages)..where((t) => t.id.equals(messageId))).go();
-  });
+  Future<void> remove(String messageId) => _write(
+    (db) => db.transaction(() async {
+      await (db.delete(db.messages)..where((t) => t.id.equals(messageId))).go();
+      // A withdrawn message must not come back from the notification's copy.
+      await (db.delete(
+        db.pushInbox,
+      )..where((t) => t.messageId.equals(messageId))).go();
+    }),
+  );
 
   @override
   Future<void> deleteConversation(String conversationId) => _write(
@@ -471,6 +507,9 @@ final class DriftMessageStore implements MessageStore {
       await (db.delete(
         db.conversations,
       )..where((t) => t.id.equals(conversationId))).go();
+      await (db.delete(
+        db.pushInbox,
+      )..where((t) => t.conversationId.equals(conversationId))).go();
     }),
   );
 
@@ -501,6 +540,31 @@ final class DriftMessageStore implements MessageStore {
       return [for (final r in rows) messageFromRow(db.messages.map(r.data))];
     });
   }
+
+  @override
+  Future<List<Message>> pushInbox() => _run(const [], (db) async {
+    final rows = await (db.select(
+      db.pushInbox,
+    )..orderBy([(t) => OrderingTerm.asc(t.receivedAt)])).get();
+    return [
+      for (final r in rows)
+        Message(
+          id: r.messageId,
+          conversationId: r.conversationId,
+          senderId: r.senderId,
+          body: r.body,
+          createdAt: DateTime.fromMicrosecondsSinceEpoch(r.receivedAt),
+        ),
+    ];
+  });
+
+  @override
+  Future<void> sweepPushInbox(DateTime before) => _run<void>(null, (db) async {
+    await (db.delete(db.pushInbox)..where(
+          (t) => t.receivedAt.isSmallerThanValue(before.microsecondsSinceEpoch),
+        ))
+        .go();
+  });
 
   /// Waits for the work already running before closing, so no transaction is
   /// abandoned in the database isolate; work started later waits for the clear.
@@ -601,6 +665,8 @@ void Function(Database) _keyed(String key) {
     // A second connection (the future iOS notification extension) waits for a
     // lock instead of failing at once.
     raw.execute('PRAGMA busy_timeout = 5000;');
+    // Android only: WAL lets reads run while the sync writes. Not on iOS, where a held -shm lock in the App Group can get a suspended app killed (security decision, t_0f04c69ee7).
+    if (Platform.isAndroid) raw.execute('PRAGMA journal_mode = WAL;');
     if (raw.select('PRAGMA cipher;').isEmpty) {
       throw StateError('SQLite3 Multiple Ciphers is not loaded');
     }
@@ -615,6 +681,9 @@ final class _OtherOwner implements Exception {
 /// True when the file itself cannot be used, so it may be deleted: another owner, SQLITE_NOTADB (26, wrong key
 /// or not a database) or SQLITE_CORRUPT (11). Anything else (busy, locked, constraint) is a passing failure.
 /// Drift's background isolate may wrap the SqliteException, so look through the wrappers.
+/// The meta key of the time a chat first held a locked text.
+String heldMetaKey(String conversationId) => 'held:$conversationId';
+
 bool _unusable(Object e) {
   if (e is _OtherOwner) return true;
   if (e is DriftRemoteException) return _unusable(e.remoteCause);

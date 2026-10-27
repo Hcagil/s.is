@@ -13,7 +13,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
-/** For an encrypted push that carries ciphertext, ask Dart (a short-lived headless Flutter engine) for the message text. Nothing is written anywhere: the text comes back in memory only. */
+/** For an encrypted push that carries ciphertext, ask Dart (a short-lived headless Flutter engine) for the message text. The text comes back in memory; Dart may also save it into the phone store (push_inbox) before it answers 'done', so the engine is never destroyed before 'done' while the push time lasts (plus a short grace). */
 object PeekRunner {
     private const val CHANNEL = "com.esd.sis/peek"
     private const val ENTRY_LIBRARY = "package:sis/features/notifications/data/push_peek_entry.dart"
@@ -21,6 +21,8 @@ object PeekRunner {
     private const val PUSH_CAP_MS = 3000L
     private const val BURST_BUDGET_MS = 6000L
     private const val QUIET_GAP_MS = 15000L
+    // Extra wait after the push cap, so an engine that is in the middle of its store write (committing, closing) is not destroyed under it.
+    private const val WRITE_GRACE_MS = 300L
     private var burstSpentMs = 0L
     private var lastPeekEnd = 0L
 
@@ -32,6 +34,12 @@ object PeekRunner {
 
     // Peer names by message_id, like [reasons].
     private val names = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    // Older lines' texts read from the store by the peek (message id -> text), keyed by the message id of the push that asked; memory only, taken once.
+    private val olders = java.util.concurrent.ConcurrentHashMap<String, Map<String, String>>()
+
+    /** Texts of the chat's older lines (message id -> text) that the peek of the push with [messageId] read from the phone's store; empty when none. Taken once. */
+    fun takeOlder(messageId: String): Map<String, String> = olders.remove(messageId) ?: emptyMap()
 
     /** The chat partner's name from this phone's own copy of the chat, read once after peek() of the push with that message id; null when the phone has no copy or no peek ran. */
     fun takeName(messageId: String): String? = names.remove(messageId)
@@ -62,11 +70,12 @@ object PeekRunner {
             !extras.getString("conversation_id").isNullOrEmpty() &&
             !extras.getString("message_id").isNullOrEmpty()
 
-    /** The message text, or null (= stay locked) on any failure, timeout, or when called on the main thread. Blocks the caller up to TIMEOUT_MS; call it from the draw thread only. */
-    fun peek(context: Context, extras: Bundle): String? {
+    /** The message text, or null (= stay locked) on any failure, timeout, or when called on the main thread. Blocks the caller up to TIMEOUT_MS; call it from the draw thread only. [older]: message ids (max 50) of the chat's other notification lines whose text is not in memory; Dart reads their text from the store. */
+    fun peek(context: Context, extras: Bundle, older: List<String> = emptyList()): String? {
         val mid = extras.getString("message_id")
         mid?.let { reasons.remove(it) }
         mid?.let { names.remove(it) }
+        mid?.let { olders.remove(it) }
         if (!wanted(extras)) return fail(mid, "not_wanted")
         override?.let { return it(extras) }
         if (Looper.myLooper() == Looper.getMainLooper()) return fail(mid, "main_thread")
@@ -84,11 +93,12 @@ object PeekRunner {
         }
 
         // sk/si (a pre-key push's sender key and id) ride along only when present: the Dart side casts this map to Map<String, String>. Never logged.
-        val args = (listOf("user_id", "conversation_id", "message_id", "ct", "ot") + listOf("sk", "si").filter { !extras.getString(it).isNullOrEmpty() }).associateWith { extras.getString(it)!! }
+        val args = (listOf("user_id", "conversation_id", "message_id", "ct", "ot") + listOf("sk", "si").filter { !extras.getString(it).isNullOrEmpty() }).associateWith { extras.getString(it)!! } + (if (older.isEmpty()) emptyMap() else mapOf("older" to older.take(50).joinToString(",")))
         val latch = CountDownLatch(1)
         val result = AtomicReference<String?>(null)
         val dartReason = AtomicReference<String?>(null)
         val dartName = AtomicReference<String?>(null)
+        val dartOlder = AtomicReference<Map<String, String>?>(null)
         val engineRef = AtomicReference<FlutterEngine?>(null)
         val main = Handler(Looper.getMainLooper())
 
@@ -107,12 +117,14 @@ object PeekRunner {
                 flutter.plugins.add(com.github.dart_lang.jni_flutter.JniFlutterPlugin())
                 MethodChannel(flutter.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, res ->
                     when (call.method) {
-                        "take" -> res.success(args)
+                        // budget_ms: the push time Dart may still use; it saves the text into the store only with at least 500 ms left.
+                        "take" -> res.success(args + ("budget_ms" to (timeout - (now() - startedAt)).coerceAtLeast(0L).toString()))
                         "done" -> {
                             val m = call.arguments as? Map<*, *>
                             result.set(m?.get("text") as? String)
                             dartReason.set(m?.get("reason") as? String)
                             dartName.set(m?.get("name") as? String)
+                            dartOlder.set((m?.get("older") as? Map<*, *>)?.entries?.mapNotNull { (k, v) -> if (k is String && v is String) k to v else null }?.toMap())
                             res.success(null)
                             latch.countDown()
                         }
@@ -129,7 +141,7 @@ object PeekRunner {
             }
         }
 
-        val finished = latch.await(timeout, TimeUnit.MILLISECONDS)
+        val finished = latch.await(timeout, TimeUnit.MILLISECONDS) || latch.await(WRITE_GRACE_MS, TimeUnit.MILLISECONDS)
         main.post { engineRef.get()?.destroy() }
         charge(startedAt)
         if (!finished) return fail(mid, "timeout")
@@ -142,6 +154,10 @@ object PeekRunner {
                 r != null && r.matches(Regex("^[a-z_]{1,24}(:[A-Za-z0-9_]{1,40})?$")) -> r
                 else -> "other:unknown"
             }
+        }
+        mid?.let { m -> dartOlder.get()?.takeIf { it.isNotEmpty() }?.let { olders[m] = it } }
+        if ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            android.util.Log.i("SisPeek", "reason=${mid?.let { reasons[it] }} ms=${now() - startedAt}")
         }
         return text
     }

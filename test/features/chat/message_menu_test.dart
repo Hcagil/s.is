@@ -106,6 +106,24 @@ Future<ProviderContainer> pump(
     await tester.pump(const Duration(milliseconds: 20));
   }
   await settleImages(tester);
+  // A photo has a size only once its real decode ends, outside the fake
+  // clock; on a busy machine that outlasts settleImages, and a tap on the
+  // still-empty photo misses it.
+  for (final path in messages.map((m) => m.attachmentPath).nonNulls) {
+    final photo = find.byKey(ValueKey('attachment-$path'));
+    for (var i = 0; i < 400; i++) {
+      if (photo.evaluate().isNotEmpty && !tester.getSize(photo).isEmpty) break;
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+    }
+    expect(
+      tester.getSize(photo).isEmpty,
+      isFalse,
+      reason: 'precondition: $path decoded and sized',
+    );
+  }
   await tester.pumpAndSettle();
   return container;
 }
@@ -288,7 +306,7 @@ void main() {
       expect(keyboardUp(tester), isTrue);
     });
 
-    testWidgets('the paperclip Photo grid closes it, the caption page '
+    testWidgets('the paperclip Photo grid closes it, the big photo view '
         'keeps it closed', (tester) async {
       await pump(tester, [
         msg('m1', from: bob),
@@ -301,12 +319,12 @@ void main() {
       expect(find.byKey(const ValueKey('sheet-from-app')), findsOneWidget);
       expect(keyboardUp(tester), isFalse);
 
-      await tick(tester, ['p1']);
-      await sendTicked(tester);
+      // A tap on the photo opens it big, with the caption field.
+      await openViewer(tester, 'p1');
       await tester.pumpAndSettle();
 
       expect(key('preview-page'), findsOneWidget);
-      // The composer sits offstage under the preview route.
+      // The composer sits offstage under the big photo view.
       final composerText = tester.widget<EditableText>(
         find.descendant(
           of: find.byKey(const ValueKey('composer-field'), skipOffstage: false),

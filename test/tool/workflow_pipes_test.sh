@@ -5,11 +5,16 @@
 # large input whose answer is on the first line -- the shape that kills the
 # writer with SIGPIPE (exit 141) when the reader stops early:
 #
-#   release.yml `scope` / "Decide whether this change ships" (id: diff)
-#   - ship=true when some changed path matches none of ^(test/|
-#     integration_test/|supabase/tests/|tool/|docs/|\.github/),
-#     \.md$, ^\.git(ignore|attributes)$; else ship=false (no paths, or a
-#     failing git diff); the same answer with or without pipefail, at any size;
+#   release.yml `scope` / "Pick the newest commit whose CI passed on main" (id: pick)
+#   - asks gh for exactly the newest passed ci.yml push run on main and outputs
+#     sha=<its head sha>; no such run, or a failing gh, fails the step red and
+#     outputs nothing;
+#   release.yml `scope` / "Decide whether the commits since the last release
+#     ship" (id: diff), run in a real git repo with the real tool/release_scope.sh
+#   - judges $SHA = steps.pick.outputs.sha against the newest release tag gh
+#     returns ("" = none: the commit alone); outputs exactly its ship= line;
+#     an unknown commit or an unreadable release list fails the step and
+#     outputs nothing; the summary names the reason or "daily noon run";
 #   ci.yml "Native iOS tests (simulator)"
 #   - the destination is the UUID on the first `  iPhone` line of
 #     `xcrun simctl list devices available`; never a UUID from another line;
@@ -21,6 +26,11 @@
 #     clock before "Xcode build done" (a slow build is not a hang); after it,
 #     no result within VIDEO_PREP_AFTER_BUILD_S -> flutter is stopped and the
 #     step fails at once with an ::error:: line;
+#   release.yml `publish` / "Tag and publish release notes"
+#   - creates release v<name>+<code> targeting $SHA (scope's picked commit);
+#     up to 3 tries, waiting 10 s after the 1st failure and 30 s after the 2nd;
+#     after a failed create, an existing release (`gh release view` succeeds)
+#     ends the step with 0; 3 failures and no release -> a message, exit 1;
 #   ios-ipa.yml "Check the signature"
 #   - authority = the text after the FIRST `Authority=` line of
 #     `codesign -dvv` (stderr included); signed only when it begins with
@@ -52,72 +62,76 @@ step_run() {
 mkdir -p "$tmp/bin"
 stub() { printf '#!/usr/bin/env bash\n%s\n' "$2" > "$tmp/bin/$1"; chmod +x "$tmp/bin/$1"; }
 
-# ---- 1 ship decision ---------------------------------------------------------
-grep -A1 -- '- name: Decide whether this change ships' .github/workflows/release.yml | grep -qE '^ *id: diff$' \
-  || fail "Decide whether this change ships is not step id diff"
-step_run .github/workflows/release.yml "Decide whether this change ships" "$tmp/ship.sh"
-# git: `diff --name-only HEAD^ HEAD` prints $PATHS (cat: dies of SIGPIPE like
-# the real writer); GIT_RC != 0 -> git fails after printing nothing.
-stub git '[ "$*" = "diff --name-only HEAD^ HEAD" ] || { echo "git stub: unexpected: $*" >&2; exit 2; }
-[ "${GIT_RC:-0}" = 0 ] || { echo "fatal: bad revision HEAD^" >&2; exit "$GIT_RC"; }
-cat "$PATHS"'
-ship() { # <shell> <paths file> [GIT_RC] -> prints the ship= output
-  : > "$tmp/gh_out"
-  PATH="$tmp/bin:$PATH" PATHS=$2 GIT_RC=${3:-0} GITHUB_OUTPUT="$tmp/gh_out" $1 "$tmp/ship.sh" > "$tmp/out" 2>&1 \
-    || fail "ship step exited $? under '$1'"
-  cat "$tmp/gh_out"
+# ---- 1 release commit and ship decision -----------------------------------------
+# "Pick": gh answers the one exact query (newest passed ci.yml push run on main)
+# with $GREEN ("!" = gh fails); any other call fails.
+step_run .github/workflows/release.yml "Pick the newest commit whose CI passed on main" "$tmp/pick.sh"
+grep -A1 -- '- name: Pick the newest commit whose CI passed on main' .github/workflows/release.yml | grep -qE '^ *id: pick$' \
+  || fail "Pick the newest commit whose CI passed on main is not step id pick"
+stub gh 'if [ "$*" = "run list --workflow ci.yml --branch main --event push --status success --limit 1 --json headSha --jq .[0].headSha // empty" ]; then
+  [ "$GREEN" = "!" ] && exit 1; [ -n "$GREEN" ] && echo "$GREEN"; exit 0; fi
+if [ "$*" = "release list --limit 1 --json tagName --jq .[0].tagName // empty" ]; then
+  [ "$PREV" = "!" ] && exit 1; [ -n "$PREV" ] && echo "$PREV"; exit 0; fi
+echo "gh stub: unexpected: $*" >&2; exit 2'
+pick() { # <shell> <green> -> sets rc; $tmp/gh_out holds the outputs
+  : > "$tmp/gh_out"; set +e
+  PATH="$tmp/bin:$PATH" GREEN=$2 GITHUB_OUTPUT="$tmp/gh_out" $1 "$tmp/pick.sh" > "$tmp/out" 2>&1; rc=$?; set -e
 }
-while IFS='|' read -r want list; do
-  tr ',' '\n' <<<"$list" | sed '/^$/d' > "$tmp/paths"
-  for sh in "${SHELLS[@]}"; do
-    got=$(ship "$sh" "$tmp/paths")
-    [ "$got" = "ship=$want" ] || fail "paths [$list] under '$sh' gave [$got], want ship=$want"
-  done
-done <<'EOF'
-false|
-false|docs/DESIGN.md
-false|.github/workflows/ci.yml,docs/a.png,README.md,lib/x/notes.md
-false|.gitignore,.gitattributes
-false|docs/a,.github/b,CHANGELOG.md,.gitignore
-false|test/tool/whats_new_note_test.sh
-false|integration_test/app_test.dart
-false|supabase/tests/rls_test.sql
-false|tool/ci_local.sh
-false|test/a.dart,integration_test/b.dart,supabase/tests/c.sql,tool/d.sh,docs/e,.github/f,g.md,.gitignore
-true|lib/tool/x.dart
-true|lib/test/x.dart
-true|supabase/migrations/2.sql
-true|supabase/functions/f/index.ts
-true|test/a.dart,pubspec.yaml
-true|assets/icon.png
-true|android/app/build.gradle
-true|ios/Runner/Info.plist
-true|tool/x.sh,supabase/functions/f/index.ts
-true|lib/main.dart
-true|docs/x.md,pubspec.yaml
-true|.github/dependabot.yml,supabase/migrations/1.sql
-true|lib/docs/x.dart
-true|sub/.gitignore
-true|.gitignore.bak
-true|README.mdx
-true|.githubx/y
-true|Docs/x
-true|README.MD
-true|x.md.orig
-EOF
-# A failing git diff ships nothing.
-printf 'lib/main.dart\n' > "$tmp/paths"
 for sh in "${SHELLS[@]}"; do
-  [ "$(ship "$sh" "$tmp/paths" 128)" = ship=false ] || fail "a failing git diff shipped under '$sh'"
+  pick "$sh" 0123abc
+  [ $rc = 0 ] && [ "$(cat "$tmp/gh_out")" = sha=0123abc ] || fail "pick under '$sh': rc $rc, outputs [$(cat "$tmp/gh_out")], want sha=0123abc"
+  pick "$sh" ""
+  [ $rc != 0 ] && [ ! -s "$tmp/gh_out" ] && grep -q 'No commit on main has a passed CI run' "$tmp/out" \
+    || fail "pick with no green run under '$sh': rc $rc, outputs [$(cat "$tmp/gh_out")] (must fail red, output nothing)"
+  pick "$sh" '!'
+  [ $rc != 0 ] && [ ! -s "$tmp/gh_out" ] || fail "pick with a failing gh under '$sh': rc $rc, outputs [$(cat "$tmp/gh_out")]"
 done
-# Large: the shipping path first, then many that do not ship (or do).
-{ echo lib/main.dart; for ((i = 0; i < BIG; i++)); do echo "docs/p$i.md"; done; } > "$tmp/big-first"
-{ for ((i = 0; i < BIG; i++)); do echo "docs/p$i.md"; done; } > "$tmp/big-none"
-{ for ((i = 0; i < BIG; i++)); do echo "lib/p$i.dart"; done; } > "$tmp/big-all"
+
+# "Decide": the step as written, run in a real git repo with the real
+# tool/release_scope.sh (its path rules: test/tool/release_scope_test.sh);
+# gh answers the last release tag with $PREV.
+grep -A1 -- '- name: Decide whether the commits since the last release ship' .github/workflows/release.yml | grep -qE '^ *id: diff$' \
+  || fail "Decide whether the commits since the last release ship is not step id diff"
+grep -A6 -- '- name: Decide whether the commits since the last release ship' .github/workflows/release.yml \
+  | grep -qE '^ *SHA: \$\{\{ steps\.pick\.outputs\.sha \}\}$' || fail "the ship decision does not judge the picked commit"
+step_run .github/workflows/release.yml "Decide whether the commits since the last release ship" "$tmp/ship.sh"
+repo=$tmp/repo; mkdir -p "$repo/tool" "$repo/lib" "$repo/docs"
+cp tool/release_scope.sh "$repo/tool/"
+(
+  cd "$repo"; git init -q -b main .; git config user.email qa@sis.test; git config user.name QA
+  git config commit.gpgsign false; git config tag.gpgsign false
+  echo 1 > lib/a.dart; git add lib; git commit -q -m app; git tag -a v1 -m v1
+  echo 2 > docs/a.md; git add docs; git commit -q -m docs; git tag docs-commit
+  echo 3 > lib/a.dart; git add lib; git commit -q -m app2; git tag app-commit
+)
+D=$(git -C "$repo" rev-parse docs-commit); L=$(git -C "$repo" rev-parse app-commit)
+decide() { # <shell> <prev> <sha> [reason] -> sets rc; $tmp/gh_out, $tmp/summary
+  : > "$tmp/gh_out"; : > "$tmp/summary"; set +e
+  (cd "$repo" && PATH="$tmp/bin:$PATH" PREV=$2 SHA=$3 REASON=${4:-} GITHUB_OUTPUT="$tmp/gh_out" GITHUB_STEP_SUMMARY="$tmp/summary" \
+    $1 "$tmp/ship.sh") > "$tmp/out" 2>&1; rc=$?; set -e
+}
 for sh in "${SHELLS[@]}"; do
-  [ "$(ship "$sh" "$tmp/big-first")" = ship=true ] || fail "$BIG paths, first shipping, under '$sh' gave [$(cat "$tmp/gh_out")] (SIGPIPE?)"
-  [ "$(ship "$sh" "$tmp/big-all")" = ship=true ] || fail "$BIG shipping paths under '$sh' gave [$(cat "$tmp/gh_out")] (SIGPIPE?)"
-  [ "$(ship "$sh" "$tmp/big-none")" = ship=false ] || fail "$BIG docs paths under '$sh' gave [$(cat "$tmp/gh_out")]"
+  while read -r prev sha want; do
+    [ "$prev" = - ] && prev=
+    decide "$sh" "$prev" "${!sha}"
+    [ $rc = 0 ] && [ "$(cat "$tmp/gh_out")" = "ship=$want" ] \
+      || fail "decide prev [$prev] sha $sha under '$sh': rc $rc, outputs [$(cat "$tmp/gh_out")], want ship=$want"
+  done <<'TABLE'
+v1 D false
+v1 L true
+- D false
+- L true
+docs-commit L true
+app-commit L false
+TABLE
+  decide "$sh" v1 "$D"
+  grep -q 'daily noon run' "$tmp/summary" || fail "a scheduled run's summary does not say so: [$(cat "$tmp/summary")]"
+  decide "$sh" v1 "$D" 'crash for everyone'
+  grep -q 'crash for everyone' "$tmp/summary" || fail "a manual run's summary lacks its reason: [$(cat "$tmp/summary")]"
+  decide "$sh" v1 deadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+  [ $rc != 0 ] && [ ! -s "$tmp/gh_out" ] || fail "an unknown release commit under '$sh': rc $rc, outputs [$(cat "$tmp/gh_out")] (must fail, decide nothing)"
+  decide "$sh" '!' "$L"
+  [ $rc != 0 ] && [ ! -s "$tmp/gh_out" ] || fail "an unreadable last release under '$sh': rc $rc, outputs [$(cat "$tmp/gh_out")] (must fail, never judge sha^ alone)"
 done
 
 # ---- 2 simulator UDID ----------------------------------------------------------
@@ -266,6 +280,63 @@ for sh in "${SHELLS[@]}"; do
   done
   sig "$sh" "$tmp/a-adhoc" || true
   grep -qxF "Runner.app: unsigned or ad-hoc" "$tmp/out" || fail "no Authority line is not reported as unsigned under '$sh'"
+done
+
+# ---- 4 release tag: retried, and a release that already exists is success ----
+# "Tag and publish release notes" as written; gh fails the first $FAILS creates
+# ("all" = every one) and `release view` of the tag succeeds from view call
+# number $VIEW_FROM on (0 = never); sleep is a stand-in that only logs.
+grep -A3 -- '- name: Tag and publish release notes' .github/workflows/release.yml | grep -qE '^ *GH_TOKEN: \$\{\{ github\.token \}\}$' \
+  || fail "the tag step does not get GH_TOKEN"
+awk '/^  publish:/ { f = 1; next } f && /^  [a-z-]+:/ { exit } f && /^    env:/ { e = 1; next } e && !/^      / { exit } e' .github/workflows/release.yml \
+  | grep -qE '^      SHA: \$\{\{ needs\.scope\.outputs\.sha \}\}$' || fail "publish's SHA is not scope's picked commit"
+awk -v n="- name: Tag and publish release notes" '
+  index($0, n) && substr($0, index($0, n) + length(n)) == "" { found = 1; next }
+  found && !inrun && /^ *- / { exit }
+  found && !inrun && /^ *run: \|/ { inrun = 1; match($0, /^ */); ind = RLENGTH; next }
+  inrun { if ($0 ~ /^ *$/) { print ""; next }; match($0, /^ */); if (RLENGTH <= ind) exit; if (!body) body = RLENGTH; print substr($0, body + 1) }' \
+  .github/workflows/release.yml | sed 's/\${{ needs\.scope\.outputs\.name }}/26.10.5/g; s/\${{ needs\.scope\.outputs\.code }}/177/g' > "$tmp/tag.sh"
+[ -s "$tmp/tag.sh" ] || fail "step 'Tag and publish release notes' not found"
+! grep -q '\${{' "$tmp/tag.sh" || fail "the tag step reads an unexpected expression: $(cat "$tmp/tag.sh")"
+TAG='v26.10.5+177'; PICK=0123abcd0123abcd0123abcd0123abcd0123abcd
+stub gh 'echo "gh $*" >> "$CALLS"
+case "$1 $2" in
+  "release create")
+    [ "$3" = "$TAG" ] || { echo "gh stub: create of [$3]" >&2; exit 2; }
+    t=; for a in "$@"; do [ "$t" = 1 ] && { [ "$a" = "$PICK" ] || exit 2; t=2; }; [ "$a" = --target ] && t=1; done
+    [ "$t" = 2 ] || { echo "gh stub: create without --target $PICK: $*" >&2; exit 2; }
+    n=$(grep -c "^gh release create" "$CALLS")
+    [ "$FAILS" = all ] && exit 1; [ "$n" -le "$FAILS" ] && exit 1; exit 0 ;;
+  "release view")
+    [ "$3" = "$TAG" ] || exit 1
+    n=$(grep -c "^gh release view" "$CALLS")
+    [ "$VIEW_FROM" != 0 ] && [ "$n" -ge "$VIEW_FROM" ] && exit 0; exit 1 ;;
+esac
+echo "gh stub: unexpected: $*" >&2; exit 2'
+stub sleep 'echo "sleep $*" >> "$CALLS"'
+tagrun() { # <shell> <fails> <view_from> -> sets rc; $tmp/calls
+  : > "$tmp/calls"; set +e
+  PATH="$tmp/bin:$PATH" CALLS="$tmp/calls" TAG=$TAG PICK=$PICK SHA=$PICK FAILS=$2 VIEW_FROM=$3 $1 "$tmp/tag.sh" >> "$tmp/calls" 2>&1; rc=$?; set -e
+}
+seq_of() { grep -E '^(gh release create|sleep)' "$tmp/calls" | awk '{ print $1 == "sleep" ? "sleep" $2 : "create" }' | tr '\n' ' '; }
+for sh in "${SHELLS[@]}"; do
+  while read -r fails view_from want_rc want_seq; do
+    tagrun "$sh" "$fails" "$view_from"
+    got=$(seq_of)
+    [ "$rc" = "$want_rc" ] && [ "$got" = "${want_seq//_/ } " ] \
+      || fail "tag under '$sh', $fails failed creates, view ok from call $view_from: rc $rc, calls [$got], want rc $want_rc [${want_seq//_/ }]; log: $(tr '\n' ';' < "$tmp/calls")"
+  done <<'TABLE'
+0 0 0 create
+1 0 0 create_sleep10_create
+2 0 0 create_sleep10_create_sleep30_create
+1 1 0 create
+all 3 0 create_sleep10_create_sleep30_create
+all 0 1 create_sleep10_create_sleep30_create
+TABLE
+  # Always failing: a message of the step's own after the last try (the step's
+  # output is interleaved with the stand-ins' log, which prints nothing else).
+  tagrun "$sh" all 0; ! grep -qE '^(gh|sleep) ' <<<"$(tail -1 "$tmp/calls")" \
+    || fail "a tag step that gave up printed no message after its last try under '$sh': $(tr '\n' ';' < "$tmp/calls")"
 done
 
 echo "workflow pipes: OK"

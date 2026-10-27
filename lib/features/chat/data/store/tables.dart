@@ -174,3 +174,27 @@ class SendQueueRows extends Table {
   @override
   String get tableName => 'send_queue';
 }
+
+/// A decrypted message the notification saved while the app was closed: shown only, never a stored message; a trigger deletes it when the real messages row lands.
+@DataClassName('StoredPushInboxRow')
+class PushInbox extends Table {
+  TextColumn get messageId => text()();
+
+  TextColumn get conversationId => text()();
+
+  TextColumn get senderId => text()();
+
+  TextColumn get body => text()();
+
+  /// sha256 hex of the ciphertext the body was opened from.
+  TextColumn get sealed => text()();
+
+  /// Local clock, microseconds since epoch.
+  IntColumn get receivedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {messageId};
+
+  @override
+  String get tableName => 'push_inbox';
+}

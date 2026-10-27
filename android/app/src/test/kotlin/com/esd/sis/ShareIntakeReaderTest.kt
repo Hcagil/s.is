@@ -21,6 +21,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -257,5 +258,73 @@ class ShareIntakeReaderTest {
         assertTrue(freshShared.exists())
         assertTrue(freshRaw.exists())
         assertTrue(oldOther.exists())
+    }
+
+    // --- Size cap: a photo source over 50 MiB is refused (counted from the bytes, not the provider's SIZE). ---
+
+    private val photoCap = 50L * 1024 * 1024
+
+    /** A real JPEG followed by zero padding, [total] bytes in all, produced lazily. */
+    private fun padded(total: Long): InputStream {
+        val head = jpeg(40, 20)
+        return object : InputStream() {
+            var pos = 0L
+            override fun read(): Int = when {
+                pos >= total -> -1
+                pos < head.size -> head[(pos++).toInt()].toInt() and 0xff
+                else -> { pos++; 0 }
+            }
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (pos >= total) return -1
+                val k = minOf(len.toLong(), total - pos).toInt()
+                for (i in 0 until k) b[off + i] = if (pos + i < head.size) head[(pos + i).toInt()] else 0
+                pos += k
+                return k
+            }
+        }
+    }
+
+    private fun sized(total: Long): Uri {
+        val uri = Uri.parse("content://$other/x/s${System.nanoTime()}.jpg")
+        shadowOf(context.contentResolver).registerInputStream(uri, padded(total))
+        return uri
+    }
+
+    private fun raws() = context.cacheDir.listFiles().orEmpty().filter { it.name.startsWith("picked_raw_") }.toSet()
+
+    @Test
+    fun `a photo source of exactly 50 MiB is processed`() {
+        val path = PickedImageProcessor(context).process(sized(photoCap), 1600)
+        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, o)
+        assertEquals(40, o.outWidth)
+        assertEquals(20, o.outHeight)
+    }
+
+    @Test
+    fun `a photo source one byte over 50 MiB is refused and leaves no raw copy`() {
+        val before = raws()
+        try {
+            PickedImageProcessor(context).process(sized(photoCap + 1), 1600)
+            fail("expected NotImageException")
+        } catch (e: NotImageException) {
+            // expected
+        }
+        assertEquals(before, raws())
+    }
+
+    @Test
+    fun `an oversize photo is left out of a share and the other items stay`() {
+        val video = serve(Uri.parse("content://$other/x/keep.mp4"), ByteArray(1000) { 3 })
+        val got = items(ShareIntakeReader(context).read(send(photo(), sized(photoCap + 1), video, text = "hi")))
+        assertEquals(2, got.size)
+        assertEquals(listOf(false, true), got.map { it["video"] })
+    }
+
+    @Test
+    fun `text whose unit 3999 is a lead surrogate is cut to 3999 units`() {
+        val text = "a".repeat(3999) + "\uD83D\uDE00" + "b".repeat(100)
+        assertTrue(text[3999].isHighSurrogate())
+        assertEquals("a".repeat(3999), ShareIntakeReader(context).read(send(text = text))!!["text"])
     }
 }

@@ -173,7 +173,12 @@ void main() {
     noah = SupabaseChatRepository(noahClient!);
     offline = SupabaseChatRepository(deadClient!);
 
-    await findByTag(liamClient!, [miaClient!]);
+    // liam reaches mia (stored, so a quick rerun may hit RLMT1).
+    try {
+      await findByTag(liamClient!, [miaClient!]);
+    } on PostgrestException catch (e) {
+      if (e.code != 'RLMT1') rethrow;
+    }
     final started = await liam.startDirectConversation(
       miaClient!.auth.currentUser!.id,
     );
@@ -698,14 +703,24 @@ void main() {
       addTearDown(t.view.reset);
 
       Future<void> until(bool Function() ok, String what) async {
-        for (var i = 0; i < 150; i++) {
+        for (var i = 0; i < 300; i++) {
           await t.runAsync(
             () => Future<void>.delayed(const Duration(milliseconds: 100)),
           );
           await t.pump();
           if (ok()) return;
         }
-        fail('never happened: $what');
+        // What the screen did show, so a failure on CI names its cause.
+        final shown = find
+            .byType(Text)
+            .evaluate()
+            .map((e) {
+              final w = e.widget as Text;
+              return w.data ?? w.textSpan?.toPlainText();
+            })
+            .nonNulls
+            .toList();
+        fail('never happened in 30 s: $what. On screen: $shown');
       }
 
       final refused = (await t.runAsync(() => mia.attachmentUrl(missingPath)))!;

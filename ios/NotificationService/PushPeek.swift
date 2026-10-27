@@ -88,7 +88,12 @@ enum PushPeek {
       return (nil, nil)
     }
 
-    return (PeekCore.text(push: push, data: data, pickleKey: pickleKey, decryptor: decryptor), data.peerName)
+    let opened = PeekCore.opened(push: push, data: data, pickleKey: pickleKey, decryptor: decryptor)
+    // Save only a text a STORED session or key opened, for the chat partner the store knows (never the push's own sender key or id). Runs here, before the extension hands its content to the system, so the store connection is already closed.
+    if let row = PeekCore.saveRow(push: push, data: data, opened: opened) {
+      _ = PeekStoreReader.save(path: store.path, keyHex: storeKeyHex, conversationId: push.conversationId, messageId: push.messageId, peerUserId: row.peerUserId, body: row.body, sealed: row.sealed, receivedAtMicros: Int64(Date().timeIntervalSince1970 * 1_000_000))
+    }
+    return (opened?.text, data.peerName)
   }
 
   /// Formats the shown body of a notification.

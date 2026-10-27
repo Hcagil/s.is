@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
 import '../../../core/platform_features.dart';
+import '../../../core/startup_marks.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/member.dart';
 import '../../auth/domain/session_state.dart';
@@ -38,6 +39,7 @@ import '../domain/location_services.dart';
 import '../domain/location_share_repository.dart';
 import '../domain/message.dart';
 import '../domain/message_store.dart';
+import '../domain/push_inbox_store.dart';
 import '../domain/phone_book.dart';
 import '../domain/photo_crop_renderer.dart';
 import '../domain/picture_cropper.dart';
@@ -275,6 +277,12 @@ MessageStore? _storeOf(Ref ref) {
   } catch (_) {
     return null;
   }
+}
+
+/// The push_inbox read side of the message store, or null (no store, or a store without it, such as a test fake). Never throws.
+PushInboxStore? _pushInboxOf(Ref ref) {
+  final store = _storeOf(ref);
+  return store is PushInboxStore ? store as PushInboxStore : null;
 }
 
 /// Erases the database file and drops the store instance: after clear() an

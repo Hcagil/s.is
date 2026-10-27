@@ -2102,6 +2102,18 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{Send 1 photo} other{Send {count} photos}}'**
   String attachSendPhotos(int count);
 
+  /// Screen-reader label of the tick circle on a photo that is not selected
+  ///
+  /// In en, this message translates to:
+  /// **'Select photo'**
+  String get attachTickSelect;
+
+  /// Screen-reader label of the tick circle on a selected photo
+  ///
+  /// In en, this message translates to:
+  /// **'Selected'**
+  String get attachTickSelected;
+
   /// Title of the photo permission prompt
   ///
   /// In en, this message translates to:

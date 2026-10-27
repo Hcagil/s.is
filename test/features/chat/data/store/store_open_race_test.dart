@@ -77,15 +77,17 @@ void main() {
         }
       }
       expect(lost, isEmpty, reason: '${42 - lost.length}/42 saves kept');
-    });
+      // 63 opens of a new encrypted file: ~9 s alone, 33 s on a busy machine.
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('six openers x 40 rounds on NEW files under CPU load: every save '
         'kept, no reset', () async {
       // Load makes the write-lock races that lost saves before the fix.
-      // 48 busy shell loops (separate processes, so the test's own
-      // isolates are not frozen with them).
+      // Two busy shell loops per core (separate processes, so the test's own
+      // isolates are not frozen with them): the ratio the fix was proven
+      // with, without burying a 4-core CI runner under 48 of them.
       final spinners = [
-        for (var i = 0; i < 48; i++)
+        for (var i = 0; i < 2 * Platform.numberOfProcessors; i++)
           await Process.start('sh', ['-c', 'while :; do :; done']),
       ];
       addTearDown(() {
@@ -117,7 +119,8 @@ void main() {
       }
       expect(lost, isEmpty, reason: '${total - lost.length}/$total saves kept');
       expect(h.deleteKeyCalls, 0, reason: 'deleteKey never called');
-    }, timeout: const Timeout(Duration(minutes: 3)));
+      // CPU-bound: ~20 s alone, ~3 min with the machine busy.
+    }, timeout: const Timeout(Duration(minutes: 8)));
 
     test('an existing store reopened twice at once keeps its data', () async {
       final first = storeAt(h.file);

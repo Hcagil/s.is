@@ -26,6 +26,7 @@ private const val NETWORK_CHANNEL = "sis/network"
 private const val SPEECH_CHANNEL = "sis/speech"
 private const val SHARE_CHANNEL = "sis/share_intake"
 private const val REPLY_CHANNEL = "sis/encrypted_reply"
+private const val LAUNCH_TAP_CHANNEL = "sis/launch_tap"
 private const val REQUEST_TONE = 9103
 private const val REQUEST_ATTACHMENTS = 9101
 private const val REQUEST_PICTURE = 9102
@@ -58,6 +59,12 @@ class MainActivity : FlutterActivity() {
     private var pendingShare: Map<String, Any?>? = null
     private var shareParsing = false
     private val shareWaiters = mutableListOf<MethodChannel.Result>()
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        // Before super: the Flutter plugins read the launch intent from there. A tap without our proof is dropped.
+        TapProof.admit(this, intent)
+        super.onCreate(savedInstanceState)
+    }
 
     override fun onDestroy() {
         pickExecutor.shutdown()
@@ -101,15 +108,30 @@ class MainActivity : FlutterActivity() {
         replyChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, REPLY_CHANNEL).also {
             it.setMethodCallHandler { call, result -> if (call.method == "take") result.success(EncryptedReplyInbox.take()) else result.notImplemented() }
         }
+        // A cold start from a notification tap: Dart reads the chat id at once, without waiting for Firebase. Taken once (the action is cleared) so a recreate or a launch from history does not reopen the chat.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LAUNCH_TAP_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "take") result.success(takeLaunchTap()) else result.notImplemented()
+            }
         shareReader.cleanStale()
         handleShare(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
+        TapProof.admit(this, intent)
         super.onNewIntent(intent)
         setIntent(intent)
         handleShare(intent)
         replyChannel?.invokeMethod("arrived", null) // a Reply may have been left in EncryptedReplyInbox just before this launch
+    }
+
+    private fun takeLaunchTap(): String? {
+        val launch = intent ?: return null
+        if (launch.action != "SELECT_NOTIFICATION") return null
+        if ((launch.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return null
+        val payload = launch.getStringExtra("payload")
+        launch.action = null
+        return payload?.takeIf { it.isNotEmpty() }
     }
 
     // Dart asks for the share that started or reached the app. A parse still

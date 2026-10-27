@@ -42,13 +42,20 @@ const config = RuntimeConfig(
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 
-const c1 = Conversation(id: 'c1', title: 'Weekend plan');
-const c2 = Conversation(id: 'c2', title: 'New project');
+const c1 = Conversation(
+  id: '00000000-0000-4000-8000-0000000000c1',
+  title: 'Weekend plan',
+);
+const c2 = Conversation(
+  id: '00000000-0000-4000-8000-0000000000c2',
+  title: 'New project',
+);
 
 Future<ProviderContainer> pumpApp(
   WidgetTester t, {
   required ChatRepository chat,
   required PushSourceFake push,
+  bool settle = true,
 }) async {
   await t.pumpWidget(
     ProviderScope(
@@ -77,7 +84,14 @@ Future<ProviderContainer> pumpApp(
       child: const SisApp(),
     ),
   );
-  await t.pumpAndSettle();
+  if (settle) {
+    await t.pumpAndSettle();
+  } else {
+    // The list read is held: its loading state never settles.
+    for (var i = 0; i < 20; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+  }
   expect(
     find.byType(HomeScreen, skipOffstage: false),
     findsOneWidget,
@@ -102,7 +116,7 @@ void main() {
     await pumpApp(t, chat: chat, push: push);
     final readsBefore = chat.listReads;
 
-    push.openConversation('c1');
+    push.openConversation('00000000-0000-4000-8000-0000000000c1');
     await t.pumpAndSettle();
 
     expect(find.byType(MessageScreen), findsOneWidget);
@@ -119,7 +133,7 @@ void main() {
       reason: 'a conversation already on the list needs no re-read',
     );
     expect(push.cleared, [
-      'c1',
+      '00000000-0000-4000-8000-0000000000c1',
     ], reason: 'opening the tapped conversation clears its notification');
   });
 
@@ -133,7 +147,7 @@ void main() {
     // A chat started while the app was closed: the list the app already
     // loaded does not have it yet, but the server does now.
     chat.list = [c1, c2];
-    push.openConversation('c2');
+    push.openConversation('00000000-0000-4000-8000-0000000000c2');
     await t.pumpAndSettle();
 
     expect(
@@ -153,7 +167,7 @@ void main() {
       readsBefore + 1,
       reason: 'exactly one re-read, not a poll',
     );
-    expect(push.cleared, ['c2']);
+    expect(push.cleared, ['00000000-0000-4000-8000-0000000000c2']);
   });
 
   // 0.30.12: a tap opens the chat at once; one the list never learns about
@@ -166,7 +180,7 @@ void main() {
     // Re-reads are held, so the chat is seen open before the list decides.
     final gate = chat.listGate = Completer<void>();
 
-    push.openConversation('does-not-exist');
+    push.openConversation('00000000-0000-4000-8000-0000000000ff');
     await nextFrames(t);
     expect(
       find.byType(MessageScreen, skipOffstage: false),
@@ -190,6 +204,77 @@ void main() {
     expect(find.byType(HomeScreen), findsOneWidget);
   });
 
+  group('a payload that is not a chat id opens nothing', () {
+    // Not a lowercase 8-4-4-4-12 UUID: the uppercase one names a chat that IS
+    // on the list, so only the shape check can stop it. List reads are held
+    // so a chat opened by mistake would be on screen before the list could
+    // close it again.
+    const bad = ['does-not-exist', '00000000-0000-4000-8000-0000000000C1'];
+
+    Future<void> release(FakeChat chat, Completer<void> gate) async {
+      gate.complete();
+      chat.listGate = null;
+    }
+
+    for (final id in bad) {
+      testWidgets('tapped from home: "$id"', (t) async {
+        final chat = FakeChat(list: [c1, c2]);
+        final push = PushSourceFake();
+        final c = await pumpApp(t, chat: chat, push: push);
+        final gate = chat.listGate = Completer<void>();
+
+        push.openConversation(id);
+        await nextFrames(t);
+        expect(find.byType(MessageScreen, skipOffstage: false), findsNothing);
+        expect(c.read(openConversationProvider), isNull);
+
+        await release(chat, gate);
+        await t.pumpAndSettle();
+        expect(find.byType(MessageScreen, skipOffstage: false), findsNothing);
+        expect(find.byType(HomeScreen), findsOneWidget);
+      });
+
+      testWidgets('tapped with a chat open, goes back to home: "$id"', (
+        t,
+      ) async {
+        final chat = FakeChat(list: [c1, c2]);
+        final push = PushSourceFake();
+        final c = await pumpApp(t, chat: chat, push: push);
+        await t.tap(find.text('New project'));
+        await t.pumpAndSettle();
+        expect(find.byType(MessageScreen), findsOneWidget);
+        final gate = chat.listGate = Completer<void>();
+
+        push.openConversation(id);
+        await nextFrames(t);
+        for (var i = 0; i < 10; i++) {
+          await t.pump(const Duration(milliseconds: 100));
+        }
+        expect(find.byType(MessageScreen, skipOffstage: false), findsNothing);
+        expect(c.read(openConversationProvider), isNull);
+
+        await release(chat, gate);
+        await t.pumpAndSettle();
+        expect(find.byType(MessageScreen, skipOffstage: false), findsNothing);
+        expect(find.byType(HomeScreen), findsOneWidget);
+      });
+
+      testWidgets('a cold start launched from it: "$id"', (t) async {
+        final chat = FakeChat(list: [c1, c2]);
+        final gate = chat.listGate = Completer<void>();
+        final push = PushSourceFake(launchConversationId: id);
+        final c = await pumpApp(t, chat: chat, push: push, settle: false);
+        expect(find.byType(MessageScreen, skipOffstage: false), findsNothing);
+        expect(c.read(openConversationProvider), isNull);
+
+        await release(chat, gate);
+        await t.pumpAndSettle();
+        expect(find.byType(MessageScreen, skipOffstage: false), findsNothing);
+        expect(find.byType(HomeScreen), findsOneWidget);
+      });
+    }
+  });
+
   testWidgets('a tap while the list is re-reading opens the chat in the same '
       'frame, titled from the list it already holds', (t) async {
     final chat = FakeChat(list: [c1, c2]);
@@ -199,10 +284,13 @@ void main() {
     c.invalidate(conversationListProvider);
     await t.pump();
 
-    push.openConversation('c1');
+    push.openConversation('00000000-0000-4000-8000-0000000000c1');
     await nextFrames(t);
     expect(find.byType(MessageScreen, skipOffstage: false), findsOneWidget);
-    expect(c.read(openConversationProvider), 'c1');
+    expect(
+      c.read(openConversationProvider),
+      '00000000-0000-4000-8000-0000000000c1',
+    );
 
     gate.complete();
     chat.listGate = null;
@@ -228,9 +316,12 @@ void main() {
     c.invalidate(conversationListProvider);
     await t.pump();
 
-    push.openConversation('c2');
+    push.openConversation('00000000-0000-4000-8000-0000000000c2');
     await nextFrames(t);
-    expect(c.read(openConversationProvider), 'c2');
+    expect(
+      c.read(openConversationProvider),
+      '00000000-0000-4000-8000-0000000000c2',
+    );
 
     gate.complete();
     chat.listGate = null;
@@ -255,7 +346,7 @@ void main() {
     await t.pump();
 
     chat.list = [c1, c2]; // the server has it; the list does not yet
-    push.openConversation('c2');
+    push.openConversation('00000000-0000-4000-8000-0000000000c2');
     await nextFrames(t);
     expect(find.byType(MessageScreen, skipOffstage: false), findsOneWidget);
 
@@ -275,7 +366,9 @@ void main() {
   testWidgets('the conversation a cold start was launched from opens '
       'automatically', (t) async {
     final chat = FakeChat(list: [c1]);
-    final push = PushSourceFake(launchConversationId: 'c1');
+    final push = PushSourceFake(
+      launchConversationId: '00000000-0000-4000-8000-0000000000c1',
+    );
     await pumpApp(t, chat: chat, push: push);
 
     expect(find.byType(MessageScreen), findsOneWidget);
@@ -287,7 +380,7 @@ void main() {
       findsOneWidget,
     );
     expect(push.cleared, [
-      'c1',
+      '00000000-0000-4000-8000-0000000000c1',
     ], reason: 'opening from a cold-start launch clears its notification too');
   });
 
@@ -299,7 +392,7 @@ void main() {
     // models that by changing what the server answers without deliver().
     Message m(String id, String body, int minute) => Message(
       id: id,
-      conversationId: 'c1',
+      conversationId: '00000000-0000-4000-8000-0000000000c1',
       senderId: 'u2',
       body: body,
       createdAt: DateTime.utc(2026, 9, 29, 12, minute),
@@ -309,7 +402,7 @@ void main() {
       final chat = FakeChat(list: [c1], initial: [m('m1', 'before', 1)]);
       final push = PushSourceFake();
       await pumpApp(t, chat: chat, push: push);
-      push.openConversation('c1');
+      push.openConversation('00000000-0000-4000-8000-0000000000c1');
       await t.pumpAndSettle();
       expect(find.text('before'), findsOneWidget);
       // Sent while the phone slept: on the server, never delivered live.
@@ -337,7 +430,7 @@ void main() {
         'new messages, on the same screen', (t) async {
       final (_, push) = await openChat(t);
 
-      push.openConversation('c1');
+      push.openConversation('00000000-0000-4000-8000-0000000000c1');
       await t.pumpAndSettle();
 
       expect(find.text('while away'), findsOneWidget);
@@ -346,7 +439,10 @@ void main() {
         findsOneWidget,
         reason: 'no second copy of the chat pushed on top of the first',
       );
-      expect(push.cleared, ['c1', 'c1']);
+      expect(push.cleared, [
+        '00000000-0000-4000-8000-0000000000c1',
+        '00000000-0000-4000-8000-0000000000c1',
+      ]);
 
       await t.pageBack();
       await t.pumpAndSettle();
@@ -361,12 +457,15 @@ void main() {
       await t.pumpAndSettle();
       expect(find.byType(MessageScreen, skipOffstage: false), findsNothing);
 
-      push.openConversation('c1');
+      push.openConversation('00000000-0000-4000-8000-0000000000c1');
       await t.pumpAndSettle();
 
       expect(find.byType(MessageScreen), findsOneWidget);
       expect(find.text('while away'), findsOneWidget);
-      expect(push.cleared, ['c1', 'c1']);
+      expect(push.cleared, [
+        '00000000-0000-4000-8000-0000000000c1',
+        '00000000-0000-4000-8000-0000000000c1',
+      ]);
     });
 
     testWidgets('returning to the app shows what arrived meanwhile and clears '
@@ -376,7 +475,10 @@ void main() {
       await leaveAndReturn(t);
 
       expect(find.text('while away'), findsOneWidget);
-      expect(push.cleared, ['c1', 'c1']);
+      expect(push.cleared, [
+        '00000000-0000-4000-8000-0000000000c1',
+        '00000000-0000-4000-8000-0000000000c1',
+      ]);
       expect(find.byType(MessageScreen, skipOffstage: false), findsOneWidget);
     });
 
@@ -391,7 +493,7 @@ void main() {
       await t.pumpAndSettle();
 
       expect(find.text('while away'), findsNothing);
-      expect(push.cleared, ['c1']);
+      expect(push.cleared, ['00000000-0000-4000-8000-0000000000c1']);
     });
   });
 
@@ -412,7 +514,7 @@ void main() {
       await t.pumpAndSettle();
       expect(find.byType(MessageScreen), findsOneWidget);
 
-      push.openConversation('c2');
+      push.openConversation('00000000-0000-4000-8000-0000000000c2');
       await t.pumpAndSettle();
       expect(
         find.descendant(
@@ -438,14 +540,14 @@ void main() {
       final chat = ChatFake(self: 'u1')
         ..conversationsResult = Ok([
           Conversation(
-            id: 'c1',
+            id: '00000000-0000-4000-8000-0000000000c1',
             title: 'Weekend plan',
             lastMessage: 'hi',
             lastMessageAt: earlier,
             lastSenderId: 'u2',
           ),
           Conversation(
-            id: 'c2',
+            id: '00000000-0000-4000-8000-0000000000c2',
             title: 'New project',
             lastMessage: 'yo',
             lastMessageAt: earlier,
@@ -457,11 +559,11 @@ void main() {
       int unreadC1() => c
           .read(conversationListProvider)
           .value!
-          .singleWhere((x) => x.id == 'c1')
+          .singleWhere((x) => x.id == '00000000-0000-4000-8000-0000000000c1')
           .unread;
       Message inC1(String id) => Message(
         id: id,
-        conversationId: 'c1',
+        conversationId: '00000000-0000-4000-8000-0000000000c1',
         senderId: 'u2',
         body: 'still there?',
         createdAt: DateTime.now(),
@@ -469,11 +571,17 @@ void main() {
 
       await t.tap(find.text('Weekend plan'));
       await t.pumpAndSettle();
-      expect(c.read(openConversationProvider), 'c1');
+      expect(
+        c.read(openConversationProvider),
+        '00000000-0000-4000-8000-0000000000c1',
+      );
 
-      push.openConversation('c2');
+      push.openConversation('00000000-0000-4000-8000-0000000000c2');
       await t.pumpAndSettle();
-      expect(c.read(openConversationProvider), 'c2');
+      expect(
+        c.read(openConversationProvider),
+        '00000000-0000-4000-8000-0000000000c2',
+      );
       chat.deliver(inC1('m1'));
       await t.pumpAndSettle();
       expect(unreadC1(), 1, reason: 'c1 is not being viewed');
@@ -493,7 +601,9 @@ void main() {
       t,
     ) async {
       final chat = FakeChat(list: [c1, c2]);
-      final push = PushSourceFake(launchConversationId: 'c2');
+      final push = PushSourceFake(
+        launchConversationId: '00000000-0000-4000-8000-0000000000c2',
+      );
       await pumpApp(t, chat: chat, push: push);
       expect(find.byType(MessageScreen), findsOneWidget);
 

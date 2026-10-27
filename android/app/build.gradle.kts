@@ -7,6 +7,9 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+// Second app for push tests (tool/sis_test_send.sh): only when SIS_TEST_APP=1 AND the debug build type. Release and the CI debug build keep com.esd.sis.
+val testApp: Boolean = System.getenv("SIS_TEST_APP") == "1"
+
 val releaseSigningValues = mapOf(
     "ANDROID_UPLOAD_KEYSTORE" to System.getenv("ANDROID_UPLOAD_KEYSTORE"),
     "ANDROID_UPLOAD_KEY_ALIAS" to System.getenv("ANDROID_UPLOAD_KEY_ALIAS"),
@@ -67,6 +70,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+        manifestPlaceholders["appLabel"] = "SIS"
     }
 
     signingConfigs {
@@ -81,6 +85,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            if (testApp) {
+                applicationIdSuffix = ".test"
+                manifestPlaceholders["appLabel"] = "SIS Test"
+            }
+        }
         release {
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

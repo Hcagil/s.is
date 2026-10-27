@@ -8,10 +8,13 @@
 //   not fetched again; media is never requested;
 // - stored cursor: the first feed read starts 5 s before it with the nil id;
 //   pages until a short one; the cursor is saved after each page and never
-//   moves back; chats not in the list are not stored; vanished rows are
-//   removed; an Err leaves the cursor;
-// - a run() during a pass restarts it, catch-up first; an offline list, no
-//   store or no Allowed session do nothing; an account change or a sign-out
+//   moves back; rows of chats not in the list are stored too; vanished rows
+//   are removed; an Err leaves the cursor;
+// - slice 1: changesSince is the first network call, conversations() only
+//   after the feed (backfill); an offline list still stores the feed rows
+//   and skips the backfill; every feed page reaches the loaded chat list;
+// - a run() during a pass restarts it, catch-up first; no store or no
+//   Allowed session do nothing; an account change or a sign-out
 //   (erase) during a pass stops it with nothing written;
 // - an open chat still loading its first page delays the fill (max ~3 s).
 import 'dart:async';
@@ -27,11 +30,15 @@ import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/catch_up_mark.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/message_opener.dart';
+import 'package:sis/features/chat/data/store/drift_chat_list_snapshot_store.dart';
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
 import 'package:sis/features/chat/domain/chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/message_store.dart';
+import 'package:sis/features/chat/domain/push_inbox_store.dart';
+import 'package:sis/features/notifications/application/push_controller.dart';
+import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/drift_stores.dart';
 import '../../support/fakes.dart';
@@ -550,13 +557,107 @@ void main() {
       expect(feed.feedCalls, isNotEmpty);
     });
 
-    test('rows of chats not in the list are not stored', () async {
+    // Slice 1: the server's RLS already limits feed rows to the member's
+    // chats, so a row of a chat the list does not show yet is stored.
+    test('rows of chats not in the list are stored too', () async {
       feed.change(msg('c1-new', t: 200));
       feed.change(msg('cx-new', conv: 'cx', t: 201));
       final (c, store) = await withCursor();
       await run(c);
       expect(ids(await store.newest('c1')), contains('c1-new'));
-      expect(await store.newest('cx'), isEmpty);
+      expect(ids(await store.newest('cx')), ['cx-new']);
+    });
+
+    test('changesSince is the first network call; conversations() only '
+        'after the feed', () async {
+      feed.change(msg('c1-new', t: 200));
+      final (c, _) = await withCursor();
+      await run(c);
+      final net = [
+        for (final x in feed.calls)
+          if (x != 'saveCursor') x,
+      ];
+      expect(net.first, 'changesSince', reason: 'got $net');
+      final lastFeed = net.lastIndexOf('changesSince');
+      final list = net.indexOf('conversations');
+      expect(list, isNonNegative, reason: 'the backfill reads the list');
+      expect(list, greaterThan(lastFeed), reason: 'got $net');
+    });
+
+    test('the chat list offline: the feed rows are still stored, the cursor '
+        'moves, no backfill runs', () async {
+      feed.change(msg('c1-new', t: 200));
+      feed.change(msg('c2-new', conv: 'c2', t: 201));
+      feed.history['c2'] = _rows('c2', 0, 5);
+      final (c, store) = await withCursor();
+      feed.conversationsResult = const Err(NetworkFailure('offline'));
+      await run(c);
+      expect(ids(await store.newest('c1')), contains('c1-new'));
+      expect(ids(await store.newest('c2')), ['c2-new']);
+      expect((await store.cursor())?.id, 'c2-new');
+      expect(feed.count('messages:'), 0, reason: 'no newest-page fill');
+      expect(feed.count('before:'), 0, reason: 'no older-page fill');
+    });
+
+    test('every feed page reaches the loaded chat list at once: +1 unread, '
+        'to the top, preview set', () async {
+      final rows = [
+        for (var i = 0; i < 501; i++)
+          msg('c2-n${i.toString().padLeft(4, '0')}', conv: 'c2', t: 101 + i),
+      ];
+      rows.forEach(feed.change);
+      feed.changeGates[2] = Completer<void>();
+      final (c, _) = await withCursor(
+        listed: const ['c1', 'c2'],
+        more: [
+          presenceRepositoryProvider.overrideWithValue(PresenceFake()),
+          pushSourceProvider.overrideWithValue(PushSourceFake()),
+          chatListSnapshotStoreProvider.overrideWith(
+            (ref) => DriftChatListSnapshotStore(
+              (ref.watch(messageStoreProvider) as _Spy).inner
+                  as DriftMessageStore,
+            ),
+          ),
+        ],
+      );
+      // The list as the server last sent it: c1 on top, c2 read.
+      feed.conversationsResult = Ok([
+        Conversation(id: 'c1', lastMessage: 'one', lastMessageAt: at(100)),
+        Conversation(id: 'c2', lastMessage: 'two', lastMessageAt: at(50)),
+      ]);
+      c.listen(conversationListProvider, (_, _) {});
+      await eventually(() {
+        final s = c.read(conversationListProvider);
+        return s.hasValue && !s.isLoading && s.value!.length == 2;
+      }, reason: 'list loaded');
+      List<Conversation> shown() => c.read(conversationListProvider).value!;
+      expect(shown().first.id, 'c1');
+      final listReads = feed.count('conversations');
+      unawaited(c.read(storeSyncProvider).run());
+      await eventually(
+        () => feed.feedCalls.length == 2,
+        reason: 'page 1 done, page 2 held',
+      );
+      await eventually(
+        () => shown().first.id == 'c2',
+        reason: 'page 1 moved c2 up before the next page',
+      );
+      final top = shown().first;
+      expect(top.lastMessage, rows[499].body);
+      expect(top.lastMessageAt, rows[499].createdAt);
+      expect(top.unread, greaterThanOrEqualTo(1));
+      expect(
+        feed.count('conversations'),
+        listReads,
+        reason: 'shown from the stored rows, not a list re-read',
+      );
+      final afterPage1 = top.unread;
+      feed.changeGates[2]!.complete();
+      await eventually(
+        () => shown().first.lastMessageAt == rows.last.createdAt,
+        reason: 'page 2 reached the list too',
+      );
+      expect(shown().first.unread, greaterThan(afterPage1));
     });
 
     test('a vanished row is removed; a placeholder is stored as one', () async {
@@ -690,17 +791,6 @@ void main() {
   });
 
   group('nothing happens', () {
-    test('when the chat list is offline', () async {
-      feed.conversationsResult = const Err(NetworkFailure('offline'));
-      feed.change(msg('c1-new', t: 200));
-      final c = await boot();
-      await run(c);
-      expect(feed.count('changesSince'), 0);
-      expect(feed.count('newestChange'), 0);
-      expect(feed.count('messages:'), 0);
-      expect(await storeOf(c).cursor(), isNull);
-    });
-
     test('without a store', () async {
       feed.conversationsResult = Ok([_chat('c1', 1)]);
       final c = await boot(withStore: false);
@@ -1065,6 +1155,134 @@ void main() {
       expect(clock.elapsed, greaterThan(const Duration(milliseconds: 2500)));
       expect(clock.elapsed, lessThan(const Duration(milliseconds: 5000)));
       feed.chatGate.complete();
+    });
+  });
+
+  // Slice 2 (t_428ad7c883): after a pass whose feed was read to its end with
+  // a stored cursor, push_inbox rows received before the pass started are
+  // swept. Not after a failed or partial read, not on the first pass (no
+  // cursor). Production wiring: the real DriftMessageStore, no spy.
+  group('push_inbox sweep', () {
+    final cursor = ChangeCursor(at(100), 'c1-100');
+    final past = DateTime.utc(2026, 1, 1).microsecondsSinceEpoch;
+    final future = DateTime.now()
+        .add(const Duration(days: 1))
+        .microsecondsSinceEpoch;
+
+    Future<(ProviderContainer, DriftMessageStore)> mount({
+      bool withCursor = true,
+      List<(String, int)>? inboxRows,
+      List<Override> more = const [],
+    }) async {
+      feed.conversationsResult = Ok([_chat('c1', 100)]);
+      final dir = Directory('${h.dir.path}/prod')..createSync();
+      final c = await boot(
+        withStore: false,
+        more: [...driftStoreOverrides(dir, key), ...more],
+      );
+      addTearDown(() => quit(c));
+      final store = c.read(messageStoreProvider) as DriftMessageStore;
+      await store.reconcilePage('c1', [
+        msg('c1-seed', t: 1),
+      ], reachedStart: true);
+      if (withCursor) await store.saveCursor(cursor);
+      for (final (id, rx) in inboxRows ?? [('old', past), ('new', future)]) {
+        await store.run<void>(null, (db) async {
+          await db.customStatement(
+            'INSERT INTO push_inbox(message_id, conversation_id, sender_id, '
+            'body, sealed, received_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [id, 'c1', 'u1', 'push text', 'ab' * 32, rx],
+          );
+        }, write: true);
+      }
+      feed.calls.clear();
+      return (c, store);
+    }
+
+    Future<List<String>> inbox(DriftMessageStore s) async =>
+        ids(await (s as PushInboxStore).pushInbox());
+
+    test('a feed read to its end with a cursor sweeps rows received before '
+        'the pass, keeps later ones', () async {
+      feed.change(msg('c1-new', t: 200));
+      final (c, store) = await mount();
+      await run(c);
+      expect(feed.count('changesSince'), greaterThan(0), reason: 'fixture');
+      expect(await inbox(store), ['new']);
+    });
+
+    test('an Err on the first feed page sweeps nothing', () async {
+      feed.change(msg('c1-new', t: 200));
+      feed.changeErrs.addAll([1, 2, 3, 4, 5, 6]);
+      final (c, store) = await mount();
+      await run(c);
+      expect(await inbox(store), ['old', 'new']);
+    });
+
+    test('a partial read (page 1 kept, then Err) sweeps nothing', () async {
+      for (var i = 0; i < 600; i++) {
+        feed.change(msg('c1-p${i.toString().padLeft(4, '0')}', t: 101 + i));
+      }
+      feed.changeErrs.addAll([2, 3, 4, 5, 6]);
+      final (c, store) = await mount();
+      await run(c);
+      expect((await store.cursor())?.id, isNot(cursor.id), reason: 'fixture');
+      expect(await inbox(store), ['old', 'new']);
+    });
+
+    test('the cached list shows a push row (+1 unread); the same message '
+        'then arriving from the feed with a later createdAt is still ONE '
+        'unread, and the preview moves to it', () async {
+      final dir = Directory('${h.dir.path}/prod')..createSync();
+      // The previous run saved the list: c1 read, its last row the seed.
+      final prev = driftStore('me', dir, key);
+      await DriftChatListSnapshotStore(prev).save('me', [
+        Conversation(
+          id: 'c1',
+          other: const Member(userId: 'u1', displayName: 'U1'),
+          lastMessage: 'seed',
+          lastMessageAt: at(1),
+          lastSenderId: 'u1',
+        ),
+      ]);
+      await prev.close();
+      feed.change(msg('n1', t: 200, sender: 'u1', body: 'real text'));
+      feed.holdList();
+      final (c, _) = await mount(
+        inboxRows: [('n1', at(150).microsecondsSinceEpoch)],
+        more: [
+          presenceRepositoryProvider.overrideWithValue(PresenceFake()),
+          pushSourceProvider.overrideWithValue(PushSourceFake()),
+        ],
+      );
+      c.listen(conversationListProvider, (_, _) {});
+      Conversation c1() => c
+          .read(conversationListProvider)
+          .value!
+          .firstWhere((x) => x.id == 'c1');
+      await eventually(
+        () => c.read(conversationListProvider).value?.isNotEmpty ?? false,
+        reason: 'cached list',
+      );
+      expect((c1().lastMessage, c1().unread), ('push text', 1));
+      unawaited(c.read(storeSyncProvider).run());
+      await eventually(
+        () => c1().lastMessage == 'real text',
+        reason: 'the feed row reached the list',
+      );
+      expect(c1().unread, 1, reason: 'the pushed message counted once');
+      feed.releaseList();
+    });
+
+    test('the first pass (no cursor yet) sweeps nothing', () async {
+      feed.history['c1'] = _rows('c1', 0, 3);
+      for (final m in feed.history['c1']!) {
+        feed.change(m);
+      }
+      final (c, store) = await mount(withCursor: false);
+      await run(c);
+      expect(await store.cursor(), isNotNull, reason: 'fixture: pass ran');
+      expect(await inbox(store), ['old', 'new']);
     });
   });
 }

@@ -3,7 +3,8 @@
 # usage line and fails; `login` without the state file
 # (.private/sis_test_sender.json) dies naming it, before any device call;
 # `login` with it: when the app has not read files/test_session.json after the
-# launch, the tool removes it and prints "already signed in; token file removed";
+# launch, the tool removes it and prints
+# "token file not read within 5 s (app already signed in, or slow): removed; run login again if needed";
 # when the app read it, no such removal. The token never appears in a device
 # command line, and the temp copies are removed on exit.
 # The tool runs from a sandbox copy with a `docker` stand-in first on PATH that
@@ -51,13 +52,13 @@ for still in yes no; do
   run login
   [ "$code" = 0 ] || fail "login (file left: $still): exit $code ($out)"
   if [ $still = yes ]; then
-    [[ "$out" == *"already signed in; token file removed"* ]] || fail "login, file left: no 'already signed in' line ($out)"
+    [[ "$out" == *"token file not read within 5 s (app already signed in, or slow): removed; run login again if needed"* ]] || fail "login, file left: no leftover-file line ($out)"
     grep -qF "$rm_tok" "$box/calls" || fail "login, file left: the app's token file is not removed"
     # The removal comes after the check that found the file.
     [ "$(grep -nF -e 'ls files/test_session.json' -e "$rm_tok" "$box/calls" | cut -d: -f2- | grep -oE 'ls files|rm -f files' | tr '\n' ' ')" = "ls files rm -f files " ] \
       || fail "login, file left: check then remove, in that order: $(cat "$box/calls")"
   else
-    [[ "$out" != *"already signed in"* ]] || fail "login, file read: says already signed in"
+    [[ "$out" != *"token file not read"* ]] || fail "login, file read: says the token file was not read"
     ! grep -qF "$rm_tok" "$box/calls" || fail "login, file read: removed a file the app already consumed"
   fi
   ! grep -qF qa-refresh-1 "$box/calls" || fail "login (file left: $still): the token is in a device command line"

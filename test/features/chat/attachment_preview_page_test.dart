@@ -37,6 +37,21 @@ import '../../support/fakes.dart';
 
 typedef Sent = ({List<PickedImage> images, String caption});
 
+final en = lookupAppLocalizations(const Locale('en'));
+
+/// The one notice on screen, checked for text and error style.
+void expectNotice(WidgetTester t, String message) {
+  final shown = t.widget<SisNotice>(find.byType(SisNotice));
+  expect(shown.message, message);
+  expect(shown.isError, isTrue, reason: 'not shown in the error style');
+}
+
+/// Lets a notice run out, so no timer is left pending.
+Future<void> noticeGone(WidgetTester t) async {
+  await t.pump(const Duration(seconds: 5));
+  await t.pumpAndSettle();
+}
+
 /// Per photo id: what load() gives (to send) and what loadForCrop() gives.
 final sendable = <String, PickedImage>{};
 final croppable = <String, PickedImage>{};
@@ -387,6 +402,44 @@ void main() {
       await t.pump(const Duration(seconds: 5));
       await t.pumpAndSettle();
     });
+    testWidgets('some ticked photos cannot be read: an error notice, the '
+        'readable ones sent in tick order with the caption, the page '
+        'closes', (t) async {
+      final h = Host(
+        3,
+        initial: 0,
+        caption: 'trip',
+        ticked: ['p2', 'p1', 'p0'],
+      );
+      h.gallery.loadResults['p1'] = null;
+      await open(t, h);
+      await send(t);
+
+      expectNotice(t, en.attachOpenFailedSome);
+      expect(h.resolved, isTrue, reason: 'the readable photos were not sent');
+      expect(
+        [for (final p in h.result!.images) p.bytes],
+        [bytesOf('p2'), bytesOf('p0')],
+      );
+      expect(h.result!.caption, 'trip');
+      expect(key('preview-page'), findsNothing, reason: 'the page stayed');
+      await noticeGone(t);
+    });
+
+    testWidgets('no ticked photo can be read: an error notice, nothing '
+        'sent, the page stays', (t) async {
+      final h = Host(2, initial: 0, caption: 'trip', ticked: ['p0', 'p1']);
+      h.gallery.loadResults['p0'] = null;
+      h.gallery.loadResults['p1'] = null;
+      await open(t, h);
+      await send(t);
+
+      expectNotice(t, en.attachOpenFailedMany);
+      expect(h.resolved, isFalse, reason: 'the page answered with nothing');
+      expect(key('preview-page'), findsOneWidget);
+      expect(h.tickedIds, ['p0', 'p1'], reason: 'the ticks were dropped');
+      await noticeGone(t);
+    });
   });
 
   group('back', () {
@@ -478,6 +531,58 @@ void main() {
 
       await send(t);
       expect(h.result!.images.single.bytes, bytesOf('p2'));
+    });
+    testWidgets('the crop starts from the crop copy (loadForCrop), not the '
+        'send copy', (t) async {
+      final h = await open(t, Host(2, initial: 1));
+      await cropDone(t);
+      expect(h.gallery.cropLoads, ['p1']);
+      expect(
+        identical(h.renderer.cuts.single.source.bytes, croppable['p1']!.bytes),
+        isTrue,
+        reason: 'the crop did not start from loadForCrop',
+      );
+      await send(t);
+      expect(h.result!.images.single, same(cutA));
+    });
+
+    testWidgets('a second crop starts again from the cached crop copy', (
+      t,
+    ) async {
+      final h = await open(t, Host(2, initial: 0));
+      await cropDone(t);
+      h.renderer.answer = cutB;
+      await cropDone(t);
+      expect(h.renderer.cuts, hasLength(2));
+      expect(
+        identical(h.renderer.cuts[1].source.bytes, croppable['p0']!.bytes),
+        isTrue,
+        reason: 'the second crop did not start from the uncut crop copy',
+      );
+      expect(h.gallery.cropLoads, [
+        'p0',
+      ], reason: 'the crop copy was not cached per photo');
+      await send(t);
+      expect(h.result!.images.single, same(cutB));
+    });
+
+    testWidgets('loadForCrop fails: a notice, no crop screen, nothing '
+        'changes', (t) async {
+      final h = Host(2, initial: 0);
+      h.gallery.cropSources['p0'] = null;
+      await open(t, h);
+      await t.tap(key('preview-crop'));
+      await t.pumpAndSettle();
+      await real(t);
+
+      expectNotice(t, en.photoOpenFailed);
+      expect(key('crop-free-done'), findsNothing, reason: 'crop screen opened');
+      expect(key('preview-page'), findsOneWidget);
+      expect(h.renderer.cuts, isEmpty);
+      expect(h.tickedIds, isEmpty, reason: 'a failed crop ticked the photo');
+      await noticeGone(t);
+      await send(t);
+      expect(h.result!.images.single.bytes, bytesOf('p0'));
     });
   });
 

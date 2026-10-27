@@ -72,8 +72,8 @@ Widget _undecodable(BuildContext context, Object error, StackTrace? stack) {
 class _AttachmentPreviewPageState extends ConsumerState<AttachmentPreviewPage> {
   // The version to show and send by photo id (cropped once the member crops).
   final _loaded = <String, PickedImage>{};
-  // As read from the gallery; opening the crop again starts from here.
-  final _originals = <String, PickedImage>{};
+  // The uncut crop copy (Gallery.loadForCrop) by photo id; every crop starts here.
+  final _cropSources = <String, PickedImage>{};
   final _thumbs = <String, Future<Uint8List?>>{};
   late final _caption = TextEditingController(text: widget.caption);
   late final _pager = PageController(initialPage: widget.initial);
@@ -110,7 +110,6 @@ class _AttachmentPreviewPageState extends ConsumerState<AttachmentPreviewPage> {
       image = null;
     }
     if (image == null) return null;
-    _originals[p.id] = image;
     if (!mounted) return image;
     setState(() => _loaded[p.id] = image!);
     return image;
@@ -118,9 +117,17 @@ class _AttachmentPreviewPageState extends ConsumerState<AttachmentPreviewPage> {
 
   Future<void> _crop() async {
     final p = _current;
-    final image = await _ensure(p);
+    PickedImage? source = _cropSources[p.id];
+    if (source == null) {
+      try {
+        source = await ref.read(galleryProvider).loadForCrop(p);
+      } catch (_) {
+        source = null;
+      }
+      if (source != null) _cropSources[p.id] = source;
+    }
     if (!mounted) return;
-    if (image == null) {
+    if (source == null) {
       showSisNotice(
         context,
         AppLocalizations.of(context).photoOpenFailed,
@@ -128,7 +135,7 @@ class _AttachmentPreviewPageState extends ConsumerState<AttachmentPreviewPage> {
       );
       return;
     }
-    final cropped = await openFreeCropScreen(context, _originals[p.id]!);
+    final cropped = await openFreeCropScreen(context, source);
     if (cropped == null || !mounted) return;
     setState(() => _loaded[p.id] = cropped);
     if (!widget.picked.value.any((e) => e.id == p.id)) {
@@ -156,6 +163,13 @@ class _AttachmentPreviewPageState extends ConsumerState<AttachmentPreviewPage> {
         isError: true,
       );
       return;
+    }
+    if (images.length < chosen.length) {
+      showSisNotice(
+        context,
+        AppLocalizations.of(context).attachOpenFailedSome,
+        isError: true,
+      );
     }
     Navigator.of(context).pop((images: images, caption: _caption.text.trim()));
   }

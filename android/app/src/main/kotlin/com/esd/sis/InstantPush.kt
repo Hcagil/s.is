@@ -30,6 +30,7 @@ object InstantPush {
 
     private const val ENQUEUE_GAP_MS = 300L
     private const val QUIET_MS = 8000L
+    private val UUID_SHAPE = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
     // Per process, as Dart kept them per isolate: when this process last posted, and when its last draw ended.
     private var lastPostAt = 0L
@@ -331,7 +332,20 @@ object InstantPush {
             val id = notificationId(conversationId)
 
             // The inbox below always gets [text] (locked for an encrypted push); the real text only lives in memory.
-            val peeked = if (locked && !redraw) PeekRunner.peek(context, extras)?.also { t -> extras.getString("message_id")?.let { peekedTexts[it] = t } } else null
+            // Older lines of this chat whose text was lost with a dead process: ask the peek to read them back from the phone's store (memory only; max 50; uuid shape).
+            val olderIds = if (locked && !redraw && owner != null) {
+                PushInbox.find(PushInbox.parse(prefs.getString("flutter.sis.push_inbox.$owner", null)), conversationId)?.getJSONArray("l")?.let { arr ->
+                    (0 until arr.length()).map { arr.getJSONObject(it).optString("m") }
+                        .filter { UUID_SHAPE.matches(it) && !peekedTexts.containsKey(it) }
+                        .take(50)
+                } ?: emptyList()
+            } else {
+                emptyList()
+            }
+            val peeked = if (locked && !redraw) PeekRunner.peek(context, extras, olderIds)?.also { t -> extras.getString("message_id")?.let { peekedTexts[it] = t } } else null
+            if (olderIds.isNotEmpty()) {
+                extras.getString("message_id")?.let { PeekRunner.takeOlder(it) }?.forEach { (id, t) -> if (id in olderIds && t.isNotEmpty()) peekedTexts[id] = t }
+            }
             // The name comes from this phone's own copy of the chat when it has one, never from the push alone.
             val localName = if (locked && !redraw) extras.getString("message_id")?.let { PeekRunner.takeName(it) } else null
             val shownTitle = localName ?: title

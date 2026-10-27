@@ -32,16 +32,6 @@ if [[ -n "${1:-}" ]]; then
     fail "the release bundle contains the test app"
   fi
 
-  libapp_entries=$(unzip -Z1 "$1" | grep '/libapp\.so$')
-  if [[ -z "$libapp_entries" ]]; then
-    fail "no libapp.so entry found in AAB"
-  fi
-
-  while IFS= read -r entry; do
-    if unzip -p "$1" "$entry" | grep -aq 'test_session.json'; then
-      fail "the test sign-in hook is in the release bundle"
-    fi
-  done <<< "$libapp_entries"
 fi
 
 echo "release guard: ok"

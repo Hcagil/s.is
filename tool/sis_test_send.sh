@@ -69,7 +69,7 @@ case "$cmd" in
     [[ $text =~ ^[A-Za-z0-9\ .,!?-]+$ ]] || die "send: letters, digits, space and . , ! ? - only"
     wait_tap label "Message"    # the composer hint
     adb shell input text "${text// /%s}"
-    wait_tap send ""
+    wait_tap label "Send"    # the send button tooltip (the phone must run English)
     # the typed text now sits in a message row, not in the box
     for _ in $(seq 20); do
       if ui_dump | find_node msg "$text" >/dev/null; then echo sent; exit 0; fi

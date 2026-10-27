@@ -620,6 +620,7 @@ Nothing contacts the site before that tap.
 - The What's new note already joins every pull request since the last release tag, so a noon release carries all of that day's lines.
 - A merge after noon waits for the next day unless it is urgent.
 - GitHub may start a scheduled run late (minutes, sometimes an hour); the range starts at the last tag, so a late or missed run loses nothing, and *Run workflow* covers a missed day.
+- 2026-10-27 — GitHub's schedule is best effort and `0 9` is its busiest minute (2026-10-26 ran 6.5 h late, 2026-10-27 did not run). The cron is now `17 9` with a fallback at `43 10`; the scope step lets only the first schedule run of a UTC day ship (lowest run id). A day GitHub drops entirely is covered by a manual run.
 - A commit whose CI failed is never released; the run takes the newest green commit, so one red merge does not hold back the earlier ones.
 - `versionCode` stays `run_number + 100` of `release.yml` and only rises; the minimum supported build is untouched; nothing is forced.
 - Testers get their tasks once a day after the noon release; an urgent release gets its own task at once.

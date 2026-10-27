@@ -633,7 +633,9 @@ void main() {
           final again = await c.read(reactionOpenerProvider).open([reaction]);
           expect(again.single.emoji, '🦊');
         }
+        // 80 real Olm opens: CPU-bound, past the default 30 s on a busy machine.
       },
+      timeout: const Timeout(Duration(minutes: 3)),
     );
   }
 

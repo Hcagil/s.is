@@ -1166,6 +1166,12 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String get attachTickSelect => 'Fotoğrafı seç';
+
+  @override
+  String get attachTickSelected => 'Seçildi';
+
+  @override
   String get attachFasterTitle => 'Fotoğrafları daha hızlı gönder';
 
   @override

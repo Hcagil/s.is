@@ -6,8 +6,9 @@
 //    scroll offset), the sheet stays open and the caller gets nothing yet;
 //    Use pops the sheet with the cropped image as images.first. An empty
 //    list means the sheet closed without a pick.
-//  - square: false (a chat photo): a tap ticks, "Send N photos" pops the
-//    sheet with the ticked photos; no crop route ever. (0.30.10)
+//  - square: false (a chat photo): the tick circle ticks, "Send N photos"
+//    pops the sheet with the ticked photos and the caption it was given; no
+//    crop route ever.
 //  - square: true has no camera tile and no tick circles. (0.30.10)
 //  - "From an app" (sheet-from-app) with square: true crops over the grid
 //    too; back returns to it, and a cancelled or failed pick leaves it.
@@ -112,7 +113,7 @@ Future<void> systemBack(WidgetTester t) async {
   await steps(t, 30);
 }
 
-typedef Picked = ({List<PickedImage> images, int dropped});
+typedef Picked = ({List<PickedImage> images, int dropped, String caption});
 
 /// A bare screen that opens the sheet (or the avatar sheet) and keeps what
 /// the call resolves with.
@@ -148,7 +149,11 @@ class Host {
                 TextButton(
                   key: ValueKey('open-$square'),
                   onPressed: () async {
-                    sheet = await showAttachmentSheet(context, square: square);
+                    sheet = await showAttachmentSheet(
+                      context,
+                      square: square,
+                      caption: square ? '' : 'typed',
+                    );
                     resolved = true;
                   },
                   child: Text('open $square'),
@@ -364,10 +369,10 @@ void main() {
       expect(h.cropper.calls.single.source, picked.bytes);
     });
 
-    testWidgets('not square: a tap ticks, Send resolves the ticked photo; no '
-        'crop', (t) async {
+    testWidgets('not square: the tick circle ticks, Send resolves the ticked '
+        'photo and the caption; no crop', (t) async {
       final h = await mount(t, 'open-false');
-      await t.tap(byKey('sheet-photo-p0'));
+      await t.tap(byKey('sheet-tick-p0'));
       await steps(t);
       expect(h.resolved, isFalse, reason: 'a tick is not a pick');
       expect(byKey('sheet-tick-p0'), findsOneWidget);
@@ -381,6 +386,7 @@ void main() {
       expect(sawCrop, isFalse, reason: 'a chat photo went through the crop');
       expect(h.resolved, isTrue, reason: 'Send did not pop the sheet');
       expect(h.sheet!.images.single.bytes, pngBytes);
+      expect(h.sheet!.caption, 'typed', reason: 'the caption was lost');
       expect(h.gallery.loadedIds, ['p0']);
       expect(h.gallery.cropLoads, isEmpty);
       expect(h.cropper.calls, isEmpty);

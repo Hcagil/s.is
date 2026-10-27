@@ -1172,6 +1172,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get attachTickSelect => 'Select photo';
+
+  @override
+  String get attachTickSelected => 'Selected';
+
+  @override
   String get attachFasterTitle => 'Send photos faster';
 
   @override

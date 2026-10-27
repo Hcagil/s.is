@@ -1,8 +1,10 @@
 // The paperclip flow, from its contract: the paperclip opens the attach
-// card and its Photo tile opens the photo grid; a tap on a photo ticks it;
-// "Send N photos" (sheet-send) loads the ticked photos and opens the preview
-// page; the preview page's round Send (preview-send) is what sends. Camera
-// and "Gallery" (sheet-from-app) also land on the preview page.
+// card and its Photo tile opens the photo grid; the tick circle in a photo's
+// corner (sheet-tick-<id>) ticks it, a tap on the photo itself
+// (sheet-photo-<id>) opens the big photo view; "Send N photos" (sheet-send)
+// loads the ticked photos and sends them at once, with the composer's text as
+// the caption -- no preview step. The big view's round Send (preview-send)
+// sends from there.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -25,17 +27,25 @@ Future<void> openGrid(WidgetTester t) async {
   await t.pumpAndSettle();
 }
 
-/// Ticks each of [ids] in the open grid.
+/// Ticks each of [ids] in the open grid with its tick circle.
 Future<void> tick(WidgetTester t, List<String> ids) async {
   for (final id in ids) {
     await t.ensureVisible(key('sheet-photo-$id'));
     await t.pump();
-    await t.tap(key('sheet-photo-$id'));
+    await t.tap(key('sheet-tick-$id'));
     await t.pump();
   }
 }
 
-/// Taps "Send N photos" and lets the photos load onto the preview page.
+/// Taps a photo itself in the open grid: the big photo view opens on it.
+Future<void> openViewer(WidgetTester t, String id) async {
+  await t.ensureVisible(key('sheet-photo-$id'));
+  await t.pump();
+  await t.tap(key('sheet-photo-$id'));
+  await frames(t);
+}
+
+/// Taps "Send N photos" and lets the ticked photos load and go out.
 Future<void> sendTicked(WidgetTester t) async {
   await t.tap(key('sheet-send'));
   await frames(t);
@@ -53,7 +63,7 @@ String previewCaption(WidgetTester t) => t
     .controller
     .text;
 
-/// Taps the preview page's Send and lets the sends run, without letting a
+/// Taps the big photo view's Send and lets the sends run, without letting a
 /// notice's timer run out.
 Future<void> previewSend(WidgetTester t) async {
   expect(key('preview-page'), findsOneWidget, reason: 'no preview page');
@@ -61,12 +71,11 @@ Future<void> previewSend(WidgetTester t) async {
   await frames(t);
 }
 
-/// Ticks [ids], sends them to the preview, sends from there, and lets the
-/// uploads and their pictures settle.
+/// Ticks [ids], sends them from the grid, and lets the uploads and their
+/// pictures settle.
 Future<void> sendFromGrid(WidgetTester t, List<String> ids) async {
   await openGrid(t);
   await tick(t, ids);
   await sendTicked(t);
-  await previewSend(t);
   await settleImages(t);
 }

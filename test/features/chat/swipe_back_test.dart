@@ -26,11 +26,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/presentation/add_members_page.dart';
+import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/presentation/attachment_preview_page.dart';
 import 'package:sis/features/chat/presentation/forward_page.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/chat/presentation/new_chat_page.dart';
 import 'package:sis/features/chat/presentation/new_group_page.dart';
+import 'package:sis/features/chat/presentation/photo_ticks.dart';
 import 'package:sis/features/chat/presentation/photo_viewer.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -426,7 +428,17 @@ void main() {
     Future<void> open(WidgetTester t) async {
       await pumpLauncher(
         t,
-        (context, _) => showAttachmentPreview(context, images: [pickedPng()]),
+        (context, _) => showAttachmentPreview(
+          context,
+          photos: const [GalleryPhoto('p1')],
+          picked: PhotoTicks(),
+          initial: 0,
+        ),
+        overrides: [
+          galleryProvider.overrideWithValue(
+            GalleryFake(photos: const [GalleryPhoto('p1')]),
+          ),
+        ],
       );
       expect(find.byType(AttachmentPreviewPage), findsOneWidget);
     }

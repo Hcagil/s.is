@@ -101,7 +101,6 @@ Future<Set<String>> sendAndWaitForPending(WidgetTester tester) async {
   await openGrid(tester);
   await tick(tester, ['p1']);
   await sendTicked(tester);
-  await tester.tap(key('preview-send'));
   for (var i = 0; i < 50 && key('attachment-local').evaluate().isEmpty; i++) {
     await tester.runAsync(() => Future<void>.delayed(Duration.zero));
     await tester.pump(const Duration(milliseconds: 20));

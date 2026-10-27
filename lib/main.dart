@@ -119,6 +119,7 @@ import 'features/presence/application/presence_controllers.dart';
 import 'features/presence/data/supabase_presence_repository.dart';
 import 'features/profile/application/profile_controller.dart';
 import 'features/profile/data/supabase_profile_repository.dart';
+import 'features/auth/data/test_session_hook.dart';
 import 'features/update/application/release_notes_controller.dart';
 import 'features/update/application/update_controller.dart';
 import 'features/update/data/play_update_repository.dart';
@@ -231,6 +232,12 @@ Future<void> main() async {
       ),
     );
     StartupMarks.mark('supabase-ready');
+    // Test builds only (SIS_TEST_LOGIN define): sign in once from a handed-over token.
+    if (kTestLogin && Supabase.instance.client.auth.currentSession == null) {
+      await consumeTestSession(
+        signIn: (t) => Supabase.instance.client.auth.setSession(t),
+      );
+    }
     // Push is set up after the first frame (see below); everything that asks
     // the push source waits for it (DeferredPushSource).
     // Realtime re-joins and foreground pushes reach the app through these (LiveCatchUp).

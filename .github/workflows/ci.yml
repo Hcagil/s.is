@@ -131,7 +131,7 @@ jobs:
       - name: Resolve dependencies
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter pub get
       - name: Layer rules
-        run: tool/check_pattern.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/check_pr_body_test.py && test/tool/release_scope_test.sh
+        run: tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/check_pr_body_test.py && test/tool/release_scope_test.sh && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh
 
       - name: Check formatting
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter dart format --output=none --set-exit-if-changed lib test
@@ -286,6 +286,12 @@ jobs:
         run: |
           export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
           SIS_BOT_TEST_COMPOSE="docker compose -f compose.yaml -f .github/compose.ci.yaml" test/tool/sis_bot_tool_test.sh
+      # The test sender account (push-sender@sis.test) through
+      # tool/sis_test_account_admin.sh, with the stack's own local keys only.
+      - name: Test sender admin tool test
+        run: |
+          export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
+          SIS_BOT_TEST_COMPOSE="docker compose -f compose.yaml -f .github/compose.ci.yaml" test/tool/sis_test_account_admin_test.sh
 
   # Proves the iOS project compiles (unsigned). Signing is proved by ios-signed below.
   ios:

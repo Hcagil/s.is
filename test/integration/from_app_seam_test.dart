@@ -283,8 +283,8 @@ void main() {
       await tapWhenShown(t, 'composer-attach');
       await tapWhenShown(t, 'attach-photo');
       await tapWhenShown(t, 'sheet-from-app');
-      // 0.30.10: every pick lands on the preview page; its Send sends.
-      await tapWhenShown(t, 'preview-send');
+      // What comes back is sent at once, like ticked grid photos: no preview
+      // step.
 
       var arrived = <Message>[];
       Future<void> poll() async {
@@ -332,6 +332,7 @@ void main() {
       expect(gallery.accessRequests, 1, reason: 'only opening the sheet');
       expect(gallery.openSettingsCalls, 0);
       expect(find.byType(SisNotice), findsNothing);
+      expect(byKey('preview-page'), findsNothing, reason: 'a preview step');
 
       await unmount(t);
     }, timeout: const Timeout(Duration(seconds: 120)));
@@ -347,8 +348,8 @@ void main() {
       await tapWhenShown(t, 'composer-attach');
       await tapWhenShown(t, 'attach-photo');
       await tapWhenShown(t, 'sheet-from-app');
-      // 0.30.10: every pick lands on the preview page; its Send sends.
-      await tapWhenShown(t, 'preview-send');
+      // What comes back is sent at once, like ticked grid photos: no preview
+      // step.
       await until(
         t,
         () => t
@@ -359,6 +360,7 @@ void main() {
 
       final after = (await t.runAsync(ids))!;
       expect(after.difference(before), isEmpty);
+      expect(byKey('preview-page'), findsNothing, reason: 'a preview step');
       expect(
         find.textContaining('Only the first'),
         findsNothing,

@@ -4,7 +4,10 @@ cd "$(dirname "$0")/.."
 
 fail() { echo "release guard: $*" >&2; exit 1; }
 
-# Check 1: the release workflows must not mention the test app
+# Check 1: the release workflows exist and do not mention the test app
+for f in .github/workflows/release.yml .github/workflows/ios-ipa.yml; do
+  [ -f "$f" ] || fail "$f missing"
+done
 if grep -qE 'SIS_TEST_LOGIN|SIS_TEST_APP|com\.esd\.sis\.test' .github/workflows/release.yml .github/workflows/ios-ipa.yml; then
   fail "release.yml or ios-ipa.yml mentions the test app"
 fi

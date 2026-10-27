@@ -157,6 +157,8 @@ jobs:
               --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ vars.SUPABASE_PUBLISHABLE_KEY }} \
               --dart-define=GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }} \
               --dart-define=MAPS_API_KEY="$MAPS_API_KEY_ANDROID"
+      - name: Guard (the test app and its sign-in never ship)
+        run: tool/check_release_clean.sh build/app/outputs/bundle/release/app-release.aab
       - name: Install Supabase CLI
         uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
         with: { version: 2.117.0 }

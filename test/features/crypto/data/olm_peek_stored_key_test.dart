@@ -1,6 +1,7 @@
-// peekDecrypt's onStoredKey (slice 2 W1, t_428ad7c883) over REAL Olm: it
-// fires only when a session or peer key already STORED on the phone opened
-// the text, never for the push's own sender key (sk), never on failure.
+// peekDecrypt's onStoredKey (slice 2 W1, t_428ad7c883; rule B1 t_a7085eeee6)
+// over REAL Olm: it fires when the text was opened and passed every check -- a
+// session or peer key already STORED on the phone, or the push's own sender
+// key (sk) after the shape/peer/key checks -- never on failure.
 // Drafted by test_writer from the contract; reviewed and mutation-checked by qa.
 import 'dart:convert';
 
@@ -158,7 +159,7 @@ void main() {
       onStoredKey: () => fired++,
     );
     expect(result, 'first words');
-    expect(fired, 0);
+    expect(fired, 1, reason: 'B1: the checked sk path may be saved');
   });
 
   test('failure: no stored session', () async {

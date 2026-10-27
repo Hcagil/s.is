@@ -728,9 +728,10 @@ final class PeekSenderKeyTests: XCTestCase {
 
 // MARK: - What may be saved (PeekCore.opened, slice 3)
 
-// PeekCore.opened storedKey: only a key already on the phone (stored session,
-// stored session id, inbound with the stored peer key) may lead to a save; the
-// push sk (first contact) and a stored body never do. text() == opened()?.text.
+// PeekCore.opened storedKey: a key already on the phone (stored session,
+// stored session id, inbound with the stored peer key) or the push sk (first
+// contact, after the shape/peer/key checks; rule B1 t_a7085eeee6) may lead to a
+// save; a stored body never does. text() == opened()?.text.
 // Written from the contract (t_176cbd956f), never from the code. Draft: test_writer.
 
 final class PeekOpenedTests: XCTestCase {
@@ -807,7 +808,7 @@ final class PeekOpenedTests: XCTestCase {
     XCTAssertEqual(result, PeekOpened(text: "fresh", storedKey: true))
   }
 
-  func testOt0InboundWithPushSenderKeyIsNotStoredKey() {
+  func testOt0InboundWithPushSenderKeyMayBeSaved() {
     let dec = FakeDecryptor()
     dec.prekeyIds["CT"] = "new"
     dec.inboundTexts["ACC+\(validSk)"] = "first"
@@ -816,12 +817,12 @@ final class PeekOpenedTests: XCTestCase {
     // Peer known
     let d1 = data(sessions: [])
     let result1 = opened(p, d1, dec)
-    XCTAssertEqual(result1, PeekOpened(text: "first", storedKey: false))
+    XCTAssertEqual(result1, PeekOpened(text: "first", storedKey: true))
 
     // No peer
     let d2 = data(noPeer: true, sessions: [])
     let result2 = opened(p, d2, dec)
-    XCTAssertEqual(result2, PeekOpened(text: "first", storedKey: false))
+    XCTAssertEqual(result2, PeekOpened(text: "first", storedKey: true))
   }
 
   func testAStoredBodyIsNotStoredKey() {

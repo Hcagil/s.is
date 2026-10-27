@@ -39,8 +39,9 @@ case "$cmd" in
   install)
     [ -f "$APK" ] || die "build first"
     docker cp "$APK" sis-adb:/tmp/sis_test.apk
-    adb install -r -t /tmp/sis_test.apk
+    rc=0; adb install -r -t /tmp/sis_test.apk || rc=$?
     docker exec sis-adb rm -f /tmp/sis_test.apk
+    exit $rc
     ;;
   login)
     # Hands the refresh token to the app once; the app deletes the file after reading it.
@@ -67,9 +68,9 @@ case "$cmd" in
   send)
     text=${1:-}
     [[ $text =~ ^[A-Za-z0-9\ .,!?-]+$ ]] || die "send: letters, digits, space and . , ! ? - only"
-    wait_tap label "Message"    # the composer hint
+    wait_tap label "Message|Mesaj"    # the composer hint, EN or TR
     adb shell input text "${text// /%s}"
-    wait_tap label "Send"    # the send button tooltip (the phone must run English)
+    wait_tap label "Send|Gönder"    # the send button tooltip, EN or TR
     # the typed text now sits in a message row, not in the box
     for _ in $(seq 20); do
       if ui_dump | find_node msg "$text" >/dev/null; then echo sent; exit 0; fi

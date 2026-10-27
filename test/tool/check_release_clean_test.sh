@@ -2,12 +2,14 @@
 # tool/check_release_clean.sh [aab] on fixture copies of the real repo files:
 #
 #   - this tree as it is: exit 0, "release guard: ok";
-#   - release.yml mentioning SIS_TEST_LOGIN, SIS_TEST_APP or com.esd.sis.test -> exit 1;
+#   - release.yml or ios-ipa.yml mentioning SIS_TEST_LOGIN, SIS_TEST_APP or
+#     com.esd.sis.test -> exit 1; either file missing -> exit 1 (never a silent skip);
 #   - the exact line `        applicationId = "com.esd.sis"` missing (also when
 #     only its indent changes) -> exit 1;
 #   - applicationIdSuffix not exactly once, or once but outside `debug {` -> exit 1;
 #   - with an AAB: not a file, manifest without com.esd.sis, or manifest with
-#     com.esd.sis.test -> exit 1; a clean bundle -> exit 0.
+#     com.esd.sis.test, or only com.esd.sis.MainActivity (the package is a whole
+#     token) -> exit 1; a clean bundle -> exit 0.
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
@@ -19,9 +21,9 @@ fail() { echo "FAIL: $*"; fails=$((fails + 1)); }
 fresh() {
   rm -rf "$tmp/t"; mkdir -p "$tmp/t/tool" "$tmp/t/.github/workflows" "$tmp/t/android/app"
   cp "$repo/tool/check_release_clean.sh" "$tmp/t/tool/"
-  cp "$repo/.github/workflows/release.yml" "$tmp/t/.github/workflows/"
+  cp "$repo/.github/workflows/release.yml" "$repo/.github/workflows/ios-ipa.yml" "$tmp/t/.github/workflows/"
   cp "$repo/android/app/build.gradle.kts" "$tmp/t/android/app/"
-  rel="$tmp/t/.github/workflows/release.yml"; gradle="$tmp/t/android/app/build.gradle.kts"
+  rel="$tmp/t/.github/workflows/release.yml"; ipa="$tmp/t/.github/workflows/ios-ipa.yml"; gradle="$tmp/t/android/app/build.gradle.kts"
 }
 
 # expect <code> <name> [aab] : runs the guard in the fixture tree.
@@ -51,7 +53,10 @@ fresh; expect 0 "this tree"
 
 for word in SIS_TEST_LOGIN SIS_TEST_APP com.esd.sis.test; do
   fresh; echo "        # $word" >>"$rel"; expect 1 "release.yml mentions $word"
+  fresh; echo "        # $word" >>"$ipa"; expect 1 "ios-ipa.yml mentions $word"
 done
+fresh; rm "$rel"; expect 1 "release.yml missing"
+fresh; rm "$ipa"; expect 1 "ios-ipa.yml missing"
 
 fresh; sed -i 's/^        applicationId = "com.esd.sis"$/        applicationId = "com.esd.other"/' "$gradle"
 expect 1 "applicationId changed"
@@ -73,6 +78,10 @@ aab "$tmp/good.aab" 'package="com.esd.sis" versionCode="1"'
 fresh; expect 0 "clean AAB" "$tmp/good.aab"
 aab "$tmp/other.aab" 'package="com.example.app"'
 fresh; expect 1 "AAB of another app" "$tmp/other.aab"
+aab "$tmp/activity.aab" 'android:name="com.esd.sis.MainActivity"'
+fresh; expect 1 "AAB naming only com.esd.sis.MainActivity" "$tmp/activity.aab"
+aab "$tmp/both.aab" 'package="com.esd.sis" android:authorities="com.esd.sis.test.files"'
+fresh; expect 1 "AAB of com.esd.sis that also names com.esd.sis.test" "$tmp/both.aab"
 aab "$tmp/test.aab" 'package="com.esd.sis.test"'
 fresh; expect 1 "AAB of the test app" "$tmp/test.aab"
 

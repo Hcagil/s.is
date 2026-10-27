@@ -578,8 +578,10 @@ class _ComposerState extends ConsumerState<_Composer>
                                           _send();
                                           _focus.requestFocus();
                                         },
-                                  icon: const Icon(Icons.arrow_upward_rounded),
-                                  tooltip: l.commonSend,
+                                  icon: Icon(
+                                    Icons.arrow_upward_rounded,
+                                    semanticLabel: l.commonSend,
+                                  ),
                                 )
                               : (id == null
                                     ? const SizedBox(width: 48, height: 48)

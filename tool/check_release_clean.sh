@@ -4,9 +4,9 @@ cd "$(dirname "$0")/.."
 
 fail() { echo "release guard: $*" >&2; exit 1; }
 
-# Check 1: release.yml must not mention test app
-if grep -qE 'SIS_TEST_LOGIN|SIS_TEST_APP|com\.esd\.sis\.test' .github/workflows/release.yml; then
-  fail "release.yml mentions the test app"
+# Check 1: the release workflows must not mention the test app
+if grep -qE 'SIS_TEST_LOGIN|SIS_TEST_APP|com\.esd\.sis\.test' .github/workflows/release.yml .github/workflows/ios-ipa.yml; then
+  fail "release.yml or ios-ipa.yml mentions the test app"
 fi
 
 # Check 2: build.gradle.kts must contain exactly the line with applicationId = "com.esd.sis"
@@ -25,10 +25,11 @@ if [[ -n "${1:-}" ]]; then
     fail "the given AAB is not a file"
   fi
   manifest=$(unzip -p "$1" base/manifest/AndroidManifest.xml | strings)
-  if ! echo "$manifest" | grep -q 'com.esd.sis'; then
+  # com.esd.sis as a whole token: com.esd.sis.MainActivity or com.esd.sis.test do not count.
+  if ! grep -qE '(^|[^A-Za-z0-9._])com\.esd\.sis($|[^A-Za-z0-9._])' <<<"$manifest"; then
     fail "the release bundle is not com.esd.sis"
   fi
-  if echo "$manifest" | grep -q 'com.esd.sis.test'; then
+  if grep -qF 'com.esd.sis.test' <<<"$manifest"; then
     fail "the release bundle contains the test app"
   fi
 

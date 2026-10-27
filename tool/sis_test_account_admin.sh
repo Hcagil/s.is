@@ -6,7 +6,7 @@
 # report it. An AI session never runs this.
 #
 #   bootstrap   create push-sender@sis.test (a normal user, NOT a bot), allowlist row, mint its session
-#   mint        new session for the existing account (the old one ends)
+#   mint        new session for the existing account (older sessions stay in auth.sessions but lose access by the one-active-session rule)
 #   revoke      delete every session + the local token file
 #   delete      allowlist row, sessions, then the user (cascades keys and push tokens)
 #

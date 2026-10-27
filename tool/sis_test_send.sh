@@ -55,7 +55,14 @@ case "$cmd" in
       || die "hand-over failed (is the debug test app installed?)"
     adb shell am force-stop "$PKG"
     adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
-    echo "token handed over; the app signs in on start"
+    # The app deletes the file when it reads it. If it is still there the app was already signed in and never read it: remove it.
+    sleep 5
+    if adb shell run-as "$PKG" ls files/test_session.json >/dev/null 2>&1; then
+      adb shell run-as "$PKG" rm -f files/test_session.json
+      echo "already signed in; token file removed"
+    else
+      echo "token handed over; the app signs in on start"
+    fi
     ;;
   status)
     adb devices

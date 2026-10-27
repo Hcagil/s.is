@@ -61,7 +61,7 @@ struct PeekData: Equatable {
   var storedSenderId: String? = nil
 }
 
-/// A text a push opened, and whether a key already stored on the phone opened it (a stored session, or an inbound session built with the stored peer key). Only such a text may be saved; the push's own sender key (first contact) and an already stored body never qualify.
+/// A text a push opened, and whether it may be saved into push_inbox: opened by a stored session, or by an inbound session built with a stored peer key or with the push's own sender key after the shape, peer and key checks (first contact). Only an already stored body never qualifies.
 struct PeekOpened: Equatable {
   let text: String
   let storedKey: Bool
@@ -109,12 +109,12 @@ enum PeekCore {
     } else {
       return nil
     }
-    let storedKey = !data.sessions.isEmpty  // false when the key came from the push's sk
+    let storedKey = true  // the push's own sk passed the shape, peer and key checks above; the app re-opens the message itself and replaces the saved text
     guard let text = decryptor.decryptInbound(accountPickle: account, pickleKey: pickleKey, identityKey: identityKey, messageId: push.messageId, ct: push.ct) else { return nil }
     return PeekOpened(text: text, storedKey: storedKey)
   }
 
-  /// What the extension may save into push_inbox, or nil. Only a text opened by a STORED key (opened.storedKey) for a chat partner the store knows (data.peerUserId non-nil) is saved; the sender is that store peer, never the push's senderId.
+  /// What the extension may save into push_inbox, or nil. Only a text that was opened (opened.storedKey, which also covers the first-contact sk path) for a chat partner the store knows (data.peerUserId non-nil) is saved; the sender is that store peer, never the push's senderId.
   static func saveRow(push: PeekPush, data: PeekData, opened: PeekOpened?) -> (peerUserId: String, body: String, sealed: String)? {
     guard let opened = opened, opened.storedKey, let peer = data.peerUserId else { return nil }
     return (peer, opened.text, sealedHash(push.ct))

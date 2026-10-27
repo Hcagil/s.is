@@ -635,3 +635,15 @@ Nothing contacts the site before that tap.
 - The engine is not destroyed while the write runs: Kotlin passes the remaining push time, Dart writes only with at least 500 ms left, and Kotlin waits a short grace.
 - iOS and plain (unencrypted) group messages are separate, later slices.
 
+## 2026-10-27 — A notification keeps its text after the app process dies
+
+**Decision.** When Android redraws a private-chat notification after the app process died, the peek engine reads the earlier lines' texts back from the encrypted store (`push_inbox`, else the stored message) into memory. A first message opened with the push's own `sk` is now also saved to `push_inbox`, after the same checks as the notification text. The peek still never saves a session, the account or a one-time key.
+
+**Why.** On the test phone, earlier lines turned into "🔒 New message" after the system killed the app, and a first message took about 2 s to show after a tap. The owner wants notifications and the chat to show text at once.
+
+**Consequences.**
+- No new copy of a text at rest: the older texts live only in memory; `push_inbox` stays display-only and is replaced when the real row is written.
+- A first message's text in `push_inbox` has the same trust as the notification itself (an evil server could substitute `sk` until the security codes are compared); accepted, as for the notification.
+- If the peek does not run or times out, older lines show the locked text as before. After a process death between a text push and its picture, older lines stay locked until the next push.
+- iOS saves the first message the same way in its notification service extension.
+

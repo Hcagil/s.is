@@ -3,6 +3,12 @@ import 'dart:io' show sleep;
 
 import 'package:sqlite3/sqlite3.dart';
 
+import '../../chat/domain/encrypted_message_repository.dart';
+
+final _uuidShape = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+);
+
 /// One stored Olm session row (pickle is still encrypted with the pickle key).
 final class PeekSession {
   const PeekSession({
@@ -29,6 +35,7 @@ final class PeekRows {
     this.keyPeers = const [],
     this.peerName,
     this.storedSenderId,
+    this.older = const {},
   });
 
   /// Meta key 'owner_id'.
@@ -45,6 +52,9 @@ final class PeekRows {
 
   /// messages.sender_id of that same row; null when no row or deleted.
   final String? storedSenderId;
+
+  /// Text of the chat's OLDER messages (message id -> body) already in the store: push_inbox first, else a readable messages body sent by the peer. Empty unless olderIds was given.
+  final Map<String, String> older;
 
   /// Meta key 'olm_account' (account pickle).
   final String? account;
@@ -64,6 +74,7 @@ PeekRows? readPeekRows({
   required String messageId,
   String? senderKey,
   String? senderId,
+  List<String> olderIds = const [],
 }) {
   // A busy or locked store (SQLITE_BUSY 5, SQLITE_LOCKED 6) is retried for at most about 1 s in total; PRAGMA busy_timeout alone fails at once on this build.
   final clock = Stopwatch()..start();
@@ -76,6 +87,7 @@ PeekRows? readPeekRows({
         messageId,
         senderKey,
         senderId,
+        olderIds,
       );
     } on SqliteException catch (e) {
       final busy = e.resultCode == 5 || e.resultCode == 6;
@@ -94,6 +106,7 @@ PeekRows? _readPeekRows(
   String messageId,
   String? senderKey,
   String? senderId,
+  List<String> olderIds,
 ) {
   {
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
@@ -169,6 +182,37 @@ PeekRows? _readPeekRows(
                   row['peer_user_id'] as String,
               ];
 
+        final older = <String, String>{};
+        final hasInbox = db
+            .select(
+              "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'push_inbox';",
+            )
+            .isNotEmpty;
+        // Max 50 ids, uuid shape only; anything else is skipped.
+        for (final id in olderIds.take(50)) {
+          if (!_uuidShape.hasMatch(id)) continue;
+          if (hasInbox) {
+            final r = db.select(
+              'SELECT body FROM push_inbox WHERE message_id = ? AND conversation_id = ?;',
+              [id, conversationId],
+            );
+            if (r.isNotEmpty) {
+              older[id] = r.first['body'] as String;
+              continue;
+            }
+          }
+          final m = db.select(
+            'SELECT body, sender_id FROM messages WHERE id = ? AND conversation_id = ? AND deleted IS NULL;',
+            [id, conversationId],
+          );
+          if (m.isNotEmpty &&
+              peerUserId != null &&
+              m.first['sender_id'] == peerUserId) {
+            final b = m.first['body'] as String;
+            if (!isLockedPlaceholder(b)) older[id] = b;
+          }
+        }
+
         return PeekRows(
           ownerId: meta('owner_id'),
           peerUserId: peerUserId,
@@ -178,6 +222,7 @@ PeekRows? _readPeekRows(
           account: meta('olm_account'),
           sessions: sessions,
           keyPeers: keyPeers,
+          older: older,
         );
       } finally {
         db.execute('COMMIT;');

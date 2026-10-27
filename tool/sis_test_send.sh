@@ -56,10 +56,10 @@ case "$cmd" in
     adb shell am force-stop "$PKG"
     adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
     # The app deletes the file when it reads it. If it is still there the app did not read it (already signed in, or slow): remove it.
-    sleep 5
+    wait=${SIS_LOGIN_WAIT:-5}; sleep "$wait"
     if adb shell run-as "$PKG" ls files/test_session.json >/dev/null 2>&1; then
       adb shell run-as "$PKG" rm -f files/test_session.json
-      echo "token file not read within 5 s (app already signed in, or slow): removed; run login again if needed"
+      echo "token file not read within ${wait} s (app already signed in, or slow): removed; run login again if needed"
     else
       echo "token handed over; the app signs in on start"
     fi
@@ -75,9 +75,9 @@ case "$cmd" in
   send)
     text=${1:-}
     [[ $text =~ ^[A-Za-z0-9\ .,!?-]+$ ]] || die "send: letters, digits, space and . , ! ? - only"
-    wait_tap label "Message|Mesaj"    # the composer hint, EN or TR
+    wait_tap edit x    # the composer is the first text box (its hint is not in the dump)
     adb shell input text "${text// /%s}"
-    wait_tap label "Send|Gönder"    # the send button tooltip, EN or TR
+    wait_tap desc "Send|Gönder"    # the send button, exact semantics label, EN or TR
     # the typed text now sits in a message row, not in the box
     for _ in $(seq 20); do
       if ui_dump | find_node msg "$text" >/dev/null; then echo sent; exit 0; fi

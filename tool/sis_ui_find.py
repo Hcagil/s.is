@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Finds a node in a uiautomator dump (stdin) and prints its centre "x y".
-# Usage: sis_ui_find.py label|msg <label|alt|alt>. Exit 1: no match. Exit 2: bad usage.
+# Usage: sis_ui_find.py label|msg|edit|desc <label|alt|alt>. Exit 1: no match. Exit 2: bad usage.
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -26,6 +26,20 @@ def find_node(mode, label):
             haystack = node.get("text", "") + "\n" + node.get("content-desc", "")
             alts = [a.lower() for a in label.split("|") if a]
             if any(a in haystack.lower() for a in alts):
+                print(centre(b))
+                return 0
+        return 1
+    if mode == "edit":
+        for node, b in nodes:
+            if node.get("class") == "android.widget.EditText":
+                print(centre(b))
+                return 0
+        return 1
+    if mode == "desc":
+        alts = [a.lower() for a in label.split("|") if a]
+        for node, b in nodes:
+            desc = node.get("content-desc", "")
+            if desc and desc.lower() in alts:
                 print(centre(b))
                 return 0
         return 1

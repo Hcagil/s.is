@@ -28,6 +28,7 @@ import 'package:sis/features/notifications/application/push_controller.dart';
 import '../../support/fakes.dart';
 import '../../support/join_chat.dart';
 import '../../support/sis_ui.dart';
+import '../../support/store_spy.dart' show eventually;
 
 import 'package:sis/l10n/app_localizations.dart';
 
@@ -85,6 +86,15 @@ List<String> ids(ProviderContainer c) =>
 
 Conversation row(ProviderContainer c, String id) =>
     c.read(conversationListProvider).requireValue.firstWhere((x) => x.id == id);
+
+/// Start-up is over: the first read has answered and the live join is up.
+/// Until the join is up it can still put the list again, so a test that
+/// records states from here would see that late update first.
+Future<void> started(ChatFake chat, ProviderContainer c) async {
+  await c.read(conversationListProvider.future);
+  await eventually(() => chat.liveAllListeners > 0, reason: 'the join');
+  await settle();
+}
 
 /// A container whose list is loaded and kept alive.
 Future<ProviderContainer> loaded(ChatFake chat) async {
@@ -302,6 +312,10 @@ void main() {
         ..incomingAllResult = const Err(NetworkFailure('realtime down'));
       final c = scope(chat);
       c.listen(conversationListProvider, (_, _) {});
+      await eventually(
+        () => !c.read(conversationListProvider).isLoading,
+        reason: 'the list never finished loading',
+      );
       await settle();
 
       final state = c.read(conversationListProvider);
@@ -606,8 +620,7 @@ void main() {
       final c = scope(chat);
       final seen = <AsyncValue<List<Conversation>>>[];
       c.listen(conversationListProvider, (_, next) => seen.add(next));
-      await c.read(conversationListProvider.future);
-      await settle();
+      await started(chat, c);
       seen.clear();
 
       chat.conversationsResult = Ok([conv('c2', 40), conv('c1', 30)]);
@@ -623,8 +636,7 @@ void main() {
       final c = scope(chat);
       final seen = <AsyncValue<List<Conversation>>>[];
       c.listen(conversationListProvider, (_, next) => seen.add(next));
-      await c.read(conversationListProvider.future);
-      await settle();
+      await started(chat, c);
       seen.clear();
 
       chat.conversationsResult = const Err(NetworkFailure('offline'));
@@ -650,8 +662,7 @@ void main() {
       final c = scope(chat);
       final seen = <AsyncValue<List<Conversation>>>[];
       c.listen(conversationListProvider, (_, next) => seen.add(next));
-      await c.read(conversationListProvider.future);
-      await settle();
+      await started(chat, c);
       seen.clear();
 
       chat.conversationsResult = const Err(NetworkFailure('offline'));
@@ -672,8 +683,7 @@ void main() {
       final c = scope(chat);
       final seen = <AsyncValue<List<Conversation>>>[];
       c.listen(conversationListProvider, (_, next) => seen.add(next));
-      await c.read(conversationListProvider.future);
-      await settle();
+      await started(chat, c);
       seen.clear();
 
       chat.conversationsResult = const Err(DeniedFailure());

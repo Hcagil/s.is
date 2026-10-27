@@ -141,6 +141,22 @@ class World {
     await Future<void>.delayed(const Duration(milliseconds: 20));
   }
 
+  /// The S5 re-lock has reached the server and its answer has been handled.
+  /// A fixed wait ends before it on a busy machine.
+  Future<void> relocked() async {
+    await eventually(() => fake.relockCalls.isNotEmpty, reason: 'the re-lock');
+    await after();
+  }
+
+  /// Runs every hop already queued (each a zero timer or microtask, so the
+  /// count holds however long the machine stalls), then a little real time.
+  Future<void> after() async {
+    for (var i = 0; i < 20; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+
   Future<Result<void>> react(String? emoji) =>
       c.read(reactionsProvider.notifier).react('m1', emoji);
 
@@ -315,7 +331,7 @@ void main() {
         const Reaction(messageId: 'm2', userId: 'u2', emoji: '😂'),
       ]);
       await w.loaded();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await w.relocked();
       expect(w.locker.calls, contains(('c1', 'm1', '❤️')));
       expect(w.fake.relockCalls, [('m1', ct, 1)]);
       expect(
@@ -333,7 +349,11 @@ void main() {
         'is written', () async {
       final w = World();
       await w.loaded();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await eventually(
+        () => w.opener.remembered.isNotEmpty,
+        reason: 'the saved copy',
+      );
+      await w.relocked();
       expect(w.fake.relockCalls, [('m1', ct, 1)]);
       expect(w.opener.remembered, [('m1', 'u1', ct, '❤️')]);
     });
@@ -346,7 +366,7 @@ void main() {
         return const Ok(false);
       };
       await w.loaded();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await w.relocked();
       expect(w.fake.relockCalls, [('m1', ct, 1)]);
       expect(w.opener.remembered, isEmpty);
       expect(w.fake.lockedCalls, isEmpty);
@@ -360,7 +380,7 @@ void main() {
         return const Err(NetworkFailure('offline'));
       };
       await w.loaded();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await w.relocked();
       expect(w.fake.relockCalls, isNotEmpty);
       expect(w.opener.remembered, isEmpty);
     });
@@ -372,7 +392,11 @@ void main() {
         w.locker.answers.add(const Ok(null));
       }
       await w.loaded();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await eventually(
+        () => w.locker.calls.isNotEmpty,
+        reason: 'the re-lock asked the locker',
+      );
+      await w.after();
       expect(w.fake.lockedCalls, isEmpty);
       expect(w.fake.setCalls, isEmpty);
     });
@@ -399,6 +423,10 @@ void main() {
         peerKey: (_) async => const Ok(null),
       );
       final w = World(realOpener: real);
+      // No own plain row: the S5 re-lock of the World's seeded ❤️ would run
+      // alongside the test and, landing first on a busy machine, write its
+      // own copy and usage into the store.
+      w.fake.seed('c1', const []);
       var n = 0;
       w.locker.onLock = () => Ok(QueuedCiphertext('Q1Q${++n}', 1));
       await w.loaded();

@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/grey_option.dart';
@@ -12,9 +11,11 @@ import '../application/chat_controllers.dart';
 import '../domain/attachment.dart';
 import '../domain/external_picker.dart';
 import '../domain/gallery.dart';
+import 'attachment_preview_page.dart';
 import 'crop_screen.dart';
 import 'message_menu_card.dart';
 import 'person_avatar.dart';
+import 'photo_ticks.dart';
 
 /// Shows the paperclip's photo grid; an empty `images` list when the member
 /// closes it or backs out without choosing a photo. `dropped` is how many
@@ -23,20 +24,25 @@ import 'person_avatar.dart';
 /// returned photos.
 /// With [square] the sheet crops the chosen photo itself (the crop screen
 /// opens over the grid, so back returns to it) and returns the cropped image.
-Future<({List<PickedImage> images, int dropped})> showAttachmentSheet(
+Future<({List<PickedImage> images, int dropped, String caption})>
+showAttachmentSheet(
   BuildContext context, {
   bool square = false,
+  String caption = '',
 }) async {
   final result =
-      await showModalBottomSheet<({List<PickedImage> images, int dropped})>(
+      await showModalBottomSheet<
+        ({List<PickedImage> images, int dropped, String caption})
+      >(
         context: context,
         isScrollControlled: true,
         showDragHandle: true,
         // The paperclip leaves the keyboard up: the panel must not take focus.
         requestFocus: false,
-        builder: (_) => AttachmentSheet(square: square),
+        builder: (_) => AttachmentSheet(square: square, caption: caption),
       );
-  return result ?? (images: const <PickedImage>[], dropped: 0);
+  return result ??
+      (images: const <PickedImage>[], dropped: 0, caption: caption);
 }
 
 /// Opens the attach card above [anchor] (the paperclip's global rect). The
@@ -186,12 +192,16 @@ Widget _attachTile(
 /// time it opens; when access is missing or partial, shows SIS's own screen
 /// for it instead of the phone's photos.
 class AttachmentSheet extends ConsumerStatefulWidget {
-  const AttachmentSheet({super.key, this.square = false});
+  const AttachmentSheet({super.key, this.square = false, this.caption = ''});
 
   /// True when picking a profile/group picture: the chosen photo is loaded
   /// uncropped, ready for the crop screen, instead of the long-edge resize
   /// used for a chat photo.
   final bool square;
+
+  /// The composer's text: sent as the caption when the member sends from the
+  /// grid, prefilled on the big photo view.
+  final String caption;
 
   @override
   ConsumerState<AttachmentSheet> createState() => _AttachmentSheetState();
@@ -215,17 +225,25 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
   int _generation = 0;
   final _scroll = ScrollController();
   // Ticked photos, in tick order (a chat photo only; a picture is one tap).
-  final _picked = <GalleryPhoto>[];
+  // Shared with the big photo view, so ticks made there show here.
+  final _pickedNotifier = PhotoTicks();
+  List<GalleryPhoto> get _picked => _pickedNotifier.value;
+
+  void _onTicks() => setState(() {});
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    _pickedNotifier.addListener(_onTicks);
     _load();
   }
 
   @override
   void dispose() {
+    _pickedNotifier
+      ..removeListener(_onTicks)
+      ..dispose();
     _scroll
       ..removeListener(_onScroll)
       ..dispose();
@@ -287,24 +305,25 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     }
   }
 
-  /// A tap on a tile. A picture (square) is chosen at once and cropped; a
-  /// chat photo is ticked or unticked.
+  /// A tap on a chat photo's tile: opens it big, growing from [from]. Send
+  /// there closes this sheet too, with the photos and the caption.
+  Future<void> _openViewer(GalleryPhoto p, Rect from) async {
+    final result = await showAttachmentPreview(
+      context,
+      photos: _photos,
+      picked: _pickedNotifier,
+      initial: _photos.indexWhere((e) => e.id == p.id),
+      caption: widget.caption,
+      from: from,
+    );
+    if (result == null || !mounted) return;
+    Navigator.of(context)
+        .pop((images: result.images, dropped: 0, caption: result.caption));
+  }
+
+  /// A tap on a tile of a picture grid (square): chosen at once and cropped.
   Future<void> _choose(GalleryPhoto p) async {
-    if (!widget.square) {
-      final at = _picked.indexWhere((e) => e.id == p.id);
-      if (at >= 0) {
-        setState(() => _picked.removeAt(at));
-      } else if (_picked.length >= ExternalPicker.maxAttachments) {
-        showSisNotice(
-          context,
-          AppLocalizations.of(context)
-              .attachLimit(ExternalPicker.maxAttachments),
-        );
-      } else {
-        setState(() => _picked.add(p));
-      }
-      return;
-    }
+    if (!widget.square) return;
     if (_opening) return;
     setState(() => _opening = true);
     PickedImage? image;
@@ -420,12 +439,13 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
   /// crop closes the sheet.
   Future<void> _finish(List<PickedImage> images, int dropped) async {
     if (!widget.square) {
-      Navigator.of(context).pop((images: images, dropped: dropped));
+      Navigator.of(context)
+          .pop((images: images, dropped: dropped, caption: widget.caption));
       return;
     }
     final cropped = await openCropScreen(context, images.first);
     if (!mounted || cropped == null) return;
-    Navigator.of(context).pop((images: [cropped], dropped: 0));
+    Navigator.of(context).pop((images: [cropped], dropped: 0, caption: ''));
   }
 
   @override
@@ -498,12 +518,22 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
                 return _CameraTile(onTap: _opening ? null : _takePhoto);
               }
               final p = _photos[i - (widget.square ? 0 : 1)];
-              return GalleryThumb(
-                key: ValueKey('sheet-photo-${p.id}'),
-                photo: p,
-                onTap: () => _choose(p),
-                showTick: !widget.square,
-                selected: _picked.any((e) => e.id == p.id),
+              return Builder(
+                builder: (tileContext) => GalleryThumb(
+                  key: ValueKey('sheet-photo-${p.id}'),
+                  photo: p,
+                  onTap: () {
+                    if (widget.square) {
+                      _choose(p);
+                      return;
+                    }
+                    final box = tileContext.findRenderObject()! as RenderBox;
+                    _openViewer(p, box.localToGlobal(Offset.zero) & box.size);
+                  },
+                  onTickTap: () => _pickedNotifier.toggle(context, p),
+                  showTick: !widget.square,
+                  selected: _picked.any((e) => e.id == p.id),
+                ),
               );
             },
           );
@@ -666,12 +696,17 @@ class GalleryThumb extends ConsumerStatefulWidget {
     super.key,
     required this.photo,
     required this.onTap,
+    this.onTickTap,
     this.showTick = false,
     this.selected = false,
   });
 
   final GalleryPhoto photo;
   final VoidCallback onTap;
+
+  /// Tap on the tick circle (a 44 dp target in the corner). Null: the tick is
+  /// only drawn and a tap anywhere is [onTap].
+  final VoidCallback? onTickTap;
 
   /// Draws the tick circle in the corner (a chat photo, not a picture).
   final bool showTick;
@@ -718,16 +753,39 @@ class _ThumbState extends ConsumerState<GalleryThumb> {
               ),
             if (widget.showTick)
               Positioned(
-                top: 6,
-                right: 6,
-                child: Icon(
-                  widget.selected
-                      ? Icons.check_circle_rounded
-                      : Icons.radio_button_unchecked,
-                  key: ValueKey('sheet-tick-${widget.photo.id}'),
-                  size: 24,
-                  color: widget.selected ? brand : Colors.white,
-                  shadows: const [Shadow(blurRadius: 3)],
+                top: 0,
+                right: 0,
+                width: 44,
+                height: 44,
+                child: Semantics(
+                  button: true,
+                  selected: widget.selected,
+                  label: widget.selected
+                      ? AppLocalizations.of(context).attachTickSelected
+                      : AppLocalizations.of(context).attachTickSelect,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: widget.onTickTap,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 6, right: 6),
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: AnimatedScale(
+                          scale: widget.selected ? 1 : 0.9,
+                          duration: const Duration(milliseconds: 150),
+                          child: Icon(
+                            widget.selected
+                                ? Icons.check_circle_rounded
+                                : Icons.radio_button_unchecked,
+                            key: ValueKey('sheet-tick-${widget.photo.id}'),
+                            size: 24,
+                            color: widget.selected ? brand : Colors.white,
+                            shadows: const [Shadow(blurRadius: 3)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
           ],

@@ -334,6 +334,8 @@
   "attachAllowMore": "Daha fazlasına izin ver",
   "attachNoPhotos": "Henüz fotoğraf yok",
   "attachSendPhotos": "{count, plural, other{{count} fotoğraf gönder}}",
+  "attachTickSelect": "Fotoğrafı seç",
+  "attachTickSelected": "Seçildi",
   "attachFasterTitle": "Fotoğrafları daha hızlı gönder",
   "attachFasterBody": "Galeri burada hemen yüklensin diye erişime izin ver – sen göndermeden hiçbir şey yüklenmez.",
   "attachOpenSettings": "Ayarları aç",

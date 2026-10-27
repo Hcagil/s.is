@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/notice.dart';
+import '../../../app/fade_scale_route.dart';
 import '../../../app/swipe_back.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
@@ -20,7 +21,7 @@ Future<PickedImage?> openFreeCropScreen(
   BuildContext context,
   PickedImage source,
 ) => Navigator.of(context).push<PickedImage?>(
-  MaterialPageRoute(
+  fadeScaleRoute(
     settings: noSwipeBack,
     builder: (_) => FreeCropScreen(source: source),
   ),

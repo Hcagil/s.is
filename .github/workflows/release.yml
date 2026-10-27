@@ -1,12 +1,15 @@
 name: Release
-# Runs once a day at 09:00 UTC (12:00 Turkey time, UTC+3 all year) and by hand
+# Runs once a day at 09:17 UTC (12:17 Turkey time, UTC+3 all year; 09:00 is GitHub's
+# busiest minute) with a fallback at 10:43 UTC (only the first schedule run of a
+# day ships), and by hand
 # for an urgent fix (docs/DECISIONS.md, 2026-10-25). It releases the newest main
 # commit whose CI passed on main. Branch protection lets an administrator merge
 # past a red check (DECISIONS, 2026-09-21); taking only a green commit is what
 # keeps such a merge from shipping.
 on:
   schedule:
-    - cron: '0 9 * * *'
+    - cron: '17 9 * * *'
+    - cron: '43 10 * * *'
   workflow_dispatch:
     inputs:
       reason:
@@ -58,9 +61,15 @@ jobs:
           GH_REPO: ${{ github.repository }}
           SHA: ${{ steps.pick.outputs.sha }}
           REASON: ${{ inputs.reason }}
+          EVENT: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
           ship=$(tool/release_scope.sh "$prev" "$SHA")
+          if [ "$EVENT" = schedule ]; then
+            earlier=$(gh run list --workflow release.yml --event schedule --created "$(date -u +%F)" --limit 50 --json databaseId --jq "[.[] | select(.databaseId < $RUN_ID)] | length")
+            if [ "$earlier" -gt 0 ]; then ship=ship=false; fi
+          fi
           echo "$ship" >> "$GITHUB_OUTPUT"
           echo "Release range ${prev:-start}..$SHA: $ship (${REASON:-daily noon run})" >> "$GITHUB_STEP_SUMMARY"
       # One source for the version, read by the Play job and the iOS job alike,

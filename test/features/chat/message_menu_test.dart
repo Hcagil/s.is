@@ -306,7 +306,7 @@ void main() {
       expect(keyboardUp(tester), isTrue);
     });
 
-    testWidgets('the paperclip Photo grid closes it, the caption page '
+    testWidgets('the paperclip Photo grid closes it, the big photo view '
         'keeps it closed', (tester) async {
       await pump(tester, [
         msg('m1', from: bob),
@@ -319,12 +319,12 @@ void main() {
       expect(find.byKey(const ValueKey('sheet-from-app')), findsOneWidget);
       expect(keyboardUp(tester), isFalse);
 
-      await tick(tester, ['p1']);
-      await sendTicked(tester);
+      // A tap on the photo opens it big, with the caption field.
+      await openViewer(tester, 'p1');
       await tester.pumpAndSettle();
 
       expect(key('preview-page'), findsOneWidget);
-      // The composer sits offstage under the preview route.
+      // The composer sits offstage under the big photo view.
       final composerText = tester.widget<EditableText>(
         find.descendant(
           of: find.byKey(const ValueKey('composer-field'), skipOffstage: false),

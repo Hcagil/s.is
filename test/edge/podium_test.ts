@@ -248,6 +248,25 @@ Deno.test({ ...opts, name: 'every failure but config counts toward the auto-off;
   assert(!all.includes('<html>') && !all.includes('12 TL') && !all.includes('5550123'), `Vega's reply or an error text was logged: ${all}`);
 } });
 
+Deno.test({ ...opts, name: 'amount rule (<= 25 chars, strict number shape): accepted ones are stored as is, refused ones are a counted failure', fn: async () => {
+  const good = ['12.345,67', '1234', '0', '1,5', '1.23', "1'234", '1 234,5', '1,234', '999.999.999,99', '1'.repeat(25),
+    '12.345.678.901.234.567,89', '1234567,89'];
+  const bad = ['1.2.3,4,5', '1,', '1.', '.5', '1234.567', '12,34,567', '1..2', '1,234,5678', '1'.repeat(26),
+    '123.456.789.012.345.678,90', '1 234 ', '+5'];
+  for (const [amount, ok] of [...good.map((a) => [a, true] as const), ...bad.map((a) => [a, false] as const)]) {
+    await resetState();
+    reset({ amount });
+    const id = await job();
+    const r = await post(fake, id);
+    assertEquals(r.status, 200, r.text);
+    assertEquals(JSON.parse(r.text).result, ok ? 'ok' : 'failed', `amount ${JSON.stringify(amount)}`);
+    const st = await state();
+    assertEquals([st.amount, st.fail_count], ok ? [amount, 0] : [null, 1], `amount ${JSON.stringify(amount)}: stored, fail_count`);
+    if (ok) assertEquals((await lastReply()).admin_msg.amt, amount);
+    else assertEquals((await lastReply()).admin_msg, { k: 'podFail' });
+  }
+} });
+
 Deno.test({ ...opts, name: 'the placeholder reader (Vega not built yet) fails the job, is not counted, the password never leaves', fn: async () => {
   await resetState();
   Deno.env.set('VEGA_BASE_URL', 'http://vega.qa.test:9698');

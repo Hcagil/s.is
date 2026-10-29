@@ -1,5 +1,5 @@
 begin;
-select plan(140);
+select plan(187);
 
 -- Bacanaks Ozel: a command chat for command admins only, one command /podium
 -- (the Vega money total). Written from the contract, not from the migration:
@@ -464,6 +464,94 @@ select is((select convert_from(body, 'utf8')::jsonb from net.http_request_queue 
           'the call carries only the job id');
 select is((select headers->>'x-podium-secret' from net.http_request_queue where id > (select n from q1) and url = 'https://bd-test.local/podium'),
           'bd-shared-value', 'with the shared secret header');
+
+-- round 2 ------------------------------------------------------------------------------------------
+select vega('7770007', null); select fresh(bc('own'));
+insert into audit_log select c::text from app_private.podium_commands c; delete from app_private.podium_commands;
+
+-- amount rule (same in edge and SQL): <= 25 chars and
+-- ^[0-9]{1,3}([.,' ][0-9]{3})*([.,][0-9]{1,2})?$ | ^[0-9]+([.,][0-9]{1,2})?$; else a 'shape' failure (counted)
+create table amt_case(a text, good boolean);
+insert into amt_case values
+  ('12.345,67', true), ('1234', true), ('0', true), ('1,5', true), ('1.23', true), ('1''234', true),
+  ('1 234,5', true), ('999.999.999,99', true), (repeat('1', 25), true), ('12.345.678.901.234.567,89', true),
+  ('1234567,89', true),
+  ('1.2.3,4,5', false), ('1,', false), ('1.', false), ('.5', false), ('1234.567', false), ('12,34,567', false),
+  ('1..2', false), ('1,234,5678', false), (repeat('1', 26), false), ('123.456.789.012.345.678,90', false),
+  ('1,234', true);
+create table amt_res(a text, good boolean, v jsonb, stored text, fc int);
+do $$ declare r record; begin
+  for r in select a, good from amt_case loop
+    delete from app_private.podium_commands;
+    update app_private.podium_state set amount = 'before', fetched_at = now() - interval '31 seconds',
+      fail_count = case when r.good then 2 else 0 end, off = false where only_row;
+    perform say('own', bc('own'), '/podium');
+    perform vega(r.a, null);
+    insert into amt_res select r.a, r.good, fresh(bc('own')), amount, fail_count from app_private.podium_state;
+  end loop;
+end $$;
+select is(jsonb_build_object('amt', v->0->>'amt', 'k_ok', v->0->>'k' in ('pod', 'podPrev'), 'n', jsonb_array_length(v), 'stored', stored, 'fc', fc),
+          jsonb_build_object('amt', a, 'k_ok', true, 'n', 1, 'stored', a, 'fc', 0),
+          'amount ' || quote_literal(a) || ' is accepted: answered, stored as is, fail count reset')
+  from amt_res where good order by a;
+select is(jsonb_build_object('v', v, 'stored', stored, 'fc', fc),
+          jsonb_build_object('v', '[{"k":"podFail"}]'::jsonb, 'stored', 'before', 'fc', 1),
+          'amount ' || quote_literal(a) || ' is refused: podFail, not stored, counted as a failure')
+  from amt_res where not good order by a;
+delete from app_private.podium_commands;
+
+-- auto-off: a failure with no reason (null) counts; 'config' never turns it off
+update app_private.podium_state set fail_count = 0, off = false where only_row;
+select fail_once(null);
+select is((select fail_count from app_private.podium_state), 1, 'a failure with a null reason adds 1');
+select fail_once(null);
+select is((select (fail_count, off)::text from app_private.podium_state), '(2,f)', 'two null-reason failures: still on');
+select fail_once(null);
+select is((select off from app_private.podium_state), true, 'three null-reason failures in a row turn it off');
+update app_private.podium_state set fail_count = 2, off = false where only_row;
+select fail_once('config'); select fail_once('config');
+select is((select off from app_private.podium_state), false, 'config failures on top of two counted ones never turn it off');
+select ok((select fail_count < 3 from app_private.podium_state), 'and never push the count to 3');
+update app_private.podium_state set fail_count = 0, off = false where only_row;
+delete from app_private.podium_commands;
+
+-- business day: app_private.podium_business_day(timestamptz), Istanbul, before 07:30 = previous day
+create function ist(t timestamp) returns timestamptz language sql immutable as $$ select timezone('Europe/Istanbul', t) $$;
+select is(app_private.podium_business_day(ist('2026-10-29 07:29:59')), date '2026-10-28', 'Istanbul 07:29:59 -> previous day');
+select is(app_private.podium_business_day(ist('2026-10-29 07:30:00')), date '2026-10-29', 'Istanbul 07:30:00 -> same day');
+select is(app_private.podium_business_day(ist('2026-10-29 00:00:00')), date '2026-10-28', 'Istanbul 00:00 -> previous day');
+select is(app_private.podium_business_day(ist('2026-10-29 23:59:59')), date '2026-10-29', 'Istanbul 23:59:59 -> same day');
+select is(app_private.podium_business_day('2026-10-29 00:00:00+00'), date '2026-10-28', 'UTC midnight (03:00 Istanbul) -> previous day');
+select is(app_private.podium_business_day('2026-10-29 05:00:00+00'), date '2026-10-29', 'UTC 05:00 (08:00 Istanbul) -> same day, not the UTC answer');
+select is(app_private.podium_business_day('2026-10-28 21:30:00+00'), date '2026-10-28', 'UTC 21:30 (00:30 next day in Istanbul) -> the UTC date');
+select is(app_private.podium_business_day(ist('2027-01-01 07:00:00')), date '2026-12-31', 'New Year 07:00 Istanbul -> 31 December');
+set local timezone = 'Pacific/Kiritimati';
+select is(app_private.podium_business_day(ist('2026-10-29 07:30:00')), date '2026-10-29', 'session time zone +14: 07:30 Istanbul still the same day');
+select is(app_private.podium_business_day(ist('2026-10-29 07:29:59')), date '2026-10-28', 'session time zone +14: 07:29:59 Istanbul still the previous day');
+set local timezone = 'America/Los_Angeles';
+select is(app_private.podium_business_day(ist('2026-10-29 07:30:00')), date '2026-10-29', 'session time zone -07: 07:30 Istanbul still the same day');
+reset timezone;
+select function_returns('app_private', 'podium_business_day', array['timestamp with time zone'], 'date', 'it returns a date');
+select volatility_is('app_private', 'podium_business_day', array['timestamp with time zone'], 'immutable', 'it is immutable');
+select ok(not has_function_privilege('anon', 'app_private.podium_business_day(timestamptz)', 'execute'), 'anon may not call it');
+select ok(not has_function_privilege('authenticated', 'app_private.podium_business_day(timestamptz)', 'execute'), 'authenticated may not call it');
+select ok(not exists (select 1 from pg_proc p, aclexplode(p.proacl) a
+                       where p.oid = 'app_private.podium_business_day(timestamptz)'::regprocedure and a.grantee = 0),
+          'it is not granted to public');
+
+-- the ask path uses it: with the function stubbed, the job and the cache follow the stub
+create or replace function app_private.podium_business_day(at timestamptz) returns date language sql immutable as $$ select date '2001-02-03' $$;
+update app_private.podium_state set fetched_at = now() - interval '31 seconds' where only_row;
+create table j9 as select id from app_private.podium_jobs;
+select is(say('own', bc('own'), '/podium'), 'ok', 'fixture: own asks with the business day stubbed');
+select is((select day from app_private.podium_jobs where id not in (select id from j9)), date '2001-02-03',
+          'the job is for the day podium_business_day returns');
+select vega('5', null); select fresh(bc('own'));
+update app_private.podium_state set fetched_at = now() - interval '5 seconds' where only_row;
+create table j10 as select jobs() as n;
+select from (select say('own', bc('own'), '/podium')) x;
+select is(fresh(bc('own'))->0->>'amt', '5', 'a fresh cache of the stubbed day is served');
+select is(jobs(), (select n from j10), 'without a new job: the cache day check uses podium_business_day too');
 
 -- last: nothing anywhere ever held an amount outside the answer's admin_msg
 select is((select count(*) from app_private.podium_commands c where c::text ~ '(777000[0-9]|4815162342)')

@@ -12,6 +12,7 @@ import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -23,11 +24,14 @@ import org.robolectric.annotation.Config
 /**
  * Private Chats 4a: a push of an encrypted chat (data `encrypted == "true"`). Written from the
  * contract, not the code:
- * - its line is the locked string ("🔒 New message", values-tr "🔒 Yeni mesaj") under the
+ * - its line is the fallback string ("New message", values-tr "Yeni mesaj") under the
  *   sender's name, never the server body;
  * - it has one Reply (Group I: the app sends it locked) and no Mark as read, even with a valid
  *   action ticket;
- * - every other push is unchanged: its body, and both buttons.
+ * - every other push is unchanged: its body, and both buttons;
+ * - every chat push, plain or private, is VISIBILITY_PRIVATE with a public version titled
+ *   "SIS", text the fallback, same small icon and colour, never the chat name;
+ * - strings: notification_fallback, notification_public_title "SIS"; notification_locked gone.
  */
 private const val TOKEN = "v1.ticket-for-chat.sig"
 private const val URL = "https://project.example/functions/v1/notification-action"
@@ -93,7 +97,7 @@ class LockedPushDrawTest {
     @Test
     fun `an encrypted push shows the locked text with the sender's name`() {
         val l = line(draw("c-locked-1", "true"))
-        assertEquals("🔒 New message", l.text.toString())
+        assertEquals("New message", l.text.toString())
         assertEquals("Ann Sender", l.person!!.name.toString())
     }
 
@@ -104,7 +108,7 @@ class LockedPushDrawTest {
     @Test
     @Config(qualifiers = "tr")
     fun `in Turkish the locked text is the values-tr string`() =
-        assertEquals("🔒 Yeni mesaj", line(draw("c-locked-tr", "true")).text.toString())
+        assertEquals("Yeni mesaj", line(draw("c-locked-tr", "true")).text.toString())
 
     @Test
     fun `a push without the flag keeps its body and both buttons`() {
@@ -119,4 +123,46 @@ class LockedPushDrawTest {
         assertEquals("server placeholder body", line(n).text.toString())
         assertTrue(buttons(n).containsAll(listOf("Mark as read", "Reply")))
     }
+
+    private fun assertPublic(n: Notification, fallback: String) {
+        assertEquals(Notification.VISIBILITY_PRIVATE, n.visibility)
+        val pub = n.publicVersion!!
+        assertEquals("SIS", pub.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString())
+        assertEquals(fallback, pub.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString())
+        assertEquals(n.smallIcon.resId, pub.smallIcon.resId)
+        assertEquals(n.color, pub.color)
+        assertFalse(pub.extras.toString(), pub.extras.toString().contains("Ann Sender"))
+        assertFalse(pub.extras.toString(), pub.extras.toString().contains("server placeholder body"))
+    }
+
+    @Test
+    fun `a plain push is private with the SIS public version`() = assertPublic(draw("c-pub-1", null), "New message")
+
+    @Test
+    fun `a private chat push is private with the SIS public version`() =
+        assertPublic(draw("c-pub-2", "true"), "New message")
+
+    @Test
+    @Config(qualifiers = "tr")
+    fun `in Turkish the public version shows the values-tr fallback`() =
+        assertPublic(draw("c-pub-tr", null), "Yeni mesaj")
+
+    @Test
+    fun `the strings are the contract's and notification_locked is gone`() {
+        assertEquals("New message", app.getString(R.string.notification_fallback))
+        assertEquals("SIS", app.getString(R.string.notification_public_title))
+        assertEquals(0, app.resources.getIdentifier("notification_locked", "string", app.packageName))
+    }
+
+    private fun noLockEmoji() = R.string::class.java.fields.forEach { f ->
+        val text = app.getString(f.getInt(null))
+        assertFalse("${f.name}: $text", text.contains("\uD83D\uDD12"))
+    }
+
+    @Test
+    fun `no app string holds a lock emoji`() = noLockEmoji()
+
+    @Test
+    @Config(qualifiers = "tr")
+    fun `no Turkish app string holds a lock emoji`() = noLockEmoji()
 }

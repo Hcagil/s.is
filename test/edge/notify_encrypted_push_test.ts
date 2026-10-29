@@ -220,7 +220,7 @@ test('preview full (unset): data keeps every key and adds ct = the row ciphertex
         ...(ot === 0 ? ['si', 'sk'] : []), 'title', 'user_id'],
       `the key set: ${attempts[0].raw}`);
     assertEquals([d.user_id, d.message_id, d.conversation_id, d.encrypted, d.body, d.title],
-      [bob.id, id, conv, 'true', PLACEHOLDER, sender.name]);
+      [bob.id, id, conv, 'true', 'New message', sender.name]);
     assertEquals(d.action_url, `${apiUrl}/functions/v1/notification-action`);
     assert(/^\d+$/.test(d.badge), `badge is a count: ${d.badge}`);
     assertEquals(d.ct, ct, 'ct is the row ciphertext, unchanged');

@@ -192,6 +192,14 @@ jobs:
           supabase functions deploy notify-on-message --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
           supabase functions deploy admin-apple --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
           supabase functions deploy admin-apple-report --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+          supabase functions deploy podium --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+          # podium: one random secret shared by the database trigger (Vault) and the function; new every release, never printed.
+          PODIUM_SECRET=$(openssl rand -hex 32)
+          echo "::add-mask::$PODIUM_SECRET"
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" PODIUM_SHARED_SECRET="$PODIUM_SECRET"
+          supabase db query --linked "delete from vault.secrets where name = 'podium_secret'"
+          supabase db query --linked "select vault.create_secret('$PODIUM_SECRET', 'podium_secret') is not null"
+          supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/podium', 'podium_url') where not exists (select 1 from vault.secrets where name = 'podium_url')"
           supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/notify-on-message', 'notify_on_message_url') where not exists (select 1 from vault.secrets where name = 'notify_on_message_url')"
           supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/admin-apple', 'admin_apple_url') where not exists (select 1 from vault.secrets where name = 'admin_apple_url')"
         env:

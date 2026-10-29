@@ -648,3 +648,13 @@ Nothing contacts the site before that tap.
 - If the peek does not run or times out, older lines show the locked text as before. After a process death between a text push and its picture, older lines stay locked until the next push.
 - iOS saves the first message the same way in its notification service extension.
 
+## 2026-10-29 — Reaction notifications open on the phone; the lock screen follows the phone's setting
+
+**Decision.** When someone reacts to your message, the server sends a push to you only (the message author), never for your own or a bot's reaction. In a plain chat with full preview the push carries the emoji and a short quote; in a private chat it carries only the encrypted reaction, which the phone opens in memory. Every chat notification is private on the lock screen with one public version ("SIS" / "New message"), so the phone's own setting decides what the lock screen shows, and no notification text has a lock sign.
+
+**Why.** The owner wants reaction notifications like WhatsApp, and the lock screen to follow the phone's setting (owner 2026-10-29). Opening the reaction on the phone keeps the server from ever seeing a private chat's emoji.
+
+**Consequences.**
+- Old builds never get a reaction push: a device gets one only after its build registers with `reaction_push` true (Android and iOS builds that draw reactions).
+- A retry, a clear or a relock sends nothing from the database; the edge claim and limits keep forged calls to at most one extra push (accepted, see SECURITY.md).
+- With "hide sensitive content" on, the lock screen shows "SIS" instead of the sender's name.

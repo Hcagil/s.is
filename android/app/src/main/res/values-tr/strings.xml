@@ -4,5 +4,6 @@
     <string name="action_reply">Yanıtla</string>
     <string name="action_reply_hint">Mesaj</string>
     <string name="action_not_sent">Gönderilemedi</string>
-    <string name="notification_locked">🔒 Yeni mesaj</string>
+    <string name="notification_fallback">Yeni mesaj</string>
+    <string name="notification_public_title">SIS</string>
 </resources>

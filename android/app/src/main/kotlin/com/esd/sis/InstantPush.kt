@@ -299,7 +299,7 @@ object InstantPush {
             val title = extras.getString("title")
             val locked = extras.getString("encrypted") == "true"
             // An encrypted chat shows the peeked text or the locked text (the server body is only a placeholder); its Reply goes to the app, see addEncryptedReply.
-            val lockedText = context.getString(R.string.notification_locked)
+            val lockedText = context.getString(R.string.notification_fallback)
             val text = if (locked) lockedText else extras.getString("body")
             val hasFields = conversationId != null && title != null && text != null
             val chat = extras.getString("chat")
@@ -433,18 +433,16 @@ object InstantPush {
                 .apply { if (!loud) setSilent(true).setOnlyAlertOnce(true) }
                 .apply { if (badge > 0) setNumber(badge) }
                 .apply {
-                    // With the default lock-screen setting the lock screen shows this locked public version, not the text; a phone set to "show all content" shows the full notification.
-                    if (locked) {
-                        setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-                        setPublicVersion(
-                            NotificationCompat.Builder(context, channel)
-                                .setSmallIcon(R.drawable.ic_launcher_monochrome)
-                                .setColor(ContextCompat.getColor(context, R.color.notification_accent))
-                                .setContentTitle(entry.optString("t"))
-                                .setContentText(lockedText)
-                                .build(),
-                        )
-                    }
+                    // The phone's own lock-screen setting decides: full content, or only this public version (same for every chat).
+                    setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                    setPublicVersion(
+                        NotificationCompat.Builder(context, channel)
+                            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+                            .setColor(ContextCompat.getColor(context, R.color.notification_accent))
+                            .setContentTitle(context.getString(R.string.notification_public_title))
+                            .setContentText(lockedText)
+                            .build(),
+                    )
                 }
                 .apply {
                     // The buttons need the action token the push carried; an older server sends none.

@@ -2474,4 +2474,44 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noticeNewMessage => 'New message';
+
+  @override
+  String get podTitle => 'Total money';
+
+  @override
+  String podPrevTitle(String date) {
+    return 'Previous day\'s total ($date)';
+  }
+
+  @override
+  String podFetched(String time) {
+    return 'From Vega, fetched at $time';
+  }
+
+  @override
+  String get podFail => 'Vega did not answer.';
+
+  @override
+  String get podOff => 'This command is turned off.';
+
+  @override
+  String get podUnk => 'Unknown command. Try /podium.';
+
+  @override
+  String get podRate => 'Too many commands. Wait a minute and try again.';
+
+  @override
+  String get podSwOn => '/podium is turned on.';
+
+  @override
+  String get podSwOff => '/podium is turned off.';
+
+  @override
+  String get podCmdDesc => 'Total money from Vega';
+
+  @override
+  String get podHint => 'Type / for commands';
+
+  @override
+  String get podNotEnc => 'Not end-to-end encrypted';
 }

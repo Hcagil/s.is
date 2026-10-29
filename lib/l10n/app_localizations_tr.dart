@@ -2450,4 +2450,44 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get noticeNewMessage => 'Yeni mesaj';
+
+  @override
+  String get podTitle => 'Toplam para';
+
+  @override
+  String podPrevTitle(String date) {
+    return 'Önceki günün toplamı ($date)';
+  }
+
+  @override
+  String podFetched(String time) {
+    return 'Vega\'dan alındı: $time';
+  }
+
+  @override
+  String get podFail => 'Vega yanıt vermedi.';
+
+  @override
+  String get podOff => 'Bu komut kapalı.';
+
+  @override
+  String get podUnk => 'Bilinmeyen komut. /podium yazın.';
+
+  @override
+  String get podRate => 'Çok fazla komut. Bir dakika bekleyip tekrar deneyin.';
+
+  @override
+  String get podSwOn => '/podium açıldı.';
+
+  @override
+  String get podSwOff => '/podium kapatıldı.';
+
+  @override
+  String get podCmdDesc => 'Vega\'dan toplam para';
+
+  @override
+  String get podHint => 'Komutlar için / yazın';
+
+  @override
+  String get podNotEnc => 'Uçtan uca şifreli değil';
 }

@@ -739,5 +739,17 @@
   "cropSquare": "Kare",
   "cropFree": "Serbest",
   "cropButtonLabel": "Fotoğrafı kırp",
-  "cropRotateLabel": "Döndür"
+  "cropRotateLabel": "Döndür",
+  "podTitle": "Toplam para",
+  "podPrevTitle": "Önceki günün toplamı ({date})",
+  "podFetched": "Vega'dan alındı: {time}",
+  "podFail": "Vega yanıt vermedi.",
+  "podOff": "Bu komut kapalı.",
+  "podUnk": "Bilinmeyen komut. /podium yazın.",
+  "podRate": "Çok fazla komut. Bir dakika bekleyip tekrar deneyin.",
+  "podSwOn": "/podium açıldı.",
+  "podSwOff": "/podium kapatıldı.",
+  "podCmdDesc": "Vega'dan toplam para",
+  "podHint": "Komutlar için / yazın",
+  "podNotEnc": "Uçtan uca şifreli değil"
 }

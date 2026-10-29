@@ -4345,6 +4345,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'New message'**
   String get noticeNewMessage;
+
+  /// Bacanaks Ozel command chat
+  ///
+  /// In en, this message translates to:
+  /// **'Total money'**
+  String get podTitle;
+
+  /// Bacanaks Ozel command chat
+  ///
+  /// In en, this message translates to:
+  /// **'Previous day\'s total ({date})'**
+  String podPrevTitle(String date);
+
+  /// Bacanaks Ozel command chat
+  ///
+  /// In en, this message translates to:
+  /// **'From Vega, fetched at {time}'**
+  String podFetched(String time);
+
+  /// Bacanaks Ozel command chat
+  ///
+  /// In en, this message translates to:
+  /// **'Vega did not answer.'**
+  String get podFail;
+
+  /// Bacanaks Ozel command chat
+  ///
+  /// In en, this message translates to:
+  /// **'This command is turned off.'**
+  String get podOff;
+
+  /// Bacanaks Ozel command chat
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown command. Try /podium.'**
+  String get podUnk;
+
+  /// Bacanaks Ozel command chat
+  ///
+  /// In en, this message translates to:
+  /// **'Too many commands. Wait a minute and try again.'**
+  String get podRate;
+
+  /// Bacanaks Ozel command chat
+  ///
+  /// In en, this message translates to:
+  /// **'/podium is turned on.'**
+  String get podSwOn;
+
+  /// Bacanaks Ozel command chat
+  ///
+  /// In en, this message translates to:
+  /// **'/podium is turned off.'**
+  String get podSwOff;
+
+  /// Bacanaks Ozel command chat
+  ///
+  /// In en, this message translates to:
+  /// **'Total money from Vega'**
+  String get podCmdDesc;
+
+  /// Bacanaks Ozel command chat
+  ///
+  /// In en, this message translates to:
+  /// **'Type / for commands'**
+  String get podHint;
+
+  /// Bacanaks Ozel command chat
+  ///
+  /// In en, this message translates to:
+  /// **'Not end-to-end encrypted'**
+  String get podNotEnc;
 }
 
 class _AppLocalizationsDelegate

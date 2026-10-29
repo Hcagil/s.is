@@ -8,6 +8,7 @@
 // or { error: 'method' } (405) if not POST,
 // or { error: 'unauthorized' } (401) if secret mismatch,
 // or { error: 'bad_request' } (400) if malformed request,
+// or { error: 'finish' } (500) if saving the result failed,
 // or { ok: true, ran: true, result: 'ok'|'failed' } (200) on success.
 // Never logs or returns the amount, the password or Vega's reply.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -73,11 +74,15 @@ Deno.serve(async (req) => {
     console.log('podium: fetch failed');
   }
 
-  if (amount !== null && !/^[0-9][0-9.,' ]{0,24}$/.test(amount)) {
+  if (amount !== null && (amount.length > 25 || !/^[0-9]{1,3}([.,' ][0-9]{3})*([.,][0-9]{1,2})?$|^[0-9]+([.,][0-9]{1,2})?$/.test(amount))) {
     amount = null;
     reason = 'shape';
   }
 
-  await db.rpc('podium_job_finish', { job: jobId, amount, reason: amount === null ? reason : null });
+  const { error } = await db.rpc('podium_job_finish', { job: jobId, amount, reason: amount === null ? reason : null });
+  if (error) {
+    console.log('podium: finish failed');
+    return reply(500, { error: 'finish' });
+  }
   return reply(200, { ok: true, ran: true, result: amount === null ? 'failed' : 'ok' });
 });

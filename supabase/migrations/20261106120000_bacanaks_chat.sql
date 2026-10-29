@@ -82,6 +82,7 @@ begin
   insert into public.conversation_members(conversation_id,user_id)
     values (cid,new.user_id)
     on conflict do nothing;
+  perform set_config('app_private.admin_write','',true);
   return null;
 end;
 $$;
@@ -135,6 +136,12 @@ create policy messages_send_bacanaks on public.messages for insert to authentica
   not forwarded
 );
 
+-- The business day in Istanbul: before 07:30 it is still the previous day.
+create or replace function app_private.podium_business_day(at timestamptz) returns date language sql immutable set search_path = '' as $$
+  select ((at at time zone 'Europe/Istanbul') - interval '7 hours 30 minutes')::date
+$$;
+revoke all on function app_private.podium_business_day(timestamptz) from public, anon, authenticated;
+
 -- One /podium ask. Only the exact word /podium is read; the text is never stored or forwarded.
 create or replace function app_private.podium_handle(conv uuid, uid uuid, body text) returns void language plpgsql security definer set search_path = '' as $$
   declare
@@ -178,8 +185,8 @@ create or replace function app_private.podium_handle(conv uuid, uid uuid, body t
 
     -- The business day comes from the server clock in Istanbul, never from the phone.
     ist := now() at time zone 'Europe/Istanbul';
-    prev := ist::time < time '07:30';
-    d := ist::date - case when prev then 1 else 0 end;
+    d := app_private.podium_business_day(now());
+    prev := d < ist::date;
 
     -- Shared 30 s gap between Vega calls: a fresh answer is reused.
     if st.fetched_at is not null and st.fetched_at > now() - interval '30 seconds' and st.day = d and st.amount is not null then
@@ -209,7 +216,7 @@ $$;
 revoke all on function public.podium_job_claim(uuid) from public, anon, authenticated;
 grant execute on function public.podium_job_claim(uuid) to service_role;
 
--- amount null or malformed = failure. Three failed logins in a row turn the command off.
+-- amount null or malformed = failure. Three failures in a row (any reason but 'config') turn the command off.
 create or replace function public.podium_job_finish(job uuid, amount text, reason text) returns void language plpgsql security definer set search_path = '' as $$
   declare
     j app_private.podium_jobs;
@@ -219,12 +226,12 @@ create or replace function public.podium_job_finish(job uuid, amount text, reaso
     select * into j from app_private.podium_jobs where id = job and state = 'running' for update;
     if not found then return; end if;
 
-    ok := amount is not null and amount ~ '^[0-9][0-9.,'' ]{0,24}$';
+    ok := amount is not null and length(amount) <= 25 and amount ~ '^[0-9]{1,3}([.,'' ][0-9]{3})*([.,][0-9]{1,2})?$|^[0-9]+([.,][0-9]{1,2})?$';
 
     if ok then
-      update app_private.podium_state set amount = podium_job_finish.amount, day = j.day, fetched_at = now(), fail_count = 0;
+      update app_private.podium_state set amount = podium_job_finish.amount, day = j.day, fetched_at = now(), fail_count = 0 where only_row;
     else
-      update app_private.podium_state set fail_count = case when reason = 'login' then fail_count + 1 else fail_count end, off = off or (reason = 'login' and fail_count + 1 >= 3);
+      update app_private.podium_state set fail_count = case when reason is distinct from 'config' then fail_count + 1 else fail_count end, off = off or (reason is distinct from 'config' and fail_count + 1 >= 3) where only_row;
     end if;
 
     -- waiting asks get the same answer
@@ -372,7 +379,7 @@ begin
   elsif c = '/listtesters' then
     outcome := app_private.admin_cmd_list(conv); em := null;
   elsif c in ('/podiumon','/podiumoff') then
-    update app_private.podium_state set off = (c = '/podiumoff'), fail_count = 0;
+    update app_private.podium_state set off = (c = '/podiumoff'), fail_count = 0 where only_row;
     perform app_private.admin_reply(conv, jsonb_build_object('k', case when c = '/podiumon' then 'podSwOn' else 'podSwOff' end));
     outcome := 'ok'; em := null;
   elsif em is null then

@@ -14,5 +14,5 @@ export async function fetchVegaTotal(day: string, prev: boolean): Promise<string
     throw new VegaError('config');
   }
   // TODO(owner step): the page that holds the total is not known without credentials. Login form: POST /Authentication/LoginAction, fields UygulamaTipi=3, UserName, Password. Never put the password in a URL, never log request or response.
-  throw new VegaError('shape');
+  throw new VegaError('config'); // reader not built yet: 'config' is not counted toward the auto-off
 }

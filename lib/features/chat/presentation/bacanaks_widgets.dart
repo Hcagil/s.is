@@ -5,10 +5,12 @@ import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/chat_controllers.dart';
 
-/// The round coins-stack avatar of the Bacanaks Ozel chat.
+/// Avatar widget for Bacanaks with brand colors.
 class BacanaksAvatar extends StatelessWidget {
+  /// Creates a BacanaksAvatar.
   const BacanaksAvatar({super.key, this.radius = 18});
 
+  /// Radius of the avatar.
   final double radius;
 
   @override
@@ -26,15 +28,19 @@ class BacanaksAvatar extends StatelessWidget {
   }
 }
 
-/// The "/" suggestion row above the composer; a tap sends the command.
+/// Panel that appears when typing /podium command.
 class PodiumSlashPanel extends StatelessWidget {
+  /// Creates a PodiumSlashPanel.
   const PodiumSlashPanel({
     super.key,
     required this.controller,
     required this.onPick,
   });
 
+  /// Controller for the text input.
   final TextEditingController controller;
+
+  /// Callback when panel is tapped.
   final VoidCallback onPick;
 
   @override
@@ -81,8 +87,9 @@ class PodiumSlashPanel extends StatelessWidget {
   }
 }
 
-/// Three calm dots while a /podium ask has no answer yet (gone after 2 minutes).
+/// Waiting indicator for podium command.
 class PodiumWaiting extends ConsumerWidget {
+  /// Creates a PodiumWaiting.
   const PodiumWaiting({super.key});
 
   @override

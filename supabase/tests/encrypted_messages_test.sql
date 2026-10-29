@@ -1,5 +1,5 @@
 begin;
-select plan(170);
+select plan(172);
 
 -- Encrypted messages (Private Chats step 4a, 20261031120000_encrypted_messages.sql):
 -- messages.ciphertext / olm_type, the conversation gates, the plain-text lock
@@ -514,7 +514,7 @@ select is(try(format($q$insert into public.messages(id, conversation_id, sender_
                      mid('P2'), g('AC'))), 'ok', 'ann: plain to cat');
 reset role;
 select is((select encrypted::text || '|' || body from app_private.push_targets_for_message(mid('P1')) where user_id = u('bob')),
-  'true|' || ph(), 'ciphertext, preview full: encrypted true, the placeholder body');
+  'true|New message', 'ciphertext, preview unset (full): encrypted true, body exactly New message');
 select is((select encrypted::text || '|' || body from app_private.push_targets_for_message(mid('P3')) where user_id = u('gus')),
   'true|New message', 'ciphertext, preview sender: encrypted true, New message');
 select is((select encrypted::text || '|' || coalesce(body, '<null>') from app_private.push_targets_for_message(mid('P4')) where user_id = u('hal')),
@@ -525,9 +525,15 @@ select is((select encrypted from app_private.push_targets_for_message(mid('abpla
   false, 'a plain row in an encrypted chat: encrypted false');
 select ok((select body <> ph() from app_private.push_targets_for_message(mid('P2')) where user_id = u('cat')),
   'a plain row never gets the placeholder wording');
+select is((select body from app_private.push_targets_for_message(mid('P2')) where user_id = u('cat')),
+  'p2 words', 'a plain row, preview unset: the body is still the message text');
+select is((select count(*) from unnest(array['P1','P2','P3','P4']) m,
+                  lateral app_private.push_targets_for_message(mid(m)) t
+            where t.body like '%' || U&'\+01F512' || '%'), 0::bigint,
+  'no push body holds a lock emoji');
 set local role service_role;
 select is((select encrypted::text || '|' || body from public.push_targets(mid('P1')) where user_id = u('bob')),
-  'true|' || ph(), 'public.push_targets: encrypted true for the ciphertext row');
+  'true|New message', 'public.push_targets: encrypted true, body exactly New message');
 select is((select encrypted from public.push_targets(mid('P2')) where user_id = u('cat')),
   false, 'public.push_targets: encrypted false for the plain row');
 reset role;

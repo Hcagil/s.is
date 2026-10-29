@@ -238,7 +238,7 @@ begin
   on conflict (message_id, user_id)
   do update set emoji = excluded.emoji, ciphertext = null, olm_type = null, updated_at = now();
   -- A retry with the same emoji sends nothing.
-  if old_emoji is distinct from emoji then
+  if old_emoji is distinct from emoji and m.sender_id <> auth.uid() then
     perform app_private.notify_reaction(message, auth.uid());
   end if;
 end $$;
@@ -271,7 +271,7 @@ begin
   on conflict (message_id, user_id)
   do update set emoji = null, ciphertext = excluded.ciphertext, olm_type = excluded.olm_type, updated_at = now();
   -- A network retry inside one tap reuses the same bytes and sends nothing.
-  if old_ct is distinct from ciphertext then
+  if old_ct is distinct from ciphertext and m.sender_id <> auth.uid() then
     perform app_private.notify_reaction(message, auth.uid());
   end if;
 end $$;

@@ -223,6 +223,12 @@ Future<void> main() async {
     return;
   } // SessionController yields SetupRequired
   try {
+    // Read-only prefetch of the store key in parallel with Supabase; the store open finds it in memory (falls back to the lazy read on any error).
+    unawaited(
+      DriftMessageStore.prefetchKey(
+        () => StoreKey.inGroup(keychainGroup).peek(),
+      ),
+    );
     await Supabase.initialize(
       url: config.supabaseUrl,
       publishableKey: config.supabasePublishableKey,

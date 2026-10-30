@@ -129,6 +129,7 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
             messageId: r.messageId,
             emoji: r.emoji!,
           );
+      if (generation != _generation) return;
       if (locked case Ok(:final value?)) {
         final repo = ref.read(reactionRepositoryProvider);
         // Compare-and-set on the server (only a row still plain is replaced), so a newer change or removal, from this or a second phone, is never undone.
@@ -140,6 +141,7 @@ class ReactionsController extends AsyncNotifier<ReactionsByMessage> {
           Ok(value: final done) => done,
           Err() => false,
         };
+        if (generation != _generation) return;
         if (applied) {
           await ref
               .read(reactionOpenerProvider)

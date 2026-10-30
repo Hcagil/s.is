@@ -37,6 +37,13 @@ final class DriftMessageStore implements MessageStore, PushInboxStore {
   static String? _prefetchedKey;
   static bool _keyTaken = false;
 
+  /// Test seam: forgets the prefetched key and the "first open ran" flag.
+  @visibleForTesting
+  static void resetPrefetchForTest() {
+    _prefetchedKey = null;
+    _keyTaken = false;
+  }
+
   /// Cold start: reads the on-phone store key (read-only, via [read]) while Supabase starts, so the first open finds it in memory. Dropped if an erase happens meanwhile, if the first open already ran, or on any error or null.
   static Future<void> prefetchKey(Future<String?> Function() read) async {
     final erasuresAtStart = _erasures;

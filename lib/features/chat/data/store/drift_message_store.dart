@@ -34,6 +34,20 @@ final class DriftMessageStore implements MessageStore, PushInboxStore {
 
   /// Bumped by every clear() in the process; an instance whose work began before a bump lost to that erase.
   static int _erasures = 0;
+  static String? _prefetchedKey;
+  static bool _keyTaken = false;
+
+  /// Cold start: reads the on-phone store key (read-only, via [read]) while Supabase starts, so the first open finds it in memory. Dropped if an erase happens meanwhile, if the first open already ran, or on any error or null.
+  static Future<void> prefetchKey(Future<String?> Function() read) async {
+    final erasuresAtStart = _erasures;
+    try {
+      final key = await read();
+      StartupMarks.mark('store-key-prefetched');
+      if (key != null && !_keyTaken && erasuresAtStart == _erasures) {
+        _prefetchedKey = key;
+      }
+    } catch (_) {}
+  }
 
   /// Per file path: opens in this process run one after another, so a new file's schema is created by one opener while the others wait (no create-vs-create race).
   static final _openGates = <String, Future<void>>{};
@@ -266,7 +280,10 @@ final class DriftMessageStore implements MessageStore, PushInboxStore {
     final seen = _seen ??= _erasures;
     final file = await _file();
     await file.parent.create(recursive: true);
-    final key = await _key();
+    final prefetched = _keyTaken ? null : _prefetchedKey;
+    _keyTaken = true;
+    _prefetchedKey = null;
+    final key = prefetched ?? await _key();
     StartupMarks.mark('store-key');
 
     Future<StoreDatabase> attempt() async {
@@ -571,6 +588,7 @@ final class DriftMessageStore implements MessageStore, PushInboxStore {
   @override
   Future<void> clear() {
     _erasures++;
+    _prefetchedKey = null;
     _closed = true;
     final running = _inflight.toList();
     final pending = _db;

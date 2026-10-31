@@ -64,14 +64,17 @@ Deno.serve(async (req) => {
 
   let amount: string | null = null;
   let reason = 'other';
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     amount = await Promise.race([
       fetchVegaTotal(claim.day, claim.prev),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new VegaError('timeout')), 20000))
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new VegaError('timeout')), 20000); })
     ]);
   } catch (e) {
     reason = e instanceof VegaError ? e.code : 'other';
     console.log('podium: fetch failed');
+  } finally {
+    clearTimeout(timer);
   }
 
   if (amount !== null && (amount.length > 25 || !/^[0-9]{1,3}([.,' ][0-9]{3})*([.,][0-9]{1,2})?$|^[0-9]+([.,][0-9]{1,2})?$/.test(amount))) {

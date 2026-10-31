@@ -160,6 +160,8 @@ create or replace function app_private.podium_handle(conv uuid, uid uuid, body t
       perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','podFail'));
     end loop;
 
+    -- One ask per user at a time, so a parallel burst cannot pass the limit below.
+    perform pg_advisory_xact_lock(hashtextextended('podium:' || uid::text, 0));
     -- Rate limit: 30 commands per 10 minutes
     select count(*) into cnt from app_private.podium_commands where user_id = uid and at > now() - interval '10 minutes';
     if cnt >= 30 then

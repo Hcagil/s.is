@@ -29,7 +29,22 @@ export async function fetchVegaTotal(day: string, prev: boolean): Promise<string
       await res2.body?.cancel();
       throw new VegaError('login'); // a redirect = session not accepted
     }
-    const html = await res2.text();
+    const reader = res2.body?.getReader();
+    if (!reader) throw new VegaError('shape');
+    let total = 0;
+    const chunks: Uint8Array[] = [];
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > 1048576) {
+        await reader.cancel();
+        throw new VegaError('shape'); // a reply over 1 MiB is not the report page
+      }
+      chunks.push(value);
+    }
+    const decoder = new TextDecoder();
+    const html = chunks.map((c) => decoder.decode(c, { stream: true })).join('') + decoder.decode();
     const m = html.match(/Toplam Ciro<\/div>\s*<[^>]*class="[^"]*dash-stat-value[^"]*"[^>]*>\s*([0-9.,]+)\s*</);
     if (!m) throw new VegaError('shape');
     return m[1];

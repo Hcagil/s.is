@@ -22,9 +22,9 @@ final class NotificationService: UNNotificationServiceExtension, URLSessionDownl
     if let text = peek.text {
       mutable.body = PushPeek.shownBody(text: text, sender: peek.name ?? (mutable.userInfo["sender"] as? String))
     } else if (mutable.userInfo["encrypted"] as? String) == "true" {
-      // The one locked text, the same words as Android's notification_locked string (res/values/strings.xml, values-tr).
+      // The one fallback text, the same words as Android's notification_fallback string (res/values/strings.xml, values-tr).
       let turkish = Locale.preferredLanguages.first?.hasPrefix("tr") ?? false
-      mutable.body = turkish ? "🔒 Yeni mesaj" : "🔒 New message"
+      mutable.body = turkish ? "Yeni mesaj" : "New message"
     }
     // Only our own Supabase host: the push's action link is built from the same SUPABASE_URL as the picture link.
     guard let link = mutable.userInfo["thumb_url"] as? String, let url = URL(string: link), url.scheme == "https", let actionLink = mutable.userInfo["action_url"] as? String, let actionHost = URL(string: actionLink)?.host, let host = url.host, host.lowercased() == actionHost.lowercased() else {

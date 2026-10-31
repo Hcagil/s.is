@@ -28,14 +28,14 @@ import org.robolectric.annotation.Config
  * (here its test seam `PeekRunner.override`). Written from the contract, not the code:
  * - the notification line shows the peeked text;
  * - the push inbox (FlutterSharedPreferences) only ever holds the locked text;
- * - the lock-screen public version shows R.string.notification_locked;
+ * - visibility PRIVATE; the public version: title "SIS", text the fallback, same icon and colour;
  * - one Reply (the app sends it locked) and no Mark as read (Group I);
  * - a null peek draws today's locked notification;
  * - without ct/ot, or when not encrypted, the peek is never asked.
  */
 private const val OWNER = "member-a"
 private const val SECRET = "meet at the old bridge at nine"
-private const val LOCKED = "🔒 New message"
+private const val LOCKED = "New message"
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -123,18 +123,24 @@ class EncryptedPushPeekTest {
         val inbox = prefs.getString("flutter.sis.push_inbox.$OWNER", null)
         assertNotNull("push inbox written", inbox)
         assertTrue(inbox, inbox!!.contains(LOCKED))
+        assertFalse(inbox, inbox.contains("\uD83D\uDD12"))
         assertFalse(allPrefs(), allPrefs().contains(SECRET))
     }
 
     @Test
-    fun `the lock screen version is private and shows the locked string`() {
+    fun `the lock screen version is private and shows SIS and the fallback string`() {
         val n = show(extras("c-peek-3"))
         assertEquals(Notification.VISIBILITY_PRIVATE, n.visibility)
         val pub = n.publicVersion
         assertNotNull("public version set", pub)
-        val text = pub!!.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
-        assertEquals(app.getString(R.string.notification_locked), text)
+        assertEquals("SIS", pub!!.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString())
+        val text = pub.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+        assertEquals(app.getString(R.string.notification_fallback), text)
+        assertEquals(LOCKED, text)
+        assertEquals(n.smallIcon.resId, pub.smallIcon.resId)
+        assertEquals(n.color, pub.color)
         assertFalse(pub.extras.toString().contains(SECRET))
+        assertFalse(pub.extras.toString().contains("Ann Sender"))
     }
 
     @Test

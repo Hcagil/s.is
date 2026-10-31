@@ -125,13 +125,40 @@ class DiskStore {
 
   File get file => File('${dir.path}/sis_store.sqlite');
 
+  /// When set, every store's file or key lookup ([holdAt] 'file' or 'key')
+  /// waits for it: a store open still in flight, as on a slow phone.
+  Completer<void>? holdOpen;
+  String holdAt = 'key';
+
+  /// Lookups that reached [holdOpen].
+  int held = 0;
+
+  /// The key as main.dart wires it: from the keychain, and sign-out deletes
+  /// it there. Off: the fixed [key] and a no-op delete.
+  bool keychain = false;
+
+  Future<void> _hold(String at) async {
+    final h = holdOpen;
+    if (h == null || holdAt != at) return;
+    held++;
+    await h.future;
+  }
+
   DriftMessageStore messages(String owner) {
     _lastOwner = owner;
     return _last = DriftMessageStore(
       ownerId: owner,
-      file: () async => file,
-      key: () async => key,
-      deleteKey: () async {},
+      file: () async {
+        await _hold('file');
+        return file;
+      },
+      key: () async {
+        await _hold('key');
+        return keychain ? const StoreKey().loadOrCreate() : key;
+      },
+      deleteKey: () async {
+        if (keychain) await const StoreKey().delete();
+      },
     );
   }
 
@@ -234,6 +261,7 @@ void main() {
 
   tearDown(() async {
     if (store.holdLoad case final h? when !h.isCompleted) h.complete();
+    if (store.holdOpen case final h? when !h.isCompleted) h.complete();
     for (final c in chat.calls) {
       if (!c.gate.isCompleted) c.gate.complete();
     }
@@ -624,6 +652,8 @@ void main() {
 
       session(c, const SignedOut());
       await until(() => store.log.contains('clear'), 'the erase');
+      // The log line is written when the erase starts; the file goes later.
+      await until(() => !store.file.existsSync(), 'the file gone');
       chat.answerAll();
       await pastDebounce();
 
@@ -634,7 +664,63 @@ void main() {
         reason: 'saved after the erase: ${store.log}',
       );
       expect(store.file.existsSync(), isFalse, reason: 're-created');
-    });
+    }, timeout: const Timeout(Duration(seconds: 60)));
+
+    // A store open (its file or key lookup) still in flight at sign-out,
+    // with a save waiting on it, finishing after the erase began: the file
+    // and its side files are gone, the key is gone, nothing saved after.
+    for (final at in ['file', 'key']) {
+      for (final seeded in [true, false]) {
+        test('a store open held at its $at lookup, '
+            '${seeded ? "a list stored" : "no file yet"}', () async {
+          store.keychain = true;
+          if (seeded) await seedAlice();
+          store
+            ..holdAt = at
+            ..holdOpen = Completer<void>();
+          final c = app(const Allowed(alice));
+          await until(() => store.held > 0, 'the open in flight');
+          // A write waiting on that open, as a debounced save would.
+          final saving = c
+              .read(chatListSnapshotStoreProvider)
+              .save(alice.userId, aList);
+
+          session(c, const SignedOut());
+          await until(() => store.log.contains('clear'), 'the erase');
+          await pause(100);
+          store.holdOpen!.complete();
+          try {
+            await saving;
+          } catch (_) {}
+          final sides = [
+            for (final x in ['', '-wal', '-shm', '-journal'])
+              File('${store.file.path}$x'),
+          ];
+          await until(
+            () async =>
+                sides.every((f) => !f.existsSync()) &&
+                await const StoreKey().peek() == null,
+            'the files and the key gone',
+          );
+          await pastDebounce();
+
+          final cleared = store.log.indexOf('clear');
+          expect(
+            store.log.skip(cleared).where((e) => e.startsWith('save:')),
+            isEmpty,
+            reason: 'saved after the erase: ${store.log}',
+          );
+          for (final f in sides) {
+            expect(f.existsSync(), isFalse, reason: '${f.path} re-created');
+          }
+          expect(
+            await const StoreKey().peek(),
+            isNull,
+            reason: 'key re-created',
+          );
+        }, timeout: const Timeout(Duration(seconds: 60)));
+      }
+    }
 
     test('a refresh finishing after the erase', () async {
       final c = await aliceLoaded();

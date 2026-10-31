@@ -83,7 +83,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get textSystemFont => 'Use the phone\'s own font';
 
   @override
-  String get textSystemFontHint => 'Matches your system. Off = SIS font';
+  String get textSystemFontHint =>
+      'Uses your phone\'s font. When off, SIS uses its own font.';
 
   @override
   String get textChatSize => 'Chat text size';
@@ -146,7 +147,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get archivedChatsHint =>
-      'Archived chats stay archived when a new message arrives. No sound, no push, no badge.';
+      'Archived chats stay archived when a new message arrives, with no sound, notification or badge.';
 
   @override
   String get archivedChatsEmpty => 'No archived chats';
@@ -228,11 +229,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cropGestureHint => 'Pinch to zoom, drag to move';
 
   @override
-  String get groupLeftNotice => 'Left the group';
+  String get groupLeftNotice => 'You left the group';
 
   @override
   String get groupLeftUnsentNotice =>
-      'Left the group. Unsent messages weren\'t sent.';
+      'You left the group. Messages that were still waiting to send were not delivered.';
 
   @override
   String get attachPhoto => 'Photo';
@@ -319,7 +320,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'SIS needs your real email address. In Apple\'s sign-in choose Share My Email and try again.';
 
   @override
-  String get findFromContacts => 'Find people from contacts';
+  String get findFromContacts => 'Find people from your phone contacts';
 
   @override
   String get pickerAddCaption => 'Add a caption';
@@ -382,7 +383,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String securityCodeIntro(String name) {
-    return 'Compare this code with $name\'s phone, in person or on a call. If both match, tap Matches. This is saved on this phone only. After that, messages you send from now on are end-to-end encrypted between your two phones.';
+    return 'Compare this code with the one on $name\'s phone, in person or on a call. If they match, tap Matches. Your choice is saved on this phone only.';
   }
 
   @override
@@ -406,18 +407,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String securityCodeVerifiedNote(String name) {
-    return 'Saved on this phone only. $name is not told.';
+    return 'Saved on this phone only. $name is not notified.';
   }
 
   @override
-  String get securityCodeUnverify => 'Mark as not verified';
+  String get securityCodeUnverify => 'Remove verification';
 
   @override
   String get securityCodeMismatchTitle => 'The codes are different';
 
   @override
   String securityCodeMismatchBody(String name) {
-    return 'This can happen if $name got a new phone or reinstalled SIS. It can also mean someone is in between you. Check with $name in person or on a call, and do not send anything private until you know. Nothing was marked as verified.';
+    return 'This can happen if $name got a new phone or reinstalled SIS. It can also mean someone is intercepting your messages. Check with $name in person or on a call, and do not send anything sensitive until you are sure. Nothing was marked as verified.';
   }
 
   @override
@@ -428,7 +429,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String securityCodeUnavailable(String name) {
-    return 'No security code to show yet. It appears after your first secure message with $name.';
+    return 'No security code yet. It appears after you and $name have exchanged messages.';
   }
 
   @override
@@ -472,7 +473,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get messageDeleteTitle => 'Delete message?';
 
   @override
-  String get messageDeleteForMeBody => 'It is hidden on your devices only.';
+  String get messageDeleteForMeBody => 'It is hidden for you only.';
 
   @override
   String get messageDeleteForEveryoneBody =>
@@ -503,7 +504,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonVibration => 'Vibration';
 
   @override
-  String get commonYourPeople => 'Your people';
+  String get commonYourPeople => 'Your contacts';
 
   @override
   String get commonNobodyFound => 'Nobody found';
@@ -586,10 +587,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAvatarNobody => 'Nobody';
 
   @override
-  String get settingsAvatarNobodyHint => 'Only you -- others see your initials';
+  String get settingsAvatarNobodyHint => 'Only you. Others see your initials.';
 
   @override
-  String get settingsSignedInAs => 'Signed in with Google as';
+  String get settingsSignedInAs => 'Signed in as';
 
   @override
   String get settingsUnknownAccount => 'Unknown account';
@@ -606,7 +607,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appTagline => 'Stay in sync';
 
   @override
-  String get settingsLicences => 'Open-source licences';
+  String get settingsLicences => 'Open-source licenses';
 
   @override
   String get notifSwitchHint => 'New messages when the app is closed';
@@ -618,7 +619,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notifPreviewFull => 'Name and message';
 
   @override
-  String get notifPreviewSender => 'Only who it is from';
+  String get notifPreviewSender => 'Sender only';
 
   @override
   String get notifPreviewNone => 'No details';
@@ -705,7 +706,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonSkip => 'Skip';
 
   @override
-  String get commonSearchPeople => 'Search your people';
+  String get commonSearchPeople => 'Search contacts';
 
   @override
   String get commonForwarded => 'Forwarded';
@@ -838,7 +839,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get messageEmpty => 'No messages yet. Say something.';
+  String get messageEmpty => 'No messages yet. Say hello.';
 
   @override
   String get addMembersDone => 'Added to the group';
@@ -848,7 +849,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addMembersNoneBody =>
-      'Everyone in your people list is already in this group.';
+      'Everyone in your contacts is already in this group.';
 
   @override
   String get addMembersOldTitle => 'Show earlier messages';
@@ -858,7 +859,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addMembersAdminDecides =>
-      'Group admin sets whether new members see earlier messages';
+      'Group admins decide whether new members see earlier messages';
 
   @override
   String get addMembersAdding => 'Adding…';
@@ -907,16 +908,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get forwardTitle => 'Forward to';
 
   @override
-  String get forwardSearch => 'Search chats and people';
+  String get forwardSearch => 'Search chats and contacts';
 
   @override
   String get forwardPrefix => 'Forwarding: ';
 
   @override
-  String get forwardPeople => 'People';
+  String get forwardPeople => 'Contacts';
 
   @override
-  String get forwardNothing => 'Nothing found';
+  String get forwardNothing => 'No results';
 
   @override
   String forwardSendCount(int count) {
@@ -982,7 +983,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get avatarTakePhoto => 'Take photo';
 
   @override
-  String get avatarChoose => 'Choose from library';
+  String get avatarChoose => 'Choose from gallery';
 
   @override
   String get avatarRemove => 'Remove picture';
@@ -1054,7 +1055,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get mediaEmpty => 'No photos shared yet';
+  String get mediaEmpty => 'No media shared yet';
 
   @override
   String eventLeft(String name) {
@@ -1182,7 +1183,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attachFasterBody =>
-      'Allow access so your gallery loads right here – nothing is uploaded until you send it.';
+      'Allow access so your gallery loads right here. Nothing is uploaded until you send it.';
 
   @override
   String get attachOpenSettings => 'Open settings';
@@ -1232,23 +1233,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileTag => 'Tag';
 
   @override
-  String get profileTagHint => 'Unique. Letters, digits and _; 3 to 20.';
+  String get profileTagHint =>
+      'Must be unique. Use 3 to 20 letters, digits or _.';
 
   @override
-  String get signInBody => 'Private messages for the people on your list.';
+  String get signInBody => 'Messaging for the people you know.';
 
   @override
   String get signInGoogle => 'Continue with Google';
 
   @override
-  String get signInInvitedOnly => 'Only invited Google accounts can sign in.';
+  String get signInInvitedOnly => 'Only invited accounts can sign in.';
 
   @override
   String get statusDeniedTitle => 'Access denied';
 
   @override
   String get statusDeniedBody =>
-      'This Google account is not currently approved for SIS.';
+      'This account is not approved for SIS right now.';
 
   @override
   String get replacedTitle => 'You signed in on another phone';
@@ -1315,8 +1317,8 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count licences',
-      one: '1 licence',
+      other: '$count licenses',
+      one: '1 license',
     );
     return '$_temp0';
   }
@@ -1366,13 +1368,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearanceThemePlaceholder => 'My theme';
 
   @override
-  String get themeTabAccent => 'Accent Color';
+  String get themeTabAccent => 'Accent color';
 
   @override
   String get themeTabBackground => 'Background';
 
   @override
-  String get themeTabMyMessages => 'My Messages';
+  String get themeTabMyMessages => 'My messages';
 
   @override
   String get themePickAccent => 'Pick an accent color';
@@ -1395,7 +1397,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get themeLowContrast =>
-      'Accent may be hard to read. Consider a darker shade.';
+      'This accent color may be hard to read. Try a darker shade.';
 
   @override
   String get themeModeLabel => 'Appearance mode';
@@ -1414,17 +1416,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String themeSwatch(String hex) {
-    return 'Colour $hex';
+    return 'Color $hex';
   }
 
   @override
-  String get wallpaperColour => 'Colour';
+  String get wallpaperColour => 'Color';
 
   @override
   String get wallpaperGradient => 'Gradient';
 
   @override
-  String get wallpaperPicture => 'Picture';
+  String get wallpaperPicture => 'Photo';
 
   @override
   String get wallpaperChoosePhoto => 'Choose photo';
@@ -1434,18 +1436,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'That photo could not be used. Try another.';
 
   @override
-  String get wallpaperReset => 'Reset Chat Backgrounds';
+  String get wallpaperReset => 'Reset chat wallpaper';
 
   @override
   String get wallpaperResetInfo =>
-      'Remove all uploaded chat backgrounds and restore the pre-installed ones.';
+      'Removes the chat wallpapers you added and restores the built-in ones.';
 
   @override
-  String get wallpaperResetTitle => 'Reset chat backgrounds';
+  String get wallpaperResetTitle => 'Reset chat wallpaper?';
 
   @override
-  String get wallpaperResetConfirm =>
-      'Are you sure you want to reset all chat backgrounds?';
+  String get wallpaperResetConfirm => 'Your own wallpapers will be removed.';
 
   @override
   String get wallpaperResetAction => 'Reset';
@@ -1466,11 +1467,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatDeleteUndo => 'Undo';
 
   @override
-  String get chatDeleteChat => 'Delete Chat';
+  String get chatDeleteChat => 'Delete chat';
 
   @override
   String chatDeleteSure(String name) {
-    return 'Are you sure you want to delete the chat with **$name**?';
+    return 'Delete the chat with **$name**?';
   }
 
   @override
@@ -1482,21 +1483,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatDeletedUndo => 'Chat deleted';
 
   @override
-  String get chatLeaveGroupTitle => 'Leave Group';
+  String get chatLeaveGroupTitle => 'Leave group?';
 
   @override
   String chatDeleteLeaveSure(String name) {
-    return 'Are you sure you want to delete and leave the group **$name**?';
+    return 'Leave **$name** and delete the chat?';
   }
 
   @override
   String get chatDeleteGroupForAll => 'Delete the group for all members';
 
   @override
-  String get chatGroupLeftUndo => 'You left the group.';
+  String get chatGroupLeftUndo => 'You left the group';
 
   @override
-  String get chatGroupDeletedUndo => 'Group deleted.';
+  String get chatGroupDeletedUndo => 'Group deleted';
 
   @override
   String chatDeleteFewTitle(int count) {
@@ -1510,14 +1511,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get chatDeleteFewSure =>
-      'Are you sure you want to delete selected chats?';
+  String get chatDeleteFewSure => 'Delete the selected chats?';
 
   @override
-  String get chatDeleteBothSides => 'Delete for both sides where possible';
+  String get chatDeleteBothSides => 'Delete for everyone where possible';
 
   @override
-  String get chatsDeletedUndo => 'Chats deleted.';
+  String get chatsDeletedUndo => 'Chats deleted';
 
   @override
   String get pollNewTitle => 'New poll';
@@ -1538,7 +1538,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pollAddOption => 'Add option';
 
   @override
-  String get pollOptionsMax => 'You have added the maximum number of options.';
+  String get pollOptionsMax =>
+      'You have reached the maximum number of options.';
 
   @override
   String get pollMultipleTitle => 'Allow several answers';
@@ -1556,7 +1557,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pollDiscardTitle => 'Discard poll?';
 
   @override
-  String get pollDiscardBody => 'Are you sure you want to discard this poll?';
+  String get pollDiscardBody => 'Your question and options will be lost.';
 
   @override
   String get pollDiscardConfirm => 'Discard';
@@ -1610,7 +1611,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get messageActionRetractVote => 'Retract vote';
+  String get messageActionRetractVote => 'Withdraw vote';
 
   @override
   String get messageActionStopPoll => 'Stop poll';
@@ -1620,7 +1621,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pollStopBody =>
-      'If you stop this poll now, nobody will be able to vote in it anymore. This action cannot be undone.';
+      'If you stop this poll, nobody can vote in it anymore. This cannot be undone.';
 
   @override
   String get pollStopConfirm => 'Stop';
@@ -1640,7 +1641,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contactPickerTitle => 'Send a contact';
 
   @override
-  String get contactSearchHint => 'Search your contacts';
+  String get contactSearchHint => 'Search contacts';
 
   @override
   String get contactSend => 'Send contact';
@@ -1674,13 +1675,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get autoDownloadSection => 'Media auto-download';
 
   @override
-  String get autoDownloadEnable => 'Enable';
+  String get autoDownloadEnable => 'On';
 
   @override
-  String get autoDownloadWifiOnly => 'Enable only on Wi-Fi';
+  String get autoDownloadWifiOnly => 'Only on Wi-Fi';
 
   @override
-  String get autoDownloadDisabled => 'Disabled';
+  String get autoDownloadDisabled => 'Off';
 
   @override
   String get autoDownloadChoose => 'Choose what downloads';
@@ -1759,7 +1760,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get videoWaitingNetwork => 'Waiting for network';
+  String get videoWaitingNetwork => 'Waiting for connection';
 
   @override
   String get videoWaiting => 'Waiting…';
@@ -1827,7 +1828,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoAccessBody =>
-      'Allow access so your videos show up here – nothing is uploaded until you send it.';
+      'Allow access so your videos show up here. Nothing is uploaded until you send it.';
 
   @override
   String get videoAllow => 'Allow videos';
@@ -1864,7 +1865,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get voiceSlideToCancel => 'Slide to cancel';
 
   @override
-  String get voiceCancel => 'CANCEL';
+  String get voiceCancel => 'Cancel';
 
   @override
   String get voiceShowText => 'Show text';
@@ -1900,10 +1901,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stickerTabRecent => 'Recent';
 
   @override
-  String get stickerTabFavourites => 'Favourites';
+  String get stickerTabFavourites => 'Favorites';
 
   @override
-  String get stickerTabStarter => 'SIS starter';
+  String get stickerTabStarter => 'SIS starter pack';
 
   @override
   String get stickerTabMine => 'My stickers';
@@ -1916,7 +1917,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get stickerEmptyFavourites =>
-      'Long-press a sticker in a chat to add it to your favourites.';
+      'Long-press a sticker in a chat to add it to your favorites.';
 
   @override
   String get stickerEmptyAlbum => 'This album is empty.';
@@ -1932,17 +1933,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stickerLoadFailed => 'Could not load this sticker.';
 
   @override
-  String get messageActionStickerFavourite => 'Add to favourites';
+  String get messageActionStickerFavourite => 'Add to favorites';
 
   @override
   String get messageActionStickerAlbum => 'Add to album';
 
   @override
-  String get stickerAddedFavourite => 'Added to favourites.';
+  String get stickerAddedFavourite => 'Added to favorites';
 
   @override
   String stickerAddedAlbum(String name) {
-    return 'Added to $name.';
+    return 'Added to $name';
   }
 
   @override
@@ -1991,24 +1992,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stickerCancel => 'Cancel';
 
   @override
-  String get stickerAlbumShared => 'Album shared.';
+  String get stickerAlbumShared => 'Album shared';
 
   @override
   String stickerAlbumStickers(int count) {
-    return '$count stickers';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count stickers',
+      one: '1 sticker',
+    );
+    return '$_temp0';
   }
 
   @override
   String get stickerAlbumAdd => 'Add album';
 
   @override
-  String get stickerAlbumAddFavourites => 'Add to favourites';
+  String get stickerAlbumAddFavourites => 'Add to favorites';
 
   @override
-  String get stickerAlbumAdded => 'Album added.';
+  String get stickerAlbumAdded => 'Album added';
 
   @override
-  String get stickerAlbumFavouritesAdded => 'Added to your favourites.';
+  String get stickerAlbumFavouritesAdded => 'Added to your favorites';
 
   @override
   String get stickerAlbumGone => 'This album is no longer available.';
@@ -2017,7 +2024,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stickerRemoveFromAlbum => 'Remove from album';
 
   @override
-  String get stickerRemoveFavourite => 'Remove from favourites';
+  String get stickerRemoveFavourite => 'Remove from favorites';
 
   @override
   String stickerLimitAlbums(int max) {
@@ -2031,7 +2038,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String stickerLimitFavourites(int max) {
-    return 'You can keep up to $max favourites.';
+    return 'You can keep up to $max favorites.';
   }
 
   @override
@@ -2103,7 +2110,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get makerFontSerif => 'Serif';
 
   @override
-  String get makerFontHand => 'Hand';
+  String get makerFontHand => 'Handwriting';
 
   @override
   String get makerDrawTitle => 'Draw';
@@ -2127,7 +2134,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get makerLimitReached => 'Limit reached';
 
   @override
-  String get makerAlsoFavourite => 'Also add to favourites';
+  String get makerAlsoFavourite => 'Also add to favorites';
 
   @override
   String get makerSave => 'Save';
@@ -2208,13 +2215,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoRefusedMore => 'It cannot play inside SIS.';
 
   @override
-  String get adminUnk => 'I don’t know that command.';
+  String get adminUnk => 'I don\'t know that command.';
 
   @override
   String get adminNoem => 'That command needs an email address.';
 
   @override
-  String get adminBad => 'That email address doesn’t look right.';
+  String get adminBad => 'That email address doesn\'t look right.';
 
   @override
   String get adminHelpHeader => 'Commands:';
@@ -2290,7 +2297,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfDone => 'Removed';
 
   @override
-  String get adminConfCancelled => 'Cancelled';
+  String get adminConfCancelled => 'Canceled';
 
   @override
   String adminRmOk(String email) {
@@ -2298,7 +2305,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get adminCanOk => 'Cancelled. Nothing was removed.';
+  String get adminCanOk => 'Canceled. Nothing was removed.';
 
   @override
   String adminNoList(String email) {
@@ -2349,7 +2356,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminRate => 'Too many commands. Wait a minute and try again.';
 
   @override
-  String get adminKeep => 'Cancelled: this card is no longer valid.';
+  String get adminKeep => 'Canceled: this card is no longer valid.';
 
   @override
   String get adminErr => 'Something went wrong. Nothing was changed.';
@@ -2367,7 +2374,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get findPeopleTitle => 'Find people';
 
   @override
-  String get findPeopleSub => 'From your contacts';
+  String get findPeopleSub => 'From your phone contacts';
 
   @override
   String get findOnSis => 'On SIS';
@@ -2385,11 +2392,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get findInvite => 'Invite';
 
   @override
-  String get findDiscTitle => 'Find people from your contacts';
+  String get findDiscTitle => 'Find people from your phone contacts';
 
   @override
   String get findDiscBody =>
-      'SIS sends the email addresses in your contacts, in coded (hashed) form, to the SIS server to show which of your contacts use SIS. This happens each time you open Find people. The codes are not stored; SIS only keeps a note of which members you found. Names and phone numbers stay on your phone.';
+      'SIS sends the coded (hashed) email addresses of your contacts to the SIS server to show which of them use SIS. This happens each time you open Find people. The codes are not stored; SIS only keeps a note of which members you found. Names and phone numbers stay on your phone.';
 
   @override
   String get findContinue => 'Continue';
@@ -2405,7 +2412,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'SIS can look at your phone contacts to show who is already here.';
 
   @override
-  String get findAllow => 'Allow contacts';
+  String get findAllow => 'Allow access to contacts';
 
   @override
   String get findLater => 'Try again later.';
@@ -2431,7 +2438,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appearanceModeNoteBuiltIn =>
-      'Your theme keeps its own colours; this only picks the light or dark version.';
+      'Your theme keeps its own colors; this only picks the light or dark version.';
 
   @override
   String appearanceModeNoteFollows(String name) {

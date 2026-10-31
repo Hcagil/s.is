@@ -4,5 +4,6 @@
     <string name="action_reply">Reply</string>
     <string name="action_reply_hint">Message</string>
     <string name="action_not_sent">Not sent</string>
-    <string name="notification_locked">🔒 New message</string>
+    <string name="notification_fallback">New message</string>
+    <string name="notification_public_title">SIS</string>
 </resources>

@@ -464,7 +464,7 @@ void main() {
         expect(byKey('add-members-history-note'), findsOneWidget);
         expect(
           find.text(
-            'Group admin sets whether new members see earlier messages',
+            'Group admins decide whether new members see earlier messages',
           ),
           findsOneWidget,
         );
@@ -511,8 +511,8 @@ void main() {
         await tapKey(t, 'add-members');
         expect(
           find.text(
-            'Yeni üyeler önceki mesajları görecekler mi, grup yöneticisi '
-            'belirler',
+            'Yeni üyelerin önceki mesajları görüp görmeyeceğini grup '
+            'yöneticisi belirler',
           ),
           findsOneWidget,
         );
@@ -544,7 +544,7 @@ void main() {
       await tapKey(t, 'leave-group');
       await tapKey(t, 'leave-confirm');
       expect(w.chat.groupWrites, ['leave:g1']);
-      expect(find.textContaining('Left the group'), findsOneWidget);
+      expect(find.textContaining('You left the group'), findsOneWidget);
 
       // Back to the list, however many pages the leave left open: the
       // topmost page's back button each time.
@@ -599,9 +599,9 @@ void main() {
 
       expect(c.read(sendQueueProvider)['g1'] ?? const [], isEmpty);
       expect(c.read(draftsProvider.notifier).draftFor('g1').text, isEmpty);
-      final notices = find.textContaining('Left the group');
+      final notices = find.textContaining('You left the group');
       expect(notices, findsOneWidget, reason: 'exactly one notice');
-      expect(textOf(notices), contains('Unsent messages'));
+      expect(textOf(notices), contains('were not delivered'));
       final sends = w.chat.sent.length;
       await t.pump(const Duration(seconds: 30));
       await settle(t);
@@ -630,7 +630,7 @@ void main() {
       expect(c.read(sendQueueProvider)['g1'] ?? const [], isEmpty);
       expect(c.read(draftsProvider.notifier).draftFor('g1').text, isEmpty);
       expect(byKey('composer-left'), findsOneWidget);
-      expect(find.textContaining('Left the group'), findsNothing);
+      expect(find.textContaining('You left the group'), findsNothing);
       await t.pump(const Duration(seconds: 30));
       await settle(t);
       await drain(t);

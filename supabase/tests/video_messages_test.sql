@@ -153,7 +153,7 @@ select is((select attachment_duration_ms from public.conversation_previews where
 reset role;
 select is((select string_agg(body, ',') from app_private.push_targets_for_message(
              'f2200000-0000-0000-0000-00000000a010') where user_id = u('02')),
-          E'\U0001F3A5 Video', 'the push of a video message reads the camera and Video');
+          'Video', 'the push of a video message reads Video (no app language: Turkish, no emoji)');
 select is((select string_agg(body, ',') from app_private.push_targets_for_message(
              'f2200000-0000-0000-0000-00000000a004') where user_id = u('02')),
           E'\U0001F4CE Beach day.mp4', 'control: a pdf still pushes the paperclip and its name');

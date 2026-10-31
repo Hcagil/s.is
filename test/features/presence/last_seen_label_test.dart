@@ -244,11 +244,11 @@ void main() {
   group('Turkish', () {
     final tr = lookupAppLocalizations(const Locale('tr'));
     for (final (at, want) in [
-      (now, 'az önce görüldü'),
-      (now.subtract(const Duration(minutes: 7)), '7 dk önce görüldü'),
-      (DateTime(2026, 9, 23, 9, 5), 'bugün 09:05 görüldü'),
-      (DateTime(2026, 9, 22, 23, 59), 'dün 23:59 görüldü'),
-      (DateTime(2026, 3, 4, 12), '04.03.26 görüldü'),
+      (now, 'son görülme az önce'),
+      (now.subtract(const Duration(minutes: 7)), 'son görülme 7 dk önce'),
+      (DateTime(2026, 9, 23, 9, 5), 'son görülme bugün 09:05'),
+      (DateTime(2026, 9, 22, 23, 59), 'son görülme dün 23:59'),
+      (DateTime(2026, 3, 4, 12), 'son görülme 04.03.26'),
     ]) {
       test(want, () => expect(lastSeenText(tr, at, now), want));
     }

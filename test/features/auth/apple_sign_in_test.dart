@@ -269,7 +269,7 @@ void main() {
       expectProvider(
         await repo().signInWithApple(),
         userCanceled: false,
-        message: 'Sign-in failed. Please try again.',
+        message: 'Could not sign in. Try again.',
       );
       expect(gotrue.grants, hasLength(1));
     },

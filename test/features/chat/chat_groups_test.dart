@@ -205,7 +205,10 @@ void main() {
       await tester.pumpAndSettle();
       await tapCreate(tester);
 
-      expect(find.textContaining('Not allowed'), findsAtLeastNWidgets(1));
+      expect(
+        find.textContaining("You don't have permission to do that."),
+        findsAtLeastNWidgets(1),
+      );
       expect(find.byType(MessageScreen), findsNothing);
       expect(
         container.read(openConversationProvider),

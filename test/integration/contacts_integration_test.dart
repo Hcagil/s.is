@@ -38,7 +38,7 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 const _password = 'integration-password';
-const _rateLimited = 'Too many searches, try again later.';
+const _rateLimited = 'Too many searches. Try again in a little while.';
 
 Future<SupabaseClient> signedIn(String email) async {
   final client = SupabaseClient(

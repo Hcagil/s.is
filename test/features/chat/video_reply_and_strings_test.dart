@@ -148,7 +148,7 @@ void main() {
       expect(l10nEn.videoSendCount(3), equals('Send (3)'));
       expect(l10nEn.videoCompressing(42), equals('Compressing 42%'));
       expect(l10nEn.videoSending(42), equals('Sending 42%'));
-      expect(l10nEn.videoWaitingNetwork, equals('Waiting for network'));
+      expect(l10nEn.videoWaitingNetwork, equals('Waiting for connection'));
       expect(l10nEn.videoTooLong(1), isNot(equals(l10nEn.videoTooLong(3))));
       expect(l10nEn.videoTooLong(3), contains('3'));
 

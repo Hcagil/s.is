@@ -3852,7 +3852,7 @@ class ContactsFake implements ContactsRepository {
   }
 
   static const rateLimited = ProviderFailure(
-    'Too many searches, try again later.',
+    'Too many searches. Try again in a little while.',
   );
 
   @override

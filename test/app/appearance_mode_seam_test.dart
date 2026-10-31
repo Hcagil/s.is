@@ -234,7 +234,7 @@ void main() {
     await pumpApp(t);
     await openCard(t);
     expect(
-      underContaining('appearance-mode-note', 'keeps its own colours'),
+      underContaining('appearance-mode-note', 'keeps its own colors'),
       findsOneWidget,
     );
   });
@@ -246,12 +246,9 @@ void main() {
     );
     await openAppearance(t);
     expect(under('appearance-mode', 'Açık veya koyu'), findsOneWidget);
-    expect(under('appearance-mode', 'Sistem varsayılanı'), findsOneWidget);
+    expect(under('appearance-mode', 'Telefonu izle'), findsOneWidget);
     await tapKey(t, 'appearance-mode');
-    expect(
-      under('appearance-mode-system', 'Sistem varsayılanı'),
-      findsOneWidget,
-    );
+    expect(under('appearance-mode-system', 'Telefonu izle'), findsOneWidget);
     expect(under('appearance-mode-light', 'Açık'), findsOneWidget);
     expect(under('appearance-mode-dark', 'Koyu'), findsOneWidget);
   });

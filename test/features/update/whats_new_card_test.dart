@@ -155,7 +155,7 @@ void main() {
         installed: '0.31',
         locale: const Locale('tr'),
       );
-      expect(find.text('Kurulu (sürümünüz)'), findsOneWidget);
+      expect(find.text('Yüklü (senin sürümün)'), findsOneWidget);
     });
 
     for (final other in ['0.30.17', '0.31.1', '0.3']) {
@@ -423,7 +423,7 @@ void main() {
         installed: '0.31',
         locale: const Locale('tr'),
       );
-      expect(find.text('Güncelsiniz'), findsOneWidget);
+      expect(find.text('Uygulaman güncel'), findsOneWidget);
     });
 
     for (final installed in ['0.30.17', '0.30', '0.3']) {

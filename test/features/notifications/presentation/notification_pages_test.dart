@@ -178,7 +178,7 @@ void main() {
 
       for (final (key, title, example) in [
         ('notif-preview-full', 'Name and message', 'Ayşe: See you at 8'),
-        ('notif-preview-sender', 'Only who it is from', 'Ayşe: New message'),
+        ('notif-preview-sender', 'Sender only', 'Ayşe: New message'),
         ('notif-preview-none', 'No details', 'SIS: New message'),
       ]) {
         await t.ensureVisible(byKey(key));

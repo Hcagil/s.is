@@ -239,10 +239,10 @@ void main() {
       await pumpApp(t, photos: photos);
       await openWallpaper(t);
       await reveal(t, byKey('wallpaper-reset'));
-      expect(find.text('Reset Chat Backgrounds'), findsOneWidget);
+      expect(find.text('Reset chat wallpaper'), findsOneWidget);
       expect(
         find.text(
-          'Remove all uploaded chat backgrounds and restore the pre-installed ones.',
+          'Removes the chat wallpapers you added and restores the built-in ones.',
         ),
         findsOneWidget,
       );
@@ -258,11 +258,8 @@ void main() {
       await openWallpaper(t);
       await tapKey(t, 'wallpaper-reset');
       expect(byKey('wallpaper-reset-card'), findsOneWidget);
-      expect(find.text('Reset chat backgrounds'), findsOneWidget);
-      expect(
-        find.text('Are you sure you want to reset all chat backgrounds?'),
-        findsOneWidget,
-      );
+      expect(find.text('Reset chat wallpaper?'), findsOneWidget);
+      expect(find.text('Your own wallpapers will be removed.'), findsOneWidget);
       await tapKey(t, 'wallpaper-reset-cancel');
       expect(byKey('wallpaper-reset-card'), findsNothing);
       expect(look(t).wallpaper, pictureWall);
@@ -361,13 +358,11 @@ void main() {
       );
       await openWallpaper(t);
       await reveal(t, byKey('wallpaper-reset'));
-      expect(find.text('Sohbet Arka Planlarını Sıfırla'), findsOneWidget);
+      expect(find.text('Sohbet duvar kâğıdını sıfırla'), findsOneWidget);
       await tapKey(t, 'wallpaper-reset');
-      expect(find.text('Sohbet arka planlarını sıfırla'), findsOneWidget);
+      expect(find.text('Sohbet duvar kâğıdı sıfırlansın mı?'), findsOneWidget);
       expect(
-        find.text(
-          'Tüm sohbet arka planlarını sıfırlamak istediğine emin misin?',
-        ),
+        find.text('Eklediğin duvar kâğıtları kaldırılacak.'),
         findsOneWidget,
       );
       expect(

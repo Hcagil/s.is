@@ -38,13 +38,13 @@ const sentinel = 'SENTINEL-7f3a-raw-exception-text';
 ProviderFailure expectFailed(
   Result<void> r, {
   required bool userCanceled,
-  String message = signInFailedMessage,
+  String? message,
 }) {
   expect(r, isA<Err<void>>(), reason: '$r');
   final f = (r as Err<void>).failure;
   expect(f, isA<ProviderFailure>());
   expect(f.message, isNot(contains(sentinel)));
-  expect(f.message, message);
+  expect(f.message, message ?? signInFailedMessage);
   expect((f as ProviderFailure).userCanceled, userCanceled);
   return f;
 }
@@ -87,8 +87,8 @@ void main() {
   });
 
   test('the two sentences are the ones the contract names', () {
-    expect(signInFailedMessage, 'Sign-in failed. Please try again.');
-    expect(signInCanceledMessage, 'Sign-in was cancelled. Please try again.');
+    expect(signInFailedMessage, 'Could not sign in. Try again.');
+    expect(signInCanceledMessage, 'Sign-in canceled.');
   });
 
   group('Android (useNonce false)', () {

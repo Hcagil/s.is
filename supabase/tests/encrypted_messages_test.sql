@@ -514,11 +514,11 @@ select is(try(format($q$insert into public.messages(id, conversation_id, sender_
                      mid('P2'), g('AC'))), 'ok', 'ann: plain to cat');
 reset role;
 select is((select encrypted::text || '|' || body from app_private.push_targets_for_message(mid('P1')) where user_id = u('bob')),
-  'true|New message', 'ciphertext, preview unset (full): encrypted true, body exactly New message');
+  'true|Yeni mesaj', 'ciphertext, preview unset (full): encrypted true, body exactly Yeni mesaj (no app language)');
 select is((select encrypted::text || '|' || body from app_private.push_targets_for_message(mid('P3')) where user_id = u('gus')),
-  'true|New message', 'ciphertext, preview sender: encrypted true, New message');
+  'true|Yeni mesaj', 'ciphertext, preview sender: encrypted true, Yeni mesaj');
 select is((select encrypted::text || '|' || coalesce(body, '<null>') from app_private.push_targets_for_message(mid('P4')) where user_id = u('hal')),
-  'true|New message', 'ciphertext, preview none: encrypted true, New message');
+  'true|Yeni mesaj', 'ciphertext, preview none: encrypted true, Yeni mesaj');
 select is((select encrypted from app_private.push_targets_for_message(mid('P2')) where user_id = u('cat')),
   false, 'a plain row: encrypted false');
 select is((select encrypted from app_private.push_targets_for_message(mid('abplain')) where user_id = u('bob')),
@@ -533,7 +533,7 @@ select is((select count(*) from unnest(array['P1','P2','P3','P4']) m,
   'no push body holds a lock emoji');
 set local role service_role;
 select is((select encrypted::text || '|' || body from public.push_targets(mid('P1')) where user_id = u('bob')),
-  'true|New message', 'public.push_targets: encrypted true, body exactly New message');
+  'true|Yeni mesaj', 'public.push_targets: encrypted true, body exactly Yeni mesaj');
 select is((select encrypted from public.push_targets(mid('P2')) where user_id = u('cat')),
   false, 'public.push_targets: encrypted false for the plain row');
 reset role;

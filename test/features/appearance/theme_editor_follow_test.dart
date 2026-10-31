@@ -247,11 +247,11 @@ void main() {
         isSemantics(label: 'Vurgu rengini kullan'),
       );
       expect(find.byTooltip('Vurgu rengini kullan'), findsOneWidget);
-      expect(find.text('Balon, vurgu renginizi izler.'), findsOneWidget);
+      expect(find.text('Balon vurgu rengini izler.'), findsOneWidget);
       await t.tap(byKey('swatch-mine-FFFFFF'));
       await t.pumpAndSettle();
       expect(
-        find.text('Bu renk, vurguyu değiştirseniz de sabit kalır.'),
+        find.text('Vurgu rengini değiştirsen de bu renk sabit kalır.'),
         findsOneWidget,
       );
       h.dispose();

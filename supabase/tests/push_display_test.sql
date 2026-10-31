@@ -1,5 +1,5 @@
 begin;
-select plan(52);
+select plan(53);
 
 -- Who shows a push itself (v0.12), and why older builds must not go quiet.
 --
@@ -11,7 +11,7 @@ select plan(52);
 -- 1. device_tokens.shows_itself -- false for every device that did not say
 --    otherwise, including every row written before this column existed.
 -- 2. register_device_token(device_token, device_platform, shows_itself
---    default false) is
+--    default false, reaction_push default false) is
 --    the ONLY register_device_token. An older build keeps calling it with two
 --    arguments (by name, through PostgREST) and must land on false; a second
 --    two-argument overload left beside it would make that call ambiguous or,
@@ -93,8 +93,10 @@ select is((select shows_itself from app_private.device_tokens where token = 'dot
 delete from app_private.device_tokens where token = 'dot-legacy-row';
 
 -- 2 one function, three arguments, and who may call it -------------------------
-select has_function('public', 'register_device_token', array['text', 'text', 'boolean'],
-                    'register_device_token takes token, platform and shows_itself');
+select has_function('public', 'register_device_token', array['text', 'text', 'boolean', 'boolean'],
+                    'register_device_token takes token, platform, shows_itself and reaction_push');
+select hasnt_function('public', 'register_device_token', array['text', 'text', 'boolean'],
+                      'the three-argument register_device_token is gone (reaction_push added a fourth)');
 select hasnt_function('public', 'register_device_token', array['text', 'text'],
                       'the two-argument register_device_token is gone');
 select is((select count(*) from pg_proc
@@ -106,15 +108,15 @@ select is((select count(*) from pg_proc
 select is((select proargnames::text from pg_proc
             where proname = 'register_device_token'
               and pronamespace = 'public'::regnamespace),
-          '{device_token,device_platform,shows_itself}',
-          'its parameters keep the names older builds send: device_token, device_platform (+ shows_itself)');
-select function_privs_are('public', 'register_device_token', array['text', 'text', 'boolean'],
+          '{device_token,device_platform,shows_itself,reaction_push}',
+          'its parameters keep the names older builds send: device_token, device_platform (+ shows_itself, reaction_push)');
+select function_privs_are('public', 'register_device_token', array['text', 'text', 'boolean', 'boolean'],
                           'anon', '{}'::text[], 'anon holds no execute on register_device_token');
-select function_privs_are('public', 'register_device_token', array['text', 'text', 'boolean'],
+select function_privs_are('public', 'register_device_token', array['text', 'text', 'boolean', 'boolean'],
                           'authenticated', '{EXECUTE}'::text[],
                           'authenticated may execute register_device_token');
 select is((select has_function_privilege('public',
-             'public.register_device_token(text, text, boolean)', 'execute')),
+             'public.register_device_token(text, text, boolean, boolean)', 'execute')),
           false, 'PUBLIC holds no execute: anon cannot reach it through the default grant');
 set local role anon;
 select throws_ok($$select public.register_device_token('anon-display-token', 'android', true)$$,

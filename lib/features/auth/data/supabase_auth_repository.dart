@@ -16,8 +16,12 @@ import '../domain/member.dart';
 /// What a member reads when sign-in fails. SDK and backend error text can carry
 /// a token or an ID, so it never reaches the screen or the log: only the type
 /// or code does.
-const signInFailedMessage = 'Sign-in failed. Please try again.';
-const signInCanceledMessage = 'Sign-in was cancelled. Please try again.';
+String get signInFailedMessage => failureText(
+  'Could not sign in. Try again.',
+  'Oturum açılamadı. Tekrar dene.',
+);
+String get signInCanceledMessage =>
+    failureText('Sign-in canceled.', 'Oturum açma iptal edildi.');
 
 /// [AuthRepository] backed by Google native sign-in and Supabase Auth.
 final class SupabaseAuthRepository implements AuthRepository {
@@ -102,12 +106,12 @@ final class SupabaseAuthRepository implements AuthRepository {
       return _googleFailure(e);
     } catch (e) {
       log('Google sign-in failed: ${e.runtimeType}', name: 'sis.auth');
-      return const Err(ProviderFailure(signInFailedMessage));
+      return Err(ProviderFailure(signInFailedMessage));
     }
     final idToken = user.authentication.idToken;
     if (idToken == null) {
       log('Google sign-in returned no ID token', name: 'sis.auth');
-      return const Err(ProviderFailure(signInFailedMessage));
+      return Err(ProviderFailure(signInFailedMessage));
     }
     try {
       final auth =
@@ -134,7 +138,7 @@ final class SupabaseAuthRepository implements AuthRepository {
       );
       // The sign-up hook refuses an address that is not invited (403).
       if (e.statusCode == '403') return const Err(DeniedFailure());
-      return const Err(ProviderFailure(signInFailedMessage));
+      return Err(ProviderFailure(signInFailedMessage));
     }
   }
 
@@ -178,12 +182,12 @@ final class SupabaseAuthRepository implements AuthRepository {
       );
     } catch (e) {
       log('Apple sign-in failed: ${e.runtimeType}', name: 'sis.auth');
-      return const Err(ProviderFailure(signInFailedMessage));
+      return Err(ProviderFailure(signInFailedMessage));
     }
     final idToken = credential.identityToken;
     if (idToken == null) {
       log('Apple sign-in returned no ID token', name: 'sis.auth');
-      return const Err(ProviderFailure(signInFailedMessage));
+      return Err(ProviderFailure(signInFailedMessage));
     }
     // A hidden email is refused here, before anything reaches the server (the
     // sign-up hook refuses it too).
@@ -207,7 +211,7 @@ final class SupabaseAuthRepository implements AuthRepository {
         name: 'sis.auth',
       );
       if (e.statusCode == '403') return const Err(DeniedFailure());
-      return const Err(ProviderFailure(signInFailedMessage));
+      return Err(ProviderFailure(signInFailedMessage));
     }
   }
 

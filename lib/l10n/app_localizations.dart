@@ -1469,13 +1469,13 @@ abstract class AppLocalizations {
   /// A quoted message that is only a photo
   ///
   /// In en, this message translates to:
-  /// **'📷 Photo'**
+  /// **'Photo'**
   String get quotePhoto;
 
   /// A quoted photo album
   ///
   /// In en, this message translates to:
-  /// **'📷 {count} photos'**
+  /// **'{count} photos'**
   String quotePhotos(int count);
 
   /// Photo viewer menu, a photo of an album: delete it for everyone (the album's other photos stay)
@@ -2885,7 +2885,7 @@ abstract class AppLocalizations {
   /// Chat list preview of a poll message
   ///
   /// In en, this message translates to:
-  /// **'📊 Poll: {question}'**
+  /// **'Poll: {question}'**
   String pollPreviewLine(String question);
 
   /// Title of the send-a-contact page
@@ -3221,8 +3221,38 @@ abstract class AppLocalizations {
   /// Chat list preview of a voice message
   ///
   /// In en, this message translates to:
-  /// **'🎤 Voice message'**
+  /// **'Voice message'**
   String get voicePreviewLine;
+
+  /// Summary notification when one message is waiting
+  ///
+  /// In en, this message translates to:
+  /// **'1 new message'**
+  String get notifSummaryOne;
+
+  /// Summary notification when several messages wait in one chat
+  ///
+  /// In en, this message translates to:
+  /// **'{count} new messages'**
+  String notifSummaryMany(int count);
+
+  /// Summary notification when messages wait in several chats
+  ///
+  /// In en, this message translates to:
+  /// **'{count} new messages from {chats} chats'**
+  String notifSummaryChats(int count, int chats);
+
+  /// Name of the summary notification channel
+  ///
+  /// In en, this message translates to:
+  /// **'Summary'**
+  String get notifChannelSummary;
+
+  /// Description of the message notification channel
+  ///
+  /// In en, this message translates to:
+  /// **'New messages'**
+  String get notifChannelMessages;
 
   /// Notice when the button was released too early
   ///
@@ -3311,13 +3341,13 @@ abstract class AppLocalizations {
   /// Chat list preview of a sticker message
   ///
   /// In en, this message translates to:
-  /// **'😀 Sticker'**
+  /// **'Sticker'**
   String get stickerPreviewLine;
 
   /// Chat list preview of a shared sticker album
   ///
   /// In en, this message translates to:
-  /// **'📂 Sticker album'**
+  /// **'Sticker album'**
   String get stickerAlbumPreviewLine;
 
   /// Tooltip of the sticker button beside the message box

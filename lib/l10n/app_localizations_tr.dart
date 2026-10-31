@@ -749,11 +749,11 @@ class AppLocalizationsTr extends AppLocalizations {
   String get quoteDeleted => 'Bu mesaj silindi';
 
   @override
-  String get quotePhoto => '📷 Fotoğraf';
+  String get quotePhoto => 'Fotoğraf';
 
   @override
   String quotePhotos(int count) {
-    return '📷 $count fotoğraf';
+    return '$count fotoğraf';
   }
 
   @override
@@ -1607,7 +1607,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String pollPreviewLine(String question) {
-    return '📊 Anket: $question';
+    return 'Anket: $question';
   }
 
   @override
@@ -1814,7 +1814,26 @@ class AppLocalizationsTr extends AppLocalizations {
   String get videoLoadMoreFailed => 'Daha fazla video yüklenemedi.';
 
   @override
-  String get voicePreviewLine => '🎤 Sesli mesaj';
+  String get voicePreviewLine => 'Sesli mesaj';
+
+  @override
+  String get notifSummaryOne => '1 yeni mesaj';
+
+  @override
+  String notifSummaryMany(int count) {
+    return '$count yeni mesaj';
+  }
+
+  @override
+  String notifSummaryChats(int count, int chats) {
+    return '$chats sohbetten $count yeni mesaj';
+  }
+
+  @override
+  String get notifChannelSummary => 'Özet';
+
+  @override
+  String get notifChannelMessages => 'Yeni mesajlar';
 
   @override
   String get voiceHoldHint => 'Kaydetmek için basılı tut, göndermek için bırak';
@@ -1860,10 +1879,10 @@ class AppLocalizationsTr extends AppLocalizations {
   String get voiceSend => 'Sesli mesajı gönder';
 
   @override
-  String get stickerPreviewLine => '😀 Çıkartma';
+  String get stickerPreviewLine => 'Çıkartma';
 
   @override
-  String get stickerAlbumPreviewLine => '📂 Çıkartma albümü';
+  String get stickerAlbumPreviewLine => 'Çıkartma albümü';
 
   @override
   String get stickerButtonTooltip => 'Çıkartmalar';

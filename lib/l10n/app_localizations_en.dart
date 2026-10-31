@@ -753,11 +753,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quoteDeleted => 'This message was deleted';
 
   @override
-  String get quotePhoto => '📷 Photo';
+  String get quotePhoto => 'Photo';
 
   @override
   String quotePhotos(int count) {
-    return '📷 $count photos';
+    return '$count photos';
   }
 
   @override
@@ -1634,7 +1634,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String pollPreviewLine(String question) {
-    return '📊 Poll: $question';
+    return 'Poll: $question';
   }
 
   @override
@@ -1840,7 +1840,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoLoadMoreFailed => 'Could not load more videos.';
 
   @override
-  String get voicePreviewLine => '🎤 Voice message';
+  String get voicePreviewLine => 'Voice message';
+
+  @override
+  String get notifSummaryOne => '1 new message';
+
+  @override
+  String notifSummaryMany(int count) {
+    return '$count new messages';
+  }
+
+  @override
+  String notifSummaryChats(int count, int chats) {
+    return '$count new messages from $chats chats';
+  }
+
+  @override
+  String get notifChannelSummary => 'Summary';
+
+  @override
+  String get notifChannelMessages => 'New messages';
 
   @override
   String get voiceHoldHint => 'Hold to record, release to send';
@@ -1886,10 +1905,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get voiceSend => 'Send voice message';
 
   @override
-  String get stickerPreviewLine => '😀 Sticker';
+  String get stickerPreviewLine => 'Sticker';
 
   @override
-  String get stickerAlbumPreviewLine => '📂 Sticker album';
+  String get stickerAlbumPreviewLine => 'Sticker album';
 
   @override
   String get stickerButtonTooltip => 'Stickers';

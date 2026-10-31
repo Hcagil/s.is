@@ -25,6 +25,8 @@ final class SupabasePushRegistry implements PushRegistry {
           // Android draws pushes itself, grouped: send it data only. An
           // iPhone is shown a regular notification by the system.
           'shows_itself': platform == 'android',
+          // Android draws a reaction push itself (kind 'reaction'); the server sends reaction pushes only to a device that says so.
+          'reaction_push': platform == 'android',
         },
       );
       return const Ok(null);

@@ -1,10 +1,12 @@
 import 'dart:convert';
 
+import 'package:characters/characters.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../chat/domain/encrypted_message_repository.dart';
 import '../../chat/domain/message_envelope.dart';
+import '../../chat/domain/reaction_envelope.dart';
 import '../domain/key_engine.dart';
 import 'olm_key_engine.dart';
 import 'olm_peek_store.dart';
@@ -235,4 +237,136 @@ Future<String?> peekEncryptedText({
     onInbox?.call(code);
   }
   return text;
+}
+
+/// An opened reaction: its emoji and, when the reacted message is mine and readable, a short quote of it.
+typedef PeekedReaction = ({String emoji, String? quote});
+
+/// Opens a reaction push's ciphertext with a session this phone already stores, in memory only: nothing is written. Returns the emoji, or null with a fixed reason code through [onFail] (never text, ids or keys). The chat's peer (from the phone's own copy) must be [reactorId]; only that peer's sessions are tried.
+// shortcut: a reaction that opens a brand-new session shows the generic text (no account / createInbound path); upgrade if testers miss it.
+Future<String?> peekReactionEmoji({
+  required PeekRows rows,
+  required List<int> pickleKey,
+  required String messageId,
+  required String reactorId,
+  required String ciphertext,
+  required int olmType,
+  SessionKeyEngine? engine,
+  void Function(String reason)? onFail,
+}) async {
+  try {
+    final peer = rows.peerUserId;
+    if (peer == null || peer != reactorId) {
+      onFail?.call('no_peer');
+      return null;
+    }
+    if (olmType != 0 && olmType != 1) {
+      onFail?.call('decrypt_fail');
+      return null;
+    }
+    final cipher = OlmCipher(olmType, base64.decode(ciphertext));
+    engine ??= OlmKeyEngine();
+    String? open(List<int> plain) {
+      final emoji = decodeReactionEnvelope(
+        utf8.decode(plain),
+        messageId: messageId,
+        userId: peer,
+      );
+      if (emoji == null) onFail?.call('decrypt_fail');
+      return emoji;
+    }
+
+    if (olmType == 1) {
+      for (final s in rows.sessions) {
+        if (s.peerUserId != peer) continue;
+        try {
+          final session = await engine.restoreSession(s.pickle, pickleKey);
+          return open(session.decrypt(cipher));
+        } on KeyEngineException {
+          continue;
+        }
+      }
+      onFail?.call(rows.sessions.isEmpty ? 'no_session' : 'decrypt_fail');
+      return null;
+    }
+    final id = await engine.preKeySessionId(cipher);
+    final session = rows.sessions.where((s) => s.sessionId == id).firstOrNull;
+    if (session == null) {
+      onFail?.call('no_session');
+      return null;
+    }
+    if (session.peerUserId != peer) {
+      onFail?.call('decrypt_fail');
+      return null;
+    }
+    final restored = await engine.restoreSession(session.pickle, pickleKey);
+    final List<int> plain;
+    try {
+      plain = restored.decrypt(cipher);
+    } on KeyEngineException {
+      onFail?.call('decrypt_fail');
+      return null;
+    }
+    return open(plain);
+  } catch (e) {
+    onFail?.call('other:${e.runtimeType}');
+    return null;
+  }
+}
+
+/// Reads the peek rows of the reacted message and opens the reaction (see [peekReactionEmoji]). Writes nothing (no push_inbox, no session). The quote is the reacted message's stored body only when it is my own message ([ownerId] sent it), not deleted, not the locked placeholder and not blank; cut to 60 characters plus an ellipsis.
+Future<PeekedReaction?> peekReaction({
+  required String storePath,
+  required String storeKeyHex,
+  required List<int> pickleKey,
+  required String ownerId,
+  required String conversationId,
+  required String messageId,
+  required String reactorId,
+  required String ciphertext,
+  required int olmType,
+  void Function(String reason)? onFail,
+  void Function(String name)? onPeerName,
+}) async {
+  try {
+    final rows = readPeekRows(
+      path: storePath,
+      keyHex: storeKeyHex,
+      conversationId: conversationId,
+      messageId: messageId,
+    );
+    if (rows == null) {
+      onFail?.call('rows_null');
+      return null;
+    }
+    if (rows.ownerId != ownerId) {
+      onFail?.call('owner_mismatch');
+      return null;
+    }
+    final name = rows.peerName;
+    if (name != null) onPeerName?.call(name);
+    final emoji = await peekReactionEmoji(
+      rows: rows,
+      pickleKey: pickleKey,
+      messageId: messageId,
+      reactorId: reactorId,
+      ciphertext: ciphertext,
+      olmType: olmType,
+      onFail: onFail,
+    );
+    if (emoji == null) return null;
+    final body = rows.storedBody;
+    String? quote;
+    if (rows.storedSenderId == ownerId &&
+        body != null &&
+        !isLockedPlaceholder(body) &&
+        body.trim().isNotEmpty) {
+      final cut = body.characters.take(60).toString();
+      quote = cut.length < body.length ? '$cut…' : cut;
+    }
+    return (emoji: emoji, quote: quote);
+  } catch (e) {
+    onFail?.call('other:${e.runtimeType}');
+    return null;
+  }
 }

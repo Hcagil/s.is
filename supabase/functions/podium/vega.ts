@@ -6,7 +6,7 @@ export class VegaError extends Error { constructor(readonly code: VegaErrorCode)
  * returns the money total exactly as Vega prints it.
  */
 export async function fetchVegaTotal(day: string, prev: boolean): Promise<string> {
-  void day; // unused: durum picks the business day on Vega's side (shortcut: tarihBas/tarihBitis not sent; add if the real call shows durum alone is not enough)
+  void day; // shortcut: durum picks the day on Vega's side; tarihBaslangic/tarihBitis not sent, add if the real call shows durum alone is not enough
   const baseUrl = Deno.env.get('VEGA_BASE_URL');
   const username = Deno.env.get('VEGA_USERNAME');
   const password = Deno.env.get('VEGA_PASSWORD');
@@ -25,7 +25,10 @@ export async function fetchVegaTotal(day: string, prev: boolean): Promise<string
     const cookie = res.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
     if (res.status >= 400 || cookie === '') throw new VegaError('login');
     const res2 = await fetch(`${base}/OzetRaporlar/List?durum=${prev ? 'dun' : 'bugun'}`, { redirect: 'manual', signal, headers: { Cookie: cookie } });
-    if (res2.status >= 300) { await res2.body?.cancel(); throw new VegaError('login'); } // a redirect = session not accepted
+    if (res2.status >= 300) {
+      await res2.body?.cancel();
+      throw new VegaError('login'); // a redirect = session not accepted
+    }
     const html = await res2.text();
     const m = html.match(/Toplam Ciro<\/div>\s*<[^>]*class="[^"]*dash-stat-value[^"]*"[^>]*>\s*([0-9.,]+)\s*</);
     if (!m) throw new VegaError('shape');

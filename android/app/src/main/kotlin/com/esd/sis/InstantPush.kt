@@ -90,7 +90,6 @@ object InstantPush {
             context.resources.getText(R.string.summary_many).toString(),
             context.resources.getText(R.string.summary_chats).toString(),
         )
-
     /** The channel's name in the phone's settings. */
     fun alertChannelName(
         a: Alert,

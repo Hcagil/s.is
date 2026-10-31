@@ -278,9 +278,9 @@ class MainActivity : FlutterActivity() {
             when {
                 uri == null -> result.success(null)
                 uri == RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION) ->
-                    result.success(mapOf("uri" to null, "name" to "System default"))
+                    result.success(mapOf("uri" to null, "name" to getString(R.string.tone_default)))
                 else -> result.success(
-                    mapOf("uri" to uri.toString(), "name" to (RingtoneManager.getRingtone(this, uri)?.getTitle(this) ?: "Custom")),
+                    mapOf("uri" to uri.toString(), "name" to (RingtoneManager.getRingtone(this, uri)?.getTitle(this) ?: getString(R.string.tone_custom))),
                 )
             }
             return

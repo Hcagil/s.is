@@ -6,4 +6,16 @@
     <string name="action_not_sent">Gönderilemedi</string>
     <string name="notification_fallback">Yeni mesaj</string>
     <string name="notification_public_title">SIS</string>
+    <string name="channel_messages">Mesajlar</string>
+    <string name="channel_custom_tone">Mesajlar (özel ses)</string>
+    <string name="channel_silent">Mesajlar (sessiz)</string>
+    <string name="channel_no_vibration">, titreşimsiz</string>
+    <string name="channel_description">Yeni mesajlar</string>
+    <string name="channel_summary">Özet</string>
+    <string name="person_you">Sen</string>
+    <string name="tone_default">Sistem varsayılanı</string>
+    <string name="tone_custom">Özel</string>
+    <string name="summary_one">1 yeni mesaj</string>
+    <string name="summary_many">%1$d yeni mesaj</string>
+    <string name="summary_chats">%2$d sohbetten %1$d yeni mesaj</string>
 </resources>

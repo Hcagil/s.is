@@ -32,41 +32,54 @@ Future<void> _run(String exe, List<String> args) async {
 }
 
 /// The cached SQLite3 Multiple Ciphers object file.
+// Built in a private folder and renamed last, so a cut-short run never leaves
+// a half file that is reused.
 Future<String> _sqliteObject() async {
   _dir.createSync(recursive: true);
   final obj = '${_dir.path}/sqlite3mc-$_version.o';
   if (!File(obj).existsSync()) {
-    final zip = '${_dir.path}/amalgamation.zip';
-    await _run('curl', [
-      '-fsSL',
-      '--retry',
-      '3',
-      '-o',
-      zip,
-      'https://github.com/utelle/SQLite3MultipleCiphers/releases/download/'
-          'v$_version/sqlite3mc-$_version-sqlite-$_sqlite-amalgamation.zip',
-    ]);
-    final sum = await Process.run('sha256sum', [zip]);
-    expect((sum.stdout as String).split(' ').first, _sha256);
-    await _run('unzip', [
-      '-q',
-      '-o',
-      zip,
-      'sqlite3mc_amalgamation.c',
-      'sqlite3.h',
-      '-d',
-      _dir.path,
-    ]);
-    await _run('clang', [
-      '-c',
-      '-fPIC',
-      '-O1',
-      '-w',
-      ..._flags,
-      '${_dir.path}/sqlite3mc_amalgamation.c',
-      '-o',
-      obj,
-    ]);
+    final work = _dir.createTempSync('build-');
+    try {
+      final zip = '${work.path}/amalgamation.zip';
+      await _run('curl', [
+        '-fsSL',
+        '--retry',
+        '3',
+        '-o',
+        zip,
+        'https://github.com/utelle/SQLite3MultipleCiphers/releases/download/'
+            'v$_version/sqlite3mc-$_version-sqlite-$_sqlite-amalgamation.zip',
+      ]);
+      final sum = await Process.run('sha256sum', [zip]);
+      expect((sum.stdout as String).split(' ').first, _sha256);
+      await _run('unzip', [
+        '-q',
+        '-o',
+        zip,
+        'sqlite3mc_amalgamation.c',
+        'sqlite3.h',
+        '-d',
+        work.path,
+      ]);
+      await _run('clang', [
+        '-c',
+        '-fPIC',
+        '-O1',
+        '-w',
+        ..._flags,
+        '${work.path}/sqlite3mc_amalgamation.c',
+        '-o',
+        '$obj.$pid.tmp',
+      ]);
+      // The other builders include the header from _dir.
+      File('${work.path}/sqlite3.h')
+          .copySync('${_dir.path}/sqlite3.h.$pid.tmp');
+      File('${_dir.path}/sqlite3.h.$pid.tmp')
+          .renameSync('${_dir.path}/sqlite3.h');
+      File('$obj.$pid.tmp').renameSync(obj);
+    } finally {
+      work.deleteSync(recursive: true);
+    }
   }
   return obj;
 }

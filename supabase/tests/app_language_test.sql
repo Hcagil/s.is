@@ -255,7 +255,7 @@ reset role; select debug_is(g('GMIX')); select as_('bot');
 select is(send(g('GMIX'), 'second mix'), 'second mix', 'dan switching to en does not resend it either');
 reset role;
 select is((select count(*) from public.messages where sender_id = u('bot') and conversation_id = g('GEN')
-             and (body like 'Merhaba, ben SIS Destek%' or body like 'Hello, I am SIS Destek%')),
+             and (body like 'Merhaba, ben SIS Destek%' or body like 'Hi, I''m SIS Support%')),
           1::bigint, 'GEN holds exactly one first line');
 
 -- 7 humans are never prefixed, whatever their language -----------------------

@@ -134,7 +134,7 @@ class PeekBudgetTest {
         assertEquals("secret one", line("c-b2"))
         offMain { InstantPush.show(app, extras("c-b3"), paced = false) }
         assertEquals(2, allowed.size)
-        assertEquals("🔒 New message", line("c-b3"))
+        assertEquals("New message", line("c-b3"))
     }
 
     @Test

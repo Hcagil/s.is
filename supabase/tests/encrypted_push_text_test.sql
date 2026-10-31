@@ -1,5 +1,5 @@
 begin;
-select plan(25);
+select plan(27);
 
 -- Encrypted push text (Private Chats 4b, 20261102120000_encrypted_push_text.sql).
 --
@@ -55,7 +55,7 @@ create function try(q text) returns text language plpgsql as $$
 begin execute q; return 'ok'; exception when others then return sqlstate; end $$;
 -- push_targets claims a message: a second call returns nothing. So each
 -- message is read ONCE, into snap, and the assertions read snap.
-create table public.f4b_snap(m text, user_id uuid, ciphertext text, olm_type smallint, encrypted boolean);
+create table public.f4b_snap(m text, user_id uuid, ciphertext text, olm_type smallint, encrypted boolean, body text);
 grant select, insert on public.f4b_snap to service_role;
 -- the row of [n] for message [m]: "ciphertext|olm_type", nulls as <null>.
 create function pt(m text, n text) returns text language sql stable as $$
@@ -114,7 +114,7 @@ select ok(pg_get_function_result('public.push_targets(uuid)'::regprocedure) like
 -- 2 the values, as service_role (the function's only caller) ---------------
 set local role service_role;
 insert into public.f4b_snap
-  select m, t.user_id, t.ciphertext, t.olm_type, t.encrypted
+  select m, t.user_id, t.ciphertext, t.olm_type, t.encrypted, t.body
     from unnest(array['pB','pC','pG','pH','eB0','eB1','eC1','eC0','eG1','eH0']) m,
          lateral public.push_targets(mid(m)) t;
 select is((select count(*) from public.f4b_snap where m = 'eB0' and user_id = u('bob')), 1::bigint,
@@ -123,6 +123,10 @@ select is(pt('eB0', 'bob'), 'QkJCMA==|0', 'preview unset + ciphertext row, olm_t
 select is(pt('eB1', 'bob'), 'QkJCMQ==|1', 'preview unset + ciphertext row, olm_type 1: the row''s ciphertext and 1');
 select is(pt('eC1', 'cat'), 'Q0NDMQ==|1', 'preview full + ciphertext row, olm_type 1: the row''s ciphertext and 1');
 select is(pt('eC0', 'cat'), 'Q0NDMA==|0', 'preview full + ciphertext row, olm_type 0: the row''s ciphertext and 0');
+select is((select string_agg(distinct body, ',') from public.f4b_snap where m in ('eC1', 'eC0') and user_id = u('cat')),
+  'New message', 'preview full set explicitly + ciphertext row: body exactly New message');
+select is((select count(*) from public.f4b_snap where m = 'eB0' and body = 'New message'), 1::bigint,
+  'preview unset + ciphertext row: body exactly New message');
 select is(pt('eG1', 'gus'), '<null>|<null>', 'preview sender + ciphertext row: both null');
 select is(pt('eH0', 'hal'), '<null>|<null>', 'preview none + ciphertext row: both null');
 select is((select encrypted from public.f4b_snap where m = 'eG1' and user_id = u('gus')), true,

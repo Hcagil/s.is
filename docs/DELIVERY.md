@@ -41,11 +41,14 @@ before any release beyond internal testing.
 | Trigger | Workflow | Holds secrets | Does |
 |---|---|---|---|
 | pull request, push to `main` | `ci.yml` | no | pattern check, format, analyze, Rust advisories and licences (cargo deny), tests, release bundle signed with a throwaway key; pgTAP and integration tests on database changes |
-| daily 09:00 UTC (12:00 Istanbul), or by hand for an urgent fix | `release.yml` | yes | see below |
+| CI passing on `main` (one release per Istanbul day), a daily catch-up, or by hand for an urgent fix | `release.yml` | yes | see below |
 
-`release.yml` runs once a day at 09:00 UTC (12:00 Turkey time) and by
-hand (*Actions → Release → Run workflow*, with a reason) for an urgent fix:
-a security hole or a crash for everyone (docs/DECISIONS.md, 2026-10-25).
+`release.yml` starts when CI passes on `main` and publishes at most one
+release per Istanbul calendar day. Catch-up runs at 09:17 and 10:43 UTC
+pick up a change that missed it. It can also be started by hand (*Actions →
+Release → Run workflow*, with a reason) for an urgent fix, which ships even
+after the day's release: a security hole or a crash for everyone
+(docs/DECISIONS.md, 2026-10-25).
 It releases the newest `main` commit whose CI passed on `main`, and only
 when the commits since the last release tag touch more than docs, Markdown
 or `.github/`; otherwise it ends green and publishes nothing. In order:
@@ -268,8 +271,8 @@ tool/ci_local.sh --database
 
 ## Runbook
 
-- **Ship:** merge a pull request into `main`. Nothing else. CI runs again on `main` (about ten minutes); the next day's 12:00 Istanbul release (09:00 UTC) ships every change merged since the last release, and the Play Console *Internal testing* track shows the new build within minutes of that. Phones receive it as a flexible in-app update.
-- **Ship an urgent fix now** (a security hole or a crash for everyone): after it merges and CI on `main` is green, *Actions → Release → Run workflow* on `main` with the reason. It ships everything merged since the last release, like the noon run.
+- **Ship:** merge a pull request into `main`. Nothing else. CI runs again on `main` (about ten minutes); the release starts as soon as that CI run is green and ships every change merged since the last release (one release per Istanbul day; a later merge waits for the next day), and the Play Console *Internal testing* track shows the new build within minutes of that. Phones receive it as a flexible in-app update.
+- **Ship an urgent fix now** (a security hole or a crash for everyone): after it merges and CI on `main` is green, *Actions → Release → Run workflow* on `main` with the reason. It ships everything merged since the last release, like the daily release; a reason of `daily` is not urgent and obeys the one-a-day rule.
 - **A release failed:** read the failed step first. A failure before *Apply database migrations* changed nothing anywhere — re-run the failed job (*Re-run failed jobs*; it keeps the same `versionCode`). A failure at the migration or upload step is also safe to re-run: `db push` skips migrations that are already applied. A failure only at *Tag and publish release notes* means the build is already on Play — do not re-run (Play rejects the same `versionCode` twice); create the tag by hand.
 - **The iOS job failed but Play succeeded:** the Play build is fine. Do not re-run the whole workflow (Play rejects the same `versionCode` twice); use *Re-run failed jobs*, which runs only `ios` again with the same build number. A build number App Store Connect has already accepted is never reused: if the upload itself got that far, ship the next release instead.
 - **Distribution to TestFlight groups failed** (job `distribute`; the build is uploaded, Play and `ios` are fine): re-run only that job (*Re-run failed jobs*). It is idempotent: a build already in a group or already submitted for beta review is not an error. A build App Store Connect could not process (`INVALID`) needs the next release. "Test Information" in the error means the owner fills in TestFlight, Test Information in App Store Connect once, then re-runs the job.

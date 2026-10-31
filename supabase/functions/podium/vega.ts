@@ -6,13 +6,34 @@ export class VegaError extends Error { constructor(readonly code: VegaErrorCode)
  * returns the money total exactly as Vega prints it.
  */
 export async function fetchVegaTotal(day: string, prev: boolean): Promise<string> {
-  void day; void prev;
+  void day; // unused: durum picks the business day on Vega's side (shortcut: tarihBas/tarihBitis not sent; add if the real call shows durum alone is not enough)
   const baseUrl = Deno.env.get('VEGA_BASE_URL');
   const username = Deno.env.get('VEGA_USERNAME');
   const password = Deno.env.get('VEGA_PASSWORD');
   if (!baseUrl || !username || !password) {
     throw new VegaError('config');
   }
-  // TODO(owner step): the page that holds the total is not known without credentials. Login form: POST /Authentication/LoginAction, fields UygulamaTipi=3, UserName, Password. Never put the password in a URL, never log request or response.
-  throw new VegaError('config'); // reader not built yet: 'config' is not counted toward the auto-off
+  const base = baseUrl.replace(/\/+$/, '');
+  const signal = AbortSignal.timeout(15000);
+  try {
+    const res = await fetch(`${base}/Authentication/LoginAction`, {
+      method: 'POST', redirect: 'manual', signal,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ UygulamaTipi: '3', UserName: username, Password: password })
+    });
+    await res.body?.cancel();
+    const cookie = res.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+    if (res.status >= 400 || cookie === '') throw new VegaError('login');
+    const res2 = await fetch(`${base}/OzetRaporlar/List?durum=${prev ? 'dun' : 'bugun'}`, { redirect: 'manual', signal, headers: { Cookie: cookie } });
+    if (res2.status >= 300) { await res2.body?.cancel(); throw new VegaError('login'); } // a redirect = session not accepted
+    const html = await res2.text();
+    const m = html.match(/Toplam Ciro<\/div>\s*<[^>]*class="[^"]*dash-stat-value[^"]*"[^>]*>\s*([0-9.,]+)\s*</);
+    if (!m) throw new VegaError('shape');
+    return m[1];
+  } catch (e) {
+    if (e instanceof VegaError) throw e;
+    const n = (e as { name?: string }).name;
+    if (n === 'TimeoutError' || n === 'AbortError') throw new VegaError('timeout');
+    throw e; // network error: index.ts counts it as 'other'
+  }
 }

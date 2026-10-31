@@ -5,6 +5,8 @@
 //
 // Alice owns the phone and the reacted message; Bob is her 1:1 peer and the
 // reactor. Bob's phone locks the reaction envelope with his real Olm session.
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -423,6 +425,28 @@ void main() {
     });
   });
 
+  // F2 (round 2): an emoji over 64 UTF-8 bytes is not opened (generic text).
+  group('F2 emoji size limit', () {
+    final at64 = '😀' * 16;
+    final at65 = '${'😀' * 14}❤️€';
+    test('64 bytes: opened', () async {
+      expect(utf8.encode(at64).length, 64);
+      await sessionsBothWays();
+      final r = await bobReacts(emoji: at64);
+      await alice.store.close();
+      expect((await peek(r))?.emoji, at64);
+    });
+    test('65 bytes: null with decrypt_fail', () async {
+      expect(utf8.encode(at65).length, 65);
+      await sessionsBothWays();
+      final r = await bobReacts(emoji: at65);
+      await alice.store.close();
+      final reasons = <String>[];
+      expect(await peek(r, reasons: reasons), isNull);
+      expect(reasons, ['decrypt_fail']);
+    });
+  });
+
   group('AC-12 writes nothing', () {
     test('after a peek the store file is byte-for-byte unchanged, no '
         'push_inbox or reaction_plains row, and the app still opens the '
@@ -530,6 +554,29 @@ void main() {
       expect(await alice.h.file.readAsBytes(), bytes);
       expect(count('push_inbox'), 0);
     });
+
+    test("F1: 'take' with a message_id that is not a UUID: bad_args, no "
+        'emoji, no quote', () async {
+      await sessionsBothWays();
+      await storeOnAlice('See you at 6', id: 'm-not-uuid');
+      final r = await bobReacts(messageId: 'm-not-uuid');
+      await alice.store.close();
+      final done = await runPeekMain({...take(r), 'message_id': 'm-not-uuid'});
+      expect(done['emoji'], isNull);
+      expect(done['quote'], isNull);
+      expect(done['reason'], 'bad_args');
+    });
+
+    test(
+      "F1: 'take' with a reactor_id that is not a UUID: reason bad_args",
+      () async {
+        await sessionsBothWays();
+        final r = await bobReacts();
+        await alice.store.close();
+        final done = await runPeekMain(take(r, reactor: 'not-a-uuid'));
+        expect(done['reason'], 'bad_args');
+      },
+    );
 
     test("'take' with a reactor_id that is not a UUID: no emoji", () async {
       await sessionsBothWays();

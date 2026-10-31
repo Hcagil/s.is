@@ -257,4 +257,50 @@ void main() {
     );
     expect(decoded, isNull);
   });
+
+  // F2 (round 2): the emoji is at most maxReactionEmojiBytes (64) UTF-8 bytes;
+  // a longer one is refused on decode. Multi-byte characters hit the limit.
+  group('emoji size limit', () {
+    final at64 = '😀' * 16; // 16 x 4 bytes
+    final at65 = '${'😀' * 14}❤️€'; // 56 + 6 + 3 bytes
+    test('fixtures are 64 and 65 UTF-8 bytes', () {
+      expect(maxReactionEmojiBytes, 64);
+      expect(utf8.encode(at64).length, 64);
+      expect(utf8.encode(at65).length, 65);
+    });
+    test('an emoji of exactly 64 bytes decodes', () {
+      final json = encodeReactionEnvelope(
+        messageId: messageIdA,
+        userId: userIdU,
+        emoji: at64,
+      );
+      expect(
+        decodeReactionEnvelope(json, messageId: messageIdA, userId: userIdU),
+        at64,
+      );
+    });
+    test('an emoji of 65 bytes is refused (null)', () {
+      final json = jsonEncode({
+        'v': 1,
+        'k': 'r',
+        'i': messageIdA,
+        'u': userIdU,
+        'e': at65,
+        'p': ' ',
+      });
+      expect(
+        decodeReactionEnvelope(json, messageId: messageIdA, userId: userIdU),
+        isNull,
+      );
+      final encoded = encodeReactionEnvelope(
+        messageId: messageIdA,
+        userId: userIdU,
+        emoji: at65,
+      );
+      expect(
+        decodeReactionEnvelope(encoded, messageId: messageIdA, userId: userIdU),
+        isNull,
+      );
+    });
+  });
 }

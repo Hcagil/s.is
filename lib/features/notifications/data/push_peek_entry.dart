@@ -12,6 +12,10 @@ import '../../crypto/data/pickle_key.dart';
 /// Channel to the Android PeekRunner (PeekRunner.kt).
 const peekChannel = MethodChannel('com.esd.sis/peek');
 
+final _uuidShape = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+);
+
 /// Entry of the headless engine started for one encrypted push: asks Kotlin
 /// for the push fields ('take' returns a Map with String keys user_id,
 /// conversation_id, message_id, ct and ot (ot is a String like "0"), plus
@@ -43,6 +47,10 @@ Future<void> peekMain() async {
       reason = 'no_store_key';
     } else if (pickle == null) {
       reason = 'no_pickle_key';
+    } else if (a['kind'] == 'reaction' &&
+        !(_uuidShape.hasMatch(a['reactor_id'] ?? '') &&
+            _uuidShape.hasMatch(a['message_id'] ?? ''))) {
+      reason = 'bad_args';
     } else {
       if (a['kind'] == 'reaction') {
         final r = await peekReaction(

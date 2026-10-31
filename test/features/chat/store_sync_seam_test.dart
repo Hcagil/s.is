@@ -133,8 +133,24 @@ class _Feed extends ChatFake {
     return Ok(rows.length > limit ? rows.sublist(rows.length - limit) : rows);
   }
 
+  /// Restarted by each chat-list read; a sync pass reads the list just
+  /// before it waits for the open chat, so this times the wait itself.
+  final sinceList = Stopwatch();
+
+  /// Per chat, [sinceList] when its newest page was first asked for.
+  final firstPageAt = <String, Duration>{};
+
+  @override
+  Future<Result<List<Conversation>>> conversations() {
+    sinceList
+      ..reset()
+      ..start();
+    return super.conversations();
+  }
+
   @override
   Future<Result<List<Message>>> messages(String conversationId) async {
+    firstPageAt[conversationId] ??= sinceList.elapsed;
     if (conversationId == holdChat) {
       calls.add('held:$conversationId');
       await chatGate.future;
@@ -1145,17 +1161,19 @@ void main() {
 
     test('waits at most about 3 s', () async {
       final c = await openLoading();
-      final clock = Stopwatch()..start();
       unawaited(c.read(storeSyncProvider).run());
       await eventually(
         () => feed.count('messages:c1') > 0,
         reason: 'fill starts without c9',
         timeout: const Duration(seconds: 8),
       );
-      expect(clock.elapsed, greaterThan(const Duration(milliseconds: 2500)));
-      expect(clock.elapsed, lessThan(const Duration(milliseconds: 5000)));
+      // Timed from the pass's list read, not from run(): the store open
+      // before it is slow under load and is not part of the wait.
+      final waited = feed.firstPageAt['c1']!;
+      expect(waited, greaterThan(const Duration(milliseconds: 2500)));
+      expect(waited, lessThan(const Duration(milliseconds: 5000)));
       feed.chatGate.complete();
-    });
+    }, timeout: const Timeout(Duration(seconds: 60)));
   });
 
   // Slice 2 (t_428ad7c883): after a pass whose feed was read to its end with

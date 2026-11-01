@@ -436,7 +436,7 @@ void main() {
       (VideoRefusal.isPrivate, 'This video is private.'),
       (VideoRefusal.deleted, 'This video was deleted.'),
       (VideoRefusal.region, 'This video is not available in your region.'),
-      (VideoRefusal.login, 'This video needs a sign-in to watch.'),
+      (VideoRefusal.login, 'Sign in to watch this video.'),
       (VideoRefusal.other, 'This video could not be loaded.'),
     ]) {
       testWidgets('$refusal says why and offers YouTube', (t) async {

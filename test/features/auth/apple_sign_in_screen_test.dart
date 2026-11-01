@@ -24,8 +24,8 @@ const hiddenEn =
     "SIS needs your real email address. In Apple's sign-in choose Share My "
     'Email and try again.';
 const hiddenTr =
-    'SIS gerçek e-posta adresini gerektirir. Apple ile oturum açarken '
-    "E-postamı Paylaş'ı seçip tekrar dene.";
+    'SIS gerçek e-posta adresinizi gerektirir. Apple ile oturum açarken '
+    "E-postamı Paylaş'ı seçip tekrar deneyin.";
 final appleButton = find.byKey(const ValueKey('apple-sign-in'));
 final googleButton = find.text('Continue with Google');
 final ios = TargetPlatformVariant.only(TargetPlatform.iOS);

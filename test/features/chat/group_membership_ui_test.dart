@@ -512,7 +512,7 @@ void main() {
         expect(
           find.text(
             'Yeni üyelerin önceki mesajları görüp görmeyeceğini grup '
-            'yöneticisi belirler',
+            'yöneticileri belirler',
           ),
           findsOneWidget,
         );
@@ -601,7 +601,7 @@ void main() {
       expect(c.read(draftsProvider.notifier).draftFor('g1').text, isEmpty);
       final notices = find.textContaining('You left the group');
       expect(notices, findsOneWidget, reason: 'exactly one notice');
-      expect(textOf(notices), contains('were not delivered'));
+      expect(textOf(notices), contains('were not sent'));
       final sends = w.chat.sent.length;
       await t.pump(const Duration(seconds: 30));
       await settle(t);

@@ -133,7 +133,7 @@ void main() {
 
     // Before last tap, max note should not be visible
     expect(
-      find.text('You have reached the maximum number of options.'),
+      find.text('You have added the maximum number of options.'),
       findsNothing,
     );
 
@@ -145,7 +145,7 @@ void main() {
     expect(k('poll-option-11'), findsOneWidget);
     expect(k('poll-add-option'), findsNothing);
     expect(
-      find.text('You have reached the maximum number of options.'),
+      find.text('You have added the maximum number of options.'),
       findsOneWidget,
     );
   });
@@ -256,7 +256,7 @@ void main() {
       await t.pumpAndSettle();
       expect(t.takeException(), isNull);
     }
-    expect(find.text('En fazla seçenek sayısına ulaştın.'), findsOneWidget);
+    expect(find.text('En yüksek sayıda seçenek eklediniz.'), findsOneWidget);
     expect(t.takeException(), isNull);
   });
 }

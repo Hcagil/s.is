@@ -876,7 +876,7 @@ void main() {
         expect(spy.left, ['g1']);
         expect(t.widgetList<SisNotice>(notice).map((n) => n.message), [
           unsent
-              ? 'You left the group. Messages that were still waiting to send were not delivered.'
+              ? 'You left the group. Messages still waiting to send were not sent.'
               : 'You left the group',
         ]);
         expect(find.byType(GroupScreen), findsNothing);

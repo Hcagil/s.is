@@ -127,7 +127,7 @@ void main() {
       await t.pump();
       expect(
         find.text(
-          'Bu vurgu rengini okumak zor olabilir. Daha koyu bir ton dene.',
+          'Bu vurgu rengini okumak zor olabilir. Daha koyu bir ton deneyin.',
         ),
         findsOneWidget,
       );

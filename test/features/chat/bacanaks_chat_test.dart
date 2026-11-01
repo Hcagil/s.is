@@ -270,6 +270,35 @@ void main() {
     );
 
     testWidgets(
+      '[$lang] pod / podPrev: a whole number ("7", "12345") and "99.999,99" are shown exactly as given',
+      (t) async {
+        for (final k in ['pod', 'podPrev']) {
+          Future<String> shown(String amt) async {
+            await pumpBubble(t, {
+              'k': k,
+              'amt': amt,
+              'day': '2026-10-28',
+              'at': at.toIso8601String(),
+            }, locale);
+            return screenText(t);
+          }
+
+          // The same bubble with a marker amount: the only difference allowed
+          // is the amount itself, so a lone "7" cannot hide in other text.
+          final base = await shown('#AMT#');
+          expect(base, contains('#AMT#'));
+          for (final amt in ['7', '12345', '99.999,99']) {
+            expect(
+              await shown(amt),
+              base.replaceAll('#AMT#', amt),
+              reason: '$k $amt',
+            );
+          }
+        }
+      },
+    );
+
+    testWidgets(
       '[$lang] podPrev: previous-day title with the day, amount, fetched line',
       (t) async {
         await pumpBubble(t, {

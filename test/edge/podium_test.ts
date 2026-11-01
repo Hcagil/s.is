@@ -270,6 +270,7 @@ Deno.test({ ...opts, name: 'amount rule (<= 25 chars, strict number shape): acce
 
 // A fake Vega on 127.0.0.1 for the real reader (index.ts + vega.ts together).
 let vegaDurum: string[] = [];
+let vegaTotal = '8.642.097,31';
 const fakeVega = realServe({ hostname: '127.0.0.1', port: 0, onListen: () => {} }, (req) => {
   const u = new URL(req.url);
   if (u.pathname === '/Authentication/LoginAction') {
@@ -277,7 +278,7 @@ const fakeVega = realServe({ hostname: '127.0.0.1', port: 0, onListen: () => {} 
   }
   vegaDurum.push(u.searchParams.get('durum') ?? '');
   return new Response(`<div class="dash-stat-label">Toplam Ciro</div>
-    <a class="tarihLink dash-stat-value" href="/CiroRaporlar/List">8.642.097,31</a>`);
+    <a class="tarihLink dash-stat-value" href="/CiroRaporlar/List">${vegaTotal}</a>`);
 });
 function vegaEnv(base: string) {
   Deno.env.set('VEGA_BASE_URL', base);
@@ -344,6 +345,29 @@ Deno.test({ ...opts, name: 'the real reader with no Vega config fails the job wi
   assertEquals(JSON.parse(r.text).result, 'failed');
   const st = await state();
   assertEquals([st.fail_count, st.off], [0, false]);
+} });
+
+// Real page shapes (t_7c0a1a1920): today can be a whole number with no
+// separators ("7"); yesterday looked like "99.999,99". Page -> parse -> reply.
+Deno.test({ ...opts, name: 'the real reader: a whole-number total ("7", "12345") and a dotted one ("99.999,99") are answered exactly as on the page', fn: async () => {
+  vegaEnv(`http://127.0.0.1:${fakeVega.addr.port}`);
+  try {
+    for (const total of ['7', '12345', '99.999,99']) {
+      for (const prev of [false, true]) {
+        await resetState();
+        vegaTotal = total;
+        const id = await job(prev);
+        const r = await post(real, id);
+        assertEquals(JSON.parse(r.text), { ok: true, ran: true, result: 'ok' }, `${total} prev=${prev}: ${r.text}`);
+        const m = (await lastReply()).admin_msg;
+        assertEquals([m.k, m.amt], [prev ? 'podPrev' : 'pod', total], `${total} prev=${prev}`);
+        assertEquals(await state(), { amount: total, fail_count: 0, off: false }, `${total} prev=${prev}`);
+      }
+    }
+  } finally {
+    vegaTotal = '8.642.097,31';
+    clearVegaEnv();
+  }
 } });
 
 Deno.test({ ...opts, name: 'teardown', fn: async () => {

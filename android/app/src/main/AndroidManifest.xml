@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Huawei launcher: lets the app set its own icon number (HuaweiBadge.kt). -->
+    <uses-permission android:name="com.huawei.android.launcher.permission.CHANGE_BADGE"/>
     <!-- Android 13+: without it SIS cannot draw a notification at all. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- The attachment sheet's own photo grid (v0.9): photos only. Android 14+

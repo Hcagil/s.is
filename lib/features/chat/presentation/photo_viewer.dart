@@ -75,6 +75,7 @@ class _PhotoViewerState extends ConsumerState<PhotoViewer>
   /// [_closeVelocity], closes the viewer; anything shorter springs back.
   static const _closeDistance = 120.0;
   static const _closeVelocity = 700.0;
+  static const _flingVelocity = 300.0;
 
   late final _pages = PageController(initialPage: widget.initialIndex);
   late int _index = widget.initialIndex;
@@ -89,6 +90,47 @@ class _PhotoViewerState extends ConsumerState<PhotoViewer>
 
   int _pointers = 0;
   bool _pinching = false;
+
+  /// A zoomed photo handed its extra sideways drag to the pages; true until
+  /// the pages have settled. Holds [_index] fixed meanwhile.
+  bool _handOver = false;
+
+  double get _viewport => _pages.position.viewportDimension;
+
+  /// Pixels the pages are dragged away from the shown photo (negative: the
+  /// previous photo is coming in).
+  double get _offset =>
+      _handOver ? _pages.position.pixels - _index * _viewport : 0;
+
+  void _setOffset(double o) {
+    final w = _viewport;
+    final lo = _index > 0 ? -w : 0.0;
+    final hi = _index < widget.paths.length - 1 ? w : 0.0;
+    final c = o.clamp(lo, hi);
+    _handOver = c != 0; // back at 0 (or no neighbour): nothing to settle
+    _pages.position.jumpTo(_index * w + c);
+  }
+
+  /// Finger lifted: past half or a fast fling moves a page, else spring back.
+  Future<void> _settle(double vx) async {
+    final off = _offset;
+    final fling = vx.abs() > _flingVelocity && vx.sign == -off.sign;
+    final dir = (fling || off.abs() > _viewport / 2) ? off.sign.toInt() : 0;
+    final to = (_index + dir).clamp(0, widget.paths.length - 1);
+    await _pages.animateToPage(
+      to,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+    );
+    if (!mounted) return;
+    setState(() {
+      _handOver = false;
+      if (to != _index) {
+        _index = to;
+        _zoomed = false;
+      }
+    });
+  }
 
   /// Zoomed or mid-pinch: no page swipe and no swipe-down may win the gesture.
   bool get _locked => _zoomed || _pinching;
@@ -175,13 +217,20 @@ class _PhotoViewerState extends ConsumerState<PhotoViewer>
               controller: _pages,
               physics: _locked ? const NeverScrollableScrollPhysics() : null,
               itemCount: widget.paths.length,
-              onPageChanged: (i) => setState(() {
-                _index = i;
-                _zoomed = false;
-              }),
+              onPageChanged: (i) {
+                if (_handOver) return;
+                setState(() {
+                  _index = i;
+                  _zoomed = false;
+                });
+              },
               itemBuilder: (context, i) => _Photo(
                 widget.paths[i],
                 isAvatar: widget.isAvatar,
+                current: i == _index,
+                pageOffset: () => _offset,
+                onOffset: _setOffset,
+                onRelease: _settle,
                 onZoomed: (z) {
                   if (z != _zoomed) setState(() => _zoomed = z);
                 },
@@ -195,11 +244,23 @@ class _PhotoViewerState extends ConsumerState<PhotoViewer>
 }
 
 class _Photo extends ConsumerStatefulWidget {
-  const _Photo(this.path, {required this.isAvatar, required this.onZoomed});
+  const _Photo(
+    this.path, {
+    required this.isAvatar,
+    required this.onZoomed,
+    required this.current,
+    required this.pageOffset,
+    required this.onOffset,
+    required this.onRelease,
+  });
 
   final String path;
   final bool isAvatar;
   final ValueChanged<bool> onZoomed;
+  final bool current;
+  final ValueGetter<double> pageOffset;
+  final ValueChanged<double> onOffset;
+  final ValueChanged<double> onRelease;
 
   @override
   ConsumerState<_Photo> createState() => _PhotoState();
@@ -216,12 +277,32 @@ class _PhotoState extends ConsumerState<_Photo>
   );
   Offset _tap = Offset.zero;
   int _down = 0;
+  Matrix4 _last = Matrix4.identity();
 
-  void _report() => widget.onZoomed(_zoom.value.getMaxScaleOnAxis() > 1.01);
+  bool get _isZoomed => _zoom.value.getMaxScaleOnAxis() > 1.01;
+
+  /// Zoomed photo at its sideways edge: the drag left over moves the pages.
+  void _handOver(ScaleUpdateDetails d) {
+    if (d.pointerCount != 1 || !_isZoomed) return;
+    final off = widget.pageOffset();
+    final dx = d.focalPointDelta.dx;
+    if (off != 0) {
+      _zoom.value = _last.clone(); // the finger belongs to the pages now
+      final next = off - dx;
+      widget.onOffset(
+        (off < 0 && next > 0) || (off > 0 && next < 0) ? 0 : next,
+      );
+      return;
+    }
+    final extra = dx - (_zoom.value.storage[12] - _last.storage[12]);
+    if (extra.abs() > 0.5) widget.onOffset(-extra);
+  }
+
+  void _report() => widget.onZoomed(_isZoomed);
 
   /// Zoomed: back to fit. At fit: zoom in about the tapped spot.
   void _toggleZoom() {
-    final zoomedIn = _zoom.value.getMaxScaleOnAxis() > 1.01;
+    final zoomedIn = _isZoomed;
     final k = 1 - _doubleTapScale;
     final target = Matrix4.identity();
     if (!zoomedIn) {
@@ -242,6 +323,17 @@ class _PhotoState extends ConsumerState<_Photo>
       ..reset()
       ..addListener(step);
     _anim.forward().whenComplete(() => _anim.removeListener(step));
+  }
+
+  @override
+  void didUpdateWidget(_Photo old) {
+    super.didUpdateWidget(old);
+    // The photo we left goes back to fit (after the frame: the viewer listens).
+    if (old.current && !widget.current) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _zoom.value = Matrix4.identity();
+      });
+    }
   }
 
   @override
@@ -270,9 +362,21 @@ class _PhotoState extends ConsumerState<_Photo>
           onDoubleTap: _toggleZoom,
           child: InteractiveViewer(
             transformationController: _zoom,
-            onInteractionStart: (_) => _anim.stop(),
-            onInteractionUpdate: (_) => _report(),
-            onInteractionEnd: (_) => _report(),
+            onInteractionStart: (_) {
+              _anim.stop();
+              _last = _zoom.value.clone();
+            },
+            onInteractionUpdate: (d) {
+              _report();
+              _handOver(d);
+              _last = _zoom.value.clone();
+            },
+            onInteractionEnd: (d) {
+              _report();
+              if (d.pointerCount == 0 && widget.pageOffset() != 0) {
+                widget.onRelease(d.velocity.pixelsPerSecond.dx);
+              }
+            },
             maxScale: 5,
             child: Center(
               child: Image.memory(

@@ -202,7 +202,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get groupLeaveBody =>
-      'Grup diğerleri için kalır. Tekrar eklenebilirsin.';
+      'Grup diğerleri için kalır. Tekrar eklenebilirsiniz.';
 
   @override
   String get groupLeaveCancel => 'İptal et';
@@ -221,7 +221,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get cropGestureHint =>
-      'Yakınlaştırmak için sıkıştır, taşımak için sürükle';
+      'Yakınlaştırmak için sıkıştırın, taşımak için sürükleyin';
 
   @override
   String get groupLeftNotice => 'Gruptan ayrıldınız';
@@ -252,7 +252,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get locationShareCurrent => 'Şu anki konumu paylaş';
 
   @override
-  String get locationShareCurrentSub => 'Şu an bulunduğun yeri gönderir';
+  String get locationShareCurrentSub => 'Şu an bulunduğunuz yeri gönderir';
 
   @override
   String locationShareAccuracy(int meters) {
@@ -267,7 +267,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get locationPermNote =>
-      'Konum izni yalnızca Paylaş\'a dokunduğunda istenir';
+      'Konum izni yalnızca Paylaş\'a dokunduğunuzda istenir';
 
   @override
   String get locationSearchHint => 'Yer ara';
@@ -277,11 +277,11 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get locationDenied =>
-      'SIS için konum kapalı. Telefon ayarlarından açabilir veya haritadan yer seçebilirsin.';
+      'SIS için konum kapalı. Telefon ayarlarından açabilir veya haritadan yer seçebilirsiniz.';
 
   @override
   String get locationUnavailable =>
-      'Konumun bulunamadı. Konumun açık olduğundan emin ol.';
+      'Konumunuz bulunamadı. Konumunuzun açık olduğundan emin olun.';
 
   @override
   String get locationPreviewLine => '📍 Konum';
@@ -359,7 +359,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get chatMenuUnpin => 'Sabitlemeyi kaldır';
 
   @override
-  String get chatPinLimit => 'En fazla 5 sohbet sabitleyebilirsin.';
+  String get chatPinLimit => 'En fazla 5 sohbet sabitleyebilirsiniz.';
 
   @override
   String eventPinned(String name) {
@@ -371,7 +371,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get encryptionRowSubtitle =>
-      'Mesajlar uçtan uca şifrelidir. Doğrulamak için dokun.';
+      'Mesajlar uçtan uca şifrelidir. Doğrulamak için dokunun.';
 
   @override
   String get securityCodeTitle => 'Güvenlik kodunu doğrula';
@@ -383,12 +383,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String securityCodeChanged(String name) {
-    return '$name ile güvenlik kodun değişti. Doğrulamak için dokun.';
+    return '$name ile güvenlik kodunuz değişti. Doğrulamak için dokunun.';
   }
 
   @override
   String securityCodeChangedUnverified(String name) {
-    return '$name ile güvenlik kodun değişti ve artık doğrulanmış değil. Doğrulamak için dokun.';
+    return '$name ile güvenlik kodunuz değişti ve artık doğrulanmış değil. Doğrulamak için dokunun.';
   }
 
   @override
@@ -429,7 +429,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String securityCodeNewPhoneNote(String name) {
-    return '$name yeni bir telefon alırsa kod değişir ve yeniden kontrol etmen gerekir.';
+    return '$name yeni bir telefon alırsa kod değişir ve yeniden kontrol etmeniz gerekir.';
   }
 
   @override
@@ -499,7 +499,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get commonVibration => 'Titreşim';
 
   @override
-  String get commonYourPeople => 'Kişilerin';
+  String get commonYourPeople => 'Kişileriniz';
 
   @override
   String get commonNobodyFound => 'Kimse bulunamadı';
@@ -554,14 +554,14 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get settingsShowLastSeenHint =>
-      'Bu kapalıyken sen de kimsenin son görülmesini göremezsin.';
+      'Bu kapalıyken siz de kimsenin son görülmesini göremezsiniz.';
 
   @override
   String get settingsShowRead => 'Mesajları okuduğumu göster';
 
   @override
   String get settingsShowReadHint =>
-      'Bu kapalıyken başkalarının senin mesajlarını ne zaman okuduğunu göremezsin.';
+      'Bu kapalıyken başkalarının sizin mesajlarınızı ne zaman okuduğunu göremezsiniz.';
 
   @override
   String get settingsAvatarVisibility => 'Profil fotoğrafını kimler görsün';
@@ -570,13 +570,13 @@ class AppLocalizationsTr extends AppLocalizations {
   String get settingsAvatarEveryone => 'Herkes';
 
   @override
-  String get settingsAvatarEveryoneHint => 'Profilini görebilen herkes';
+  String get settingsAvatarEveryoneHint => 'Profilinizi görebilen herkes';
 
   @override
   String get settingsAvatarContacts => 'Kişilerim';
 
   @override
-  String get settingsAvatarContactsHint => 'Yalnızca kaydettiğin kişiler';
+  String get settingsAvatarContactsHint => 'Yalnızca kaydettiğiniz kişiler';
 
   @override
   String get settingsAvatarNobody => 'Hiç kimse';
@@ -600,7 +600,7 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String get appTagline => 'Hep bağlantıda kal';
+  String get appTagline => 'Hep bağlantıda kalın';
 
   @override
   String get settingsLicences => 'Açık kaynak lisansları';
@@ -684,10 +684,10 @@ class AppLocalizationsTr extends AppLocalizations {
   String get alertChoiceOff => 'Kapalı';
 
   @override
-  String get notifExplainerTitle => 'SIS yeni mesajlardan seni haberdar edecek';
+  String get notifExplainerTitle => 'SIS yeni mesajlardan sizi haberdar edecek';
 
   @override
-  String get commonYou => 'Sen';
+  String get commonYou => 'Siz';
 
   @override
   String get commonGroup => 'Grup';
@@ -717,7 +717,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get composerReadOnlySystem => 'Burada yalnızca SIS yazabilir';
 
   @override
-  String get composerLeftGroup => 'Artık bu grubun üyesi değilsin';
+  String get composerLeftGroup => 'Artık bu grubun üyesi değilsiniz';
 
   @override
   String get composerSendPhoto => 'Fotoğraf gönder';
@@ -767,11 +767,11 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String listYouPrefix(String message) {
-    return 'Sen: $message';
+    return 'Siz: $message';
   }
 
   @override
-  String get listEmpty => 'Henüz sohbet yok.\nYeni sohbet ile başla.';
+  String get listEmpty => 'Henüz sohbet yok.\nYeni sohbet ile başlayın.';
 
   @override
   String get listSearchHint => 'Mesajlarda ara';
@@ -844,7 +844,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get addMembersNoneTitle => 'Eklenecek kimse kalmadı';
 
   @override
-  String get addMembersNoneBody => 'Kişilerindeki herkes zaten bu grupta.';
+  String get addMembersNoneBody => 'Kişilerinizdeki herkes zaten bu grupta.';
 
   @override
   String get addMembersOldTitle => 'Önceki mesajları göster';
@@ -892,7 +892,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get newChatChat => 'Sohbet';
 
   @override
-  String get newChatEmpty => 'Henüz kimse yok — etiketiyle birini bul';
+  String get newChatEmpty => 'Henüz kimse yok — etiketiyle birini bulun';
 
   @override
   String forwardDoneMany(int count) {
@@ -1015,7 +1015,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String membersYou(String name) {
-    return '$name (sen)';
+    return '$name (siz)';
   }
 
   @override
@@ -1134,7 +1134,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String attachLimit(int count) {
-    return 'Tek seferde en fazla $count fotoğraf gönderebilirsin.';
+    return 'Tek seferde en fazla $count fotoğraf gönderebilirsiniz.';
   }
 
   @override
@@ -1172,7 +1172,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get attachTickSelected => 'Seçildi';
 
   @override
-  String get attachFasterTitle => 'Fotoğrafları daha hızlı gönder';
+  String get attachFasterTitle => 'Fotoğrafları daha hızlı gönderin';
 
   @override
   String get attachFasterBody =>
@@ -1191,14 +1191,14 @@ class AppLocalizationsTr extends AppLocalizations {
   String get attachCamera => 'Kamera';
 
   @override
-  String get onboardingWelcome => 'Hoş geldin';
+  String get onboardingWelcome => 'Hoş geldiniz';
 
   @override
-  String get onboardingHeading => 'Diğerleri seni nasıl görsün?';
+  String get onboardingHeading => 'Diğerleri sizi nasıl görsün?';
 
   @override
   String get onboardingHint =>
-      'İkisini de sonra Ayarlar\'dan değiştirebilirsin.';
+      'İkisini de sonra Ayarlar\'dan değiştirebilirsiniz.';
 
   @override
   String get tagChecking => 'Kontrol ediliyor…';
@@ -1247,11 +1247,11 @@ class AppLocalizationsTr extends AppLocalizations {
   String get statusDeniedBody => 'Bu hesap şu an SIS için onaylı değil.';
 
   @override
-  String get replacedTitle => 'Başka bir telefonda oturum açtın';
+  String get replacedTitle => 'Başka bir telefonda oturum açtınız';
 
   @override
   String get replacedBody =>
-      'SIS aynı anda tek telefonda çalışır. Burada kullanmak için yeniden oturum aç; diğer telefonun oturumu kapanır.';
+      'SIS aynı anda tek telefonda çalışır. Burada kullanmak için yeniden oturum açın; diğer telefonun oturumu kapanır.';
 
   @override
   String get replacedSignIn => 'Oturum aç';
@@ -1274,7 +1274,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String statusStartBody(String reason) {
-    return 'Uygulamayı yeniden başlat. Yine olmazsa uygulamayı kaldırıp tekrar yükle.\n\n$reason';
+    return 'Uygulamayı yeniden başlatın. Yine olmazsa uygulamayı kaldırıp tekrar yükleyin.\n\n$reason';
   }
 
   @override
@@ -1314,7 +1314,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get commonConversation => 'Sohbet';
 
   @override
-  String get statusStartBootstrap => 'SIS başlatılamadı. Tekrar dene.';
+  String get statusStartBootstrap => 'SIS başlatılamadı. Tekrar deneyin.';
 
   @override
   String get appearanceRename => 'Yeniden adlandır';
@@ -1420,7 +1420,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get wallpaperPickFailed =>
-      'Bu fotoğraf kullanılamadı. Başka birini dene.';
+      'Bu fotoğraf kullanılamadı. Başka birini deneyin.';
 
   @override
   String get wallpaperReset => 'Sohbet duvar kağıtlarını sıfırla';
@@ -1635,7 +1635,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get contactEmpty => 'Telefon numarası olan kişi yok';
 
   @override
-  String get contactNoMatch => 'Aramana uyan kişi yok';
+  String get contactNoMatch => 'Aramanıza uyan kişi yok';
 
   @override
   String contactPreviewLine(String name) {
@@ -1696,7 +1696,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String fileTapToDownload(String size) {
-    return '$size · İndirmek için dokun';
+    return '$size · İndirmek için dokunun';
   }
 
   @override
@@ -1715,7 +1715,7 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bu telefonda bu dosyayı açabilen bir uygulama yok.';
 
   @override
-  String get filePhotoTapToDownload => 'Fotoğrafı indirmek için dokun';
+  String get filePhotoTapToDownload => 'Fotoğrafı indirmek için dokunun';
 
   @override
   String get videoReviewTitle => 'Videolar';
@@ -1763,8 +1763,8 @@ class AppLocalizationsTr extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count video gönderilemedi. Tekrar dene.',
-      one: 'Bu video gönderilemedi. Tekrar dene.',
+      other: '$count video gönderilemedi. Tekrar deneyin.',
+      one: 'Bu video gönderilemedi. Tekrar deneyin.',
     );
     return '$_temp0';
   }
@@ -1800,7 +1800,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get videoGridEmpty => 'Henüz video yok';
 
   @override
-  String get videoAccessTitle => 'Videoları burada seç';
+  String get videoAccessTitle => 'Videoları burada seçin';
 
   @override
   String get videoAccessBody =>
@@ -1838,10 +1838,11 @@ class AppLocalizationsTr extends AppLocalizations {
   String get notifChannelMessages => 'Yeni mesajlar';
 
   @override
-  String get voiceHoldHint => 'Kaydetmek için basılı tut, göndermek için bırak';
+  String get voiceHoldHint =>
+      'Kaydetmek için basılı tutun, göndermek için bırakın';
 
   @override
-  String get voiceMicDenied => 'Kayıt için Ayarlar\'dan mikrofona izin ver.';
+  String get voiceMicDenied => 'Kayıt için Ayarlar\'dan mikrofona izin verin.';
 
   @override
   String get voiceMicFailed => 'Kayıt başlatılamadı.';
@@ -1857,7 +1858,7 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bu telefonda bu dilde yazdırma kullanılamıyor.';
 
   @override
-  String get voiceSlideToCancel => 'İptal için kaydır';
+  String get voiceSlideToCancel => 'İptal etmek için kaydırın';
 
   @override
   String get voiceCancel => 'İptal et';
@@ -1908,18 +1909,18 @@ class AppLocalizationsTr extends AppLocalizations {
   String get stickerTabNew => '+ Yeni';
 
   @override
-  String get stickerEmptyRecent => 'Gönderdiğin çıkartmalar burada görünür.';
+  String get stickerEmptyRecent => 'Gönderdiğiniz çıkartmalar burada görünür.';
 
   @override
   String get stickerEmptyFavourites =>
-      'Favorilere eklemek için sohbetteki bir çıkartmaya uzun bas.';
+      'Favorilere eklemek için sohbetteki bir çıkartmaya uzun basın.';
 
   @override
   String get stickerEmptyAlbum => 'Bu albüm boş.';
 
   @override
   String get stickerNoAlbums =>
-      'Henüz albüm yok. Çıkartmalarını saklamak için bir tane oluştur.';
+      'Henüz albüm yok. Çıkartmalarınızı saklamak için bir tane oluşturun.';
 
   @override
   String get stickerLabel => 'Çıkartma';
@@ -1978,7 +1979,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get stickerAlbumDeleteBody =>
-      'Albüm yalnızca sende silinir. Sohbetlerdeki çıkartmalar kalır.';
+      'Albüm yalnızca sizde silinir. Sohbetlerdeki çıkartmalar kalır.';
 
   @override
   String get stickerDelete => 'Sil';
@@ -2017,7 +2018,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String stickerLimitAlbums(int max) {
-    return 'En fazla $max albümün olabilir.';
+    return 'En fazla $max albümünüz olabilir.';
   }
 
   @override
@@ -2027,7 +2028,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String stickerLimitFavourites(int max) {
-    return 'En fazla $max favori tutabilirsin.';
+    return 'En fazla $max favori tutabilirsiniz.';
   }
 
   @override
@@ -2061,24 +2062,24 @@ class AppLocalizationsTr extends AppLocalizations {
   String get makerReset => 'Sıfırla';
 
   @override
-  String get makerBrushHint => 'Silmek ya da geri getirmek için boya';
+  String get makerBrushHint => 'Silmek ya da geri getirmek için boyayın';
 
   @override
   String get makerCutoutPreparing => 'Arka plan kaldırılıyor…';
 
   @override
   String get makerCutoutUnavailable =>
-      'Arka plan şu an kaldırılamadı. Görselin olduğu gibi kaldı.';
+      'Arka plan şu an kaldırılamadı. Görseliniz olduğu gibi kaldı.';
 
   @override
   String get makerCutoutNoSupport =>
-      'Bu telefon arka planı kaldıramıyor. Görselin olduğu gibi kaldı.';
+      'Bu telefon arka planı kaldıramıyor. Görseliniz olduğu gibi kaldı.';
 
   @override
   String get makerEditTitle => 'Çıkartmayı düzenle';
 
   @override
-  String get makerEditHint => 'Çıkartmana yazı ekle ya da çiz';
+  String get makerEditHint => 'Çıkartmanıza yazı ekleyin ya da çizin';
 
   @override
   String get makerToAlbum => 'Albüme kaydet';
@@ -2087,7 +2088,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get makerTextTitle => 'Yazı';
 
   @override
-  String get makerTextHint => 'Yazını yaz';
+  String get makerTextHint => 'Yazı yaz';
 
   @override
   String get makerSize => 'Boyut';
@@ -2132,7 +2133,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get makerDone => 'Bitti';
 
   @override
-  String get makerSaveFailed => 'Çıkartma kaydedilemedi. Tekrar dene.';
+  String get makerSaveFailed => 'Çıkartma kaydedilemedi. Tekrar deneyin.';
 
   @override
   String makerSaveToCount(int count, int max) {
@@ -2181,7 +2182,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String videoPlayerPrivacy(String site) {
-    return 'İzlerken $site IP adresini ve cihazını görür. Kapatınca SIS çerezlerini siler.';
+    return 'İzlerken $site IP adresinizi ve cihazınızı görür. Kapatınca SIS çerezlerini siler.';
   }
 
   @override
@@ -2191,7 +2192,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get videoRefusedDeleted => 'Bu video silinmiş.';
 
   @override
-  String get videoRefusedRegion => 'Bu video bölgende izlenemiyor.';
+  String get videoRefusedRegion => 'Bu video bölgenizde izlenemiyor.';
 
   @override
   String get videoRefusedLogin =>
@@ -2243,7 +2244,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String adminFail(String email, String reason) {
-    return '$email için Apple adımı başarısız: $reason. İzin listesi kaydedildi; tekrar denemek için komutu yeniden yaz.';
+    return '$email için Apple adımı başarısız: $reason. İzin listesi kaydedildi; tekrar denemek için komutu yeniden yazın.';
   }
 
   @override
@@ -2290,7 +2291,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String adminRmOk(String email) {
-    return '$email izin listesinden kaldırıldı. Şimdi Play’de elle kaldır: Play Console > Internal testing > Testers > Bacanaks > bu e-postayı sil.';
+    return '$email izin listesinden kaldırıldı. Şimdi Play’de elle kaldırın: Play Console > Internal testing > Testers > Bacanaks > bu e-postayı silin.';
   }
 
   @override
@@ -2314,7 +2315,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String adminFailRm(String email, String reason) {
-    return '$email için Apple adımı başarısız: $reason. İzin listesi satırı zaten kaldırıldı; tekrar denemek için komutu yeniden yaz.';
+    return '$email için Apple adımı başarısız: $reason. İzin listesi satırı zaten kaldırıldı; tekrar denemek için komutu yeniden yazın.';
   }
 
   @override
@@ -2342,7 +2343,8 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String get adminRate => 'Çok fazla komut. Bir dakika bekle ve tekrar dene.';
+  String get adminRate =>
+      'Çok fazla komut. Bir dakika bekleyin ve tekrar deneyin.';
 
   @override
   String get adminKeep => 'İptal edildi: bu kart artık geçerli değil.';
@@ -2352,7 +2354,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get adminNoLink =>
-      'Play davet bağlantısı henüz ayarlanmadı. Sahibinden ayarlamasını iste, sonra komutu yeniden yaz.';
+      'Play davet bağlantısı henüz ayarlanmadı. Sahibinden ayarlamasını isteyin, sonra komutu yeniden yazın.';
 
   @override
   String adminListOther(int count) {
@@ -2394,17 +2396,17 @@ class AppLocalizationsTr extends AppLocalizations {
   String get findNotNow => 'Şimdi değil';
 
   @override
-  String get findAskTitle => 'Arkadaşlarını SIS\'te bul';
+  String get findAskTitle => 'Arkadaşlarınızı SIS\'te bulun';
 
   @override
   String get findAskBody =>
-      'SIS, kimlerin zaten burada olduğunu göstermek için rehberine bakabilir.';
+      'SIS, kimlerin zaten burada olduğunu göstermek için rehberinize bakabilir.';
 
   @override
   String get findAllow => 'Rehbere erişime izin ver';
 
   @override
-  String get findLater => 'Daha sonra tekrar dene.';
+  String get findLater => 'Daha sonra tekrar deneyin.';
 
   @override
   String get findEmpty => 'Kişi bulunamadı';

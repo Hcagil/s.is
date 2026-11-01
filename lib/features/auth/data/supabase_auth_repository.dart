@@ -18,7 +18,7 @@ import '../domain/member.dart';
 /// or code does.
 String get signInFailedMessage => failureText(
   'Could not sign in. Try again.',
-  'Oturum açılamadı. Tekrar dene.',
+  'Oturum açılamadı. Tekrar deneyin.',
 );
 String get signInCanceledMessage =>
     failureText('Sign-in canceled.', 'Oturum açma iptal edildi.');

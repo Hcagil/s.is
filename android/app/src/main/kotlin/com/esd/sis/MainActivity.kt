@@ -23,6 +23,7 @@ import java.util.concurrent.Executors
 private const val CHANNEL = "sis/external_picker"
 private const val TONE_CHANNEL = "sis/tone_picker"
 private const val NETWORK_CHANNEL = "sis/network"
+private const val NOTIFICATIONS_CHANNEL = "sis/notifications"
 private const val SPEECH_CHANNEL = "sis/speech"
 private const val SHARE_CHANNEL = "sis/share_intake"
 private const val REPLY_CHANNEL = "sis/encrypted_reply"
@@ -92,6 +93,13 @@ class MainActivity : FlutterActivity() {
                     return@setMethodCallHandler
                 }
                 pickTone((call.arguments as? Map<*, *>)?.get("current") as? String, result)
+            }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NOTIFICATIONS_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "setBadge") {
+                    HuaweiBadge.set(this, (call.arguments as? Int) ?: 0)
+                    result.success(null)
+                } else result.notImplemented()
             }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NETWORK_CHANNEL)
             .setMethodCallHandler { call, result ->

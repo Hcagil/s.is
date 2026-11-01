@@ -348,7 +348,7 @@ void main() {
       ),
       (
         const Locale('tr'),
-        'İzlerken YouTube IP adresini ve cihazını görür. Kapatınca SIS çerezlerini siler.',
+        'İzlerken YouTube IP adresinizi ve cihazınızı görür. Kapatınca SIS çerezlerini siler.',
       ),
     ]) {
       testWidgets('the privacy line ($locale)', (t) async {

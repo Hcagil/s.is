@@ -216,7 +216,7 @@ void main() {
       final result = adminPreviewLine(l, {'k': 'rate'});
       expect(
         result,
-        equals("Çok fazla komut. Bir dakika bekle ve tekrar dene."),
+        equals("Çok fazla komut. Bir dakika bekleyin ve tekrar deneyin."),
       );
     });
 

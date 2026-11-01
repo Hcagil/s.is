@@ -16,7 +16,7 @@ final class SupabaseContactsRepository implements ContactsRepository {
     PostgrestException(:final code) when code == 'RLMT1' => ProviderFailure(
       failureText(
         'Too many searches. Try again in a little while.',
-        'Çok fazla arama yaptın. Biraz sonra tekrar dene.',
+        'Çok fazla arama yaptınız. Biraz sonra tekrar deneyin.',
       ),
     ),
     PostgrestException(:final code) when code == '42501' =>

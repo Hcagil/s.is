@@ -245,6 +245,33 @@ Deno.test({ ...opts, name: 'connection refused => a plain Error (index reports o
   await fails('plain');
 } });
 
+Deno.test({ ...opts, name: 'a crafted page (label, then dash-stat-value x 69000, ~1 MB) => shape in under 1 s (no regex stall)', fn: async () => {
+  setup();
+  onList = () => new Response('Toplam Ciro</div><x class="' + 'dash-stat-value'.repeat(69000));
+  const t0 = performance.now();
+  await fails('shape');
+  const t1 = performance.now();
+  const elapsed = t1 - t0;
+  assert(elapsed < 1000, `elapsed ${elapsed} ms`);
+} });
+
+Deno.test({ ...opts, name: 'the total is read only within 512 bytes of the label start: closing < at byte 511 => found, at 512 => shape', fn: async () => {
+  const head = '<html><body><div class="dash-stat-label">';
+  const label = 'Toplam Ciro</div>';
+  const anchorBeforeClose = '<a class="tarihLink dash-stat-value" href="/CiroRaporlar/List">37.652,00';
+  const lenAnchorBeforeClose = anchorBeforeClose.length;
+  const n = 512 - 17 - lenAnchorBeforeClose - 1;
+  const body = head + label + ' '.repeat(n) + '<a class="tarihLink dash-stat-value" href="/CiroRaporlar/List">37.652,00</a></body></html>';
+  setup();
+  onList = () => new Response(body);
+  assertEquals(await fetchVegaTotal('d', false), '37.652,00');
+
+  const body2 = head + label + ' '.repeat(n + 1) + '<a class="tarihLink dash-stat-value" href="/CiroRaporlar/List">37.652,00</a></body></html>';
+  setup();
+  onList = () => new Response(body2);
+  await fails('shape');
+} });
+
 Deno.test({ ...opts, name: 'teardown', fn: async () => {
   for (const k of ['VEGA_BASE_URL', 'VEGA_USERNAME', 'VEGA_PASSWORD']) Deno.env.delete(k);
   await server.shutdown();

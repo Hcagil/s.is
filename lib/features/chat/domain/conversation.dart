@@ -22,6 +22,7 @@ final class Conversation {
     this.hasLeft = false,
     this.isSystem = false,
     this.isAdminChat = false,
+    this.isBacanaks = false,
     this.senders = const {},
     this.settings = const GroupSettings(),
     this.archived = false,
@@ -63,6 +64,9 @@ final class Conversation {
   /// type commands into. Also [isSystem].
   final bool isAdminChat;
 
+  /// True for the Bacanaks Ozel command chat (also [isAdminChat]).
+  final bool isBacanaks;
+
   /// For a group: each other member's name and colour slot by user id, so the
   /// list can name and colour the sender of the preview. Empty for a 1:1.
   final Map<String, GroupVoice> senders;
@@ -98,6 +102,7 @@ final class Conversation {
         hasLeft: hasLeft,
         isSystem: isSystem,
         isAdminChat: isAdminChat,
+        isBacanaks: isBacanaks,
         senders: senders,
         settings: settings,
         archived: archived,
@@ -118,6 +123,7 @@ final class Conversation {
     hasLeft: hasLeft,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
+    isBacanaks: isBacanaks,
     senders: senders,
     settings: settings,
     archived: archived,
@@ -139,6 +145,7 @@ final class Conversation {
     hasLeft: hasLeft,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
+    isBacanaks: isBacanaks,
     senders: senders,
     settings: settings,
     archived: archived,
@@ -160,6 +167,7 @@ final class Conversation {
     hasLeft: hasLeft,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
+    isBacanaks: isBacanaks,
     senders: senders,
     settings: next,
     archived: archived,
@@ -181,6 +189,7 @@ final class Conversation {
     hasLeft: hasLeft,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
+    isBacanaks: isBacanaks,
     senders: senders,
     settings: settings,
     archived: value,
@@ -202,6 +211,7 @@ final class Conversation {
     hasLeft: hasLeft,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
+    isBacanaks: isBacanaks,
     senders: senders,
     settings: settings,
     archived: archived,
@@ -223,6 +233,7 @@ final class Conversation {
     hasLeft: hasLeft,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
+    isBacanaks: isBacanaks,
     senders: senders,
     settings: settings,
     archived: archived,
@@ -244,6 +255,7 @@ final class Conversation {
     'hasLeft': hasLeft,
     'isSystem': isSystem,
     if (isAdminChat) 'isAdminChat': true,
+    if (isBacanaks) 'isBacanaks': true,
     'senders': {for (final e in senders.entries) e.key: e.value.toJson()},
     'settings': settings.toJson(),
     // Written only when true: the saved list the native side reads keeps its
@@ -270,6 +282,7 @@ final class Conversation {
     hasLeft: json['hasLeft'] as bool? ?? false,
     isSystem: json['isSystem'] as bool? ?? false,
     isAdminChat: json['isAdminChat'] as bool? ?? false,
+    isBacanaks: json['isBacanaks'] as bool? ?? false,
     senders: {
       for (final e
           in ((json['senders'] as Map<String, Object?>?) ??
@@ -290,7 +303,9 @@ final class Conversation {
 
   /// The group's title, or who you are talking to. Empty when the partner's
   /// name is unknown; presentation localises that via conversationLabel.
-  String get label => isAdminChat
+  String get label => isBacanaks
+      ? 'Bacanaks Özel'
+      : isAdminChat
       ? 'SIS Admin'
       : isSystem
       ? 'SIS'

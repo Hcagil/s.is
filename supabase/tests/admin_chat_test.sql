@@ -132,7 +132,7 @@ insert into app_private.owners(user_id) values ('00000000-0000-0000-0000-0000000
 select throws_ok($$insert into app_private.owners(user_id) values ('00000000-0000-0000-0000-0000000ac002')$$,
                  '23505', null, 'a second owner row is refused (single row)');
 
-create temp table adm as select id from public.conversations where admin_chat;
+create temp table adm as select id from public.conversations where admin_chat and not bacanaks_chat;
 grant select on adm to authenticated;
 select is((select count(*) from adm), 1::bigint, 'exactly one admin conversation exists');
 select is((select array_agg(user_id::text) from public.conversation_members where conversation_id = (select id from adm)),

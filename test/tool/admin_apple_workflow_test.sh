@@ -107,8 +107,8 @@ a7() { ! grep -qE 'GITHUB_STEP_SUMMARY|upload-artifact|set -x|set -o xtrace|bash
 
 # --- R1: no workflow_run trigger, no tip-of-main check left in any workflow --
 r1() {
-  ! grep -qE 'workflow_run|tip of main|ls-remote' "$R" "$I" || return 1
-  grep -qE '^  schedule:' "$R" && grep -qE '^  workflow_dispatch:' "$R"
+  ! grep -qE 'tip of main|ls-remote' "$R" "$I" || return 1
+  grep -qE '^  workflow_run:' "$R" && grep -qE '^  schedule:' "$R" && grep -qE '^  workflow_dispatch:' "$R"
 }
 # --- R1c: the release guard in every deploying job, run as GitHub would ---
 # job_step FILE JOB SEL -> the lines of step SEL (a number, or a name regex)
@@ -387,7 +387,7 @@ check "A9 admin-apple: tool exit 1 -> rejected, 75 x3 -> timeout, remove passes 
 check "A10 admin-apple: claim token fetch fails: the job stops, nothing reported, tool never runs" a10
 check "A11 admin-apple: progress token fetch fails: ignored, retries and finish go on" a11
 check "A12 admin-apple: finish token fetch fails: swallowed, tool's exit code kept, no false reason" a12
-check "R1 release: daily schedule and dispatch, no workflow_run, no tip-of-main check left" r1
+check "R1 release: workflow_run on CI, daily schedule and dispatch, no tip-of-main check left" r1
 check "R1c release publish/distribute + ios-ipa ipa (upload true): first step is the release guard; a re-run never deploys a commit older than the last release" r1c
 check "R1d ios-ipa: CI's call (upload false) skips the release guard" r1d
 check "R2 release: deploys admin-apple and admin-apple-report" r2

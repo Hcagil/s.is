@@ -327,6 +327,39 @@ void main() {
     expect(emojiOf(await opener().open([row]), mid(1), bob), isNull);
   });
 
+  // F2 (round 2): an emoji over 64 UTF-8 bytes is not opened, not remembered
+  // as done and not saved; exactly 64 opens.
+  group('F2 emoji size limit', () {
+    final at64 = '😀' * 16;
+    final at65 = '${'😀' * 14}❤️€';
+    String sealed(Reaction r) =>
+        sha256.convert(utf8.encode(r.ciphertext!)).toString();
+
+    test('64 bytes: opened and saved', () async {
+      expect(utf8.encode(at64).length, 64);
+      final row = await bobReacts(mid(1), at64);
+      expect(emojiOf(await opener().open([row]), mid(1), bob), at64);
+      expect(
+        await DriftReactionStore(a.store).emojiOf(mid(1), bob, sealed(row)),
+        at64,
+      );
+    });
+
+    test('65 bytes: hidden, nothing saved, and not marked done (a second '
+        'read tries again)', () async {
+      expect(utf8.encode(at65).length, 65);
+      final row = await bobReacts(mid(1), at65);
+      final o = opener();
+      expect(emojiOf(await o.open([row]), mid(1), bob), isNull);
+      expect(
+        await DriftReactionStore(a.store).emojiOf(mid(1), bob, sealed(row)),
+        isNull,
+      );
+      expect(emojiOf(await o.open([row]), mid(1), bob), isNull);
+      expect(a.engine.decrypts, [row.ciphertext, row.ciphertext]);
+    });
+  });
+
   test('garbage ciphertext is hidden and nothing throws', () async {
     await lockRaw('warm-up'); // a session exists, so the bytes are the issue
     final row = Reaction(

@@ -28,6 +28,7 @@ object PushInbox {
      * [raw] with one more message for [conversationId], as JSON text. A separate [sender] and
      * [chat] (a group message) win over the title; else "Sender @ Group" is a group, else a 1:1.
      * A line whose [messageId] is already stored is not added twice.
+     * A [messageId] starting with "r:" is a reaction line: it replaces a stored line with the same id and does not raise the count.
      */
     fun add(
         raw: String?,
@@ -42,7 +43,9 @@ object PushInbox {
         val chats = parse(raw)
         val existing = find(chats, conversationId)
         val old = existing?.getJSONArray("l") ?: JSONArray()
-        if (messageId != null && (0 until old.length()).any { old.getJSONObject(it).optString("m") == messageId }) {
+        // shortcut: a reaction line does not raise the unread count (the "N new messages" text counts messages only); upgrade if reactions should count.
+        val reaction = messageId != null && messageId.startsWith("r:")
+        if (messageId != null && !reaction && (0 until old.length()).any { old.getJSONObject(it).optString("m") == messageId }) {
             return chats.toString()
         }
 
@@ -61,7 +64,7 @@ object PushInbox {
 
         val line = JSONObject().put("s", lineSender).put("x", text).put("a", at)
         if (messageId != null) line.put("m", messageId)
-        val all = (0 until old.length()).map { old.getJSONObject(it) } + line
+        val all = (0 until old.length()).map { old.getJSONObject(it) }.filter { !reaction || it.optString("m") != messageId } + line
         val lines = JSONArray(all.takeLast(MAX_LINES))
 
         val updated = JSONObject()
@@ -69,7 +72,7 @@ object PushInbox {
             .put("t", chatTitle)
             .put("g", group)
             .put("l", lines)
-            .put("n", (existing?.optInt("n", 0) ?: 0) + 1)
+            .put("n", (existing?.optInt("n", 0) ?: 0) + (if (reaction) 0 else 1))
             .put("p", existing?.optInt("p", 0) ?: 0)
 
         val result = JSONArray()
@@ -136,6 +139,7 @@ object PushInbox {
         if (chats.length() == 0) return ""
         var total = 0
         for (i in 0 until chats.length()) total += chats.getJSONObject(i).optInt("n", 0)
+        if (total == 0) return ""
         return when {
             chats.length() > 1 -> fromChats.format(total, chats.length())
             total == 1 -> one

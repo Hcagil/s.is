@@ -5,6 +5,14 @@
     <string name="action_reply_hint">Message</string>
     <string name="action_not_sent">Not sent</string>
     <string name="notification_fallback">New message</string>
+    <string name="reaction_generic">New reaction to your message</string>
+    <string name="reaction_to_message">Reacted %1$s to your message</string>
+    <string name="reaction_to_quote">Reacted %1$s to: \"%2$s\"</string>
+    <string name="reaction_to_photo">Reacted %1$s to your photo</string>
+    <string name="reaction_to_video">Reacted %1$s to your video</string>
+    <string name="reaction_to_sticker">Reacted %1$s to your sticker</string>
+    <string name="reaction_to_voice">Reacted %1$s to your voice message</string>
+    <string name="reaction_to_file">Reacted %1$s to your file</string>
     <string name="notification_public_title">SIS</string>
     <string name="channel_messages">Messages</string>
     <string name="channel_custom_tone">Messages (custom tone)</string>

@@ -14,7 +14,9 @@
 #   - judges $SHA = steps.pick.outputs.sha against the newest release tag gh
 #     returns ("" = none: the commit alone); outputs exactly its ship= line;
 #     an unknown commit or an unreadable release list fails the step and
-#     outputs nothing; the summary names the reason or "daily noon run";
+#     outputs nothing; the summary names the reason or the event; a release
+#     already published today in Europe/Istanbul turns ship=false for a
+#     schedule, workflow_run or reason=daily dispatch, never for another reason;
 #   ci.yml "Native iOS tests (simulator)"
 #   - the destination is the UUID on the first `  iPhone` line of
 #     `xcrun simctl list devices available`; never a UUID from another line;
@@ -72,6 +74,8 @@ stub gh 'if [ "$*" = "run list --workflow ci.yml --branch main --event push --st
   [ "$GREEN" = "!" ] && exit 1; [ -n "$GREEN" ] && echo "$GREEN"; exit 0; fi
 if [ "$*" = "release list --limit 1 --json tagName --jq .[0].tagName // empty" ]; then
   [ "$PREV" = "!" ] && exit 1; [ -n "$PREV" ] && echo "$PREV"; exit 0; fi
+if [ "$*" = "release list --limit 1 --json publishedAt --jq .[0].publishedAt // empty" ]; then
+  [ "$LAST" = "!" ] && exit 1; [ -n "$LAST" ] && echo "$LAST"; exit 0; fi
 echo "gh stub: unexpected: $*" >&2; exit 2'
 pick() { # <shell> <green> -> sets rc; $tmp/gh_out holds the outputs
   : > "$tmp/gh_out"; set +e
@@ -105,11 +109,19 @@ cp tool/release_scope.sh "$repo/tool/"
   echo 3 > lib/a.dart; git add lib; git commit -q -m app2; git tag app-commit
 )
 D=$(git -C "$repo" rev-parse docs-commit); L=$(git -C "$repo" rev-parse app-commit)
-decide() { # <shell> <prev> <sha> [reason] -> sets rc; $tmp/gh_out, $tmp/summary
+# gh answers the last release tag with $PREV and its publishedAt with $LAST
+# ("" = no release, "!" = gh fails). The test runs under TZ=UTC so a guard that
+# forgets Europe/Istanbul is caught by the late-UTC-evening case below.
+decide() { # <shell> <prev> <sha> [reason] [event=schedule] [last] -> sets rc; $tmp/gh_out, $tmp/summary
   : > "$tmp/gh_out"; : > "$tmp/summary"; set +e
-  (cd "$repo" && PATH="$tmp/bin:$PATH" PREV=$2 SHA=$3 REASON=${4:-} GITHUB_OUTPUT="$tmp/gh_out" GITHUB_STEP_SUMMARY="$tmp/summary" \
-    $1 "$tmp/ship.sh") > "$tmp/out" 2>&1; rc=$?; set -e
+  (cd "$repo" && PATH="$tmp/bin:$PATH" TZ=UTC PREV=$2 SHA=$3 REASON=${4:-} EVENT=${5:-schedule} LAST=${6:-} \
+    GITHUB_OUTPUT="$tmp/gh_out" GITHUB_STEP_SUMMARY="$tmp/summary" $1 "$tmp/ship.sh") > "$tmp/out" 2>&1; rc=$?; set -e
 }
+now=$(date -u +%FT%TZ); empty=
+today_ist=$(TZ=Europe/Istanbul date +%F)
+# 00:30 today in Istanbul = 21:30 on the previous UTC day, in gh's Z form.
+early_ist=$(date -u -d "${today_ist}T00:30:00+03:00" +%FT%TZ)
+yesterday_ist=$(TZ=Europe/Istanbul date -d yesterday +%F)T12:00:00Z
 for sh in "${SHELLS[@]}"; do
   while read -r prev sha want; do
     [ "$prev" = - ] && prev=
@@ -124,9 +136,27 @@ v1 L true
 docs-commit L true
 app-commit L false
 TABLE
+  # One release per Istanbul day: a release already published today blocks a
+  # scheduled, CI-triggered or "daily" manual run; any other manual reason ships.
+  while read -r reason event last want; do
+    [ "$reason" = - ] && reason=
+    decide "$sh" v1 "$L" "$reason" "$event" "${!last}"
+    [ $rc = 0 ] && [ "$(cat "$tmp/gh_out")" = "ship=$want" ] \
+      || fail "decide event $event reason [$reason] last \$$last under '$sh': rc $rc, outputs [$(cat "$tmp/gh_out")], want ship=$want"
+  done <<'TABLE'
+- schedule now false
+- workflow_run now false
+daily workflow_dispatch now false
+urgent workflow_dispatch now true
+- schedule early_ist false
+- schedule yesterday_ist true
+- schedule empty true
+TABLE
+  decide "$sh" v1 "$L" "" schedule '!'
+  [ $rc != 0 ] && [ ! -s "$tmp/gh_out" ] || fail "an unreadable publishedAt under '$sh': rc $rc, outputs [$(cat "$tmp/gh_out")] (must fail, decide nothing)"
   decide "$sh" v1 "$D"
-  grep -q 'daily noon run' "$tmp/summary" || fail "a scheduled run's summary does not say so: [$(cat "$tmp/summary")]"
-  decide "$sh" v1 "$D" 'crash for everyone'
+  grep -q 'schedule' "$tmp/summary" || fail "a scheduled run's summary does not name the event: [$(cat "$tmp/summary")]"
+  decide "$sh" v1 "$D" 'crash for everyone' workflow_dispatch
   grep -q 'crash for everyone' "$tmp/summary" || fail "a manual run's summary lacks its reason: [$(cat "$tmp/summary")]"
   decide "$sh" v1 deadbeefdeadbeefdeadbeefdeadbeefdeadbeef
   [ $rc != 0 ] && [ ! -s "$tmp/gh_out" ] || fail "an unknown release commit under '$sh': rc $rc, outputs [$(cat "$tmp/gh_out")] (must fail, decide nothing)"

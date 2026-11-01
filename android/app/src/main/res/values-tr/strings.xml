@@ -5,6 +5,14 @@
     <string name="action_reply_hint">Mesaj</string>
     <string name="action_not_sent">Gönderilemedi</string>
     <string name="notification_fallback">Yeni mesaj</string>
+    <string name="reaction_generic">Mesajına yeni tepki</string>
+    <string name="reaction_to_message">Mesajına %1$s tepkisi verdi</string>
+    <string name="reaction_to_quote">Mesajına %1$s tepkisi verdi: \"%2$s\"</string>
+    <string name="reaction_to_photo">Fotoğrafına %1$s tepkisi verdi</string>
+    <string name="reaction_to_video">Videona %1$s tepkisi verdi</string>
+    <string name="reaction_to_sticker">Çıkartmana %1$s tepkisi verdi</string>
+    <string name="reaction_to_voice">Sesli mesajına %1$s tepkisi verdi</string>
+    <string name="reaction_to_file">Dosyana %1$s tepkisi verdi</string>
     <string name="notification_public_title">SIS</string>
     <string name="channel_messages">Mesajlar</string>
     <string name="channel_custom_tone">Mesajlar (özel ses)</string>

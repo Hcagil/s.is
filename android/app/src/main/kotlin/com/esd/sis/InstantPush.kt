@@ -205,6 +205,21 @@ object InstantPush {
         return if (group && !sender.isNullOrEmpty()) "$sender: $text" else text
     }
 
+    /** The text of a reaction notification, built on the phone in the phone's language: the emoji [emoji] with the [quote] of the reacted message (already cut by the server or by the peek) or, for a media message, its [quoteKind] ("photo", "video", "sticker", "voice", "file"); "to your message" when neither is known. The generic text when [emoji] is null or blank. */
+    fun reactionText(context: Context, emoji: String?, quote: String?, quoteKind: String?): String {
+        if (emoji.isNullOrBlank()) return context.getString(R.string.reaction_generic)
+        if (!quote.isNullOrBlank()) return context.getString(R.string.reaction_to_quote, emoji, quote)
+        val res = when (quoteKind) {
+            "photo" -> R.string.reaction_to_photo
+            "video" -> R.string.reaction_to_video
+            "sticker" -> R.string.reaction_to_sticker
+            "voice" -> R.string.reaction_to_voice
+            "file" -> R.string.reaction_to_file
+            else -> R.string.reaction_to_message
+        }
+        return context.getString(res, emoji)
+    }
+
     /** The tap contract of flutter_local_notifications, so the app opens the chat as it does for the notification Dart draws. Null when the app has no launch intent. */
     fun tapIntent(context: Context, id: Int, conversationId: String): PendingIntent? {
         val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return null
@@ -314,7 +329,19 @@ object InstantPush {
             val locked = extras.getString("encrypted") == "true"
             // An encrypted chat shows the peeked text or the locked text (the server body is only a placeholder); its Reply goes to the app, see addEncryptedReply.
             val lockedText = context.getString(R.string.notification_fallback)
-            val text = if (locked) lockedText else extras.getString("body")
+            val reaction = extras.getString("kind") == "reaction"
+            val reactorId = extras.getString("reactor_id")
+            val pushMessageId = extras.getString("message_id")
+            // A reaction needs both ids in uuid shape, and a reaction by myself is dropped (defence in depth: the server never sends one).
+            if (reaction && (reactorId == null || !UUID_SHAPE.matches(reactorId) || pushMessageId == null || !UUID_SHAPE.matches(pushMessageId) || reactorId == extras.getString("user_id"))) return false
+            // The inbox line key: one line per reactor and message, so a changed emoji replaces it (PushInbox.add); "r:" never passes UUID_SHAPE, so it is never looked up as an older line.
+            val lineKey = if (reaction) "r:$pushMessageId:$reactorId" else pushMessageId
+            val text = when {
+                // A private chat's reaction is generic until the peek opens it; a plain one is built from e/q/qk (the server body is English only).
+                reaction -> if (locked) context.getString(R.string.reaction_generic) else reactionText(context, extras.getString("e"), extras.getString("q"), extras.getString("qk"))
+                locked -> lockedText
+                else -> extras.getString("body")
+            }
             val hasFields = conversationId != null && title != null && text != null
             val chat = extras.getString("chat")
             val hasNotificationBlock = extras.keySet().any { it.startsWith("gcm.n.") || it.startsWith("gcm.notification.") }
@@ -347,7 +374,7 @@ object InstantPush {
 
             // The inbox below always gets [text] (locked for an encrypted push); the real text only lives in memory.
             // Older lines of this chat whose text was lost with a dead process: ask the peek to read them back from the phone's store (memory only; max 50; uuid shape).
-            val olderIds = if (locked && !redraw && owner != null) {
+            val olderIds = if (locked && !reaction && !redraw && owner != null) {
                 PushInbox.find(PushInbox.parse(prefs.getString("flutter.sis.push_inbox.$owner", null)), conversationId)?.getJSONArray("l")?.let { arr ->
                     (0 until arr.length()).map { arr.getJSONObject(it).optString("m") }
                         .filter { UUID_SHAPE.matches(it) && !peekedTexts.containsKey(it) }
@@ -356,7 +383,18 @@ object InstantPush {
             } else {
                 emptyList()
             }
-            val peeked = if (locked && !redraw) PeekRunner.peek(context, extras, olderIds)?.also { t -> extras.getString("message_id")?.let { peekedTexts[it] = t } } else null
+            // A reaction's earlier peeked text must not outlive a replaced line whose new peek fails.
+            if (reaction && !redraw) peekedTexts.remove(lineKey)
+            val peeked = if (locked && !redraw) {
+                PeekRunner.peek(context, extras, olderIds)?.let { t ->
+                    // For a reaction the peek returns the emoji; the quote comes separately (memory only).
+                    val shown = if (reaction) reactionText(context, t, pushMessageId?.let { PeekRunner.takeQuote(it) }, null) else t
+                    lineKey?.let { peekedTexts[it] = shown }
+                    shown
+                }
+            } else {
+                null
+            }
             if (olderIds.isNotEmpty()) {
                 extras.getString("message_id")?.let { PeekRunner.takeOlder(it) }?.forEach { (id, t) -> if (id in olderIds && t.isNotEmpty()) peekedTexts[id] = t }
             }
@@ -401,7 +439,7 @@ object InstantPush {
                 chat,
                 text,
                 System.currentTimeMillis(),
-                extras.getString("message_id"),
+                lineKey,
             )
             // commit(), not apply(): written before Dart can read it, narrowing the read-modify-write race.
             if (!redraw) prefs.edit().putString(inboxKey, inbox).commit()

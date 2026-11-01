@@ -36,7 +36,7 @@ final class DeniedFailure extends Failure {
   @override
   String get message => failureText(
     "You don't have permission to do that.",
-    'Bunu yapma iznin yok.',
+    'Bunu yapma izniniz yok.',
   );
 }
 
@@ -47,7 +47,7 @@ final class SearchLimitFailure extends Failure {
   @override
   String get message => failureText(
     'Too many searches. Try again in a little while.',
-    'Çok fazla arama yaptın. Biraz sonra tekrar dene.',
+    'Çok fazla arama yaptınız. Biraz sonra tekrar deneyin.',
   );
 }
 
@@ -61,7 +61,7 @@ final class StickerLimitFailure extends Failure {
   @override
   String get message => failureText(
     'You have reached the sticker limit.',
-    'Çıkartma sınırına ulaştın.',
+    'Çıkartma sınırına ulaştınız.',
   );
 }
 
@@ -81,7 +81,7 @@ final class PinLimitFailure extends Failure {
   @override
   String get message => failureText(
     'You can pin up to 5 chats.',
-    'En fazla 5 sohbet sabitleyebilirsin.',
+    'En fazla 5 sohbet sabitleyebilirsiniz.',
   );
 }
 
@@ -140,8 +140,10 @@ final class LocationUnavailableFailure extends Failure {
   const LocationUnavailableFailure();
 
   @override
-  String get message =>
-      failureText('Could not find where you are.', 'Konumun bulunamadı.');
+  String get message => failureText(
+    'Could not find your position. Check that location is on.',
+    'Konumunuz bulunamadı. Konumunuzun açık olduğundan emin olun.',
+  );
 }
 
 final class ProviderFailure extends Failure {
@@ -159,7 +161,7 @@ final class HiddenEmailFailure extends Failure {
   @override
   String get message => failureText(
     "SIS needs your real email address. In Apple's sign-in choose Share My Email and try again.",
-    "SIS gerçek e-posta adresini gerektirir. Apple ile oturum açarken E-postamı Paylaş'ı seçip tekrar dene.",
+    "SIS gerçek e-posta adresinizi gerektirir. Apple ile oturum açarken E-postamı Paylaş'ı seçip tekrar deneyin.",
   );
 }
 
@@ -181,7 +183,7 @@ final class SessionPendingFailure extends Failure {
   @override
   String get message => failureText(
     'Setting up encryption. Try again in a moment.',
-    'Şifreleme hazırlanıyor. Biraz sonra tekrar dene.',
+    'Şifreleme hazırlanıyor. Biraz sonra tekrar deneyin.',
   );
 }
 
@@ -211,7 +213,7 @@ String failureReason(Object error) => error is Failure
     ? error.message
     : failureText(
         'Something went wrong. Try again.',
-        'Bir şeyler ters gitti. Tekrar dene.',
+        'Bir şeyler ters gitti. Tekrar deneyin.',
       );
 
 sealed class Result<T> {

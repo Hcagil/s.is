@@ -17,7 +17,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
     PostgrestException(:final code) when code == '23505' => ProviderFailure(
       failureText(
         'That tag was just taken. Choose another one.',
-        'Bu etiket az önce alındı. Başka bir tane seç.',
+        'Bu etiket az önce alındı. Başka bir tane seçin.',
       ),
     ),
     PostgrestException(:final code) when code == '23514' => ProviderFailure(
@@ -31,7 +31,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
     PostgrestException(:final code) when code == 'RLMT1' => ProviderFailure(
       failureText(
         'Too many searches. Try again in a little while.',
-        'Çok fazla arama yaptın. Biraz sonra tekrar dene.',
+        'Çok fazla arama yaptınız. Biraz sonra tekrar deneyin.',
       ),
     ),
     _ => readableFailure(e),

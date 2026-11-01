@@ -52,10 +52,10 @@ const enBody =
     'SIS works on one phone at a time. Sign in again to use it here; the '
     'other phone will be signed out.';
 const enButton = 'Sign in';
-const trTitle = 'Başka bir telefonda oturum açtın';
+const trTitle = 'Başka bir telefonda oturum açtınız';
 const trBody =
     'SIS aynı anda tek telefonda çalışır. Burada kullanmak için yeniden '
-    'oturum aç; diğer telefonun oturumu kapanır.';
+    'oturum açın; diğer telefonun oturumu kapanır.';
 const trButton = 'Oturum aç';
 final deniedText = find.textContaining('not approved for SIS');
 

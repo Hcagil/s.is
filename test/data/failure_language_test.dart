@@ -39,7 +39,7 @@ void main() {
       final e = const SocketException('Failed host lookup: nope');
       expect(
         readableFailure(e).message,
-        'Bağlantı yok. İnternetini kontrol edip tekrar dene.',
+        'Bağlantı yok. İnternetinizi kontrol edip tekrar deneyin.',
       );
     });
 
@@ -48,14 +48,14 @@ void main() {
       final e = PostgrestException(message: 'x');
       expect(
         readableFailure(e).message,
-        'Bizden kaynaklı bir sorun oluştu. Tekrar dene.',
+        'Bizden kaynaklı bir sorun oluştu. Tekrar deneyin.',
       );
     });
 
     test('generic failure (tr)', () {
       failureLanguage = 'tr';
       final e = StateError('boom');
-      expect(readableFailure(e).message, 'Bir şeyler ters gitti. Tekrar dene.');
+      expect(readableFailure(e).message, 'Bir şeyler ters gitti. Tekrar deneyin.');
     });
   });
 
@@ -66,7 +66,7 @@ void main() {
     });
     test('tr', () {
       failureLanguage = 'tr';
-      expect(signInFailedMessage, 'Oturum açılamadı. Tekrar dene.');
+      expect(signInFailedMessage, 'Oturum açılamadı. Tekrar deneyin.');
       expect(signInCanceledMessage, 'Oturum açma iptal edildi.');
     });
   });

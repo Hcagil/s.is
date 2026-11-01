@@ -28,21 +28,21 @@ void main() {
     test('Turkish, count 1', () {
       expect(
         l10nTr.videoPickFailed(1),
-        equals('Bu video gönderilemedi. Tekrar dene.'),
+        equals('Bu video gönderilemedi. Tekrar deneyin.'),
       );
     });
 
     test('Turkish, count 2', () {
       expect(
         l10nTr.videoPickFailed(2),
-        equals('2 video gönderilemedi. Tekrar dene.'),
+        equals('2 video gönderilemedi. Tekrar deneyin.'),
       );
     });
 
     test('Turkish, count 5', () {
       expect(
         l10nTr.videoPickFailed(5),
-        equals('5 video gönderilemedi. Tekrar dene.'),
+        equals('5 video gönderilemedi. Tekrar deneyin.'),
       );
     });
   });

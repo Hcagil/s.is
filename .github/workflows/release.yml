@@ -1,12 +1,15 @@
 name: Release
-# Runs once a day at 09:17 UTC (12:17 Turkey time, UTC+3 all year; 09:00 is GitHub's
-# busiest minute) with a fallback at 10:43 UTC (only the first schedule run of a
-# day ships), and by hand
-# for an urgent fix (docs/DECISIONS.md, 2026-10-25). It releases the newest main
-# commit whose CI passed on main. Branch protection lets an administrator merge
-# past a red check (DECISIONS, 2026-09-21); taking only a green commit is what
-# keeps such a merge from shipping.
+# A release starts as soon as CI passes on main (workflow_run), at most ONE release per Istanbul calendar day (Europe/Istanbul);
+# the two daily crons (09:17 and 10:43 UTC) only catch up a change that missed it;
+# an urgent manual run with any reason other than 'daily' ships the same day
+# (docs/DECISIONS.md, 2026-10-25); it releases the newest main commit whose CI passed on main;
+# branch protection lets an admin merge past a red check (DECISIONS 2026-09-21),
+# taking only a green commit is what keeps such a merge from shipping.
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   schedule:
     - cron: '17 9 * * *'
     - cron: '43 10 * * *'
@@ -22,7 +25,7 @@ permissions:
 jobs:
   scope:
     # Main only: a manual run started on another branch is refused.
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -62,16 +65,15 @@ jobs:
           SHA: ${{ steps.pick.outputs.sha }}
           REASON: ${{ inputs.reason }}
           EVENT: ${{ github.event_name }}
-          RUN_ID: ${{ github.run_id }}
         run: |
           prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
           ship=$(tool/release_scope.sh "$prev" "$SHA")
-          if [ "$EVENT" = schedule ]; then
-            earlier=$(gh run list --workflow release.yml --event schedule --created "$(date -u +%F)" --limit 50 --json databaseId --jq "[.[] | select(.databaseId < $RUN_ID)] | length")
-            if [ "$earlier" -gt 0 ]; then ship=ship=false; fi
+          if [ "$EVENT" != workflow_dispatch ] || [ "$REASON" = daily ]; then
+            last=$(gh release list --limit 1 --json publishedAt --jq '.[0].publishedAt // empty')
+            if [ -n "$last" ] && [ "$(TZ=Europe/Istanbul date -d "$last" +%F)" = "$(TZ=Europe/Istanbul date +%F)" ]; then ship=ship=false; fi
           fi
           echo "$ship" >> "$GITHUB_OUTPUT"
-          echo "Release range ${prev:-start}..$SHA: $ship (${REASON:-daily noon run})" >> "$GITHUB_STEP_SUMMARY"
+          echo "Release range ${prev:-start}..$SHA: $ship (${REASON:-$EVENT})" >> "$GITHUB_STEP_SUMMARY"
       # One source for the version, read by the Play job and the iOS job alike,
       # so both builds carry the same number.
       - name: Compute version

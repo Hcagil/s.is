@@ -24,8 +24,8 @@ const hiddenEn =
     "SIS needs your real email address. In Apple's sign-in choose Share My "
     'Email and try again.';
 const hiddenTr =
-    'SIS gerçek e-posta adresinizi gerektirir. Apple girişinde E-postamı '
-    "Paylaş'ı seçip tekrar deneyin.";
+    'SIS gerçek e-posta adresinizi gerektirir. Apple ile oturum açarken '
+    "E-postamı Paylaş'ı seçip tekrar deneyin.";
 final appleButton = find.byKey(const ValueKey('apple-sign-in'));
 final googleButton = find.text('Continue with Google');
 final ios = TargetPlatformVariant.only(TargetPlatform.iOS);
@@ -136,7 +136,7 @@ void main() {
       await t.pumpAndSettle();
       await tapApple(t);
 
-      expect(find.textContaining('not currently approved'), findsOneWidget);
+      expect(find.textContaining('not approved for SIS'), findsOneWidget);
       expect(find.byType(SignInScreen), findsNothing);
     }, variant: ios);
 
@@ -145,14 +145,14 @@ void main() {
     ) async {
       final auth = FakeAuth()
         ..appleResult = const Err(
-          ProviderFailure('Sign-in failed. Please try again.'),
+          ProviderFailure('Could not sign in. Try again.'),
         );
       await t.pumpWidget(app(auth));
       await t.pumpAndSettle();
       await tapApple(t);
 
       expect(find.byType(SignInScreen), findsNothing);
-      expect(find.text('Sign-in failed. Please try again.'), findsOneWidget);
+      expect(find.text('Could not sign in. Try again.'), findsOneWidget);
     }, variant: ios);
   });
 

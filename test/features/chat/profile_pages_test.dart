@@ -572,7 +572,7 @@ void main() {
       await tapKey(t, 'group-member-u3');
       expect(find.byType(PersonScreen), findsOneWidget);
       await tapKey(t, 'tab-media');
-      expect(find.text('No photos shared yet'), findsOneWidget);
+      expect(find.text('No media shared yet'), findsOneWidget);
       expect(byKey('media-g1/1.png'), findsNothing, reason: 'group media');
       await tapKey(t, 'tab-links');
       expect(find.text('No links shared yet'), findsOneWidget);
@@ -842,7 +842,7 @@ void main() {
       });
 
       testWidgets('$who: confirm leaves through the real controller, says '
-          '"Left the group" and pops the page', (t) async {
+          '"You left the group" and pops the page', (t) async {
         final w = clubWith(admin: admin);
         await clubPage(t, w);
         await openCard(t);
@@ -852,7 +852,7 @@ void main() {
         expect(find.byType(GroupScreen), findsNothing, reason: 'not popped');
         expect(byKey('leave-card'), findsNothing);
         expect(t.widgetList<SisNotice>(notice).map((n) => n.message), [
-          'Left the group',
+          'You left the group',
         ]);
         await drainNotice(t);
       });
@@ -876,8 +876,8 @@ void main() {
         expect(spy.left, ['g1']);
         expect(t.widgetList<SisNotice>(notice).map((n) => n.message), [
           unsent
-              ? 'Left the group. Unsent messages weren\'t sent.'
-              : 'Left the group',
+              ? 'You left the group. Messages still waiting to send were not sent.'
+              : 'You left the group',
         ]);
         expect(find.byType(GroupScreen), findsNothing);
         await drainNotice(t);

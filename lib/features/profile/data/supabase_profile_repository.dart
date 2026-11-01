@@ -14,14 +14,26 @@ final class SupabaseProfileRepository implements ProfileRepository {
   final SupabaseClient _client;
 
   Failure _asFailure(Object e) => switch (e) {
-    PostgrestException(:final code) when code == '23505' =>
-      const ProviderFailure('That tag was just taken. Pick another.'),
-    PostgrestException(:final code) when code == '23514' =>
-      const ProviderFailure('That name or tag is not allowed.'),
+    PostgrestException(:final code) when code == '23505' => ProviderFailure(
+      failureText(
+        'That tag was just taken. Choose another one.',
+        'Bu etiket az önce alındı. Başka bir tane seç.',
+      ),
+    ),
+    PostgrestException(:final code) when code == '23514' => ProviderFailure(
+      failureText(
+        'That name or tag is not allowed.',
+        'Bu ad veya etiket kullanılamaz.',
+      ),
+    ),
     PostgrestException(:final code) when code == '42501' =>
       const DeniedFailure(),
-    PostgrestException(:final code) when code == 'RLMT1' =>
-      const ProviderFailure('Too many searches, try again later.'),
+    PostgrestException(:final code) when code == 'RLMT1' => ProviderFailure(
+      failureText(
+        'Too many searches. Try again in a little while.',
+        'Çok fazla arama yaptın. Biraz sonra tekrar dene.',
+      ),
+    ),
     _ => readableFailure(e),
   };
 

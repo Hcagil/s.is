@@ -305,7 +305,7 @@ void main() {
       await openPage(t, 'settings-account');
 
       expect(appBarTitle('Account'), findsOneWidget);
-      expect(find.text('Signed in with Google as'), findsOneWidget);
+      expect(find.text('Signed in as'), findsOneWidget);
       expect(
         find.descendant(
           of: byKey('account-email'),
@@ -390,7 +390,7 @@ void main() {
       expect(nav.canPop(), isFalse, reason: 'a page is left on the stack');
       for (final gone in [
         find.byType(SettingsScreen, skipOffstage: false),
-        find.text('Signed in with Google as', skipOffstage: false),
+        find.text('Signed in as', skipOffstage: false),
         find.byKey(const ValueKey('account-sign-out'), skipOffstage: false),
         find.byType(HomeScreen, skipOffstage: false),
       ]) {
@@ -505,7 +505,7 @@ void main() {
 
       await pumpApp(t);
       await openPage(t, 'settings-about');
-      expect(under('about-licences', 'Open-source licences'), findsOneWidget);
+      expect(under('about-licences', 'Open-source licenses'), findsOneWidget);
       await t.tap(byKey('about-licences'));
       // The page spins while it reads the registry off the real asset bundle.
       for (var i = 0; i < 50 && find.text('sora').evaluate().isEmpty; i++) {

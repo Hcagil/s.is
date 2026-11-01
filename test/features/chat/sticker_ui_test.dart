@@ -170,8 +170,8 @@ void main() {
       }
       expect(labels, [
         'Recent',
-        'Favourites',
-        'SIS starter',
+        'Favorites',
+        'SIS starter pack',
         'My stickers',
         '+ New',
       ]);
@@ -282,7 +282,7 @@ void main() {
       final e = await open(t, messages: [stickerMsg('m1', 's1')]);
       await t.longPress(k('sticker-m1'));
       await t.pumpAndSettle();
-      await t.tap(find.text('Add to favourites').last);
+      await t.tap(find.text('Add to favorites').last);
       await t.pumpAndSettle();
       expect(e.repo.calls, contains('addFavourite s1'));
       expect(e.repo.favs, ['s1']);
@@ -312,7 +312,7 @@ void main() {
       await open(t, messages: [stickerMsg('m1', 's1', from: 'u1')]);
       await t.longPress(k('sticker-m1'));
       await t.pumpAndSettle();
-      expect(find.text('Add to favourites'), findsNothing);
+      expect(find.text('Add to favorites'), findsNothing);
       expect(find.text('Add to album'), findsNothing);
     });
 
@@ -326,7 +326,7 @@ void main() {
       await t.tap(k('menu-sticker-favourite'));
       await t.pumpAndSettle();
       expect(e.repo.calls, contains('addFavourite s1'));
-      expect(find.text('Added to favourites.'), findsOneWidget);
+      expect(find.text('Added to favorites'), findsOneWidget);
       await noticesGone(t);
     });
 
@@ -339,8 +339,8 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(k('menu-sticker-favourite'));
       await t.pumpAndSettle();
-      expect(find.text('Added to favourites.'), findsNothing);
-      expect(find.text('You can keep up to 200 favourites.'), findsOneWidget);
+      expect(find.text('Added to favorites'), findsNothing);
+      expect(find.text('You can keep up to 200 favorites.'), findsOneWidget);
       await noticesGone(t);
     });
 

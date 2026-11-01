@@ -82,16 +82,30 @@ object InstantPush {
         return "msg-$tone-v${if (a.vibration) 1 else 0}"
     }
 
+    /** The summary line in the phone's language; getText keeps the %1$d / %2$d markers for PushInbox.summary to fill. */
+    fun summaryText(context: Context, chats: org.json.JSONArray): String =
+        PushInbox.summary(
+            chats,
+            context.getString(R.string.summary_one),
+            context.resources.getText(R.string.summary_many).toString(),
+            context.resources.getText(R.string.summary_chats).toString(),
+        )
     /** The channel's name in the phone's settings. */
-    fun alertChannelName(a: Alert): String =
-        "Messages" + (if (a.sound) (if (a.tone == null) "" else " (custom tone)") else " (silent)") + (if (a.vibration) "" else ", no vibration")
+    fun alertChannelName(
+        a: Alert,
+        messages: String = "Messages",
+        customTone: String = "Messages (custom tone)",
+        silent: String = "Messages (silent)",
+        noVibration: String = ", no vibration",
+    ): String =
+        (if (a.sound) (if (a.tone == null) messages else customTone) else silent) + (if (a.vibration) "" else noVibration)
 
     /** Creates the channel for [a] if it does not exist (an existing one, with the member's own settings, is left alone) and returns its id. Same settings the notifications plugin gave it: high importance, the tone or the default notification sound, notification audio usage. */
     fun ensureAlertChannel(context: Context, a: Alert): String {
         val id = alertChannelId(a)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(id, alertChannelName(a), NotificationManager.IMPORTANCE_HIGH)
-            channel.description = "New messages"
+            val channel = NotificationChannel(id, alertChannelName(a, context.getString(R.string.channel_messages), context.getString(R.string.channel_custom_tone), context.getString(R.string.channel_silent), context.getString(R.string.channel_no_vibration)), NotificationManager.IMPORTANCE_HIGH)
+            channel.description = context.getString(R.string.channel_description)
             if (a.sound) {
                 val uri = if (a.tone == null) RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION) else Uri.parse(a.tone)
                 channel.setSound(uri, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build())
@@ -191,6 +205,21 @@ object InstantPush {
         return if (group && !sender.isNullOrEmpty()) "$sender: $text" else text
     }
 
+    /** The text of a reaction notification, built on the phone in the phone's language: the emoji [emoji] with the [quote] of the reacted message (already cut by the server or by the peek) or, for a media message, its [quoteKind] ("photo", "video", "sticker", "voice", "file"); "to your message" when neither is known. The generic text when [emoji] is null or blank. */
+    fun reactionText(context: Context, emoji: String?, quote: String?, quoteKind: String?): String {
+        if (emoji.isNullOrBlank()) return context.getString(R.string.reaction_generic)
+        if (!quote.isNullOrBlank()) return context.getString(R.string.reaction_to_quote, emoji, quote)
+        val res = when (quoteKind) {
+            "photo" -> R.string.reaction_to_photo
+            "video" -> R.string.reaction_to_video
+            "sticker" -> R.string.reaction_to_sticker
+            "voice" -> R.string.reaction_to_voice
+            "file" -> R.string.reaction_to_file
+            else -> R.string.reaction_to_message
+        }
+        return context.getString(res, emoji)
+    }
+
     /** The tap contract of flutter_local_notifications, so the app opens the chat as it does for the notification Dart draws. Null when the app has no launch intent. */
     fun tapIntent(context: Context, id: Int, conversationId: String): PendingIntent? {
         val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return null
@@ -234,7 +263,7 @@ object InstantPush {
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setColor(ContextCompat.getColor(context, R.color.notification_accent))
             .setContentTitle("SIS")
-            .setContentText(PushInbox.summary(inboxChats))
+            .setContentText(summaryText(context, inboxChats))
             .setStyle(
                 NotificationCompat.InboxStyle().also { s ->
                     for (i in inboxChats.length() - 1 downTo 0) {
@@ -244,7 +273,7 @@ object InstantPush {
                         val who = last.optString("s")
                         s.addLine(c.optString("t") + ": " + (if (c.optBoolean("g") && who.isNotEmpty()) "$who: " else "") + last.optString("x"))
                     }
-                    s.setSummaryText(PushInbox.summary(inboxChats))
+                    s.setSummaryText(summaryText(context, inboxChats))
                 },
             )
             .setGroup(GROUP)
@@ -299,8 +328,20 @@ object InstantPush {
             val title = extras.getString("title")
             val locked = extras.getString("encrypted") == "true"
             // An encrypted chat shows the peeked text or the locked text (the server body is only a placeholder); its Reply goes to the app, see addEncryptedReply.
-            val lockedText = context.getString(R.string.notification_locked)
-            val text = if (locked) lockedText else extras.getString("body")
+            val lockedText = context.getString(R.string.notification_fallback)
+            val reaction = extras.getString("kind") == "reaction"
+            val reactorId = extras.getString("reactor_id")
+            val pushMessageId = extras.getString("message_id")
+            // A reaction needs both ids in uuid shape, and a reaction by myself is dropped (defence in depth: the server never sends one).
+            if (reaction && (reactorId == null || !UUID_SHAPE.matches(reactorId) || pushMessageId == null || !UUID_SHAPE.matches(pushMessageId) || reactorId == extras.getString("user_id"))) return false
+            // The inbox line key: one line per reactor and message, so a changed emoji replaces it (PushInbox.add); "r:" never passes UUID_SHAPE, so it is never looked up as an older line.
+            val lineKey = if (reaction) "r:$pushMessageId:$reactorId" else pushMessageId
+            val text = when {
+                // A private chat's reaction is generic until the peek opens it; a plain one is built from e/q/qk (the server body is English only).
+                reaction -> if (locked) context.getString(R.string.reaction_generic) else reactionText(context, extras.getString("e"), extras.getString("q"), extras.getString("qk"))
+                locked -> lockedText
+                else -> extras.getString("body")
+            }
             val hasFields = conversationId != null && title != null && text != null
             val chat = extras.getString("chat")
             val hasNotificationBlock = extras.keySet().any { it.startsWith("gcm.n.") || it.startsWith("gcm.notification.") }
@@ -333,7 +374,7 @@ object InstantPush {
 
             // The inbox below always gets [text] (locked for an encrypted push); the real text only lives in memory.
             // Older lines of this chat whose text was lost with a dead process: ask the peek to read them back from the phone's store (memory only; max 50; uuid shape).
-            val olderIds = if (locked && !redraw && owner != null) {
+            val olderIds = if (locked && !reaction && !redraw && owner != null) {
                 PushInbox.find(PushInbox.parse(prefs.getString("flutter.sis.push_inbox.$owner", null)), conversationId)?.getJSONArray("l")?.let { arr ->
                     (0 until arr.length()).map { arr.getJSONObject(it).optString("m") }
                         .filter { UUID_SHAPE.matches(it) && !peekedTexts.containsKey(it) }
@@ -342,7 +383,18 @@ object InstantPush {
             } else {
                 emptyList()
             }
-            val peeked = if (locked && !redraw) PeekRunner.peek(context, extras, olderIds)?.also { t -> extras.getString("message_id")?.let { peekedTexts[it] = t } } else null
+            // A reaction's earlier peeked text must not outlive a replaced line whose new peek fails.
+            if (reaction && !redraw) peekedTexts.remove(lineKey)
+            val peeked = if (locked && !redraw) {
+                PeekRunner.peek(context, extras, olderIds)?.let { t ->
+                    // For a reaction the peek returns the emoji; the quote comes separately (memory only).
+                    val shown = if (reaction) reactionText(context, t, pushMessageId?.let { PeekRunner.takeQuote(it) }, null) else t
+                    lineKey?.let { peekedTexts[it] = shown }
+                    shown
+                }
+            } else {
+                null
+            }
             if (olderIds.isNotEmpty()) {
                 extras.getString("message_id")?.let { PeekRunner.takeOlder(it) }?.forEach { (id, t) -> if (id in olderIds && t.isNotEmpty()) peekedTexts[id] = t }
             }
@@ -354,7 +406,7 @@ object InstantPush {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 manager.createNotificationChannel(
-                    NotificationChannel(CHANNEL_SUMMARY, "Summary", NotificationManager.IMPORTANCE_LOW),
+                    NotificationChannel(CHANNEL_SUMMARY, context.getString(R.string.channel_summary), NotificationManager.IMPORTANCE_LOW),
                 )
                 if (!legacyChannelsDeleted) {
                     // Builds before the per-chat tone channels left these four in the phone's settings.
@@ -387,7 +439,7 @@ object InstantPush {
                 chat,
                 text,
                 System.currentTimeMillis(),
-                extras.getString("message_id"),
+                lineKey,
             )
             // commit(), not apply(): written before Dart can read it, narrowing the read-modify-write race.
             if (!redraw) prefs.edit().putString(inboxKey, inbox).commit()
@@ -395,7 +447,7 @@ object InstantPush {
             val entry = PushInbox.find(inboxChats, conversationId) ?: return false
             val isGroup = entry.optBoolean("g")
             val avatar = avatarFor(context, ownerId, conversationId)
-            val style = NotificationCompat.MessagingStyle(Person.Builder().setName("You").build())
+            val style = NotificationCompat.MessagingStyle(Person.Builder().setName(context.getString(R.string.person_you)).build())
             if (isGroup) {
                 style.setConversationTitle(entry.optString("t"))
                 style.setGroupConversation(true)
@@ -429,22 +481,20 @@ object InstantPush {
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setWhen(System.currentTimeMillis())
-                .apply { if (entry.optInt("n", 0) > 1) setSubText("${entry.optInt("n")} new messages") }
+                .apply { if (entry.optInt("n", 0) > 1) setSubText(context.getString(R.string.summary_many, entry.optInt("n"))) }
                 .apply { if (!loud) setSilent(true).setOnlyAlertOnce(true) }
                 .apply { if (badge > 0) setNumber(badge) }
                 .apply {
-                    // With the default lock-screen setting the lock screen shows this locked public version, not the text; a phone set to "show all content" shows the full notification.
-                    if (locked) {
-                        setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-                        setPublicVersion(
-                            NotificationCompat.Builder(context, channel)
-                                .setSmallIcon(R.drawable.ic_launcher_monochrome)
-                                .setColor(ContextCompat.getColor(context, R.color.notification_accent))
-                                .setContentTitle(entry.optString("t"))
-                                .setContentText(lockedText)
-                                .build(),
-                        )
-                    }
+                    // The phone's own lock-screen setting decides: full content, or only this public version (same for every chat).
+                    setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                    setPublicVersion(
+                        NotificationCompat.Builder(context, channel)
+                            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+                            .setColor(ContextCompat.getColor(context, R.color.notification_accent))
+                            .setContentTitle(context.getString(R.string.notification_public_title))
+                            .setContentText(lockedText)
+                            .build(),
+                    )
                 }
                 .apply {
                     // The buttons need the action token the push carried; an older server sends none.

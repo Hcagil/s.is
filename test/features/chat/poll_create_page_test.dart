@@ -241,7 +241,7 @@ void main() {
     WidgetTester t,
   ) async {
     await openTr360(t);
-    expect(find.text('Yeni Anket'), findsOneWidget);
+    expect(find.text('Yeni anket'), findsOneWidget);
     await t.ensureVisible(k('poll-question'));
     await t.pumpAndSettle();
     await t.enterText(

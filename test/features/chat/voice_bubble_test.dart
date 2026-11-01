@@ -338,7 +338,7 @@ void main() {
 
     final tr = lookupAppLocalizations(const Locale('tr')).voicePreviewLine;
     final en = lookupAppLocalizations(const Locale('en')).voicePreviewLine;
-    expect(tr, '🎤 Sesli mesaj');
-    expect(en, '🎤 Voice message');
+    expect(tr, 'Sesli mesaj');
+    expect(en, 'Voice message');
   });
 }

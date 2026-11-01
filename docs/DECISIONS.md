@@ -242,6 +242,17 @@ unchanged.
 - iOS offers Turkish only once `CFBundleLocalizations` lists `tr` (and `tr` is
   in `knownRegions`); that change ships with the Update 1 release.
 
+**Amendment 2026-11-01 (app texts in both languages).** Failure sentences
+already lived in `core/` (`Failure.message`) before this rule was applied to
+them. They now follow the app language through one small exception:
+`lib/core/failure.dart` holds `failureLanguage`, set by the app builder, and
+`failureText(en, tr)` picks the sentence; `NetworkFailure.localized` takes the
+two sentences as literals. Background isolates (push) never run the builder,
+so failure sentences there stay English; push display text uses
+`lookupAppLocalizations` instead. Long term the failures become typed codes
+turned into words in `presentation/`; until then no new `core/`,
+`application/` or `domain/` sentence is added outside `failureText`.
+
 ## 2026-10-06 — Android chat notifications are drawn natively only; Reply needs an unlocked phone
 
 **Context.** A Reply from a lock-screen notification must not send without
@@ -648,3 +659,13 @@ Nothing contacts the site before that tap.
 - If the peek does not run or times out, older lines show the locked text as before. After a process death between a text push and its picture, older lines stay locked until the next push.
 - iOS saves the first message the same way in its notification service extension.
 
+## 2026-10-29 — Reaction notifications open on the phone; the lock screen follows the phone's setting
+
+**Decision.** When someone reacts to your message, the server sends a push to you only (the message author), never for your own or a bot's reaction. In a plain chat with full preview the push carries the emoji and a short quote; in a private chat it carries only the encrypted reaction, which the phone opens in memory. Every chat notification is private on the lock screen with one public version ("SIS" / "New message"), so the phone's own setting decides what the lock screen shows, and no notification text has a lock sign.
+
+**Why.** The owner wants reaction notifications like WhatsApp, and the lock screen to follow the phone's setting (owner 2026-10-29). Opening the reaction on the phone keeps the server from ever seeing a private chat's emoji.
+
+**Consequences.**
+- Old builds never get a reaction push: a device gets one only after its build registers with `reaction_push` true (Android and iOS builds that draw reactions).
+- A retry, a clear or a relock sends nothing from the database; the edge claim and limits keep forged calls to at most one extra push (accepted, see SECURITY.md).
+- With "hide sensitive content" on, the lock screen shows "SIS" instead of the sender's name.

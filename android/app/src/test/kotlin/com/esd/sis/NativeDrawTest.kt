@@ -436,11 +436,11 @@ class NativeDrawTest {
     }
 
     @Test
-    fun `group payload without the text - the sender's New message, the text never shown`() {
+    fun `group payload without the text - the sender's Yeni mesaj (the server's body as sent), the text never shown`() {
         val n = deliver("group_sender", "g-team")
         val s = style(n)
         assertEquals("Edge Team", s.conversationTitle.toString())
-        assertEquals(listOf("New message"), s.messages.map { it.text.toString() })
+        assertEquals(listOf("Yeni mesaj"), s.messages.map { it.text.toString() })
         assertEquals(listOf("Ann Sender"), s.messages.map { it.person?.name?.toString() })
     }
 

@@ -259,8 +259,8 @@ void main() {
       );
       await openWallpaper(t);
       expect(under('wallpaper-tab-colour', 'Renk'), findsOneWidget);
-      expect(under('wallpaper-tab-gradient', 'Gradyan'), findsOneWidget);
-      expect(under('wallpaper-tab-picture', 'Resim'), findsOneWidget);
+      expect(under('wallpaper-tab-gradient', 'Degrade'), findsOneWidget);
+      expect(under('wallpaper-tab-picture', 'Fotoğraf'), findsOneWidget);
     });
 
     testWidgets('English tab labels', (t) async {
@@ -271,9 +271,9 @@ void main() {
         initial: AppearanceSettings(language: AppLanguage.en),
       );
       await openWallpaper(t);
-      expect(under('wallpaper-tab-colour', 'Colour'), findsOneWidget);
+      expect(under('wallpaper-tab-colour', 'Color'), findsOneWidget);
       expect(under('wallpaper-tab-gradient', 'Gradient'), findsOneWidget);
-      expect(under('wallpaper-tab-picture', 'Picture'), findsOneWidget);
+      expect(under('wallpaper-tab-picture', 'Photo'), findsOneWidget);
     });
   });
 }

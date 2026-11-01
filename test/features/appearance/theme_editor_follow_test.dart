@@ -251,7 +251,7 @@ void main() {
       await t.tap(byKey('swatch-mine-FFFFFF'));
       await t.pumpAndSettle();
       expect(
-        find.text('Bu renk, vurguyu değiştirseniz de sabit kalır.'),
+        find.text('Vurgu renginizi değiştirseniz de bu renk sabit kalır.'),
         findsOneWidget,
       );
       h.dispose();

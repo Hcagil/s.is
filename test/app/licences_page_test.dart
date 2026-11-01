@@ -96,7 +96,7 @@ double _lastLineMid(WidgetTester t, String text) {
 }
 
 /// Tile subtitles of the form "N licences" (or a stray "1 licence").
-final _counts = find.textContaining(RegExp(r'^\d+ licences?$'));
+final _counts = find.textContaining(RegExp(r'^\d+ licenses?$'));
 
 void main() {
   group('detail page lays out each paragraph as the licence asks', () {
@@ -202,7 +202,7 @@ void main() {
       await _mount(t, registry);
       expect(_counts, findsNWidgets(2), reason: 'only beta and eta have many');
       for (final (package, count) in [('beta', 2), ('eta', 3)]) {
-        final label = find.text('$count licences');
+        final label = find.text('$count licenses');
         expect(label, findsOneWidget);
         final next = sorted[sorted.indexOf(package) + 1];
         final y = t.getTopLeft(label).dy;

@@ -32,12 +32,12 @@ void main() {
     AppLanguage.tr: 'Varsay\u0131lana s\u0131f\u0131rla',
   };
   final accentLabels = {
-    AppLanguage.en: 'Accent Color',
-    AppLanguage.tr: 'Vurgu Rengi',
+    AppLanguage.en: 'Accent color',
+    AppLanguage.tr: 'Vurgu rengi',
   };
-  final bgLabels = {AppLanguage.en: 'Background', AppLanguage.tr: 'Arka Plan'};
+  final bgLabels = {AppLanguage.en: 'Background', AppLanguage.tr: 'Arka plan'};
   final mineLabels = {
-    AppLanguage.en: 'My Messages',
+    AppLanguage.en: 'My messages',
     AppLanguage.tr: 'Mesajlar\u0131m',
   };
   final modeLabels = {

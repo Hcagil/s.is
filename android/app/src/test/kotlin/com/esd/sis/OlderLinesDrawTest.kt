@@ -112,6 +112,6 @@ class OlderLinesDrawTest {
         engine("must not show")
         offMain { InstantPush.show(app, extras("c-a5"), paced = false) }
         assertEquals("no engine once the budget is spent", 1, calls)
-        assertEquals(listOf("🔒 New message", "🔒 New message"), lines("c-a5"))
+        assertEquals(listOf("New message", "New message"), lines("c-a5"))
     }
 }

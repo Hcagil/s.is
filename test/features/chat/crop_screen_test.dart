@@ -521,10 +521,10 @@ void main() {
       await t.pumpAndSettle();
     }
 
-    testWidgets('"Crop picture", Choose, a live preview, a hint, the dim, '
+    testWidgets('"Crop photo", Choose, a live preview, a hint, the dim, '
         'and a zoom slider from 1 to 4 starting at 1', (t) async {
       await open(t, 2000, 1000);
-      expect(find.text('Crop picture'), findsOneWidget);
+      expect(find.text('Crop photo'), findsOneWidget);
       expect(
         find.descendant(of: byKey('crop-use'), matching: find.text('Choose')),
         findsOneWidget,

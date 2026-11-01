@@ -836,7 +836,10 @@ void main() {
         await tap(t, 'maker-save');
         await until(
           t,
-          () => find.text('Sticker limit reached.').evaluate().isNotEmpty,
+          () => find
+              .text('You have reached the sticker limit.')
+              .evaluate()
+              .isNotEmpty,
           'the limit notice',
         );
         expect(k('maker-saved'), findsNothing);

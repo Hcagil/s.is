@@ -160,7 +160,7 @@ reset role;
 -- 4 the push body ---------------------------------------------------------------------
 select is((select string_agg(body, ',') from app_private.push_targets_for_message(
              'f1100000-0000-0000-0000-00000000a010') where user_id = u('02')),
-          E'\U0001F4CE Menu.xlsx', 'the push of a file message reads the paperclip and the name');
+          'Dosya: Menu.xlsx', 'the push of a file message reads Dosya: and the name (no app language: Turkish, no emoji)');
 
 -- 5 the guard trigger ------------------------------------------------------------------
 select as_('01');

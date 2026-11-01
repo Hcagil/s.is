@@ -1,3 +1,5 @@
+import '../../../core/failure.dart';
+
 /// Who may see this member's profile picture. Everyone here already means
 /// "everyone who can see the profile at all" -- see docs/DECISIONS.md,
 /// "Contacts, exact-tag search, and who sees your picture". One-way: hiding
@@ -66,11 +68,23 @@ String normaliseTag(String input) {
 /// fine. The same shape as the `profiles.tag` check constraint; whether it is
 /// FREE is a separate question only the server can answer.
 String? tagProblem(String tag) {
-  if (tag.length < 3) return 'At least 3 characters';
-  if (tag.length > 20) return 'At most 20 characters';
-  if (!RegExp(r'^[a-z]').hasMatch(tag)) return 'Start with a letter';
+  if (tag.length < 3) {
+    return failureText('Use at least 3 characters', 'En az 3 karakter olmalı');
+  }
+  if (tag.length > 20) {
+    return failureText(
+      'Use at most 20 characters',
+      'En fazla 20 karakter olabilir',
+    );
+  }
+  if (!RegExp(r'^[a-z]').hasMatch(tag)) {
+    return failureText('Start with a letter', 'Harfle başlamalı');
+  }
   if (!RegExp(r'^[a-z0-9_]+$').hasMatch(tag)) {
-    return 'Letters, digits and _ only';
+    return failureText(
+      'Use letters, digits and _ only',
+      'Yalnızca harf, rakam ve _ kullanılabilir',
+    );
   }
   return null;
 }
@@ -78,9 +92,12 @@ String? tagProblem(String tag) {
 /// Why [name] cannot be used as a display name, or null when it can.
 String? displayNameProblem(String name) {
   final trimmed = name.trim();
-  if (trimmed.isEmpty) return 'Enter a name';
+  if (trimmed.isEmpty) return failureText('Enter a name', 'Bir ad gir');
   if (trimmed.length > maxDisplayNameLength) {
-    return 'At most $maxDisplayNameLength characters';
+    return failureText(
+      'Use at most $maxDisplayNameLength characters',
+      'En fazla $maxDisplayNameLength karakter olabilir',
+    );
   }
   return null;
 }

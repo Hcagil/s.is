@@ -33,10 +33,10 @@ import UserNotifications
     let turkish = Locale.preferredLanguages.first?.hasPrefix("tr") ?? false
     let reply = UNTextInputNotificationAction(identifier: AppDelegate.replyAction, title: turkish ? "Yanıtla" : "Reply", options: [.authenticationRequired], textInputButtonTitle: turkish ? "Gönder" : "Send", textInputPlaceholder: turkish ? "Mesaj" : "Message")
     let markRead = UNNotificationAction(identifier: AppDelegate.markReadAction, title: turkish ? "Okundu olarak işaretle" : "Mark as read", options: [])
-    let category = UNNotificationCategory(identifier: AppDelegate.messageCategory, actions: [reply, markRead], intentIdentifiers: [], options: [])
+    let category = UNNotificationCategory(identifier: AppDelegate.messageCategory, actions: [reply, markRead], intentIdentifiers: [], hiddenPreviewsBodyPlaceholder: turkish ? "Yeni mesaj" : "New message", options: [])
     // An encrypted chat's push (the server sets SIS_MESSAGE_LOCKED) has no Mark as read; its Reply opens SIS (.foreground) after the unlock (.authenticationRequired), and the app locks and sends the text. Never encrypted in the extension or in the background.
     let lockedReply = UNTextInputNotificationAction(identifier: AppDelegate.replyAction, title: turkish ? "Yanıtla" : "Reply", options: [.authenticationRequired, .foreground], textInputButtonTitle: turkish ? "Gönder" : "Send", textInputPlaceholder: turkish ? "Mesaj" : "Message")
-    let locked = UNNotificationCategory(identifier: AppDelegate.lockedCategory, actions: [lockedReply], intentIdentifiers: [], options: [])
+    let locked = UNNotificationCategory(identifier: AppDelegate.lockedCategory, actions: [lockedReply], intentIdentifiers: [], hiddenPreviewsBodyPlaceholder: turkish ? "Yeni mesaj" : "New message", options: [])
     UNUserNotificationCenter.current().setNotificationCategories([category, locked])
   }
 

@@ -155,12 +155,22 @@ List<InboxChat> removeFromInbox(List<InboxChat> inbox, String conversationId) =>
         if (c.conversationId != conversationId) c,
     ];
 
-/// The one-line summary over everything waiting: '1 new message',
-/// 'N new messages', with ' from K chats' when more than one chat is waiting.
-/// Empty inbox -> ''.
-String inboxSummary(List<InboxChat> inbox) {
+/// The one-line summary over everything waiting: [one] for a single message,
+/// [many] for N messages in one chat, [fromChats] when more than one chat is
+/// waiting. The caller passes the app-language texts. Empty inbox -> ''.
+String inboxSummary(
+  List<InboxChat> inbox, {
+  String one = '1 new message',
+  String Function(int count) many = _manyEnglish,
+  String Function(int count, int chats) fromChats = _fromChatsEnglish,
+}) {
   if (inbox.isEmpty) return '';
   final total = inbox.fold(0, (sum, c) => sum + c.count);
-  final messages = total == 1 ? '1 new message' : '$total new messages';
-  return inbox.length > 1 ? '$messages from ${inbox.length} chats' : messages;
+  if (inbox.length > 1) return fromChats(total, inbox.length);
+  return total == 1 ? one : many(total);
 }
+
+String _manyEnglish(int count) => '$count new messages';
+
+String _fromChatsEnglish(int count, int chats) =>
+    '$count new messages from $chats chats';

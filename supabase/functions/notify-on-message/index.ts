@@ -135,9 +135,13 @@ declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 Deno.serve(async (req: Request) => {
   const payload = await req.json().catch(() => null);
   const id = payload?.record?.id;
-  // Only the id is taken from the request; everything shown comes from the
-  // database.
-  if (typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)) {
+  const rm = payload?.reaction?.message_id;
+  const ru = payload?.reaction?.user_id;
+  // Only ids are taken from the request; everything shown comes from the
+  // database. A reaction call is claimed in SQL (once per reaction change), so a forged one sends at most the push that was due.
+  if (typeof rm === 'string' && typeof ru === 'string' && UUID_RE.test(rm) && UUID_RE.test(ru)) {
+    EdgeRuntime.waitUntil(sendReaction(rm, ru).catch(() => console.error('reaction notify failed')));
+  } else if (typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)) {
     EdgeRuntime.waitUntil(send(id).catch((e) => console.error('notify failed', e)));
   }
   return new Response(null, { status: 204 });
@@ -320,4 +324,104 @@ async function send(id: string): Promise<void> {
   // ponytail: the message is claimed before FCM answers, so a failed send is
   // not retried; add a retry queue if lost notifications are ever reported.
   console.log(`sent ${sent} of ${targets.length}`);
+}
+
+type ReactionTarget = {
+  user_id: string;
+  token: string;
+  platform: string;
+  conversation_id: string;
+  title: string;
+  body: string;
+  sender: string | null;
+  chat: string | null;
+  emoji: string | null;
+  quote: string | null;
+  quote_kind: string | null;
+  ciphertext: string | null;
+  olm_type: number | null;
+  encrypted: boolean;
+};
+
+// A reaction push: who and what is decided in SQL (public.reaction_push_targets claims it once and applies the limits). The phone never gets emoji or quote of a private chat from here; it gets ct/ot and opens it itself. Logs hold counts only.
+async function sendReaction(messageId: string, reactorId: string): Promise<void> {
+  const raw = Deno.env.get('FCM_SERVICE_ACCOUNT');
+  if (!raw) {
+    console.error('FCM_SERVICE_ACCOUNT is not set');
+    return;
+  }
+  const serviceAccount = JSON.parse(raw);
+  const db = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  );
+  const { data, error } = await db.rpc('reaction_push_targets', { message_id: messageId, reactor: reactorId });
+  if (error) {
+    console.error('reaction_push_targets failed', error.message);
+    return;
+  }
+  const targets = (data ?? []) as ReactionTarget[];
+  if (!targets.length) return;
+
+  const token = await accessToken(serviceAccount);
+  const projectId = serviceAccount.project_id;
+  const collapse = (await sha256Hex(messageId + ':' + reactorId)).slice(0, 32);
+
+  const results = await Promise.allSettled(
+    targets.map(async (t) => {
+      const ios = t.platform === 'ios';
+      const group = t.chat != null && t.sender != null;
+      const shown = group
+        ? { title: t.chat!, body: `${t.sender}: ${t.body}` }
+        : { title: t.title, body: t.body };
+      const build = (withCt: boolean) => JSON.stringify({
+        message: {
+          token: t.token,
+          ...(ios ? { notification: shown } : {}),
+          data: {
+            user_id: t.user_id,
+            conversation_id: t.conversation_id,
+            message_id: messageId,
+            kind: 'reaction',
+            reactor_id: reactorId,
+            title: t.title,
+            body: t.body,
+            ...(group ? { sender: t.sender!, chat: t.chat! } : {}),
+            ...(t.emoji ? { e: t.emoji } : {}),
+            ...(t.quote ? { q: t.quote } : {}),
+            ...(t.quote_kind ? { qk: t.quote_kind } : {}),
+            ...(t.encrypted ? { encrypted: 'true' } : {}),
+            ...(withCt && t.ciphertext && t.olm_type != null
+              ? { ct: t.ciphertext, ot: String(t.olm_type) }
+              : {}),
+          },
+          ...(ios
+            ? {
+                apns: {
+                  headers: { 'apns-collapse-id': collapse },
+                  payload: { aps: { 'thread-id': t.conversation_id, sound: 'default', 'mutable-content': 1 } },
+                },
+              }
+            : { android: { priority: 'high', collapse_key: collapse } }),
+        },
+      });
+      const fits = !!t.ciphertext && t.olm_type != null
+        && new TextEncoder().encode(build(true)).length <= CT_BUDGET_BYTES;
+      const post = (bearer: string) => fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' },
+        body: build(fits),
+      });
+      let r = await post(token);
+      if (r.status === 401) {
+        const next = cached && cached.token !== token
+          ? cached.token
+          : await accessToken(serviceAccount, true);
+        r = await post(next);
+      }
+      if (!r.ok) throw new Error(`fcm ${r.status}`);
+    }),
+  );
+  const sent = results.filter((r) => r.status === 'fulfilled').length;
+  console.log(`reaction sent ${sent} of ${targets.length}`);
 }

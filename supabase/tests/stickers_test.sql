@@ -443,7 +443,7 @@ select is((select sticker_album from public.conversation_previews where conversa
           'and is not an album card');
 reset role;
 select is((select string_agg(body, ',') from app_private.push_targets_for_message(g('MP')) where user_id = u('02')),
-          E'\U0001F600 Sticker', 'the push of a sticker reads 😀 Sticker');
+          'Çıkartma', 'the push of a sticker reads Çıkartma (receiver has no app language: Turkish, no emoji)');
 -- one transaction, one now(): age the sticker so the card is the newest
 update public.messages set created_at = now() - interval '30 seconds' where id = g('MP');
 select as_('01');
@@ -454,7 +454,7 @@ select is((select sticker_id from public.conversation_previews where conversatio
           'with no sticker id');
 reset role;
 select is((select string_agg(body, ',') from app_private.push_targets_for_message(g('CP')) where user_id = u('02')),
-          E'\U0001F4C2 Sticker album', 'the push of an album card reads 📂 Sticker album');
+          'Çıkartma albümü', 'the push of an album card reads Çıkartma albümü');
 select is((select count(*) from app_private.push_targets_for_message(g('CP')) where user_id = u('01')), 0::bigint,
           'the sender gets no push');
 

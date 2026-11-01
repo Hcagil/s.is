@@ -30,7 +30,7 @@ create function tr_(b text) returns text language sql immutable as $$
          || E'\n\n' || b
 $$;
 create function en_(b text) returns text language sql immutable as $$
-  select 'Hello, I am SIS Destek, an AI assistant. My messages are written by AI.' || E'\n\n' || b
+  select 'Hi, I''m SIS Support, an AI assistant. My replies are written by AI.' || E'\n\n' || b
 $$;
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
 select u(n), 'al-' || name || '@sis.test', now(), json_build_object('full_name', initcap(name))::jsonb
@@ -255,7 +255,7 @@ reset role; select debug_is(g('GMIX')); select as_('bot');
 select is(send(g('GMIX'), 'second mix'), 'second mix', 'dan switching to en does not resend it either');
 reset role;
 select is((select count(*) from public.messages where sender_id = u('bot') and conversation_id = g('GEN')
-             and (body like 'Merhaba, ben SIS Destek%' or body like 'Hello, I am SIS Destek%')),
+             and (body like 'Merhaba, ben SIS Destek%' or body like 'Hi, I''m SIS Support%')),
           1::bigint, 'GEN holds exactly one first line');
 
 -- 7 humans are never prefixed, whatever their language -----------------------

@@ -111,13 +111,13 @@ void phone(WidgetTester t, Brightness b) {
 }
 
 void main() {
-  testWidgets('default: the first row reads Follow phone and the app '
+  testWidgets('default: the first row reads System default and the app '
       'follows the phone brightness', (t) async {
     phone(t, Brightness.dark);
     await pumpApp(t);
     await openAppearance(t);
     expect(under('appearance-mode', 'Light or dark'), findsOneWidget);
-    expect(under('appearance-mode', 'Follow phone'), findsOneWidget);
+    expect(under('appearance-mode', 'System default'), findsOneWidget);
     expect(
       t.getRect(byKey('appearance-mode')).top,
       lessThan(t.getRect(find.byType(ChatPreview).first).top),
@@ -139,7 +139,7 @@ void main() {
       expect(byKey('appearance-mode-$k'), findsOneWidget, reason: k);
     }
     expect(byKey('appearance-mode-note'), findsOneWidget);
-    expect(under('appearance-mode-system', 'Follow phone'), findsOneWidget);
+    expect(under('appearance-mode-system', 'System default'), findsOneWidget);
     expect(under('appearance-mode-light', 'Light'), findsOneWidget);
     expect(under('appearance-mode-dark', 'Dark'), findsOneWidget);
 
@@ -234,7 +234,7 @@ void main() {
     await pumpApp(t);
     await openCard(t);
     expect(
-      underContaining('appearance-mode-note', 'keeps its own colours'),
+      underContaining('appearance-mode-note', 'keeps its own colors'),
       findsOneWidget,
     );
   });

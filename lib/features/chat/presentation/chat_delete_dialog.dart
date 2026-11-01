@@ -144,12 +144,14 @@ class _DeleteChatsDialogState extends State<_DeleteChatsDialog> {
           avatarPath: c.avatarPath,
         ),
         const SizedBox(width: 12),
-        Text(
-          l.chatLeaveGroupTitle,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: t.text,
+        Expanded(
+          child: Text(
+            l.chatLeaveGroupTitle,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: t.text,
+            ),
           ),
         ),
       ],

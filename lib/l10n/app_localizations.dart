@@ -407,7 +407,7 @@ abstract class AppLocalizations {
   /// Group info: greyed setting
   ///
   /// In en, this message translates to:
-  /// **'Members can change the group picture'**
+  /// **'Members can change the group photo'**
   String get groupPickSwitch;
 
   /// Group info: greyed setting
@@ -479,7 +479,7 @@ abstract class AppLocalizations {
   /// Crop screen title
   ///
   /// In en, this message translates to:
-  /// **'Crop picture'**
+  /// **'Crop photo'**
   String get cropTitle;
 
   /// Crop screen confirm button
@@ -497,7 +497,7 @@ abstract class AppLocalizations {
   /// Crop screen preview text
   ///
   /// In en, this message translates to:
-  /// **'This is how the picture shows up'**
+  /// **'This is how the photo will look'**
   String get cropPreviewHint;
 
   /// Crop screen gesture hint
@@ -515,7 +515,7 @@ abstract class AppLocalizations {
   /// Notice after leaving a group when queued messages were dropped
   ///
   /// In en, this message translates to:
-  /// **'You left the group. Messages that were still waiting to send were not delivered.'**
+  /// **'You left the group. Messages still waiting to send were not sent.'**
   String get groupLeftUnsentNotice;
 
   /// Attach card tile under the composer
@@ -539,7 +539,7 @@ abstract class AppLocalizations {
   /// Attach card tile under the composer
   ///
   /// In en, this message translates to:
-  /// **'Voice'**
+  /// **'Voice message'**
   String get attachVoice;
 
   /// Attach card tile under the composer
@@ -1877,13 +1877,13 @@ abstract class AppLocalizations {
   /// Menu action
   ///
   /// In en, this message translates to:
-  /// **'Remove as admin'**
+  /// **'Dismiss admin'**
   String get membersRemoveAdmin;
 
   /// Menu action
   ///
   /// In en, this message translates to:
-  /// **'Make admin'**
+  /// **'Promote to admin'**
   String get membersMakeAdmin;
 
   /// Badge of a member who left
@@ -1943,7 +1943,7 @@ abstract class AppLocalizations {
   /// Group event line
   ///
   /// In en, this message translates to:
-  /// **'{name} changed the group picture'**
+  /// **'{name} changed the group photo'**
   String eventPictureChanged(String name);
 
   /// Group event line
@@ -2561,7 +2561,7 @@ abstract class AppLocalizations {
   /// Row at the bottom of the wallpaper page; opens the confirm card
   ///
   /// In en, this message translates to:
-  /// **'Reset chat wallpaper'**
+  /// **'Reset chat wallpapers'**
   String get wallpaperReset;
 
   /// Info line under the reset row
@@ -2573,7 +2573,7 @@ abstract class AppLocalizations {
   /// Title of the reset confirm card
   ///
   /// In en, this message translates to:
-  /// **'Reset chat wallpaper?'**
+  /// **'Reset chat wallpapers?'**
   String get wallpaperResetTitle;
 
   /// Question on the reset confirm card
@@ -2627,7 +2627,7 @@ abstract class AppLocalizations {
   /// Delete dialog for one person; the name between ** is shown bold
   ///
   /// In en, this message translates to:
-  /// **'Delete the chat with **{name}**?'**
+  /// **'Permanently delete the chat with **{name}**?'**
   String chatDeleteSure(String name);
 
   /// Checkbox: delete the chat for the other person too
@@ -2651,7 +2651,7 @@ abstract class AppLocalizations {
   /// Delete dialog for a group; the name between ** is shown bold
   ///
   /// In en, this message translates to:
-  /// **'Leave **{name}** and delete the chat?'**
+  /// **'Are you sure you want to delete and leave the group **{name}**?'**
   String chatDeleteLeaveSure(String name);
 
   /// Checkbox shown to a group admin
@@ -2681,7 +2681,7 @@ abstract class AppLocalizations {
   /// Body of the delete dialog for several chats
   ///
   /// In en, this message translates to:
-  /// **'Delete the selected chats?'**
+  /// **'Are you sure you want to delete these chats?'**
   String get chatDeleteFewSure;
 
   /// Checkbox of the several-chats delete dialog
@@ -2735,19 +2735,19 @@ abstract class AppLocalizations {
   /// Shown when the poll has the maximum number of options
   ///
   /// In en, this message translates to:
-  /// **'You have reached the maximum number of options.'**
+  /// **'You have added the maximum number of options.'**
   String get pollOptionsMax;
 
   /// Switch: members may pick more than one option
   ///
   /// In en, this message translates to:
-  /// **'Allow several answers'**
+  /// **'Allow multiple answers'**
   String get pollMultipleTitle;
 
   /// Switch: votes are anonymous
   ///
   /// In en, this message translates to:
-  /// **'Anonymous votes'**
+  /// **'Anonymous voting'**
   String get pollAnonymousTitle;
 
   /// Subtitle of the anonymous votes switch
@@ -2843,7 +2843,7 @@ abstract class AppLocalizations {
   /// Message menu: take your vote back
   ///
   /// In en, this message translates to:
-  /// **'Withdraw vote'**
+  /// **'Retract vote'**
   String get messageActionRetractVote;
 
   /// Message menu: close your own poll
@@ -3095,7 +3095,7 @@ abstract class AppLocalizations {
   /// Label on a video bubble that is waiting for the connection
   ///
   /// In en, this message translates to:
-  /// **'Waiting for connection'**
+  /// **'Waiting for network'**
   String get videoWaitingNetwork;
 
   /// Label on a video bubble queued behind another send
@@ -3899,7 +3899,7 @@ abstract class AppLocalizations {
   /// Reason shown when the site refuses a video
   ///
   /// In en, this message translates to:
-  /// **'This video needs a sign-in to watch.'**
+  /// **'Sign in to watch this video.'**
   String get videoRefusedLogin;
 
   /// Reason shown when the site refuses a video
@@ -4277,7 +4277,7 @@ abstract class AppLocalizations {
   /// Light or dark option: match the phone setting
   ///
   /// In en, this message translates to:
-  /// **'Follow phone'**
+  /// **'System default'**
   String get appearanceModeFollow;
 
   /// Small line under the Follow phone option

@@ -205,7 +205,7 @@
   "@groupSettingsTitle": {
     "description": "Group info: section label"
   },
-  "groupPickSwitch": "Members can change the group picture",
+  "groupPickSwitch": "Members can change the group photo",
   "@groupPickSwitch": {
     "description": "Group info: greyed setting"
   },
@@ -258,7 +258,7 @@
   "@groupLeaveCancel": {
     "description": "Leave confirm card cancel"
   },
-  "cropTitle": "Crop picture",
+  "cropTitle": "Crop photo",
   "@cropTitle": {
     "description": "Crop screen title"
   },
@@ -270,7 +270,7 @@
   "@cropPreview": {
     "description": "Crop screen preview label"
   },
-  "cropPreviewHint": "This is how the picture shows up",
+  "cropPreviewHint": "This is how the photo will look",
   "@cropPreviewHint": {
     "description": "Crop screen preview text"
   },
@@ -282,7 +282,7 @@
   "@groupLeftNotice": {
     "description": "Notice after leaving a group"
   },
-  "groupLeftUnsentNotice": "You left the group. Messages that were still waiting to send were not delivered.",
+  "groupLeftUnsentNotice": "You left the group. Messages still waiting to send were not sent.",
   "@groupLeftUnsentNotice": {
     "description": "Notice after leaving a group when queued messages were dropped"
   },
@@ -298,7 +298,7 @@
   "@attachFile": {
     "description": "Attach card tile under the composer"
   },
-  "attachVoice": "Voice",
+  "attachVoice": "Voice message",
   "@attachVoice": {
     "description": "Attach card tile under the composer"
   },
@@ -836,9 +836,9 @@
   "@membersYou": {"description": "The signed-in member's own row in the members tab", "placeholders": {"name": {"type": "String"}}},
   "membersAdmin": "Admin",
   "@membersAdmin": {"description": "Badge of an admin"},
-  "membersRemoveAdmin": "Remove as admin",
+  "membersRemoveAdmin": "Dismiss admin",
   "@membersRemoveAdmin": {"description": "Menu action"},
-  "membersMakeAdmin": "Make admin",
+  "membersMakeAdmin": "Promote to admin",
   "@membersMakeAdmin": {"description": "Menu action"},
   "membersLeft": "Left",
   "@membersLeft": {"description": "Badge of a member who left"},
@@ -858,7 +858,7 @@
   "@eventLeft": {"description": "Group event line", "placeholders": {"name": {"type": "String"}}},
   "eventRemoved": "{name} was removed",
   "@eventRemoved": {"description": "Group event line", "placeholders": {"name": {"type": "String"}}},
-  "eventPictureChanged": "{name} changed the group picture",
+  "eventPictureChanged": "{name} changed the group photo",
   "@eventPictureChanged": {
     "description": "Group event line",
     "placeholders": {
@@ -1071,11 +1071,11 @@
   "@wallpaperChoosePhoto": {"description": "Button to pick a wallpaper photo"},
   "wallpaperPickFailed": "That photo could not be used. Try another.",
   "@wallpaperPickFailed": {"description": "Shown when the chosen wallpaper photo could not be read"},
-  "wallpaperReset": "Reset chat wallpaper",
+  "wallpaperReset": "Reset chat wallpapers",
   "@wallpaperReset": {"description": "Row at the bottom of the wallpaper page; opens the confirm card"},
   "wallpaperResetInfo": "Removes the chat wallpapers you added and restores the built-in ones.",
   "@wallpaperResetInfo": {"description": "Info line under the reset row"},
-  "wallpaperResetTitle": "Reset chat wallpaper?",
+  "wallpaperResetTitle": "Reset chat wallpapers?",
   "@wallpaperResetTitle": {"description": "Title of the reset confirm card"},
   "wallpaperResetConfirm": "Your own wallpapers will be removed.",
   "@wallpaperResetConfirm": {"description": "Question on the reset confirm card"},
@@ -1093,7 +1093,7 @@
   "@chatDeleteUndo": {"description": "Button of the undo bar after deleting chats"},
   "chatDeleteChat": "Delete chat",
   "@chatDeleteChat": {"description": "Title and button of the delete dialog for one chat or group"},
-  "chatDeleteSure": "Delete the chat with **{name}**?",
+  "chatDeleteSure": "Permanently delete the chat with **{name}**?",
   "@chatDeleteSure": {"description": "Delete dialog for one person; the name between ** is shown bold", "placeholders": {"name": {"type": "String"}}},
   "chatDeleteAlso": "Also delete for {name}",
   "@chatDeleteAlso": {"description": "Checkbox: delete the chat for the other person too", "placeholders": {"name": {"type": "String"}}},
@@ -1101,7 +1101,7 @@
   "@chatDeletedUndo": {"description": "Undo bar after deleting one chat"},
   "chatLeaveGroupTitle": "Leave group?",
   "@chatLeaveGroupTitle": {"description": "Title of the delete dialog for a group"},
-  "chatDeleteLeaveSure": "Leave **{name}** and delete the chat?",
+  "chatDeleteLeaveSure": "Are you sure you want to delete and leave the group **{name}**?",
   "@chatDeleteLeaveSure": {"description": "Delete dialog for a group; the name between ** is shown bold", "placeholders": {"name": {"type": "String"}}},
   "chatDeleteGroupForAll": "Delete the group for all members",
   "@chatDeleteGroupForAll": {"description": "Checkbox shown to a group admin"},
@@ -1111,7 +1111,7 @@
   "@chatGroupDeletedUndo": {"description": "Undo bar after an admin deletes a group for everyone"},
   "chatDeleteFewTitle": "{count, plural, =1{Delete 1 chat} other{Delete {count} chats}}",
   "@chatDeleteFewTitle": {"description": "Title of the delete dialog for several chats", "placeholders": {"count": {"type": "int"}}},
-  "chatDeleteFewSure": "Delete the selected chats?",
+  "chatDeleteFewSure": "Are you sure you want to delete these chats?",
   "@chatDeleteFewSure": {"description": "Body of the delete dialog for several chats"},
   "chatDeleteBothSides": "Delete for everyone where possible",
   "@chatDeleteBothSides": {"description": "Checkbox of the several-chats delete dialog"},
@@ -1129,11 +1129,11 @@
   "@pollOptionHint": {"description": "Hint inside an empty poll option field"},
   "pollAddOption": "Add option",
   "@pollAddOption": {"description": "Row that adds another poll option"},
-  "pollOptionsMax": "You have reached the maximum number of options.",
+  "pollOptionsMax": "You have added the maximum number of options.",
   "@pollOptionsMax": {"description": "Shown when the poll has the maximum number of options"},
-  "pollMultipleTitle": "Allow several answers",
+  "pollMultipleTitle": "Allow multiple answers",
   "@pollMultipleTitle": {"description": "Switch: members may pick more than one option"},
-  "pollAnonymousTitle": "Anonymous votes",
+  "pollAnonymousTitle": "Anonymous voting",
   "@pollAnonymousTitle": {"description": "Switch: votes are anonymous"},
   "pollAnonymousSubtitle": "Nobody sees who voted for what",
   "@pollAnonymousSubtitle": {"description": "Subtitle of the anonymous votes switch"},
@@ -1165,7 +1165,7 @@
   "@pollResultsTitle": {"description": "Title of the voters list"},
   "pollOptionVoters": "{count, plural, =1{1 vote} other{{count} votes}}",
   "@pollOptionVoters": {"description": "Votes of one option in the voters list", "placeholders": {"count": {"type": "int"}}},
-  "messageActionRetractVote": "Withdraw vote",
+  "messageActionRetractVote": "Retract vote",
   "@messageActionRetractVote": {"description": "Message menu: take your vote back"},
   "messageActionStopPoll": "Stop poll",
   "@messageActionStopPoll": {"description": "Message menu: close your own poll"},
@@ -1274,7 +1274,7 @@
   "@videoCompressing": {"description": "Label on a video bubble while it is being shrunk", "placeholders": {"percent": {"type": "int"}}},
   "videoSending": "Sending {percent}%",
   "@videoSending": {"description": "Label on a video bubble while it uploads", "placeholders": {"percent": {"type": "int"}}},
-  "videoWaitingNetwork": "Waiting for connection",
+  "videoWaitingNetwork": "Waiting for network",
   "@videoWaitingNetwork": {"description": "Label on a video bubble that is waiting for the connection"},
   "videoWaiting": "Waiting…",
   "@videoWaiting": {"description": "Label on a video bubble queued behind another send"},
@@ -1542,7 +1542,7 @@
   "@videoRefusedDeleted": {"description": "Reason shown when the site refuses a video"},
   "videoRefusedRegion": "This video is not available in your region.",
   "@videoRefusedRegion": {"description": "Reason shown when the site refuses a video"},
-  "videoRefusedLogin": "This video needs a sign-in to watch.",
+  "videoRefusedLogin": "Sign in to watch this video.",
   "@videoRefusedLogin": {"description": "Reason shown when the site refuses a video"},
   "videoRefusedOther": "This video could not be loaded.",
   "@videoRefusedOther": {"description": "Reason shown when the site refuses a video"},
@@ -1668,7 +1668,7 @@
   "@findEmpty": {"description": "Shown when the phone has no contacts"},
   "appearanceModeTitle": "Light or dark",
   "@appearanceModeTitle": {"description": "Appearance row name and title of its choice card"},
-  "appearanceModeFollow": "Follow phone",
+  "appearanceModeFollow": "System default",
   "@appearanceModeFollow": {"description": "Light or dark option: match the phone setting"},
   "appearanceModeFollowHint": "Matches your phone’s Light or Dark setting",
   "@appearanceModeFollowHint": {"description": "Small line under the Follow phone option"},

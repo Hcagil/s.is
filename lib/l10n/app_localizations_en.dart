@@ -174,7 +174,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get groupSettingsTitle => 'Group settings';
 
   @override
-  String get groupPickSwitch => 'Members can change the group picture';
+  String get groupPickSwitch => 'Members can change the group photo';
 
   @override
   String get groupAddSwitch => 'Members can add people';
@@ -214,7 +214,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get groupLeaveCancel => 'Cancel';
 
   @override
-  String get cropTitle => 'Crop picture';
+  String get cropTitle => 'Crop photo';
 
   @override
   String get cropChoose => 'Choose';
@@ -223,7 +223,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cropPreview => 'Preview';
 
   @override
-  String get cropPreviewHint => 'This is how the picture shows up';
+  String get cropPreviewHint => 'This is how the photo will look';
 
   @override
   String get cropGestureHint => 'Pinch to zoom, drag to move';
@@ -233,7 +233,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get groupLeftUnsentNotice =>
-      'You left the group. Messages that were still waiting to send were not delivered.';
+      'You left the group. Messages still waiting to send were not sent.';
 
   @override
   String get attachPhoto => 'Photo';
@@ -245,7 +245,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachFile => 'File';
 
   @override
-  String get attachVoice => 'Voice';
+  String get attachVoice => 'Voice message';
 
   @override
   String get attachLocation => 'Location';
@@ -1027,10 +1027,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get membersAdmin => 'Admin';
 
   @override
-  String get membersRemoveAdmin => 'Remove as admin';
+  String get membersRemoveAdmin => 'Dismiss admin';
 
   @override
-  String get membersMakeAdmin => 'Make admin';
+  String get membersMakeAdmin => 'Promote to admin';
 
   @override
   String get membersLeft => 'Left';
@@ -1069,7 +1069,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String eventPictureChanged(String name) {
-    return '$name changed the group picture';
+    return '$name changed the group photo';
   }
 
   @override
@@ -1436,14 +1436,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'That photo could not be used. Try another.';
 
   @override
-  String get wallpaperReset => 'Reset chat wallpaper';
+  String get wallpaperReset => 'Reset chat wallpapers';
 
   @override
   String get wallpaperResetInfo =>
       'Removes the chat wallpapers you added and restores the built-in ones.';
 
   @override
-  String get wallpaperResetTitle => 'Reset chat wallpaper?';
+  String get wallpaperResetTitle => 'Reset chat wallpapers?';
 
   @override
   String get wallpaperResetConfirm => 'Your own wallpapers will be removed.';
@@ -1471,7 +1471,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String chatDeleteSure(String name) {
-    return 'Delete the chat with **$name**?';
+    return 'Permanently delete the chat with **$name**?';
   }
 
   @override
@@ -1487,7 +1487,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String chatDeleteLeaveSure(String name) {
-    return 'Leave **$name** and delete the chat?';
+    return 'Are you sure you want to delete and leave the group **$name**?';
   }
 
   @override
@@ -1511,7 +1511,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get chatDeleteFewSure => 'Delete the selected chats?';
+  String get chatDeleteFewSure =>
+      'Are you sure you want to delete these chats?';
 
   @override
   String get chatDeleteBothSides => 'Delete for everyone where possible';
@@ -1538,14 +1539,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pollAddOption => 'Add option';
 
   @override
-  String get pollOptionsMax =>
-      'You have reached the maximum number of options.';
+  String get pollOptionsMax => 'You have added the maximum number of options.';
 
   @override
-  String get pollMultipleTitle => 'Allow several answers';
+  String get pollMultipleTitle => 'Allow multiple answers';
 
   @override
-  String get pollAnonymousTitle => 'Anonymous votes';
+  String get pollAnonymousTitle => 'Anonymous voting';
 
   @override
   String get pollAnonymousSubtitle => 'Nobody sees who voted for what';
@@ -1611,7 +1611,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get messageActionRetractVote => 'Withdraw vote';
+  String get messageActionRetractVote => 'Retract vote';
 
   @override
   String get messageActionStopPoll => 'Stop poll';
@@ -1760,7 +1760,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get videoWaitingNetwork => 'Waiting for connection';
+  String get videoWaitingNetwork => 'Waiting for network';
 
   @override
   String get videoWaiting => 'Waiting…';
@@ -2225,7 +2225,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'This video is not available in your region.';
 
   @override
-  String get videoRefusedLogin => 'This video needs a sign-in to watch.';
+  String get videoRefusedLogin => 'Sign in to watch this video.';
 
   @override
   String get videoRefusedOther => 'This video could not be loaded.';
@@ -2443,7 +2443,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearanceModeTitle => 'Light or dark';
 
   @override
-  String get appearanceModeFollow => 'Follow phone';
+  String get appearanceModeFollow => 'System default';
 
   @override
   String get appearanceModeFollowHint =>

@@ -87,6 +87,18 @@ class _PhotoViewerState extends ConsumerState<PhotoViewer>
   /// The shown photo is pinch-zoomed: a drag then pans it instead of closing.
   bool _zoomed = false;
 
+  int _pointers = 0;
+  bool _pinching = false;
+
+  /// Zoomed or mid-pinch: no page swipe and no swipe-down may win the gesture.
+  bool get _locked => _zoomed || _pinching;
+
+  void _pointer(int delta) {
+    _pointers = math.max(0, _pointers + delta);
+    final pinching = _pointers >= 2;
+    if (pinching != _pinching) setState(() => _pinching = pinching);
+  }
+
   @override
   void dispose() {
     _pages.dispose();
@@ -147,27 +159,33 @@ class _PhotoViewerState extends ConsumerState<PhotoViewer>
       ),
       body: Transform.translate(
         offset: Offset(0, _dy),
-        child: GestureDetector(
-          // Null while zoomed: no drag recogniser, so the photo pans.
-          onVerticalDragStart: _zoomed ? null : (_) => _back.stop(),
-          onVerticalDragUpdate: _zoomed
-              ? null
-              : (d) => setState(() => _dy = math.max(0, _dy + d.delta.dy)),
-          onVerticalDragEnd: _zoomed ? null : _release,
-          child: PageView.builder(
-            key: const ValueKey('viewer-pages'),
-            controller: _pages,
-            itemCount: widget.paths.length,
-            onPageChanged: (i) => setState(() {
-              _index = i;
-              _zoomed = false;
-            }),
-            itemBuilder: (context, i) => _Photo(
-              widget.paths[i],
-              isAvatar: widget.isAvatar,
-              onZoomed: (z) {
-                if (z != _zoomed) setState(() => _zoomed = z);
-              },
+        child: Listener(
+          onPointerDown: (_) => _pointer(1),
+          onPointerUp: (_) => _pointer(-1),
+          onPointerCancel: (_) => _pointer(-1),
+          child: GestureDetector(
+            // Null while zoomed: no drag recogniser, so the photo pans.
+            onVerticalDragStart: _locked ? null : (_) => _back.stop(),
+            onVerticalDragUpdate: _locked
+                ? null
+                : (d) => setState(() => _dy = math.max(0, _dy + d.delta.dy)),
+            onVerticalDragEnd: _locked ? null : _release,
+            child: PageView.builder(
+              key: const ValueKey('viewer-pages'),
+              controller: _pages,
+              physics: _locked ? const NeverScrollableScrollPhysics() : null,
+              itemCount: widget.paths.length,
+              onPageChanged: (i) => setState(() {
+                _index = i;
+                _zoomed = false;
+              }),
+              itemBuilder: (context, i) => _Photo(
+                widget.paths[i],
+                isAvatar: widget.isAvatar,
+                onZoomed: (z) {
+                  if (z != _zoomed) setState(() => _zoomed = z);
+                },
+              ),
             ),
           ),
         ),
@@ -187,11 +205,47 @@ class _Photo extends ConsumerStatefulWidget {
   ConsumerState<_Photo> createState() => _PhotoState();
 }
 
-class _PhotoState extends ConsumerState<_Photo> {
+class _PhotoState extends ConsumerState<_Photo>
+    with SingleTickerProviderStateMixin {
+  static const _doubleTapScale = 2.5;
+
   final _zoom = TransformationController();
+  late final _anim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 200),
+  );
+  Offset _tap = Offset.zero;
+
+  void _report() => widget.onZoomed(_zoom.value.getMaxScaleOnAxis() > 1.01);
+
+  /// Zoomed: back to fit. At fit: zoom in about the tapped spot.
+  void _toggleZoom() {
+    final zoomedIn = _zoom.value.getMaxScaleOnAxis() > 1.01;
+    final k = 1 - _doubleTapScale;
+    final target = Matrix4.identity();
+    if (!zoomedIn) {
+      target
+        ..translateByDouble(_tap.dx * k, _tap.dy * k, 0, 1)
+        ..scaleByDouble(_doubleTapScale, _doubleTapScale, 1, 1);
+    }
+    final tween = Matrix4Tween(
+      begin: _zoom.value,
+      end: target,
+    ).chain(CurveTween(curve: Curves.easeOut));
+    void step() {
+      _zoom.value = tween.evaluate(_anim);
+      _report();
+    }
+
+    _anim
+      ..reset()
+      ..addListener(step);
+    _anim.forward().whenComplete(() => _anim.removeListener(step));
+  }
 
   @override
   void dispose() {
+    _anim.dispose();
     _zoom.dispose();
     super.dispose();
   }
@@ -204,19 +258,24 @@ class _PhotoState extends ConsumerState<_Photo> {
         ? ref.watch(avatarBytesProvider(path))
         : ref.watch(attachmentBytesProvider(path));
     return switch (bytesValue) {
-      AsyncData(:final value) => InteractiveViewer(
-        transformationController: _zoom,
-        onInteractionEnd: (_) =>
-            widget.onZoomed(_zoom.value.getMaxScaleOnAxis() > 1.01),
-        maxScale: 5,
-        child: Center(
-          child: Image.memory(
-            value,
-            key: ValueKey('viewer-image-$path'),
-            fit: BoxFit.contain,
-            errorBuilder: (_, _, _) => Text(
-              AppLocalizations.of(context).commonImageUnavailable,
-              style: white,
+      AsyncData(:final value) => GestureDetector(
+        onDoubleTapDown: (d) => _tap = d.localPosition,
+        onDoubleTap: _toggleZoom,
+        child: InteractiveViewer(
+          transformationController: _zoom,
+          onInteractionStart: (_) => _anim.stop(),
+          onInteractionUpdate: (_) => _report(),
+          onInteractionEnd: (_) => _report(),
+          maxScale: 5,
+          child: Center(
+            child: Image.memory(
+              value,
+              key: ValueKey('viewer-image-$path'),
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => Text(
+                AppLocalizations.of(context).commonImageUnavailable,
+                style: white,
+              ),
             ),
           ),
         ),

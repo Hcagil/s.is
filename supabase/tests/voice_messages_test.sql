@@ -185,7 +185,7 @@ select is((select count(*) from pg_attribute
           'conversation_previews has attachment_mime');
 select is((select string_agg(body, ',') from app_private.push_targets_for_message(
              'f3300000-0000-0000-0000-00000000a010') where user_id = u('02')),
-          E'\U0001F3A4 Voice message', 'the push of a voice message reads the mic and Voice message');
+          'Sesli mesaj', 'the push of a voice message reads Sesli mesaj (no app language: Turkish, no emoji)');
 select is((select strpos(string_agg(body, ','), 'secret') from app_private.push_targets_for_message(
              'f3300000-0000-0000-0000-00000000a010') where user_id = u('02')),
           0, 'the push never carries the transcript');
@@ -195,7 +195,7 @@ select is(voice_insert('f3300000-0000-0000-0000-00000000a011', 'audio/mp4', 'nul
 reset role;
 select isnt((select string_agg(body, ',') from app_private.push_targets_for_message(
              'f3300000-0000-0000-0000-00000000a011') where user_id = u('02')),
-          E'\U0001F3A4 Voice message', 'an audio/mp4 file without a length is not pushed as a voice message');
+          'Sesli mesaj', 'an audio/mp4 file without a length is not pushed as a voice message');
 select isnt((select string_agg(body, ',') from app_private.push_targets_for_message(
              'f3300000-0000-0000-0000-00000000a011') where user_id = u('02')),
           null, 'the length-less audio file still pushes to the other member');

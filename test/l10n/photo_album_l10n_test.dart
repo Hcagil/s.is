@@ -35,8 +35,8 @@ void main() {
   });
 
   test('quotePhotos', () {
-    expect(en.quotePhotos(3), '📷 3 photos');
-    expect(tr.quotePhotos(7), '📷 7 fotoğraf');
+    expect(en.quotePhotos(3), '3 photos');
+    expect(tr.quotePhotos(7), '7 fotoğraf');
     expect(en.quotePhotos(10), contains('10'));
   });
 }

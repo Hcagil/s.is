@@ -1,5 +1,5 @@
 /* The contacts prompt (iPhone asks once, then Settings). */
-"NSContactsUsageDescription" = "SIS uses your contacts so you can pick one to send in a chat, and, when you open Find people, to show which of your contacts use SIS. For that, your contacts' email addresses are sent in coded (hashed) form, checked against SIS members and not stored.";
+"NSContactsUsageDescription" = "SIS reads your contacts so you can send one in a chat and, when you open Find people, see which of them use SIS. Only coded (hashed) email addresses are sent to SIS; they are checked against SIS members and not stored.";
 
 /* The photo library prompt (iPhone asks once, then Settings). */
 "NSPhotoLibraryUsageDescription" = "Allow access so your photos and videos load right here in the chat. Nothing is uploaded until you send it. You can allow just a few.";

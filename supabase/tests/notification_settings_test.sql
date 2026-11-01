@@ -383,10 +383,10 @@ select is((select body from app_private.push_targets_for_message((select long fr
           left(repeat('x', 130), 119) || '…', 'text over 120 characters is cut to 119 plus an ellipsis');
 select is((select body from app_private.push_targets_for_message((select photo_cap from _msg))
             where user_id = '00000000-0000-0000-0000-0000000ee001'),
-          '📷 look', 'a photo with a caption is prefixed with a camera');
+          'look', 'a photo with a caption shows the caption alone');
 select is((select body from app_private.push_targets_for_message((select photo_nocap from _msg))
             where user_id = '00000000-0000-0000-0000-0000000ee001'),
-          '📷 Photo', 'a photo with no caption just says so');
+          'Fotoğraf', 'a photo with no caption just says so (no app language: Turkish)');
 
 -- the sender-name fallback, for the one message sent after bo's profile
 -- is gone -- kept last among the naming assertions so it cannot affect
@@ -400,7 +400,7 @@ insert into public.messages(conversation_id, sender_id, body)
 reset role;
 select is((select title from app_private.push_targets_for_message(
              (select id from public.messages where body = 'sent with no profile row')))
-             , 'Someone @ ee-group', 'a sender with no profile row is shown as Someone');
+             , 'Biri @ ee-group', 'a sender with no profile row is shown as Biri (receiver has no app language)');
 -- restored: every assertion below this line that names bo again needs his name back.
 insert into public.profiles select * from _bo_profile;
 
@@ -440,10 +440,10 @@ select is((select title from app_private.push_targets_for_message((select short 
           'Bo', 'sender preview names only the sender -- no group suffix, unlike full');
 select is((select body from app_private.push_targets_for_message((select short from _msg))
             where user_id = '00000000-0000-0000-0000-0000000ee001'),
-          'New message', 'sender preview never shows the text');
+          'Yeni mesaj', 'sender preview never shows the text');
 select is((select body from app_private.push_targets_for_message((select photo_cap from _msg))
             where user_id = '00000000-0000-0000-0000-0000000ee001'),
-          'New message', 'not even a caption, when the recipient asked for sender-only');
+          'Yeni mesaj', 'not even a caption, when the recipient asked for sender-only');
 
 select test_as('00000000-0000-0000-0000-0000000ee001', 'ee000000-0000-0000-0000-000000000001');
 select lives_ok($$update public.notification_settings set preview = 'none' where user_id = auth.uid()$$,
@@ -454,7 +454,7 @@ select is((select title from app_private.push_targets_for_message((select short 
           'SIS', 'none preview hides even the sender''s name');
 select is((select body from app_private.push_targets_for_message((select short from _msg))
             where user_id = '00000000-0000-0000-0000-0000000ee001'),
-          'New message', 'and still says only that a message exists');
+          'Yeni mesaj', 'and still says only that a message exists');
 
 -- 8 enabled=false removes the recipient from every list --------------------
 select test_as('00000000-0000-0000-0000-0000000ee001', 'ee000000-0000-0000-0000-000000000001');

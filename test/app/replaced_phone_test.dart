@@ -57,7 +57,7 @@ const trBody =
     'SIS aynı anda tek telefonda çalışır. Burada kullanmak için yeniden '
     'oturum aç; diğer telefonun oturumu kapanır.';
 const trButton = 'Oturum aç';
-final deniedText = find.textContaining('not currently approved');
+final deniedText = find.textContaining('not approved for SIS');
 
 /// Material's phone glyphs, every style.
 final phoneIcons = <IconData>{
@@ -114,12 +114,7 @@ class CancelAuth extends ColdAuth {
   Future<Result<void>> signInWithApple() async {
     appleSignIns++;
     await Future<void>.delayed(Duration.zero);
-    return const Err(
-      ProviderFailure(
-        'Sign-in was cancelled. Please try again.',
-        userCanceled: true,
-      ),
-    );
+    return const Err(ProviderFailure('Sign-in canceled.', userCanceled: true));
   }
 }
 

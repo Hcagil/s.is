@@ -12,7 +12,7 @@
   "group_sender": {
     "conversation_id": "<conversation>",
     "title": "Ann Sender",
-    "body": "New message",
+    "body": "Yeni mesaj",
     "user_id": "<user>",
     "message_id": "<message>",
     "sender": "Ann Sender",
@@ -22,7 +22,7 @@
   "group_none": {
     "conversation_id": "<conversation>",
     "title": "SIS",
-    "body": "New message",
+    "body": "Yeni mesaj",
     "user_id": "<user>",
     "message_id": "<message>",
     "badge": "1"

@@ -245,7 +245,7 @@ abstract class AppLocalizations {
   /// Switch subtitle
   ///
   /// In en, this message translates to:
-  /// **'Matches your system. Off = SIS font'**
+  /// **'Uses your phone\'s font. When off, SIS uses its own font.'**
   String get textSystemFontHint;
 
   /// Section label
@@ -353,7 +353,7 @@ abstract class AppLocalizations {
   /// Note at the top of the Archived screen
   ///
   /// In en, this message translates to:
-  /// **'Archived chats stay archived when a new message arrives. No sound, no push, no badge.'**
+  /// **'Archived chats stay archived when a new message arrives, with no sound, notification or badge.'**
   String get archivedChatsHint;
 
   /// Archived screen with nothing in it
@@ -407,7 +407,7 @@ abstract class AppLocalizations {
   /// Group info: greyed setting
   ///
   /// In en, this message translates to:
-  /// **'Members can change the group picture'**
+  /// **'Members can change the group photo'**
   String get groupPickSwitch;
 
   /// Group info: greyed setting
@@ -479,7 +479,7 @@ abstract class AppLocalizations {
   /// Crop screen title
   ///
   /// In en, this message translates to:
-  /// **'Crop picture'**
+  /// **'Crop photo'**
   String get cropTitle;
 
   /// Crop screen confirm button
@@ -497,7 +497,7 @@ abstract class AppLocalizations {
   /// Crop screen preview text
   ///
   /// In en, this message translates to:
-  /// **'This is how the picture shows up'**
+  /// **'This is how the photo will look'**
   String get cropPreviewHint;
 
   /// Crop screen gesture hint
@@ -509,13 +509,13 @@ abstract class AppLocalizations {
   /// Notice after leaving a group
   ///
   /// In en, this message translates to:
-  /// **'Left the group'**
+  /// **'You left the group'**
   String get groupLeftNotice;
 
   /// Notice after leaving a group when queued messages were dropped
   ///
   /// In en, this message translates to:
-  /// **'Left the group. Unsent messages weren\'t sent.'**
+  /// **'You left the group. Messages still waiting to send were not sent.'**
   String get groupLeftUnsentNotice;
 
   /// Attach card tile under the composer
@@ -539,7 +539,7 @@ abstract class AppLocalizations {
   /// Attach card tile under the composer
   ///
   /// In en, this message translates to:
-  /// **'Voice'**
+  /// **'Voice message'**
   String get attachVoice;
 
   /// Attach card tile under the composer
@@ -677,7 +677,7 @@ abstract class AppLocalizations {
   /// New chat page row
   ///
   /// In en, this message translates to:
-  /// **'Find people from contacts'**
+  /// **'Find people from your phone contacts'**
   String get findFromContacts;
 
   /// Share picker caption box
@@ -791,7 +791,7 @@ abstract class AppLocalizations {
   /// Explanation under the security code
   ///
   /// In en, this message translates to:
-  /// **'Compare this code with {name}\'s phone, in person or on a call. If both match, tap Matches. This is saved on this phone only. After that, messages you send from now on are end-to-end encrypted between your two phones.'**
+  /// **'Compare this code with the one on {name}\'s phone, in person or on a call. If they match, tap Matches. Your choice is saved on this phone only.'**
   String securityCodeIntro(String name);
 
   /// Chat line in a 1:1 when the security code changed
@@ -827,13 +827,13 @@ abstract class AppLocalizations {
   /// No description provided for @securityCodeVerifiedNote.
   ///
   /// In en, this message translates to:
-  /// **'Saved on this phone only. {name} is not told.'**
+  /// **'Saved on this phone only. {name} is not notified.'**
   String securityCodeVerifiedNote(String name);
 
   /// No description provided for @securityCodeUnverify.
   ///
   /// In en, this message translates to:
-  /// **'Mark as not verified'**
+  /// **'Remove verification'**
   String get securityCodeUnverify;
 
   /// No description provided for @securityCodeMismatchTitle.
@@ -845,7 +845,7 @@ abstract class AppLocalizations {
   /// No description provided for @securityCodeMismatchBody.
   ///
   /// In en, this message translates to:
-  /// **'This can happen if {name} got a new phone or reinstalled SIS. It can also mean someone is in between you. Check with {name} in person or on a call, and do not send anything private until you know. Nothing was marked as verified.'**
+  /// **'This can happen if {name} got a new phone or reinstalled SIS. It can also mean someone is intercepting your messages. Check with {name} in person or on a call, and do not send anything sensitive until you are sure. Nothing was marked as verified.'**
   String securityCodeMismatchBody(String name);
 
   /// No description provided for @securityCodeOk.
@@ -863,7 +863,7 @@ abstract class AppLocalizations {
   /// No description provided for @securityCodeUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'No security code to show yet. It appears after your first secure message with {name}.'**
+  /// **'No security code yet. It appears after you and {name} have exchanged messages.'**
   String securityCodeUnavailable(String name);
 
   /// No description provided for @securityCodeNewPhoneNote.
@@ -941,7 +941,7 @@ abstract class AppLocalizations {
   /// Delete confirm card: body for Delete for me
   ///
   /// In en, this message translates to:
-  /// **'It is hidden on your devices only.'**
+  /// **'It is hidden for you only.'**
   String get messageDeleteForMeBody;
 
   /// Delete confirm card: body for Delete for everyone
@@ -1001,7 +1001,7 @@ abstract class AppLocalizations {
   /// Section header above the list of people the member already knows
   ///
   /// In en, this message translates to:
-  /// **'Your people'**
+  /// **'Your contacts'**
   String get commonYourPeople;
 
   /// Empty result of a people search
@@ -1163,13 +1163,13 @@ abstract class AppLocalizations {
   /// Explains the nobody option
   ///
   /// In en, this message translates to:
-  /// **'Only you -- others see your initials'**
+  /// **'Only you. Others see your initials.'**
   String get settingsAvatarNobodyHint;
 
   /// Label above the signed-in email
   ///
   /// In en, this message translates to:
-  /// **'Signed in with Google as'**
+  /// **'Signed in as'**
   String get settingsSignedInAs;
 
   /// Shown when the email is not known
@@ -1199,7 +1199,7 @@ abstract class AppLocalizations {
   /// Row that opens the licences page
   ///
   /// In en, this message translates to:
-  /// **'Open-source licences'**
+  /// **'Open-source licenses'**
   String get settingsLicences;
 
   /// Subtitle of the master notifications switch
@@ -1223,7 +1223,7 @@ abstract class AppLocalizations {
   /// Preview option: only the sender shown
   ///
   /// In en, this message translates to:
-  /// **'Only who it is from'**
+  /// **'Sender only'**
   String get notifPreviewSender;
 
   /// Preview option: nothing shown
@@ -1379,7 +1379,7 @@ abstract class AppLocalizations {
   /// Hint of the search field above a list of people
   ///
   /// In en, this message translates to:
-  /// **'Search your people'**
+  /// **'Search contacts'**
   String get commonSearchPeople;
 
   /// Label on a forwarded message and notice after forwarding
@@ -1469,13 +1469,13 @@ abstract class AppLocalizations {
   /// A quoted message that is only a photo
   ///
   /// In en, this message translates to:
-  /// **'📷 Photo'**
+  /// **'Photo'**
   String get quotePhoto;
 
   /// A quoted photo album
   ///
   /// In en, this message translates to:
-  /// **'📷 {count} photos'**
+  /// **'{count} photos'**
   String quotePhotos(int count);
 
   /// Photo viewer menu, a photo of an album: delete it for everyone (the album's other photos stay)
@@ -1601,7 +1601,7 @@ abstract class AppLocalizations {
   /// Empty state of a conversation
   ///
   /// In en, this message translates to:
-  /// **'No messages yet. Say something.'**
+  /// **'No messages yet. Say hello.'**
   String get messageEmpty;
 
   /// Notice after adding members
@@ -1619,7 +1619,7 @@ abstract class AppLocalizations {
   /// Explains the empty state of the add members page
   ///
   /// In en, this message translates to:
-  /// **'Everyone in your people list is already in this group.'**
+  /// **'Everyone in your contacts is already in this group.'**
   String get addMembersNoneBody;
 
   /// Switch on the add members page
@@ -1637,7 +1637,7 @@ abstract class AppLocalizations {
   /// Note on the add members page for a non-admin: the group switch decides about history
   ///
   /// In en, this message translates to:
-  /// **'Group admin sets whether new members see earlier messages'**
+  /// **'Group admins decide whether new members see earlier messages'**
   String get addMembersAdminDecides;
 
   /// Label of the add button while it works
@@ -1727,7 +1727,7 @@ abstract class AppLocalizations {
   /// Hint of the search field on the forward page
   ///
   /// In en, this message translates to:
-  /// **'Search chats and people'**
+  /// **'Search chats and contacts'**
   String get forwardSearch;
 
   /// Label before the preview of the message being forwarded
@@ -1739,13 +1739,13 @@ abstract class AppLocalizations {
   /// Header above people on the forward page
   ///
   /// In en, this message translates to:
-  /// **'People'**
+  /// **'Contacts'**
   String get forwardPeople;
 
   /// No result on the forward page
   ///
   /// In en, this message translates to:
-  /// **'Nothing found'**
+  /// **'No results'**
   String get forwardNothing;
 
   /// Send button with the number of chosen chats
@@ -1805,7 +1805,7 @@ abstract class AppLocalizations {
   /// Picture menu: pick from the gallery
   ///
   /// In en, this message translates to:
-  /// **'Choose from library'**
+  /// **'Choose from gallery'**
   String get avatarChoose;
 
   /// Picture menu: remove the picture
@@ -1877,13 +1877,13 @@ abstract class AppLocalizations {
   /// Menu action
   ///
   /// In en, this message translates to:
-  /// **'Remove as admin'**
+  /// **'Dismiss admin'**
   String get membersRemoveAdmin;
 
   /// Menu action
   ///
   /// In en, this message translates to:
-  /// **'Make admin'**
+  /// **'Promote to admin'**
   String get membersMakeAdmin;
 
   /// Badge of a member who left
@@ -1925,7 +1925,7 @@ abstract class AppLocalizations {
   /// Empty state of the media tab
   ///
   /// In en, this message translates to:
-  /// **'No photos shared yet'**
+  /// **'No media shared yet'**
   String get mediaEmpty;
 
   /// Group event line
@@ -1943,7 +1943,7 @@ abstract class AppLocalizations {
   /// Group event line
   ///
   /// In en, this message translates to:
-  /// **'{name} changed the group picture'**
+  /// **'{name} changed the group photo'**
   String eventPictureChanged(String name);
 
   /// Group event line
@@ -2123,7 +2123,7 @@ abstract class AppLocalizations {
   /// Explains the photo permission prompt
   ///
   /// In en, this message translates to:
-  /// **'Allow access so your gallery loads right here – nothing is uploaded until you send it.'**
+  /// **'Allow access so your gallery loads right here. Nothing is uploaded until you send it.'**
   String get attachFasterBody;
 
   /// Button when the permission was denied for good
@@ -2213,13 +2213,13 @@ abstract class AppLocalizations {
   /// Helper under the tag field
   ///
   /// In en, this message translates to:
-  /// **'Unique. Letters, digits and _; 3 to 20.'**
+  /// **'Must be unique. Use 3 to 20 letters, digits or _.'**
   String get profileTagHint;
 
   /// Sign-in screen description
   ///
   /// In en, this message translates to:
-  /// **'Private messages for the people on your list.'**
+  /// **'Messaging for the people you know.'**
   String get signInBody;
 
   /// Google sign-in button
@@ -2231,7 +2231,7 @@ abstract class AppLocalizations {
   /// Sign-in screen footnote
   ///
   /// In en, this message translates to:
-  /// **'Only invited Google accounts can sign in.'**
+  /// **'Only invited accounts can sign in.'**
   String get signInInvitedOnly;
 
   /// Title of the screen for an account that is not approved
@@ -2243,7 +2243,7 @@ abstract class AppLocalizations {
   /// Body of the access denied screen
   ///
   /// In en, this message translates to:
-  /// **'This Google account is not currently approved for SIS.'**
+  /// **'This account is not approved for SIS right now.'**
   String get statusDeniedBody;
 
   /// Title of the screen shown on a phone that another phone replaced
@@ -2345,7 +2345,7 @@ abstract class AppLocalizations {
   /// Number of licences of a package
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{1 licence} other{{count} licences}}'**
+  /// **'{count, plural, =1{1 license} other{{count} licenses}}'**
   String licencesCount(int count);
 
   /// Fallback title for a chat whose name is not known yet
@@ -2435,7 +2435,7 @@ abstract class AppLocalizations {
   /// Theme editor tab
   ///
   /// In en, this message translates to:
-  /// **'Accent Color'**
+  /// **'Accent color'**
   String get themeTabAccent;
 
   /// Theme editor tab
@@ -2447,7 +2447,7 @@ abstract class AppLocalizations {
   /// Theme editor tab
   ///
   /// In en, this message translates to:
-  /// **'My Messages'**
+  /// **'My messages'**
   String get themeTabMyMessages;
 
   /// Theme editor accent tab label
@@ -2489,7 +2489,7 @@ abstract class AppLocalizations {
   /// Theme editor warning
   ///
   /// In en, this message translates to:
-  /// **'Accent may be hard to read. Consider a darker shade.'**
+  /// **'This accent color may be hard to read. Try a darker shade.'**
   String get themeLowContrast;
 
   /// Theme editor mode switch label
@@ -2525,13 +2525,13 @@ abstract class AppLocalizations {
   /// Screen-reader label of a colour swatch
   ///
   /// In en, this message translates to:
-  /// **'Colour {hex}'**
+  /// **'Color {hex}'**
   String themeSwatch(String hex);
 
   /// Wallpaper tab
   ///
   /// In en, this message translates to:
-  /// **'Colour'**
+  /// **'Color'**
   String get wallpaperColour;
 
   /// Wallpaper tab
@@ -2543,7 +2543,7 @@ abstract class AppLocalizations {
   /// Wallpaper tab
   ///
   /// In en, this message translates to:
-  /// **'Picture'**
+  /// **'Photo'**
   String get wallpaperPicture;
 
   /// Button to pick a wallpaper photo
@@ -2561,25 +2561,25 @@ abstract class AppLocalizations {
   /// Row at the bottom of the wallpaper page; opens the confirm card
   ///
   /// In en, this message translates to:
-  /// **'Reset Chat Backgrounds'**
+  /// **'Reset chat wallpapers'**
   String get wallpaperReset;
 
   /// Info line under the reset row
   ///
   /// In en, this message translates to:
-  /// **'Remove all uploaded chat backgrounds and restore the pre-installed ones.'**
+  /// **'Removes the chat wallpapers you added and restores the built-in ones.'**
   String get wallpaperResetInfo;
 
   /// Title of the reset confirm card
   ///
   /// In en, this message translates to:
-  /// **'Reset chat backgrounds'**
+  /// **'Reset chat wallpapers?'**
   String get wallpaperResetTitle;
 
   /// Question on the reset confirm card
   ///
   /// In en, this message translates to:
-  /// **'Are you sure you want to reset all chat backgrounds?'**
+  /// **'Your own wallpapers will be removed.'**
   String get wallpaperResetConfirm;
 
   /// Confirm button of the reset card
@@ -2621,13 +2621,13 @@ abstract class AppLocalizations {
   /// Title and button of the delete dialog for one chat or group
   ///
   /// In en, this message translates to:
-  /// **'Delete Chat'**
+  /// **'Delete chat'**
   String get chatDeleteChat;
 
   /// Delete dialog for one person; the name between ** is shown bold
   ///
   /// In en, this message translates to:
-  /// **'Are you sure you want to delete the chat with **{name}**?'**
+  /// **'Permanently delete the chat with **{name}**?'**
   String chatDeleteSure(String name);
 
   /// Checkbox: delete the chat for the other person too
@@ -2645,7 +2645,7 @@ abstract class AppLocalizations {
   /// Title of the delete dialog for a group
   ///
   /// In en, this message translates to:
-  /// **'Leave Group'**
+  /// **'Leave group?'**
   String get chatLeaveGroupTitle;
 
   /// Delete dialog for a group; the name between ** is shown bold
@@ -2663,13 +2663,13 @@ abstract class AppLocalizations {
   /// Undo bar after deleting a group the member only leaves
   ///
   /// In en, this message translates to:
-  /// **'You left the group.'**
+  /// **'You left the group'**
   String get chatGroupLeftUndo;
 
   /// Undo bar after an admin deletes a group for everyone
   ///
   /// In en, this message translates to:
-  /// **'Group deleted.'**
+  /// **'Group deleted'**
   String get chatGroupDeletedUndo;
 
   /// Title of the delete dialog for several chats
@@ -2681,19 +2681,19 @@ abstract class AppLocalizations {
   /// Body of the delete dialog for several chats
   ///
   /// In en, this message translates to:
-  /// **'Are you sure you want to delete selected chats?'**
+  /// **'Are you sure you want to delete these chats?'**
   String get chatDeleteFewSure;
 
   /// Checkbox of the several-chats delete dialog
   ///
   /// In en, this message translates to:
-  /// **'Delete for both sides where possible'**
+  /// **'Delete for everyone where possible'**
   String get chatDeleteBothSides;
 
   /// Undo bar after deleting several chats
   ///
   /// In en, this message translates to:
-  /// **'Chats deleted.'**
+  /// **'Chats deleted'**
   String get chatsDeletedUndo;
 
   /// Title of the create-poll screen
@@ -2741,13 +2741,13 @@ abstract class AppLocalizations {
   /// Switch: members may pick more than one option
   ///
   /// In en, this message translates to:
-  /// **'Allow several answers'**
+  /// **'Allow multiple answers'**
   String get pollMultipleTitle;
 
   /// Switch: votes are anonymous
   ///
   /// In en, this message translates to:
-  /// **'Anonymous votes'**
+  /// **'Anonymous voting'**
   String get pollAnonymousTitle;
 
   /// Subtitle of the anonymous votes switch
@@ -2771,7 +2771,7 @@ abstract class AppLocalizations {
   /// Body of the leave-create-poll confirmation
   ///
   /// In en, this message translates to:
-  /// **'Are you sure you want to discard this poll?'**
+  /// **'Your question and options will be lost.'**
   String get pollDiscardBody;
 
   /// Confirm button of the leave-create-poll confirmation
@@ -2861,7 +2861,7 @@ abstract class AppLocalizations {
   /// Body of the stop-poll confirmation
   ///
   /// In en, this message translates to:
-  /// **'If you stop this poll now, nobody will be able to vote in it anymore. This action cannot be undone.'**
+  /// **'If you stop this poll, nobody can vote in it anymore. This cannot be undone.'**
   String get pollStopBody;
 
   /// Confirm button of the stop-poll confirmation
@@ -2885,7 +2885,7 @@ abstract class AppLocalizations {
   /// Chat list preview of a poll message
   ///
   /// In en, this message translates to:
-  /// **'📊 Poll: {question}'**
+  /// **'Poll: {question}'**
   String pollPreviewLine(String question);
 
   /// Title of the send-a-contact page
@@ -2897,7 +2897,7 @@ abstract class AppLocalizations {
   /// Search field hint on the send-a-contact page
   ///
   /// In en, this message translates to:
-  /// **'Search your contacts'**
+  /// **'Search contacts'**
   String get contactSearchHint;
 
   /// Button that sends the picked phone contact
@@ -2957,19 +2957,19 @@ abstract class AppLocalizations {
   /// Auto-download preset
   ///
   /// In en, this message translates to:
-  /// **'Enable'**
+  /// **'On'**
   String get autoDownloadEnable;
 
   /// Auto-download preset
   ///
   /// In en, this message translates to:
-  /// **'Enable only on Wi-Fi'**
+  /// **'Only on Wi-Fi'**
   String get autoDownloadWifiOnly;
 
   /// Auto-download preset
   ///
   /// In en, this message translates to:
-  /// **'Disabled'**
+  /// **'Off'**
   String get autoDownloadDisabled;
 
   /// Auto-download page: section title
@@ -3197,7 +3197,7 @@ abstract class AppLocalizations {
   /// Explains the video library permission prompt
   ///
   /// In en, this message translates to:
-  /// **'Allow access so your videos show up here – nothing is uploaded until you send it.'**
+  /// **'Allow access so your videos show up here. Nothing is uploaded until you send it.'**
   String get videoAccessBody;
 
   /// Button that asks for video library access
@@ -3221,8 +3221,38 @@ abstract class AppLocalizations {
   /// Chat list preview of a voice message
   ///
   /// In en, this message translates to:
-  /// **'🎤 Voice message'**
+  /// **'Voice message'**
   String get voicePreviewLine;
+
+  /// Summary notification when one message is waiting
+  ///
+  /// In en, this message translates to:
+  /// **'1 new message'**
+  String get notifSummaryOne;
+
+  /// Summary notification when several messages wait in one chat
+  ///
+  /// In en, this message translates to:
+  /// **'{count} new messages'**
+  String notifSummaryMany(int count);
+
+  /// Summary notification when messages wait in several chats
+  ///
+  /// In en, this message translates to:
+  /// **'{count} new messages from {chats} chats'**
+  String notifSummaryChats(int count, int chats);
+
+  /// Name of the summary notification channel
+  ///
+  /// In en, this message translates to:
+  /// **'Summary'**
+  String get notifChannelSummary;
+
+  /// Description of the message notification channel
+  ///
+  /// In en, this message translates to:
+  /// **'New messages'**
+  String get notifChannelMessages;
 
   /// Notice when the button was released too early
   ///
@@ -3269,7 +3299,7 @@ abstract class AppLocalizations {
   /// Cancel button while a recording is locked
   ///
   /// In en, this message translates to:
-  /// **'CANCEL'**
+  /// **'Cancel'**
   String get voiceCancel;
 
   /// Shows the transcript under a voice message
@@ -3311,13 +3341,13 @@ abstract class AppLocalizations {
   /// Chat list preview of a sticker message
   ///
   /// In en, this message translates to:
-  /// **'😀 Sticker'**
+  /// **'Sticker'**
   String get stickerPreviewLine;
 
   /// Chat list preview of a shared sticker album
   ///
   /// In en, this message translates to:
-  /// **'📂 Sticker album'**
+  /// **'Sticker album'**
   String get stickerAlbumPreviewLine;
 
   /// Tooltip of the sticker button beside the message box
@@ -3341,13 +3371,13 @@ abstract class AppLocalizations {
   /// Sticker panel tab
   ///
   /// In en, this message translates to:
-  /// **'Favourites'**
+  /// **'Favorites'**
   String get stickerTabFavourites;
 
   /// Sticker panel tab
   ///
   /// In en, this message translates to:
-  /// **'SIS starter'**
+  /// **'SIS starter pack'**
   String get stickerTabStarter;
 
   /// Sticker panel tab
@@ -3371,7 +3401,7 @@ abstract class AppLocalizations {
   /// Empty Favourites tab
   ///
   /// In en, this message translates to:
-  /// **'Long-press a sticker in a chat to add it to your favourites.'**
+  /// **'Long-press a sticker in a chat to add it to your favorites.'**
   String get stickerEmptyFavourites;
 
   /// Empty album
@@ -3401,7 +3431,7 @@ abstract class AppLocalizations {
   /// Message menu: keep a received sticker
   ///
   /// In en, this message translates to:
-  /// **'Add to favourites'**
+  /// **'Add to favorites'**
   String get messageActionStickerFavourite;
 
   /// Message menu: put a received sticker in an album
@@ -3413,13 +3443,13 @@ abstract class AppLocalizations {
   /// Notice after adding a sticker to favourites
   ///
   /// In en, this message translates to:
-  /// **'Added to favourites.'**
+  /// **'Added to favorites'**
   String get stickerAddedFavourite;
 
   /// Notice after adding a sticker to an album
   ///
   /// In en, this message translates to:
-  /// **'Added to {name}.'**
+  /// **'Added to {name}'**
   String stickerAddedAlbum(String name);
 
   /// Title of the album picker
@@ -3509,13 +3539,13 @@ abstract class AppLocalizations {
   /// Notice after sharing an album
   ///
   /// In en, this message translates to:
-  /// **'Album shared.'**
+  /// **'Album shared'**
   String get stickerAlbumShared;
 
   /// Size line of an album card
   ///
   /// In en, this message translates to:
-  /// **'{count} stickers'**
+  /// **'{count, plural, =1{1 sticker} other{{count} stickers}}'**
   String stickerAlbumStickers(int count);
 
   /// Button on a shared album card
@@ -3527,19 +3557,19 @@ abstract class AppLocalizations {
   /// Button on a shared album card
   ///
   /// In en, this message translates to:
-  /// **'Add to favourites'**
+  /// **'Add to favorites'**
   String get stickerAlbumAddFavourites;
 
   /// Notice after adding a shared album
   ///
   /// In en, this message translates to:
-  /// **'Album added.'**
+  /// **'Album added'**
   String get stickerAlbumAdded;
 
   /// Notice after adding a shared album to favourites
   ///
   /// In en, this message translates to:
-  /// **'Added to your favourites.'**
+  /// **'Added to your favorites'**
   String get stickerAlbumFavouritesAdded;
 
   /// Notice when a shared album was deleted
@@ -3557,7 +3587,7 @@ abstract class AppLocalizations {
   /// Sticker menu inside favourites
   ///
   /// In en, this message translates to:
-  /// **'Remove from favourites'**
+  /// **'Remove from favorites'**
   String get stickerRemoveFavourite;
 
   /// Notice at the album limit
@@ -3575,7 +3605,7 @@ abstract class AppLocalizations {
   /// Notice at the favourites limit
   ///
   /// In en, this message translates to:
-  /// **'You can keep up to {max} favourites.'**
+  /// **'You can keep up to {max} favorites.'**
   String stickerLimitFavourites(int max);
 
   /// Title of the card that starts making a sticker
@@ -3713,7 +3743,7 @@ abstract class AppLocalizations {
   /// Handwriting font choice
   ///
   /// In en, this message translates to:
-  /// **'Hand'**
+  /// **'Handwriting'**
   String get makerFontHand;
 
   /// Title of the draw step
@@ -3761,7 +3791,7 @@ abstract class AppLocalizations {
   /// Option to also favourite the new sticker
   ///
   /// In en, this message translates to:
-  /// **'Also add to favourites'**
+  /// **'Also add to favorites'**
   String get makerAlsoFavourite;
 
   /// Button that saves the sticker
@@ -3869,7 +3899,7 @@ abstract class AppLocalizations {
   /// Reason shown when the site refuses a video
   ///
   /// In en, this message translates to:
-  /// **'This video needs a sign-in to watch.'**
+  /// **'Sign in to watch this video.'**
   String get videoRefusedLogin;
 
   /// Reason shown when the site refuses a video
@@ -3887,7 +3917,7 @@ abstract class AppLocalizations {
   /// Admin chat reply text
   ///
   /// In en, this message translates to:
-  /// **'I don’t know that command.'**
+  /// **'I don\'t know that command.'**
   String get adminUnk;
 
   /// Admin chat reply text
@@ -3899,7 +3929,7 @@ abstract class AppLocalizations {
   /// Admin chat reply text
   ///
   /// In en, this message translates to:
-  /// **'That email address doesn’t look right.'**
+  /// **'That email address doesn\'t look right.'**
   String get adminBad;
 
   /// Admin chat reply text
@@ -4031,7 +4061,7 @@ abstract class AppLocalizations {
   /// Admin chat reply text
   ///
   /// In en, this message translates to:
-  /// **'Cancelled'**
+  /// **'Canceled'**
   String get adminConfCancelled;
 
   /// Admin chat reply text
@@ -4043,7 +4073,7 @@ abstract class AppLocalizations {
   /// Admin chat reply text
   ///
   /// In en, this message translates to:
-  /// **'Cancelled. Nothing was removed.'**
+  /// **'Canceled. Nothing was removed.'**
   String get adminCanOk;
 
   /// Admin chat reply text
@@ -4121,7 +4151,7 @@ abstract class AppLocalizations {
   /// Admin chat reply text
   ///
   /// In en, this message translates to:
-  /// **'Cancelled: this card is no longer valid.'**
+  /// **'Canceled: this card is no longer valid.'**
   String get adminKeep;
 
   /// Admin chat reply text
@@ -4151,7 +4181,7 @@ abstract class AppLocalizations {
   /// Find people page subtitle
   ///
   /// In en, this message translates to:
-  /// **'From your contacts'**
+  /// **'From your phone contacts'**
   String get findPeopleSub;
 
   /// Section header: contacts who are members
@@ -4187,13 +4217,13 @@ abstract class AppLocalizations {
   /// Disclosure title, shown before contacts are read
   ///
   /// In en, this message translates to:
-  /// **'Find people from your contacts'**
+  /// **'Find people from your phone contacts'**
   String get findDiscTitle;
 
   /// Disclosure body
   ///
   /// In en, this message translates to:
-  /// **'SIS sends the email addresses in your contacts, in coded (hashed) form, to the SIS server to show which of your contacts use SIS. This happens each time you open Find people. The codes are not stored; SIS only keeps a note of which members you found. Names and phone numbers stay on your phone.'**
+  /// **'SIS sends the coded (hashed) email addresses of your contacts to the SIS server to show which of them use SIS. This happens each time you open Find people. The codes are not stored; SIS only keeps a note of which members you found. Names and phone numbers stay on your phone.'**
   String get findDiscBody;
 
   /// Disclosure accept button
@@ -4223,7 +4253,7 @@ abstract class AppLocalizations {
   /// Button that asks for contacts permission
   ///
   /// In en, this message translates to:
-  /// **'Allow contacts'**
+  /// **'Allow access to contacts'**
   String get findAllow;
 
   /// Shown when the server search limit is reached
@@ -4247,7 +4277,7 @@ abstract class AppLocalizations {
   /// Light or dark option: match the phone setting
   ///
   /// In en, this message translates to:
-  /// **'Follow phone'**
+  /// **'System default'**
   String get appearanceModeFollow;
 
   /// Small line under the Follow phone option
@@ -4271,7 +4301,7 @@ abstract class AppLocalizations {
   /// Note on the light or dark card when a built-in theme is active
   ///
   /// In en, this message translates to:
-  /// **'Your theme keeps its own colours; this only picks the light or dark version.'**
+  /// **'Your theme keeps its own colors; this only picks the light or dark version.'**
   String get appearanceModeNoteBuiltIn;
 
   /// Note on the light or dark card for an automatic custom theme

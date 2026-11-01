@@ -200,7 +200,10 @@ void main() {
       await search(t, 'cem');
 
       expect(
-        under('find-by-tag-error', 'Too many searches, try again later.'),
+        under(
+          'find-by-tag-error',
+          'Too many searches. Try again in a little while.',
+        ),
         findsOneWidget,
       );
       expect(byKey('find-by-tag-result-u3'), findsNothing);
@@ -221,7 +224,10 @@ void main() {
       expect(byKey('find-by-tag-error'), findsNothing);
       await search(t, 'cem');
       expect(
-        under('find-by-tag-error', 'Too many searches, try again later.'),
+        under(
+          'find-by-tag-error',
+          'Too many searches. Try again in a little while.',
+        ),
         findsOneWidget,
       );
       expect(byKey('find-by-tag-result-u3'), findsNothing);

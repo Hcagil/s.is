@@ -138,7 +138,7 @@ void main() {
 
     test('unk with help', () {
       final result = adminPreviewLine(l, {'k': 'unk', 'help': true});
-      expect(result, equals("I don’t know that command."));
+      expect(result, equals("I don't know that command."));
       expect(result, isNot(contains('\n')));
     });
 
@@ -159,12 +159,12 @@ void main() {
 
     test('keep', () {
       final result = adminPreviewLine(l, {'k': 'keep'});
-      expect(result, equals("Cancelled: this card is no longer valid."));
+      expect(result, equals("Canceled: this card is no longer valid."));
     });
 
     test('canOk', () {
       final result = adminPreviewLine(l, {'k': 'canOk'});
-      expect(result, equals("Cancelled. Nothing was removed."));
+      expect(result, equals("Canceled. Nothing was removed."));
     });
 
     test('list', () {

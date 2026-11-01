@@ -267,7 +267,7 @@ select is(
   (select string_agg(body, ',') from app_private.push_targets_for_message(
      (select id from public.messages
        where attachment_path = (select conv from _fx) || '/p-ok.png'))),
-  '📷 Photo',
+  'Fotoğraf',
   'the pushed body is the photo label, never the preview payload');
 
 select * from finish();

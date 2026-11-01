@@ -124,9 +124,9 @@ select is(pt('eB1', 'bob'), 'QkJCMQ==|1', 'preview unset + ciphertext row, olm_t
 select is(pt('eC1', 'cat'), 'Q0NDMQ==|1', 'preview full + ciphertext row, olm_type 1: the row''s ciphertext and 1');
 select is(pt('eC0', 'cat'), 'Q0NDMA==|0', 'preview full + ciphertext row, olm_type 0: the row''s ciphertext and 0');
 select is((select string_agg(distinct body, ',') from public.f4b_snap where m in ('eC1', 'eC0') and user_id = u('cat')),
-  'New message', 'preview full set explicitly + ciphertext row: body exactly New message');
-select is((select count(*) from public.f4b_snap where m = 'eB0' and body = 'New message'), 1::bigint,
-  'preview unset + ciphertext row: body exactly New message');
+  'Yeni mesaj', 'preview full set explicitly + ciphertext row: body exactly Yeni mesaj (no app language)');
+select is((select count(*) from public.f4b_snap where m = 'eB0' and body = 'Yeni mesaj'), 1::bigint,
+  'preview unset + ciphertext row: body exactly Yeni mesaj');
 select is(pt('eG1', 'gus'), '<null>|<null>', 'preview sender + ciphertext row: both null');
 select is(pt('eH0', 'hal'), '<null>|<null>', 'preview none + ciphertext row: both null');
 select is((select encrypted from public.f4b_snap where m = 'eG1' and user_id = u('gus')), true,

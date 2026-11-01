@@ -458,9 +458,9 @@ Deno.test({
       // none there is no sender or group to name: the old wording stands.
       assertEquals(messageTo(p.iosfull).notification, { title, body: `${sender.name}: ${text}` },
         'iPhone, preview full: titled by the group, the line names the sender');
-      assertEquals(messageTo(p.iossender).notification, { title, body: `${sender.name}: New message` },
+      assertEquals(messageTo(p.iossender).notification, { title, body: `${sender.name}: Yeni mesaj` },
         'iPhone, preview sender: titled by the group, the sender named, no text');
-      assertEquals(messageTo(p.iosnone).notification, { title: 'SIS', body: 'New message' },
+      assertEquals(messageTo(p.iosnone).notification, { title: 'SIS', body: 'Yeni mesaj' },
         'iPhone, preview none: unchanged');
       for (const x of [p.iosfull, p.iossender, p.iosnone]) {
         const m = messageTo(x);

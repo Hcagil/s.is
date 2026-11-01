@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
@@ -10,6 +11,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../l10n/app_localizations.dart';
+import '../../../l10n/app_localizations_en.dart';
 import '../domain/notification_inbox.dart';
 import 'alert_channels.dart';
 import 'push_receipt_log.dart';
@@ -32,8 +35,26 @@ final class LocalPushDisplay {
   static const _ownerKey = 'sis.push_inbox_owner';
   static const _summaryId = 0;
   static const _summaryChannelId = 'summary';
-  static const _summaryChannelName = 'Summary';
-  static const _channelDescription = 'New messages';
+
+  /// The texts in the phone's language (this also runs in the background isolate, so no BuildContext); English when the language is not one of ours.
+  static AppLocalizations _words() {
+    try {
+      return lookupAppLocalizations(PlatformDispatcher.instance.locale);
+    } catch (_) {
+      return AppLocalizationsEn();
+    }
+  }
+
+  static String _summary(List<InboxChat> inbox) {
+    final l = _words();
+    return inboxSummary(
+      inbox,
+      one: l.notifSummaryOne,
+      many: l.notifSummaryMany,
+      fromChats: (n, k) => l.notifSummaryChats(n, k),
+    );
+  }
+
   static const _alerts = SharedPrefsAlertStore();
 
   /// iOS only: AppDelegate.swift removes a chat's delivered pushes by thread
@@ -203,12 +224,12 @@ final class LocalPushDisplay {
     await _plugin.show(
       id: _summaryId,
       title: 'SIS',
-      body: inboxSummary(inbox),
+      body: _summary(inbox),
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           _summaryChannelId,
-          _summaryChannelName,
-          channelDescription: _channelDescription,
+          _words().notifChannelSummary,
+          channelDescription: _words().notifChannelMessages,
           importance: Importance.low,
           playSound: false,
           enableVibration: false,
@@ -224,7 +245,7 @@ final class LocalPushDisplay {
                     : '${c.title}: ${c.lines.last.text}',
             ],
             contentTitle: 'SIS',
-            summaryText: inboxSummary(inbox),
+            summaryText: _summary(inbox),
           ),
         ),
         iOS: DarwinNotificationDetails(presentSound: false),

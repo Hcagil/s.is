@@ -120,7 +120,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
             .setContentTitle(chat.optString("t"))
             .setContentText(line)
             .setStyle(
-                NotificationCompat.MessagingStyle(Person.Builder().setName("You").build()).also {
+                NotificationCompat.MessagingStyle(Person.Builder().setName(context.getString(R.string.person_you)).build()).also {
                     if (chat.optBoolean("g")) {
                         it.setConversationTitle(chat.optString("t"))
                         it.setGroupConversation(true)

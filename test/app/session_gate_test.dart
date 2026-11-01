@@ -74,7 +74,7 @@ void main() {
       app(FakeAuth(session: true, allowed: false), FakeUpdate()),
     );
     await t.pumpAndSettle();
-    expect(find.textContaining('not currently approved'), findsOneWidget);
+    expect(find.textContaining('not approved for SIS'), findsOneWidget);
   });
   testWidgets('allowed reaches the conversation list', (t) async {
     await t.pumpWidget(app(FakeAuth(session: true), FakeUpdate()));

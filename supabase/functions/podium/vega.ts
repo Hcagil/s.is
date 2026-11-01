@@ -45,7 +45,9 @@ export async function fetchVegaTotal(day: string, prev: boolean): Promise<string
     }
     const decoder = new TextDecoder();
     const html = chunks.map((c) => decoder.decode(c, { stream: true })).join('') + decoder.decode();
-    const m = html.match(/Toplam Ciro<\/div>\s*<[^>]*class="[^"]*dash-stat-value[^"]*"[^>]*>\s*([0-9.,]+)\s*</);
+    // the regex backtracks badly on a crafted body, so it only sees the 512 bytes after the label
+    const i = html.indexOf('Toplam Ciro</div>');
+    const m = i < 0 ? null : html.slice(i, i + 512).match(/Toplam Ciro<\/div>\s*<[^>]*class="[^"]*dash-stat-value[^"]*"[^>]*>\s*([0-9.,]+)\s*</);
     if (!m) throw new VegaError('shape');
     return m[1];
   } catch (e) {

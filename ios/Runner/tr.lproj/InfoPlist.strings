@@ -5,15 +5,15 @@
 "NSCameraUsageDescription" = "Fotoğraf çekip sohbette gönderebilmen için kameraya erişime izin ver. Fotoğraf yalnızca sen gönderdiğinde yüklenir.";
 
 /* Fotoğraf kitaplığı izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
-"NSPhotoLibraryUsageDescription" = "Fotoğrafların ve videoların sohbette burada yüklensin diye erişime izin ver. Sen gönderene kadar hiçbir şey gönderilmez. Yalnızca birkaçına izin verebilirsin.";
+"NSPhotoLibraryUsageDescription" = "Fotoğraflarınız ve videolarınız sohbette burada yüklensin diye erişime izin verin. Siz gönderene kadar hiçbir şey gönderilmez. Yalnızca birkaçına izin verebilirsiniz.";
 
 /* Konum izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
-"NSLocationWhenInUseUsageDescription" = "Bulunduğun yeri sohbette paylaşabilmen için erişime izin ver. Konumun yalnızca sen göndermeyi seçtiğinde okunur.";
+"NSLocationWhenInUseUsageDescription" = "Bulunduğunuz yeri sohbette paylaşabilmeniz için erişime izin verin. Konumunuz yalnızca siz göndermeyi seçtiğinizde okunur.";
 
-"NSLocationAlwaysAndWhenInUseUsageDescription" = "Bulunduğun yeri sohbette paylaşabilmen için erişime izin ver. Konumun yalnızca sen göndermeyi seçtiğinde okunur.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Bulunduğunuz yeri sohbette paylaşabilmeniz için erişime izin verin. Konumunuz yalnızca siz göndermeyi seçtiğinizde okunur.";
 
 /* Mikrofon izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
-"NSMicrophoneUsageDescription" = "Sesli mesaj kaydedebilmen ve yazıyı sesle yazdırabilmen için mikrofona izin ver. Ses yalnızca sesli mesajı gönderdiğinde gönderilir.";
+"NSMicrophoneUsageDescription" = "Sesli mesaj kaydedebilmeniz ve yazıyı sesle yazdırabilmeniz için mikrofona izin verin. Ses yalnızca sesli mesajı gönderdiğinizde gönderilir.";
 
 /* Konuşma tanıma izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
-"NSSpeechRecognitionUsageDescription" = "Sesini mesaj kutusunda yazıya çevirebilmek için konuşma tanımaya izin ver. Telefonunda çalışır.";
+"NSSpeechRecognitionUsageDescription" = "Sesinizi mesaj kutusunda yazıya çevirebilmek için konuşma tanımaya izin verin. Telefonunuzda çalışır.";

@@ -361,7 +361,7 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(byKey('selection-pin'));
     await t.pumpAndSettle();
-    expect(find.text('En fazla 5 sohbet sabitleyebilirsin.'), findsOneWidget);
+    expect(find.text('En fazla 5 sohbet sabitleyebilirsiniz.'), findsOneWidget);
     expect(byKey('pinned-c1'), findsNothing);
     await ui.drainNotice(t);
   });

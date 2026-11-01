@@ -716,6 +716,22 @@ when a collaborator leaves or a dependency is suspected compromised.
 - iPhone: the push carries category `SIS_MESSAGE_LOCKED` (a foreground Reply only).
 - On the phone, an opened text is stored once. The store's upsert is one atomic statement, so a live row never replaces a deleted one. A hidden or vanished message is dropped from the opener's waiting list, so it cannot come back.
 
+### Bacanaks Özel /podium (accepted risk)
+
+- The `podium` edge function signs in to the owner's Vega system and reads one total from its summary page. Vega offers only plain HTTP (no TLS). This is an **accepted risk**, recorded by the owner on 2026-10-24 and 2026-11-01 (owner decisions log, local).
+- What the owner accepts:
+  - **Plain-HTTP exposure:** the Vega user name, password and the total travel readable over the internet on every sign-in.
+  - **Fake total:** anyone on the path can change the reply, so the shown total may be false. The reply says it comes from Vega and shows the fetch time.
+  - **Vega's terms:** the owner is a Vega partner using his own business account; automated reading is his decision.
+  - **Account lockout:** repeated failed sign-ins may lock the account. Three failures in a row turn the reader off until the owner turns it on again.
+  - **Responsibility:** the owner is responsible for the Vega account. He states it can only read, not change data.
+- Limits that keep the risk small (checked by the security gate):
+  - The credentials live only in edge-function secrets (`VEGA_BASE_URL`, `VEGA_USERNAME`, `VEGA_PASSWORD`). They never reach the app, a URL query, a log line, an error, a chat message or a database row.
+  - The function is started only by the database with a shared secret header. It requests one fixed path and never forwards the command text.
+  - The reply is read up to 1 MiB, and the total is matched only in a short window after its label. Any other shape gives "no result"; the raw page is never stored or shown.
+  - Only the date, time, total and fetch time are stored, with one audit row per command. No push carries the total.
+- The owner should change the Vega password regularly, and at once after any sign of misuse or a kill-switch event. The real fix is HTTPS with a read-only key on Vega's side.
+
 ## Runbook
 
 - **Allow a member:** insert the row directly against the project, through the

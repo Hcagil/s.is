@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -40,6 +41,12 @@ String? adminReplyText(AppLocalizations l, Map<String, dynamic> m) {
     'keep' => l.adminKeep,
     'err' => l.adminErr,
     'nolink' => l.adminNoLink,
+    'podFail' => l.podFail,
+    'podOff' => l.podOff,
+    'podUnk' => l.podUnk,
+    'podRate' => l.podRate,
+    'podSwOn' => l.podSwOn,
+    'podSwOff' => l.podSwOff,
     _ => null,
   };
   if (text == null || m['help'] != true) return text;
@@ -56,6 +63,7 @@ String adminPreviewLine(AppLocalizations l, Map<String, dynamic> m) =>
       'list' => l.adminListHeader(m['n'] as int? ?? 0),
       'fwd' => l.adminFwdTitle,
       'conf' => l.adminConfTitle,
+      'pod' || 'podPrev' => l.podTitle,
       _ => (adminReplyText(l, m) ?? '').split('\n').first,
     };
 
@@ -183,6 +191,53 @@ class _AdminReplyBubbleState extends ConsumerState<AdminReplyBubble> {
                 st == 'done' ? l.adminConfDone : l.adminConfCancelled,
                 style: muted,
               ),
+          ],
+        );
+      case 'pod' || 'podPrev':
+        final at = DateTime.tryParse('${m['at']}')?.toLocal();
+        final day = DateTime.tryParse('${m['day']}');
+        final locale = Localizations.localeOf(context).toString();
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              m['k'] == 'pod'
+                  ? l.podTitle
+                  : l.podPrevTitle(
+                      day == null
+                          ? ''
+                          : DateFormat('d MMM', locale).format(day),
+                    ),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: brand.muted,
+              ),
+            ),
+            Text(
+              '${m['amt']}',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: Theme.of(context).colorScheme.onSurface,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              l.podFetched(at == null ? '' : DateFormat('HH:mm').format(at)),
+              style: TextStyle(fontSize: 12, color: brand.muted),
+            ),
+            const SizedBox(height: 4),
+          ],
+        );
+      case 'podFail' || 'podOff':
+        content = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 16, color: brand.danger),
+            const SizedBox(width: 8),
+            Flexible(child: Text(adminReplyText(l, m) ?? '')),
           ],
         );
       default:

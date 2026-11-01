@@ -81,6 +81,7 @@ import 'profile_pages.dart';
 import 'readers_card.dart';
 import 'day_chip.dart';
 import 'seen_time.dart';
+import 'bacanaks_widgets.dart';
 
 part 'message_bubble.dart';
 part 'reaction_chips.dart';
@@ -583,6 +584,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     final isGroup = widget.group || (listed?.isGroup ?? false);
     final isSystem = listed?.isSystem ?? false;
     final isAdminChat = listed?.isAdminChat ?? false;
+    final isBacanaks = listed?.isBacanaks ?? false;
     final otherUserId = widget.otherUserId ?? listed?.other?.userId;
     final status = _status(ref, AppLocalizations.of(context), otherUserId);
     // The group's own roster names every sender, current or departed --
@@ -705,18 +707,21 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                     padding: const EdgeInsets.all(4),
                     child: Row(
                       children: [
-                        PersonAvatar(
-                          label:
-                              title ??
-                              AppLocalizations.of(context).commonConversation,
-                          seed:
-                              otherUserId ??
-                              conversationId ??
-                              title ??
-                              'Conversation',
-                          radius: 18,
-                          avatarPath: _headerAvatar(ref, conversationId),
-                        ),
+                        isBacanaks
+                            ? const BacanaksAvatar()
+                            : PersonAvatar(
+                                label:
+                                    title ??
+                                    AppLocalizations.of(context)
+                                        .commonConversation,
+                                seed:
+                                    otherUserId ??
+                                    conversationId ??
+                                    title ??
+                                    'Conversation',
+                                radius: 18,
+                                avatarPath: _headerAvatar(ref, conversationId),
+                              ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -729,6 +734,14 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
+                              if (status == null && isBacanaks)
+                                Text(
+                                  AppLocalizations.of(context).podNotEnc,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: SisBrand.of(context).muted,
+                                      ),
+                                ),
                               if (status != null)
                                 Text(
                                   status,
@@ -1034,6 +1047,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                       ?.lastOrNull
                       ?.body,
                 ),
+              if (isBacanaks) const PodiumWaiting(),
               const _Composer(),
             ],
           ),

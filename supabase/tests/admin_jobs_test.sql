@@ -56,7 +56,7 @@ select test_as('00000000-0000-0000-0000-0000000ab001', 'ab000000-0000-0000-0000-
 select is(public.activate_session(), true, 'fixture: the owner is active');
 reset role;
 insert into app_private.owners(user_id) values ('00000000-0000-0000-0000-0000000ab001');
-create temp table adm as select id from public.conversations where admin_chat;
+create temp table adm as select id from public.conversations where admin_chat and not bacanaks_chat;
 grant select on adm to authenticated;
 select is((select count(*) from adm), 1::bigint, 'fixture: one admin conversation');
 

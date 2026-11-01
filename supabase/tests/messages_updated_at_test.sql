@@ -48,7 +48,7 @@ select is(has_column_privilege('anon', 'public.messages', 'updated_at', 'INSERT'
 select is(has_column_privilege('anon', 'public.messages', 'updated_at', 'UPDATE'),
           false, 'anon cannot update updated_at');
 select policies_are('public', 'messages',
-  array['messages_read', 'messages_send', 'messages_send_admin'],
+  array['messages_read', 'messages_send', 'messages_send_admin', 'messages_send_bacanaks'],
   'messages policies unchanged');
 
 -- fixtures ------------------------------------------------------------------

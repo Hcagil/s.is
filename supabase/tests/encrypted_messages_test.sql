@@ -178,7 +178,7 @@ insert into public.conversations(id, system) values ('e5c0c000-0000-0000-0000-00
 insert into public.conversation_members(conversation_id, user_id) values ('e5c0c000-0000-0000-0000-00000000555a', u('ann'));
 insert into public.e5c_ids values ('SYS', 'e5c0c000-0000-0000-0000-00000000555a');
 insert into app_private.owners(user_id) values (u('own'));
-insert into public.e5c_ids select 'ADM', id from public.conversations where admin_chat;
+insert into public.e5c_ids select 'ADM', id from public.conversations where admin_chat and not bacanaks_chat;
 -- ann's sticker (and its file), sent while AB is encrypted
 insert into public.stickers(id, owner_id) values ('e5c05000-0000-0000-0000-000000000001', u('ann'));
 insert into storage.objects(bucket_id, name, owner_id, metadata)

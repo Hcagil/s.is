@@ -347,6 +347,8 @@ class _ComposerState extends ConsumerState<_Composer>
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final id = _conversationId;
+    final bacanaks = (ref.watch(conversationListProvider).value ?? const [])
+        .any((c) => c.id == id && c.isBacanaks);
     // A group left or been removed from: read-only, nothing more to write.
     // Checked before the listeners below register at all -- there is
     // nothing left for any of them to restore into a box that cannot send.
@@ -460,6 +462,14 @@ class _ComposerState extends ConsumerState<_Composer>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (bacanaks)
+              PodiumSlashPanel(
+                controller: _controller,
+                onPick: () {
+                  _controller.text = '/podium';
+                  _send();
+                },
+              ),
             if (editing == null) const LinkStrip(),
             if (editing != null)
               _EditBar(editing)
@@ -535,7 +545,9 @@ class _ComposerState extends ConsumerState<_Composer>
                                             .setText(id, text);
                                       },
                                       decoration: InputDecoration(
-                                        hintText: l.commonMessage,
+                                        hintText: bacanaks
+                                            ? l.podHint
+                                            : l.commonMessage,
                                         counterText: '',
                                         suffixIcon: IconButton(
                                           key: const ValueKey(

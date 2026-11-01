@@ -153,7 +153,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
         _client
             .from('conversations')
             .select(
-              'id, title, avatar_path, system, admin_chat, members_can_set_avatar, '
+              'id, title, avatar_path, system, admin_chat, bacanaks_chat, members_can_set_avatar, '
               'members_can_add, new_members_see_history, '
               'members_can_pin, pinned_message_id',
             )
@@ -197,6 +197,10 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
       final adminChatById = {
         for (final row in conversationRows)
           row['id'] as String: row['admin_chat'] == true,
+      };
+      final bacanaksById = {
+        for (final row in conversationRows)
+          row['id'] as String: row['bacanaks_chat'] == true,
       };
       final settingsById = {
         for (final row in conversationRows)
@@ -315,7 +319,13 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
                 : adminChatById[row['conversation_id']] == true
                 ? (row['admin_msg'] == null
                       ? (row['body'] as String).split('\n').first
-                      : adminPreviewPrefix + jsonEncode(row['admin_msg']))
+                      : adminPreviewPrefix +
+                            jsonEncode(
+                              // a podium reply never puts its amount in the list
+                              '${row['admin_msg']['k']}'.startsWith('pod')
+                                  ? {'k': row['admin_msg']['k']}
+                                  : row['admin_msg'],
+                            ))
                 : (row['body'] as String).isNotEmpty
                 ? row['body'] as String
                 : (row['attachment_path'] == null ? '' : 'Photo'),
@@ -348,6 +358,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
             hasLeft: myLeftAtByConversation[id] != null,
             isSystem: systemById[id] ?? false,
             isAdminChat: adminChatById[id] ?? false,
+            isBacanaks: bacanaksById[id] ?? false,
             settings: settingsById[id] ?? const GroupSettings(),
             archived: archivedIds.contains(id),
             pinned: pinnedIds.contains(id),

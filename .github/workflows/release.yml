@@ -179,6 +179,22 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      # /podium (Bacanaks chat) is optional: a failure here must never block the Play upload.
+      - name: Deploy the podium function
+        continue-on-error: true
+        run: |
+          supabase functions deploy podium --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+          # podium: one random secret shared by the database trigger (Vault) and the function; new every release, never printed.
+          PODIUM_SECRET=$(openssl rand -hex 32)
+          echo "::add-mask::$PODIUM_SECRET"
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" PODIUM_SHARED_SECRET="$PODIUM_SECRET"
+          supabase db query --linked "delete from vault.secrets where name = 'podium_secret'"
+          supabase db query --linked "select vault.create_secret('$PODIUM_SECRET', 'podium_secret') is not null"
+          supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/podium', 'podium_url') where not exists (select 1 from vault.secrets where name = 'podium_url')"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
       # The push sender, and notification-action, the endpoint its notification
       # buttons call (the push carries a signed token instead of a session).
       # Deployed before the trigger learns its URL, so the

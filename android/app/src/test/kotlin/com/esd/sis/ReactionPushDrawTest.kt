@@ -324,13 +324,13 @@ class ReactionPushDrawTest {
     @Config(qualifiers = "tr")
     fun `reactionText follows the TR table`() {
         val t = "👍"
-        assertEquals("Mesajına $t tepkisi verdi: \"6'da görüşürüz\"", InstantPush.reactionText(app, t, "6'da görüşürüz", null))
-        assertEquals("Mesajına $t tepkisi verdi", InstantPush.reactionText(app, t, null, null))
-        assertEquals("Fotoğrafına $t tepkisi verdi", InstantPush.reactionText(app, t, null, "photo"))
-        assertEquals("Videona $t tepkisi verdi", InstantPush.reactionText(app, t, null, "video"))
-        assertEquals("Çıkartmana $t tepkisi verdi", InstantPush.reactionText(app, t, null, "sticker"))
-        assertEquals("Sesli mesajına $t tepkisi verdi", InstantPush.reactionText(app, t, null, "voice"))
-        assertEquals("Dosyana $t tepkisi verdi", InstantPush.reactionText(app, t, null, "file"))
-        assertEquals("Mesajına yeni tepki", InstantPush.reactionText(app, null, null, null))
+        assertEquals("\"6'da görüşürüz\" mesajınıza $t tepkisini verdi", InstantPush.reactionText(app, t, "6'da görüşürüz", null))
+        assertEquals("Mesajınıza $t tepkisini verdi", InstantPush.reactionText(app, t, null, null))
+        assertEquals("Fotoğrafınıza $t tepkisini verdi", InstantPush.reactionText(app, t, null, "photo"))
+        assertEquals("Videonuza $t tepkisini verdi", InstantPush.reactionText(app, t, null, "video"))
+        assertEquals("Çıkartmanıza $t tepkisini verdi", InstantPush.reactionText(app, t, null, "sticker"))
+        assertEquals("Sesli mesajınıza $t tepkisini verdi", InstantPush.reactionText(app, t, null, "voice"))
+        assertEquals("Dosyanıza $t tepkisini verdi", InstantPush.reactionText(app, t, null, "file"))
+        assertEquals("Mesajınıza yeni tepki", InstantPush.reactionText(app, null, null, null))
     }
 }

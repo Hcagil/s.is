@@ -125,7 +125,7 @@ select is((select chat from test_row('group hello', 'cat')), 'Night Shift',
           'sender preview: chat is the group''s title');
 select is((select title from test_row('group hello', 'cat')), 'Ann Sender',
           'sender preview: title unchanged (name only)');
-select is((select body from test_row('group hello', 'cat')), 'New message',
+select is((select body from test_row('group hello', 'cat')), 'Yeni mesaj',
           'sender preview: body unchanged');
 
 -- 3 group, preview none: neither new column leaks who or where ------------
@@ -135,7 +135,7 @@ select is((select chat from test_row('group hello', 'dan')), null,
           'none: chat is null, the group name stays off the lock screen');
 select is((select title from test_row('group hello', 'dan')), 'SIS',
           'none: title unchanged');
-select is((select body from test_row('group hello', 'dan')), 'New message',
+select is((select body from test_row('group hello', 'dan')), 'Yeni mesaj',
           'none: body unchanged');
 select is((select count(*) from _t, jsonb_each_text(to_jsonb(_t))
             where _t.msg = 'group hello'
@@ -178,9 +178,9 @@ create temp table _g on commit drop as
   select t.* from public.messages m, app_private.push_targets_for_message(m.id) t
    where m.body = 'gus hello';
 select is((select sender from _g where user_id = '00000000-0000-0000-0000-00000006a002'),
-          'Someone', 'no profile: sender is Someone');
+          'Biri', 'no profile: sender is Biri (receiver has no app language)');
 select is((select title from _g where user_id = '00000000-0000-0000-0000-00000006a002'),
-          'Someone @ Night Shift', 'no profile: title agrees with sender');
+          'Biri @ Night Shift', 'no profile: title agrees with sender');
 select is((select chat from _g where user_id = '00000000-0000-0000-0000-00000006a002'),
           'Night Shift', 'no profile: chat is still the group');
 select is((select sender from _g where user_id = '00000000-0000-0000-0000-00000006a004'),

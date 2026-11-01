@@ -41,8 +41,8 @@ const config = RuntimeConfig(
 );
 
 const discBody =
-    'SIS sends the email addresses in your contacts, in coded (hashed) form, '
-    'to the SIS server to show which of your contacts use SIS. This happens '
+    'SIS sends the coded (hashed) email addresses of your contacts to the '
+    'SIS server to show which of them use SIS. This happens '
     'each time you open Find people. The codes are not stored; SIS only keeps '
     'a note of which members you found. Names and phone numbers stay on your '
     'phone.';
@@ -144,7 +144,7 @@ void main() {
     ) async {
       final w = World();
       await openFind(t, w);
-      expect(find.text('Find people from your contacts'), findsWidgets);
+      expect(find.text('Find people from your phone contacts'), findsWidgets);
       expect(find.text(discBody), findsOneWidget);
       expect(byKey('find-primary'), findsOneWidget);
       expect(byKey('find-not-now'), findsOneWidget);

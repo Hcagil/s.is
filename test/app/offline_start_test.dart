@@ -123,7 +123,10 @@ void main() {
         failureReason(const NetworkFailure('No connection')),
         'No connection',
       );
-      expect(failureReason(const DeniedFailure()), 'Not allowed');
+      expect(
+        failureReason(const DeniedFailure()),
+        "You don't have permission to do that.",
+      );
     });
 
     for (final (name, error) in <(String, Object)>[

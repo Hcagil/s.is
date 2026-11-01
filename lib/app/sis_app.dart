@@ -106,23 +106,27 @@ class SisApp extends ConsumerWidget {
               ),
       ),
       navigatorObservers: [ref.read(routeStackProvider)],
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(
-          textScaler: sisTextScaler(
-            MediaQuery.textScalerOf(context),
-            look.appTextSize.scale,
+      builder: (context, child) {
+        // Failure texts (no BuildContext where they are made) follow the language shown.
+        failureLanguage = Localizations.localeOf(context).languageCode;
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: sisTextScaler(
+              MediaQuery.textScalerOf(context),
+              look.appTextSize.scale,
+            ),
           ),
-        ),
-        child: MessageNoticeHost(
-          onOpen: (id) {
-            final navContext = navigatorKey.currentContext;
-            if (navContext != null) {
-              unawaited(openFromNotification(navContext, ref, id));
-            }
-          },
-          child: child!,
-        ),
-      ),
+          child: MessageNoticeHost(
+            onOpen: (id) {
+              final navContext = navigatorKey.currentContext;
+              if (navContext != null) {
+                unawaited(openFromNotification(navContext, ref, id));
+              }
+            },
+            child: child!,
+          ),
+        );
+      },
       home: const SessionGate(),
     );
   }

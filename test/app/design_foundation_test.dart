@@ -239,14 +239,8 @@ void main() {
       expect(find.byType(SisWordmark), findsOneWidget);
       expect(wordmarkText, findsOneWidget);
       expect(find.text('Stay in sync'), findsOneWidget);
-      expect(
-        find.text('Private messages for the people on your list.'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('Only invited Google accounts can sign in.'),
-        findsOneWidget,
-      );
+      expect(find.text('Messaging for the people you know.'), findsOneWidget);
+      expect(find.text('Only invited accounts can sign in.'), findsOneWidget);
     });
 
     testWidgets('the Google button spans the width it is given', (t) async {

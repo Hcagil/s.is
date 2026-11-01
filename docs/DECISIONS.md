@@ -242,6 +242,17 @@ unchanged.
 - iOS offers Turkish only once `CFBundleLocalizations` lists `tr` (and `tr` is
   in `knownRegions`); that change ships with the Update 1 release.
 
+**Amendment 2026-11-01 (app texts in both languages).** Failure sentences
+already lived in `core/` (`Failure.message`) before this rule was applied to
+them. They now follow the app language through one small exception:
+`lib/core/failure.dart` holds `failureLanguage`, set by the app builder, and
+`failureText(en, tr)` picks the sentence; `NetworkFailure.localized` takes the
+two sentences as literals. Background isolates (push) never run the builder,
+so failure sentences there stay English; push display text uses
+`lookupAppLocalizations` instead. Long term the failures become typed codes
+turned into words in `presentation/`; until then no new `core/`,
+`application/` or `domain/` sentence is added outside `failureText`.
+
 ## 2026-10-06 — Android chat notifications are drawn natively only; Reply needs an unlocked phone
 
 **Context.** A Reply from a lock-screen notification must not send without

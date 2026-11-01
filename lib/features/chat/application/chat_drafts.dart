@@ -812,9 +812,10 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     try {
       await _persistNow();
     } on StoreWriteException {
-      return const Err(
-        NetworkFailure(
+      return Err(
+        NetworkFailure.localized(
           'Could not save the message on this phone.',
+          'Mesaj bu telefona kaydedilemedi.',
           retryable: true,
         ),
       );

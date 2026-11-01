@@ -72,10 +72,7 @@ void main() {
   test('Apple sign‑in cancelled → SignedOut with hiddenEmail false', () async {
     final fake = FakeAuth();
     fake.appleResult = Err(
-      ProviderFailure(
-        'Sign-in was cancelled. Please try again.',
-        userCanceled: true,
-      ),
+      ProviderFailure('Sign-in canceled.', userCanceled: true),
     );
     final c = make(fake);
     await settle(c);
@@ -90,9 +87,7 @@ void main() {
 
   test('Apple sign‑in generic failure → SessionError', () async {
     final fake = FakeAuth();
-    fake.appleResult = Err(
-      ProviderFailure('Sign-in failed. Please try again.'),
-    );
+    fake.appleResult = Err(ProviderFailure('Could not sign in. Try again.'));
     final c = make(fake);
     await settle(c);
     await c.read(sessionControllerProvider.notifier).signInWithApple();
@@ -100,7 +95,7 @@ void main() {
     final state = c.read(sessionControllerProvider).requireValue;
     expect(state, isA<SessionError>());
     final err = state as SessionError;
-    expect(err.reason, 'Sign-in failed. Please try again.');
+    expect(err.reason, 'Could not sign in. Try again.');
     expect(fake.appleCalls, 1);
   });
 

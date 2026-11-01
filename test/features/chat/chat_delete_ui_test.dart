@@ -294,12 +294,9 @@ void main() {
   testWidgets('4. Dialog B contents and cancel', (t) async {
     await pumpList(t);
     await openDelete(t, ['c1']);
-    expect(find.text('Delete Chat'), findsWidgets);
+    expect(find.text('Delete chat'), findsWidgets);
     expect(boldShown(t, 'Bob Stone'), isTrue);
-    expect(
-      rich('Are you sure you want to delete the chat with Bob Stone?'),
-      findsOneWidget,
-    );
+    expect(rich('Permanently delete the chat with Bob Stone?'), findsOneWidget);
     expect(find.text('Also delete for Bob'), findsOneWidget);
     expect(byKey('delete-chat-check'), findsOneWidget);
     await t.tap(byKey('delete-chat-cancel'));
@@ -336,14 +333,14 @@ void main() {
     await openDelete(t, ['c1', 'c2']);
     expect(find.text('Delete 2 chats'), findsOneWidget);
     expect(
-      rich('Are you sure you want to delete selected chats?'),
+      rich('Are you sure you want to delete these chats?'),
       findsOneWidget,
     );
-    expect(find.text('Delete for both sides where possible'), findsOneWidget);
+    expect(find.text('Delete for everyone where possible'), findsOneWidget);
     await confirm(t);
     expect(byKey('conversation-c1'), findsNothing);
     expect(byKey('conversation-c2'), findsNothing);
-    expect(find.text('Chats deleted.'), findsOneWidget);
+    expect(find.text('Chats deleted'), findsOneWidget);
   });
 
   testWidgets('8. Dialog A groups only', (t) async {
@@ -356,7 +353,7 @@ void main() {
   testWidgets('9. Dialog C leave group', (t) async {
     await pumpList(t);
     await openDelete(t, ['g1']);
-    expect(find.text('Leave Group'), findsWidgets);
+    expect(find.text('Leave group?'), findsWidgets);
     expect(
       rich('Are you sure you want to delete and leave the group Trip?'),
       findsOneWidget,
@@ -364,16 +361,16 @@ void main() {
     expect(boldShown(t, 'Trip'), isTrue);
     expect(byKey('delete-chat-check'), findsNothing);
     await confirm(t);
-    expect(find.text('You left the group.'), findsOneWidget);
+    expect(find.text('You left the group'), findsOneWidget);
   });
 
   testWidgets('10. Dialog D ticked', (t) async {
     final w = await pumpList(t);
     await openDelete(t, ['g2']);
-    expect(find.text('Leave Group'), findsWidgets);
+    expect(find.text('Leave group?'), findsWidgets);
     expect(find.text('Delete the group for all members'), findsOneWidget);
     await confirm(t, tick: true);
-    expect(find.text('Group deleted.'), findsOneWidget);
+    expect(find.text('Group deleted'), findsOneWidget);
     await runOut(t);
     expect(w.groups.calls, contains('delete:g2'));
   });
@@ -382,7 +379,7 @@ void main() {
     await pumpList(t);
     await openDelete(t, ['g2']);
     await confirm(t);
-    expect(find.text('You left the group.'), findsOneWidget);
+    expect(find.text('You left the group'), findsOneWidget);
   });
 
   testWidgets('12. Undo restores order', (t) async {
@@ -441,27 +438,27 @@ void main() {
   testWidgets('15. Turkish B dialog', (t) async {
     await pumpList(t, tr: true);
     await openDelete(t, ['c1']);
-    expect(find.text('Sohbeti Sil'), findsWidgets);
+    expect(find.text('Sohbeti sil'), findsWidgets);
     expect(rich('ile olan sohbet kalıcı olarak silinsin mi?'), findsOneWidget);
     expect(boldShown(t, 'Bob Stone'), isTrue);
     expect(find.text('Bob için de sil'), findsOneWidget);
     expect(find.text('İptal et'), findsOneWidget);
     await confirm(t);
-    expect(find.text('Sohbet silindi.'), findsOneWidget);
-    expect(find.text('Geri Al'), findsOneWidget);
+    expect(find.text('Sohbet silindi'), findsOneWidget);
+    expect(find.text('Geri al'), findsOneWidget);
   });
 
   testWidgets('16. Turkish A + D flow', (t) async {
     await pumpList(t, tr: true);
     await openDelete(t, ['c1', 'c2']);
     expect(find.text('2 sohbet sil'), findsOneWidget);
-    expect(find.text('Mümkünse her iki taraftan da silin'), findsOneWidget);
+    expect(find.text('Mümkünse herkesten sil'), findsOneWidget);
     await t.tap(byKey('delete-chat-cancel'));
     await t.pumpAndSettle();
     await t.tap(byKey('selection-back'));
     await t.pumpAndSettle();
     await openDelete(t, ['g2']);
-    expect(find.text('Gruptan Ayrıl'), findsWidgets);
+    expect(find.text('Gruptan ayrılmak ister misiniz?'), findsWidgets);
     expect(find.text('Grubu tüm üyeler için sil'), findsOneWidget);
     await confirm(t, tick: true);
     expect(find.text('Grup silindi'), findsOneWidget);

@@ -129,14 +129,22 @@ object PushInbox {
         return names
     }
 
-    /** '1 new message' / 'N new messages', plus ' from K chats' for several chats; '' when empty. */
-    fun summary(chats: JSONArray): String {
+    /** '1 new message' / 'N new messages', or 'N new messages from K chats' for several chats; '' when empty. The three texts come from the caller's string resources (defaults are English); [many] takes the count as %1$d, [fromChats] takes the count as %1$d and the chat count as %2$d. */
+    fun summary(
+        chats: JSONArray,
+        one: String = "1 new message",
+        many: String = "%1\$d new messages",
+        fromChats: String = "%1\$d new messages from %2\$d chats",
+    ): String {
         if (chats.length() == 0) return ""
         var total = 0
         for (i in 0 until chats.length()) total += chats.getJSONObject(i).optInt("n", 0)
         if (total == 0) return ""
-        val messages = if (total == 1) "1 new message" else "$total new messages"
-        return if (chats.length() > 1) "$messages from ${chats.length()} chats" else messages
+        return when {
+            chats.length() > 1 -> fromChats.format(total, chats.length())
+            total == 1 -> one
+            else -> many.format(total)
+        }
     }
 
     /**

@@ -106,7 +106,7 @@ void main() {
       await t.tap(byKey('swatch-accent-9AA3B2'));
       await t.pump();
       expect(
-        find.text('Accent may be hard to read. Consider a darker shade.'),
+        find.text('This accent color may be hard to read. Try a darker shade.'),
         findsOneWidget,
       );
       expect(byKey('editor-contrast-warning'), findsOneWidget);
@@ -126,7 +126,9 @@ void main() {
       await t.tap(byKey('swatch-accent-9AA3B2'));
       await t.pump();
       expect(
-        find.text('Bu vurgu rengi zor okunabilir. Daha koyu bir ton seçin.'),
+        find.text(
+          'Bu vurgu rengini okumak zor olabilir. Daha koyu bir ton deneyin.',
+        ),
         findsOneWidget,
       );
     });

@@ -99,7 +99,7 @@ void main() {
           n,
     ];
     final labels = find
-        .textContaining(RegExp(r'^\d+ licences$'))
+        .textContaining(RegExp(r'^\d+ licenses$'))
         .evaluate()
         .map((e) => int.parse((e.widget as Text).data!.split(' ').first));
     // ignore: avoid_print

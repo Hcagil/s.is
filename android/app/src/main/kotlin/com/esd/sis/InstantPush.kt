@@ -82,16 +82,30 @@ object InstantPush {
         return "msg-$tone-v${if (a.vibration) 1 else 0}"
     }
 
+    /** The summary line in the phone's language; getText keeps the %1$d / %2$d markers for PushInbox.summary to fill. */
+    fun summaryText(context: Context, chats: org.json.JSONArray): String =
+        PushInbox.summary(
+            chats,
+            context.getString(R.string.summary_one),
+            context.resources.getText(R.string.summary_many).toString(),
+            context.resources.getText(R.string.summary_chats).toString(),
+        )
     /** The channel's name in the phone's settings. */
-    fun alertChannelName(a: Alert): String =
-        "Messages" + (if (a.sound) (if (a.tone == null) "" else " (custom tone)") else " (silent)") + (if (a.vibration) "" else ", no vibration")
+    fun alertChannelName(
+        a: Alert,
+        messages: String = "Messages",
+        customTone: String = "Messages (custom tone)",
+        silent: String = "Messages (silent)",
+        noVibration: String = ", no vibration",
+    ): String =
+        (if (a.sound) (if (a.tone == null) messages else customTone) else silent) + (if (a.vibration) "" else noVibration)
 
     /** Creates the channel for [a] if it does not exist (an existing one, with the member's own settings, is left alone) and returns its id. Same settings the notifications plugin gave it: high importance, the tone or the default notification sound, notification audio usage. */
     fun ensureAlertChannel(context: Context, a: Alert): String {
         val id = alertChannelId(a)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(id, alertChannelName(a), NotificationManager.IMPORTANCE_HIGH)
-            channel.description = "New messages"
+            val channel = NotificationChannel(id, alertChannelName(a, context.getString(R.string.channel_messages), context.getString(R.string.channel_custom_tone), context.getString(R.string.channel_silent), context.getString(R.string.channel_no_vibration)), NotificationManager.IMPORTANCE_HIGH)
+            channel.description = context.getString(R.string.channel_description)
             if (a.sound) {
                 val uri = if (a.tone == null) RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION) else Uri.parse(a.tone)
                 channel.setSound(uri, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build())
@@ -249,7 +263,7 @@ object InstantPush {
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setColor(ContextCompat.getColor(context, R.color.notification_accent))
             .setContentTitle("SIS")
-            .setContentText(PushInbox.summary(inboxChats))
+            .setContentText(summaryText(context, inboxChats))
             .setStyle(
                 NotificationCompat.InboxStyle().also { s ->
                     for (i in inboxChats.length() - 1 downTo 0) {
@@ -259,7 +273,7 @@ object InstantPush {
                         val who = last.optString("s")
                         s.addLine(c.optString("t") + ": " + (if (c.optBoolean("g") && who.isNotEmpty()) "$who: " else "") + last.optString("x"))
                     }
-                    s.setSummaryText(PushInbox.summary(inboxChats))
+                    s.setSummaryText(summaryText(context, inboxChats))
                 },
             )
             .setGroup(GROUP)
@@ -392,7 +406,7 @@ object InstantPush {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 manager.createNotificationChannel(
-                    NotificationChannel(CHANNEL_SUMMARY, "Summary", NotificationManager.IMPORTANCE_LOW),
+                    NotificationChannel(CHANNEL_SUMMARY, context.getString(R.string.channel_summary), NotificationManager.IMPORTANCE_LOW),
                 )
                 if (!legacyChannelsDeleted) {
                     // Builds before the per-chat tone channels left these four in the phone's settings.
@@ -433,7 +447,7 @@ object InstantPush {
             val entry = PushInbox.find(inboxChats, conversationId) ?: return false
             val isGroup = entry.optBoolean("g")
             val avatar = avatarFor(context, ownerId, conversationId)
-            val style = NotificationCompat.MessagingStyle(Person.Builder().setName("You").build())
+            val style = NotificationCompat.MessagingStyle(Person.Builder().setName(context.getString(R.string.person_you)).build())
             if (isGroup) {
                 style.setConversationTitle(entry.optString("t"))
                 style.setGroupConversation(true)
@@ -467,7 +481,7 @@ object InstantPush {
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setWhen(System.currentTimeMillis())
-                .apply { if (entry.optInt("n", 0) > 1) setSubText("${entry.optInt("n")} new messages") }
+                .apply { if (entry.optInt("n", 0) > 1) setSubText(context.getString(R.string.summary_many, entry.optInt("n"))) }
                 .apply { if (!loud) setSilent(true).setOnlyAlertOnce(true) }
                 .apply { if (badge > 0) setNumber(badge) }
                 .apply {

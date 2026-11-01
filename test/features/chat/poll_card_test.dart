@@ -383,7 +383,7 @@ void main() {
     await show(t, fake, locale: const Locale('tr'));
     await narrow(t);
     expect(t.takeException(), isNull);
-    expect(find.text('Kesin Sonuçlar'), findsOneWidget);
+    expect(find.text('Kesin sonuçlar'), findsOneWidget);
   });
 
   testWidgets('the chat list shows a poll in English', (WidgetTester t) async {
@@ -391,7 +391,7 @@ void main() {
     expect(
       find.descendant(
         of: k('preview-c1'),
-        matching: find.text('📊 Poll: Lunch?'),
+        matching: find.text('Poll: Lunch?'),
         matchRoot: true,
       ),
       findsOneWidget,
@@ -403,7 +403,7 @@ void main() {
     expect(
       find.descendant(
         of: k('preview-c1'),
-        matching: find.text('📊 Anket: Lunch?'),
+        matching: find.text('Anket: Lunch?'),
         matchRoot: true,
       ),
       findsOneWidget,

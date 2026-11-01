@@ -139,7 +139,7 @@ void main() {
     await t.pumpWidget(app(auth));
     await settle(t);
 
-    expect(find.textContaining('not currently approved'), findsOneWidget);
+    expect(find.textContaining('not approved for SIS'), findsOneWidget);
     expect(auth.signOuts, 0);
     expect(await gone(t, picture), isTrue, reason: 'a picture survived');
     expect(await gone(t, photo), isTrue, reason: 'a photo survived');

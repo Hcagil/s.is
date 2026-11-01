@@ -27,7 +27,7 @@ String encodeReactionEnvelope({
   return jsonEncode(map);
 }
 
-/// Reads the JSON text [json] that [encodeReactionEnvelope] made for the reaction of [userId] to [messageId]. Null (never a throw) when it is not valid JSON, not an object, `v` is not 1, `k` is not 'r' (a message envelope has no `k`), `i` is not exactly [messageId], `u` is not exactly [userId] (a copy of another reaction replayed into this row), or `e` is not a non-empty string.
+/// Reads the JSON text [json] that [encodeReactionEnvelope] made for the reaction of [userId] to [messageId]. Null (never a throw) when it is not valid JSON, not an object, `v` is not 1, `k` is not 'r' (a message envelope has no `k`), `i` is not exactly [messageId], `u` is not exactly [userId] (a copy of another reaction replayed into this row), or `e` is not a non-empty string or is longer than [maxReactionEmojiBytes] UTF-8 bytes.
 String? decodeReactionEnvelope(
   String json, {
   required String messageId,
@@ -47,5 +47,9 @@ String? decodeReactionEnvelope(
     return null;
   }
   final Object? emoji = map['e'];
-  return emoji is String && emoji.isNotEmpty ? emoji : null;
+  return emoji is String &&
+          emoji.isNotEmpty &&
+          utf8.encode(emoji).length <= maxReactionEmojiBytes
+      ? emoji
+      : null;
 }

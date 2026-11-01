@@ -13,7 +13,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
-/** For an encrypted push that carries ciphertext, ask Dart (a short-lived headless Flutter engine) for the message text. The text comes back in memory; Dart may also save it into the phone store (push_inbox) before it answers 'done', so the engine is never destroyed before 'done' while the push time lasts (plus a short grace). */
+/** For an encrypted push that carries ciphertext, ask Dart (a short-lived headless Flutter engine) for the message text. The text comes back in memory; Dart may also save it into the phone store (push_inbox) before it answers 'done', so the engine is never destroyed before 'done' while the push time lasts (plus a short grace). A reaction push (kind reaction) is peeked the same way; the answer is its emoji, and takeQuote gives the quote. */
 object PeekRunner {
     private const val CHANNEL = "com.esd.sis/peek"
     private const val ENTRY_LIBRARY = "package:sis/features/notifications/data/push_peek_entry.dart"
@@ -34,6 +34,12 @@ object PeekRunner {
 
     // Peer names by message_id, like [reasons].
     private val names = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    // Quotes of reaction peeks by message_id, like [names]; memory only, never logged.
+    @VisibleForTesting val quotes = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** The quote of the reacted message (my own message, cut by Dart) read by the reaction peek of the push with [messageId]; null when none. Taken once. */
+    fun takeQuote(messageId: String): String? = quotes.remove(messageId)
 
     // Older lines' texts read from the store by the peek (message id -> text), keyed by the message id of the push that asked; memory only, taken once.
     private val olders = java.util.concurrent.ConcurrentHashMap<String, Map<String, String>>()
@@ -61,14 +67,17 @@ object PeekRunner {
         lastPeekEnd = 0L
     }
 
-    /** True when [extras] is an encrypted push with ciphertext: encrypted == "true", non-empty "ct", "ot" is "0" or "1", and non-empty user_id, conversation_id, message_id. */
+    /** True when [extras] is an encrypted push with ciphertext: encrypted == "true", non-empty "ct", "ot" is "0" or "1", and non-empty user_id, conversation_id, message_id. A reaction push (kind == "reaction") also needs a reactor_id of uuid shape. */
     fun wanted(extras: Bundle): Boolean =
         extras.getString("encrypted") == "true" &&
             !extras.getString("ct").isNullOrEmpty() &&
             extras.getString("ot").let { it == "0" || it == "1" } &&
             !extras.getString("user_id").isNullOrEmpty() &&
             !extras.getString("conversation_id").isNullOrEmpty() &&
-            !extras.getString("message_id").isNullOrEmpty()
+            !extras.getString("message_id").isNullOrEmpty() &&
+            (extras.getString("kind") != "reaction" || extras.getString("reactor_id").orEmpty().matches(UUID_SHAPE))
+
+    private val UUID_SHAPE = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
     /** The message text, or null (= stay locked) on any failure, timeout, or when called on the main thread. Blocks the caller up to TIMEOUT_MS; call it from the draw thread only. [older]: message ids (max 50) of the chat's other notification lines whose text is not in memory; Dart reads their text from the store. */
     fun peek(context: Context, extras: Bundle, older: List<String> = emptyList()): String? {
@@ -76,6 +85,7 @@ object PeekRunner {
         mid?.let { reasons.remove(it) }
         mid?.let { names.remove(it) }
         mid?.let { olders.remove(it) }
+        mid?.let { quotes.remove(it) }
         if (!wanted(extras)) return fail(mid, "not_wanted")
         override?.let { return it(extras) }
         if (Looper.myLooper() == Looper.getMainLooper()) return fail(mid, "main_thread")
@@ -93,11 +103,12 @@ object PeekRunner {
         }
 
         // sk/si (a pre-key push's sender key and id) ride along only when present: the Dart side casts this map to Map<String, String>. Never logged.
-        val args = (listOf("user_id", "conversation_id", "message_id", "ct", "ot") + listOf("sk", "si").filter { !extras.getString(it).isNullOrEmpty() }).associateWith { extras.getString(it)!! } + (if (older.isEmpty()) emptyMap() else mapOf("older" to older.take(50).joinToString(",")))
+        val args = (listOf("user_id", "conversation_id", "message_id", "ct", "ot") + (if (extras.getString("kind") == "reaction") listOf("kind", "reactor_id") else emptyList()) + listOf("sk", "si").filter { !extras.getString(it).isNullOrEmpty() }).associateWith { extras.getString(it)!! } + (if (older.isEmpty()) emptyMap() else mapOf("older" to older.take(50).joinToString(",")))
         val latch = CountDownLatch(1)
         val result = AtomicReference<String?>(null)
         val dartReason = AtomicReference<String?>(null)
         val dartName = AtomicReference<String?>(null)
+        val dartQuote = AtomicReference<String?>(null)
         val dartOlder = AtomicReference<Map<String, String>?>(null)
         val engineRef = AtomicReference<FlutterEngine?>(null)
         val main = Handler(Looper.getMainLooper())
@@ -121,7 +132,9 @@ object PeekRunner {
                         "take" -> res.success(args + ("budget_ms" to (timeout - (now() - startedAt)).coerceAtLeast(0L).toString()))
                         "done" -> {
                             val m = call.arguments as? Map<*, *>
-                            result.set(m?.get("text") as? String)
+                            // A reaction answers its emoji with text null.
+                            result.set((m?.get("text") ?: m?.get("emoji")) as? String)
+                            dartQuote.set(m?.get("quote") as? String)
                             dartReason.set(m?.get("reason") as? String)
                             dartName.set(m?.get("name") as? String)
                             dartOlder.set((m?.get("older") as? Map<*, *>)?.entries?.mapNotNull { (k, v) -> if (k is String && v is String) k to v else null }?.toMap())
@@ -148,6 +161,7 @@ object PeekRunner {
         val text = result.get()?.takeIf { it.isNotEmpty() }
         val r = dartReason.get()
         mid?.let { m -> dartName.get()?.takeIf { it.isNotEmpty() }?.take(200)?.let { names[m] = it } }
+        mid?.let { m -> if (text != null) dartQuote.get()?.takeIf { it.isNotEmpty() }?.take(200)?.let { quotes[m] = it } }
         mid?.let {
             reasons[it] = when {
                 text != null -> "ok"

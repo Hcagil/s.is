@@ -144,6 +144,8 @@ void main() {
       'device_token': 'apns-backed-token-1',
       'device_platform': 'ios',
       'shows_itself': false,
+      // A1: no reaction pushes until the iPhone build that draws them (I5).
+      'reaction_push': false,
     });
   });
 
@@ -154,6 +156,8 @@ void main() {
         'device_token': 'fcm-token-1234',
         'device_platform': 'android',
         'shows_itself': true,
+        // A1: reaction_push follows device_platform == 'android'.
+        'reaction_push': true,
       });
     });
   }

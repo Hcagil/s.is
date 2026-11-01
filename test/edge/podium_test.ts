@@ -2,8 +2,8 @@
 // for real). Vega is faked by running the function's own index.ts from a temp
 // copy whose ./vega.ts is a scripted fake: it can answer an amount, throw
 // VegaError('login' | 'timeout' | 'shape' | 'config'), throw a plain Error, or
-// answer junk. A second copy runs with the real vega.ts (the reader is not
-// built yet: it throws 'shape' once configured).
+// answer junk. A second copy runs with the real vega.ts against a fake Vega
+// HTTP server (podium_vega_test.ts covers the reader itself).
 //
 // Contract: POST {job_id} + header x-podium-secret. 405 not POST; 401 secret
 // missing or wrong (checked before the body is read); 400 bad body; 200
@@ -71,6 +71,7 @@ export async function fetchVegaTotal(day: string, prev: boolean): Promise<string
 
 const handlers: ((req: Request) => Response | Promise<Response>)[] = [];
 (globalThis as Record<string, unknown>).EdgeRuntime = { waitUntil: () => {} };
+const realServe = Deno.serve.bind(Deno);
 Object.defineProperty(Deno, 'serve', {
   configurable: true,
   writable: true,
@@ -267,30 +268,72 @@ Deno.test({ ...opts, name: 'amount rule (<= 25 chars, strict number shape): acce
   }
 } });
 
-Deno.test({ ...opts, name: 'the placeholder reader (Vega not built yet) fails the job, is not counted, the password never leaves', fn: async () => {
-  await resetState();
-  Deno.env.set('VEGA_BASE_URL', 'http://vega.qa.test:9698');
+// A fake Vega on 127.0.0.1 for the real reader (index.ts + vega.ts together).
+let vegaDurum: string[] = [];
+const fakeVega = realServe({ hostname: '127.0.0.1', port: 0, onListen: () => {} }, (req) => {
+  const u = new URL(req.url);
+  if (u.pathname === '/Authentication/LoginAction') {
+    return new Response(null, { status: 302, headers: { location: '/', 'set-cookie': 'ASP.NET_SessionId=qa; path=/' } });
+  }
+  vegaDurum.push(u.searchParams.get('durum') ?? '');
+  return new Response(`<div class="dash-stat-label">Toplam Ciro</div>
+    <a class="tarihLink dash-stat-value" href="/CiroRaporlar/List">8.642.097,31</a>`);
+});
+function vegaEnv(base: string) {
+  Deno.env.set('VEGA_BASE_URL', base);
   Deno.env.set('VEGA_USERNAME', 'qa-user');
   Deno.env.set('VEGA_PASSWORD', vegaPassword);
+}
+function clearVegaEnv() {
+  for (const k of ['VEGA_BASE_URL', 'VEGA_USERNAME', 'VEGA_PASSWORD']) Deno.env.delete(k);
+}
+
+Deno.test({ ...opts, name: 'the real reader against a fake Vega: prev job reads durum=dun, the total is stored and answered', fn: async () => {
+  await resetState();
+  vegaEnv(`http://127.0.0.1:${fakeVega.addr.port}`);
+  logged.length = 0;
+  try {
+    for (const [prev, durum] of [[true, 'dun'], [false, 'bugun']] as const) {
+      vegaDurum = [];
+      const id = await job(prev);
+      const r = await post(real, id);
+      assertEquals(JSON.parse(r.text), { ok: true, ran: true, result: 'ok' }, r.text);
+      assertEquals(vegaDurum, [durum]);
+      assertEquals(await jobState(id), 'done');
+      const m = (await lastReply()).admin_msg;
+      assertEquals([m.k, m.amt], [prev ? 'podPrev' : 'pod', '8.642.097,31']);
+      assertEquals((await state()).amount, '8.642.097,31');
+    }
+    assert(!logged.join('\n').includes('8.642.097') && !logged.join('\n').includes(vegaPassword), `logged: ${logged.join(' | ')}`);
+  } finally {
+    clearVegaEnv();
+  }
+} });
+
+// Was "the placeholder reader ... is not counted": the placeholder failed every
+// configured call without counting. The real reader now calls Vega; a refused
+// connection is a plain Error => reason 'other', which counts (3 in a row => off).
+Deno.test({ ...opts, name: 'the real reader with Vega unreachable fails the job, counts toward the auto-off, the password never leaves', fn: async () => {
+  await resetState();
+  vegaEnv('http://vega.qa.test:9698');
   logged.length = 0;
   vegaHits.length = 0;
   try {
-    for (let i = 0; i < 3; i++) {
+    for (let i = 1; i <= 3; i++) {
       const id = await job();
       const r = await post(real, id);
       assertEquals(r.status, 200, r.text);
       assertEquals(JSON.parse(r.text).result, 'failed');
       assertEquals(await jobState(id), 'failed');
       assert(!r.text.includes(vegaPassword));
+      const st = await state();
+      assertEquals([st.fail_count, st.off], [i, i === 3], `after ${i} refused connection(s)`);
     }
-    const st = await state();
-    assertEquals([st.fail_count, st.off], [0, false], 'the placeholder reader counted toward the auto-off');
+    assert(vegaHits.length >= 3, 'the reader did try Vega');
     assert(!logged.join('\n').includes(vegaPassword), 'the Vega password was logged');
     assert(vegaHits.every((u) => !u.includes(vegaPassword) && !u.includes('qa-user')), `credentials in a URL: ${vegaHits}`);
   } finally {
-    Deno.env.delete('VEGA_BASE_URL');
-    Deno.env.delete('VEGA_USERNAME');
-    Deno.env.delete('VEGA_PASSWORD');
+    clearVegaEnv();
   }
 } });
 
@@ -312,5 +355,6 @@ Deno.test({ ...opts, name: 'teardown', fn: async () => {
     console.error('teardown:', (e as Error).message);
   }
   await sql.end();
+  await fakeVega.shutdown();
   await Deno.remove(dir, { recursive: true });
 } });

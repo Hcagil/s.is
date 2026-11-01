@@ -215,6 +215,7 @@ class _PhotoState extends ConsumerState<_Photo>
     duration: const Duration(milliseconds: 200),
   );
   Offset _tap = Offset.zero;
+  int _down = 0;
 
   void _report() => widget.onZoomed(_zoom.value.getMaxScaleOnAxis() > 1.01);
 
@@ -258,23 +259,30 @@ class _PhotoState extends ConsumerState<_Photo>
         ? ref.watch(avatarBytesProvider(path))
         : ref.watch(attachmentBytesProvider(path));
     return switch (bytesValue) {
-      AsyncData(:final value) => GestureDetector(
-        onDoubleTapDown: (d) => _tap = d.localPosition,
-        onDoubleTap: _toggleZoom,
-        child: InteractiveViewer(
-          transformationController: _zoom,
-          onInteractionStart: (_) => _anim.stop(),
-          onInteractionUpdate: (_) => _report(),
-          onInteractionEnd: (_) => _report(),
-          maxScale: 5,
-          child: Center(
-            child: Image.memory(
-              value,
-              key: ValueKey('viewer-image-$path'),
-              fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => Text(
-                AppLocalizations.of(context).commonImageUnavailable,
-                style: white,
+      AsyncData(:final value) => Listener(
+        onPointerDown: (_) {
+          if (++_down >= 2) _anim.stop();
+        },
+        onPointerUp: (_) => _down = math.max(0, _down - 1),
+        onPointerCancel: (_) => _down = math.max(0, _down - 1),
+        child: GestureDetector(
+          onDoubleTapDown: (d) => _tap = d.localPosition,
+          onDoubleTap: _toggleZoom,
+          child: InteractiveViewer(
+            transformationController: _zoom,
+            onInteractionStart: (_) => _anim.stop(),
+            onInteractionUpdate: (_) => _report(),
+            onInteractionEnd: (_) => _report(),
+            maxScale: 5,
+            child: Center(
+              child: Image.memory(
+                value,
+                key: ValueKey('viewer-image-$path'),
+                fit: BoxFit.contain,
+                errorBuilder: (_, _, _) => Text(
+                  AppLocalizations.of(context).commonImageUnavailable,
+                  style: white,
+                ),
               ),
             ),
           ),

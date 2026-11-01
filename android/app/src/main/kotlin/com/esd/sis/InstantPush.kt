@@ -428,6 +428,8 @@ object InstantPush {
             // payload): shown by launchers that print a number on the icon. No
             // permission involved.
             val badge = extras.getString("badge")?.toIntOrNull() ?: 0
+            // Huawei's launcher ignores setNumber: it needs its own call (no-op elsewhere).
+            extras.getString("badge")?.toIntOrNull()?.let { HuaweiBadge.set(context, it) }
             // This push is stored in the inbox now, so the chat's notification lists every unread line.
             val ownerId = owner ?: return false
             val inboxKey = "flutter.sis.push_inbox.$ownerId"

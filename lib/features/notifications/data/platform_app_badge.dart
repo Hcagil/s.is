@@ -3,9 +3,9 @@ import 'package:flutter/services.dart';
 
 import '../domain/push.dart';
 
-/// The app-icon number. iOS sets it through AppDelegate.swift; Android has no
-/// app-set number (its launcher badge follows the notification, which
-/// InstantPush.kt numbers from the push).
+/// The app-icon number. iOS sets it through AppDelegate.swift; Android through
+/// MainActivity.kt (HuaweiBadge, which does nothing on other phones). A push also
+/// numbers its notification in InstantPush.kt.
 final class PlatformAppBadge implements AppBadge {
   const PlatformAppBadge();
 
@@ -13,7 +13,10 @@ final class PlatformAppBadge implements AppBadge {
 
   @override
   Future<void> set(int count) async {
-    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+    if (defaultTargetPlatform != TargetPlatform.iOS &&
+        defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
     try {
       await _channel.invokeMethod<void>('setBadge', count < 0 ? 0 : count);
     } on PlatformException {

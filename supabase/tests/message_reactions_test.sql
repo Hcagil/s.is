@@ -295,7 +295,7 @@ select throws_ok(format('select react(%L, null)', g('DEL')), '42501', 'not permi
                  'nor can a reaction on a deleted message be cleared');
 select is(seen(g('DEL')), '', 'reactions on a deleted message are not readable');
 reset role;
-select is(rows_of(g('DEL')), 1::bigint, 'fixture: the reaction row is still there underneath');
+select is(rows_of(g('DEL')), 0::bigint, 'the delete erased the reaction row with the message');
 
 -- hidden for me: bob hides, ann still may
 select as_('02');

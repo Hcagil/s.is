@@ -192,9 +192,13 @@ select is(try(format($q$update public.messages set body = 'edited text' where id
 select is((select body from public.messages where id = g('C1')), E'Ann Lee\n+90 555', 'the body is unchanged');
 select as_('01');
 select is(sc(g('G'), g('C2'), 'Del Me', '123'), 'ok', 'fixture: a second contact');
+-- older than 15 minutes: a fresh delete would vanish instead of leaving a placeholder
+reset role;
+update public.messages set created_at = now() - interval '1 hour' where id = g('C2');
+select as_('01');
 select is(try(format($q$select public.delete_message(%L)$q$, g('C2'))), 'ok', 'the sender deletes it for everyone');
 reset role;
-select is((select deleted from public.messages where id = g('C2')), 'placeholder', 'it is a placeholder now');
+select is((select deleted from public.messages where id = g('C2')), 'placeholder', 'it is a placeholder now (over 15 minutes old)');
 select as_('01');
 select isnt(try(format($q$insert into public.messages(conversation_id, sender_id, body, contact) values (%L, %L, E'Ann\n123', true)$q$,
                 g('G'), u('01'))), 'ok', 'a direct insert with contact = true is refused');

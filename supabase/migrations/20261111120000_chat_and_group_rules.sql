@@ -121,6 +121,16 @@ begin
     raise exception 'not permitted' using errcode = '42501';
   end if;
 
+  -- Debug group: the last human admin cannot leave while only the bot remains.
+  if mine.role = 'admin'
+     and not exists (select 1 from public.conversation_members
+                      where conversation_id = conversation and left_at is null and id <> mine.id
+                        and (role = 'admin' or not app_private.is_bot(user_id)))
+     and exists (select 1 from public.conversation_members
+                  where conversation_id = conversation and left_at is null and id <> mine.id) then
+    raise exception 'a group needs at least one admin' using errcode = '42501';
+  end if;
+
   update public.conversation_members set left_at = now(), left_reason = 'left'
    where id = mine.id;
   insert into public.group_events(conversation_id, kind, actor_id, subject_id)

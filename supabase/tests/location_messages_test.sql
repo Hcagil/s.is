@@ -230,9 +230,13 @@ select isnt(try(format($q$insert into public.messages(conversation_id, sender_id
 -- 7 the coordinates go on delete -----------------------------------------------
 select as_('01');
 select is(sl(g('G'), g('L2'), 1, 2, 'Del', ''), 'ok', 'fixture: a location to delete');
+-- older than 15 minutes: a fresh delete would vanish instead of leaving a placeholder
+reset role;
+update public.messages set created_at = now() - interval '1 hour' where id = g('L2');
+select as_('01');
 select is(try(format($q$select public.delete_message(%L)$q$, g('L2'))), 'ok', 'the sender deletes it for everyone');
 reset role;
-select is((select deleted from public.messages where id = g('L2')), 'placeholder', 'it is a placeholder now');
+select is((select deleted from public.messages where id = g('L2')), 'placeholder', 'it is a placeholder now (over 15 minutes old)');
 select is(ll(g('L2')), ',', 'and its coordinates are gone');
 select as_('02');
 select is(sl(g('G'), g('LB'), 3, 4, 'Bob place', ''), 'ok', 'fixture: bob''s location');

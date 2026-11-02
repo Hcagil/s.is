@@ -209,7 +209,7 @@ select lives_ok($$select public.delete_message('fa0e0000-0000-0000-0000-00000000
                 'ann deletes album photo 2 for everyone');
 reset role;
 select is((select photo_group from public.messages where id = 'fa0e0000-0000-0000-0000-000000000002'),
-          'a1b00000-0000-0000-0000-000000000001'::uuid, 'the deleted photo keeps its group');
+          null, 'the deleted photo no longer holds a group (all content is erased)');
 select ok((select attachment_path is null from public.messages where id = 'fa0e0000-0000-0000-0000-000000000002'),
           'control: the delete did take the image away (the check''s deleted branch is what lets it stay)');
 select is((select photo_group from public.messages where id = 'fa0e0000-0000-0000-0000-000000000001'),
@@ -231,7 +231,7 @@ reset role;
 -- 6 reading ----------------------------------------------------------------------------
 select as_bob();
 select is((select count(*) from public.messages where photo_group = 'a1b00000-0000-0000-0000-000000000001'),
-          2::bigint, 'control: bob, a member, reads both album rows');
+          1::bigint, 'control: bob, a member, reads the one live album row (the deleted photo left the group)');
 reset role;
 select as_cat();
 select is((select count(*) from public.messages where photo_group is not null), 0::bigint,

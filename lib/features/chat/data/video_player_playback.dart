@@ -23,22 +23,27 @@ final class VideoPlayerPlayback implements VoicePlayback {
     old?.removeListener(_emit);
     await old?.dispose();
 
-    final c = VideoPlayerController.file(File(path));
-    var ok = true;
-    try {
-      await c.initialize();
-    } catch (e) {
-      log('Opening a video failed: ${e.runtimeType}', name: 'sis.video');
-      ok = false;
+    // Texture first; a phone whose texture path fails gets the platform view.
+    for (final type in VideoViewType.values) {
+      final c = VideoPlayerController.file(File(path), viewType: type);
+      try {
+        await c.initialize();
+      } catch (e) {
+        final f = File(path);
+        final size = f.existsSync() ? f.lengthSync() : -1;
+        log(
+          'Opening a video failed (${type.name}): $e; length=$size',
+          name: 'sis.video',
+        );
+        await c.dispose();
+        continue;
+      }
+      _controller = c;
+      c.addListener(_emit);
+      _emit();
+      return true;
     }
-    if (!ok) {
-      await c.dispose();
-      return false;
-    }
-    _controller = c;
-    c.addListener(_emit);
-    _emit();
-    return true;
+    return false;
   }
 
   void _emit() {

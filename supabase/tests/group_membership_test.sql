@@ -1,5 +1,5 @@
 begin;
-select plan(145);
+select plan(147);
 
 -- Leaving a group, removing members, admins, and membership windows (v0.23.0).
 --
@@ -291,11 +291,21 @@ select throws_ok(format('select admin_c(%L, %L, false)', g('G1'), u('01')), null
                  'an ordinary member cannot demote the admin');
 reset role;
 select is(admins_of(g('G1')), '01', 'still ada alone');
+-- Rule 15: the sole admin may remove her own admin right; the longest-standing other member
+-- (cai, joined first, made unambiguous here) becomes admin automatically.
+update public.conversation_members set joined_at = now() - interval '30 hours'
+ where conversation_id = g('G1') and user_id = u('01') and left_at is null;
+update public.conversation_members set joined_at = now() - interval '20 hours'
+ where conversation_id = g('G1') and user_id = u('03') and left_at is null;
 select gm_as('01');
-select throws_ok(format('select admin_c(%L, %L, false)', g('G1'), u('01')), null, null,
-                 'the sole admin cannot demote herself');
-select lives_ok(format('select admin_c(%L, %L, true)', g('G1'), u('03')), 'ada makes cai an admin');
+select lives_ok(format('select admin_c(%L, %L, false)', g('G1'), u('01')),
+                'the sole admin can demote herself');
 reset role;
+select is(admins_of(g('G1')), '03', 'and cai, the longest-standing other member, is admin now');
+select is(current_role_of(g('G1'), '01'), 'member', 'ada is an ordinary member');
+-- put the two-admin state back for the rest of this file
+update public.conversation_members set role = 'admin'
+ where conversation_id = g('G1') and user_id = u('01') and left_at is null;
 select is(admins_of(g('G1')), '01,03', 'two admins');
 -- with another admin present nothing else could refuse this: only the
 -- self-removal rule can.
@@ -306,9 +316,12 @@ reset role;
 select is(current_role_of(g('G1'), '01'), 'admin', 'ada is still in, still admin');
 select gm_as('03');
 select lives_ok(format('select admin_c(%L, %L, false)', g('G1'), u('01')), 'the new admin demotes ada');
-select throws_ok(format('select admin_c(%L, %L, false)', g('G1'), u('03')), null, null,
-                 'and, now the sole admin, cannot demote herself');
-select lives_ok(format('select admin_c(%L, %L, true)', g('G1'), u('01')), 'cai makes ada admin again');
+select lives_ok(format('select admin_c(%L, %L, false)', g('G1'), u('03')),
+                'and, now the sole admin, demoting herself hands over to ada (longest-standing)');
+reset role;
+select is(admins_of(g('G1')), '01', 'ada is admin again by the hand-over');
+select gm_as('01');
+select lives_ok(format('select admin_c(%L, %L, true)', g('G1'), u('03')), 'ada makes cai admin again');
 reset role;
 select is(admins_of(g('G1')), '01,03', 'ada and cai are admins');
 

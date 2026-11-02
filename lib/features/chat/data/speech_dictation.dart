@@ -1,3 +1,5 @@
+import 'dart:developer' show log;
+
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/services.dart' show MethodChannel;
@@ -17,12 +19,14 @@ final class SpeechDictation implements Dictation {
   final SpeechToText _stt = SpeechToText();
   void Function(String)? _onText;
   void Function()? _onEnd;
+  void Function()? _onError;
 
   @override
   Future<VoiceStart> start({
     required String localeTag,
     required void Function(String text) onText,
     required void Function() onEnd,
+    void Function()? onError,
   }) async {
     try {
       if (!await _onDeviceOnly()) return VoiceStart.failed;
@@ -36,6 +40,7 @@ final class SpeechDictation implements Dictation {
       if (id == null) return VoiceStart.failed;
       _onText = onText;
       _onEnd = onEnd;
+      _onError = onError;
       await _stt.listen(
         onResult: (r) => _onText?.call(r.recognizedWords),
         listenOptions: SpeechListenOptions(
@@ -49,9 +54,11 @@ final class SpeechDictation implements Dictation {
         ),
       );
       return VoiceStart.started;
-    } catch (_) {
+    } catch (e) {
+      log('Dictation start failed: ${e.runtimeType}', name: 'sis.dictation');
       _onText = null;
       _onEnd = null;
+      _onError = null;
       return VoiceStart.failed;
     }
   }
@@ -79,12 +86,26 @@ final class SpeechDictation implements Dictation {
     }
   }
 
-  void _error(SpeechRecognitionError e) => _finish();
+  void _error(SpeechRecognitionError e) {
+    log(
+      'Dictation error: ${e.errorMsg} permanent=${e.permanent}',
+      name: 'sis.dictation',
+    );
+    // Silence ends are normal; any other error means it cannot listen.
+    const quiet = {'error_no_match', 'error_speech_timeout'};
+    if (!quiet.contains(e.errorMsg)) {
+      final fail = _onError;
+      _onError = null;
+      fail?.call();
+    }
+    _finish();
+  }
 
   void _finish() {
     final end = _onEnd;
     _onEnd = null;
     _onText = null;
+    _onError = null;
     end?.call();
   }
 

@@ -177,11 +177,13 @@ abstract interface class VoiceTranscriber {
 abstract interface class Dictation {
   /// Starts listening in [localeTag]. [onText] gets the whole text recognised
   /// so far on every update; [onEnd] is called once when listening ends, by
-  /// itself (silence, error) or after [stop] / [cancel].
+  /// itself (silence, error) or after [stop] / [cancel]. [onError] is called
+  /// just before [onEnd] when the recogniser failed (not on plain silence).
   Future<VoiceStart> start({
     required String localeTag,
     required void Function(String text) onText,
     required void Function() onEnd,
+    void Function()? onError,
   });
 
   /// Stops and keeps what was recognised ([onText] gets the final text, then

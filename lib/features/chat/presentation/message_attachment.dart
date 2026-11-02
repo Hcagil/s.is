@@ -56,13 +56,15 @@ class _Attachment extends ConsumerWidget {
   /// The box the photo will take once decoded, known from its preview (a
   /// tiny PNG of the same shape) before any bytes arrive: the placeholder,
   /// the blurred preview and the photo all take exactly this box, so the
-  /// bubble never changes height. Null without a preview.
+  /// bubble never changes height. No preview at all (the bot's photos) gets
+  /// one fixed box; null only for a preview that is not a PNG.
   ///
   /// This is what keeps scrolling honest: the list is reversed, and a
   /// bubble that grows between the viewport and the newest message shoves
   /// the rows on screen away from it -- scrolling down toward the newest
   /// message then fights every photo that loads on the way (0.30.16).
   static Size? _photoBox(Uint8List? preview) {
+    if (preview == null) return const Size(240, 240);
     final size = pngDimensions(preview);
     if (size == null) return null;
     // Scaled up as well as down: the preview is only 24 px wide.
@@ -181,10 +183,10 @@ class _Attachment extends ConsumerWidget {
           ),
         ),
       ),
-      null => const SizedBox(
-        height: 120,
-        width: 180,
-        child: Center(child: SisLoadingLogo(size: 40)),
+      null => SizedBox(
+        height: box?.height ?? 120,
+        width: box?.width ?? 180,
+        child: const Center(child: SisLoadingLogo(size: 40)),
       ),
     };
   }

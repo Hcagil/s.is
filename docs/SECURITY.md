@@ -154,6 +154,29 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     The video player loads only the official embed of YouTube, Instagram,
     TikTok or X in a sandboxed web view, and only after the tap (see
     `docs/DECISIONS.md`, 2026-10-11).
+  - `delete_message(message)` is security definer, uses server clock
+    (`created_at`, `now()`), and returns 42501 'not permitted' for all
+    refusals. Senders may delete for everyone within 6 hours; within 15
+    minutes it vanishes (`deleted = 'vanished'`), later leaving a
+    placeholder (`deleted = 'placeholder'`). Group admins may delete any
+    readable message at any time, setting `messages.deleted_by_admin`
+    (server-set, not client-writable) and always leaving a placeholder.
+    Delete for everyone in 1:1 chats with bot accounts
+    (`app_private.bot_accounts`) is refused; delete for me is a phone-only
+    action and is unaffected. All content is erased (rule L1): text,
+    ciphertext, attachment columns, voice transcript, place, album group,
+    sticker, link card, edit time, and reactions; the poll (`polls` row,
+    options, votes) and pin are cleared. Metadata (sender, send time,
+    reply target, forwarded flag) remains. `app_private.storage_removal_queue`
+    lists files for removal (RLS on, no `anon`/`authenticated` grants);
+    only `delete_message` fills it with the attachment, its `.t` thumbnail,
+    and the link-card picture `link-previews/<conversation_id>/<message_id>.jpg`
+    (always, because an earlier edit may have dropped the card while the
+    picture stayed). A server sweeper later removes files after re-checking
+    no live message uses the path. The 6-hour limit binds only the sender:
+    the comment in migration `20260924140000_delete_for_everyone.sql` that
+    `deleted_attachments` is written only "inside the 6-hour window" is
+    outdated, because an admin's delete writes it at any time.
   - `profiles` rows are readable only for an allowlisted account that is the
     caller, shares a conversation with the caller, or is a contact the
     caller saved; a tag find alone does not open the row (`find_by_tag`

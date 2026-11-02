@@ -129,19 +129,19 @@ select is((select deleted from public.messages where id = (select recent from _m
 
 -- 3 over six hours old: no window any more --------------------------------
 select test_as('00000000-0000-0000-0000-0000000de001', 'de000000-0000-0000-0000-0000000de001');
-select lives_ok(format($$select public.delete_message(%L)$$, (select old from _m)),
-                'a message over 6 hours old may be deleted by its sender');
+select throws_ok(format($$select public.delete_message(%L)$$, (select old from _m)),
+                 '42501', 'not permitted', 'a message over 6 hours old can no longer be deleted by its sender');
 reset role;
-select is((select deleted from public.messages where id = (select old from _m)), 'placeholder',
-          'the 7-hour-old message is a placeholder now');
+select is((select deleted from public.messages where id = (select old from _m)), null,
+          'the 7-hour-old message stays live');
 
 -- 4 within the hour: a placeholder too, and a text message returns no path -
 select test_as('00000000-0000-0000-0000-0000000de001', 'de000000-0000-0000-0000-0000000de001');
 select is(public.delete_message((select recent from _m)), null,
           'a text message returns no path to remove from storage');
 reset role;
-select is((select deleted from public.messages where id = (select recent from _m)), 'placeholder',
-          'under an hour old: a placeholder, never vanished');
+select is((select deleted from public.messages where id = (select recent from _m)), 'vanished',
+          'under 15 minutes old: vanished, no trace');
 select is((select deleted_by from public.messages where id = (select recent from _m)),
           '00000000-0000-0000-0000-0000000de001'::uuid, 'deleted_by records the sender who deleted it');
 select isnt((select deleted_at from public.messages where id = (select recent from _m)), null,
@@ -171,8 +171,8 @@ select is(public.delete_message((select photo from _m)),
 reset role;
 select is((select attachment_path from public.messages where id = (select photo from _m)), null,
           'attachment_path is wiped');
-select is((select deleted from public.messages where id = (select photo from _m)), 'placeholder',
-          'the photo message, sent 5 minutes ago, is a placeholder too');
+select is((select deleted from public.messages where id = (select photo from _m)), 'vanished',
+          'the photo message, sent 5 minutes ago, vanishes too');
 
 -- 7 without app access: the sender gate alone cannot be what stops her ------
 select test_as('00000000-0000-0000-0000-0000000de003', 'de000000-0000-0000-0000-0000000de003');

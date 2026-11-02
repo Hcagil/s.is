@@ -201,8 +201,9 @@ void main() {
       find.descendant(of: pane(paneId), matching: matching);
 
   testWidgets('A deletes her own message through the sheet; a fresh one '
-      'vanishes from B\'s open screen, a backdated one becomes a placeholder',
-      (t) async {
+      'vanishes from B\'s open screen, a backdated one becomes a placeholder', (
+    t,
+  ) async {
     // Written directly with the service key, bypassing RLS the way a
     // trusted backend job would -- and the way the pgTAP suite backdates
     // created_at "as postgres": no client insert grant ever allows it.

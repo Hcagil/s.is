@@ -301,6 +301,7 @@
   "membersLeft": "Ayrıldı",
   "membersRemovedBadge": "Çıkarıldı",
   "bubbleDeletedByAdmin": "Yönetici tarafından silindi",
+  "chatLockedMessage": "🔒 Bu mesaj açılamıyor",
   "bubbleEdited": "düzenlendi {time}",
   "linksEmpty": "Henüz paylaşılan bağlantı yok",
   "linkOpenFailed": "{host} açılamadı",

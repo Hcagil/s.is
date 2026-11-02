@@ -403,7 +403,17 @@ final class DriftSessionEngine implements SessionEngine {
         peerUserId,
         identityKey: peerIdentityKey,
       );
-      if (rows.isEmpty) return const Err(SessionPendingFailure());
+      if (rows.isEmpty) {
+        // A message sent just before the contact's key changed opens with the session of the old key.
+        final old = (await _sessionsOf(
+          db,
+          peerUserId,
+        )).where((r) => r.peerIdentityKey != peerIdentityKey).toList();
+        if (old.isEmpty) return const Err(SessionPendingFailure());
+        final r = await _tryRows(db, key, old, cipher, save);
+        if (r is Err) return const Err(SessionPendingFailure());
+        return r;
+      }
       return _tryRows(db, key, rows, cipher, save);
     });
   }

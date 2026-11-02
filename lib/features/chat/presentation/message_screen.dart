@@ -15,6 +15,7 @@ import '../../../app/notice.dart';
 import '../../../app/theme.dart';
 import '../../../core/failure.dart';
 import '../../../l10n/app_localizations.dart';
+import '../domain/encrypted_message_repository.dart';
 import '../../appearance/presentation/chat_text_scale.dart';
 import '../../appearance/presentation/chat_wallpaper.dart';
 import '../../auth/application/session_controller.dart';
@@ -936,7 +937,13 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                             )
                                           : null;
                                       final bubble = _Bubble(
-                                        message,
+                                        isLockedPlaceholder(message.body)
+                                            ? message.withPlain(
+                                                AppLocalizations.of(context)
+                                                    .chatLockedMessage,
+                                                null,
+                                              )
+                                            : message,
                                         key: ValueKey('bubble-${message.id}'),
                                         mine: mine,
                                         delivery: delivery,

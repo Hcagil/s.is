@@ -1,5 +1,5 @@
 begin;
-select plan(112);
+select plan(106);
 
 -- Group settings (Update 2): the three switches on conversations,
 -- set_group_settings, add_members and set_group_avatar under the switches,
@@ -177,8 +177,8 @@ select ok(app_private.is_bot(u('10')), 'fixture: the bot is a bot');
 select col_not_null('public', 'conversations', 'members_can_set_avatar', 'members_can_set_avatar is not null');
 select col_not_null('public', 'conversations', 'members_can_add', 'members_can_add is not null');
 select col_not_null('public', 'conversations', 'new_members_see_history', 'new_members_see_history is not null');
-select is(settings_of(g('G')), 'false|true|true',
-          'a new group: picture admins-only, members add, new members see history');
+select is(settings_of(g('G')), 'false|true|false',
+          'a new group: picture admins-only, members add, new members do NOT see history (rule 16)');
 
 -- 2 who may call the new RPCs ---------------------------------------------------
 do $$ begin perform set_config('request.jwt.claims', '{"role":"anon"}', true); end $$;
@@ -222,13 +222,13 @@ select gs_as('11');
 select throws_ok(format('select settings_c(%L, true, false, false)', g('K')), '42501', null,
                  'kim, admin of K but with her session revoked, cannot change K''s switches');
 reset role;
-select is(settings_of(g('G')), 'false|true|true', 'every refused call left the switches as they were');
+select is(settings_of(g('G')), 'false|true|false', 'every refused call left the switches as they were');
 
 delete from realtime.messages where topic like 'chats:%';
 select gs_as('01');
 select lives_ok(format('select settings_c(%L, null, false, null)', g('G')), 'ada, the admin, turns members adding off');
 reset role;
-select is(settings_of(g('G')), 'false|false|true', 'one switch changed; null left the other two');
+select is(settings_of(g('G')), 'false|false|false', 'one switch changed; null left the other two');
 select is(nudged(), '01,02,03,11',
           'each current member got group_changed on chats:<own id>; not rem (removed) nor hal');
 select gs_as('01');
@@ -460,41 +460,17 @@ select throws_ok(format('select public.delete_group(%L)', g('DEBUG')), '42501', 
 reset role;
 select is((select count(*)::int from public.conversations where id = g('DEBUG')), 1, 'the Debug group is still there');
 
-delete from realtime.messages where topic like 'chats:%';
+-- rule 17: not even an admin of a live group can delete it any more (closing replaces it)
 select gs_as('01');
-create temp table deleted_paths as select public.delete_group(g('G')) as paths;
+select throws_ok(format('select public.delete_group(%L)', g('G')), '42501', 'not permitted',
+                 'ada, admin of G, is refused too: delete_group is gone');
 reset role;
-select ok((select (g('G') || '/gs-old.jpg') = any(paths) from deleted_paths),
-          'delete_group returns the photo paths of the group''s messages');
-select ok((select ('group/' || g('G') || '/2.jpg') = any(paths) from deleted_paths),
-          'delete_group returns the current group picture path too');
-select is((select count(*)::int from app_private.deleted_attachments
-            where user_id = u('01') and path in (g('G') || '/gs-old.jpg', 'group/' || g('G') || '/2.jpg')), 2,
-          'the deleter is recorded for each returned path');
-select is((select count(*)::int from public.conversations where id = g('G')), 0, 'the group is gone');
-select is((select count(*)::int from public.messages where conversation_id = g('G')), 0, 'its messages are gone');
-select is((select count(*)::int from public.conversation_members where conversation_id = g('G')), 0, 'its members are gone');
-select is(nudged(), '01,02,03,04,05,06,07,09,11',
-          'everyone who had it in their list (rem, removed, too) got group_changed on chats:<own id>');
-select gs_as('02');
-select is((select count(*)::int from public.conversations where id = g('G')), 0, 'bea''s list no longer has it');
-reset role;
-
--- a group with photo messages and NO group picture.
-select gs_as('01');
-insert into ids values ('P', public.start_group_conversation('gs-photos', array[u('02')]));
-reset role;
-insert into storage.objects(bucket_id, name, owner_id, metadata) values
-  ('attachments', g('P') || '/gs-p.jpg', u('01')::text, '{"size":3,"mimetype":"image/jpeg"}'::jsonb);
-insert into public.messages(conversation_id, sender_id, body, attachment_path)
-values (g('P'), u('01'), 'gs photo', g('P') || '/gs-p.jpg');
-select gs_as('01');
-create temp table deleted_p as select public.delete_group(g('P')) as paths;
-reset role;
-select is((select paths from deleted_p), array[g('P') || '/gs-p.jpg'],
-          'no group picture: delete_group still returns the photo paths, never null');
-select is((select count(*)::int from app_private.deleted_attachments where path = g('P') || '/gs-p.jpg' and user_id = u('01')), 1,
-          'and records them for the deleter');
+select is((select count(*)::int from public.conversations where id = g('G')), 1, 'G is still there');
+select ok(exists (select 1 from public.messages where conversation_id = g('G')), 'with its messages');
+select is((select count(*)::int from public.conversation_members where conversation_id = g('G')
+            and left_at is null), 8, 'and its current members');
+-- the avatar-release gates below still need a gone group: remove G as the owner (fixture only)
+delete from public.conversations where id = g('G');
 
 -- may_remove_group_avatar, gate by gate: each negative fails exactly one
 -- clause of the positive (ada, who deleted G, removing a group/G/ object

@@ -152,14 +152,13 @@ void main() {
       );
     }))!;
 
-    if (!groupSetting) {
-      await t.runAsync(() async {
-        await service
-            .from('conversations')
-            .update({'new_members_see_history': false})
-            .eq('id', g);
-      });
-    }
+    // New groups default to OFF (rule 16): set the case's value explicitly.
+    await t.runAsync(() async {
+      await service
+          .from('conversations')
+          .update({'new_members_see_history': groupSetting})
+          .eq('id', g);
+    });
 
     final old = (await t.runAsync(() async {
       return _ok(

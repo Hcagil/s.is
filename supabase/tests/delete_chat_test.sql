@@ -1,5 +1,5 @@
 begin;
-select plan(63);
+select plan(61);
 
 -- Delete chat: public.chat_hides, hide_chat(conversation), and
 -- delete_direct_chat(conversation) returns text[] (photo paths).
@@ -9,10 +9,8 @@ select plan(63);
 --   hide_chat. hide_chat: the caller must be or have been a member and have
 --   app access; never the bot. It moves only the caller's history_from up, so
 --   old messages are hidden from the caller alone; a later message shows; the
---   caller's pin and archive marks for that chat go. delete_direct_chat: a
---   current member of a real 1:1 (not a group, not the system chat, not one
---   with the bot) removes it for both and gets the photo paths back, each
---   recorded so the caller may remove the files -- and nothing else.
+--   caller's pin and archive marks for that chat go. delete_direct_chat: refused
+--   for everyone (rule 9, 1:1 deletion is on the caller's own phone only).
 --
 -- Each refusal fixture fails ONE gate; its positive control passes the others.
 --   ann, bob  1:1 AB, both in group G (ann admin)     cat  in nothing of AB
@@ -290,24 +288,20 @@ select photo(g('HA'), '08', 'kept.jpg');
 grant select on paths to authenticated;
 select as_('07');
 select send(g('GH'), 'text too');
-select is((select array_agg(x order by x) from unnest(public.delete_direct_chat(g('GH'))) x),
-          (select array_agg(p order by p) from paths),
-          'gus deletes GH for both and gets both photo paths back');
+-- rule 9: a 1:1 is deleted on the caller's own phone only; the server refuses the old call
+select throws_ok($$select public.delete_direct_chat(g('GH'))$$, '42501', 'not permitted',
+                 'gus cannot delete GH for both any more');
 reset role;
-select ok(not exists (select 1 from public.conversations where id = g('GH')), 'the conversation is gone');
-select is(msgs(g('GH')), 0::bigint, 'with its messages');
+select ok(exists (select 1 from public.conversations where id = g('GH')), 'the conversation stays');
+select is(msgs(g('GH')), 3::bigint, 'with all its messages (two photos and the text)');
+select is((select count(*) from storage.objects where bucket_id = 'attachments'
+            and name in (select p from paths)), 2::bigint, 'and both photos stay in storage');
 select as_('08');
-select is((select count(*) from public.conversations where id = g('GH')), 0::bigint, 'hal no longer sees it');
+select is((select count(*) from public.conversations where id = g('GH')), 1::bigint, 'hal still sees it');
 reset role;
-select as_('07'); reset role;  -- may_remove_attachment reads the claims as the storage policy would
-select ok(app_private.may_remove_attachment(g('GH')::text || '/hal.jpg'),
-          'gus may remove hal''s photo of the deleted chat');
-select ok(app_private.may_remove_attachment(g('GH')::text || '/gus.jpg'), 'and his own');
-select ok(not app_private.may_remove_attachment(g('HA')::text || '/kept.jpg'),
-          'but not hal''s photo in another chat');
-select as_('08'); reset role;
-select ok(not app_private.may_remove_attachment(g('GH')::text || '/gus.jpg'),
-          'and hal, who did not delete, gets no release');
+select as_('07'); reset role;
+select ok(not app_private.may_remove_attachment(g('GH')::text || '/hal.jpg'),
+          'the refused call released no photo to remove');
 
 -- 7 a revoked session (a member) is refused -------------------------------------------
 select as_('04');

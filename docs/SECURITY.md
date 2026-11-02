@@ -73,9 +73,8 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     creator is its admin; the last admin leaving promotes the
     longest-standing current non-bot member; the sole admin demoting
     themselves promotes the oldest non-bot member the same way (refused with
-    'a group needs at least one admin' if none exists, and in the Debug group
-    the last human admin cannot leave while only the bot remains: same
-    refusal, nothing changes); an admin cannot remove themselves.
+    'a group needs at least one admin' if none exists); an admin cannot
+    remove themselves.
     `delete_group` and `delete_direct_chat` are refused ('not permitted').
     `app_private.drop_group_if_unused` has no client grant; `leave_group`
     calls it, and it deletes a group with no current member and no message

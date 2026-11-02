@@ -321,9 +321,7 @@ void main() {
 
     await expectLater(
       pace.rpc('delete_group', params: {'conversation': g}),
-      throwsA(
-        isA<PostgrestException>().having((e) => e.code, 'code', '42501'),
-      ),
+      throwsA(isA<PostgrestException>().having((e) => e.code, 'code', '42501')),
     );
 
     Future<void> tryRemove(SupabaseClient who, String bucket, String p) async {

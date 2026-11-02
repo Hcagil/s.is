@@ -1,3 +1,4 @@
+import 'dart:async' show Timer;
 import 'dart:developer' show log;
 
 import 'package:flutter/foundation.dart'
@@ -20,6 +21,7 @@ final class SpeechDictation implements Dictation {
   void Function(String)? _onText;
   void Function()? _onEnd;
   void Function()? _onError;
+  Timer? _endTimer;
 
   @override
   Future<VoiceStart> start({
@@ -82,7 +84,8 @@ final class SpeechDictation implements Dictation {
 
   void _status(String s) {
     if (s == SpeechToText.doneStatus || s == SpeechToText.notListeningStatus) {
-      _finish();
+      // The plugin posts a hard error after these statuses; give it a moment.
+      _endTimer ??= Timer(const Duration(milliseconds: 150), _finish);
     }
   }
 
@@ -102,6 +105,8 @@ final class SpeechDictation implements Dictation {
   }
 
   void _finish() {
+    _endTimer?.cancel();
+    _endTimer = null;
     final end = _onEnd;
     _onEnd = null;
     _onText = null;

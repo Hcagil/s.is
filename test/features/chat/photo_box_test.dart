@@ -195,13 +195,13 @@ void main() {
     });
   });
 
-  testWidgets('a photo without a preview keeps the old sizes: a 120 px '
-      'placeholder, then the photo fitted into 280 x 260', (t) async {
+  testWidgets('a photo without a preview is one fixed 240 x 240 box, '
+      'before and after the photo decodes', (t) async {
     await t.runAsync(() async {
       await open(t, null);
-      expect(t.getSize(photo).height, 120, reason: 'the placeholder');
-      final (_, after) = await boxes(t, await _png(600, 300));
-      expect(after, const Size(280, 140), reason: 'the decoded photo');
+      final (before, after) = await boxes(t, await _png(600, 300));
+      expect(before, const Size(240, 240), reason: 'the placeholder');
+      expect(after, const Size(240, 240), reason: 'the decoded photo');
     });
   });
 

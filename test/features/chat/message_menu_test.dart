@@ -29,6 +29,7 @@ import 'package:sis/features/chat/presentation/photo_viewer.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
 import '../../support/attach_flow.dart';
+import '../../support/crop_fakes.dart' show png;
 import '../../support/fakes.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
@@ -44,6 +45,7 @@ Message msg(
   String from = 'u1',
   String? attachment,
   String? replyTo,
+  Uint8List? preview,
   int minute = 0,
 }) => Message(
   id: id,
@@ -53,6 +55,7 @@ Message msg(
   // Fresh, so own text is still editable.
   createdAt: DateTime.now().subtract(Duration(minutes: 60 - minute)),
   attachmentPath: attachment,
+  attachmentPreview: preview,
   replyTo: replyTo,
 );
 
@@ -923,8 +926,11 @@ void main() {
   testWidgets('a photo-only bubble is unchanged: the photo at its start', (
     tester,
   ) async {
+    // A small tall preview gives the photo a box narrower than the bubble
+    // (a photo without a preview is a fixed 240 x 240 box that fills it).
+    final preview = (await tester.runAsync(() => png(2, 20)))!;
     await pump(tester, [
-      msg('p2', from: bob, attachment: 'c1/2.png', body: ''),
+      msg('p2', from: bob, attachment: 'c1/2.png', body: '', preview: preview),
     ]);
     final photo = tester.getRect(
       find.byKey(const ValueKey('attachment-c1/2.png')),

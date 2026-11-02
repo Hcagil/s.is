@@ -69,7 +69,8 @@ Future<void> pump(
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         linkOpenerProvider.overrideWithValue(LinkOpenerFake()),
         sessionControllerProvider.overrideWith(_SignedIn.new),
-        if (!gateOpen) photoGateProvider.overrideWith((ref, path) async => false),
+        if (!gateOpen)
+          photoGateProvider.overrideWith((ref, path) async => false),
       ],
     ),
   );

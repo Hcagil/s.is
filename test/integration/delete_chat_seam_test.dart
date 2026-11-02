@@ -254,7 +254,8 @@ void main() {
     expect(await exists(conv), isTrue);
   }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test('delete for both: the 1:1 is gone for both', () async {
+  test('delete for both: the server refuses it (rule 9); the 1:1 stays for '
+      'both', () async {
     final conv = await direct(ash, cyd);
     final app = _App(ash);
     addTearDown(app.container.dispose);
@@ -262,11 +263,10 @@ void main() {
 
     await app.deleteAndWait([conv], both: true);
 
-    expect(app.state.failure, isNull);
-    expect(app.lists(conv), isFalse);
-    expect(await exists(conv), isFalse);
+    expect(app.state.failure, isA<DeniedFailure>());
+    expect(await exists(conv), isTrue);
     final cydList = _ok(await SupabaseChatRepository(cyd).conversations());
-    expect([for (final c in cydList) c.id], isNot(contains(conv)));
+    expect([for (final c in cydList) c.id], contains(conv));
   }, timeout: const Timeout(Duration(seconds: 90)));
 
   test('a group as a member: bea leaves it, then it is hidden for her; the '
@@ -293,7 +293,8 @@ void main() {
     expect(await readable(ash, g), 1);
   }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test('the only admin, ticked: the group is deleted for everyone', () async {
+  test('the only admin, ticked: the server refuses delete-for-everyone '
+      '(rule 17); the group stays', () async {
     final g = await group(ash, [bea]);
     final app = _App(ash);
     addTearDown(app.container.dispose);
@@ -302,9 +303,8 @@ void main() {
 
     await app.deleteAndWait([g], both: true);
 
-    expect(app.state.failure, isNull);
-    expect(app.lists(g), isFalse);
-    expect(await exists(g), isFalse);
+    expect(app.state.failure, isA<DeniedFailure>());
+    expect(await exists(g), isTrue);
   }, timeout: const Timeout(Duration(seconds: 90)));
 
   test('undo: the row is back and the server never heard of it', () async {

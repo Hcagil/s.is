@@ -247,7 +247,7 @@ void main() {
       'avatar_path': null,
       'members_can_set_avatar': false,
       'members_can_add': false,
-      'new_members_see_history': true,
+      'new_members_see_history': false, // new default (rule 16)
     }, reason: 'only the one switch changed on the server');
     expect(paceApp.settings(g).membersCanAdd, isFalse);
 
@@ -259,33 +259,27 @@ void main() {
 
     final refused = await quillApp.groups.setSettings(
       g,
-      newMembersSeeHistory: false,
+      newMembersSeeHistory: true,
     );
     expect(refused, isA<Err<void>>());
     expect((refused as Err<void>).failure, isA<DeniedFailure>());
     expect(
       quillApp.settings(g).newMembersSeeHistory,
-      isTrue,
+      isFalse,
       reason: 'the refused switch is rolled back',
     );
-    expect((await row(g))!['new_members_see_history'], isTrue);
+    expect((await row(g))!['new_members_see_history'], isFalse);
   });
 
-  test('delete: a member is refused; the admin deletes, the group picture '
-      'and the photos leave Storage, every app drops the group live, and a '
-      'removed member hears only "deleted"', () async {
+  test('delete: the server refuses delete-for-everyone to a member and to '
+      'the admin (rule 17); the group, its picture and photos stay', () async {
     final g = await newGroup();
     final pic = await picture(g, 1);
     final shot = await photo(quill, g, 2);
-    expect(await exists('avatars', pic), isTrue);
-    expect(await exists('attachments', shot), isTrue);
-
-    // rush is removed, then listens raw on his own topic.
-    _ok(await SupabaseChatRepository(pace).removeMember(g, idOf(rush)), 'rm');
-    final rushChanges = <GroupChange>[];
-    final opened = await SupabaseGroupSettingsRepository(rush).groupChanges();
-    final rushSub = _ok(opened, 'rush subscribe').listen(rushChanges.add);
-    addTearDown(rushSub.cancel);
+    addTearDown(() async {
+      await service.storage.from('avatars').remove([pic]);
+      await service.storage.from('attachments').remove([shot]);
+    });
 
     final paceApp = _App(pace);
     final quillApp = _App(quill);
@@ -294,67 +288,43 @@ void main() {
     await paceApp.ready();
     await quillApp.ready();
     expect(quillApp.lists(g), isTrue);
-    await Future<void>.delayed(const Duration(seconds: 2));
 
-    // A settings change while rush is gone must not reach him.
-    _ok(await paceApp.groups.setSettings(g, membersCanSetAvatar: true), 'set');
-
-    final refused = await quillApp.groups.deleteGroup(g);
-    expect(refused, isA<Err<void>>());
-    expect((refused as Err<void>).failure, isA<DeniedFailure>());
-    expect(await row(g), isNotNull, reason: 'a member deleted the group');
+    for (final app in [quillApp, paceApp]) {
+      final refused = await app.groups.deleteGroup(g);
+      expect(refused, isA<Err<void>>());
+      expect((refused as Err<void>).failure, isA<DeniedFailure>());
+    }
+    expect(await row(g), isNotNull, reason: 'a refused delete removed it');
     expect(quillApp.deleted, isNot(contains(g)));
-
-    expect(await paceApp.groups.deleteGroup(g), isA<Ok<void>>());
-    expect(await row(g), isNull, reason: 'the group is still there');
-    expect(paceApp.lists(g), isFalse);
-    expect(await exists('avatars', pic), isFalse, reason: 'picture kept');
-    expect(await exists('attachments', shot), isFalse, reason: 'photo kept');
-
-    await _until(
-      () => quillApp.deleted.contains(g) && !quillApp.lists(g),
-      'quill\'s app drops the group live',
-    );
-    await _until(
-      () =>
-          rushChanges.any((c) => c.conversationId == g && c.what == 'deleted'),
-      'removed rush is told it was deleted',
-    );
-    expect(
-      rushChanges.where((c) => c.conversationId == g && c.what != 'deleted'),
-      isEmpty,
-      reason: 'a member who left heard a settings change',
-    );
+    expect(paceApp.deleted, isNot(contains(g)));
+    expect(await exists('avatars', pic), isTrue, reason: 'picture removed');
+    expect(await exists('attachments', shot), isTrue, reason: 'photo removed');
   });
 
-  test('Storage clean-up rules on the real Storage API: only the deleter, '
-      'only recorded group paths of a deleted group, only objects older '
-      'than the record', () async {
-    final gone = await newGroup();
-    final pic = await picture(gone, 3);
-    final shot = await photo(pace, gone, 5);
-    final stray = 'group/$gone/stray-${_nonce()}.jpg';
+  test('Storage clean-up rules on the real Storage API: the refused '
+      'delete_group records nothing, so nobody may remove a group\'s '
+      'objects through the delete path', () async {
+    final g = await newGroup();
+    final shot = await photo(pace, g, 5);
     final quillProfile = 'profile/${idOf(quill)}/qa-${_nonce()}.jpg';
-    for (final p in [stray, quillProfile]) {
-      await service.storage
-          .from('avatars')
-          .uploadBinary(
-            p,
-            _jpeg(6).bytes,
-            fileOptions: const FileOptions(contentType: 'image/jpeg'),
-          );
-    }
+    await service.storage
+        .from('avatars')
+        .uploadBinary(
+          quillProfile,
+          _jpeg(6).bytes,
+          fileOptions: const FileOptions(contentType: 'image/jpeg'),
+        );
     addTearDown(() async {
-      await service.storage.from('avatars').remove([pic, stray, quillProfile]);
+      await service.storage.from('avatars').remove([quillProfile]);
       await service.storage.from('attachments').remove([shot]);
     });
 
-    // The RPC alone, as if the app died before its clean-up ran.
-    final paths = await pace.rpc(
-      'delete_group',
-      params: {'conversation': gone},
+    await expectLater(
+      pace.rpc('delete_group', params: {'conversation': g}),
+      throwsA(
+        isA<PostgrestException>().having((e) => e.code, 'code', '42501'),
+      ),
     );
-    expect((paths as List).cast<String>(), containsAll([pic, shot]));
 
     Future<void> tryRemove(SupabaseClient who, String bucket, String p) async {
       try {
@@ -364,34 +334,14 @@ void main() {
       }
     }
 
-    await tryRemove(quill, 'avatars', pic);
-    expect(await exists('avatars', pic), isTrue, reason: 'a non-deleter');
-    await tryRemove(rush, 'attachments', shot);
-    expect(await exists('attachments', shot), isTrue, reason: 'non-deleter');
-    // A live group's picture is not checked here: its admin may remove it
-    // through the picture policy (replacing a picture deletes the old one).
-    // group_settings_test.sql proves may_remove_group_avatar refuses it.
+    await tryRemove(quill, 'attachments', shot);
+    expect(await exists('attachments', shot), isTrue, reason: 'a member');
+    await tryRemove(pace, 'attachments', shot);
+    expect(await exists('attachments', shot), isTrue, reason: 'the admin');
     await tryRemove(pace, 'avatars', quillProfile);
     expect(await exists('avatars', quillProfile), isTrue, reason: 'profile');
-    await tryRemove(pace, 'avatars', stray);
-    expect(await exists('avatars', stray), isTrue, reason: 'never recorded');
-
-    await tryRemove(pace, 'avatars', pic);
-    expect(await exists('avatars', pic), isFalse, reason: 'deleter refused');
-    await tryRemove(pace, 'attachments', shot);
-    expect(await exists('attachments', shot), isFalse, reason: 'photo');
-
-    // An object put back at a recorded path after the deletion is newer
-    // than the record: the deleter may not remove it.
-    await service.storage
-        .from('avatars')
-        .uploadBinary(
-          pic,
-          _jpeg(7).bytes,
-          fileOptions: const FileOptions(contentType: 'image/jpeg'),
-        );
-    await tryRemove(pace, 'avatars', pic);
-    expect(await exists('avatars', pic), isTrue, reason: 'a newer object');
+    // A live group's own picture path is not checked: its admin may remove
+    // it through the picture policy (group_settings_test.sql covers that).
   });
 
   test('offline: a settings change and a delete fail with a reason, the '

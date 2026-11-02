@@ -1,5 +1,5 @@
 begin;
-select plan(102);
+select plan(117);
 
 -- The SIS Bot may send a plain single photo into a chat it belongs to.
 --
@@ -281,13 +281,23 @@ insert into p values
   ('PPNG', obj(g('DEBUG'), 'image/png')), ('V', obj(g('DEBUG'))),
   ('OCT', obj(g('DEBUG'), 'application/octet-stream')), ('BIG', obj(g('DEBUG'), 'image/jpeg', 10485761)),
   ('ANNS', obj(g('DEBUG'), 'image/jpeg', 3, u('01'))), ('G2O', obj(g('G2'))), ('LEFTO', obj(g('LEFT'))),
-  ('SVG', obj(g('DEBUG'), 'image/svg+xml')), ('P3', obj(g('DEBUG')));
+  ('SVG', obj(g('DEBUG'), 'image/svg+xml')), ('P3', obj(g('DEBUG'))),
+  ('PREV', obj(g('DEBUG'))), ('PREV4K', obj(g('DEBUG'))), ('PREVR', obj(g('DEBUG'))),
+  ('ANNP', obj(g('DEBUG'), 'image/jpeg', 3, u('01')));
 insert into storage.objects(bucket_id, name, owner_id, metadata, created_at) values
   ('attachments', g('DEBUG') || '/1-' || bot8() || '.jpg', u('bot')::text, '{"size":3}', now() - interval '3 days');
 insert into p values ('NOMIME', g('DEBUG') || '/1-' || bot8() || '.jpg');
 create function pp(n text) returns text language sql stable as $$ select path from p where name = n $$;
 grant select on p to authenticated;
 grant execute on function pp(text) to authenticated;
+-- a real 4x3 PNG as base64 (passes messages_attachment_preview_check)
+create function prev() returns text language sql immutable as $$
+  select 'iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAFElEQVR4nGM8wcXFAANMDEgAhQMAISYA4vYuch4AAAAASUVORK5CYII='::text
+$$;
+create function preview_of(path text) returns text language sql security definer set search_path = '' as $$
+  select attachment_preview from public.messages where attachment_path = path
+$$;
+grant execute on function prev(), preview_of(text) to authenticated;
 delete from app_private.bot_actions where bot_id = u('bot');
 
 select as_('bot');
@@ -296,6 +306,13 @@ select is(sends(), 1::bigint, 'and that photo is logged as one send');
 select is(psend(pp('PMAX')), 'ok', 'a photo of exactly 10485760 bytes passes');
 select is(psend(pp('PPNG')), 'ok', 'an image/png photo passes');
 select is(sends(), 3::bigint, 'each photo is one send');
+-- 7b a bot photo may carry a tiny preview (t_571fda3424)
+select is(psend(pp('PREV'), 'attachment_preview', quote_literal(prev())), 'ok',
+          'the bot sends a plain photo with a valid tiny PNG preview');
+select is(preview_of(pp('PREV')), prev(), 'and the preview is stored unchanged');
+select is(psend(pp('PREV4K'), 'attachment_preview', quote_literal('iVBORw0KGgo' || repeat('A', 3989))), 'ok',
+          'a preview of exactly 4000 characters passes');
+select is(sends(), 5::bigint, 'a photo with a preview is charged as one send');
 
 -- 8 only a plain single photo ---------------------------------------------------------------
 select is(psend(pp('V'), 'attachment_name', '''a.pdf'''), '42501', 'refused: photo + attachment_name (file)');
@@ -304,7 +321,22 @@ select is(psend(pp('V'), 'attachment_size', '3'), '42501', 'refused: photo + att
 select is(psend(pp('V'), 'attachment_duration_ms', '1000'), '42501', 'refused: photo + attachment_duration_ms (video)');
 select is(psend(pp('V'), 'attachment_waveform', '''AAAA'''), '42501', 'refused: photo + attachment_waveform (voice)');
 select is(psend(pp('V'), 'voice_transcript', '''words'''), '42501', 'refused: photo + voice_transcript');
-select is(psend(pp('V'), 'attachment_preview', '''abc'''), '42501', 'refused: photo + attachment_preview');
+select is(psend(pp('V'), 'attachment_preview', '''abc'''), '23514', 'refused by the CHECK: photo + preview ''abc''');
+select is(psend(pp('V'), 'attachment_preview', quote_literal('AAAAAAAAAAAA')), '23514',
+          'refused by the CHECK: preview without the PNG prefix');
+select is(psend(pp('V'), 'attachment_preview', quote_literal('iVBORw0KGgo' || repeat('A', 3993))), '23514',
+          'refused by the CHECK: preview of 4004 characters');
+select is(psend(pp('V'), 'attachment_preview', quote_literal('iVBORw0KGgoAA')), '23514',
+          'refused by the CHECK: preview length not a multiple of 4');
+select is(psend(pp('V'), 'attachment_preview', quote_literal('iVBORw0KGgo!')), '23514',
+          'refused by the CHECK: preview with a non-base64 character');
+select is(try(format('insert into public.messages(conversation_id, sender_id, body, attachment_preview) values (%L, %L, %L, %L)',
+                     g('DEBUG'), u('bot'), 'text', prev())), '23514',
+          'refused by the CHECK: a bot preview without attachment_path');
+select is(psend(pp('V'), 'attachment_preview, sticker_id', quote_literal(prev()) || ', ' || quote_literal(gen_random_uuid())),
+          '42501', 'refused: a valid preview does not open photo + sticker_id');
+select is(psend(pp('V'), 'attachment_preview, attachment_name', quote_literal(prev()) || ', ''a.pdf'''),
+          '42501', 'refused: a valid preview does not open photo + attachment_name');
 select is(psend(pp('V'), 'photo_group', quote_literal(gen_random_uuid())), '42501', 'refused: photo + photo_group (album)');
 select is(psend(pp('V'), 'sticker_id', quote_literal(gen_random_uuid())), '42501', 'refused: photo + sticker_id');
 select is(psend(pp('V'), 'sticker_album_id', quote_literal(gen_random_uuid())), '42501', 'refused: photo + sticker_album_id');
@@ -317,7 +349,7 @@ select is(psend(pp('V'), 'poll', 'true'), '42501', 'refused: photo + poll');
 select is(psend(pp('V'), 'contact', 'true'), '42501', 'refused: photo + contact');
 select is(psend(pp('V'), 'sticker_album', 'true'), '42501', 'refused: photo + sticker_album');
 select is(psend(pp('V'), 'forwarded', 'true'), '42501', 'refused: photo + forwarded');
-select is(sends(), 3::bigint, 'refused photo rows are not logged as sends');
+select is(sends(), 5::bigint, 'refused photo rows are not logged as sends');
 
 -- 9 the stored object -------------------------------------------------------------------
 select is(psend(pp('OCT')), '42501', 'refused: object type application/octet-stream');
@@ -330,7 +362,7 @@ select is(psend(g('DEBUG') || '/' || nextval('seq') || '-' || bot8() || '.jpg'),
 select is(psend(pp('G2O')), '42501', 'refused: a chat the bot is not a member of');
 select is(psend(pp('LEFTO')), '42501', 'refused: a chat the bot has left');
 select is(psend(pp('V')), 'ok', 'control: the same plain row on a valid object passes');
-select is(sends(), 4::bigint, 'only the passing photo was logged');
+select is(sends(), 6::bigint, 'only the passing photo was logged');
 reset role;
 
 -- 9b the trigger alone: a privileged writer (no RLS, no column grants) still
@@ -356,6 +388,17 @@ select is(raw(pp('V'), 'ciphertext', '''x'''), '42501', 'trigger refuses: photo 
 alter table public.messages enable trigger messages_ciphertext_guard;
 select is(raw(pp('ANNS')), '42501', 'trigger refuses: an object owned by a human');
 select is(raw(pp('R1')), 'ok', 'control: the trigger passes a plain photo row from the same writer');
+select is(raw(pp('PREVR'), 'attachment_preview', quote_literal(prev())), 'ok',
+          'the trigger passes a plain photo row with a valid preview');
+select is(raw(pp('V'), 'attachment_preview, poll', quote_literal(prev()) || ', true'), '42501',
+          'trigger refuses: photo + preview + poll');
+-- humans are unaffected: a photo of ann's with a preview passes, a bad one hits the CHECK
+select as_('01');
+select is(psend(pp('ANNP'), 'attachment_preview', quote_literal('AAAAAAAAAAAA')), '23514',
+          'human: a preview without the PNG prefix is refused by the CHECK');
+select is(psend(pp('ANNP'), 'attachment_preview', quote_literal(prev())), 'ok',
+          'human: a photo with a valid preview passes');
+reset role;
 
 -- 10 one budget for text and photos ---------------------------------------------------
 delete from app_private.bot_actions where bot_id = u('bot');

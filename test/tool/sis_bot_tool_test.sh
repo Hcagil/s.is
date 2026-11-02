@@ -24,6 +24,8 @@
 # object, writing nothing; 2 bad uuid; 4 OFF) and read's [image <id>] marker.
 # Also read's reply_body: the replied-to text for originals older than --since,
 # null for a reply to a message the bot cannot see (before its history_from) and a non-reply.
+# send --image: a tiny PNG preview (24/16/12/8 px, aspect and EXIF rotation kept),
+# none and still sent without Pillow or for an undecodable file.
 # While the tools run, a poller checks that no token or key is in any argv and
 # that sis_bot.sh keeps its temp files in one mode-700 directory it removes.
 set -euo pipefail
@@ -435,6 +437,40 @@ check "read: an image file is '[image <id>]' too" has_body "[image $P3]"
 check "read: a video gets no image marker" bash -c "! grep -qF '[image $V1]' '$BOX/out'"
 check "read: a non-image file gets no image marker" bash -c "! grep -qF '[image $F1]' '$BOX/out'"
 check "read: a text-only message is unchanged" has_body "text only 7c"
+sql "delete from app_private.bot_actions where bot_id = '$BOT_ID'" >/dev/null
+
+# 7d send --image carries a tiny PNG preview (24/16/12/8 px wide, aspect kept,
+# EXIF rotation applied, <= 2900 bytes) when Pillow decodes the file; without
+# Pillow or on a decode error it sends no preview and still succeeds.
+python3 - "$FIX" <<'PY'
+import sys
+from PIL import Image
+d = sys.argv[1]
+Image.new("RGB", (400, 200), (10, 120, 200)).save(d + "/wide.png")
+ex = Image.Exif(); ex[0x0112] = 6   # stored 400x200, shown rotated: 200x400
+Image.new("RGB", (400, 200), (200, 50, 10)).save(d + "/rot.jpg", exif=ex.tobytes())
+PY
+{ printf '\x89PNG\r\n\x1a\n'; head -c 4000 /dev/urandom; } >"$FIX/broken.png"
+mkdir -p "$BOX/nopil/PIL"; echo 'raise ImportError("no Pillow here")' >"$BOX/nopil/PIL/__init__.py"
+prev_of() { sql "select coalesce(attachment_preview, '<null>') from public.messages where sender_id = '$BOT_ID' and body = '$1'"; }
+path_of() { sql "select attachment_path is not null from public.messages where sender_id = '$BOT_ID' and body = '$1'"; }
+# dims BASE64 -> "w h bytes" of the decoded PNG
+dims() { python3 -c 'import base64,io,sys;from PIL import Image
+b=base64.b64decode(sys.argv[1]);i=Image.open(io.BytesIO(b));assert i.format=="PNG";print(i.width,i.height,len(b))' "$1"; }
+expect_exit 0 "send --image of a wide PNG" "$BOT" send --image "$FIX/wide.png" "$DEBUG" "img wide 7d"
+pw=$(prev_of "img wide 7d")
+check "the wide photo carries a preview starting with the PNG signature" test "${pw:0:11}" = iVBORw0KGgo
+read -r w h n <<<"$(dims "$pw" 2>/dev/null || echo 0 0 0)"
+check "its preview is 24/16/12/8 px wide ($w)" bash -c "case $w in 24|16|12|8) ;; *) false ;; esac"
+check "its preview keeps the 2:1 shape (${w}x$h)" test "$h" -gt 0 -a $((h * 2 - w)) -ge -2 -a $((h * 2 - w)) -le 2
+check "its preview is at most 2900 bytes ($n)" test "$n" -gt 0 -a "$n" -le 2900
+expect_exit 0 "send --image of a JPEG with EXIF rotation" "$BOT" send --image "$FIX/rot.jpg" "$DEBUG" "img rot 7d"
+read -r w h n <<<"$(dims "$(prev_of "img rot 7d")" 2>/dev/null || echo 0 0 0)"
+check "the EXIF-rotated photo's preview is upright: taller than wide (${w}x$h)" test "$h" -gt "$w" -a "$w" -gt 0
+expect_exit 0 "send --image without Pillow still succeeds" env PYTHONPATH="$BOX/nopil" "$BOT" send --image "$FIX/wide.png" "$DEBUG" "img nopil 7d"
+check "without Pillow: a photo row, no preview" test "$(path_of "img nopil 7d") $(prev_of "img nopil 7d")" = "t <null>"
+expect_exit 0 "send --image of a file Pillow cannot decode still succeeds" "$BOT" send --image "$FIX/broken.png" "$DEBUG" "img broken 7d"
+check "undecodable: a photo row, no preview" test "$(path_of "img broken 7d") $(prev_of "img broken 7d")" = "t <null>"
 sql "delete from app_private.bot_actions where bot_id = '$BOT_ID'" >/dev/null
 
 # 8 usage and unsafe file (2) ------------------------------------------------------------

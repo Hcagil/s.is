@@ -29,8 +29,8 @@ import '../support/video_fakes.dart';
 /// Two members' message screens, mounted at once over the real repository,
 /// exercising the seam a unit test cannot: A deletes her own message through
 /// the actual swipe -> action row -> confirm flow, and B's OPEN screen must
-/// see the result arrive live over Realtime. Since 0.30.8 a delete leaves a
-/// placeholder at any age (there is no "vanish within the hour" any more).
+/// see the result arrive live over Realtime. A sender's delete under 15
+/// minutes vanishes without trace; from 15 minutes on it leaves a placeholder.
 ///
 /// Requires `docker compose run --rm supabase start`. Uses opal and russ
 /// (created here, password sign-in); run with --concurrency=1 like the rest
@@ -200,8 +200,9 @@ void main() {
   Finder within(String paneId, Finder matching) =>
       find.descendant(of: pane(paneId), matching: matching);
 
-  testWidgets('A deletes her own message through the sheet; B\'s open screen '
-      'sees a placeholder, and so does a backdated one', (t) async {
+  testWidgets('A deletes her own message through the sheet; a fresh one '
+      'vanishes from B\'s open screen, a backdated one becomes a placeholder',
+      (t) async {
     // Written directly with the service key, bypassing RLS the way a
     // trusted backend job would -- and the way the pgTAP suite backdates
     // created_at "as postgres": no client insert grant ever allows it.
@@ -249,8 +250,8 @@ void main() {
     expect(old, isA<Ok<Message>>());
     final recentMessage = (recent! as Ok<Message>).value;
     final oldMessage = (old! as Ok<Message>).value;
-    // Two hours old: a delete is allowed at any age and leaves a
-    // placeholder, exactly like the fresh one.
+    // Two hours old: past 15 minutes, so its delete leaves a placeholder
+    // (the fresh one, under 15 minutes, vanishes).
     // `.toUtc()` matters: under the suite's non-UTC TZ, a naive local
     // string here would be read back by Postgres as UTC, landing hours in
     // the future rather than in the past.
@@ -319,6 +320,12 @@ void main() {
       'both screens to load the seeded messages',
     );
 
+    expect(
+      within('b', find.byKey(ValueKey('message-${recentMessage.id}'))),
+      findsOneWidget,
+      reason: 'B must show the fresh message before it is deleted',
+    );
+
     // A deletes the recent message, through the real UI: a long-press,
     // the action card, the confirm card.
     await t.longPress(
@@ -342,11 +349,16 @@ void main() {
     // of whatever Realtime then does to tell B.
     await until(
       t,
-      () => within(
-        'a',
-        find.byKey(ValueKey('deleted-${recentMessage.id}')),
-      ).evaluate().isNotEmpty,
-      'A\'s own screen to update after her delete',
+      () =>
+          within(
+            'a',
+            find.byKey(ValueKey('message-${recentMessage.id}')),
+          ).evaluate().isEmpty &&
+          within(
+            'a',
+            find.byKey(ValueKey('deleted-${recentMessage.id}')),
+          ).evaluate().isEmpty,
+      'A\'s own screen to drop the vanished message',
       // Server or app? The row in the database, and A's controller state.
       explain: () async {
         final row = await service
@@ -364,18 +376,31 @@ void main() {
       },
     );
 
-    // B's OPEN screen sees the placeholder, live, without any action of
-    // his own.
+    // B's OPEN screen loses it, live, without any action of his own, and
+    // no placeholder takes its place.
     await until(
       t,
-      () => within(
-        'b',
-        find.byKey(ValueKey('deleted-${recentMessage.id}')),
-      ).evaluate().isNotEmpty,
-      'B\'s screen to show the recent message as a placeholder',
+      () =>
+          within(
+            'b',
+            find.byKey(ValueKey('message-${recentMessage.id}')),
+          ).evaluate().isEmpty &&
+          within(
+            'b',
+            find.byKey(ValueKey('deleted-${recentMessage.id}')),
+          ).evaluate().isEmpty,
+      'B\'s screen to drop the vanished recent message',
     );
+    final vanishedRow = await t.runAsync(
+      () => service
+          .from('messages')
+          .select('deleted')
+          .eq('id', recentMessage.id)
+          .single(),
+    );
+    expect(vanishedRow!['deleted'], 'vanished');
 
-    // The backdated message: two hours old, still deletable, still a
+    // The backdated message: two hours old, still deletable, but a
     // placeholder.
     await t.longPress(
       within('a', find.byKey(ValueKey('message-${oldMessage.id}'))),

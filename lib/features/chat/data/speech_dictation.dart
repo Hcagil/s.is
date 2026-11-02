@@ -1,4 +1,3 @@
-import 'dart:async' show Timer;
 import 'dart:developer' show log;
 
 import 'package:flutter/foundation.dart'
@@ -21,8 +20,6 @@ final class SpeechDictation implements Dictation {
   void Function(String)? _onText;
   void Function()? _onEnd;
   void Function()? _onError;
-  Timer? _ready;
-  bool _heard = false;
 
   @override
   Future<VoiceStart> start({
@@ -44,7 +41,6 @@ final class SpeechDictation implements Dictation {
       _onText = onText;
       _onEnd = onEnd;
       _onError = onError;
-      _heard = false;
       await _stt.listen(
         onResult: (r) => _onText?.call(r.recognizedWords),
         listenOptions: SpeechListenOptions(
@@ -57,7 +53,6 @@ final class SpeechDictation implements Dictation {
           localeId: id,
         ),
       );
-      _ready = Timer(const Duration(seconds: 4), _notReady);
       return VoiceStart.started;
     } catch (e) {
       log('Dictation start failed: ${e.runtimeType}', name: 'sis.dictation');
@@ -71,7 +66,7 @@ final class SpeechDictation implements Dictation {
   @override
   Future<void> stop() async {
     try {
-      await _stt.stop().timeout(const Duration(seconds: 2));
+      await _stt.stop();
     } catch (_) {}
     _finish();
   }
@@ -80,16 +75,12 @@ final class SpeechDictation implements Dictation {
   Future<void> cancel() async {
     _onText = null;
     try {
-      await _stt.cancel().timeout(const Duration(seconds: 2));
+      await _stt.cancel();
     } catch (_) {}
     _finish();
   }
 
   void _status(String s) {
-    if (s == SpeechToText.listeningStatus) {
-      _heard = true;
-      _ready?.cancel();
-    }
     if (s == SpeechToText.doneStatus || s == SpeechToText.notListeningStatus) {
       _finish();
     }
@@ -110,20 +101,7 @@ final class SpeechDictation implements Dictation {
     _finish();
   }
 
-  /// The recogniser never reported it is listening: treat it as an error.
-  void _notReady() {
-    if (_heard) return;
-    log('Dictation not ready: no listening status', name: 'sis.dictation');
-    final fail = _onError;
-    _onError = null;
-    fail?.call();
-    _stt.cancel().ignore();
-    _finish();
-  }
-
   void _finish() {
-    _ready?.cancel();
-    _ready = null;
     final end = _onEnd;
     _onEnd = null;
     _onText = null;
@@ -133,7 +111,8 @@ final class SpeechDictation implements Dictation {
 
   Future<String?> _localeId(String tag) async {
     try {
-      final locales = await _stt.locales();
+      // Without a working recogniser this call never answers (bind error 10).
+      final locales = await _stt.locales().timeout(const Duration(seconds: 3));
       final want = tag.replaceAll('-', '_');
       for (final l in locales) {
         if (l.localeId.replaceAll('-', '_') == want) return l.localeId;
@@ -145,7 +124,8 @@ final class SpeechDictation implements Dictation {
         }
       }
       return null;
-    } catch (_) {
+    } catch (e) {
+      log('Dictation locales failed: ${e.runtimeType}', name: 'sis.dictation');
       return null;
     }
   }

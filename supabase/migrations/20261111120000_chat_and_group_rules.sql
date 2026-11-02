@@ -32,6 +32,9 @@ begin
   if not app_private.has_app_access() then
     raise exception 'not permitted' using errcode = '42501';
   end if;
+  if is_admin is null then
+    raise exception 'is_admin required' using errcode = '22004';
+  end if;
   select title into grp from public.conversations where id = conversation;
   if grp is null then
     raise exception 'not permitted' using errcode = '42501';

@@ -1,5 +1,5 @@
 begin;
-select plan(47);
+select plan(49);
 
 -- Chat and group rules (rules 9, 15-17, 19): written from the contract.
 --   old delete_group / delete_direct_chat are refused (42501 'not permitted'), nothing deleted;
@@ -147,6 +147,12 @@ select throws_ok(format('select admin_c(%L, %L, false)', g('GB'), u('01')), null
                  'the only member cannot demote herself');
 reset role;
 select is(admins_of(g('GB')), '01', 'and stays admin');
+-- a null is_admin is refused (22004) and changes nothing: the sole admin stays admin
+select as_('03');
+select throws_ok(format('select admin_c(%L, %L, null)', g('GD'), u('03')), '22004', 'is_admin required',
+                 'a null is_admin is refused');
+reset role;
+select is(admins_of(g('GD')), '03', 'and the sole admin of GD is still admin');
 
 -- 3 default of the history switch ---------------------------------------------------------
 select is((select column_default from information_schema.columns

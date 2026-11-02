@@ -227,4 +227,55 @@ void main() {
     }
     expect(got.map((m) => (m.id, m.body)), [('m1', 'waited for')]);
   });
+
+  group('the sender got a new identity key after sending (t_8c161d4051)', () {
+    /// alice sends a NORMAL (type 1) text, then reinstalls: the directory
+    /// (peerKey) now hands out her new key. Returns that row.
+    Future<Message> sentThenNewKey() async {
+      final first = await opener().open([await send('m0', 'ilk')]);
+      expect(first.single.body, 'ilk');
+      final reply = ok(
+        await bob.engine.encrypt(
+          alice.userId,
+          'selam',
+          peerIdentityKey: alice.identity.identityKey,
+        ),
+      );
+      ok(
+        await alice.engine.decrypt(
+          peerUserId: bob.userId,
+          peerIdentityKey: bob.identity.identityKey,
+          ciphertext: reply.ciphertext,
+          olmType: reply.olmType,
+        ),
+      );
+      final m1 = await send('m1', 'anahtar değişmeden önce', t: 1);
+      expect(m1.olmType, 1, reason: 'setup: a normal message');
+      final old = alice.identity.identityKey;
+      alice = await Phone.make(alice.userId);
+      expect(alice.identity.identityKey, isNot(old));
+      sessionMade = false;
+      return m1;
+    }
+
+    test('the text opens with the old-key session (real Olm)', () async {
+      final m1 = await sentThenNewKey();
+      final out = await opener().open([m1]);
+      expect(out.single.body, 'anahtar değişmeden önce');
+      expect(out.single.ciphertext, isNull);
+      expect(await storedBody('m1'), 'anahtar değişmeden önce');
+    });
+
+    test('the old session already retired by her new pre-key message: the '
+        'old text stays locked with the placeholder, no crash', () async {
+      final m1 = await sentThenNewKey();
+      final p0 = await send('p0', 'yeni anahtar', t: 2);
+      expect(p0.olmType, 0);
+      final o = opener();
+      expect((await o.open([p0])).single.body, 'yeni anahtar');
+      final out = await o.open([m1]);
+      expect(out.single.body, lockedBodyPlaceholder);
+      expect(out.single.ciphertext, isNull);
+    });
+  });
 }

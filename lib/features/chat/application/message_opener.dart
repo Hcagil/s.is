@@ -387,7 +387,9 @@ class StoreMessageOpener implements MessageOpener {
   @override
   Future<void> openWaiting(String peerUserId) => _serial<void>(() async {
     if (_disposed) return;
-    await _retryPending(peerUserId, const {});
+    try {
+      await _retryPending(peerUserId, const {});
+    } catch (_) {}
   });
 
   /// Opens the rows of [peer] that waited for a session (except [skip], the rows of the call in progress) and sends each one that opened on [reopened].

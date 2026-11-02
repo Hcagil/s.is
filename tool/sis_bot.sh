@@ -130,12 +130,30 @@ os.replace(tmp, path)' "$FILE"
 call POST /rest/v1/rpc/activate_session '{}'
 [ "$(tr -d ' \n' <"$TMP")" = "true" ] || die 3 "session superseded: the owner runs tool/sis_bot_admin.sh mint"
 
-send_message() { # conversation text [attachment_path]
+tiny_preview() { # image file -> base64 of a tiny PNG on stdout, empty if not possible
+  python3 - "$1" <<'PY' 2>/dev/null || true
+import base64, io, sys
+try:
+    from PIL import Image, ImageOps
+    im = ImageOps.exif_transpose(Image.open(sys.argv[1]))
+    im.load(); im = im.convert("RGBA")
+    for w in (24, 16, 12, 8):
+        t = im.resize((w, max(1, round(im.height * w / im.width))), Image.LANCZOS)
+        b = io.BytesIO(); t.save(b, "PNG", optimize=True)
+        if len(b.getvalue()) <= 2900:
+            print(base64.b64encode(b.getvalue()).decode()); break
+except Exception:
+    pass
+PY
+}
+
+send_message() { # conversation text [attachment_path [preview_base64]]
   local id payload
   id=$(python3 -c 'import uuid;print(uuid.uuid4())')
   payload=$(python3 -c 'import json,sys;d={"id":sys.argv[1],"conversation_id":sys.argv[2],"sender_id":sys.argv[3],"body":sys.argv[4]}
 if sys.argv[5]: d["attachment_path"]=sys.argv[5]
-print(json.dumps(d))' "$id" "$1" "$ME" "$2" "${3:-}")
+if sys.argv[6]: d["attachment_preview"]=sys.argv[6]
+print(json.dumps(d))' "$id" "$1" "$ME" "$2" "${3:-}" "${4:-}")
   call POST /rest/v1/messages "$payload"
   echo "sent $id"
 }
@@ -195,7 +213,7 @@ PY
         429) die 5 "rate limited, try again later" ;;
         *) die 1 "upload failed (http $STATUS)" ;;
       esac
-      send_message "$conv" "$TEXT" "$path"
+      send_message "$conv" "$TEXT" "$path" "$(tiny_preview "$IMG")"
     else
       send_message "$1" "$TEXT"
     fi

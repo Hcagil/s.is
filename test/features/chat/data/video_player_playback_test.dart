@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/chat/data/video_player_playback.dart';
+// ignore: depend_on_referenced_packages -- the fake replaces video_player's own platform seam
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 /// A platform whose players fail to initialise for the view types in [failing].

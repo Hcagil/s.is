@@ -221,6 +221,15 @@ final class FakeDecryptor: PeekDecryptor {
     seenKeys.append(pickleKey)
     return inboundTexts["\(accountPickle)+\(identityKey)"]
   }
+
+  /// session pickle -> emoji a reaction decrypts to (others: nil)
+  var reactionTexts: [String: String] = [:]
+
+  func decryptReaction(sessionPickle: String, pickleKey: [UInt8], messageId: String, reactorId: String, ct: String, olmType: Int32) -> String? {
+    log.append("reaction \(sessionPickle) \(messageId) \(reactorId) \(olmType)")
+    seenKeys.append(pickleKey)
+    return reactionTexts[sessionPickle]
+  }
 }
 
 final class PeekCoreTests: XCTestCase {
@@ -973,5 +982,214 @@ final class PeekSaveRowTests: XCTestCase {
     XCTAssertEqual(PeekCore.sealedHash(""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
     XCTAssertEqual(PeekCore.sealedHash("Günaydın 🔒"), "3b874d5e72d79187fa863a851df66557e16116892f21f00d5f13ed76bc173c4a")
     XCTAssertEqual(PeekCore.sealedHash("AwogQ+/xyz=="), "71722cc5f9acf0dbcd5a3dafeee05b7a4b508564b39edc2914fdf91b8d7a55f7")
+  }
+}
+
+// MARK: - PeekCore.reaction / PeekReactionPush (written from the contract)
+
+final class PeekReactionTests: XCTestCase {
+  let key: [UInt8] = Array(repeating: 9, count: 32)
+  let reactor = "11111111-2222-3333-4444-555555555555"
+  let intruder = "99999999-2222-3333-4444-555555555555"
+
+  func info(ot: String = "1") -> [AnyHashable: Any] {
+    [
+      "kind": "reaction", "reactor_id": reactor, "encrypted": "true", "message_id": "m1",
+      "conversation_id": "c1", "user_id": "me", "ct": "CT", "ot": ot,
+    ]
+  }
+
+  func push(ot: String = "1") -> PeekReactionPush {
+    PeekReactionPush(userInfo: info(ot: ot))!
+  }
+
+  func row(_ id: String, peer: String? = nil) -> PeekSessionRow {
+    PeekSessionRow(sessionId: id, peerUserId: peer ?? reactor, identityKey: "IK-\(id)", pickle: "P-\(id)")
+  }
+
+  func data(
+    owner: String? = "me", peer: String?? = nil, body: String? = "Günaydın",
+    sessions: [PeekSessionRow] = [], sender: String? = "me"
+  ) -> PeekData {
+    PeekData(ownerId: owner, peerUserId: peer ?? reactor, storedBody: body, account: "ACC", sessions: sessions, storedSenderId: sender)
+  }
+
+  func reaction(_ p: PeekReactionPush, _ d: PeekData, _ dec: FakeDecryptor) -> (emoji: String, quote: String?)? {
+    PeekCore.reaction(push: p, data: d, pickleKey: key, decryptor: dec)
+  }
+
+  /// A decryptor whose only peer session s1 opens the reaction to a thumbs up.
+  func opening() -> FakeDecryptor {
+    let dec = FakeDecryptor()
+    dec.reactionTexts = ["P-s1": "👍"]
+    return dec
+  }
+
+  // MARK: PeekReactionPush(userInfo:)
+
+  func testAReactionPushWithAllKeysIsRead() {
+    let p = push(ot: "0")
+    XCTAssertEqual(p.reactorId, reactor)
+    XCTAssertEqual(p.push.messageId, "m1")
+    XCTAssertEqual(p.push.userId, "me")
+    XCTAssertEqual(p.push.olmType, 0)
+  }
+
+  func testAPushThatIsNotAReactionIsNil() {
+    for kind in ["message", "", "Reaction", "reactions"] {
+      var p = info()
+      p["kind"] = kind
+      XCTAssertNil(PeekReactionPush(userInfo: p), "kind=\(kind)")
+    }
+    var noKind = info()
+    noKind.removeValue(forKey: "kind")
+    XCTAssertNil(PeekReactionPush(userInfo: noKind), "without kind")
+  }
+
+  func testAReactionPushWithABadReactorIdIsNil() {
+    for bad in ["", "not-a-uuid", "11111111-2222-3333-4444-55555555555", "11111111222233334444555555555555"] {
+      var p = info()
+      p["reactor_id"] = bad
+      XCTAssertNil(PeekReactionPush(userInfo: p), "reactor_id=\(bad)")
+    }
+    var missing = info()
+    missing.removeValue(forKey: "reactor_id")
+    XCTAssertNil(PeekReactionPush(userInfo: missing), "without reactor_id")
+    var number = info()
+    number["reactor_id"] = 5
+    XCTAssertNil(PeekReactionPush(userInfo: number), "reactor_id as a number")
+  }
+
+  func testAReactionPushWithoutTheEncryptedKeysIsNil() {
+    for k in ["ct", "ot", "encrypted"] {
+      var p = info()
+      p.removeValue(forKey: k)
+      XCTAssertNil(PeekReactionPush(userInfo: p), "without \(k)")
+    }
+    var plain = info()
+    plain["encrypted"] = "false"
+    XCTAssertNil(PeekReactionPush(userInfo: plain), "encrypted=false")
+  }
+
+  // MARK: PeekCore.reaction: who
+
+  func testAnotherOwnersStoreGivesNilWithoutOlm() {
+    for owner in ["someone-else", nil] as [String?] {
+      let dec = opening()
+      XCTAssertNil(reaction(push(), data(owner: owner, sessions: [row("s1")]), dec), "owner \(owner ?? "nil")")
+      XCTAssertTrue(dec.log.isEmpty, "\(dec.log)")
+    }
+  }
+
+  func testNoPeerGivesNilWithoutOlm() {
+    let dec = opening()
+    XCTAssertNil(reaction(push(), data(peer: .some(nil), sessions: [row("s1")]), dec))
+    XCTAssertTrue(dec.log.isEmpty, "\(dec.log)")
+  }
+
+  func testAReactorThatIsNotTheStoredPeerGivesNilWithoutOlm() {
+    // The store's partner is the intruder; the push claims the reaction is from `reactor`.
+    let dec = FakeDecryptor()
+    dec.reactionTexts = ["P-s1": "👍", "P-s9": "😈"]
+    let d = data(peer: .some(intruder), sessions: [row("s1"), row("s9", peer: intruder)])
+    XCTAssertNil(reaction(push(), d, dec))
+    XCTAssertNil(reaction(push(ot: "0"), d, dec))
+    XCTAssertFalse(dec.log.contains { $0.hasPrefix("reaction") || $0.hasPrefix("decrypt") || $0.hasPrefix("inbound") }, "\(dec.log)")
+  }
+
+  // MARK: PeekCore.reaction: which session
+
+  func testNormalReactionTriesOnlyThePeersSessionsInOrderAndTheFirstEmojiWins() {
+    let dec = FakeDecryptor()
+    dec.reactionTexts = ["P-s9": "😈", "P-s2": "👍", "P-s3": "❤️"]
+    let sessions = [row("s1"), row("s9", peer: intruder), row("s2"), row("s3")]
+    XCTAssertEqual(reaction(push(ot: "1"), data(sessions: sessions), dec)?.emoji, "👍")
+    XCTAssertEqual(dec.log, ["reaction P-s1 m1 \(reactor) 1", "reaction P-s2 m1 \(reactor) 1"])
+    XCTAssertEqual(dec.seenKeys, [key, key], "the pickle key is passed through")
+  }
+
+  func testNormalReactionThatNoSessionOpensGivesNil() {
+    let dec = FakeDecryptor()
+    dec.inboundTexts = ["ACC+IK-s1": "👍"]
+    XCTAssertNil(reaction(push(ot: "1"), data(sessions: [row("s1"), row("s2")]), dec))
+    XCTAssertNil(reaction(push(ot: "1"), data(sessions: []), dec))
+    XCTAssertFalse(dec.log.contains { $0.hasPrefix("inbound") || $0.hasPrefix("decrypt ") }, "\(dec.log)")
+  }
+
+  func testPreKeyReactionUsesOnlyTheStoredSessionWithThatId() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds = ["CT": "s2"]
+    dec.reactionTexts = ["P-s1": "🙃", "P-s2": "🎉"]
+    dec.inboundTexts = ["ACC+IK-s1": "🙃", "ACC+IK-s2": "🙃"]
+    XCTAssertEqual(reaction(push(ot: "0"), data(sessions: [row("s1"), row("s2")]), dec)?.emoji, "🎉")
+    XCTAssertEqual(dec.log, ["prekey CT", "reaction P-s2 m1 \(reactor) 0"])
+  }
+
+  func testPreKeyReactionWithoutAStoredSessionGivesNilAndNeverOpensInbound() {
+    for sid in [nil, "s7"] as [String?] {
+      let dec = FakeDecryptor()
+      if let sid = sid { dec.prekeyIds = ["CT": sid] }
+      dec.reactionTexts = ["P-s1": "🙃"]
+      dec.inboundTexts = ["ACC+IK-s1": "🙃", "ACC+IK-s7": "🙃"]
+      XCTAssertNil(reaction(push(ot: "0"), data(sessions: [row("s1")]), dec), "session id \(sid ?? "nil")")
+      XCTAssertEqual(dec.log, ["prekey CT"], "session id \(sid ?? "nil")")
+    }
+  }
+
+  func testPreKeyReactionForAnotherPeersSessionGivesNil() {
+    let dec = FakeDecryptor()
+    dec.prekeyIds = ["CT": "s9"]
+    dec.reactionTexts = ["P-s9": "😈"]
+    XCTAssertNil(reaction(push(ot: "0"), data(sessions: [row("s1"), row("s9", peer: intruder)]), dec))
+    XCTAssertFalse(dec.log.contains { $0.hasPrefix("reaction") || $0.hasPrefix("inbound") }, "\(dec.log)")
+  }
+
+  // MARK: PeekCore.reaction: the quote
+
+  func quote(body: String?, sender: String? = "me") -> String? {
+    let r = reaction(push(), data(body: body, sessions: [row("s1")], sender: sender), opening())
+    XCTAssertEqual(r?.emoji, "👍", "the emoji is shown whatever the quote is (body \(body ?? "nil"))")
+    return r?.quote
+  }
+
+  func testMyOwnStoredMessageIsTheQuote() {
+    XCTAssertEqual(quote(body: "Günaydın"), "Günaydın")
+  }
+
+  func testAMessageNotSentByTheOwnerIsNeverQuoted() {
+    for sender in [reactor, intruder, nil] as [String?] {
+      XCTAssertNil(quote(body: "Günaydın", sender: sender), "sender \(sender ?? "nil")")
+    }
+  }
+
+  func testThePlaceholderNoBodyOrABlankBodyIsNotQuoted() {
+    for body in [PeekCore.lockedPlaceholder, nil, "", "   ", "\n\t "] as [String?] {
+      XCTAssertNil(quote(body: body), "body \(body.map { "[\($0)]" } ?? "nil")")
+    }
+  }
+
+  func testAQuoteOfSixtyCharactersIsKeptWhole() {
+    let sixty = String(repeating: "a", count: 60)
+    XCTAssertEqual(quote(body: sixty), sixty)
+  }
+
+  func testALongerQuoteIsCutToSixtyCharactersPlusAnEllipsis() {
+    let a = String(repeating: "a", count: 60)
+    XCTAssertEqual(quote(body: a + "b"), a + "…")
+    XCTAssertEqual(quote(body: a + String(repeating: "c", count: 200)), a + "…")
+  }
+
+  func testTheCutNeverSplitsAnEmoji() {
+    // 61 Characters; the 60th is one skin-tone emoji (two scalars, eight UTF-8 bytes).
+    let a59 = String(repeating: "a", count: 59)
+    XCTAssertEqual(quote(body: a59 + "👍🏽" + "b"), a59 + "👍🏽" + "…")
+    // 61 family emoji: each is one Character of seven scalars (joined by ZWJ).
+    let family = "👨‍👩‍👧‍👦"
+    let cut = quote(body: String(repeating: family, count: 61))
+    XCTAssertEqual(cut, String(repeating: family, count: 60) + "…")
+    XCTAssertEqual(cut?.count, 61)
+    // 60 flags (each two regional-indicator scalars) are kept whole.
+    let flags = String(repeating: "🇹🇷", count: 60)
+    XCTAssertEqual(quote(body: flags), flags)
   }
 }

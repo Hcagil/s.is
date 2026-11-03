@@ -20,7 +20,7 @@
 #     the three App Store Connect secrets, writes the key 700/600 under
 #     $RUNNER_TEMP/asc and removes it if: always(); it runs
 #     `tool/asc_signing.py distribute com.esd.sis BUILD GROUPS NOTE` with the
-#     groups from vars.TESTFLIGHT_GROUPS through env (empty = bacanaks) and the
+#     groups from vars.TESTFLIGHT_GROUPS through env (empty = "*", every group) and the
 #     note decoded from publish's note_b64, byte for byte; its steps are exactly
 #     the release guard, the key, distribute and the key removal: it
 #     revokes nothing (Apple checks
@@ -853,7 +853,7 @@ run_dist() { # [VAR=value ...]: sets $failed_step, $ran
 }
 dnote() { cat "$tmp/calls.note"; }
 note=$'Şarkı seçebilirsin — "alıntı" \'tek\' $HOME `x`\nİkinci satır 🎵'
-# 15 the groups default to bacanaks; the note arrives byte for byte; the key is gone after.
+# 15 the groups default to "*" (every group); the note arrives byte for byte; the key is gone after.
 fresh
 kmode=$(RUN_WF=$release run "Write the App Store Connect key" KEY="$key_text" >/dev/null; stat -c %a "$tmp/rt/asc" "$tmp/rt/asc/AuthKey_K3YID.p8" | paste -sd' ')
 [ "$kmode" = "700 600" ] || fail "distribute key dir/file modes are [$kmode], want 700 600"
@@ -861,9 +861,9 @@ grep -qx "API_PRIVATE_KEYS_DIR=$tmp/rt/asc" "$tmp/github_env" || fail "distribut
 fresh
 run_dist TF_GROUPS= NOTE_B64="$(printf '%s' "$note" | base64 -w0)"
 [ -z "$failed_step" ] || fail "distribute failed at '$failed_step'"
-grep -qx 'asc distribute com.esd.sis 4242 bacanaks' "$tmp/calls" || fail "empty TESTFLIGHT_GROUPS must mean bacanaks: $(grep '^asc' "$tmp/calls")"
+grep -qxF 'asc distribute com.esd.sis 4242 *' "$tmp/calls" || fail "empty TESTFLIGHT_GROUPS must mean * (every group): $(grep '^asc' "$tmp/calls")"
 # Distribute is the only App Store Connect call: nothing is revoked after it.
-[ "$(grep '^asc' "$tmp/calls")" = 'asc distribute com.esd.sis 4242 bacanaks' ] || fail "distribute must call nothing else: $(grep '^asc' "$tmp/calls")"
+[ "$(grep '^asc' "$tmp/calls")" = 'asc distribute com.esd.sis 4242 *' ] || fail "distribute must call nothing else: $(grep '^asc' "$tmp/calls")"
 [ "$(dnote)" = "$note" ] || fail "the note reached distribute as [$(dnote)], want [$note]"
 [ ! -e "$tmp/rt/asc" ] || fail "distribute left the key behind"
 # Groups from the variable, as data: never run as shell.
@@ -879,7 +879,7 @@ fresh
 run_dist TF_GROUPS= NOTE_B64= STUB_ASC_FAIL=distribute
 [ "$failed_step" = "Distribute the build to the TestFlight groups" ] || fail "a failed distribute did not fail (failed: '${failed_step:-none}')"
 [ "${ran[-1]}" = "Remove the App Store Connect key" ] || fail "key removal did not run after a failed distribute: ${ran[*]}"
-[ "$(grep '^asc' "$tmp/calls")" = 'asc distribute com.esd.sis 4242 bacanaks' ] || fail "a failed distribute called more: $(grep '^asc' "$tmp/calls")"
+[ "$(grep '^asc' "$tmp/calls")" = 'asc distribute com.esd.sis 4242 *' ] || fail "a failed distribute called more: $(grep '^asc' "$tmp/calls")"
 [ ! -e "$tmp/rt/asc" ] || fail "the key survived a failed distribute"
 # An empty secret fails before anything is written or called.
 for empty in KEY KEY_ID ISSUER_ID; do

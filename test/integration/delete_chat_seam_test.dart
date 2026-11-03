@@ -293,17 +293,29 @@ void main() {
     expect(await readable(ash, g), 1);
   }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test('the only admin, ticked: the server refuses delete-for-everyone '
-      '(rule 17); the group stays', () async {
+  test('the only admin: the app has no delete-for-everyone for a group; the '
+      'server still refuses delete_group (rule 17); a ticked delete is leave + '
+      'hide', () async {
     final g = await group(ash, [bea]);
+    await expectLater(
+      ash.rpc('delete_group', params: {'conversation': g}),
+      throwsA(
+        isA<PostgrestException>().having(
+          (e) => e.code,
+          'not a missing-function error',
+          isNot(anyOf('PGRST202', '42883')),
+        ),
+      ),
+    );
+    expect(await exists(g), isTrue);
+
     final app = _App(ash);
     addTearDown(app.container.dispose);
     await app.ready();
-    expect(app.row(g).isAdmin, isTrue);
-
     await app.deleteAndWait([g], both: true);
 
-    expect(app.state.failure, isA<DeniedFailure>());
+    expect(app.lists(g), isFalse);
+    expect(await app.freshIds(), isNot(contains(g)));
     expect(await exists(g), isTrue);
   }, timeout: const Timeout(Duration(seconds: 90)));
 

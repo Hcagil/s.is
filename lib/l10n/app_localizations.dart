@@ -2342,6 +2342,18 @@ abstract class AppLocalizations {
   /// **'Update now'**
   String get updateNow;
 
+  /// Notice when Update now cannot open TestFlight on iPhone
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open TestFlight. Open the TestFlight app and tap Update.'**
+  String get updateTestFlightOpenFailed;
+
+  /// Hint under Update now on the iPhone update card
+  ///
+  /// In en, this message translates to:
+  /// **'The TestFlight app opens. Tap Update next to SIS.'**
+  String get updateTestFlightHint;
+
   /// Number of licences of a package
   ///
   /// In en, this message translates to:

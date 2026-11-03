@@ -1313,6 +1313,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateNow => 'Update now';
 
   @override
+  String get updateTestFlightOpenFailed =>
+      'Could not open TestFlight. Open the TestFlight app and tap Update.';
+
+  @override
+  String get updateTestFlightHint =>
+      'The TestFlight app opens. Tap Update next to SIS.';
+
+  @override
   String licencesCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

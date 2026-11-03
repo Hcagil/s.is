@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/loading.dart';
+import '../../../app/notice.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/update_controller.dart';
@@ -135,14 +137,36 @@ class WhatsNewCard extends ConsumerWidget {
               (state is UpdateAvailableFlexible ||
                   (newer &&
                       state is! UpdateDownloading &&
-                      state is! UpdateReadyToInstall)))
+                      state is! UpdateReadyToInstall))) ...[
             _UpdateButton(
               label: AppLocalizations.of(context).updateNow,
               // Play offers a flexible update: take it here. Otherwise the store page.
               onPressed: state is UpdateAvailableFlexible
                   ? ref.read(updateControllerProvider.notifier).download
-                  : ref.read(updateControllerProvider.notifier).openStore,
+                  : () async {
+                      final l10n = AppLocalizations.of(context);
+                      final opened = await ref
+                          .read(updateControllerProvider.notifier)
+                          .openStore();
+                      if (!opened && context.mounted) {
+                        showSisNotice(
+                          context,
+                          l10n.updateTestFlightOpenFailed,
+                          isError: true,
+                        );
+                      }
+                    },
             ),
+            if (state is! UpdateAvailableFlexible &&
+                defaultTargetPlatform == TargetPlatform.iOS)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  AppLocalizations.of(context).updateTestFlightHint,
+                  style: TextStyle(color: t.muted, fontSize: 12.5),
+                ),
+              ),
+          ],
           if (isNewest && state is UpdateDownloading) ...[
             const SizedBox(height: 12),
             const SisProgressLine(),

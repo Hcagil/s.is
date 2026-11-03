@@ -298,7 +298,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
             // An image may be sent without a caption, and an empty preview
             // would read as "no messages" while hiding a real one.
             body: row['deleted'] != null
-                ? 'This message was deleted'
+                ? deletedPreviewText
                 : row['sticker_id'] != null
                 ? stickerPreviewText
                 : row['sticker_album'] == true
@@ -1323,34 +1323,8 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
         'delete_message',
         params: {'message': message.id},
       );
-      if (path is String) {
-        // The server has already taken the message's content; the photo
-        // file follows. ponytail: a failed remove is not retried, leaving an
-        // object no message points to (still listed in
-        // app_private.deleted_attachments); add a scheduled sweep of that
-        // list if it is ever seen to matter.
-        try {
-          final removed = await _client.storage.from('attachments').remove([
-            path,
-            // The small picture next to a photo or video (removing a name that does not exist is harmless).
-            '$path.t',
-          ]);
-          if (removed.isEmpty) {
-            log(
-              'deleteForEveryone: photo file was not removed',
-              name: 'sis.data',
-              level: 900,
-            );
-          }
-        } catch (e) {
-          log(
-            'deleteForEveryone: photo file removal failed: ${e.runtimeType}',
-            name: 'sis.data',
-            level: 900,
-          );
-        }
-        await _cache.remove(path);
-      }
+      // The server's sweeper removes the storage files; the phone only drops its own cached copy.
+      if (path is String) await _cache.remove(path);
       return const Ok(null);
     } catch (e) {
       return Err(_asFailure(e));

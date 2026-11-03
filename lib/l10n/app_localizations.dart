@@ -4453,6 +4453,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not end-to-end encrypted'**
   String get podNotEnc;
+
+  /// Delete box question
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete this message?'**
+  String get messageDeleteQuestion;
+
+  /// 1:1 delete box checkbox
+  ///
+  /// In en, this message translates to:
+  /// **'Also delete for {name}'**
+  String messageDeleteAlsoFor(String name);
+
+  /// Delete box red button and menu row
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get messageDeleteConfirm;
+
+  /// Group delete box checkbox
+  ///
+  /// In en, this message translates to:
+  /// **'Delete for all members'**
+  String get messageDeleteForAllMembers;
+
+  /// Delete box note under the question, media messages
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarded copies and copies saved outside SIS won\'t be deleted.'**
+  String get messageDeleteMediaNote;
+
+  /// Notice when the server refuses delete for everyone after the time limit
+  ///
+  /// In en, this message translates to:
+  /// **'Too late: {hours} hours have passed'**
+  String messageDeleteTooLate(int hours);
 }
 
 class _AppLocalizationsDelegate

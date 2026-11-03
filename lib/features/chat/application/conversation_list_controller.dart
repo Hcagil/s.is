@@ -220,7 +220,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     if (store == null) return;
     storeWrite(
       message.deletion == MessageDeletion.vanished
-          ? store.remove(message.id)
+          ? _removeVanished(ref, store, message)
           : store.upsertAll([message]),
     );
   }

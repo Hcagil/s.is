@@ -40,6 +40,7 @@ import '../domain/location_share_repository.dart';
 import '../domain/message.dart';
 import '../domain/message_store.dart';
 import '../domain/push_inbox_store.dart';
+import '../domain/vanished_store.dart';
 import '../domain/phone_book.dart';
 import '../domain/photo_crop_renderer.dart';
 import '../domain/picture_cropper.dart';
@@ -284,6 +285,34 @@ PushInboxStore? _pushInboxOf(Ref ref) {
   final store = _storeOf(ref);
   return store is PushInboxStore ? store as PushInboxStore : null;
 }
+
+/// Takes a vanished [message] out of [store], leaving only its id and chat id behind (a store without tombstones, such as a test fake, just removes it), then refreshes the chat's vanished ids so an open screen updates its quotes.
+Future<void> _removeVanished(
+  Ref ref,
+  MessageStore store,
+  Message message,
+) async {
+  if (store is VanishedStore) {
+    await (store as VanishedStore).markVanished(
+      message.id,
+      message.conversationId,
+    );
+    if (ref.mounted) {
+      ref.invalidate(vanishedIdsProvider(message.conversationId));
+    }
+  } else {
+    await store.remove(message.id);
+  }
+}
+
+/// Ids of the vanished messages of a chat, for a reply quote that points at one. Empty when no store is configured or it keeps no tombstones.
+final vanishedIdsProvider = FutureProvider.autoDispose
+    .family<Set<String>, String>((ref, conversationId) async {
+      final store = _storeOf(ref);
+      return store is VanishedStore
+          ? (store as VanishedStore).vanishedIds(conversationId)
+          : const <String>{};
+    });
 
 /// Erases the database file and drops the store instance: after clear() an
 /// upsert on the old instance would re-create rows under the old owner, so the

@@ -63,7 +63,7 @@ String _write({
     db.execute('BEGIN IMMEDIATE;');
     try {
       db.execute(
-        'INSERT OR IGNORE INTO push_inbox(message_id, conversation_id, sender_id, body, sealed, received_at) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM messages WHERE id = ?) AND EXISTS (SELECT 1 FROM conversations WHERE id = ?);',
+        'INSERT OR IGNORE INTO push_inbox(message_id, conversation_id, sender_id, body, sealed, received_at) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM messages WHERE id = ?) AND EXISTS (SELECT 1 FROM conversations WHERE id = ?) AND NOT EXISTS (SELECT 1 FROM meta WHERE key = ?);',
         [
           messageId,
           conversationId,
@@ -73,6 +73,7 @@ String _write({
           receivedAtMicros,
           messageId,
           conversationId,
+          'vanished:$conversationId:$messageId',
         ],
       );
       final saved = db.updatedRows == 1;

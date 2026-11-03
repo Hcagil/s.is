@@ -4508,6 +4508,12 @@ abstract class AppLocalizations {
   /// **'Are you sure you want to delete this message?'**
   String get messageDeleteQuestion;
 
+  /// Delete box question when 2 or more messages (an album) are deleted
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete these messages?'**
+  String get messageDeleteFewQuestion;
+
   /// 1:1 delete box checkbox
   ///
   /// In en, this message translates to:

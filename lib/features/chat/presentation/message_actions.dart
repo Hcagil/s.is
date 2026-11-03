@@ -158,6 +158,7 @@ Future<bool> runMessageAction(
             ),
           ),
     mediaNote: canAll && (message.hasAttachment || message.file != null),
+    count: photos.length,
   );
   if (choice == DeleteChoice.cancel || !context.mounted) return false;
 

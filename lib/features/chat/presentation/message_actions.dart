@@ -40,6 +40,8 @@ Future<bool> runMessageAction(
   Message message,
   MessageAction action, {
   bool singlePhoto = false,
+  String? chatName,
+  bool chatIsGroup = false,
 }) async {
   switch (action) {
     case MessageAction.reply:
@@ -147,10 +149,13 @@ Future<bool> runMessageAction(
     context,
     checkLabel: !canAll
         ? null
-        : (chat?.isGroup ?? false)
+        : (chatIsGroup || (chat?.isGroup ?? false))
         ? l.messageDeleteForAllMembers
         : l.messageDeleteAlsoFor(
-            chat == null ? '' : conversationLabel(l, chat),
+            nameOrMember(
+              l,
+              chatName ?? (chat == null ? '' : conversationLabel(l, chat)),
+            ),
           ),
     mediaNote: canAll && (message.hasAttachment || message.file != null),
   );
@@ -273,6 +278,8 @@ Future<bool> showMessageMenu(
   Rect? anchor,
   bool alignEnd = false,
   bool photoViewer = false,
+  String? chatName,
+  bool chatIsGroup = false,
 }) async {
   final me = switch (ref.read(sessionControllerProvider).value) {
     Allowed(:final member) => member.userId,
@@ -351,5 +358,7 @@ Future<bool> showMessageMenu(
     message,
     action,
     singlePhoto: photoViewer,
+    chatName: chatName,
+    chatIsGroup: chatIsGroup,
   );
 }

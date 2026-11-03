@@ -84,16 +84,10 @@ Future<DeleteChoice> showMessageDeleteBox(
                       ),
                     ],
                     const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        TextButton(
-                          key: const ValueKey('delete-cancel'),
-                          onPressed: () =>
-                              Navigator.of(card).pop(DeleteChoice.cancel),
-                          child: Text(l.messageDeleteCancel),
-                        ),
-                        const SizedBox(width: 8),
                         FilledButton(
                           key: const ValueKey('delete-confirm'),
                           style: FilledButton.styleFrom(
@@ -104,6 +98,13 @@ Future<DeleteChoice> showMessageDeleteBox(
                             checked ? DeleteChoice.forAll : DeleteChoice.forMe,
                           ),
                           child: Text(l.messageDeleteConfirm),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          key: const ValueKey('delete-cancel'),
+                          onPressed: () =>
+                              Navigator.of(card).pop(DeleteChoice.cancel),
+                          child: Text(l.messageDeleteCancel),
                         ),
                       ],
                     ),

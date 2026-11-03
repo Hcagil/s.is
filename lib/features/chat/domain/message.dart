@@ -93,6 +93,7 @@ final class Message {
     this.localImage,
     this.deletion,
     this.deletedBy,
+    this.deletedByAdmin = false,
     this.editedAt,
     this.replyTo,
     this.forwarded = false,
@@ -197,8 +198,8 @@ final class Message {
 
   bool get isDeleted => deletion != null;
 
-  /// A group admin deleted it, not its sender.
-  bool get deletedByAdmin => deletedBy != null && deletedBy != senderId;
+  /// A group admin deleted it, not its sender (the server's deleted_by_admin).
+  final bool deletedByAdmin;
 
   bool get isEdited => editedAt != null;
 
@@ -279,6 +280,7 @@ final class Message {
     adminMsg: adminMsg,
     deletion: deletion,
     deletedBy: deletedBy,
+    deletedByAdmin: deletedByAdmin,
     editedAt: editedAt,
     replyTo: replyTo,
     forwarded: forwarded,
@@ -309,6 +311,7 @@ final class Message {
     localImage: localImage,
     deletion: deletion,
     deletedBy: deletedBy,
+    deletedByAdmin: deletedByAdmin,
     editedAt: editedAt,
     replyTo: replyTo,
     forwarded: forwarded,
@@ -339,6 +342,7 @@ final class Message {
         localImage: localImage,
         deletion: deletion,
         deletedBy: deletedBy,
+        deletedByAdmin: deletedByAdmin,
         editedAt: editedAt,
         replyTo: replyTo,
         forwarded: forwarded,
@@ -368,6 +372,7 @@ final class Message {
     adminMsg: adminMsg,
     deletion: deletion,
     deletedBy: deletedBy,
+    deletedByAdmin: deletedByAdmin,
     editedAt: editedAt,
     replyTo: replyTo,
     forwarded: forwarded,
@@ -401,6 +406,7 @@ final class Message {
     localImage: localImage,
     deletion: deletion,
     deletedBy: deletedBy,
+    deletedByAdmin: deletedByAdmin,
     editedAt: editedAt,
     replyTo: replyTo,
     forwarded: forwarded,

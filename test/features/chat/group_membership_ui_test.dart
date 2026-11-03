@@ -614,6 +614,64 @@ void main() {
       await drain(t);
     });
 
+    for (final tr in [false, true]) {
+      for (final known in [false, true]) {
+        testWidgets('closed group bar, ${tr ? 'TR' : 'EN'}, closer '
+            '${known ? 'known' : 'unknown'}', (t) async {
+          if (tr) {
+            t.platformDispatcher.localesTestValue = const [Locale('tr')];
+            addTearDown(t.platformDispatcher.clearLocalesTestValue);
+          }
+          final w = World();
+          w.chat.conversationsResult = const Ok([
+            Conversation(
+              id: 'g1',
+              title: 'Club',
+              lastMessage: 'yo',
+              hasLeft: true,
+            ),
+          ]);
+          w.chat.groupRosters['g1'] = [
+            const GroupMember(
+              member: me,
+              isAdmin: false,
+              leftReason: LeftReason.removed,
+            ),
+            if (known)
+              const GroupMember(
+                member: bob,
+                isAdmin: true,
+                leftReason: LeftReason.removed,
+              ),
+          ];
+          w.groups.closures['g1'] = [
+            GroupEvent(
+              id: 'ce',
+              conversationId: 'g1',
+              kind: GroupEventKind.closed,
+              subjectId: 'ub',
+              actorId: 'ub',
+              createdAt: t0,
+            ),
+          ];
+          await openClub(t, w);
+          final want = known
+              ? (tr
+                    ? 'Bu grup ${bob.displayName} tarafından kapatıldı'
+                    : 'This group was closed by ${bob.displayName}')
+              : (tr ? 'Bu grup kapatıldı' : 'This group was closed');
+          expect(
+            find.descendant(
+              of: byKey('composer-closed'),
+              matching: find.text(want),
+            ),
+            findsOneWidget,
+          );
+          await drain(t);
+        });
+      }
+    }
+
     testWidgets('a group with no closed event stays open for a member still '
         'in it', (t) async {
       final w = World();

@@ -112,7 +112,6 @@ Future<bool> runMessageAction(
       await addStickerToAlbumFlow(context, ref, message.stickerId!);
       return false;
     case MessageAction.deleteForMe:
-    case MessageAction.deleteForEveryone:
       break;
   }
   if (!context.mounted) return false;
@@ -307,8 +306,7 @@ Future<bool> showMessageMenu(
       if (!photoViewer ||
           a == MessageAction.reply ||
           a == MessageAction.forward ||
-          a == MessageAction.deleteForMe ||
-          a == MessageAction.deleteForEveryone)
+          a == MessageAction.deleteForMe)
         a,
   ];
   if (actions.isEmpty) return false;
@@ -342,9 +340,7 @@ Future<bool> showMessageMenu(
                   a == MessageAction.deleteForMe
               ? AppLocalizations.of(context).messageActionDeletePhoto
               : swipeActionLabel(AppLocalizations.of(context), a),
-          destructive:
-              a == MessageAction.deleteForMe ||
-              a == MessageAction.deleteForEveryone,
+          destructive: a == MessageAction.deleteForMe,
         ),
     ],
   );

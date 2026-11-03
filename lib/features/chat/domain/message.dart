@@ -465,7 +465,6 @@ enum MessageAction {
   forward,
   edit,
   deleteForMe,
-  deleteForEveryone,
   copy,
   pin,
   unpin,
@@ -477,18 +476,17 @@ enum MessageAction {
 
 /// The actions [me] may take on [message] at [now], in the order they are
 /// offered -- reply and forward need a stored message with something in
-/// it; edit and delete for everyone are the sender's own message within
-/// [deleteForEveryoneWindow]. This is the single source of truth for
-/// "what does this message allow": both the swipe action row and each
-/// bubble's screen-reader custom actions read it, so the rule lives once.
+/// it; edit is the sender's own message within [deleteForEveryoneWindow].
+/// The swipe row offers one Delete (the box decides about "for everyone").
+/// This is the single source of truth for "what does this message allow":
+/// both the swipe action row and each bubble's screen-reader custom actions
+/// read it, so the rule lives once.
 List<MessageAction> allowedMessageActions(
   Message message, {
   required String? me,
   required DateTime now,
   bool admin = false,
 }) {
-  final canDelete =
-      me != null && message.canDeleteForEveryone(me, now: now, admin: admin);
   final canEdit = me != null && message.canEdit(me, now);
   final canShare = !message.isPending && !message.isDeleted;
   return [
@@ -500,7 +498,7 @@ List<MessageAction> allowedMessageActions(
         !message.albumCard)
       MessageAction.forward,
     if (canEdit) MessageAction.edit,
-    if (canDelete) MessageAction.deleteForEveryone,
+    if (!message.isPending) MessageAction.deleteForMe,
   ];
 }
 

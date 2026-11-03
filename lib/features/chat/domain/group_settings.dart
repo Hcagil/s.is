@@ -1,10 +1,11 @@
-/// A group's four admin-controlled switches. The defaults are what a newly created group gets.
+/// A group's four admin-controlled switches (and the read-only debugChat flag). The defaults are what a newly created group gets.
 final class GroupSettings {
   const GroupSettings({
     this.membersCanSetAvatar = false,
     this.membersCanAdd = true,
     this.newMembersSeeHistory = true,
     this.membersCanPin = true,
+    this.debugChat = false,
   });
 
   final bool membersCanSetAvatar;
@@ -13,6 +14,9 @@ final class GroupSettings {
 
   /// May any member pin a message (else admins only).
   final bool membersCanPin;
+
+  /// True for the Debug group (tester feedback); the close box warns for it.
+  final bool debugChat;
 
   GroupSettings copyWith({
     bool? membersCanSetAvatar,
@@ -25,6 +29,7 @@ final class GroupSettings {
       membersCanAdd: membersCanAdd ?? this.membersCanAdd,
       newMembersSeeHistory: newMembersSeeHistory ?? this.newMembersSeeHistory,
       membersCanPin: membersCanPin ?? this.membersCanPin,
+      debugChat: debugChat,
     );
   }
 
@@ -34,6 +39,7 @@ final class GroupSettings {
       'membersCanAdd': membersCanAdd,
       'newMembersSeeHistory': newMembersSeeHistory,
       'membersCanPin': membersCanPin,
+      'debugChat': debugChat,
     };
   }
 
@@ -43,6 +49,7 @@ final class GroupSettings {
       membersCanAdd: json['membersCanAdd'] as bool? ?? true,
       newMembersSeeHistory: json['newMembersSeeHistory'] as bool? ?? true,
       membersCanPin: json['membersCanPin'] as bool? ?? true,
+      debugChat: json['debugChat'] as bool? ?? false,
     );
   }
 
@@ -54,7 +61,8 @@ final class GroupSettings {
         other.membersCanSetAvatar == membersCanSetAvatar &&
         other.membersCanAdd == membersCanAdd &&
         other.newMembersSeeHistory == newMembersSeeHistory &&
-        other.membersCanPin == membersCanPin;
+        other.membersCanPin == membersCanPin &&
+        other.debugChat == debugChat;
   }
 
   @override
@@ -63,5 +71,6 @@ final class GroupSettings {
     membersCanAdd,
     newMembersSeeHistory,
     membersCanPin,
+    debugChat,
   );
 }

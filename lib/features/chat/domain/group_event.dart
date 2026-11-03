@@ -11,7 +11,11 @@
 /// `pinned` is served to every member of any chat (a 1:1 too) by the
 /// pin_events function; its subject and actor are both whoever pinned the
 /// message.
-enum GroupEventKind { left, removed, added, picture, pinned }
+///
+/// `closed` is served to every member (also one removed by the close) by the
+/// group_member_events function, not the admin-only table read. Its subject
+/// and actor are both the admin who closed the group.
+enum GroupEventKind { left, removed, added, picture, pinned, closed }
 
 final class GroupEvent {
   const GroupEvent({

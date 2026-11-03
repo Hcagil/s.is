@@ -12,23 +12,19 @@ class GroupSettingsFake implements GroupSettingsRepository {
   GroupSettingsFake({
     this.latency = const Duration(milliseconds: 5),
     this.subscribeDelay = const Duration(milliseconds: 20),
-    this.onDeleted,
   });
-
-  /// Called with the id after a delete the server accepted, so the world can
-  /// drop the group from other fakes (a real server stops listing it).
-  final void Function(String conversationId)? onDeleted;
 
   final Duration latency;
   final Duration subscribeDelay;
 
   /// Every call, in order: `settings:<id>:<avatar>:<add>:<hist>` (null shown
-  /// as '-'), `delete:<id>`, `pictures:<id>`, 'subscribe'.
+  /// as '-'), `close:<id>`, `closeEvents:<id>`, `pictures:<id>`, 'subscribe'.
   final calls = <String>[];
 
   /// What the next writes answer; Ok by default.
   Result<void> setResult = const Ok(null);
-  Result<void> deleteResult = const Ok(null);
+  Result<void> closeResult = const Ok(null);
+  final closures = <String, List<GroupEvent>>{};
   final pictures = <String, List<GroupEvent>>{};
 
   final _changes = StreamController<GroupChange>.broadcast();
@@ -62,12 +58,17 @@ class GroupSettingsFake implements GroupSettingsRepository {
   }
 
   @override
-  Future<Result<void>> deleteGroup(String conversationId) async {
-    calls.add('delete:$conversationId');
+  Future<Result<void>> closeGroup(String conversationId) async {
+    calls.add('close:$conversationId');
     await Future<void>.delayed(latency);
-    final result = deleteResult;
-    if (result is Ok) onDeleted?.call(conversationId);
-    return result;
+    return closeResult;
+  }
+
+  @override
+  Future<Result<List<GroupEvent>>> closeEvents(String conversationId) async {
+    calls.add('closeEvents:$conversationId');
+    await Future<void>.delayed(latency);
+    return Ok(closures[conversationId] ?? const []);
   }
 
   @override

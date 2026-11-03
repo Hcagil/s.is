@@ -30,6 +30,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/group_settings_fakes.dart';
 import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
@@ -95,6 +96,7 @@ class World {
   }
 
   final chat = ChatFake(latency: const Duration(milliseconds: 2), self: 'u1');
+  final groups = GroupSettingsFake(latency: Duration.zero);
 
   Widget app() => ProviderScope(
     overrides: [
@@ -105,6 +107,7 @@ class World {
       ),
       updateRepositoryProvider.overrideWithValue(FakeUpdate()),
       chatRepositoryProvider.overrideWithValue(chat),
+      groupSettingsRepositoryProvider.overrideWithValue(groups),
       presenceRepositoryProvider.overrideWithValue(PresenceFake()),
       profileRepositoryProvider.overrideWithValue(
         ProfileFake(
@@ -565,6 +568,116 @@ void main() {
       await t.pageBack();
       await settle(t);
       expect(byKey('conversation-g1'), findsOneWidget, reason: 'still listed');
+      await drain(t);
+    });
+
+    testWidgets('a closed group says who closed it instead of the box', (
+      t,
+    ) async {
+      final w = World();
+      w.chat.conversationsResult = const Ok([
+        Conversation(id: 'g1', title: 'Club', lastMessage: 'yo', hasLeft: true),
+      ]);
+      w.chat.groupRosters['g1'] = [
+        const GroupMember(
+          member: me,
+          isAdmin: false,
+          leftReason: LeftReason.removed,
+        ),
+        const GroupMember(
+          member: bob,
+          isAdmin: true,
+          leftReason: LeftReason.removed,
+        ),
+      ];
+      w.groups.closures['g1'] = [
+        GroupEvent(
+          id: 'ce',
+          conversationId: 'g1',
+          kind: GroupEventKind.closed,
+          subjectId: 'ub',
+          actorId: 'ub',
+          createdAt: t0,
+        ),
+      ];
+      await openClub(t, w);
+      expect(byKey('composer-closed'), findsOneWidget);
+      expect(byKey('composer-left'), findsNothing);
+      expect(byKey('composer-field'), findsNothing);
+      expect(
+        find.descendant(
+          of: byKey('composer-closed'),
+          matching: find.text('This group was closed by ${bob.displayName}'),
+        ),
+        findsOneWidget,
+      );
+      await drain(t);
+    });
+
+    for (final tr in [false, true]) {
+      for (final known in [false, true]) {
+        testWidgets('closed group bar, ${tr ? 'TR' : 'EN'}, closer '
+            '${known ? 'known' : 'unknown'}', (t) async {
+          if (tr) {
+            t.platformDispatcher.localesTestValue = const [Locale('tr')];
+            addTearDown(t.platformDispatcher.clearLocalesTestValue);
+          }
+          final w = World();
+          w.chat.conversationsResult = const Ok([
+            Conversation(
+              id: 'g1',
+              title: 'Club',
+              lastMessage: 'yo',
+              hasLeft: true,
+            ),
+          ]);
+          w.chat.groupRosters['g1'] = [
+            const GroupMember(
+              member: me,
+              isAdmin: false,
+              leftReason: LeftReason.removed,
+            ),
+            if (known)
+              const GroupMember(
+                member: bob,
+                isAdmin: true,
+                leftReason: LeftReason.removed,
+              ),
+          ];
+          w.groups.closures['g1'] = [
+            GroupEvent(
+              id: 'ce',
+              conversationId: 'g1',
+              kind: GroupEventKind.closed,
+              subjectId: 'ub',
+              actorId: 'ub',
+              createdAt: t0,
+            ),
+          ];
+          await openClub(t, w);
+          final want = known
+              ? (tr
+                    ? 'Bu grup ${bob.displayName} tarafından kapatıldı'
+                    : 'This group was closed by ${bob.displayName}')
+              : (tr ? 'Bu grup kapatıldı' : 'This group was closed');
+          expect(
+            find.descendant(
+              of: byKey('composer-closed'),
+              matching: find.text(want),
+            ),
+            findsOneWidget,
+          );
+          await drain(t);
+        });
+      }
+    }
+
+    testWidgets('a group with no closed event stays open for a member still '
+        'in it', (t) async {
+      final w = World();
+      await openClub(t, w);
+      expect(byKey('composer-closed'), findsNothing);
+      expect(byKey('composer-field'), findsOneWidget);
       await drain(t);
     });
 

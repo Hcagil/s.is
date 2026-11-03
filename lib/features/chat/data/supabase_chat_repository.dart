@@ -153,7 +153,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
         _client
             .from('conversations')
             .select(
-              'id, title, avatar_path, system, admin_chat, bacanaks_chat, members_can_set_avatar, '
+              'id, title, avatar_path, system, admin_chat, bacanaks_chat, debug_chat, members_can_set_avatar, '
               'members_can_add, new_members_see_history, '
               'members_can_pin, pinned_message_id',
             )
@@ -209,6 +209,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
             membersCanAdd: row['members_can_add'] == true,
             newMembersSeeHistory: row['new_members_see_history'] != false,
             membersCanPin: row['members_can_pin'] != false,
+            debugChat: row['debug_chat'] == true,
           ),
       };
 

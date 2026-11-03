@@ -342,5 +342,10 @@ insert into app_private.allowlist(email) values
   ('lr-ana@mail.test'),
   ('lr-ben@mail.test'),
   ('lr-cy@mail.test'),
+  -- close group (test/integration/close_group_seam_test.dart): boss starts the
+  -- groups, mate and other are members
+  ('clo-boss@integration.test'),
+  ('clo-mate@integration.test'),
+  ('clo-other@integration.test'),
   ('sis-destek-bot@example.com')
 on conflict do nothing;

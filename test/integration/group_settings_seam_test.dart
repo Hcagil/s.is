@@ -211,15 +211,6 @@ void main() {
     return files.any((f) => f.name == path.substring(slash + 1));
   }
 
-  /// pace sets [g]'s picture; its stored path.
-  Future<String> picture(String g, int tag) async {
-    _ok(
-      await SupabaseChatRepository(pace).setGroupAvatar(g, _jpeg(tag)),
-      'set picture',
-    );
-    return (await row(g))!['avatar_path'] as String;
-  }
-
   /// [who] sends a photo into [g]; its attachment path.
   Future<String> photo(SupabaseClient who, String g, int tag) async => _ok(
     await SupabaseChatRepository(who)
@@ -269,36 +260,6 @@ void main() {
       reason: 'the refused switch is rolled back',
     );
     expect((await row(g))!['new_members_see_history'], isFalse);
-  });
-
-  test('delete: the server refuses delete-for-everyone to a member and to '
-      'the admin (rule 17); the group, its picture and photos stay', () async {
-    final g = await newGroup();
-    final pic = await picture(g, 1);
-    final shot = await photo(quill, g, 2);
-    addTearDown(() async {
-      await service.storage.from('avatars').remove([pic]);
-      await service.storage.from('attachments').remove([shot]);
-    });
-
-    final paceApp = _App(pace);
-    final quillApp = _App(quill);
-    addTearDown(paceApp.container.dispose);
-    addTearDown(quillApp.container.dispose);
-    await paceApp.ready();
-    await quillApp.ready();
-    expect(quillApp.lists(g), isTrue);
-
-    for (final app in [quillApp, paceApp]) {
-      final refused = await app.groups.deleteGroup(g);
-      expect(refused, isA<Err<void>>());
-      expect((refused as Err<void>).failure, isA<DeniedFailure>());
-    }
-    expect(await row(g), isNotNull, reason: 'a refused delete removed it');
-    expect(quillApp.deleted, isNot(contains(g)));
-    expect(paceApp.deleted, isNot(contains(g)));
-    expect(await exists('avatars', pic), isTrue, reason: 'picture removed');
-    expect(await exists('attachments', shot), isTrue, reason: 'photo removed');
   });
 
   test('Storage clean-up rules on the real Storage API: the refused '
@@ -392,9 +353,8 @@ void main() {
     expect(after.membersCanSetAvatar, isTrue, reason: 'another switch moved');
     expect(after.newMembersSeeHistory, isFalse, reason: 'another moved');
 
-    final d = await app.groups.deleteGroup(g);
+    final d = await app.groups.closeGroup(g);
     expect(d, isA<Err<void>>());
-    expect(app.deleted, isNot(contains(g)));
     expect(await row(g), isNotNull);
 
     final changes = await SupabaseGroupSettingsRepository(dead)

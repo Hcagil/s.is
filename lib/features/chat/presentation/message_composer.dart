@@ -379,8 +379,22 @@ class _ComposerState extends ConsumerState<_Composer>
                 ?.isSystem ==
             true;
     if (hasLeft || isSystem) {
+      // A closed group: its 'closed' event names the closing admin.
+      final roster = hasLeft ? ref.watch(groupRosterProvider(id)).value : null;
+      final closerId = hasLeft
+          ? ref.watch(groupCloseEventsProvider(id)).value?.firstOrNull?.actorId
+          : null;
+      final closer = roster
+          ?.where((m) => m.member.userId == closerId)
+          .firstOrNull
+          ?.member
+          .displayName;
       return Container(
-        key: ValueKey(isSystem ? 'composer-system' : 'composer-left'),
+        key: ValueKey(
+          isSystem
+              ? 'composer-system'
+              : (closerId != null ? 'composer-closed' : 'composer-left'),
+        ),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           border: Border(
@@ -394,7 +408,11 @@ class _ComposerState extends ConsumerState<_Composer>
           16 + _composerBottomInset(context),
         ),
         child: Text(
-          isSystem ? l.composerReadOnlySystem : l.composerLeftGroup,
+          closerId != null
+              ? (closer != null && closer.isNotEmpty
+                    ? l.composerGroupClosed(nameOrMember(l, closer))
+                    : l.composerGroupClosedNoName)
+              : (isSystem ? l.composerReadOnlySystem : l.composerLeftGroup),
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Theme.of(context).colorScheme.onSurfaceVariant,

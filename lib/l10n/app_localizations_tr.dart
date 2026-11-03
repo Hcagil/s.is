@@ -180,18 +180,6 @@ class AppLocalizationsTr extends AppLocalizations {
   String get groupPinWho => 'Mesajları kimler sabitleyebilir';
 
   @override
-  String get groupDeleteForAll => 'Grubu herkes için sil';
-
-  @override
-  String groupDeleteTitle(String name) {
-    return '$name herkes için silinsin mi?';
-  }
-
-  @override
-  String get groupDeleteBody =>
-      'Bu gruptaki tüm mesajlar ve fotoğraflar herkes için silinir. Geri alınamaz.';
-
-  @override
   String get groupDeletedNotice => 'Grup silindi';
 
   @override
@@ -1490,13 +1478,7 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String get chatDeleteGroupForAll => 'Grubu tüm üyeler için sil';
-
-  @override
   String get chatGroupLeftUndo => 'Gruptan ayrıldınız';
-
-  @override
-  String get chatGroupDeletedUndo => 'Grup silindi';
 
   @override
   String chatDeleteFewTitle(int count) {
@@ -2570,5 +2552,32 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String messageDeleteTooLate(int hours) {
     return 'Çok geç: $hours saat geçti';
+  }
+
+  @override
+  String get groupCloseTitle => 'Grup kapatılsın mı?';
+
+  @override
+  String get groupCloseBody =>
+      'Bu grubu kapatırsanız siz dahil tüm üyeler gruptan çıkarılır. Artık kimse yazamaz. Bu işlem geri alınamaz.';
+
+  @override
+  String get groupCloseAction => 'Grubu kapat';
+
+  @override
+  String get groupCloseDebugWarning =>
+      'Test kullanıcılarının geri bildirimi durur.';
+
+  @override
+  String composerGroupClosed(String name) {
+    return 'Bu grup $name tarafından kapatıldı';
+  }
+
+  @override
+  String get composerGroupClosedNoName => 'Bu grup kapatıldı';
+
+  @override
+  String eventClosed(String name) {
+    return '$name grubu kapattı';
   }
 }

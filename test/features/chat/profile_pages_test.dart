@@ -20,6 +20,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/group_controller.dart';
+import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/group_settings.dart';
@@ -138,16 +139,7 @@ class World {
   }
 
   final ChatFake chat;
-  late final groups = GroupSettingsFake(
-    onDeleted: (id) {
-      if (chat.conversationsResult case Ok(:final value)) {
-        chat.conversationsResult = Ok([
-          for (final c in value)
-            if (c.id != id) c,
-        ]);
-      }
-    },
-  );
+  late final groups = GroupSettingsFake();
 
   /// Overrides added after the production ones.
   final List<Override> extra;
@@ -951,7 +943,7 @@ void main() {
         expect(values(t), [true, false, false], reason: 'after tapping $k');
       }
       expect(w.groups.calls.where((c) => c.startsWith('settings')), isEmpty);
-      expect(byKey('delete-group'), findsNothing, reason: 'members only');
+      expect(byKey('close-group'), findsNothing, reason: 'members only');
     });
 
     for (final can in [true, false]) {
@@ -1010,57 +1002,116 @@ void main() {
       await drainNotice(t);
     });
 
-    testWidgets('delete for everyone: the card names the group; cancel '
-        'deletes nothing', (t) async {
+    testWidgets('close group: the card names the consequences; cancel '
+        'closes nothing', (t) async {
       final w = clubWith(admin: true);
       await clubPage(t, w);
-      await tapKey(t, 'delete-group');
-      expect(byKey('delete-card'), findsOneWidget);
+      await tapKey(t, 'close-group');
+      expect(byKey('close-card'), findsOneWidget);
       expect(find.byType(AlertDialog), findsNothing, reason: 'a dialog');
-      expect(textOf(byKey('delete-card')), contains('Club'));
-      await tapKey(t, 'delete-cancel');
-      expect(byKey('delete-card'), findsNothing);
+      expect(byKey('close-debug-warning'), findsNothing, reason: 'not debug');
+      await tapKey(t, 'close-cancel');
+      expect(byKey('close-card'), findsNothing);
       expect(find.byType(GroupScreen), findsOneWidget);
-      expect(w.groups.calls.where((c) => c.startsWith('delete')), isEmpty);
+      expect(w.groups.calls.where((c) => c == 'close:g1'), isEmpty);
     });
 
-    testWidgets('delete for everyone: confirm deletes through the real '
-        'controller, says "Group deleted", and the group leaves the page '
-        'and the list', (t) async {
+    testWidgets('close group: confirm calls closeGroup through the real '
+        'controller, once', (t) async {
       final w = clubWith(admin: true);
       await clubPage(t, w);
-      await tapKey(t, 'delete-group');
-      await t.tap(byKey('delete-confirm'));
+      await tapKey(t, 'close-group');
+      await t.tap(byKey('close-confirm'));
       await settle(t);
-      expect(w.groups.calls.where((c) => c.startsWith('delete')), [
-        'delete:g1',
-      ]);
-      expect(find.byType(GroupScreen), findsNothing, reason: 'not popped');
-      expect(find.byType(MessageScreen), findsNothing, reason: 'chat open');
-      expect(t.widgetList<SisNotice>(notice).map((n) => n.message), [
-        'Group deleted',
-      ]);
-      expect(byKey('conversation-g1'), findsNothing, reason: 'still listed');
+      expect(w.groups.calls.where((c) => c == 'close:g1'), ['close:g1']);
+      expect(byKey('close-card'), findsNothing);
       await drainNotice(t);
     });
 
-    testWidgets('a refused delete keeps the group and says so', (t) async {
+    testWidgets('a refused close keeps the group and says so', (t) async {
       final w = clubWith(admin: true);
-      w.groups.deleteResult = const Err(DeniedFailure());
+      w.groups.closeResult = const Err(DeniedFailure());
       await clubPage(t, w);
-      await tapKey(t, 'delete-group');
-      await t.tap(byKey('delete-confirm'));
+      await tapKey(t, 'close-group');
+      await t.tap(byKey('close-confirm'));
       await settle(t);
-      expect(w.groups.calls.where((c) => c.startsWith('delete')), [
-        'delete:g1',
-      ]);
+      expect(w.groups.calls.where((c) => c == 'close:g1'), ['close:g1']);
       expect(find.byType(GroupScreen), findsOneWidget, reason: 'popped');
-      expect(
-        t.widgetList<SisNotice>(notice).map((n) => n.message),
-        isNot(contains('Group deleted')),
-      );
       expect(notice, findsOneWidget, reason: 'the refusal is not said');
       await drainNotice(t);
+    });
+
+    testWidgets('only the Debug group warns that tester feedback stops', (
+      t,
+    ) async {
+      final w = clubWith(
+        admin: true,
+        settings: const GroupSettings(debugChat: true),
+      );
+      await clubPage(t, w);
+      await tapKey(t, 'close-group');
+      expect(byKey('close-debug-warning'), findsOneWidget);
+      expect(
+        textOf(byKey('close-debug-warning')),
+        contains('Tester feedback stops.'),
+      );
+      await tapKey(t, 'close-cancel');
+    });
+
+    testWidgets('an admin never sees delete-group any more', (t) async {
+      final w = clubWith(admin: true);
+      await clubPage(t, w);
+      await reveal(t, byKey('close-group'));
+      expect(byKey('delete-group'), findsNothing);
+    });
+
+    testWidgets('a member sees no close-group', (t) async {
+      final w = clubWith(admin: false);
+      await clubPage(t, w);
+      expect(byKey('close-group'), findsNothing, reason: 'members only');
+    });
+
+    // Built, on screen or not: the list is lazy about nothing here.
+    Finder built(String k) => find.byKey(ValueKey(k), skipOffstage: false);
+
+    testWidgets('control: an open group does show leave-group', (t) async {
+      final w = clubWith(admin: true);
+      await clubPage(t, w);
+      await reveal(t, byKey('group-member-ub'));
+      expect(built('leave-group'), findsOneWidget);
+    });
+
+    testWidgets('a closed group has no leave-group and no add-members', (
+      t,
+    ) async {
+      final w = clubWith(admin: true);
+      w.chat.groupRosters['g1'] = [
+        const GroupMember(
+          member: me,
+          isAdmin: true,
+          leftReason: LeftReason.removed,
+        ),
+        const GroupMember(
+          member: bob,
+          isAdmin: false,
+          leftReason: LeftReason.removed,
+        ),
+      ];
+      w.groups.closures['g1'] = [
+        GroupEvent(
+          id: 'ce',
+          conversationId: 'g1',
+          kind: GroupEventKind.closed,
+          subjectId: 'u1',
+          actorId: 'u1',
+          createdAt: DateTime.utc(2026, 11, 1),
+        ),
+      ];
+      await clubPage(t, w);
+      await reveal(t, byKey('group-member-ub'));
+      expect(byKey('group-member-ub'), findsOneWidget, reason: 'tab not built');
+      expect(built('leave-group'), findsNothing);
+      expect(built('add-members'), findsNothing);
     });
   });
 
@@ -1124,7 +1175,7 @@ void main() {
         'setting-pickswitch',
         'setting-addsw',
         'setting-histsw',
-        'delete-group',
+        'close-group',
         'remove-member-u3',
         'leave-group',
         'mute-tile',

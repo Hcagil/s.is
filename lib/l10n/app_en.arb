@@ -221,23 +221,6 @@
   "@groupPinWho": {
     "description": "Group info: greyed setting row"
   },
-  "groupDeleteForAll": "Delete group for everyone",
-  "@groupDeleteForAll": {
-    "description": "Group info: greyed admin button"
-  },
-  "groupDeleteTitle": "Delete {name} for everyone?",
-  "@groupDeleteTitle": {
-    "description": "Delete group confirm card title",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "groupDeleteBody": "All messages and photos in this group are gone for everyone. This cannot be undone.",
-  "@groupDeleteBody": {
-    "description": "Delete group confirm card text"
-  },
   "groupDeletedNotice": "Group deleted",
   "@groupDeletedNotice": {
     "description": "Notice after the group was deleted by an admin"
@@ -1109,12 +1092,8 @@
   "@chatLeaveGroupTitle": {"description": "Title of the delete dialog for a group"},
   "chatDeleteLeaveSure": "Are you sure you want to delete and leave the group **{name}**?",
   "@chatDeleteLeaveSure": {"description": "Delete dialog for a group; the name between ** is shown bold", "placeholders": {"name": {"type": "String"}}},
-  "chatDeleteGroupForAll": "Delete the group for all members",
-  "@chatDeleteGroupForAll": {"description": "Checkbox shown to a group admin"},
   "chatGroupLeftUndo": "You left the group",
   "@chatGroupLeftUndo": {"description": "Undo bar after deleting a group the member only leaves"},
-  "chatGroupDeletedUndo": "Group deleted",
-  "@chatGroupDeletedUndo": {"description": "Undo bar after an admin deletes a group for everyone"},
   "chatDeleteFewTitle": "{count, plural, =1{Delete 1 chat} other{Delete {count} chats}}",
   "@chatDeleteFewTitle": {"description": "Title of the delete dialog for several chats", "placeholders": {"count": {"type": "int"}}},
   "chatDeleteFewSure": "Are you sure you want to delete these chats?",
@@ -1757,5 +1736,19 @@
   "messageDeleteMediaNote": "Forwarded copies and copies saved outside SIS won't be deleted.",
   "@messageDeleteMediaNote": {"description": "Delete box note under the question, media messages"},
   "messageDeleteTooLate": "Too late: {hours} hours have passed",
-  "@messageDeleteTooLate": {"description": "Notice when the server refuses delete for everyone after the time limit", "placeholders": {"hours": {"type": "int"}}}
+  "@messageDeleteTooLate": {"description": "Notice when the server refuses delete for everyone after the time limit", "placeholders": {"hours": {"type": "int"}}},
+  "groupCloseTitle": "Close group?",
+  "@groupCloseTitle": {"description": "Close group confirm card title"},
+  "groupCloseBody": "Closing this group will remove all members, including you. Nobody can write in it again. This can't be undone.",
+  "@groupCloseBody": {"description": "Close group confirm card text"},
+  "groupCloseAction": "Close group",
+  "@groupCloseAction": {"description": "Red button of the close group confirm card and of the group info page"},
+  "groupCloseDebugWarning": "Tester feedback stops.",
+  "@groupCloseDebugWarning": {"description": "Extra red line in the close box of the Debug group"},
+  "composerGroupClosed": "This group was closed by {name}",
+  "@composerGroupClosed": {"description": "Footer of a closed group, instead of the composer", "placeholders": {"name": {"type": "String"}}},
+  "composerGroupClosedNoName": "This group was closed",
+  "@composerGroupClosedNoName": {"description": "Bar instead of the composer in a closed group, while the closer's name loads or if it failed"},
+  "eventClosed": "{name} closed the group",
+  "@eventClosed": {"description": "Group event line when an admin closes the group", "placeholders": {"name": {"type": "String"}}}
 }

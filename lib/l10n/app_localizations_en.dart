@@ -186,18 +186,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get groupPinWho => 'Who may pin messages';
 
   @override
-  String get groupDeleteForAll => 'Delete group for everyone';
-
-  @override
-  String groupDeleteTitle(String name) {
-    return 'Delete $name for everyone?';
-  }
-
-  @override
-  String get groupDeleteBody =>
-      'All messages and photos in this group are gone for everyone. This cannot be undone.';
-
-  @override
   String get groupDeletedNotice => 'Group deleted';
 
   @override
@@ -1502,13 +1490,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get chatDeleteGroupForAll => 'Delete the group for all members';
-
-  @override
   String get chatGroupLeftUndo => 'You left the group';
-
-  @override
-  String get chatGroupDeletedUndo => 'Group deleted';
 
   @override
   String chatDeleteFewTitle(int count) {
@@ -2598,5 +2580,31 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String messageDeleteTooLate(int hours) {
     return 'Too late: $hours hours have passed';
+  }
+
+  @override
+  String get groupCloseTitle => 'Close group?';
+
+  @override
+  String get groupCloseBody =>
+      'Closing this group will remove all members, including you. Nobody can write in it again. This can\'t be undone.';
+
+  @override
+  String get groupCloseAction => 'Close group';
+
+  @override
+  String get groupCloseDebugWarning => 'Tester feedback stops.';
+
+  @override
+  String composerGroupClosed(String name) {
+    return 'This group was closed by $name';
+  }
+
+  @override
+  String get composerGroupClosedNoName => 'This group was closed';
+
+  @override
+  String eventClosed(String name) {
+    return '$name closed the group';
   }
 }

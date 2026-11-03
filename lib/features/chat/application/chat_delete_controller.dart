@@ -10,7 +10,7 @@ import 'chat_selection_controller.dart';
 import 'group_controller.dart';
 
 /// Which text the undo bar shows.
-enum ChatDeleteNotice { chat, chats, groupLeft, groupDeleted }
+enum ChatDeleteNotice { chat, chats, groupLeft }
 
 /// What the undo bar shows. A null [notice] means no bar.
 class ChatDeleteState {
@@ -51,7 +51,7 @@ class ChatDelete extends Notifier<ChatDeleteState> {
 
   /// Takes [chats] off the list and starts the undo countdown. A delete
   /// still waiting is committed first. [alsoForOthers] is the dialog's box:
-  /// both sides for a 1:1, the whole group for an admin (one group only).
+  /// both sides for a 1:1, a group is only left.
   void start(List<Conversation> chats, {required bool alsoForOthers}) {
     if (chats.isEmpty) return;
     if (_pending != null) unawaited(_commit());
@@ -64,8 +64,6 @@ class ChatDelete extends Notifier<ChatDeleteState> {
         ? ChatDeleteNotice.chats
         : !chats.single.isGroup
         ? ChatDeleteNotice.chat
-        : chats.single.isAdmin && alsoForOthers
-        ? ChatDeleteNotice.groupDeleted
         : ChatDeleteNotice.groupLeft;
     state = ChatDeleteState(notice: notice, secondsLeft: 5);
     _timer?.cancel();
@@ -135,9 +133,6 @@ class ChatDelete extends Notifier<ChatDeleteState> {
           : repo.hideChat(c.id);
     }
     final groups = ref.read(groupControllerProvider);
-    if (job.chats.length == 1 && c.isAdmin && job.alsoForOthers) {
-      return groups.deleteGroup(c.id);
-    }
     if (!c.hasLeft) {
       final left = await groups.leave(c.id);
       if (left case Err(:final failure)) return Err(failure);

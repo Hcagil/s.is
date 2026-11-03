@@ -838,28 +838,144 @@ void main() {
       expect(await alice.snapshot(), before);
     });
 
-    test('decrypt type 1 with only another key\'s sessions is SessionPending, '
-        'nothing written; the right key opens it', () async {
-      final carol = await Phone.make('carol');
+    // Bob sent a normal message, then got a new identity key (reinstall)
+    // before Alice opened it. The directory now says bob2's key.
+    Future<(LockedText, Phone)> sentBeforeKeyChange([
+      String t = 'ikinci',
+    ]) async {
       await established();
       final reply = ok(
         await bob.engine.encrypt(
           'alice',
-          'ikinci',
+          t,
           peerIdentityKey: alice.identityKey,
         ),
       );
       expect(reply.olmType, 1);
+      final bob2 = await Phone.make('bob');
+      expect(bob2.identityKey, isNot(bob.identityKey));
+      return (reply, bob2);
+    }
+
+    Future<List<String>> sessionRows(Phone p) async => [
+      for (final r in await p.sessions())
+        '${r['session_id']} ${r['peer_user_id']} ${r['peer_identity_key']}',
+    ];
+
+    Future<List<String>> pickles(Phone p) async => [
+      for (final row in await p.snapshot())
+        if (row.startsWith('session ')) row,
+    ];
+
+    test(
+      'type 1 sent just before the peer\'s key changed opens with the '
+      'old-key session; its pickle is saved, no session added or removed',
+      () async {
+        final (reply, bob2) = await sentBeforeKeyChange();
+        await alice.placeholder('m1', sender: 'bob');
+        final rowsBefore = await sessionRows(alice);
+        final picklesBefore = await pickles(alice);
+        final r = await alice.engine.decrypt(
+          peerUserId: 'bob',
+          peerIdentityKey: bob2.identityKey,
+          ciphertext: reply.ciphertext,
+          olmType: 1,
+          save: const PlaintextSave('m1', 'ikinci'),
+        );
+        expect(ok(r), 'ikinci');
+        expect(await alice.body('m1'), 'ikinci', reason: 'plaintext stored');
+        expect(
+          await sessionRows(alice),
+          rowsBefore,
+          reason: 'same sessions, same keys: nothing created or deleted',
+        );
+        expect(
+          await pickles(alice),
+          isNot(picklesBefore),
+          reason: 'the ratchet advanced and was saved',
+        );
+        // Saved for real: the same message cannot be opened again.
+        expect(
+          err(
+            await alice.engine.decrypt(
+              peerUserId: 'bob',
+              peerIdentityKey: bob2.identityKey,
+              ciphertext: reply.ciphertext,
+              olmType: 1,
+            ),
+          ),
+          isA<SessionPendingFailure>(),
+        );
+      },
+    );
+
+    test('an old-key session that cannot open it: SessionPending, nothing '
+        'written', () async {
+      final (reply, bob2) = await sentBeforeKeyChange();
       final before = await alice.snapshot();
       final r = await alice.engine.decrypt(
         peerUserId: 'bob',
-        peerIdentityKey: carol.identityKey,
+        peerIdentityKey: bob2.identityKey,
+        ciphertext: tamper(reply.ciphertext),
+        olmType: 1,
+      );
+      expect(err(r), isA<SessionPendingFailure>());
+      expect(await alice.snapshot(), before);
+    });
+
+    test('another peer\'s sessions are never used', () async {
+      final (reply, bob2) = await sentBeforeKeyChange();
+      final before = await alice.snapshot();
+      final r = await alice.engine.decrypt(
+        peerUserId: 'mallory',
+        peerIdentityKey: bob2.identityKey,
         ciphertext: reply.ciphertext,
         olmType: 1,
       );
       expect(err(r), isA<SessionPendingFailure>());
       expect(await alice.snapshot(), before);
-      expect(ok(await aliceOpens(reply)), 'ikinci');
+      expect(ok(await aliceOpens(reply)), 'ikinci', reason: 'still intact');
+    });
+
+    test('a session for the current key keeps priority: when it fails, '
+        'Unreadable, the old-key session is not tried', () async {
+      final carol = await Phone.make('carol');
+      final (reply, bob2) = await sentBeforeKeyChange();
+      // A session filed under bob's NEW key that is not the one Bob used
+      // (alice's session with carol, relabelled).
+      ok(await alice.engine.createOutbound('carol', carol.keys()));
+      await alice.exec(
+        "UPDATE olm_sessions SET peer_user_id = 'bob', "
+        "peer_identity_key = '${bob2.identityKey}' "
+        "WHERE peer_user_id = 'carol'",
+      );
+      final before = await alice.snapshot();
+      final r = await alice.engine.decrypt(
+        peerUserId: 'bob',
+        peerIdentityKey: bob2.identityKey,
+        ciphertext: reply.ciphertext,
+        olmType: 1,
+      );
+      expect(err(r), isA<UnreadableMessageFailure>());
+      expect(await alice.snapshot(), before);
+    });
+
+    test('old session already retired (a new session made): stays '
+        'SessionPending, no crash', () async {
+      final (reply, bob2) = await sentBeforeKeyChange();
+      ok(await alice.engine.createOutbound('bob', bob2.keys()));
+      expect(await keysOf(alice, 'bob'), [bob2.identityKey]);
+      final r = await alice.engine.decrypt(
+        peerUserId: 'bob',
+        peerIdentityKey: bob2.identityKey,
+        ciphertext: reply.ciphertext,
+        olmType: 1,
+      );
+      expect(
+        err(r),
+        isA<UnreadableMessageFailure>(),
+        reason: 'a current-key session exists and cannot open it',
+      );
     });
 
     test('a type 0 whose stored session has another key is Unreadable, '

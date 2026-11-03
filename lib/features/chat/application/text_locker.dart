@@ -14,6 +14,7 @@ import '../domain/message_envelope.dart';
 import '../domain/reaction_envelope.dart';
 import '../domain/send_queue_store.dart';
 import 'chat_controllers.dart';
+import 'message_opener.dart';
 
 /// The server side of locked texts; null until main wires it (tests, unwired builds): texts then go plain.
 final encryptedMessageRepositoryProvider =
@@ -131,6 +132,10 @@ class TextLocker {
       if (fresh.identityKey != known.identityKey) {
         return const Err(DeviceKeysFailure());
       }
+      // createOutbound drops the peer's old sessions: texts still waiting for them open first.
+      try {
+        await _ref.read(messageOpenerProvider).openWaiting(peer);
+      } catch (_) {}
       final opened = await engine.createOutbound(peer, fresh);
       if (opened case Err(:final failure)) return Err(failure);
       locked = await engine.encrypt(

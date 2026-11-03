@@ -1037,6 +1037,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get bubbleDeletedByAdmin => 'Yönetici tarafından silindi';
 
   @override
+  String get chatLockedMessage => '🔒 Bu mesaj açılamıyor';
+
+  @override
   String bubbleEdited(String time) {
     return 'düzenlendi $time';
   }

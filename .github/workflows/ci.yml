@@ -282,6 +282,13 @@ jobs:
       # (tool/sis_bot_admin.sh with the stack's own local keys, never a
       # repository secret), drives tool/sis_bot.sh's read/send/start and every
       # exit code, probes the bot's real JWT, then deletes the bot again.
+      # The bot tool test builds and measures photo fixtures with Pillow; the
+      # tool itself runs without it. A venv avoids the runner's managed Python.
+      - name: Install Pillow for the SIS Bot tool test
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pil"
+          "$RUNNER_TEMP/pil/bin/pip" install --quiet pillow==12.1.1
+          echo "$RUNNER_TEMP/pil/bin" >> "$GITHUB_PATH"
       - name: SIS Bot tool test
         run: |
           export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)

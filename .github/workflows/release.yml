@@ -195,6 +195,22 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
+      # storage-sweeper removes queued files from Storage for the cleanup jobs; optional like podium: a failure must never block the Play upload.
+      - name: Deploy the storage sweeper
+        continue-on-error: true
+        run: |
+          supabase functions deploy storage-sweeper --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+          # one random secret shared by the database job (Vault) and the function; new every release, never printed.
+          SWEEPER_SECRET=$(openssl rand -hex 32)
+          echo "::add-mask::$SWEEPER_SECRET"
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" STORAGE_SWEEPER_SECRET="$SWEEPER_SECRET"
+          supabase db query --linked "delete from vault.secrets where name = 'sweeper_secret'"
+          supabase db query --linked "select vault.create_secret('$SWEEPER_SECRET', 'sweeper_secret') is not null"
+          supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/storage-sweeper', 'sweeper_url') where not exists (select 1 from vault.secrets where name = 'sweeper_url')"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
       # The push sender, and notification-action, the endpoint its notification
       # buttons call (the push carries a signed token instead of a session).
       # Deployed before the trigger learns its URL, so the

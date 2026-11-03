@@ -122,7 +122,7 @@ enum PushPeek {
     let emoji = userInfo["e"] as? String
     let text = PeekCore.reactionText(emoji: emoji, quote: userInfo["q"] as? String, quoteKind: userInfo["qk"] as? String, turkish: turkish)
     // Same rule as reactionText: only a non-empty emoji makes a real text; the generic text gets no sender name.
-    if let sender = userInfo["sender"] as? String, !sender.isEmpty, emoji?.isEmpty == false { return (nil, shownBody(text: text, sender: sender)) }
+    if let sender = userInfo["sender"] as? String, !sender.isEmpty, PeekCore.reactionNamesSender(emoji: emoji) { return (nil, shownBody(text: text, sender: sender)) }
     return (nil, text)
   }
 

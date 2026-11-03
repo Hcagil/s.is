@@ -156,9 +156,12 @@ enum PeekCore {
     return true
   }
 
+  /// True only for a non-empty emoji. The one rule for both the real reaction text and the "Sender: " prefix.
+  static func reactionNamesSender(emoji: String?) -> Bool { emoji?.isEmpty == false }
+
   /// The notification text of a reaction push, built on the phone (EN/TR, same words as Android's reaction_* strings). Generic text when there is no emoji.
   static func reactionText(emoji: String?, quote: String?, quoteKind: String?, turkish: Bool) -> String {
-    guard let e = emoji, !e.isEmpty else { return turkish ? "Mesajınıza yeni tepki" : "New reaction to your message" }
+    guard reactionNamesSender(emoji: emoji), let e = emoji else { return turkish ? "Mesajınıza yeni tepki" : "New reaction to your message" }
     if let q = quote, !q.isEmpty { return turkish ? "\"\(q)\" mesajınıza \(e) tepkisini verdi" : "Reacted \(e) to: \"\(q)\"" }
     switch quoteKind {
     case "photo": return turkish ? "Fotoğrafınıza \(e) tepkisini verdi" : "Reacted \(e) to your photo"

@@ -1070,6 +1070,16 @@ void main() {
       expect(byKey('close-group'), findsNothing, reason: 'members only');
     });
 
+    // Built, on screen or not: the list is lazy about nothing here.
+    Finder built(String k) => find.byKey(ValueKey(k), skipOffstage: false);
+
+    testWidgets('control: an open group does show leave-group', (t) async {
+      final w = clubWith(admin: true);
+      await clubPage(t, w);
+      await reveal(t, byKey('group-member-ub'));
+      expect(built('leave-group'), findsOneWidget);
+    });
+
     testWidgets('a closed group has no leave-group and no add-members', (
       t,
     ) async {
@@ -1089,8 +1099,10 @@ void main() {
         ),
       ];
       await clubPage(t, w);
-      expect(byKey('leave-group'), findsNothing);
-      expect(byKey('add-members'), findsNothing);
+      await reveal(t, byKey('group-member-ub'));
+      expect(byKey('group-member-ub'), findsOneWidget, reason: 'tab not built');
+      expect(built('leave-group'), findsNothing);
+      expect(built('add-members'), findsNothing);
     });
   });
 

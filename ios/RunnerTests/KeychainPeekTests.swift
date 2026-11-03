@@ -1212,6 +1212,13 @@ final class PeekReactionTextTests: XCTestCase {
     XCTAssertEqual(text("", "hi", "photo", tr: true), "Mesajınıza yeni tepki")
   }
 
+  // Red for `emoji != nil` or `true` (empty counts), and for `false` or `emoji == nil` (a real emoji does not).
+  func testOnlyANonEmptyEmojiNamesTheSender() {
+    XCTAssertFalse(PeekCore.reactionNamesSender(emoji: nil))
+    XCTAssertFalse(PeekCore.reactionNamesSender(emoji: ""))
+    XCTAssertTrue(PeekCore.reactionNamesSender(emoji: "👍"))
+  }
+
   // Red if the quote text, quote marks or emoji position differ.
   func testAnEmojiWithAQuoteNamesTheQuote() {
     XCTAssertEqual(text("👍", "Günaydın", tr: false), "Reacted 👍 to: \"Günaydın\"")

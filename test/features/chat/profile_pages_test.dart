@@ -20,6 +20,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/group_controller.dart';
+import 'package:sis/features/chat/domain/group_event.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/group_settings.dart';
@@ -1089,13 +1090,21 @@ void main() {
           member: me,
           isAdmin: true,
           leftReason: LeftReason.removed,
-          closedBy: 'u1',
         ),
         const GroupMember(
           member: bob,
           isAdmin: false,
           leftReason: LeftReason.removed,
-          closedBy: 'u1',
+        ),
+      ];
+      w.groups.closures['g1'] = [
+        GroupEvent(
+          id: 'ce',
+          conversationId: 'g1',
+          kind: GroupEventKind.closed,
+          subjectId: 'u1',
+          actorId: 'u1',
+          createdAt: DateTime.utc(2026, 11, 1),
         ),
       ];
       await clubPage(t, w);

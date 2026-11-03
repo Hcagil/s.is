@@ -30,6 +30,7 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
+import '../../support/group_settings_fakes.dart';
 import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
@@ -95,6 +96,7 @@ class World {
   }
 
   final chat = ChatFake(latency: const Duration(milliseconds: 2), self: 'u1');
+  final groups = GroupSettingsFake(latency: Duration.zero);
 
   Widget app() => ProviderScope(
     overrides: [
@@ -105,6 +107,7 @@ class World {
       ),
       updateRepositoryProvider.overrideWithValue(FakeUpdate()),
       chatRepositoryProvider.overrideWithValue(chat),
+      groupSettingsRepositoryProvider.overrideWithValue(groups),
       presenceRepositoryProvider.overrideWithValue(PresenceFake()),
       profileRepositoryProvider.overrideWithValue(
         ProfileFake(
@@ -580,13 +583,21 @@ void main() {
           member: me,
           isAdmin: false,
           leftReason: LeftReason.removed,
-          closedBy: 'ub',
         ),
         const GroupMember(
           member: bob,
           isAdmin: true,
           leftReason: LeftReason.removed,
-          closedBy: 'ub',
+        ),
+      ];
+      w.groups.closures['g1'] = [
+        GroupEvent(
+          id: 'ce',
+          conversationId: 'g1',
+          kind: GroupEventKind.closed,
+          subjectId: 'ub',
+          actorId: 'ub',
+          createdAt: t0,
         ),
       ];
       await openClub(t, w);
@@ -603,13 +614,9 @@ void main() {
       await drain(t);
     });
 
-    testWidgets('closedBy on a roster row does not close a group the member '
-        'is still in', (t) async {
+    testWidgets('a group with no closed event stays open for a member still '
+        'in it', (t) async {
       final w = World();
-      w.chat.groupRosters['g1'] = [
-        const GroupMember(member: me, isAdmin: true),
-        const GroupMember(member: bob, isAdmin: false, closedBy: 'u1'),
-      ];
       await openClub(t, w);
       expect(byKey('composer-closed'), findsNothing);
       expect(byKey('composer-field'), findsOneWidget);

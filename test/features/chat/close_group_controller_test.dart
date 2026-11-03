@@ -145,7 +145,7 @@ void main() {
       await settle();
       expect(c.read(groupCloseEventsProvider('g1')).value, isEmpty);
       expect(
-        c.read(groupRosterProvider('g1')).value!.any((m) => m.closedBy != null),
+        c.read(groupRosterProvider('g1')).value!.any((m) => m.hasLeft),
         isFalse,
       );
 
@@ -155,9 +155,12 @@ void main() {
           member: me,
           isAdmin: true,
           leftReason: LeftReason.removed,
-          closedBy: 'u1',
         ),
-        const GroupMember(member: bob, isAdmin: false, closedBy: 'u1'),
+        const GroupMember(
+          member: bob,
+          isAdmin: false,
+          leftReason: LeftReason.removed,
+        ),
       ];
       settings.closures['g1'] = [closedEvent];
       final r = await c.read(groupControllerProvider).closeGroup('g1');
@@ -168,7 +171,7 @@ void main() {
         c
             .read(groupRosterProvider('g1'))
             .value!
-            .every((m) => m.closedBy == 'u1'),
+            .every((m) => m.leftReason == LeftReason.removed),
         isTrue,
         reason: 'roster not re-read',
       );

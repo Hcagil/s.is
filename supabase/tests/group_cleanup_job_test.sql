@@ -1,5 +1,5 @@
 begin;
-select plan(74);
+select plan(84);
 
 -- Group cleanup job + storage sweeper (20261114120000_group_cleanup_job.sql), written from the contract:
 --   app_private.cleanup_empty_groups(batch) wipes groups (title set, not system) with no current non-bot
@@ -247,6 +247,47 @@ insert into app_private.storage_removal_queue(bucket, path) select 'attachments'
 set local role service_role;
 select is((select count(*)::int from public.sweeper_claim(500)), 200, 'claim returns at most 200');
 reset role;
+
+-- claim only knows attachments, link-previews, avatars; other buckets stay untouched
+delete from app_private.storage_removal_queue;
+select qadd('unk1', 'photos', 'free/u1.jpg', 0);
+select qadd('unk2', 'Attachments', 'free/u2.jpg', 0);  -- bucket names are exact
+select qadd('known', 'attachments', 'free/k.jpg', 3);
+set local role service_role;
+insert into cl select 4, * from public.sweeper_claim(1);
+insert into cl select 5, * from public.sweeper_claim(10);
+reset role;
+select is((select array_agg(id) from cl where run = 4), array[qi('known')],
+          'claim 1 skips unknown-bucket rows even with fewer attempts');
+select is((select array_agg(id) from cl where run = 5), array[qi('known')], 'claim never returns an unknown-bucket row');
+select is((select array_agg(attempts order by id) from app_private.storage_removal_queue where id in (qi('unk1'), qi('unk2'))),
+          array[0, 0], 'unknown-bucket rows stay queued with attempts unchanged');
+
+-- in-use rows are dropped from the whole queue, not only the first n
+select lives_ok(format('set local role service_role; select public.sweeper_done(array[%s]::bigint[])', qi('known')), 'done known');
+reset role;
+select qadd('w1', 'attachments', 'live/x.jpg');
+select qadd('w2', 'attachments', 'live/x.jpg.t');
+select qadd('w3', 'avatars', 'conv/live.jpg');
+select qadd('wf1', 'attachments', 'free/w1.jpg', 1);
+select qadd('wf2', 'link-previews', 'free/w2.jpg', 1);
+set local role service_role;
+insert into cl select 6, * from public.sweeper_claim(2);
+reset role;
+select is((select array_agg(id order by id) from cl where run = 6), array[qi('wf1'), qi('wf2')],
+          'claim 2 returns the free rows behind 3 in-use rows');
+select is((select count(*)::int from app_private.storage_removal_queue where id in (qi('w1'), qi('w2'), qi('w3'))), 0,
+          'claim 2 dropped all 3 in-use rows');
+select lives_ok(format('set local role service_role; select public.sweeper_done(array[%s, %s]::bigint[])', qi('wf1'), qi('wf2')), 'done wf');
+reset role;
+select qadd('w4', 'avatars', 'prof/live.jpg');
+set local role service_role;
+insert into cl select 7, * from public.sweeper_claim(5);
+reset role;
+select is((select count(*)::int from cl where run = 7), 0, 'only in-use and unknown rows left: claim returns 0 rows');
+select is((select count(*)::int from app_private.storage_removal_queue where id = qi('w4')), 0, 'that claim still dropped the in-use row');
+select is((select array_agg(id order by id) from app_private.storage_removal_queue), array[qi('unk1'), qi('unk2')],
+          'afterwards only the unknown-bucket rows remain');
 
 -- ===== run_storage_sweeper =====
 create function nreq() returns int language sql as $$ select count(*)::int from net.http_request_queue $$;

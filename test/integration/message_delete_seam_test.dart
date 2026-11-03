@@ -1,4 +1,7 @@
 @Tags(['integration'])
+// Every test, setUpAll and tearDownAll here ends within this, so a stuck
+// network call or Realtime wait fails the file instead of hanging the job.
+@Timeout(Duration(minutes: 4))
 library;
 
 import 'dart:io';

@@ -108,12 +108,25 @@ void main() {
     });
 
     test('openStoreListing opens TestFlight, externally, once', () async {
-      await repo.openStoreListing();
+      expect(await repo.openStoreListing(), isTrue);
 
       expect(playCalls, isEmpty);
       expect(urls.launches, [
         (url: _testFlight, mode: PreferredLaunchMode.externalApplication),
       ]);
+    });
+
+    test('launchUrl answers false -> openStoreListing false, and '
+        'startImmediateUpdate throws StateError', () async {
+      urls.handles = (_) => false;
+      expect(await repo.openStoreListing(), isFalse);
+      await expectLater(repo.startImmediateUpdate(), throwsStateError);
+    });
+
+    test('launchUrl throws -> openStoreListing false, never throws', () async {
+      urls.launchThrows = PlatformException(code: 'ACTIVITY_NOT_FOUND');
+      expect(await repo.openStoreListing(), isFalse);
+      await expectLater(repo.startImmediateUpdate(), throwsStateError);
     });
 
     test(
@@ -145,6 +158,20 @@ void main() {
   });
 
   group('PlayUpdateRepository.openStoreListing (Android, unchanged)', () {
+    test('opened -> true', () async {
+      expect(await PlayUpdateRepository(dead).openStoreListing(), isTrue);
+    });
+
+    test('market and web both refused -> false', () async {
+      urls.handles = (_) => false;
+      expect(await PlayUpdateRepository(dead).openStoreListing(), isFalse);
+    });
+
+    test('launch throws -> false, never throws', () async {
+      urls.launchThrows = PlatformException(code: 'ACTIVITY_NOT_FOUND');
+      expect(await PlayUpdateRepository(dead).openStoreListing(), isFalse);
+    });
+
     test('opens the Play app listing first', () async {
       await PlayUpdateRepository(dead).openStoreListing();
 

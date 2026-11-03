@@ -172,6 +172,12 @@ class FakeUpdate implements UpdateRepository {
   bool failFlexible = false;
   bool failImmediate = false;
 
+  /// What openStoreListing answers: false = the store could not be opened.
+  bool storeOpens = true;
+
+  /// When set, openStoreListing waits on it (a slow launch).
+  Completer<void>? storeGate;
+
   /// How many times Play was asked.
   int checks = 0;
 
@@ -227,7 +233,11 @@ class FakeUpdate implements UpdateRepository {
   }
 
   @override
-  Future<void> openStoreListing() async => calls.add('store');
+  Future<bool> openStoreListing() async {
+    calls.add('store');
+    await storeGate?.future;
+    return storeOpens;
+  }
 }
 
 class FakeChat implements ChatRepository {

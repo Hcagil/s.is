@@ -34,6 +34,7 @@ class Recording extends UpdateController {
   Recording(this.shown);
   final UpdateState shown;
   final calls = <String>[];
+  bool opens = true;
   @override
   Future<UpdateState> build() async => shown;
   @override
@@ -41,7 +42,16 @@ class Recording extends UpdateController {
   @override
   Future<void> install() async => calls.add('install');
   @override
-  Future<void> openStore() async => calls.add('openStore');
+  Future<bool> openStore() async {
+    calls.add('openStore');
+    return opens;
+  }
+
+  @override
+  Future<bool> updateNow() async {
+    calls.add('updateNow');
+    return opens;
+  }
 }
 
 const v031 = 'Version 0.31\n- Chats load faster\n• Photos open in place';

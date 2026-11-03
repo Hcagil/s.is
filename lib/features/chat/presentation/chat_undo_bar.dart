@@ -24,7 +24,6 @@ class ChatUndoBar extends ConsumerWidget {
       ChatDeleteNotice.chat => l.chatDeletedUndo,
       ChatDeleteNotice.chats => l.chatsDeletedUndo,
       ChatDeleteNotice.groupLeft => l.chatGroupLeftUndo,
-      ChatDeleteNotice.groupDeleted => l.chatGroupDeletedUndo,
     };
 
     return Material(

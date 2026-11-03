@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -40,43 +39,6 @@ final class SupabaseGroupSettingsRepository implements GroupSettingsRepository {
           'new_members_see_history': newMembersSeeHistory,
         },
       );
-      return const Ok(null);
-    } catch (e) {
-      return Err(_asFailure(e));
-    }
-  }
-
-  @override
-  Future<Result<void>> deleteGroup(String conversationId) async {
-    try {
-      final paths = await _client.rpc(
-        'delete_group',
-        params: {'conversation': conversationId},
-      );
-      if (paths != null) {
-        try {
-          final all = paths is List ? List<String>.from(paths) : <String>[];
-          final pictures = all.where((p) => p.startsWith('group/')).toList();
-          final files = all.where((p) => !p.startsWith('group/')).toList();
-          if (files.isNotEmpty) {
-            // A video's thumbnail sits next to it as `<path>.t`; removing a
-            // name that does not exist is harmless.
-            await _client.storage.from('attachments').remove([
-              ...files,
-              for (final p in files) '$p.t',
-            ]);
-          }
-          if (pictures.isNotEmpty) {
-            await _client.storage.from('avatars').remove(pictures);
-          }
-        } catch (e) {
-          log(
-            'deleteGroup: photo file removal failed: ${e.runtimeType}',
-            name: 'sis.data',
-            level: 900,
-          );
-        }
-      }
       return const Ok(null);
     } catch (e) {
       return Err(_asFailure(e));

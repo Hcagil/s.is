@@ -2654,23 +2654,11 @@ abstract class AppLocalizations {
   /// **'Are you sure you want to delete and leave the group **{name}**?'**
   String chatDeleteLeaveSure(String name);
 
-  /// Checkbox shown to a group admin
-  ///
-  /// In en, this message translates to:
-  /// **'Delete the group for all members'**
-  String get chatDeleteGroupForAll;
-
   /// Undo bar after deleting a group the member only leaves
   ///
   /// In en, this message translates to:
   /// **'You left the group'**
   String get chatGroupLeftUndo;
-
-  /// Undo bar after an admin deletes a group for everyone
-  ///
-  /// In en, this message translates to:
-  /// **'Group deleted'**
-  String get chatGroupDeletedUndo;
 
   /// Title of the delete dialog for several chats
   ///

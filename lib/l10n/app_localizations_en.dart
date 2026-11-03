@@ -1490,13 +1490,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get chatDeleteGroupForAll => 'Delete the group for all members';
-
-  @override
   String get chatGroupLeftUndo => 'You left the group';
-
-  @override
-  String get chatGroupDeletedUndo => 'Group deleted';
 
   @override
   String chatDeleteFewTitle(int count) {

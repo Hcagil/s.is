@@ -181,9 +181,7 @@ class _DeleteChatsDialogState extends State<_DeleteChatsDialog> {
     }
 
     final c = chats.first;
-    if (c.isGroup && c.isAdmin) {
-      return _buildCheckboxRow(l.chatDeleteGroupForAll);
-    } else if (!c.isGroup) {
+    if (!c.isGroup) {
       final firstWord =
           c.other?.displayName.split(' ').firstOrNull ??
           conversationLabel(l, c);

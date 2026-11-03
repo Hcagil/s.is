@@ -122,6 +122,9 @@ class _MembersTab extends ConsumerWidget {
   Future<void> _close(BuildContext context, WidgetRef ref) async {
     final box = context.findRenderObject() as RenderBox;
     final anchor = box.localToGlobal(Offset.zero) & box.size;
+    final debugGroup = ref
+        .read(groupSettingsProvider(conversationId))
+        .debugChat;
     final confirmed = await showFloatingCard<bool>(
       context,
       anchor: anchor,
@@ -143,6 +146,14 @@ class _MembersTab extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(l.groupCloseBody),
+                if (debugGroup) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    l.groupCloseDebugWarning,
+                    key: const ValueKey('close-debug-warning'),
+                    style: TextStyle(color: scheme.error),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 FilledButton(
                   key: const ValueKey('close-confirm'),
@@ -201,6 +212,7 @@ class _MembersTab extends ConsumerWidget {
           for (final m in roster)
             if (m.hasLeft) m,
         ];
+        final closed = roster.any((m) => m.closedBy != null);
         final amAdmin =
             current.where((m) => m.member.userId == me).firstOrNull?.isAdmin ??
             false;
@@ -336,22 +348,25 @@ class _MembersTab extends ConsumerWidget {
                       ),
                     ),
                   if (amAdmin) const SizedBox(height: 10),
-                  Builder(
-                    builder: (button) => SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        key: const ValueKey('leave-group'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Theme.of(context).colorScheme.error,
-                          side: BorderSide(
-                            color: Theme.of(context).colorScheme.error,
+                  if (!closed)
+                    Builder(
+                      builder: (button) => SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          key: const ValueKey('leave-group'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Theme.of(context)
+                                .colorScheme
+                                .error,
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
                           ),
+                          onPressed: () => _leave(button, ref),
+                          child: Text(AppLocalizations.of(context).groupLeave),
                         ),
-                        onPressed: () => _leave(button, ref),
-                        child: Text(AppLocalizations.of(context).groupLeave),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),

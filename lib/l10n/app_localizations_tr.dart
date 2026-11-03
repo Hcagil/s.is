@@ -1478,13 +1478,7 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String get chatDeleteGroupForAll => 'Grubu tüm üyeler için sil';
-
-  @override
   String get chatGroupLeftUndo => 'Gruptan ayrıldınız';
-
-  @override
-  String get chatGroupDeletedUndo => 'Grup silindi';
 
   @override
   String chatDeleteFewTitle(int count) {

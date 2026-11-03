@@ -351,20 +351,6 @@ class GroupController {
     return result;
   }
 
-  /// Deletes [conversationId] for everyone, admin-only. On success anything
-  /// queued for it and its draft are dropped, and the list is re-read (the
-  /// group is gone from it).
-  Future<Result<void>> deleteGroup(String conversationId) async {
-    final result = await ref
-        .read(groupSettingsRepositoryProvider)
-        .deleteGroup(conversationId);
-    if (result is Err) return result;
-    ref.read(deletedGroupsProvider.notifier).add(conversationId);
-    _dropQueueAndDraft(conversationId);
-    await ref.read(conversationListProvider.notifier).reloadQuietly();
-    return result;
-  }
-
   /// Closes [conversationId] for good, admin-only: every member, the caller
   /// too, is removed and keeps the chat read-only. On success anything queued
   /// for it and its draft are dropped, and the roster, events and list are

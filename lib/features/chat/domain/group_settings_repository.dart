@@ -15,9 +15,6 @@ abstract interface class GroupSettingsRepository {
     bool? newMembersSeeHistory,
   });
 
-  /// Deletes the group [conversationId]. Admin-only; removes the group, its messages and photos for everyone. DeniedFailure when the caller is not an admin.
-  Future<Result<void>> deleteGroup(String conversationId);
-
   /// Closes the group [conversationId] for good (server function close_group). Admin-only; every member, the admin too, is removed and keeps the chat read-only; it cannot be reopened. DeniedFailure when the caller is not an admin or the group is already closed.
   Future<Result<void>> closeGroup(String conversationId);
 

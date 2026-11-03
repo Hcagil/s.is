@@ -43,6 +43,9 @@ bool isSendableBody(String body) {
   return trimmed.isNotEmpty && trimmed.length <= maxMessageLength;
 }
 
+/// The stored chat-list preview of a photo sent without text; the list translates it (see chatPreviewLine).
+const String photoPreviewText = 'Photo';
+
 /// The stored chat-list preview of a message deleted for everyone; the list translates it (see chatPreviewLine).
 const String deletedPreviewText = 'This message was deleted';
 
@@ -69,7 +72,7 @@ String previewText(Message message) => message.stickerId != null
           : filePreview(message.file!.name))
     : message.body.isNotEmpty
     ? message.body
-    : (message.hasAttachment ? 'Photo' : '');
+    : (message.hasAttachment ? photoPreviewText : '');
 
 /// The local clock time of [at], always HH:MM -- whatever day it falls on.
 /// What a chat bubble shows: unlike [previewTime] it never falls back to a date, since a bubble is already anchored in its conversation's order.

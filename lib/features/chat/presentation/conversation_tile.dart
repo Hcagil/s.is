@@ -12,8 +12,11 @@ import '../domain/poll.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_selection_controller.dart';
+import '../application/message_opener.dart';
 import '../domain/conversation.dart';
 import '../domain/encrypted_message_repository.dart';
+import '../domain/file_attachment.dart';
+import '../domain/video.dart';
 import '../domain/shared_contact.dart';
 import '../domain/shared_location.dart';
 import '../domain/sticker.dart';
@@ -27,9 +30,21 @@ import '../../notifications/domain/notification_settings.dart';
 import 'admin_reply_bubble.dart';
 import 'chat_row_actions.dart';
 
-/// The stored preview [text] of a chat as one line in the app language (poll, contact, location, voice and sticker prefixes translated).
-String chatPreviewLine(AppLocalizations l, String text) =>
-    text.startsWith(adminPreviewPrefix)
+/// Whether the last message of [c] is a locked one this phone is still opening (the list keeps no message id, so the time matches).
+bool isOpeningLast(List<Message> opening, Conversation c) =>
+    c.lastMessageAt != null &&
+    opening.any(
+      (m) =>
+          m.conversationId == c.id &&
+          m.createdAt.isAtSameMomentAs(c.lastMessageAt!),
+    );
+
+/// The stored preview [text] of a chat as one line in the app language (photo, video, file, poll, contact, location, voice and sticker texts translated). A locked message says "opening" while [opening], else "could not be opened".
+String chatPreviewLine(
+  AppLocalizations l,
+  String text, {
+  bool opening = false,
+}) => text.startsWith(adminPreviewPrefix)
     ? adminPreviewLine(
         l,
         jsonDecode(text.substring(adminPreviewPrefix.length))
@@ -41,6 +56,12 @@ String chatPreviewLine(AppLocalizations l, String text) =>
     ? l.contactPreviewLine(text.substring(contactPreviewPrefix.length))
     : text == locationPreviewText
     ? l.locationPreviewLine
+    : text == photoPreviewText
+    ? l.attachPhoto
+    : text == videoPreview
+    ? l.attachVideo
+    : text.startsWith(filePreviewPrefix)
+    ? l.filePreviewLine(text.substring(filePreviewPrefix.length))
     : text == voicePreview
     ? l.voicePreviewLine
     : text == stickerPreviewText
@@ -50,7 +71,7 @@ String chatPreviewLine(AppLocalizations l, String text) =>
     : text == deletedPreviewText
     ? l.quoteDeleted
     : isLockedPlaceholder(text)
-    ? l.chatLockedMessage
+    ? (opening ? l.chatOpeningMessage : l.chatLockedMessage)
     : text;
 
 class ConversationTile extends ConsumerWidget {
@@ -75,6 +96,11 @@ class ConversationTile extends ConsumerWidget {
       _ => null,
     };
     final scheme = Theme.of(context).colorScheme;
+    final opening = ref.watch(
+      openingMessagesProvider.select(
+        (rows) => isOpeningLast(rows, conversation),
+      ),
+    );
     final unread = conversation.unread > 0;
     final showPill = unread && !inArchive;
     final muted = ref.watch(
@@ -165,7 +191,7 @@ class ConversationTile extends ConsumerWidget {
                     ),
                     TextSpan(
                       text:
-                          ': ${chatPreviewLine(l, conversation.lastMessage!)}',
+                          ': ${chatPreviewLine(l, conversation.lastMessage!, opening: opening)}',
                     ),
                   ],
                 ),
@@ -178,9 +204,17 @@ class ConversationTile extends ConsumerWidget {
                 conversation.lastSenderId != null &&
                         conversation.lastSenderId == me
                     ? l.listYouPrefix(
-                        chatPreviewLine(l, conversation.lastMessage!),
+                        chatPreviewLine(
+                          l,
+                          conversation.lastMessage!,
+                          opening: opening,
+                        ),
                       )
-                    : chatPreviewLine(l, conversation.lastMessage!),
+                    : chatPreviewLine(
+                        l,
+                        conversation.lastMessage!,
+                        opening: opening,
+                      ),
                 key: ValueKey('preview-${conversation.id}'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

@@ -76,16 +76,22 @@ Postgres Row Level Security is the only authority. The client is untrusted.
     'a group needs at least one admin' if none exists); an admin cannot
     remove themselves.
     `delete_group` and `delete_direct_chat` are refused ('not permitted').
+    `close_group(conversation)` (security definer, current admin only, never
+    a bot, groups only, not twice) sets `conversations.closed_at/closed_by`,
+    writes a `closed` event and removes every current member in one
+    transaction (`left_reason='removed'`, `conversation_members.closed_by`,
+    so old apps keep working); it cannot be undone, and `add_members` then
+    refuses ('not permitted'). The Debug group may be closed like any group.
     `app_private.drop_group_if_unused` has no client grant; `leave_group`
-    calls it, and it deletes a group with no current member and no message
+    and `close_group` call it, and it deletes a group with no current member and no message
     (queueing its group photo in `storage_removal_queue` for removal); the
     Debug group and system chats are exempt.
-  - **`group_events`** (left/removed/added): RLS, SELECT only for current
+  - **`group_events`** (left/removed/added; `picture`, `pinned` and `closed` are hidden from the table and served by their own RPCs): RLS, SELECT only for current
     admins and only from their own `history_from`, written only by those
     RPCs, not in the Realtime publication, never read by previews, unread
     counts, search or push.
     The `group_member_events(conversation)` RPC (security definer, app access
-    required) returns only `left` and `removed` events to any member, inside
+    required) returns only `left`, `removed` and `closed` events to any member, inside
     the window the caller may read (`history_from` to `left_at`); the table
     stays admin-only.
   - Accepted leftovers (v0.23): a private Realtime channel joined before

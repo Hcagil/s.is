@@ -15,8 +15,9 @@
       $ASC_POLL_SECONDS, default 30, for at most $ASC_POLL_LIMIT_SECONDS,
       default 3600), sets its en-US What to Test from NOTE (empty: "Bug fixes
       and improvements."), adds it to every external beta
-      group named in GROUPS (comma-separated, case-insensitive) and, if there
-      is one, submits it for beta app review. Internal groups are skipped:
+      group named in GROUPS (comma-separated, case-insensitive; "*" = every
+      group of the app) and, if there is one, submits it for beta app review
+      (a 4xx refusal prints ::warning:: and does not fail). Internal groups are skipped:
       they get builds by themselves ("Enable automatic distribution"). Safe
       to re-run.
   asc_signing.py tester add|remove GROUPS
@@ -371,36 +372,62 @@ def distribute(bundle_identifier, build_number, groups, note):
             "relationships": {"build": {"data": {"type": "builds", "id": build_id}}},
         }})
 
-    # Names match case-insensitively. Internal groups are never POSTed to: App
-    # Store Connect rejects it (422) and adds builds itself when "Enable automatic
-    # distribution" is on for the group.
+    # Names match case-insensitively; "*" means every group of the app. Internal
+    # groups are never POSTed to: App Store Connect rejects it (422) and adds
+    # builds itself when "Enable automatic distribution" is on for the group.
     wanted = {g.strip().lower() for g in groups}
     every = call("GET", "/apps/%s/betaGroups?limit=200" % app_id)["data"]
-    matched = [g for g in every if g["attributes"]["name"].strip().lower() in wanted]
-    if not matched:
-        sys.exit("no TestFlight group named %s; the app has: %s" % (
-            ", ".join(groups), ", ".join(g["attributes"]["name"] for g in every) or "none"))
+    if "*" in wanted:
+        matched = every
+    else:
+        matched = [g for g in every if g["attributes"]["name"].strip().lower() in wanted]
+        if not matched:
+            sys.exit("no TestFlight group named %s; the app has: %s" % (
+                ", ".join(groups), ", ".join(g["attributes"]["name"] for g in every) or "none"))
     for g in matched:
+        name = g["attributes"]["name"]
+        # Counts only, never tester details.
+        try:
+            resp = call("GET", "/betaGroups/%s/betaTesters?limit=200" % g["id"], ok_missing=True)
+        except SystemExit:
+            resp = None
+        total = None
+        if resp is not None:
+            total = resp.get("meta", {}).get("paging", {}).get("total")
+            if total is None and isinstance(resp.get("data"), list):
+                total = len(resp["data"])
+        count = " testers=%d" % total if total is not None else " testers=?"
         if g["attributes"]["isInternalGroup"]:
-            print("internal group %s receives builds automatically" % g["attributes"]["name"], flush=True)
+            print("group %s: internal, added=auto%s" % (name, count), flush=True)
             continue
-        print("adding to external group %s" % g["attributes"]["name"], flush=True)
         # 409: already in the group (or the group takes every build): not an error.
         call("POST", "/betaGroups/%s/relationships/builds" % g["id"],
              {"data": [{"type": "builds", "id": build_id}]}, tolerate=(409,))
+        print("group %s: external, added=yes%s" % (name, count), flush=True)
 
     if any(not g["attributes"]["isInternalGroup"] for g in matched):
         existing = call("GET", "/builds/%s/betaAppReviewSubmission" % build_id, ok_missing=True)
         if existing and existing.get("data"):
-            print("already submitted for beta review", flush=True)
+            state = existing["data"]["attributes"].get("betaReviewState", "?")
+            print("review: already submitted (%s)" % state, flush=True)
             return
-        call("POST", "/betaAppReviewSubmissions", {"data": {
-            "type": "betaAppReviewSubmissions",
-            "relationships": {"build": {"data": {"type": "builds", "id": build_id}}},
-        }}, hint="If this says Test Information is missing, the owner must fill it in once: "
-                 "App Store Connect, TestFlight, Test Information (beta app description, feedback "
-                 "email, review contact). This tool does not invent them.")
-        print("submitted for beta review", flush=True)
+        try:
+            call("POST", "/betaAppReviewSubmissions", {"data": {
+                "type": "betaAppReviewSubmissions",
+                "relationships": {"build": {"data": {"type": "builds", "id": build_id}}},
+            }}, hint="If this says Test Information is missing, the owner must fill it in once: "
+                     "App Store Connect, TestFlight, Test Information (beta app description, feedback "
+                     "email, review contact). This tool does not invent them.")
+            print("review: submitted", flush=True)
+        except SystemExit as e:
+            msg = str(e.code)
+            if "HTTP 4" not in msg:
+                raise
+            # A review refusal must not fail the release; the build is already in the groups.
+            print("::warning::beta app review not submitted: " + msg[:300], flush=True)
+            print("review: not submitted", flush=True)
+    else:
+        print("review: skipped (no external groups)", flush=True)
 
 
 class AscError(Exception):

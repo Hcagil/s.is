@@ -846,6 +846,8 @@
   "@membersRemovedBadge": {"description": "Badge of a member who was removed"},
   "bubbleDeletedByAdmin": "Deleted by an admin",
   "@bubbleDeletedByAdmin": {"description": "Placeholder of a message an admin deleted"},
+  "chatLockedMessage": "🔒 This message can't be opened",
+  "@chatLockedMessage": {"description": "Shown in place of a message that this phone cannot open (bubble and chat-list preview)"},
   "bubbleEdited": "edited {time}",
   "@bubbleEdited": {"description": "Mark on an edited message", "placeholders": {"time": {"type": "String"}}},
   "linksEmpty": "No links shared yet",

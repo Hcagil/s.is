@@ -1904,6 +1904,12 @@ abstract class AppLocalizations {
   /// **'Deleted by an admin'**
   String get bubbleDeletedByAdmin;
 
+  /// Shown in place of a message that this phone cannot open (bubble and chat-list preview)
+  ///
+  /// In en, this message translates to:
+  /// **'🔒 This message can\'t be opened'**
+  String get chatLockedMessage;
+
   /// Mark on an edited message
   ///
   /// In en, this message translates to:

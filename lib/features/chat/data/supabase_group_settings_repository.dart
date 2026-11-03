@@ -84,6 +84,44 @@ final class SupabaseGroupSettingsRepository implements GroupSettingsRepository {
   }
 
   @override
+  Future<Result<void>> closeGroup(String conversationId) async {
+    try {
+      await _client.rpc(
+        'close_group',
+        params: {'conversation': conversationId},
+      );
+      return const Ok(null);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<List<GroupEvent>>> closeEvents(String conversationId) async {
+    try {
+      // group_member_events also returns left/removed; only 'closed' is wanted here.
+      final rows = await _client.rpc(
+        'group_member_events',
+        params: {'conversation': conversationId},
+      );
+      return Ok([
+        for (final row in (rows as List).cast<Map<String, dynamic>>())
+          if (row['kind'] == 'closed')
+            GroupEvent(
+              id: row['id'] as String,
+              conversationId: row['conversation_id'] as String,
+              kind: GroupEventKind.closed,
+              subjectId: (row['subject_id'] as String?) ?? '',
+              actorId: row['actor_id'] as String?,
+              createdAt: DateTime.parse(row['created_at'] as String),
+            ),
+      ]);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
   Future<Result<List<GroupEvent>>> pictureEvents(String conversationId) async {
     try {
       final rows = await _client.rpc(

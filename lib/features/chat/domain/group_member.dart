@@ -9,6 +9,7 @@ final class GroupMember {
     required this.member,
     required this.isAdmin,
     this.leftReason,
+    this.closedBy,
     this.colorSlot = 0,
   });
 
@@ -19,6 +20,10 @@ final class GroupMember {
   /// removed. Their past messages stay visible; this is what greys their
   /// name and puts them in the roster's "left" section.
   final LeftReason? leftReason;
+
+  /// The admin's user id when the group was closed (closed vs removed is told
+  /// by this); null for any other departure.
+  final String? closedBy;
 
   /// The colour slot (0..9) the server gave this person in this group, kept
   /// for good; see groupColorArgb.

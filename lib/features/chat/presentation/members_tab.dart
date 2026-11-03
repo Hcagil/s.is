@@ -119,14 +119,14 @@ class _MembersTab extends ConsumerWidget {
     }
   }
 
-  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+  Future<void> _close(BuildContext context, WidgetRef ref) async {
     final box = context.findRenderObject() as RenderBox;
     final anchor = box.localToGlobal(Offset.zero) & box.size;
     final confirmed = await showFloatingCard<bool>(
       context,
       anchor: anchor,
       highlightAnchor: false,
-      cardKey: const ValueKey('delete-card'),
+      cardKey: const ValueKey('close-card'),
       child: Builder(
         builder: (card) {
           final l = AppLocalizations.of(card);
@@ -138,24 +138,24 @@ class _MembersTab extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  l.groupDeleteTitle(title),
+                  l.groupCloseTitle,
                   style: Theme.of(card).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
-                Text(l.groupDeleteBody),
+                Text(l.groupCloseBody),
                 const SizedBox(height: 16),
                 FilledButton(
-                  key: const ValueKey('delete-confirm'),
+                  key: const ValueKey('close-confirm'),
                   style: FilledButton.styleFrom(
                     backgroundColor: scheme.error,
                     foregroundColor: scheme.onError,
                   ),
                   onPressed: () => Navigator.of(card).pop(true),
-                  child: Text(l.groupDeleteForAll),
+                  child: Text(l.groupCloseAction),
                 ),
                 const SizedBox(height: 8),
                 TextButton(
-                  key: const ValueKey('delete-cancel'),
+                  key: const ValueKey('close-cancel'),
                   onPressed: () => Navigator.of(card).pop(false),
                   child: Text(l.groupLeaveCancel),
                 ),
@@ -168,11 +168,11 @@ class _MembersTab extends ConsumerWidget {
     if (confirmed != true || !context.mounted) return;
     final result = await ref
         .read(groupControllerProvider)
-        .deleteGroup(conversationId);
+        .closeGroup(conversationId);
     if (!context.mounted) return;
     switch (result) {
       case Ok():
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        break;
       case Err(:final failure):
         showSisNotice(context, failure.message, isError: true);
     }
@@ -319,7 +319,7 @@ class _MembersTab extends ConsumerWidget {
                       builder: (button) => SizedBox(
                         width: double.infinity,
                         child: FilledButton(
-                          key: const ValueKey('delete-group'),
+                          key: const ValueKey('close-group'),
                           style: FilledButton.styleFrom(
                             backgroundColor: Theme.of(context)
                                 .colorScheme
@@ -328,9 +328,9 @@ class _MembersTab extends ConsumerWidget {
                                 .colorScheme
                                 .onError,
                           ),
-                          onPressed: () => _delete(button, ref),
+                          onPressed: () => _close(button, ref),
                           child: Text(
-                            AppLocalizations.of(context).groupDeleteForAll,
+                            AppLocalizations.of(context).groupCloseAction,
                           ),
                         ),
                       ),

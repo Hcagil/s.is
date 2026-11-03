@@ -55,9 +55,6 @@
   "groupAddSwitch": "Üyeler kişi ekleyebilir",
   "groupHistSwitch": "Yeni üyeler önceki mesajları görür",
   "groupPinWho": "Mesajları kimler sabitleyebilir",
-  "groupDeleteForAll": "Grubu herkes için sil",
-  "groupDeleteTitle": "{name} herkes için silinsin mi?",
-  "groupDeleteBody": "Bu gruptaki tüm mesajlar ve fotoğraflar herkes için silinir. Geri alınamaz.",
   "groupDeletedNotice": "Grup silindi",
   "groupLeave": "Gruptan ayrıl",
   "groupLeaveTitle": "Gruptan ayrılmak ister misiniz?",
@@ -772,5 +769,11 @@
   "cmdPodMeaning": "Vega'daki toplam parayı göster",
   "cmdArgEmail": "E-posta",
   "cmdRowLabel": "{command}, {meaning}",
-  "podNotEnc": "Uçtan uca şifreli değil"
+  "podNotEnc": "Uçtan uca şifreli değil",
+  "groupCloseTitle": "Grup kapatılsın mı?",
+  "groupCloseBody": "Bu grubu kapatırsanız siz dahil tüm üyeler gruptan çıkarılır. Artık kimse yazamaz. Bu işlem geri alınamaz.",
+  "groupCloseAction": "Grubu kapat",
+  "groupCloseDebugWarning": "Test kullanıcılarının geri bildirimi durur.",
+  "composerGroupClosed": "Bu grup {name} tarafından kapatıldı",
+  "eventClosed": "{name} grubu kapattı"
 }

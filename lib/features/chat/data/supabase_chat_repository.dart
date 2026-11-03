@@ -460,7 +460,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
       // left_at" rule the server's own mark_read uses.
       final rows = await _client
           .from('conversation_members')
-          .select('user_id, role, left_at, left_reason, color_slot')
+          .select('user_id, role, left_at, left_reason, closed_by, color_slot')
           .eq('conversation_id', conversationId)
           .retriedOnce();
       final byUser = <String, Map<String, dynamic>>{};
@@ -504,6 +504,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
                 : (row['left_reason'] == 'removed'
                       ? LeftReason.removed
                       : LeftReason.left),
+            closedBy: row['closed_by'] as String?,
           ),
       ]);
     } catch (e) {

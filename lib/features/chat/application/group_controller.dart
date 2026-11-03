@@ -62,6 +62,17 @@ final groupPictureEventsProvider = FutureProvider.autoDispose
       );
     }, retry: _never);
 
+/// "X closed the group" for a group: every member, also one removed by the
+/// close, may read it (the server decides). An error here means no such line,
+/// nothing more -- [chatTimelineProvider] reads it as empty.
+final groupCloseEventsProvider = FutureProvider.autoDispose
+    .family<List<GroupEvent>, String>((ref, conversationId) {
+      ref.watch(currentUserIdProvider);
+      return _value(
+        ref.read(groupSettingsRepositoryProvider).closeEvents(conversationId),
+      );
+    }, retry: _never);
+
 /// "X pinned a message" lines for any chat (a group or a 1:1): every member
 /// may read these (inside their own readable window; the server decides). An
 /// error here means no such lines, nothing more -- [chatTimelineProvider]
@@ -199,7 +210,10 @@ final chatTimelineProvider = Provider.autoDispose<List<TimelineEntry>>((ref) {
   final pictures =
       ref.watch(groupPictureEventsProvider(conversationId)).value ??
       const <GroupEvent>[];
-  return buildTimeline(messages, [...events, ...pictures, ...pins]);
+  final closes =
+      ref.watch(groupCloseEventsProvider(conversationId)).value ??
+      const <GroupEvent>[];
+  return buildTimeline(messages, [...events, ...pictures, ...closes, ...pins]);
 });
 
 final groupControllerProvider = Provider<GroupController>(GroupController.new);
@@ -347,6 +361,22 @@ class GroupController {
     if (result is Err) return result;
     ref.read(deletedGroupsProvider.notifier).add(conversationId);
     _dropQueueAndDraft(conversationId);
+    await ref.read(conversationListProvider.notifier).reloadQuietly();
+    return result;
+  }
+
+  /// Closes [conversationId] for good, admin-only: every member, the caller
+  /// too, is removed and keeps the chat read-only. On success anything queued
+  /// for it and its draft are dropped, and the roster, events and list are
+  /// re-read (the caller's chat is now read-only).
+  Future<Result<void>> closeGroup(String conversationId) async {
+    final result = await ref
+        .read(groupSettingsRepositoryProvider)
+        .closeGroup(conversationId);
+    if (result is Err) return result;
+    _dropQueueAndDraft(conversationId);
+    _invalidateGroup(conversationId);
+    ref.invalidate(groupCloseEventsProvider(conversationId));
     await ref.read(conversationListProvider.notifier).reloadQuietly();
     return result;
   }

@@ -428,24 +428,6 @@ abstract class AppLocalizations {
   /// **'Who may pin messages'**
   String get groupPinWho;
 
-  /// Group info: greyed admin button
-  ///
-  /// In en, this message translates to:
-  /// **'Delete group for everyone'**
-  String get groupDeleteForAll;
-
-  /// Delete group confirm card title
-  ///
-  /// In en, this message translates to:
-  /// **'Delete {name} for everyone?'**
-  String groupDeleteTitle(String name);
-
-  /// Delete group confirm card text
-  ///
-  /// In en, this message translates to:
-  /// **'All messages and photos in this group are gone for everyone. This cannot be undone.'**
-  String get groupDeleteBody;
-
   /// Notice after the group was deleted by an admin
   ///
   /// In en, this message translates to:
@@ -4543,6 +4525,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Too late: {hours} hours have passed'**
   String messageDeleteTooLate(int hours);
+
+  /// Close group confirm card title
+  ///
+  /// In en, this message translates to:
+  /// **'Close group?'**
+  String get groupCloseTitle;
+
+  /// Close group confirm card text
+  ///
+  /// In en, this message translates to:
+  /// **'Closing this group will remove all members, including you. Nobody can write in it again. This can\'t be undone.'**
+  String get groupCloseBody;
+
+  /// Red button of the close group confirm card and of the group info page
+  ///
+  /// In en, this message translates to:
+  /// **'Close group'**
+  String get groupCloseAction;
+
+  /// Extra red line in the close box of the Debug group
+  ///
+  /// In en, this message translates to:
+  /// **'Tester feedback stops.'**
+  String get groupCloseDebugWarning;
+
+  /// Footer of a closed group, instead of the composer
+  ///
+  /// In en, this message translates to:
+  /// **'This group was closed by {name}'**
+  String composerGroupClosed(String name);
+
+  /// Group event line when an admin closes the group
+  ///
+  /// In en, this message translates to:
+  /// **'{name} closed the group'**
+  String eventClosed(String name);
 }
 
 class _AppLocalizationsDelegate

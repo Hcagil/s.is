@@ -838,13 +838,19 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// Realtime.
   Future<Result<void>> deleteForEveryone(Message message) async {
     _ownEdits++;
+    // What the server will leave (a vanish inside 15 min): shown at the tap;
+    // the Realtime echo corrects it if the clocks disagree at the edge.
     final placeholder = Message(
       id: message.id,
       conversationId: message.conversationId,
       senderId: message.senderId,
       body: '',
       createdAt: message.createdAt,
-      deletion: MessageDeletion.placeholder,
+      deletion: deletionOnDelete(
+        ownMessage: message.senderId == _me,
+        createdAt: message.createdAt,
+        now: DateTime.now(),
+      ),
       deletedBy: _me,
     );
     _deleted(placeholder);

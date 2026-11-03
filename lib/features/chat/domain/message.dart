@@ -409,10 +409,23 @@ bool startsRun(List<Message> messages, int index) =>
 /// How long after sending a message its sender may still edit it.
 const deleteForEveryoneWindow = Duration(hours: 6);
 
-/// What a delete for everyone left behind. A new delete always leaves the
-/// "This message was deleted" placeholder; `vanished` is only what older
-/// deletes (within an hour of sending) left, as if never sent.
+/// What a delete for everyone left behind: `vanished` is a delete by the
+/// sender within [vanishWindow] of sending (as if never sent); every other
+/// one leaves the "This message was deleted" `placeholder`.
 enum MessageDeletion { vanished, placeholder }
+
+/// A sender's own delete for everyone inside this age vanishes. Mirrors the
+/// server rule in public.delete_message (the server stays the authority).
+const vanishWindow = Duration(minutes: 15);
+
+/// What the server will leave behind, so the screen can show it at the tap.
+MessageDeletion deletionOnDelete({
+  required bool ownMessage,
+  required DateTime createdAt,
+  required DateTime now,
+}) => ownMessage && now.difference(createdAt) < vanishWindow
+    ? MessageDeletion.vanished
+    : MessageDeletion.placeholder;
 
 /// Mirrors public.fold_search exactly: İ, I and ı all fold to plain 'i',
 /// then the rest is lowercased -- so "istanbul" matches "İstanbul",

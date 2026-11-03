@@ -12,4 +12,7 @@ abstract interface class MessageOpener {
 
   /// Stops waiting for the row [id]: it was hidden or vanished on this phone, so it must never be opened and shown later.
   void forget(String id);
+
+  /// Opens the rows of [peerUserId] that waited for a session now, with the sessions stored today. Call it right before the peer's old sessions can be dropped (a new session is made), so a text sent just before the contact's key changed is not lost. Rows that open come out on [reopened]. Never throws.
+  Future<void> openWaiting(String peerUserId);
 }

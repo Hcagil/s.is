@@ -1042,6 +1042,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bubbleDeletedByAdmin => 'Deleted by an admin';
 
   @override
+  String get chatLockedMessage => '🔒 This message can\'t be opened';
+
+  @override
   String bubbleEdited(String time) {
     return 'edited $time';
   }

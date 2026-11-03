@@ -131,13 +131,14 @@ as $$
 declare
   ids bigint[];
 begin
-  ids := array(select q.id from app_private.storage_removal_queue q order by q.attempts, q.id limit greatest(least(batch, 200), 1) for update skip locked);
-  update app_private.storage_removal_queue q set attempts = q.attempts + 1 where q.id = any(ids);
   -- a path a live message (or group / profile picture) still uses is never removed: drop it from the queue
-  delete from app_private.storage_removal_queue q where q.id = any(ids) and (
+  delete from app_private.storage_removal_queue q where (
     (q.bucket = 'attachments' and exists (select 1 from public.messages m where m.attachment_path = case when q.path ~ '\.t$' then left(q.path, -2) else q.path end))
     or (q.bucket = 'link-previews' and exists (select 1 from public.messages m where m.link_preview is not null and q.path = m.conversation_id::text || '/' || m.id::text || '.jpg'))
     or (q.bucket = 'avatars' and (exists (select 1 from public.conversations c where c.avatar_path = q.path) or exists (select 1 from public.profiles p where p.avatar_path = q.path))));
+  -- only buckets re-checked above are handed out; other rows stay queued. A 0-row result means nothing claimable is left.
+  ids := array(select q.id from app_private.storage_removal_queue q where q.bucket in ('attachments', 'link-previews', 'avatars') order by q.attempts, q.id limit greatest(least(batch, 200), 1) for update skip locked);
+  update app_private.storage_removal_queue q set attempts = q.attempts + 1 where q.id = any(ids);
   return query select q.id, q.bucket, q.path from app_private.storage_removal_queue q where q.id = any(ids) order by q.id;
 end;
 $$;

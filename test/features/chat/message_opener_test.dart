@@ -565,8 +565,11 @@ void main() {
       waitForKey(['w1']);
       final o = make();
       var retrying = false;
+      // The retry that can open it: after k0 made the session (a pre-key
+      // row first retries waiting rows with the old sessions, t_8c161d4051).
+      bool afterKey() => engine.decrypted.contains(ct('k0'));
       engine.during = (c) async {
-        if (retrying && c == ct('w1')) o.forget('w1');
+        if (retrying && afterKey() && c == ct('w1')) o.forget('w1');
       };
       final got = <Message>[];
       final sub = o.reopened.listen(got.add);
@@ -575,7 +578,10 @@ void main() {
       retrying = true;
       await o.open([locked('k0', t: 2, olmType: 0)]);
       await pumpUntil(
-        () => engine.decrypted.where((c) => c == ct('w1')).length == 2,
+        () =>
+            afterKey() &&
+            engine.decrypted.lastIndexOf(ct('w1')) >
+                engine.decrypted.indexOf(ct('k0')),
       );
       await Future<void>.delayed(const Duration(milliseconds: 200));
       expect(got.map((m) => m.id), isNot(contains('w1')));
@@ -588,7 +594,9 @@ void main() {
       final o = make();
       var retrying = false;
       engine.during = (c) async {
+        // Only the retry after k0 made the session opens (and writes) w1.
         if (!retrying || c != ct('w1')) return;
+        if (!engine.decrypted.contains(ct('k0'))) return;
         // Lands after the decrypt answered, while the slow write runs.
         unawaited(
           Future<void>.delayed(

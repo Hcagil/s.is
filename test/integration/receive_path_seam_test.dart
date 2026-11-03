@@ -151,6 +151,9 @@ class _Recording implements MessageOpener {
   final forgotten = <String>[];
   @override
   void forget(String id) => forgotten.add(id);
+
+  @override
+  Future<void> openWaiting(String peerUserId) async {}
 }
 
 /// Opens each row by id after [delay] of that id; throws for [boom]; rows
@@ -181,6 +184,9 @@ class _Scripted implements MessageOpener {
   final forgotten = <String>[];
   @override
   void forget(String id) => forgotten.add(id);
+
+  @override
+  Future<void> openWaiting(String peerUserId) async {}
 }
 
 void main() {

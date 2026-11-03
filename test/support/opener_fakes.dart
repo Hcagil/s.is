@@ -225,4 +225,7 @@ class ForgetSpyOpener implements MessageOpener {
 
   @override
   void forget(String id) => onForget(id);
+
+  @override
+  Future<void> openWaiting(String peerUserId) async {}
 }

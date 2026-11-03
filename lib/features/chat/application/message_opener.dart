@@ -143,6 +143,12 @@ class StoreMessageOpener implements MessageOpener {
       final inBatch = {for (final i in order) rows[i].id};
       final preKeyPeers = <String>{};
       for (final i in order) {
+        // A pre-key message may drop the peer's old sessions: rows of that peer still waiting open with them first.
+        if (rows[i].olmType == 0) {
+          try {
+            await _retryPending(rows[i].senderId, inBatch);
+          } catch (_) {}
+        }
         try {
           out[i] = await _openOne(rows[i], keys);
         } catch (_) {
@@ -376,6 +382,14 @@ class StoreMessageOpener implements MessageOpener {
     } else {
       _schedule();
     }
+  });
+
+  @override
+  Future<void> openWaiting(String peerUserId) => _serial<void>(() async {
+    if (_disposed) return;
+    try {
+      await _retryPending(peerUserId, const {});
+    } catch (_) {}
   });
 
   /// Opens the rows of [peer] that waited for a session (except [skip], the rows of the call in progress) and sends each one that opened on [reopened].

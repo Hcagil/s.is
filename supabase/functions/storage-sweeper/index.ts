@@ -44,9 +44,9 @@ Deno.serve(async (req) => {
     let roundFailed = 0;
 
     for (const [bucket, rows] of byBucket) {
-      const { error: rmErr } = await db.storage.from(bucket).remove(rows.map((r) => r.path));
+      const { error: rmErr } = await db.storage.from(bucket).remove(rows.map(r => r.path));
       if (rmErr === null) {
-        roundDone = roundDone.concat(rows.map((r) => r.id));
+        roundDone = roundDone.concat(rows.map(r => r.id));
       } else {
         roundFailed += rows.length;
         console.log('storage-sweeper: remove failed');

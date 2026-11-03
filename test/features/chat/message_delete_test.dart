@@ -1,5 +1,8 @@
-// Widget tests for deleting a message: the long-press card's delete for me
-// and delete for everyone rows, the `delete-card` confirm card, and how a placeholder or a vanishing message renders.
+// Widget tests for deleting a message (delete rules 1-6, the S4 delete box):
+// the long-press card's one Delete row opens the `delete-card` box; its
+// "Also delete for NAME" (1:1) / "Delete for all members" (group) checkbox
+// shows only when Message.canDeleteForEveryone allows; the media note only
+// with that checkbox; a server refusal shows "Too late" and keeps the message.
 // Written from the contract: what a member sees and what the repository is
 // asked to do -- never how the widgets are built.
 import 'package:flutter/material.dart';
@@ -10,6 +13,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
@@ -32,6 +36,7 @@ Message msg(
   String conversation = 'c1',
   DateTime? createdAt,
   MessageDeletion? deletion,
+  String? attachmentPath,
 }) => Message(
   id: id,
   conversationId: conversation,
@@ -39,6 +44,7 @@ Message msg(
   body: body,
   createdAt: createdAt ?? DateTime.now(),
   deletion: deletion,
+  attachmentPath: attachmentPath,
 );
 
 class _SignedIn extends SessionController {
@@ -63,8 +69,17 @@ Future<ProviderContainer> pump(
   ChatFake chat, {
   bool group = false,
 }) async {
+  // As in production, the open chat is on the list: the box reads the
+  // other person's name (1:1) or that it is a group from it.
+  chat.conversationsResult = Ok([
+    group
+        ? const Conversation(id: 'c1', title: 'Crew')
+        : const Conversation(id: 'c1', other: bob),
+  ]);
   final container = await _scope(chat);
   container.read(openConversationProvider.notifier).open('c1');
+  // The home list under the chat keeps the list provider alive.
+  container.listen(conversationListProvider, (_, _) {});
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
@@ -86,147 +101,269 @@ Future<void> openCard(WidgetTester tester, String id) async {
   expect(find.byKey(const ValueKey('message-menu')), findsOneWidget);
 }
 
+/// Opens the box for [id]: long-press, then the card's one Delete row.
+Future<void> openBox(WidgetTester tester, String id) async {
+  await openCard(tester, id);
+  expect(find.byKey(const ValueKey('menu-delete-for-everyone')), findsNothing);
+  await tester.tap(find.byKey(const ValueKey('menu-delete-for-me')));
+  await tester.pumpAndSettle();
+  expect(find.byKey(const ValueKey('delete-card')), findsOneWidget);
+}
+
+Future<void> confirmBox(WidgetTester tester, {bool tick = false}) async {
+  if (tick) {
+    await tester.tap(find.byKey(const ValueKey('delete-also')));
+    await tester.pumpAndSettle();
+  }
+  await tester.tap(find.byKey(const ValueKey('delete-confirm')));
+  await tester.pumpAndSettle();
+}
+
+final _ago7h = Duration(hours: 7);
+const alsoBob = 'Also delete for Bob';
+const allMembers = 'Delete for all members';
+const mediaNote =
+    "Forwarded copies and copies saved outside SIS won't be deleted.";
+
+ChatFake groupChat({required bool admin, required List<Message> history}) =>
+    ChatFake(self: me.userId)
+      ..groupRosters['c1'] = [
+        GroupMember(member: me, isAdmin: admin),
+        GroupMember(member: bob, isAdmin: !admin),
+      ]
+      ..history['c1'] = history
+      ..adminOf.addAll([if (admin) 'c1']);
+
 void main() {
-  group('delete from the long-press card', () {
-    testWidgets('your own message, under 6h: both deletes offered', (
+  group('the long-press card offers one Delete', () {
+    testWidgets('own, other\'s, old: always one "Delete" row, never two', (
       tester,
     ) async {
-      final chat = ChatFake()
-        ..messagesResult = Ok([msg('m1', from: me.userId)]);
-      await pump(tester, chat);
-
-      await openCard(tester, 'm1');
-
-      expect(find.byKey(const ValueKey('menu-delete-for-me')), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('menu-delete-for-everyone')),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('somebody else\'s message offers delete for me only', (
-      tester,
-    ) async {
-      final chat = ChatFake()
-        ..messagesResult = Ok([msg('m1', from: bob.userId)]);
-      await pump(tester, chat);
-
-      await openCard(tester, 'm1');
-
-      expect(
-        find.byKey(const ValueKey('menu-reply')),
-        findsOneWidget,
-        reason: 'the card did open',
-      );
-      expect(find.byKey(const ValueKey('menu-delete-for-me')), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('menu-delete-for-everyone')),
-        findsNothing,
-      );
-    });
-
-    testWidgets('your own message over 6h still offers delete for everyone', (
-      tester,
-    ) async {
-      final chat = ChatFake()
-        ..messagesResult = Ok([
+      final chat = ChatFake(self: me.userId)
+        ..history['c1'] = [
+          msg('m1', from: me.userId, body: 'mine'),
+          msg('m2', from: bob.userId, body: 'his'),
           msg(
-            'm1',
+            'm3',
             from: me.userId,
-            createdAt: DateTime.now().subtract(const Duration(hours: 7)),
+            body: 'old',
+            createdAt: DateTime.now().subtract(_ago7h),
           ),
-        ]);
+        ];
       await pump(tester, chat);
-
-      await openCard(tester, 'm1');
-
-      expect(
-        find.byKey(const ValueKey('menu-reply')),
-        findsOneWidget,
-        reason: 'the card did open',
-      );
-      expect(
-        find.byKey(const ValueKey('menu-delete-for-everyone')),
-        findsOneWidget,
-        reason: 'since 0.30.8 the sender may delete at any age',
-      );
+      for (final id in ['m1', 'm2', 'm3']) {
+        await openCard(tester, id);
+        final row = find.byKey(const ValueKey('menu-delete-for-me'));
+        expect(row, findsOneWidget, reason: id);
+        expect(
+          find.descendant(of: row, matching: find.text('Delete')),
+          findsOneWidget,
+          reason: '$id: the row reads "Delete"',
+        );
+        expect(
+          find.byKey(const ValueKey('menu-delete-for-everyone')),
+          findsNothing,
+          reason: id,
+        );
+        await tester.tapAt(const Offset(5, 5));
+        await tester.pumpAndSettle();
+      }
     });
+  });
 
-    testWidgets('cancelling the confirm card does nothing', (tester) async {
+  group('the delete box, per rule', () {
+    testWidgets('1:1, own message under 6 h: "Also delete for Bob"; ticked '
+        '-> deleted for everyone', (tester) async {
       final chat = ChatFake(self: me.userId)
         ..history['c1'] = [msg('m1', from: me.userId)];
       await pump(tester, chat);
+      await openBox(tester, 'm1');
+      expect(find.text(alsoBob, findRichText: true), findsOneWidget);
+      expect(find.text(allMembers, findRichText: true), findsNothing);
+      expect(find.text(mediaNote), findsNothing, reason: 'text, no media');
+      await confirmBox(tester, tick: true);
+      expect(chat.deleted, ['m1']);
+      expect(chat.hidden, isEmpty);
+      expect(find.text('hi'), findsNothing);
+    });
 
-      for (final row in ['delete-for-everyone', 'delete-for-me']) {
-        await openCard(tester, 'm1');
-        await tester.tap(find.byKey(ValueKey('menu-$row')));
-        await tester.pumpAndSettle();
+    testWidgets('1:1, own message under 6 h, not ticked: hidden for me only', (
+      tester,
+    ) async {
+      final chat = ChatFake(self: me.userId)
+        ..history['c1'] = [msg('m1', from: me.userId, body: 'mine')];
+      await pump(tester, chat);
+      await openBox(tester, 'm1');
+      await confirmBox(tester);
+      expect(chat.hidden, ['m1']);
+      expect(chat.deleted, isEmpty);
+      expect(find.text('mine'), findsNothing);
+    });
 
-        expect(find.byKey(const ValueKey('delete-card')), findsOneWidget);
-        expect(find.byKey(const ValueKey('delete-confirm')), findsOneWidget);
+    testWidgets('1:1, own message over 6 h: no checkbox, for me only', (
+      tester,
+    ) async {
+      final chat = ChatFake(self: me.userId)
+        ..history['c1'] = [
+          msg(
+            'm1',
+            from: me.userId,
+            body: 'old',
+            createdAt: DateTime.now().subtract(_ago7h),
+          ),
+        ];
+      await pump(tester, chat);
+      await openBox(tester, 'm1');
+      expect(find.byKey(const ValueKey('delete-also')), findsNothing);
+      expect(find.text(alsoBob, findRichText: true), findsNothing);
+      await confirmBox(tester);
+      expect(chat.hidden, ['m1']);
+      expect(chat.deleted, isEmpty);
+    });
+
+    testWidgets('1:1, the other person\'s message: no checkbox (rule 3)', (
+      tester,
+    ) async {
+      final chat = ChatFake(self: me.userId)
+        ..history['c1'] = [msg('m1', from: bob.userId, body: 'from bob')];
+      await pump(tester, chat);
+      await openBox(tester, 'm1');
+      expect(find.byKey(const ValueKey('delete-also')), findsNothing);
+      await confirmBox(tester);
+      expect(chat.hidden, ['m1']);
+      expect(chat.deleted, isEmpty);
+      expect(find.byKey(const ValueKey('message-m1')), findsNothing);
+    });
+
+    testWidgets(
+      'group member, own message under 6 h: "Delete for all members"',
+      (tester) async {
+        final chat = groupChat(
+          admin: false,
+          history: [msg('m1', from: me.userId, body: 'mine')],
+        );
+        await pump(tester, chat, group: true);
+        await openBox(tester, 'm1');
+        expect(find.text(allMembers, findRichText: true), findsOneWidget);
+        expect(find.text(alsoBob, findRichText: true), findsNothing);
+        await confirmBox(tester, tick: true);
+        expect(chat.deleted, ['m1']);
+      },
+    );
+
+    testWidgets('group member, another\'s message: no checkbox (rule 4)', (
+      tester,
+    ) async {
+      final chat = groupChat(
+        admin: false,
+        history: [msg('m1', from: bob.userId)],
+      );
+      await pump(tester, chat, group: true);
+      await openBox(tester, 'm1');
+      expect(find.byKey(const ValueKey('delete-also')), findsNothing);
+      expect(find.text(allMembers, findRichText: true), findsNothing);
+    });
+
+    testWidgets('group admin, a member\'s 30-day-old message: checkbox, '
+        'ticked -> deleted for everyone', (tester) async {
+      final chat = groupChat(
+        admin: true,
+        history: [
+          msg(
+            'm1',
+            from: bob.userId,
+            body: 'from bob',
+            createdAt: DateTime.now().subtract(const Duration(days: 30)),
+          ),
+        ],
+      );
+      await pump(tester, chat, group: true);
+      await openBox(tester, 'm1');
+      expect(find.text(allMembers, findRichText: true), findsOneWidget);
+      await confirmBox(tester, tick: true);
+      expect(chat.deleted, ['m1']);
+      expect(find.text('from bob'), findsNothing);
+    });
+
+    testWidgets('media message: the note shows only with the checkbox', (
+      tester,
+    ) async {
+      final chat = ChatFake(self: me.userId)
+        ..history['c1'] = [
+          msg('m1', from: me.userId, body: 'pic', attachmentPath: 'c1/1.png'),
+          msg(
+            'm2',
+            from: me.userId,
+            body: 'old pic',
+            attachmentPath: 'c1/2.png',
+            createdAt: DateTime.now().subtract(_ago7h),
+          ),
+        ];
+      await pump(tester, chat);
+
+      await openBox(tester, 'm1');
+      expect(find.byKey(const ValueKey('delete-also')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('delete-also')));
+      await tester.pumpAndSettle();
+      expect(find.text(mediaNote), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('delete-cancel')));
+      await tester.pumpAndSettle();
+
+      await openBox(tester, 'm2');
+      expect(find.byKey(const ValueKey('delete-also')), findsNothing);
+      expect(find.text(mediaNote), findsNothing);
+    });
+
+    testWidgets('cancel does nothing, ticked or not', (tester) async {
+      final chat = ChatFake(self: me.userId)
+        ..history['c1'] = [msg('m1', from: me.userId)];
+      await pump(tester, chat);
+      for (final tick in [false, true]) {
+        await openBox(tester, 'm1');
+        if (tick) {
+          await tester.tap(find.byKey(const ValueKey('delete-also')));
+          await tester.pumpAndSettle();
+        }
         await tester.tap(find.byKey(const ValueKey('delete-cancel')));
         await tester.pumpAndSettle();
-
         expect(find.byKey(const ValueKey('delete-card')), findsNothing);
-        expect(
-          chat.deleted,
-          isEmpty,
-          reason: '$row: cancelling must not call the repository',
-        );
-        expect(chat.hidden, isEmpty, reason: row);
-        expect(find.byKey(const ValueKey('message-m1')), findsOneWidget);
+        expect(chat.deleted, isEmpty, reason: 'tick=$tick');
+        expect(chat.hidden, isEmpty, reason: 'tick=$tick');
         expect(find.text('hi'), findsOneWidget);
       }
     });
 
-    testWidgets('confirming calls the repository and updates the screen', (
-      tester,
-    ) async {
-      // In the fake's own history, not just messagesResult: deleteForEveryone
-      // (left unforced) looks a message up there to wipe it.
-      final chat = ChatFake()..history['c1'] = [msg('m1', from: me.userId)];
+    testWidgets('server refusal: "Too late: 6 hours have passed", message '
+        'stays', (tester) async {
+      final chat = ChatFake(self: me.userId)
+        ..history['c1'] = [msg('m1', from: me.userId)]
+        ..deleteForEveryoneResult = const Err(DeniedFailure());
       await pump(tester, chat);
-
-      await openCard(tester, 'm1');
-      await tester.tap(find.byKey(const ValueKey('menu-delete-for-everyone')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('delete-confirm')));
-      await tester.pumpAndSettle();
-
-      expect(chat.deleted, ['m1']);
-      expect(chat.hidden, isEmpty);
-      expect(
-        find.text('This message was deleted'),
-        findsOneWidget,
-        reason: 'since 0.30.8 every delete leaves a placeholder',
-      );
-      expect(find.text('hi'), findsNothing);
+      await openBox(tester, 'm1');
+      await confirmBox(tester, tick: true);
+      expect(find.text('Too late: 6 hours have passed'), findsOneWidget);
+      expect(find.byKey(const ValueKey('message-m1')), findsOneWidget);
+      expect(find.text('hi'), findsOneWidget);
+      expect(chat.hidden, isEmpty, reason: 'a refusal must not hide it');
+      await drainNotice(tester);
     });
 
-    testWidgets('a refusal shows its reason and leaves the message shown', (
+    testWidgets('a confirmed delete leaves "This message was deleted"', (
       tester,
     ) async {
-      final chat = ChatFake()
-        ..messagesResult = Ok([msg('m1', from: me.userId)])
-        ..deleteForEveryoneResult = const Err(
-          ProviderFailure('too late for that'),
-        );
+      final chat = ChatFake(self: me.userId)
+        ..history['c1'] = [
+          msg(
+            'm1',
+            from: me.userId,
+            createdAt: DateTime.now().subtract(const Duration(hours: 1)),
+          ),
+        ];
       await pump(tester, chat);
-
-      await openCard(tester, 'm1');
-      await tester.tap(find.byKey(const ValueKey('menu-delete-for-everyone')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('delete-confirm')));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('too late for that'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('vanish-m1')),
-        findsNothing,
-        reason: 'a refused delete must not touch the message',
-      );
-      expect(find.byKey(const ValueKey('message-m1')), findsOneWidget);
-      await drainNotice(tester);
+      await openBox(tester, 'm1');
+      await confirmBox(tester, tick: true);
+      expect(chat.deleted, ['m1']);
+      expect(find.text('This message was deleted'), findsOneWidget);
     });
   });
 
@@ -296,92 +433,6 @@ void main() {
     });
   });
 
-  group('delete for me and group admins (0.30.8)', () {
-    Future<void> confirm(WidgetTester tester, String id, String row) async {
-      await openCard(tester, id);
-      await tester.tap(find.byKey(ValueKey('menu-$row')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('delete-card')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('delete-confirm')));
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('your own message, delete for me: hidden here only', (
-      tester,
-    ) async {
-      final chat = ChatFake(self: me.userId)
-        ..history['c1'] = [msg('m1', from: me.userId, body: 'mine')];
-      await pump(tester, chat);
-      await confirm(tester, 'm1', 'delete-for-me');
-
-      expect(chat.hidden, ['m1']);
-      expect(chat.deleted, isEmpty);
-      expect(find.text('mine'), findsNothing);
-    });
-
-    testWidgets('somebody else\'s message: for me only, and it hides it', (
-      tester,
-    ) async {
-      final chat = ChatFake(self: me.userId)
-        ..history['c1'] = [msg('m1', from: bob.userId, body: 'from bob')];
-      await pump(tester, chat);
-      await confirm(tester, 'm1', 'delete-for-me');
-
-      expect(chat.hidden, ['m1']);
-      expect(chat.deleted, isEmpty);
-      expect(find.text('from bob'), findsNothing);
-      expect(find.byKey(const ValueKey('message-m1')), findsNothing);
-    });
-
-    testWidgets('a group admin may delete a member\'s message for everyone', (
-      tester,
-    ) async {
-      final chat = ChatFake(self: me.userId)
-        ..adminOf.add('c1')
-        ..groupRosters['c1'] = [
-          const GroupMember(member: me, isAdmin: true),
-          const GroupMember(member: bob, isAdmin: false),
-        ]
-        ..history['c1'] = [
-          msg(
-            'm1',
-            from: bob.userId,
-            body: 'from bob',
-            createdAt: DateTime.now().subtract(const Duration(days: 30)),
-          ),
-        ];
-      await pump(tester, chat, group: true);
-      await confirm(tester, 'm1', 'delete-for-everyone');
-
-      expect(chat.deleted, ['m1']);
-      expect(find.text('from bob'), findsNothing);
-      expect(find.text('Deleted by an admin'), findsOneWidget);
-    });
-
-    testWidgets(
-      'a member who is not admin gets no for-everyone on another\'s',
-      (tester) async {
-        final chat = ChatFake(self: me.userId)
-          ..groupRosters['c1'] = [
-            const GroupMember(member: me, isAdmin: false),
-            const GroupMember(member: bob, isAdmin: true),
-          ]
-          ..history['c1'] = [msg('m1', from: bob.userId)];
-        await pump(tester, chat, group: true);
-        await openCard(tester, 'm1');
-
-        expect(
-          find.byKey(const ValueKey('menu-delete-for-me')),
-          findsOneWidget,
-        );
-        expect(
-          find.byKey(const ValueKey('menu-delete-for-everyone')),
-          findsNothing,
-        );
-      },
-    );
-  });
-
   group('placeholder text', () {
     Message deleted(String by) => Message(
       id: 'm1',
@@ -398,6 +449,26 @@ void main() {
       await pump(tester, chat);
       expect(find.text('This message was deleted'), findsOneWidget);
       expect(find.text('Deleted by an admin'), findsNothing);
+    });
+
+    testWidgets('in a group the sender\'s name stays above the grey line', (
+      tester,
+    ) async {
+      final chat = ChatFake(self: me.userId)
+        ..groupRosters['c1'] = [
+          const GroupMember(member: me, isAdmin: false),
+          const GroupMember(member: bob, isAdmin: false),
+        ]
+        ..messagesResult = Ok([deleted(bob.userId)]);
+      await pump(tester, chat, group: true);
+      expect(find.text('This message was deleted'), findsOneWidget);
+      final name = find.text('Bob');
+      expect(name, findsOneWidget, reason: 'title is Crew; Bob is the sender');
+      expect(
+        tester.getTopLeft(name).dy,
+        lessThan(tester.getTopLeft(find.text('This message was deleted')).dy),
+        reason: 'the name sits above the deleted line',
+      );
     });
 
     testWidgets('deleted by somebody else: an admin', (tester) async {

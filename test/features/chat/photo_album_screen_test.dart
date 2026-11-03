@@ -5,8 +5,8 @@
 //   showing "+N" for the photos not drawn;
 // - a lone photo with a group, or photos of different groups, stay plain;
 // - in the photo viewer an album photo's menu deletes and forwards THAT
-//   photo only; its delete-for-everyone row reads "Delete this photo", while
-//   "Delete for me" keeps its label.
+//   photo only; its one Delete row opens the delete box, whose "for everyone"
+//   tick deletes that photo only.
 //
 // Wired as the app mounts it: MessageScreen over the controllers, with the
 // shared server-like ChatFake behind the repository.
@@ -227,48 +227,25 @@ void main() {
       return id;
     }
 
-    testWidgets('delete for everyone reads "Delete this photo"; "Delete for '
-        'me" keeps its label', (tester) async {
+    testWidgets('one Delete row, no separate for-everyone row', (tester) async {
       await pump(tester, album(3));
       await openSecond(tester);
-
+      expect(find.byKey(const ValueKey('menu-delete-for-me')), findsOneWidget);
       expect(
-        find.descendant(
-          of: find.byKey(const ValueKey('menu-delete-for-everyone')),
-          matching: find.text('Delete this photo'),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: find.byKey(const ValueKey('menu-delete-for-me')),
-          matching: find.text('Delete for me'),
-        ),
-        findsOneWidget,
+        find.byKey(const ValueKey('menu-delete-for-everyone')),
+        findsNothing,
       );
     });
 
-    testWidgets('a plain photo keeps "Delete for everyone"', (tester) async {
-      await pump(tester, [photo('p1')]);
-      await tester.tap(find.byKey(const ValueKey('attachment-c1/p1.png')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('viewer-menu')));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.descendant(
-          of: find.byKey(const ValueKey('menu-delete-for-everyone')),
-          matching: find.text('Delete for everyone'),
-        ),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('"Delete this photo" deletes that photo only', (tester) async {
+    testWidgets('Delete, ticked for everyone, deletes that photo only', (
+      tester,
+    ) async {
       final chat = await pump(tester, album(3));
       final id = await openSecond(tester);
 
-      await tester.tap(find.byKey(const ValueKey('menu-delete-for-everyone')));
+      await tester.tap(find.byKey(const ValueKey('menu-delete-for-me')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('delete-also')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('delete-confirm')));
       await tester.pumpAndSettle();

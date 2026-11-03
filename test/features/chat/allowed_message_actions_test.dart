@@ -1,8 +1,9 @@
 // allowedMessageActions, from the rules in docs/DECISIONS.md: reply and
 // forward on any stored message; edit only on your own message younger than
-// 6 hours (never a forwarded one); delete for everyone on your own message at
-// any age, or on anyone's when you are a group admin (0.30.8); nothing on a
-// pending or deleted message. Read-by left the action set in Update 1
+// 6 hours (never a forwarded one); one Delete (the box decides "for everyone",
+// 6 h rule) on your own message at
+// any age and on anyone's (delete for me works on any message, rule 1);
+// nothing on a pending message. Read-by left the action set in Update 1
 // (reactions); slice 7 brings a readers card instead.
 import 'dart:typed_data';
 
@@ -49,7 +50,7 @@ void main() {
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
-          MessageAction.deleteForEveryone,
+          MessageAction.deleteForMe,
         ]),
       );
     });
@@ -68,7 +69,7 @@ void main() {
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
-          MessageAction.deleteForEveryone,
+          MessageAction.deleteForMe,
         ]),
       );
     });
@@ -87,7 +88,7 @@ void main() {
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
-          MessageAction.deleteForEveryone,
+          MessageAction.deleteForMe,
         ]),
       );
     });
@@ -103,7 +104,7 @@ void main() {
         equals([
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.deleteForEveryone,
+          MessageAction.deleteForMe,
         ]),
       );
     });
@@ -122,7 +123,7 @@ void main() {
           MessageAction.reply,
           MessageAction.forward,
           MessageAction.edit,
-          MessageAction.deleteForEveryone,
+          MessageAction.deleteForMe,
         ]),
       );
     });
@@ -138,7 +139,7 @@ void main() {
         equals([
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.deleteForEveryone,
+          MessageAction.deleteForMe,
         ]),
       );
     });
@@ -154,7 +155,7 @@ void main() {
         equals([
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.deleteForEveryone,
+          MessageAction.deleteForMe,
         ]),
       );
     });
@@ -171,7 +172,7 @@ void main() {
         equals([
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.deleteForEveryone,
+          MessageAction.deleteForMe,
         ]),
       );
     });
@@ -182,7 +183,14 @@ void main() {
         createdAt: now.subtract(const Duration(hours: 5)),
       );
       final actions = allowedMessageActions(msg, me: me, now: now);
-      expect(actions, equals([MessageAction.reply, MessageAction.forward]));
+      expect(
+        actions,
+        equals([
+          MessageAction.reply,
+          MessageAction.forward,
+          MessageAction.deleteForMe,
+        ]),
+      );
     });
 
     test('Somebody else\'s photo, age < 6h -> reply & forward', () {
@@ -192,7 +200,14 @@ void main() {
         attachmentPath: 'c1/1.png',
       );
       final actions = allowedMessageActions(msg, me: me, now: now);
-      expect(actions, equals([MessageAction.reply, MessageAction.forward]));
+      expect(
+        actions,
+        equals([
+          MessageAction.reply,
+          MessageAction.forward,
+          MessageAction.deleteForMe,
+        ]),
+      );
     });
 
     test(
@@ -210,7 +225,7 @@ void main() {
       },
     );
 
-    test('Deleted message (placeholder) -> empty list', () {
+    test('Deleted message (placeholder) -> Delete only', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(hours: 1)),
@@ -218,11 +233,12 @@ void main() {
       );
       final actionsGroupFalse = allowedMessageActions(msg, me: me, now: now);
       final actionsGroupTrue = allowedMessageActions(msg, me: me, now: now);
-      expect(actionsGroupFalse, equals([]));
-      expect(actionsGroupTrue, equals([]));
+      // Delete for me works on any message (rule 1), a deleted one too.
+      expect(actionsGroupFalse, equals([MessageAction.deleteForMe]));
+      expect(actionsGroupTrue, equals([MessageAction.deleteForMe]));
     });
 
-    test('Deleted message (vanished) from other user -> empty list', () {
+    test('Deleted message (vanished) from other user -> Delete only', () {
       final msg = buildMessage(
         senderId: other,
         createdAt: now.subtract(const Duration(hours: 1)),
@@ -230,18 +246,18 @@ void main() {
       );
       final actionsGroupFalse = allowedMessageActions(msg, me: me, now: now);
       final actionsGroupTrue = allowedMessageActions(msg, me: me, now: now);
-      expect(actionsGroupFalse, equals([]));
-      expect(actionsGroupTrue, equals([]));
+      // Delete for me works on any message (rule 1), a deleted one too.
+      expect(actionsGroupFalse, equals([MessageAction.deleteForMe]));
+      expect(actionsGroupTrue, equals([MessageAction.deleteForMe]));
     });
 
-    test('me == null: fresh stored message -> no edit, delete', () {
+    test('me == null: fresh stored message -> no edit', () {
       final msg = buildMessage(
         senderId: me,
         createdAt: now.subtract(const Duration(minutes: 10)),
       );
       final actions = allowedMessageActions(msg, me: null, now: now);
       expect(actions, isNot(contains(MessageAction.edit)));
-      expect(actions, isNot(contains(MessageAction.deleteForEveryone)));
     });
 
     test('me == null: deleted message -> empty list', () {
@@ -251,7 +267,7 @@ void main() {
         deletion: MessageDeletion.placeholder,
       );
       final actions = allowedMessageActions(msg, me: null, now: now);
-      expect(actions, equals([]));
+      expect(actions, equals([MessageAction.deleteForMe]));
     });
 
     // Run under TZ=JST-9: the window is between instants, so a local and a
@@ -269,7 +285,7 @@ void main() {
       );
       expect(
         allowedMessageActions(fresh, me: me, now: now),
-        contains(MessageAction.deleteForEveryone),
+        contains(MessageAction.deleteForMe),
       );
       expect(
         allowedMessageActions(fresh, me: me, now: now.toLocal()),
@@ -280,28 +296,26 @@ void main() {
         equals([
           MessageAction.reply,
           MessageAction.forward,
-          MessageAction.deleteForEveryone,
+          MessageAction.deleteForMe,
         ]),
       );
     });
 
-    test('an admin may delete somebody else\'s message, at any age', () {
+    test('admin or not, another\'s old message gets the same one Delete', () {
       final theirs = buildMessage(
         senderId: other,
         createdAt: now.subtract(const Duration(days: 30)),
       );
-      expect(
-        allowedMessageActions(theirs, me: me, now: now),
-        isNot(contains(MessageAction.deleteForEveryone)),
-      );
+      const row = [
+        MessageAction.reply,
+        MessageAction.forward,
+        MessageAction.deleteForMe,
+      ];
+      expect(allowedMessageActions(theirs, me: me, now: now), equals(row));
       expect(
         allowedMessageActions(theirs, me: me, now: now, admin: true),
-        equals([
-          MessageAction.reply,
-          MessageAction.forward,
-          MessageAction.deleteForEveryone,
-        ]),
-        reason: 'delete, but never edit on another\'s message',
+        equals(row),
+        reason: 'never edit on another\'s; the box decides "for everyone"',
       );
     });
   });

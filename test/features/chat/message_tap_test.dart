@@ -511,26 +511,11 @@ void main() {
     final kinds = <String, (Message, List<String>)>{
       'my fresh text': (
         mine('k'),
-        [
-          'reply',
-          'copy',
-          'forward',
-          'edit',
-          'pin',
-          'delete-for-me',
-          'delete-for-everyone',
-        ],
+        ['reply', 'copy', 'forward', 'edit', 'pin', 'delete-for-me'],
       ),
       'my 7 h old text': (
         chatMessage('k', body: 'old', from: me.userId, createdAt: old),
-        [
-          'reply',
-          'copy',
-          'forward',
-          'pin',
-          'delete-for-me',
-          'delete-for-everyone',
-        ],
+        ['reply', 'copy', 'forward', 'pin', 'delete-for-me'],
       ),
       'somebody else\'s text': (
         theirs('k'),

@@ -1193,3 +1193,77 @@ final class PeekReactionTests: XCTestCase {
     XCTAssertEqual(quote(body: flags), flags)
   }
 }
+
+/// The reaction notification text must equal Android's reaction_* strings (values/ and values-tr/), in InstantPush.reactionText's case order.
+final class PeekReactionTextTests: XCTestCase {
+  func text(_ e: String?, _ q: String? = nil, _ k: String? = nil, tr: Bool) -> String {
+    PeekCore.reactionText(emoji: e, quote: q, quoteKind: k, turkish: tr)
+  }
+
+  // Red if the generic text is wrong or the emoji-less guard is dropped.
+  func testNoEmojiGivesTheGenericText() {
+    XCTAssertEqual(text(nil, tr: false), "New reaction to your message")
+    XCTAssertEqual(text(nil, tr: true), "Mesajınıza yeni tepki")
+  }
+
+  // Red if an empty emoji is treated as an emoji ("Reacted  to your message").
+  func testAnEmptyEmojiGivesTheGenericTextEvenWithAQuote() {
+    XCTAssertEqual(text("", "hi", "photo", tr: false), "New reaction to your message")
+    XCTAssertEqual(text("", "hi", "photo", tr: true), "Mesajınıza yeni tepki")
+  }
+
+  // Red if the quote text, quote marks or emoji position differ.
+  func testAnEmojiWithAQuoteNamesTheQuote() {
+    XCTAssertEqual(text("👍", "Günaydın", tr: false), "Reacted 👍 to: \"Günaydın\"")
+    XCTAssertEqual(text("👍", "Günaydın", tr: true), "\"Günaydın\" mesajınıza 👍 tepkisini verdi")
+  }
+
+  // Red if the quote does not win over the media kind (case order).
+  func testAQuoteWinsOverTheMediaKind() {
+    XCTAssertEqual(text("👍", "hi", "photo", tr: false), "Reacted 👍 to: \"hi\"")
+    XCTAssertEqual(text("👍", "hi", "photo", tr: true), "\"hi\" mesajınıza 👍 tepkisini verdi")
+  }
+
+  // Red if an empty quote is used instead of falling through to the kind.
+  func testAnEmptyQuoteFallsThroughToTheKind() {
+    XCTAssertEqual(text("👍", "", "video", tr: false), "Reacted 👍 to your video")
+  }
+
+  // Red if "photo" maps to another media word.
+  func testPhoto() {
+    XCTAssertEqual(text("❤️", nil, "photo", tr: false), "Reacted ❤️ to your photo")
+    XCTAssertEqual(text("❤️", nil, "photo", tr: true), "Fotoğrafınıza ❤️ tepkisini verdi")
+  }
+
+  // Red if "video" maps to another media word.
+  func testVideo() {
+    XCTAssertEqual(text("❤️", nil, "video", tr: false), "Reacted ❤️ to your video")
+    XCTAssertEqual(text("❤️", nil, "video", tr: true), "Videonuza ❤️ tepkisini verdi")
+  }
+
+  // Red if "sticker" maps to another media word.
+  func testSticker() {
+    XCTAssertEqual(text("❤️", nil, "sticker", tr: false), "Reacted ❤️ to your sticker")
+    XCTAssertEqual(text("❤️", nil, "sticker", tr: true), "Çıkartmanıza ❤️ tepkisini verdi")
+  }
+
+  // Red if "voice" maps to another media word.
+  func testVoice() {
+    XCTAssertEqual(text("❤️", nil, "voice", tr: false), "Reacted ❤️ to your voice message")
+    XCTAssertEqual(text("❤️", nil, "voice", tr: true), "Sesli mesajınıza ❤️ tepkisini verdi")
+  }
+
+  // Red if "file" maps to another media word.
+  func testFile() {
+    XCTAssertEqual(text("❤️", nil, "file", tr: false), "Reacted ❤️ to your file")
+    XCTAssertEqual(text("❤️", nil, "file", tr: true), "Dosyanıza ❤️ tepkisini verdi")
+  }
+
+  // Red if nil or an unknown kind does not fall back to "your message".
+  func testEmojiOnlyAndUnknownKindsSayYourMessage() {
+    for k in [nil, "", "text", "gif"] as [String?] {
+      XCTAssertEqual(text("🔥", nil, k, tr: false), "Reacted 🔥 to your message", "kind \(k ?? "nil")")
+      XCTAssertEqual(text("🔥", nil, k, tr: true), "Mesajınıza 🔥 tepkisini verdi", "kind \(k ?? "nil")")
+    }
+  }
+}

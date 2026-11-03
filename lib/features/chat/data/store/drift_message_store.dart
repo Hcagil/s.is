@@ -264,6 +264,14 @@ final class DriftMessageStore
     final out = <MessagesCompanion>[];
     for (final m in messages) {
       if (m.isPending) continue;
+      final tomb =
+          await (db.select(db.meta)..where(
+                (t) => t.key.equals(
+                  '${vanishedMetaPrefix(m.conversationId)}${m.id}',
+                ),
+              ))
+              .getSingleOrNull();
+      if (tomb != null) continue; // a vanished id is final on this phone
       if (m.deletion == null && isLockedPlaceholder(m.body)) {
         final old = await (db.select(
           db.messages,

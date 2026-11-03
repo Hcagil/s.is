@@ -1747,6 +1747,8 @@
   "@groupCloseDebugWarning": {"description": "Extra red line in the close box of the Debug group"},
   "composerGroupClosed": "This group was closed by {name}",
   "@composerGroupClosed": {"description": "Footer of a closed group, instead of the composer", "placeholders": {"name": {"type": "String"}}},
+  "composerGroupClosedNoName": "This group was closed",
+  "@composerGroupClosedNoName": {"description": "Bar instead of the composer in a closed group, while the closer's name loads or if it failed"},
   "eventClosed": "{name} closed the group",
   "@eventClosed": {"description": "Group event line when an admin closes the group", "placeholders": {"name": {"type": "String"}}}
 }

@@ -2574,6 +2574,9 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String get composerGroupClosedNoName => 'Bu grup kapatıldı';
+
+  @override
   String eventClosed(String name) {
     return '$name grubu kapattı';
   }

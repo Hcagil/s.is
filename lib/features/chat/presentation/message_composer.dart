@@ -409,7 +409,9 @@ class _ComposerState extends ConsumerState<_Composer>
         ),
         child: Text(
           closerId != null
-              ? l.composerGroupClosed(nameOrMember(l, closer ?? ''))
+              ? (closer != null && closer.isNotEmpty
+                    ? l.composerGroupClosed(nameOrMember(l, closer))
+                    : l.composerGroupClosedNoName)
               : (isSystem ? l.composerReadOnlySystem : l.composerLeftGroup),
           textAlign: TextAlign.center,
           style: TextStyle(

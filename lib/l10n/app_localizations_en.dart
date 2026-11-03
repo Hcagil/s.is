@@ -2601,6 +2601,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get composerGroupClosedNoName => 'This group was closed';
+
+  @override
   String eventClosed(String name) {
     return '$name closed the group';
   }

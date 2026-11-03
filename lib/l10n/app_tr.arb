@@ -773,5 +773,6 @@
   "groupCloseAction": "Grubu kapat",
   "groupCloseDebugWarning": "Test kullanıcılarının geri bildirimi durur.",
   "composerGroupClosed": "Bu grup {name} tarafından kapatıldı",
+  "composerGroupClosedNoName": "Bu grup kapatıldı",
   "eventClosed": "{name} grubu kapattı"
 }

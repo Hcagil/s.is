@@ -4544,6 +4544,12 @@ abstract class AppLocalizations {
   /// **'This group was closed by {name}'**
   String composerGroupClosed(String name);
 
+  /// Bar instead of the composer in a closed group, while the closer's name loads or if it failed
+  ///
+  /// In en, this message translates to:
+  /// **'This group was closed'**
+  String get composerGroupClosedNoName;
+
   /// Group event line when an admin closes the group
   ///
   /// In en, this message translates to:

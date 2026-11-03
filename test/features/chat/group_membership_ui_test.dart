@@ -568,6 +568,54 @@ void main() {
       await drain(t);
     });
 
+    testWidgets('a closed group says who closed it instead of the box', (
+      t,
+    ) async {
+      final w = World();
+      w.chat.conversationsResult = const Ok([
+        Conversation(id: 'g1', title: 'Club', lastMessage: 'yo', hasLeft: true),
+      ]);
+      w.chat.groupRosters['g1'] = [
+        const GroupMember(
+          member: me,
+          isAdmin: false,
+          leftReason: LeftReason.removed,
+          closedBy: 'ub',
+        ),
+        const GroupMember(
+          member: bob,
+          isAdmin: true,
+          leftReason: LeftReason.removed,
+          closedBy: 'ub',
+        ),
+      ];
+      await openClub(t, w);
+      expect(byKey('composer-closed'), findsOneWidget);
+      expect(byKey('composer-left'), findsNothing);
+      expect(byKey('composer-field'), findsNothing);
+      expect(
+        find.descendant(
+          of: byKey('composer-closed'),
+          matching: find.text('This group was closed by ${bob.displayName}'),
+        ),
+        findsOneWidget,
+      );
+      await drain(t);
+    });
+
+    testWidgets('closedBy on a roster row does not close a group the member '
+        'is still in', (t) async {
+      final w = World();
+      w.chat.groupRosters['g1'] = [
+        const GroupMember(member: me, isAdmin: true),
+        const GroupMember(member: bob, isAdmin: false, closedBy: 'u1'),
+      ];
+      await openClub(t, w);
+      expect(byKey('composer-closed'), findsNothing);
+      expect(byKey('composer-field'), findsOneWidget);
+      await drain(t);
+    });
+
     testWidgets('a group already left opens read-only', (t) async {
       final w = World();
       w.chat.conversationsResult = const Ok([

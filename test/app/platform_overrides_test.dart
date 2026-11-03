@@ -86,7 +86,7 @@ void main() {
 
     final update = c.read(updateRepositoryProvider);
     expect(update, isA<TestFlightUpdateRepository>());
-    await update.openStoreListing();
+    expect(await update.openStoreListing(), isTrue);
     expect(urls.launches.single.url, 'itms-beta://');
 
     final r = await c.read(authRepositoryProvider).signInWithGoogle();
@@ -107,7 +107,7 @@ void main() {
         final update = c.read(updateRepositoryProvider);
         expect(update, isA<PlayUpdateRepository>());
         expect(update, isNot(isA<TestFlightUpdateRepository>()));
-        await update.openStoreListing();
+        expect(await update.openStoreListing(), isTrue);
         expect(urls.launches.first.url, 'market://details?id=com.esd.sis');
 
         final r = await c.read(authRepositoryProvider).signInWithGoogle();

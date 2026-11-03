@@ -13,6 +13,9 @@ class FakeUrlLauncherPlatform extends UrlLauncherPlatform {
   final canLaunchAsked = <String>[];
   bool Function(String url) handles = (_) => true;
 
+  /// When set, launchUrl throws it (a platform error instead of an answer).
+  Object? launchThrows;
+
   @override
   LinkDelegate? get linkDelegate => null;
 
@@ -25,6 +28,7 @@ class FakeUrlLauncherPlatform extends UrlLauncherPlatform {
   @override
   Future<bool> launchUrl(String url, LaunchOptions options) async {
     launches.add((url: url, mode: options.mode));
+    if (launchThrows != null) throw launchThrows!;
     return handles(url);
   }
 

@@ -27,15 +27,21 @@ final class TestFlightUpdateRepository
   Future<void> completeFlexibleUpdate() async {}
 
   @override
-  Future<void> startImmediateUpdate() => openStoreListing();
+  Future<void> startImmediateUpdate() async {
+    if (!await openStoreListing()) throw StateError('TestFlight did not open');
+  }
 
   @override
-  Future<void> openStoreListing() async {
+  Future<bool> openStoreListing() async {
     // ponytail: TestFlight link; becomes the App Store URL at App Store
     // release.
-    await launchUrl(
-      Uri.parse('itms-beta://'),
-      mode: LaunchMode.externalApplication,
-    );
+    try {
+      return await launchUrl(
+        Uri.parse('itms-beta://'),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      return false;
+    }
   }
 }

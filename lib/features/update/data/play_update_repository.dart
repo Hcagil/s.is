@@ -49,17 +49,24 @@ final class PlayUpdateRepository
   Future<void> startImmediateUpdate() => InAppUpdate.performImmediateUpdate();
 
   @override
-  Future<void> openStoreListing() async {
+  Future<bool> openStoreListing() async {
     const web = 'https://play.google.com/store/apps/details?id=$_package';
     try {
       final opened = await launchUrl(
         Uri.parse('market://details?id=$_package'),
         mode: LaunchMode.externalApplication,
       );
-      if (opened) return;
+      if (opened) return true;
     } catch (_) {
       // No Play app to handle market://; fall through to the web listing.
     }
-    await launchUrl(Uri.parse(web), mode: LaunchMode.externalApplication);
+    try {
+      return await launchUrl(
+        Uri.parse(web),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      return false;
+    }
   }
 }

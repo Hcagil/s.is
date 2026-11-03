@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/notice.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/update_controller.dart';
 
@@ -38,8 +39,19 @@ class UpdateRequiredScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 24),
                 FilledButton(
-                  onPressed: () =>
-                      ref.read(updateControllerProvider.notifier).updateNow(),
+                  onPressed: () async {
+                    final l10n = AppLocalizations.of(context);
+                    final opened = await ref
+                        .read(updateControllerProvider.notifier)
+                        .updateNow();
+                    if (!opened && context.mounted) {
+                      showSisNotice(
+                        context,
+                        l10n.updateTestFlightOpenFailed,
+                        isError: true,
+                      );
+                    }
+                  },
                   child: Text(AppLocalizations.of(context).updateNow),
                 ),
               ],

@@ -116,7 +116,7 @@ class DesignUpdate implements UpdateRepository {
   @override
   Future<void> startImmediateUpdate() async {}
   @override
-  Future<void> openStoreListing() async {}
+  Future<bool> openStoreListing() async => true;
 }
 
 class DesignChat implements ChatRepository {

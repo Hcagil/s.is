@@ -155,16 +155,19 @@ class DictationFake implements Dictation {
   /// The callbacks passed to [start].
   void Function(String text)? _onText;
   void Function()? _onEnd;
+  void Function()? _onError;
 
   @override
   Future<VoiceStart> start({
     required String localeTag,
     required void Function(String text) onText,
     required void Function() onEnd,
+    void Function()? onError,
   }) async {
     this.localeTag = localeTag;
     _onText = onText;
     _onEnd = onEnd;
+    _onError = onError;
     calls.add('start');
     await Future<void>.delayed(const Duration(milliseconds: 20));
     return startResult;
@@ -178,6 +181,13 @@ class DictationFake implements Dictation {
 
   /// Simulate the dictation ending by itself.
   void endByItself() => _onEnd?.call();
+
+  /// Simulate the recogniser failing: [onError] first, then [onEnd], as the
+  /// [Dictation] contract orders them.
+  void failByItself() {
+    _onError?.call();
+    _onEnd?.call();
+  }
 
   @override
   Future<void> stop() async {

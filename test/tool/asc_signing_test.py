@@ -830,6 +830,22 @@ class AscSigningTest(unittest.TestCase):
             self.assertEqual(self.group_lines(p, "Beta Club"), [], "%r: an unnamed group was handled" % groups)
             self.assertEqual(self.group_lines(p, "Delta"), [], "%r: an unnamed group was handled" % groups)
 
+    def test_distribute_tester_count_failure_shows_unknown(self):
+        for status in (403, 404, 500):
+            self.setUp()
+            self.srv.state["fail"][("GET", "/v1/betaGroups/G-B/betaTesters")] = status
+            self.srv.state["fail"][("GET", "/v1/betaGroups/G-A/betaTesters")] = status
+            p = self.star()
+            self.assertEqual(p.returncode, 0, "%d on a tester count stopped the run: %s" % (status, p.stderr))
+            for name in ("Beta Club", "Alpha"):
+                lines = self.group_lines(p, name)
+                self.assertEqual(len(lines), 1, (status, name, lines))
+                self.assertRegex(lines[0], r"testers=\?(?!\S)", "%d: %s does not show an unknown count" % (status, name))
+            self.assertEqual(self.group_adds(), ["G-B", "G-C"], "%d: a group was skipped" % status)
+            self.assert_group_line(p, "Gamma", False, 0)
+            self.assert_group_line(p, "Delta", True, 1)
+            self.assertEqual(len(self.find("POST", "/v1/betaAppReviewSubmissions")), 1, status)
+
     def test_distribute_tester_count_beyond_one_page(self):
         many = {"G-A": [], "G-B": ["t%d@mail.test" % i for i in range(250)], "G-C": [], "G-D": []}
         p = self.star(testers=many)

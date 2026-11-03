@@ -7,6 +7,12 @@ protocol PeekDecryptor {
   func prekeySessionId(ct: String) -> String?
   func decrypt(sessionPickle: String, pickleKey: [UInt8], messageId: String, ct: String, olmType: Int32) -> String?
   func decryptInbound(accountPickle: String, pickleKey: [UInt8], identityKey: String, messageId: String, ct: String) -> String?
+  func decryptReaction(sessionPickle: String, pickleKey: [UInt8], messageId: String, reactorId: String, ct: String, olmType: Int32) -> String?
+}
+
+extension PeekDecryptor {
+  /// Default so older fakes still conform; the real decryptor overrides it.
+  func decryptReaction(sessionPickle: String, pickleKey: [UInt8], messageId: String, reactorId: String, ct: String, olmType: Int32) -> String? { nil }
 }
 
 /// The data of an encrypted push that carries its ciphertext (FCM data keys, all strings).
@@ -36,6 +42,17 @@ struct PeekPush: Equatable {
     self.olmType = ot == "1" ? 1 : 0
     self.senderKey = (userInfo["sk"] as? String).flatMap { $0.isEmpty ? nil : $0 }
     self.senderId = (userInfo["si"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+  }
+}
+
+/// A reaction push of an encrypted chat: the PeekPush fields (ct, ot, ids) plus the reactor. Nil unless kind == "reaction" and reactor_id has the UUID shape.
+struct PeekReactionPush: Equatable {
+  let push: PeekPush
+  let reactorId: String
+  init?(userInfo: [AnyHashable: Any]) {
+    guard (userInfo["kind"] as? String) == "reaction", let push = PeekPush(userInfo: userInfo), let reactor = userInfo["reactor_id"] as? String, PeekCore.isUuid(reactor) else { return nil }
+    self.push = push
+    self.reactorId = reactor
   }
 }
 
@@ -139,7 +156,31 @@ enum PeekCore {
     return true
   }
 
-  private static func isUuid(_ s: String) -> Bool {
+  static func isUuid(_ s: String) -> Bool {
     return s.range(of: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", options: .regularExpression) != nil
+  }
+
+  /// The emoji and the quote of a reaction push, or nil. Reads and decrypts only; saves nothing. Rules in this order:
+  /// 1. data.ownerId == push.push.userId, else nil.
+  /// 2. data.peerUserId (the phone's own copy) must be non-nil and equal push.reactorId, else nil.
+  /// 3. Only sessions with peerUserId == the peer: olmType 1 tries each, first non-nil wins; olmType 0 uses only the stored session whose sessionId == decryptor.prekeySessionId(ct) (no inbound session ever).
+  /// 4. quote = data.storedBody only when data.storedSenderId == data.ownerId, it is not lockedPlaceholder and not blank; cut to 60 characters plus "…".
+  static func reaction(push: PeekReactionPush, data: PeekData, pickleKey: [UInt8], decryptor: PeekDecryptor) -> (emoji: String, quote: String?)? {
+    let p = push.push
+    guard data.ownerId == p.userId, let peer = data.peerUserId, peer == push.reactorId else { return nil }
+    var emoji: String?
+    if p.olmType == 1 {
+      for session in data.sessions where session.peerUserId == peer {
+        if let e = decryptor.decryptReaction(sessionPickle: session.pickle, pickleKey: pickleKey, messageId: p.messageId, reactorId: peer, ct: p.ct, olmType: 1) { emoji = e; break }
+      }
+    } else if let id = decryptor.prekeySessionId(ct: p.ct), let session = data.sessions.first(where: { $0.sessionId == id && $0.peerUserId == peer }) {
+      emoji = decryptor.decryptReaction(sessionPickle: session.pickle, pickleKey: pickleKey, messageId: p.messageId, reactorId: peer, ct: p.ct, olmType: 0)
+    }
+    guard let shown = emoji, !shown.isEmpty else { return nil }
+    var quote: String? = nil
+    if let body = data.storedBody, data.storedSenderId == data.ownerId, body != lockedPlaceholder, !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      quote = body.count > 60 ? String(body.prefix(60)) + "…" : body
+    }
+    return (shown, quote)
   }
 }

@@ -75,6 +75,22 @@ fn envelope_text(plaintext: &[u8], message_id: &str) -> Option<String> {
     text
 }
 
+/// Extract the "e" field of a reaction envelope (v==1, k=="r", i==message_id, u==reactor_id); every other copy made here is wiped.
+fn envelope_emoji(plaintext: &[u8], message_id: &str, reactor_id: &str) -> Option<String> {
+    let mut json: serde_json::Value = serde_json::from_slice(plaintext).ok()?;
+    let ok = json.get("v").and_then(|v| v.as_i64()) == Some(1) && json.get("k").and_then(|k| k.as_str()) == Some("r") && json.get("i").and_then(|i| i.as_str()) == Some(message_id) && json.get("u").and_then(|u| u.as_str()) == Some(reactor_id);
+    let text = if ok {
+        match json.get_mut("e").map(std::mem::take) {
+            Some(serde_json::Value::String(s)) => Some(s),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    wipe_value(&mut json);
+    text
+}
+
 /// Finish processing a decrypted message.
 fn finish(mut plain: Vec<u8>, message_id: &str, out: *mut u8, out_cap: usize, out_len: *mut usize) -> i32 {
     let text = envelope_text(&plain, message_id);
@@ -96,6 +112,24 @@ fn finish(mut plain: Vec<u8>, message_id: &str, out: *mut u8, out_cap: usize, ou
 /// Guard a function call to catch panics.
 fn guarded(f: impl FnOnce() -> i32) -> i32 {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or(6)
+}
+
+/// Finish processing a decrypted reaction: the emoji, bound to message_id and reactor_id.
+fn finish_emoji(mut plain: Vec<u8>, message_id: &str, reactor_id: &str, out: *mut u8, out_cap: usize, out_len: *mut usize) -> i32 {
+    let text = envelope_emoji(&plain, message_id, reactor_id);
+    wipe(&mut plain);
+    let Some(text) = text else { return 4 };
+    let mut bytes = text.into_bytes();
+    if bytes.len() > out_cap {
+        wipe(&mut bytes);
+        return 5;
+    }
+    unsafe {
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len());
+        *out_len = bytes.len();
+    }
+    wipe(&mut bytes);
+    0
 }
 
 /// Session id inside a pre-key message (olm_type 0), written to out as UTF-8 (not NUL terminated). Codes above.
@@ -160,6 +194,48 @@ pub unsafe extern "C" fn sis_peek_session(key: *const u8, key_len: usize, pickle
             Err(_) => return 3
         };
         finish(plain, message_id, out, out_cap, out_len)
+    })
+}
+
+/// Like sis_peek_session, for a reaction: returns the emoji of the reaction envelope (bound to message_id and reactor_id); nothing is saved anywhere.
+#[no_mangle]
+pub unsafe extern "C" fn sis_peek_reaction_session(key: *const u8, key_len: usize, pickle: *const std::os::raw::c_char, message_id: *const std::os::raw::c_char, reactor_id: *const std::os::raw::c_char, ct_b64: *const std::os::raw::c_char, olm_type: i32, out: *mut u8, out_cap: usize, out_len: *mut usize) -> i32 {
+    guarded(|| {
+        if olm_type != 0 && olm_type != 1 {
+            return 1;
+        }
+        if out.is_null() || out_len.is_null() || key.is_null() {
+            return 1;
+        }
+        let Some(pickle) = cstr(pickle) else { return 1 };
+        let Some(message_id) = cstr(message_id) else { return 1 };
+        let Some(reactor_id) = cstr(reactor_id) else { return 1 };
+        let Some(ct_b64) = cstr(ct_b64) else { return 1 };
+        if key_len != 32 {
+            return 1;
+        }
+        let mut key_vec = std::slice::from_raw_parts(key, key_len).to_vec();
+        let mut body = match vodozemac::base64_decode(ct_b64) {
+            Ok(b) => b,
+            Err(_) => {
+                wipe(&mut key_vec);
+                return 1;
+            }
+        };
+        let mut session = match OlmSession::from_pickle(pickle.to_string(), std::mem::take(&mut key_vec)) {
+            Ok(s) => s,
+            Err(_) => {
+                wipe(&mut key_vec);
+                wipe(&mut body);
+                return 2;
+            }
+        };
+        wipe(&mut key_vec);
+        let plain = match session.decrypt(OlmCiphertext { message_type: olm_type as u32, body }) {
+            Ok(p) => p,
+            Err(_) => return 3
+        };
+        finish_emoji(plain, message_id, reactor_id, out, out_cap, out_len)
     })
 }
 

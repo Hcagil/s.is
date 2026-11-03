@@ -10,6 +10,12 @@ struct RustPeekDecryptor: PeekDecryptor {
     }
   }
 
+  func decryptReaction(sessionPickle: String, pickleKey: [UInt8], messageId: String, reactorId: String, ct: String, olmType: Int32) -> String? {
+    pickleKey.withUnsafeBufferPointer { key in
+      run { out, cap, len in sis_peek_reaction_session(key.baseAddress, key.count, sessionPickle, messageId, reactorId, ct, olmType, out, cap, len) }
+    }
+  }
+
   func decryptInbound(accountPickle: String, pickleKey: [UInt8], identityKey: String, messageId: String, ct: String) -> String? {
     pickleKey.withUnsafeBufferPointer { key in
       run { out, cap, len in sis_peek_inbound(key.baseAddress, key.count, accountPickle, identityKey, messageId, ct, 0, out, cap, len) }

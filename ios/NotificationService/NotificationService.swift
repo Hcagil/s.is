@@ -15,6 +15,11 @@ final class NotificationService: UNNotificationServiceExtension, URLSessionDownl
       return
     }
     lock.lock(); handler = contentHandler; content = mutable; lock.unlock()
+    if let reaction = PushPeek.reactionContent(for: mutable.userInfo) {
+      // A reaction push (kind "reaction"): text built on this phone; see PushPeek.reactionContent.
+      if let title = reaction.title { mutable.title = title }
+      mutable.body = reaction.body
+    } else {
     // An encrypted chat's push: the real text from this phone's own store when it can be read (PushPeek.swift), else the locked text the server sent.
     let peek = PushPeek.peek(for: mutable.userInfo)
     // The name comes from this phone's own copy of the chat when it has one, not from the push.
@@ -25,6 +30,7 @@ final class NotificationService: UNNotificationServiceExtension, URLSessionDownl
       // The one fallback text, the same words as Android's notification_fallback string (res/values/strings.xml, values-tr).
       let turkish = Locale.preferredLanguages.first?.hasPrefix("tr") ?? false
       mutable.body = turkish ? "Yeni mesaj" : "New message"
+    }
     }
     // Only our own Supabase host: the push's action link is built from the same SUPABASE_URL as the picture link.
     guard let link = mutable.userInfo["thumb_url"] as? String, let url = URL(string: link), url.scheme == "https", let actionLink = mutable.userInfo["action_url"] as? String, let actionHost = URL(string: actionLink)?.host, let host = url.host, host.lowercased() == actionHost.lowercased() else {

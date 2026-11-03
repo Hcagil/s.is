@@ -18,5 +18,8 @@ int32_t sis_peek_prekey_session_id(const char *ct_b64, int32_t olm_type, uint8_t
 /** Decrypts with a copy of a stored session pickle (olm_type 0 or 1). */
 int32_t sis_peek_session(const uint8_t *key, size_t key_len, const char *pickle, const char *message_id, const char *ct_b64, int32_t olm_type, uint8_t *out, size_t out_cap, size_t *out_len);
 
+/** Like sis_peek_session, for a reaction: writes the emoji of the reaction envelope (bound to message_id and reactor_id). */
+int32_t sis_peek_reaction_session(const uint8_t *key, size_t key_len, const char *pickle, const char *message_id, const char *reactor_id, const char *ct_b64, int32_t olm_type, uint8_t *out, size_t out_cap, size_t *out_len);
+
 /** Pre-key message (olm_type 0) from a peer with no stored session: inbound session on a copy of the account pickle. */
 int32_t sis_peek_inbound(const uint8_t *key, size_t key_len, const char *account_pickle, const char *identity_key, const char *message_id, const char *ct_b64, int32_t olm_type, uint8_t *out, size_t out_cap, size_t *out_len);

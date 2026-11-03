@@ -96,6 +96,48 @@ enum PushPeek {
     return (opened?.text, data.peerName)
   }
 
+  /// The notification text of a reaction push, built on the phone (EN/TR, same words as Android's reaction_* strings). Generic text when there is no emoji.
+  static func reactionText(emoji: String?, quote: String?, quoteKind: String?, turkish: Bool) -> String {
+    guard let e = emoji, !e.isEmpty else { return turkish ? "Mesajınıza yeni tepki" : "New reaction to your message" }
+    if let q = quote, !q.isEmpty { return turkish ? "\"\(q)\" mesajınıza \(e) tepkisini verdi" : "Reacted \(e) to: \"\(q)\"" }
+    switch quoteKind {
+    case "photo": return turkish ? "Fotoğrafınıza \(e) tepkisini verdi" : "Reacted \(e) to your photo"
+    case "video": return turkish ? "Videonuza \(e) tepkisini verdi" : "Reacted \(e) to your video"
+    case "sticker": return turkish ? "Çıkartmanıza \(e) tepkisini verdi" : "Reacted \(e) to your sticker"
+    case "voice": return turkish ? "Sesli mesajınıza \(e) tepkisini verdi" : "Reacted \(e) to your voice message"
+    case "file": return turkish ? "Dosyanıza \(e) tepkisini verdi" : "Reacted \(e) to your file"
+    default: return turkish ? "Mesajınıza \(e) tepkisini verdi" : "Reacted \(e) to your message"
+    }
+  }
+
+  /// Title (nil = keep the push's) and body of a reaction push (kind "reaction"); nil when the push is not a reaction.
+  /// - reactor_id == user_id: generic text (an extension cannot cancel a notification).
+  /// - private chat (encrypted == "true"): the real text only when PeekCore.reaction opens it from this phone's own store; title = the phone's own copy of the partner name; otherwise generic. Never a sender prefix (a private chat is 1:1).
+  /// - plain chat: built from e/q/qk; in a group (push has "sender") prefixed "Sender: ".
+  /// Saves nothing.
+  static func reactionContent(for userInfo: [AnyHashable: Any], decryptor: PeekDecryptor = RustPeekDecryptor(), turkish: Bool = Locale.preferredLanguages.first?.hasPrefix("tr") ?? false) -> (title: String?, body: String)? {
+    guard (userInfo["kind"] as? String) == "reaction" else { return nil }
+    let generic = reactionText(emoji: nil, quote: nil, quoteKind: nil, turkish: turkish)
+    if let reactor = userInfo["reactor_id"] as? String, reactor == (userInfo["user_id"] as? String) { return (nil, generic) }
+    if (userInfo["encrypted"] as? String) == "true" {
+      guard let rp = PeekReactionPush(userInfo: userInfo),
+            let store = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?.appendingPathComponent(storeFileName),
+            FileManager.default.fileExists(atPath: store.path),
+            let group = PeekKeychain.cryptoGroup(),
+            let storeKeyHex = PeekKeychain.value(account: "sis.store.key", group: group),
+            let pickleHex = PeekKeychain.value(account: "sis.olm.pickle.key", group: group),
+            isHex64(storeKeyHex), isHex64(pickleHex) else { return (nil, generic) }
+      var pickleKey = bytes(fromHex: pickleHex)
+      defer { pickleKey.withUnsafeMutableBytes { _ = memset_s($0.baseAddress, $0.count, 0, $0.count) } }
+      guard let data = PeekStoreReader.read(path: store.path, keyHex: storeKeyHex, conversationId: rp.push.conversationId, messageId: rp.push.messageId, senderKey: nil, senderId: nil) else { return (nil, generic) }
+      guard let r = PeekCore.reaction(push: rp, data: data, pickleKey: pickleKey, decryptor: decryptor) else { return (data.peerName, generic) }
+      return (data.peerName, reactionText(emoji: r.emoji, quote: r.quote, quoteKind: nil, turkish: turkish))
+    }
+    let text = reactionText(emoji: userInfo["e"] as? String, quote: userInfo["q"] as? String, quoteKind: userInfo["qk"] as? String, turkish: turkish)
+    if let sender = userInfo["sender"] as? String, !sender.isEmpty, userInfo["e"] != nil { return (nil, shownBody(text: text, sender: sender)) }
+    return (nil, text)
+  }
+
   /// Formats the shown body of a notification.
   static func shownBody(text: String, sender: String?) -> String {
     let body = (sender?.isEmpty == false) ? "\(sender!): \(text)" : text

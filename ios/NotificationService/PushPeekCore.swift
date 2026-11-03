@@ -156,6 +156,20 @@ enum PeekCore {
     return true
   }
 
+  /// The notification text of a reaction push, built on the phone (EN/TR, same words as Android's reaction_* strings). Generic text when there is no emoji.
+  static func reactionText(emoji: String?, quote: String?, quoteKind: String?, turkish: Bool) -> String {
+    guard let e = emoji, !e.isEmpty else { return turkish ? "Mesajınıza yeni tepki" : "New reaction to your message" }
+    if let q = quote, !q.isEmpty { return turkish ? "\"\(q)\" mesajınıza \(e) tepkisini verdi" : "Reacted \(e) to: \"\(q)\"" }
+    switch quoteKind {
+    case "photo": return turkish ? "Fotoğrafınıza \(e) tepkisini verdi" : "Reacted \(e) to your photo"
+    case "video": return turkish ? "Videonuza \(e) tepkisini verdi" : "Reacted \(e) to your video"
+    case "sticker": return turkish ? "Çıkartmanıza \(e) tepkisini verdi" : "Reacted \(e) to your sticker"
+    case "voice": return turkish ? "Sesli mesajınıza \(e) tepkisini verdi" : "Reacted \(e) to your voice message"
+    case "file": return turkish ? "Dosyanıza \(e) tepkisini verdi" : "Reacted \(e) to your file"
+    default: return turkish ? "Mesajınıza \(e) tepkisini verdi" : "Reacted \(e) to your message"
+    }
+  }
+
   static func isUuid(_ s: String) -> Bool {
     return s.range(of: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", options: .regularExpression) != nil
   }

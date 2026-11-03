@@ -2234,10 +2234,10 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminHelpAnd => 'Android test kullanıcısı ekle';
 
   @override
-  String get adminHelpRm => 'Test kullanıcısı kaldır';
+  String get adminHelpRm => 'Test kullanıcısını çıkar';
 
   @override
-  String get adminHelpList => 'Test kullanıcılarını say ve listele';
+  String get adminHelpList => 'Tüm test kullanıcılarını göster';
 
   @override
   String adminIosOk(String email) {
@@ -2520,6 +2520,26 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get podHint => 'Komutlar için / yazın';
+
+  @override
+  String get adminHint => 'Komutlar için / yazın';
+
+  @override
+  String get cmdPodOnMeaning => '/podium komutunu aç';
+
+  @override
+  String get cmdPodOffMeaning => '/podium komutunu kapat';
+
+  @override
+  String get cmdPodMeaning => 'Vega\'daki toplam parayı göster';
+
+  @override
+  String get cmdArgEmail => 'E-posta';
+
+  @override
+  String cmdRowLabel(String command, String meaning) {
+    return '$command, $meaning';
+  }
 
   @override
   String get podNotEnc => 'Uçtan uca şifreli değil';

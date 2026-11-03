@@ -107,6 +107,30 @@ class _Bubble extends StatelessWidget {
     // Square-ish corner on the sender's side marks whose bubble it is.
     final r = Radius.circular(brand.bubbleRadius);
     const tail = Radius.circular(4);
+    final senderLine = sender == null
+        ? null
+        : Padding(
+            padding: EdgeInsets.fromLTRB(
+              _locationCard || _albumBox ? _hPad : 0,
+              0,
+              0,
+              2,
+            ),
+            child: Text(
+              sender!,
+              key: ValueKey('sender-${message.id}'),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                letterSpacing: SisTokens.nameLetterSpacing,
+                color: senderLeft
+                    ? Theme.of(context).colorScheme.onSurfaceVariant
+                    : senderSlot != null
+                    ? groupColor(context, senderSlot!)
+                    : personTint(context, message.senderId, ink: true),
+              ),
+            ),
+          );
     final bubble = Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -149,6 +173,7 @@ class _Bubble extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (message.deletion == MessageDeletion.placeholder) ?senderLine,
               if (message.deletion == MessageDeletion.placeholder)
                 Row(
                   key: ValueKey('deleted-${message.id}'),
@@ -266,29 +291,7 @@ class _Bubble extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (sender != null)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    _locationCard || _albumBox ? _hPad : 0,
-                    0,
-                    0,
-                    2,
-                  ),
-                  child: Text(
-                    sender!,
-                    key: ValueKey('sender-${message.id}'),
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: SisTokens.nameLetterSpacing,
-                      color: senderLeft
-                          ? Theme.of(context).colorScheme.onSurfaceVariant
-                          : senderSlot != null
-                          ? groupColor(context, senderSlot!)
-                          : personTint(context, message.senderId, ink: true),
-                    ),
-                  ),
-                ),
+              if (message.deletion != MessageDeletion.placeholder) ?senderLine,
               if (message.hasAttachment && message.file == null)
                 album.length >= 2
                     ? _AlbumGrid(

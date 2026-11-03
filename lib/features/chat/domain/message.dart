@@ -43,6 +43,9 @@ bool isSendableBody(String body) {
   return trimmed.isNotEmpty && trimmed.length <= maxMessageLength;
 }
 
+/// The stored chat-list preview of a message deleted for everyone; the list translates it (see chatPreviewLine).
+const String deletedPreviewText = 'This message was deleted';
+
 /// The one-line preview of a message in the conversation list. An image sent
 /// without a caption has an empty body, which would read as "no messages".
 /// A poll shows [pollPreview] of its question, a contact [contactPreview]
@@ -90,6 +93,7 @@ final class Message {
     this.localImage,
     this.deletion,
     this.deletedBy,
+    this.deletedByAdmin = false,
     this.editedAt,
     this.replyTo,
     this.forwarded = false,
@@ -194,16 +198,24 @@ final class Message {
 
   bool get isDeleted => deletion != null;
 
-  /// A group admin deleted it, not its sender.
-  bool get deletedByAdmin => deletedBy != null && deletedBy != senderId;
+  /// A group admin deleted it, not its sender (the server's deleted_by_admin).
+  final bool deletedByAdmin;
 
   bool get isEdited => editedAt != null;
 
-  /// Whether [me] may delete this for everyone: it is stored, not yet
-  /// deleted, and theirs -- or [admin] (a group admin may delete any
-  /// member's message). No time limit (the server checks too).
-  bool canDeleteForEveryone(String me, {bool admin = false}) =>
-      !isPending && deletion == null && (senderId == me || admin);
+  /// Whether [me] may delete this for everyone at [now]: it is stored, not yet
+  /// deleted, and either theirs and under [deleteForEveryoneWindow] old, or
+  /// [admin] (a group admin may delete any member's message at any age). The server checks too.
+  bool canDeleteForEveryone(
+    String me, {
+    required DateTime now,
+    bool admin = false,
+  }) =>
+      !isPending &&
+      deletion == null &&
+      (admin ||
+          (senderId == me &&
+              now.difference(createdAt) < deleteForEveryoneWindow));
 
   /// Whether [me] may still edit this message at [now]: their own, stored,
   /// not deleted, not forwarded, and under 6 hours old (the server checks
@@ -268,6 +280,7 @@ final class Message {
     adminMsg: adminMsg,
     deletion: deletion,
     deletedBy: deletedBy,
+    deletedByAdmin: deletedByAdmin,
     editedAt: editedAt,
     replyTo: replyTo,
     forwarded: forwarded,
@@ -298,6 +311,7 @@ final class Message {
     localImage: localImage,
     deletion: deletion,
     deletedBy: deletedBy,
+    deletedByAdmin: deletedByAdmin,
     editedAt: editedAt,
     replyTo: replyTo,
     forwarded: forwarded,
@@ -328,6 +342,7 @@ final class Message {
         localImage: localImage,
         deletion: deletion,
         deletedBy: deletedBy,
+        deletedByAdmin: deletedByAdmin,
         editedAt: editedAt,
         replyTo: replyTo,
         forwarded: forwarded,
@@ -357,6 +372,7 @@ final class Message {
     adminMsg: adminMsg,
     deletion: deletion,
     deletedBy: deletedBy,
+    deletedByAdmin: deletedByAdmin,
     editedAt: editedAt,
     replyTo: replyTo,
     forwarded: forwarded,
@@ -390,6 +406,7 @@ final class Message {
     localImage: localImage,
     deletion: deletion,
     deletedBy: deletedBy,
+    deletedByAdmin: deletedByAdmin,
     editedAt: editedAt,
     replyTo: replyTo,
     forwarded: forwarded,
@@ -454,7 +471,6 @@ enum MessageAction {
   forward,
   edit,
   deleteForMe,
-  deleteForEveryone,
   copy,
   pin,
   unpin,
@@ -466,18 +482,17 @@ enum MessageAction {
 
 /// The actions [me] may take on [message] at [now], in the order they are
 /// offered -- reply and forward need a stored message with something in
-/// it; edit and delete for everyone are the sender's own message within
-/// [deleteForEveryoneWindow]. This is the single source of truth for
-/// "what does this message allow": both the swipe action row and each
-/// bubble's screen-reader custom actions read it, so the rule lives once.
+/// it; edit is the sender's own message within [deleteForEveryoneWindow].
+/// The swipe row offers one Delete (the box decides about "for everyone").
+/// This is the single source of truth for "what does this message allow":
+/// both the swipe action row and each bubble's screen-reader custom actions
+/// read it, so the rule lives once.
 List<MessageAction> allowedMessageActions(
   Message message, {
   required String? me,
   required DateTime now,
   bool admin = false,
 }) {
-  final canDelete =
-      me != null && message.canDeleteForEveryone(me, admin: admin);
   final canEdit = me != null && message.canEdit(me, now);
   final canShare = !message.isPending && !message.isDeleted;
   return [
@@ -489,17 +504,16 @@ List<MessageAction> allowedMessageActions(
         !message.albumCard)
       MessageAction.forward,
     if (canEdit) MessageAction.edit,
-    if (canDelete) MessageAction.deleteForEveryone,
+    if (!message.isPending) MessageAction.deleteForMe,
   ];
 }
 
 /// The actions the long-press card offers for [message], in order: reply,
 /// copy (text present, not deleted), forward, edit (own text within the
 /// edit window), pin or unpin (when [canPin]; unpin when [pinned] says this
-/// message is the chat's pinned one), delete for me (any stored
-/// message), delete for everyone (only when [Message.canDeleteForEveryone]
-/// allows, [admin] says the viewer is a group admin). Copy is never in the
-/// swipe row. [canRetract] / [canStop] come from the poll's state (you voted
+/// message is the chat's pinned one), delete (any stored message; the delete
+/// box itself offers 'for everyone' when [Message.canDeleteForEveryone]
+/// allows -- [admin] is no longer used here). Copy is never in the swipe row. [canRetract] / [canStop] come from the poll's state (you voted
 /// and it is open / it is your own open poll) and put retract vote / stop poll
 /// right after reply.
 List<MessageAction> menuMessageActions(
@@ -536,7 +550,5 @@ List<MessageAction> menuMessageActions(
     if (canEdit) MessageAction.edit,
     if (canShare && canPin) pinned ? MessageAction.unpin : MessageAction.pin,
     if (!message.isPending) MessageAction.deleteForMe,
-    if (me != null && message.canDeleteForEveryone(me, admin: admin))
-      MessageAction.deleteForEveryone,
   ];
 }

@@ -1,5 +1,5 @@
 // menuMessageActions (Update 1 slice 7), from its contract: reply, copy,
-// forward, edit, pin, delete for me, delete for everyone -- in that order,
+// forward, edit, pin, one Delete (the box offers "for everyone") -- in order,
 // each only when its rule holds. Run under TZ=JST-9.
 import 'dart:typed_data';
 
@@ -28,7 +28,6 @@ void main() {
           MessageAction.edit,
           MessageAction.pin,
           MessageAction.deleteForMe,
-          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -76,7 +75,6 @@ void main() {
           MessageAction.forward,
           MessageAction.pin,
           MessageAction.deleteForMe,
-          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -99,12 +97,11 @@ void main() {
           MessageAction.edit,
           MessageAction.pin,
           MessageAction.deleteForMe,
-          MessageAction.deleteForEveryone,
         ]),
       );
     });
 
-    test('own text 7h old has no edit but deleteForEveryone', () {
+    test('own text 7h old has no edit but still Delete', () {
       final msg = Message(
         id: '5',
         conversationId: 'c1',
@@ -121,7 +118,6 @@ void main() {
           MessageAction.forward,
           MessageAction.pin,
           MessageAction.deleteForMe,
-          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -143,7 +139,6 @@ void main() {
           MessageAction.forward,
           MessageAction.pin,
           MessageAction.deleteForMe,
-          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -166,7 +161,6 @@ void main() {
           MessageAction.edit,
           MessageAction.pin,
           MessageAction.deleteForMe,
-          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -189,7 +183,6 @@ void main() {
           MessageAction.forward,
           MessageAction.pin,
           MessageAction.deleteForMe,
-          MessageAction.deleteForEveryone,
         ]),
       );
     });
@@ -233,7 +226,7 @@ void main() {
       expect(actions, equals([]));
     });
 
-    test('me null: no edit, no deleteForEveryone', () {
+    test('me null: no edit', () {
       final msg = Message(
         id: '12',
         conversationId: 'c1',
@@ -277,7 +270,6 @@ void main() {
           MessageAction.edit,
           MessageAction.pin,
           MessageAction.deleteForMe,
-          MessageAction.deleteForEveryone,
         ]),
       );
     });

@@ -21,6 +21,7 @@ MessagesCompanion messageToCompanion(Message m) {
   }
   if (m.linkPreview != null) extraMap['lp'] = m.linkPreview!.toJson();
   if (m.adminMsg != null) extraMap['am'] = m.adminMsg;
+  if (m.deletedByAdmin) extraMap['da'] = true;
   if (m.sealed != null) extraMap['sh'] = m.sealed;
   if (m.file != null) {
     final file = m.file!;
@@ -90,6 +91,7 @@ Message messageFromRow(StoredMessageRow r) {
       _ => null,
     },
     deletedBy: r.deletedBy,
+    deletedByAdmin: x['da'] == true,
     location: SharedLocation.fromRow(
       lat: (x['lat'] as num?)?.toDouble(),
       lng: (x['lng'] as num?)?.toDouble(),

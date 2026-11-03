@@ -5,8 +5,8 @@
 //   showing "+N" for the photos not drawn;
 // - a lone photo with a group, or photos of different groups, stay plain;
 // - in the photo viewer an album photo's menu deletes and forwards THAT
-//   photo only; its delete-for-everyone row reads "Delete this photo", while
-//   "Delete for me" keeps its label.
+//   photo only; its one Delete row opens the delete box, whose "for everyone"
+//   tick deletes that photo only.
 //
 // Wired as the app mounts it: MessageScreen over the controllers, with the
 // shared server-like ChatFake behind the repository.
@@ -52,13 +52,17 @@ List<Message> album(int n, {String group = 'g1'}) => [
   for (var i = 1; i <= n; i++) photo('p$i', group: group),
 ];
 
-Future<ChatFake> pump(WidgetTester tester, List<Message> messages) async {
+Future<ChatFake> pump(
+  WidgetTester tester,
+  List<Message> messages, {
+  bool listed = true,
+}) async {
   final chat =
       ChatFake(self: me.userId, latency: const Duration(milliseconds: 5))
         ..history['c1'] = [...messages]
-        ..conversationsResult = const Ok([
-          Conversation(id: 'c1', title: 'Bob'),
-          Conversation(id: 'c2', title: 'Work'),
+        ..conversationsResult = Ok([
+          if (listed) const Conversation(id: 'c1', title: 'Bob'),
+          const Conversation(id: 'c2', title: 'Work'),
         ]);
   for (final m in messages) {
     if (m.attachmentPath case final path?) chat.store(path);
@@ -227,54 +231,48 @@ void main() {
       return id;
     }
 
-    testWidgets('delete for everyone reads "Delete this photo"; "Delete for '
-        'me" keeps its label', (tester) async {
+    testWidgets('one Delete row, no separate for-everyone row', (tester) async {
       await pump(tester, album(3));
       await openSecond(tester);
-
+      expect(find.byKey(const ValueKey('menu-delete-for-me')), findsOneWidget);
       expect(
-        find.descendant(
-          of: find.byKey(const ValueKey('menu-delete-for-everyone')),
-          matching: find.text('Delete this photo'),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: find.byKey(const ValueKey('menu-delete-for-me')),
-          matching: find.text('Delete for me'),
-        ),
-        findsOneWidget,
+        find.byKey(const ValueKey('menu-delete-for-everyone')),
+        findsNothing,
       );
     });
 
-    testWidgets('a plain photo keeps "Delete for everyone"', (tester) async {
-      await pump(tester, [photo('p1')]);
-      await tester.tap(find.byKey(const ValueKey('attachment-c1/p1.png')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('viewer-menu')));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.descendant(
-          of: find.byKey(const ValueKey('menu-delete-for-everyone')),
-          matching: find.text('Delete for everyone'),
-        ),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('"Delete this photo" deletes that photo only', (tester) async {
+    testWidgets('Delete, ticked for everyone, deletes that photo only', (
+      tester,
+    ) async {
       final chat = await pump(tester, album(3));
       final id = await openSecond(tester);
 
-      await tester.tap(find.byKey(const ValueKey('menu-delete-for-everyone')));
+      await tester.tap(find.byKey(const ValueKey('menu-delete-for-me')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('delete-also')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('delete-confirm')));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
       expect(chat.deleted, [id]);
+    });
+
+    // The viewer passes no chat name (accepted gap): with the chat not on
+    // the list either, the box still names someone, never "for ".
+    testWidgets('chat not on the list: the box never shows an empty name', (
+      tester,
+    ) async {
+      await pump(tester, album(3), listed: false);
+      await openSecond(tester);
+      await tester.tap(find.byKey(const ValueKey('menu-delete-for-me')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Also delete for Member', findRichText: true),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('delete-cancel')));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('forward sends that photo only, as one plain forward', (

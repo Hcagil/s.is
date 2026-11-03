@@ -329,7 +329,7 @@ void main() {
       'reply': 'Reply',
       'forward': 'Forward',
       'edit': 'Edit',
-      'delete': 'Delete for everyone',
+      'delete': 'Delete',
     };
 
     testWidgets('per message kind, one custom action per allowed action', (
@@ -352,13 +352,17 @@ void main() {
       );
       expect(
         actionLabels(actionsNode(t, bubble('old'))),
-        unorderedEquals(['Reply', 'Forward', 'Delete for everyone']),
+        unorderedEquals(['Reply', 'Forward', 'Delete']),
       );
       expect(
         actionLabels(actionsNode(t, bubble('bob'))),
-        unorderedEquals(['Reply', 'Forward']),
+        unorderedEquals(['Reply', 'Forward', 'Delete']),
       );
-      expect(actionsNode(t, find.byKey(const ValueKey('deleted-del'))), isNull);
+      // Rule 1: delete for me works on any stored message, deleted ones too.
+      expect(
+        actionLabels(actionsNode(t, find.byKey(const ValueKey('deleted-del')))),
+        ['Delete'],
+      );
       handle.dispose();
     });
 
@@ -390,12 +394,13 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('Delete for everyone asks first', (t) async {
+    testWidgets('Delete opens the delete box first', (t) async {
       final handle = t.ensureSemantics();
       await openChat(t, messages: [chatMessage('m1', from: me.userId)]);
-      invokeAction(actionsNode(t, bubble('m1'))!, 'Delete for everyone');
+      invokeAction(actionsNode(t, bubble('m1'))!, 'Delete');
       await settle(t);
       expect(find.byKey(const ValueKey('delete-confirm')), findsOneWidget);
+      expect(find.byKey(const ValueKey('delete-also')), findsOneWidget);
       handle.dispose();
     });
   });

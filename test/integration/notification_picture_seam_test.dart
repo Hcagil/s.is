@@ -21,7 +21,10 @@ import '../support/service_key.dart';
 ///   and 65536 bytes; when no picture can be made the photo still sends.
 /// - forward copies it beside the copy, so the other chat's members (and only
 ///   they) read it; a photo without one still forwards.
-/// - deleteForEveryone removes it with the photo.
+/// - deleteForEveryone erases the message; the phone removes neither the
+///   photo nor its picture (the server queues both for its storage sweeper,
+///   app_private.storage_removal_queue, which the API does not expose: the
+///   queue itself is checked in supabase/tests/delete_message_rules_test.sql).
 /// Uses the file seam's seeded accounts (fl-sana/fl-theo/fl-uma) in its own
 /// groups. Run with --concurrency=1, TZ=JST-9.
 const _url = String.fromEnvironment(
@@ -222,15 +225,22 @@ void main() {
     expect(after.length, before + 1, reason: 'the copy arrived');
   });
 
-  test('deleteForEveryone removes the picture with the photo', () async {
+  test('deleteForEveryone of a photo with a picture: the message is erased, '
+      'the phone leaves both files to the server sweeper', () async {
     final sent = await send(photo);
     final mine = await theirs(sana, club, sent.id);
     final path = mine.attachmentPath!;
     expect(await stored('$path.t'), isTrue, reason: 'fixture: a picture');
     final r = await SupabaseChatRepository(sana).deleteForEveryone(mine);
     expect(r, isA<Ok<void>>(), reason: 'delete: $r');
-    expect(await stored(path), isFalse, reason: 'the photo is gone');
-    expect(await stored('$path.t'), isFalse, reason: 'and its picture');
+    expect(
+      (await theirs(theo, club, sent.id)).isDeleted,
+      isTrue,
+      reason: 'erased for the reader',
+    );
+    // Checked at once, before any scheduled sweep: no client removes Storage.
+    expect(await stored(path), isTrue, reason: 'the photo waits for the sweep');
+    expect(await stored('$path.t'), isTrue, reason: 'and so does its picture');
   });
 
   test('deleteForEveryone of a photo without a picture still works', () async {
@@ -239,8 +249,14 @@ void main() {
       type: 'image/jpeg',
     );
     final mine = await theirs(sana, club, sent.id);
+    expect(
+      await stored('${mine.attachmentPath}.t'),
+      isFalse,
+      reason: 'fixture',
+    );
     final r = await SupabaseChatRepository(sana).deleteForEveryone(mine);
     expect(r, isA<Ok<void>>(), reason: 'delete: $r');
-    expect(await stored(mine.attachmentPath!), isFalse);
+    expect((await theirs(theo, club, sent.id)).isDeleted, isTrue);
+    expect(await stored(mine.attachmentPath!), isTrue, reason: 'left to sweep');
   });
 }

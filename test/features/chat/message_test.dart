@@ -119,89 +119,10 @@ void main() {
     });
   });
 
-  group('canDeleteForEveryone', () {
-    final now = DateTime.utc(2026, 9, 24, 12, 0);
-    Message msg({
-      String sender = 'me',
-      Duration age = const Duration(minutes: 1),
-      Uint8List? localImage,
-      String? attachmentPath,
-      MessageDeletion? deletion,
-      bool sending = false,
-    }) => Message(
-      id: 'm1',
-      conversationId: 'c1',
-      senderId: sender,
-      body: 'hi',
-      createdAt: now.subtract(age),
-      localImage: localImage,
-      attachmentPath: attachmentPath,
-      deletion: deletion,
-      sending: sending,
-    );
-
-    test('own, stored and undeleted: yes, at any age', () {
-      for (final age in const [
-        Duration(minutes: 1),
-        Duration(hours: 6),
-        Duration(hours: 7),
-        Duration(days: 400),
-      ]) {
-        expect(
-          msg(age: age).canDeleteForEveryone('me'),
-          isTrue,
-          reason: '$age',
-        );
-      }
-    });
-
-    test('somebody else\'s message: no, unless the caller is an admin', () {
-      expect(msg(sender: 'other').canDeleteForEveryone('me'), isFalse);
-      expect(
-        msg(sender: 'other').canDeleteForEveryone('me', admin: false),
-        isFalse,
-      );
-      expect(
-        msg(
-          sender: 'other',
-          age: const Duration(days: 30),
-        ).canDeleteForEveryone('me', admin: true),
-        isTrue,
-      );
-    });
-
-    test('already deleted: no, not even for an admin', () {
-      for (final d in MessageDeletion.values) {
-        expect(msg(deletion: d).canDeleteForEveryone('me'), isFalse);
-        expect(
-          msg(
-            sender: 'other',
-            deletion: d,
-          ).canDeleteForEveryone('me', admin: true),
-          isFalse,
-        );
-      }
-    });
-
-    test('still pending: no, not even for an admin', () {
-      final photo = msg(localImage: Uint8List(0));
-      expect(photo.isPending, isTrue);
-      expect(photo.canDeleteForEveryone('me'), isFalse);
-      expect(photo.canDeleteForEveryone('me', admin: true), isFalse);
-      final text = msg(sending: true);
-      expect(text.isPending, isTrue);
-      expect(text.canDeleteForEveryone('me'), isFalse);
-    });
-
-    test('a stored photo message (local image AND a path): yes', () {
-      final stored = msg(localImage: Uint8List(0), attachmentPath: 'c1/1.png');
-      expect(stored.isPending, isFalse);
-      expect(stored.canDeleteForEveryone('me'), isTrue);
-    });
-  });
-
   group('deletedByAdmin', () {
-    Message m(String? by) => Message(
+    // The server's deleted_by_admin flag, carried as is: it no longer
+    // derives from deletedBy != senderId.
+    Message m(String? by, {bool admin = false}) => Message(
       id: 'm1',
       conversationId: 'c1',
       senderId: 'u1',
@@ -209,15 +130,25 @@ void main() {
       createdAt: DateTime.utc(2026, 9, 24),
       deletion: by == null ? null : MessageDeletion.placeholder,
       deletedBy: by,
+      deletedByAdmin: admin,
     );
 
-    test('deleted by somebody other than the sender: yes', () {
-      expect(m('admin').deletedByAdmin, isTrue);
+    test('flag set: yes, even on the admin\'s own message', () {
+      expect(m('admin', admin: true).deletedByAdmin, isTrue);
+      expect(m('u1', admin: true).deletedByAdmin, isTrue);
     });
 
-    test('deleted by its sender, or not deleted: no', () {
+    test('flag not set: no, whoever deleted it', () {
+      expect(m('admin').deletedByAdmin, isFalse);
       expect(m('u1').deletedByAdmin, isFalse);
       expect(m(null).deletedByAdmin, isFalse);
+    });
+
+    test('kept by the local copies (stored, preview, plain)', () {
+      final a = m('admin', admin: true);
+      expect(a.stored().deletedByAdmin, isTrue);
+      expect(a.withPreview(null).deletedByAdmin, isTrue);
+      expect(a.withPlain('', null).deletedByAdmin, isTrue);
     });
   });
 
@@ -230,7 +161,6 @@ void main() {
       MessageAction.edit,
       MessageAction.pin,
       MessageAction.deleteForMe,
-      MessageAction.deleteForEveryone,
     ];
     Message msg({
       String sender = 'me',
@@ -267,17 +197,20 @@ void main() {
       expect(idx, [...idx]..sort(), reason: 'in menu order: $actions');
     }
 
-    test('own fresh text: reply, copy, forward, edit, pin, both deletes -- in order', () {
-      final a = menu(msg());
-      expect(a, order);
-    });
+    test(
+      'own fresh text: reply, copy, forward, edit, pin, one Delete -- in order',
+      () {
+        final a = menu(msg());
+        expect(a, order);
+      },
+    );
 
     test('copy only for a non-empty body', () {
       final photo = msg(body: '', attachmentPath: 'c1/1.png');
       final a = menu(photo);
       inOrder(a);
       expect(a, isNot(contains(MessageAction.copy)));
-      expect(a, contains(MessageAction.deleteForEveryone));
+      expect(a, contains(MessageAction.deleteForMe));
       final captioned = menu(msg(body: 'look', attachmentPath: 'c1/1.png'));
       expect(captioned, contains(MessageAction.copy));
     });
@@ -302,22 +235,17 @@ void main() {
         inOrder(a);
         expect(a, isNot(contains(MessageAction.copy)));
         expect(a, isNot(contains(MessageAction.deleteForMe)));
-        expect(a, isNot(contains(MessageAction.deleteForEveryone)));
         expect(a, isNot(contains(MessageAction.edit)));
       }
     });
 
-    test(
-      'somebody else\'s message: delete for me, never edit or for everyone',
-      () {
-        final a = menu(msg(sender: 'other'));
-        inOrder(a);
-        expect(a, contains(MessageAction.deleteForMe));
-        expect(a, isNot(contains(MessageAction.deleteForEveryone)));
-        expect(a, contains(MessageAction.copy));
-        expect(a, isNot(contains(MessageAction.edit)));
-      },
-    );
+    test('somebody else\'s message: one Delete, never edit', () {
+      final a = menu(msg(sender: 'other'));
+      inOrder(a);
+      expect(a, contains(MessageAction.deleteForMe));
+      expect(a, contains(MessageAction.copy));
+      expect(a, isNot(contains(MessageAction.edit)));
+    });
 
     test('edit follows canEdit exactly', () {
       for (final m in [
@@ -338,8 +266,8 @@ void main() {
       );
       expect(
         menu(msg(age: const Duration(hours: 7))),
-        contains(MessageAction.deleteForEveryone),
-        reason: 'delete for everyone has no time limit (0.30.8)',
+        contains(MessageAction.deleteForMe),
+        reason: 'Delete is offered at any age; the box decides about everyone',
       );
     });
 

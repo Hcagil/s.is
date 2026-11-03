@@ -1,4 +1,7 @@
 @Tags(['integration'])
+// Every test, setUpAll and tearDownAll here ends within this, so a stuck
+// network call or Realtime wait fails the file instead of hanging the job.
+@Timeout(Duration(minutes: 4))
 library;
 
 import 'dart:io';
@@ -28,7 +31,8 @@ import '../support/video_fakes.dart';
 
 /// Two members' message screens, mounted at once over the real repository,
 /// exercising the seam a unit test cannot: A deletes her own message through
-/// the actual swipe -> action row -> confirm flow, and B's OPEN screen must
+/// the actual long-press -> Delete -> box ticked "for everyone" flow, and B's
+/// OPEN screen must
 /// see the result arrive live over Realtime. A sender's delete under 15
 /// minutes vanishes without trace; from 15 minutes on it leaves a placeholder.
 ///
@@ -149,7 +153,9 @@ void main() {
       await t.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 100)),
       );
-      await t.pump();
+      // Advance the fake clock with the real one, so the vanish animation
+      // (#298) runs as it would on a phone.
+      await t.pump(const Duration(milliseconds: 100));
     }
     // Explain a timeout instead of only reporting it: what is on screen (a
     // refused delete leaves its reason in a SnackBar) and which message
@@ -194,11 +200,48 @@ void main() {
     await t.pump(const Duration(milliseconds: 300));
   }
 
+  /// The card's one Delete row, then the box's "for everyone" tick.
+  Future<void> openBoxAndTick(WidgetTester t) async {
+    expect(
+      find.byKey(const ValueKey('menu-delete-for-everyone')),
+      findsNothing,
+    );
+    await t.tap(find.byKey(const ValueKey('menu-delete-for-me')));
+    await settle(t);
+    expect(
+      find.byKey(const ValueKey('delete-also')),
+      findsOneWidget,
+      reason: 'own message under 6 h: the box offers "for everyone"',
+    );
+    await t.tap(find.byKey(const ValueKey('delete-also')));
+    await settle(t);
+  }
+
   /// [id]'s pane-scoped subtree, so the same message's key -- identical on
   /// both sides, since it is the SAME row -- never resolves ambiguously.
   Finder pane(String id) => find.byKey(ValueKey('pane-$id'));
   Finder within(String paneId, Finder matching) =>
       find.descendant(of: pane(paneId), matching: matching);
+
+  /// Whether message [id] in [paneId] takes visible space. A vanishing
+  /// bubble is wrapped in `vanish-<id>` (#298), whose SizeTransition shrinks
+  /// to zero height while the inner `message-<id>` keeps its own size; so
+  /// the wrapper is what is measured once it exists.
+  bool visible(String paneId, String id) {
+    final wrapper = within(
+      paneId,
+      find.byKey(ValueKey('vanish-$id'), skipOffstage: false),
+    ).evaluate();
+    if (wrapper.isNotEmpty) {
+      return wrapper.any(
+        (e) => ((e.renderObject as RenderBox?)?.size.height ?? 0) >= 1,
+      );
+    }
+    return within(
+      paneId,
+      find.byKey(ValueKey('message-$id')),
+    ).evaluate().isNotEmpty;
+  }
 
   testWidgets('A deletes her own message through the sheet; a fresh one '
       'vanishes from B\'s open screen, a backdated one becomes a placeholder', (
@@ -247,8 +290,18 @@ void main() {
         body: oldBody,
       ),
     );
+    final lateBody = 'seam late ${DateTime.now().microsecondsSinceEpoch}';
+    final late = await t.runAsync(
+      () => opal.send(
+        id: randomMessageId(),
+        conversationId: conversationId,
+        body: lateBody,
+      ),
+    );
     expect(recent, isA<Ok<Message>>());
     expect(old, isA<Ok<Message>>());
+    expect(late, isA<Ok<Message>>());
+    final lateMessage = (late! as Ok<Message>).value;
     final recentMessage = (recent! as Ok<Message>).value;
     final oldMessage = (old! as Ok<Message>).value;
     // Two hours old: past 15 minutes, so its delete leaves a placeholder
@@ -335,13 +388,12 @@ void main() {
     await until(
       t,
       () => find
-          .byKey(const ValueKey('menu-delete-for-everyone'))
+          .byKey(const ValueKey('menu-delete-for-me'))
           .evaluate()
           .isNotEmpty,
       'the action row to open for the recent message',
     );
-    await t.tap(find.byKey(const ValueKey('menu-delete-for-everyone')));
-    await settle(t);
+    await openBoxAndTick(t);
     await t.tap(find.byKey(const ValueKey('delete-confirm')));
     await settle(t);
 
@@ -351,10 +403,7 @@ void main() {
     await until(
       t,
       () =>
-          within(
-            'a',
-            find.byKey(ValueKey('message-${recentMessage.id}')),
-          ).evaluate().isEmpty &&
+          !visible('a', recentMessage.id) &&
           within(
             'a',
             find.byKey(ValueKey('deleted-${recentMessage.id}')),
@@ -382,15 +431,20 @@ void main() {
     await until(
       t,
       () =>
-          within(
-            'b',
-            find.byKey(ValueKey('message-${recentMessage.id}')),
-          ).evaluate().isEmpty &&
+          !visible('b', recentMessage.id) &&
           within(
             'b',
             find.byKey(ValueKey('deleted-${recentMessage.id}')),
           ).evaluate().isEmpty,
       'B\'s screen to drop the vanished recent message',
+      explain: () async {
+        final state = russContainer.read(messagesProvider);
+        final his = state.value
+            ?.where((m) => m.id == recentMessage.id)
+            .firstOrNull;
+        return '  B controller: ${state.runtimeType} '
+            'deletion=${his?.deletion} present=${his != null}\n';
+      },
     );
     final vanishedRow = await t.runAsync(
       () => service
@@ -409,13 +463,12 @@ void main() {
     await until(
       t,
       () => find
-          .byKey(const ValueKey('menu-delete-for-everyone'))
+          .byKey(const ValueKey('menu-delete-for-me'))
           .evaluate()
           .isNotEmpty,
       'the action row never opened for the second message',
     );
-    await t.tap(find.byKey(const ValueKey('menu-delete-for-everyone')));
-    await settle(t);
+    await openBoxAndTick(t);
     expect(
       find.byKey(const ValueKey('delete-confirm')),
       findsOneWidget,
@@ -451,6 +504,76 @@ void main() {
       ),
       findsOneWidget,
     );
+
+    // deleted_by_admin is mapped from the real row: the sender's own delete
+    // leaves it false; set true (as delete_message does for an admin), the
+    // repository must carry it.
+    Message? fetched(Result<List<Message>>? r, String id) => switch (r) {
+      Ok(:final value) => value.where((m) => m.id == id).firstOrNull,
+      _ => null,
+    };
+    final asSent = await t.runAsync(() => opal.messages(conversationId));
+    expect(fetched(asSent, oldMessage.id)?.deletedByAdmin, isFalse);
+    await t.runAsync(
+      () => service
+          .from('messages')
+          .update({'deleted_by_admin': true})
+          .eq('id', oldMessage.id),
+    );
+    final asAdmin = await t.runAsync(() => opal.messages(conversationId));
+    expect(
+      fetched(asAdmin, oldMessage.id)?.deletedByAdmin,
+      isTrue,
+      reason: 'messages.deleted_by_admin must reach Message.deletedByAdmin',
+    );
+
+    // The server clock decides (rule 2): the phone loaded "late" while it
+    // was fresh, so the box still offers "for everyone"; the server now
+    // holds it as 7 h old and must refuse. The app says so; it stays.
+    await t.runAsync(
+      () => service
+          .from('messages')
+          .update({
+            'created_at': DateTime.now()
+                .toUtc()
+                .subtract(const Duration(hours: 7))
+                .toIso8601String(),
+          })
+          .eq('id', lateMessage.id),
+    );
+    await t.longPress(
+      within('a', find.byKey(ValueKey('message-${lateMessage.id}'))),
+    );
+    await until(
+      t,
+      () => find
+          .byKey(const ValueKey('menu-delete-for-me'))
+          .evaluate()
+          .isNotEmpty,
+      'the action row to open for the late message',
+    );
+    await openBoxAndTick(t);
+    await t.tap(find.byKey(const ValueKey('delete-confirm')));
+    await settle(t);
+    await until(
+      t,
+      () => find.text('Too late: 6 hours have passed').evaluate().isNotEmpty,
+      'the "too late" notice after the server refused',
+    );
+    expect(
+      within('a', find.byKey(ValueKey('message-${lateMessage.id}'))),
+      findsOneWidget,
+      reason: 'a refused delete leaves the message on A\'s screen',
+    );
+    final keptRow = await t.runAsync(
+      () => service
+          .from('messages')
+          .select('deleted, body')
+          .eq('id', lateMessage.id)
+          .single(),
+    );
+    expect(keptRow!['deleted'], isNull, reason: 'the server kept it');
+    await t.pump(const Duration(seconds: 5)); // the notice's timer
 
     await t.pumpWidget(const SizedBox());
     opalContainer.dispose();

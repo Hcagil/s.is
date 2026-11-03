@@ -18,8 +18,9 @@ import '../support/service_key.dart';
 ///  * hideForMe hides a message from the caller's own reads only; the
 ///    server refuses (DeniedFailure) a message the caller cannot read;
 ///  * unreadTotal counts what the member has not read, across chats;
-///  * deleteForEveryone of a photo message is Ok even when the photo's
-///    storage object is already gone (storage remove returns nothing).
+///  * deleteForEveryone of a photo message is Ok, leaves the storage object
+///    to the server's sweeper (the phone removes nothing), and is Ok even
+///    when the object is already gone.
 ///
 /// Uses its own accounts (signing in claims the device). Run after
 /// realtime_warmup_test.dart with --concurrency=1, like the rest.
@@ -189,13 +190,16 @@ void main() {
       ),
     );
 
-    test('the sender deleting a photo removes its object', () async {
+    test('the sender deleting a photo: deleted for the reader; the phone '
+        'leaves the stored file to the server sweeper (S4)', () async {
       final m = await photo();
       expect(await stored(m.attachmentPath!), isTrue);
 
       _ok(await hol.deleteForEveryone(m));
 
-      expect(await stored(m.attachmentPath!), isFalse);
+      // No client deletes Storage any more (manager Q3): checked at once,
+      // before the server's scheduled sweep has had a chance to run.
+      expect(await stored(m.attachmentPath!), isTrue);
       final seen = _ok(await gia.messages(chat)).where((x) => x.id == m.id);
       expect(seen.single.isDeleted, isTrue);
     });

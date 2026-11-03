@@ -436,4 +436,70 @@ void main() {
     expect(c.read(voiceCaptureProvider).phase, VoicePhase.idle);
     await t.pump(const Duration(minutes: 11));
   });
+
+  group('dictation ends by itself', () {
+    Future<(ProviderContainer, DictationFake)> dictating(WidgetTester t) async {
+      final dict = DictationFake();
+      final c = await start(
+        t,
+        HeldSendChat(),
+        FileRepoFake(),
+        VoiceRecorderFake(),
+        VoiceTranscriberFake(),
+        dict,
+      );
+      final notifier = c.read(voiceCaptureProvider.notifier)..toggleMode();
+      unawaited(notifier.begin('c1', 'tr_TR'));
+      await settle(t);
+      await t.pump(const Duration(seconds: 1));
+      expect(c.read(voiceCaptureProvider).phase, isNot(VoicePhase.idle));
+      expect(c.read(voiceCaptureProvider).elapsedMs, greaterThan(0));
+      return (c, dict);
+    }
+
+    testWidgets('recogniser error -> idle, notice, ticker stopped', (
+      WidgetTester t,
+    ) async {
+      final (c, dict) = await dictating(t);
+      dict.failByItself();
+      await settle(t);
+      final s = c.read(voiceCaptureProvider);
+      expect(s.phase, VoicePhase.idle);
+      expect(s.notice, VoiceNotice.dictationUnavailable);
+      final ms = s.elapsedMs;
+      await t.pump(const Duration(seconds: 2));
+      expect(
+        c.read(voiceCaptureProvider).elapsedMs,
+        ms,
+        reason: 'the ticker stopped',
+      );
+      await t.pump(const Duration(minutes: 11));
+    });
+
+    testWidgets('silence (onEnd alone) -> idle, no notice', (
+      WidgetTester t,
+    ) async {
+      final (c, dict) = await dictating(t);
+      dict.endByItself();
+      await settle(t);
+      final s = c.read(voiceCaptureProvider);
+      expect(s.phase, VoicePhase.idle);
+      expect(s.notice, isNull);
+      final ms = s.elapsedMs;
+      await t.pump(const Duration(seconds: 2));
+      expect(c.read(voiceCaptureProvider).elapsedMs, ms);
+      await t.pump(const Duration(minutes: 11));
+    });
+
+    testWidgets('error after the controller is disposed does not throw', (
+      WidgetTester t,
+    ) async {
+      final (c, dict) = await dictating(t);
+      c.dispose();
+      expect(dict.failByItself, returnsNormally);
+      await settle(t);
+      expect(t.takeException(), isNull);
+      await t.pump(const Duration(minutes: 11));
+    });
+  });
 }

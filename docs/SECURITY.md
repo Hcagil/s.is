@@ -756,6 +756,16 @@ when a collaborator leaves or a dependency is suspected compromised.
 - iPhone: the push carries category `SIS_MESSAGE_LOCKED` (a foreground Reply only).
 - On the phone, an opened text is stored once. The store's upsert is one atomic statement, so a live row never replaces a deleted one. A hidden or vanished message is dropped from the opener's waiting list, so it cannot come back.
 
+### Group cleanup and the storage sweeper (rule 19)
+
+- `pg_cron` job `group-cleanup` runs daily at 03:17, calling `app_private.cleanup_empty_groups(batch)` (security definer, empty search_path, no grants to public/anon/authenticated).
+- It targets titled, non-system groups (1:1, bot and system chats are never touched) with no current non-bot member whose last departure is at least 90 days ago, and that still hold messages or a group photo. The Debug group follows the same rule (owner Q-33). At most `batch` (50) groups per run, taken with `FOR UPDATE SKIP LOCKED`.
+- Per group: it queues each attachment, its `.t` thumbnail, the link-card picture and the group photo (`avatar_path` set to null) in `app_private.storage_removal_queue`; deletes polls (options and votes cascade), reactions and all messages; and writes one row to `app_private.group_cleanup_log` (conversation id, counts, time; no content; no foreign key, so the row outlives the group; RLS on, no grants to public/anon/authenticated). The conversation row is kept so former members keep the chat. A second run finds nothing to do.
+- Storage cannot be deleted from SQL, so the edge function `storage-sweeper` (deployed with `--no-verify-jwt`) does it. `pg_cron` job `storage-sweeper` runs every 10 minutes and calls `app_private.run_storage_sweeper()`, which posts with pg_net to the Vault secret `sweeper_url`, header `x-sweeper-secret` from the Vault secret `sweeper_secret`. Where either secret is missing (local, CI) or the queue is empty, it does nothing.
+- Auth of the function: the header is compared in constant time with its env secret `STORAGE_SWEEPER_SECRET`; missing or wrong secret gives 401, a non-POST gives 405. The release workflow sets one new random secret on both sides every release (same pattern as `podium`), never printed. Users cannot call it.
+- The function reaches the queue only through `public.sweeper_claim(batch)` and `public.sweeper_done(ids)`, executable by `service_role` only. `sweeper_claim` takes up to 200 rows (fewest attempts first, attempts +1) and drops from the queue, without removing, any path a live message still uses (attachment or its `.t`; link-card picture of a message that still has a card) or that is a current group or profile picture. A failed removal stays queued and sinks behind fresh rows. Paths and the secret are never logged.
+- This sweeper also empties the queue that `delete_message` and `drop_group_if_unused` fill.
+
 ### Bacanaks Özel /podium (accepted risk)
 
 - The `podium` edge function signs in to the owner's Vega system and reads one total from its summary page. Vega offers only plain HTTP (no TLS). This is an **accepted risk**, recorded by the owner on 2026-10-24 and 2026-11-01 (owner decisions log, local).

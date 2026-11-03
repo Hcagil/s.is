@@ -94,16 +94,18 @@ class UpdateController extends AsyncNotifier<UpdateState> {
   void dismiss() => state = const AsyncData(UpdateIdle());
 
   /// Opens the store page (Play, or TestFlight on iPhone). Never forces an install.
-  Future<void> openStore() =>
+  Future<bool> openStore() =>
       ref.read(updateRepositoryProvider).openStoreListing();
 
-  Future<void> updateNow() async {
+  /// True when the update or store page opened; false when nothing could open.
+  Future<bool> updateNow() async {
     final repo = ref.read(updateRepositoryProvider);
     try {
       await repo.startImmediateUpdate();
+      return true;
     } catch (_) {
       // Play cannot run an immediate update here: send the user to the listing.
-      await repo.openStoreListing();
+      return repo.openStoreListing();
     }
   }
 }

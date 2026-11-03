@@ -1309,6 +1309,14 @@ class AppLocalizationsTr extends AppLocalizations {
   String get updateNow => 'Şimdi güncelle';
 
   @override
+  String get updateTestFlightOpenFailed =>
+      'TestFlight açılamadı. TestFlight uygulamasını açın ve Güncelle\'ye dokunun.';
+
+  @override
+  String get updateTestFlightHint =>
+      'TestFlight uygulaması açılır. SIS\'in yanındaki Güncelle\'ye dokunun.';
+
+  @override
   String licencesCount(int count) {
     return '$count lisans';
   }

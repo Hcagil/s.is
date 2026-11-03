@@ -177,9 +177,20 @@ class Fake(http.server.BaseHTTPRequestHandler):
                 return self.reply(422, {"errors": [{"status": "422", "code": "ENTITY_ERROR",
                                                     "detail": "Builds cannot be assigned to this internal group."}]})
             return self.reply(204)
+        m = re.fullmatch(r"/v1/betaGroups/([^/]+)/betaTesters", url.path)
+        if self.command == "GET" and m:
+            # A group's testers: a page of at most `limit` (default 50), the full count in meta.paging.total.
+            if m.group(1) not in [g[0] for g in st["groups"]]:
+                return self.error(404)
+            ts = st.get("testers", {}).get(m.group(1), [])
+            data = [{"type": "betaTesters", "id": "T-%s-%d" % (m.group(1), i), "attributes": {
+                "email": e, "firstName": "Q", "lastName": "R", "inviteType": "EMAIL"}} for i, e in enumerate(ts)]
+            return self.reply(200, {"data": data[:int(q.get("limit", ["50"])[0])], "links": {"self": self.path},
+                                    "meta": {"paging": {"total": len(data), "limit": int(q.get("limit", ["50"])[0])}}})
         if key == ("GET", "/v1/builds/BUILD-1/betaAppReviewSubmission"):
+            state = st["review"] if isinstance(st["review"], str) else "WAITING_FOR_REVIEW"
             sub = {"type": "betaAppReviewSubmissions", "id": "SUB-1",
-                   "attributes": {"betaReviewState": "WAITING_FOR_REVIEW"}} if st["review"] else None
+                   "attributes": {"betaReviewState": state}} if st["review"] else None
             return self.reply(200, {"data": sub})
         if key == ("POST", "/v1/betaAppReviewSubmissions"):
             return self.reply(201, {"data": {"type": "betaAppReviewSubmissions", "id": "SUB-2"}})
@@ -589,6 +600,25 @@ class AscSigningTest(unittest.TestCase):
     def review_reqs(self):
         return [r for r in self.reqs() if "betaAppReviewSubmission" in r["path"]]
 
+    def group_lines(self, p, name):
+        """The output lines naming this group as a whole word."""
+        rx = re.compile(r"(?<![\w-])%s(?![\w-])" % re.escape(name))
+        return [l for l in (p.stdout + p.stderr).splitlines() if rx.search(l)]
+
+    def assert_group_line(self, p, name, internal, testers):
+        """Contract: one line per group with its name, internal/external, the added state and a tester count."""
+        kind = "internal" if internal else "external"
+        lines = [l for l in self.group_lines(p, name) if re.search(r"\b%s\b" % kind, l)]
+        self.assertEqual(len(lines), 1, "want one %s line for %s, got %r" % (kind, name, p.stdout + p.stderr))
+        line = lines[0]
+        self.assertNotRegex(line, r"\b%s\b" % ("external" if internal else "internal"))
+        if internal:
+            self.assertIn("auto", line, "an internal group must be logged as added automatically")
+        else:
+            self.assertNotIn("auto", line)
+            self.assertRegex(line, r"(?i)\b(yes|added|already)\b", "no added state on the external line")
+        self.assertRegex(line, r"(?<![\w.-])%d(?![\w.-])" % testers, "tester count %d missing: %r" % (testers, line))
+
     def whats_new(self):
         writes = [r for r in self.reqs() if r["path"].startswith("/v1/betaBuildLocalizations") and r["method"] in ("PATCH", "POST")]
         self.assertEqual(len(writes), 1, "want one localization write, got %s" % [(r["method"], r["path"]) for r in writes])
@@ -618,7 +648,8 @@ class AscSigningTest(unittest.TestCase):
         self.assertEqual(len(lg), 1)
         self.assertEqual(lg[0]["query"].get("limit"), ["200"])
         self.assertEqual(self.group_adds(), ["G-EXT"], "only the external bacanaks group, nothing else")
-        self.assertIn("internal group bacanaks receives builds automatically", p.stdout + p.stderr)
+        self.assert_group_line(p, "bacanaks", True, 0)
+        self.assert_group_line(p, "bacanaks", False, 0)
         for r in self.reqs("POST"):
             if r["path"].endswith("/relationships/builds"):
                 self.assertEqual(r["body"], {"data": [{"type": "builds", "id": "BUILD-1"}]})
@@ -661,7 +692,7 @@ class AscSigningTest(unittest.TestCase):
         p = self.dist(groups="other")
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(self.group_adds(), [], "an internal group was POSTed to")
-        self.assertIn("internal group other receives builds automatically", p.stdout + p.stderr)
+        self.assert_group_line(p, "other", True, 0)
         self.assertEqual(self.review_reqs(), [], "an internal-only distribution touched beta review")
 
     def test_distribute_groups_are_stripped(self):
@@ -697,7 +728,7 @@ class AscSigningTest(unittest.TestCase):
             p = self.dist(groups=groups)
             self.assertEqual(p.returncode, 0, "%r: %s" % (groups, p.stderr))
             self.assertEqual(self.group_adds(), ["G-EXT"], groups)
-            self.assertIn("receives builds automatically", p.stdout + p.stderr, groups)
+            self.assert_group_line(p, "BACANAKS", True, 0)
             self.assertEqual(len(self.find("POST", "/v1/betaAppReviewSubmissions")), 1, groups)
 
     def test_fake_refuses_internal_group_like_apple(self):
@@ -718,12 +749,92 @@ class AscSigningTest(unittest.TestCase):
             p = self.dist()
             self.assertNotEqual(p.returncode, 0, "%d on group add was ignored" % status)
 
-    def test_distribute_review_post_error(self):
-        self.srv.state["fail"][("POST", "/v1/betaAppReviewSubmissions")] = 422
-        p = self.dist()
-        self.assertNotEqual(p.returncode, 0)
-        self.assertIn("fake error 422", p.stderr, "the API error body is not shown")
-        self.assertIn("Test Information", p.stderr, "no hint about TestFlight Test Information")
+    def test_distribute_review_post_4xx_warns_and_succeeds(self):
+        for status in (400, 403, 409, 422):
+            self.setUp()
+            self.srv.state["fail"][("POST", "/v1/betaAppReviewSubmissions")] = status
+            p = self.dist()
+            self.assertEqual(p.returncode, 0, "%d on the review POST failed the run: %s" % (status, p.stderr))
+            self.assertEqual(len(self.find("POST", "/v1/betaAppReviewSubmissions")), 1, status)
+            warns = [l for l in (p.stdout + p.stderr).splitlines() if l.startswith("::warning::")]
+            self.assertTrue(warns, "%d: no ::warning:: line in %r" % (status, p.stdout + p.stderr))
+            self.assertTrue(any(re.search(r"(?<!\d)%d(?!\d)" % status, l) for l in warns),
+                            "%d: the warning does not carry the status: %r" % (status, warns))
+
+    def test_distribute_review_post_5xx_fails(self):
+        for status in (500, 503):
+            self.setUp()
+            self.srv.state["fail"][("POST", "/v1/betaAppReviewSubmissions")] = status
+            p = self.dist(ASC_POLL_LIMIT_SECONDS="3")
+            self.assertNotEqual(p.returncode, 0, "%d on the review POST was ignored" % status)
+            self.assertFalse(any(l.startswith("::warning::") and str(status) in l
+                                 for l in (p.stdout + p.stderr).splitlines()), "%d was downgraded to a warning" % status)
+
+    # GROUPS="*": every beta group of the app. Unique names so each group's line is unambiguous.
+    STAR_GROUPS = [("G-A", "Alpha", True), ("G-B", "Beta Club", False), ("G-C", "Gamma", False), ("G-D", "Delta", True)]
+    STAR_TESTERS = {"G-A": ["a@mail.test", "a2@mail.test"], "G-B": ["b1@mail.test", "b2@sis.test", "b3@mail.test"],
+                    "G-C": [], "G-D": ["d@mail.test"]}
+
+    def star(self, groups=None, testers=None, **extra):
+        self.srv.state["groups"] = groups or self.STAR_GROUPS
+        self.srv.state["testers"] = testers or self.STAR_TESTERS
+        p = self.dist(groups="*", **extra)
+        out = p.stdout + p.stderr
+        for e in ("@mail.test", "@sis.test", "a@mail", "b2@"):
+            self.assertNotIn(e, out, "a tester email reached the log")
+        return p
+
+    def test_distribute_star_reaches_every_group(self):
+        p = self.star()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.group_adds(), ["G-B", "G-C"], "every external group, no internal group")
+        for gid, name, internal in self.STAR_GROUPS:
+            self.assert_group_line(p, name, internal, len(self.STAR_TESTERS[gid]))
+        self.assertEqual(len(self.find("GET", "/v1/builds/BUILD-1/betaAppReviewSubmission")), 1)
+        sub = self.find("POST", "/v1/betaAppReviewSubmissions")
+        self.assertEqual(len(sub), 1, "external groups got the build: beta review must be submitted")
+        self.assertEqual(sub[0]["body"]["data"]["relationships"]["build"]["data"], {"type": "builds", "id": "BUILD-1"})
+
+    def test_distribute_star_409_means_already_there(self):
+        self.srv.state["fail"][("POST", "/v1/betaGroups/G-C/relationships/builds")] = 409
+        p = self.star()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.group_adds(), ["G-B", "G-C"])
+        self.assert_group_line(p, "Gamma", False, 0)
+        self.assertEqual(len(self.find("POST", "/v1/betaAppReviewSubmissions")), 1)
+
+    def test_distribute_star_internal_only_skips_review(self):
+        p = self.star(groups=[("G-A", "Alpha", True), ("G-D", "Delta", True)])
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.group_adds(), [], "an internal group was POSTed to")
+        self.assert_group_line(p, "Alpha", True, 2)
+        self.assert_group_line(p, "Delta", True, 1)
+        self.assertEqual(self.find("POST", "/v1/betaAppReviewSubmissions"), [], "no external group, yet review submitted")
+
+    def test_distribute_star_existing_review_is_logged_not_reposted(self):
+        self.srv.state["review"] = "IN_REVIEW"
+        p = self.star()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(len(self.find("GET", "/v1/builds/BUILD-1/betaAppReviewSubmission")), 1)
+        self.assertEqual(self.find("POST", "/v1/betaAppReviewSubmissions"), [], "a second submission was posted")
+        self.assertIn("IN_REVIEW", p.stdout + p.stderr, "the existing submission's state is not logged")
+
+    def test_distribute_named_groups_still_restrict(self):
+        for groups in ("gamma", "Alpha, GAMMA"):
+            self.setUp()
+            self.srv.state["groups"] = self.STAR_GROUPS
+            self.srv.state["testers"] = self.STAR_TESTERS
+            p = self.dist(groups=groups)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(self.group_adds(), ["G-C"], "%r reached other groups" % groups)
+            self.assertEqual(self.group_lines(p, "Beta Club"), [], "%r: an unnamed group was handled" % groups)
+            self.assertEqual(self.group_lines(p, "Delta"), [], "%r: an unnamed group was handled" % groups)
+
+    def test_distribute_tester_count_beyond_one_page(self):
+        many = {"G-A": [], "G-B": ["t%d@mail.test" % i for i in range(250)], "G-C": [], "G-D": []}
+        p = self.star(testers=many)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assert_group_line(p, "Beta Club", False, 250)
 
     def test_distribute_failed_build_stops_at_once(self):
         for state in ("FAILED", "INVALID"):

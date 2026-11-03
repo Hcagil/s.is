@@ -25,6 +25,7 @@ Future<DeleteChoice> showMessageDeleteBox(
   BuildContext context, {
   String? checkLabel,
   bool mediaNote = false,
+  int count = 1,
 }) async {
   final anchor = Rect.fromCenter(
     center: MediaQuery.sizeOf(context).center(Offset.zero),
@@ -49,7 +50,11 @@ Future<DeleteChoice> showMessageDeleteBox(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(l.messageDeleteQuestion),
+                    Text(
+                      count > 1
+                          ? l.messageDeleteFewQuestion
+                          : l.messageDeleteQuestion,
+                    ),
                     if (mediaNote) ...[
                       const SizedBox(height: 8),
                       Row(

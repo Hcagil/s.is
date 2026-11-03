@@ -2529,6 +2529,10 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bu mesajı silmek istediğinizden emin misiniz?';
 
   @override
+  String get messageDeleteFewQuestion =>
+      'Bu mesajları silmek istediğinizden emin misiniz?';
+
+  @override
   String messageDeleteAlsoFor(String name) {
     return '$name için de sil';
   }

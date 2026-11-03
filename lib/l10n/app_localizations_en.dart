@@ -2557,6 +2557,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Are you sure you want to delete this message?';
 
   @override
+  String get messageDeleteFewQuestion =>
+      'Are you sure you want to delete these messages?';
+
+  @override
   String messageDeleteAlsoFor(String name) {
     return 'Also delete for $name';
   }

@@ -761,6 +761,7 @@
   "podHint": "Komutlar için / yazın",
   "podNotEnc": "Uçtan uca şifreli değil",
   "messageDeleteQuestion": "Bu mesajı silmek istediğinizden emin misiniz?",
+  "messageDeleteFewQuestion": "Bu mesajları silmek istediğinizden emin misiniz?",
   "messageDeleteAlsoFor": "{name} için de sil",
   "messageDeleteConfirm": "Sil",
   "messageDeleteForAllMembers": "Tüm üyelerden sil",

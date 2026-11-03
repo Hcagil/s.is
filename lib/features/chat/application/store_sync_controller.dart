@@ -112,7 +112,7 @@ class StoreSyncController {
     }
     for (final m in gone) {
       _ref.read(messageOpenerProvider).forget(m.id);
-      await _removeVanished(store, m);
+      await _removeVanished(_ref, store, m);
     }
     if (keep.isNotEmpty) await store.upsertAll(keep);
   }

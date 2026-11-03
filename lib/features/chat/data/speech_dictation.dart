@@ -1,3 +1,6 @@
+import 'dart:async' show Timer;
+import 'dart:developer' show log;
+
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/services.dart' show MethodChannel;
@@ -17,12 +20,15 @@ final class SpeechDictation implements Dictation {
   final SpeechToText _stt = SpeechToText();
   void Function(String)? _onText;
   void Function()? _onEnd;
+  void Function()? _onError;
+  Timer? _endTimer;
 
   @override
   Future<VoiceStart> start({
     required String localeTag,
     required void Function(String text) onText,
     required void Function() onEnd,
+    void Function()? onError,
   }) async {
     try {
       if (!await _onDeviceOnly()) return VoiceStart.failed;
@@ -36,6 +42,7 @@ final class SpeechDictation implements Dictation {
       if (id == null) return VoiceStart.failed;
       _onText = onText;
       _onEnd = onEnd;
+      _onError = onError;
       await _stt.listen(
         onResult: (r) => _onText?.call(r.recognizedWords),
         listenOptions: SpeechListenOptions(
@@ -49,9 +56,11 @@ final class SpeechDictation implements Dictation {
         ),
       );
       return VoiceStart.started;
-    } catch (_) {
+    } catch (e) {
+      log('Dictation start failed: ${e.runtimeType}', name: 'sis.dictation');
       _onText = null;
       _onEnd = null;
+      _onError = null;
       return VoiceStart.failed;
     }
   }
@@ -75,22 +84,40 @@ final class SpeechDictation implements Dictation {
 
   void _status(String s) {
     if (s == SpeechToText.doneStatus || s == SpeechToText.notListeningStatus) {
-      _finish();
+      // The plugin posts a hard error after these statuses; give it a moment.
+      _endTimer ??= Timer(const Duration(milliseconds: 150), _finish);
     }
   }
 
-  void _error(SpeechRecognitionError e) => _finish();
+  void _error(SpeechRecognitionError e) {
+    log(
+      'Dictation error: ${e.errorMsg} permanent=${e.permanent}',
+      name: 'sis.dictation',
+    );
+    // Silence ends are normal; any other error means it cannot listen.
+    const quiet = {'error_no_match', 'error_speech_timeout'};
+    if (!quiet.contains(e.errorMsg)) {
+      final fail = _onError;
+      _onError = null;
+      fail?.call();
+    }
+    _finish();
+  }
 
   void _finish() {
+    _endTimer?.cancel();
+    _endTimer = null;
     final end = _onEnd;
     _onEnd = null;
     _onText = null;
+    _onError = null;
     end?.call();
   }
 
   Future<String?> _localeId(String tag) async {
     try {
-      final locales = await _stt.locales();
+      // Without a working recogniser this call never answers (bind error 10).
+      final locales = await _stt.locales().timeout(const Duration(seconds: 3));
       final want = tag.replaceAll('-', '_');
       for (final l in locales) {
         if (l.localeId.replaceAll('-', '_') == want) return l.localeId;
@@ -102,7 +129,8 @@ final class SpeechDictation implements Dictation {
         }
       }
       return null;
-    } catch (_) {
+    } catch (e) {
+      log('Dictation locales failed: ${e.runtimeType}', name: 'sis.dictation');
       return null;
     }
   }

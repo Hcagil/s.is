@@ -170,6 +170,7 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
             localeTag: _localeTag,
             onText: _onDictated,
             onEnd: _onDictationEnd,
+            onError: _onDictationError,
           );
     }
     if (!ref.mounted) return;
@@ -340,6 +341,11 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
       all = all.substring(0, maxMessageLength);
     }
     ref.read(draftsProvider.notifier).setText(id, all);
+  }
+
+  void _onDictationError() {
+    if (!ref.mounted) return;
+    state = state.copyWith(notice: VoiceNotice.dictationUnavailable);
   }
 
   void _onDictationEnd() {

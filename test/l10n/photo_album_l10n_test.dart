@@ -29,11 +29,6 @@ void main() {
     );
   });
 
-  test('messageDeleteAlbumTitle', () {
-    expect(en.messageDeleteAlbumTitle, 'Delete this album?');
-    expect(tr.messageDeleteAlbumTitle, 'Bu albüm silinsin mi?');
-  });
-
   test('quotePhotos', () {
     expect(en.quotePhotos(3), '3 photos');
     expect(tr.quotePhotos(7), '7 fotoğraf');

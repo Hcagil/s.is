@@ -119,6 +119,38 @@ void main() {
     );
   });
 
+  for (final (locale, word) in [
+    (const Locale('en'), 'Sticker'),
+    (const Locale('tr'), 'Çıkartma'),
+  ]) {
+    testWidgets('a pinned sticker reads "$word" in the bar', (t) async {
+      t.platformDispatcher.localesTestValue = [locale];
+      addTearDown(t.platformDispatcher.clearLocalesTestValue);
+      final pins = ChatPinFake();
+      final w = World(self: 'u1', extra: pinWith(pins));
+      pinT1(w, pins);
+      pins.messages['t1'] = Message(
+        id: 't1',
+        conversationId: 'c1',
+        senderId: 'ub',
+        body: '',
+        createdAt: DateTime.utc(2026, 9, 20, 13),
+        stickerId: starterStickerIds.first,
+      );
+      await t.pumpWidget(w.app());
+      await settle(t);
+      await openChat(t, 'c1');
+      expect(
+        find.descendant(
+          of: byKey('pinned-bar-text'),
+          matching: find.text(word, findRichText: true),
+          matchRoot: true,
+        ),
+        findsOneWidget,
+      );
+    });
+  }
+
   testWidgets('no bar when the message cannot be fetched', (t) async {
     final pins = ChatPinFake();
     final w = World(self: 'u1', extra: pinWith(pins));

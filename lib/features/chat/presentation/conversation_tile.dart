@@ -13,6 +13,7 @@ import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_selection_controller.dart';
 import '../domain/conversation.dart';
+import '../domain/encrypted_message_repository.dart';
 import '../domain/shared_contact.dart';
 import '../domain/shared_location.dart';
 import '../domain/sticker.dart';
@@ -46,6 +47,8 @@ String chatPreviewLine(AppLocalizations l, String text) =>
     ? l.stickerPreviewLine
     : text == stickerAlbumPreviewText
     ? l.stickerAlbumPreviewLine
+    : isLockedPlaceholder(text)
+    ? l.chatLockedMessage
     : text;
 
 class ConversationTile extends ConsumerWidget {

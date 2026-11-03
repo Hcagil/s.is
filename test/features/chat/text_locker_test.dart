@@ -12,9 +12,12 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/message_opener.dart';
 import 'package:sis/features/chat/application/text_locker.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/link_preview.dart';
+import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/message_opener.dart';
 import 'package:sis/features/chat/domain/message_envelope.dart';
 import 'package:sis/features/chat/domain/reaction_envelope.dart';
 import 'package:sis/features/chat/domain/send_queue_store.dart';
@@ -64,7 +67,11 @@ class _Verify extends FakeEngine {
 }
 
 class World {
-  World({SessionState session = const Allowed(me), bool wired = true}) {
+  World({
+    SessionState session = const Allowed(me),
+    bool wired = true,
+    MessageOpener? opener,
+  }) {
     chat.conversationsResult = const Ok([direct, hikers, system, admin]);
     dir.identityAnswer = Ok(keysOf('idk-bob'));
     dir.claimAnswer = Ok(keysOf('idk-bob', otk: 'otk-1'));
@@ -80,6 +87,7 @@ class World {
         keyEngineProvider.overrideWithValue(keys),
         queuedCiphertextsProvider.overrideWithValue(queue),
         if (wired) sessionEngineProvider.overrideWithValue(engine),
+        if (opener != null) messageOpenerProvider.overrideWithValue(opener),
       ],
     );
   }
@@ -114,6 +122,29 @@ class World {
 
   /// A session with bob for his current key already exists.
   void session([String key = 'idk-bob']) => engine.sessions['u2'] = {key};
+}
+
+/// Logs each openWaiting with how many createOutbound calls the engine had
+/// seen by then; [fail] makes it throw or never-return-normally.
+class _WaitSpy implements MessageOpener {
+  _WaitSpy(this.engine, {this.fail = false});
+  final FakeSessionEngine Function() engine;
+  final bool fail;
+  final calls = <(String, int)>[];
+  @override
+  Future<void> openWaiting(String peerUserId) async {
+    calls.add((peerUserId, engine().outbound.length));
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+    if (fail) throw StateError('opener broke');
+  }
+
+  @override
+  Future<List<Message>> open(List<Message> rows, {bool fresh = false}) async =>
+      rows;
+  @override
+  Stream<Message> get reopened => const Stream.empty();
+  @override
+  void forget(String id) {}
 }
 
 Failure? failureOf(Result<Object?> r) => switch (r) {
@@ -314,6 +345,28 @@ void main() {
         expect(w.engine.encrypts.last.peerIdentityKey, 'idk-bob');
       },
     );
+
+    test('the waiting texts of bob open BEFORE createOutbound drops his old '
+        'sessions', () async {
+      late World w;
+      final spy = _WaitSpy(() => w.engine);
+      w = World(opener: spy)..session('idk-old');
+      final r = await w.lock('c1');
+      expect(lockedOf(r), isNotNull);
+      expect(spy.calls, [('u2', 0)], reason: 'once, for bob, before outbound');
+      expect(w.engine.outbound.single.$1, 'u2');
+    });
+
+    test('openWaiting throwing does not stop the send', () async {
+      late World w;
+      final spy = _WaitSpy(() => w.engine, fail: true);
+      w = World(opener: spy);
+      final r = await w.lock('c1');
+      expect(spy.calls, [('u2', 0)]);
+      expect(lockedOf(r), isNotNull);
+      expect(w.engine.outbound.single.$1, 'u2');
+      expect(w.engine.encrypts.last.peerIdentityKey, 'idk-bob');
+    });
 
     test(
       'a session only for an OLD key of bob is not used: a new one is made',

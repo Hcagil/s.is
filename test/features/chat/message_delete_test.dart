@@ -68,13 +68,15 @@ Future<ProviderContainer> pump(
   WidgetTester tester,
   ChatFake chat, {
   bool group = false,
+  bool listed = true,
 }) async {
-  // As in production, the open chat is on the list: the box reads the
-  // other person's name (1:1) or that it is a group from it.
+  // As in production, the open chat is usually on the list; [listed] false
+  // is a cold start straight into the chat (e.g. from a notification).
   chat.conversationsResult = Ok([
-    group
-        ? const Conversation(id: 'c1', title: 'Crew')
-        : const Conversation(id: 'c1', other: bob),
+    if (listed)
+      group
+          ? const Conversation(id: 'c1', title: 'Crew')
+          : const Conversation(id: 'c1', other: bob),
   ]);
   final container = await _scope(chat);
   container.read(openConversationProvider.notifier).open('c1');
@@ -185,6 +187,16 @@ void main() {
       expect(chat.deleted, ['m1']);
       expect(chat.hidden, isEmpty);
       expect(find.text('hi'), findsNothing);
+    });
+
+    testWidgets('the chat list is empty: the box names the open chat', (
+      tester,
+    ) async {
+      final chat = ChatFake(self: me.userId)
+        ..history['c1'] = [msg('m1', from: me.userId)];
+      await pump(tester, chat, listed: false);
+      await openBox(tester, 'm1');
+      expect(find.text(alsoBob, findRichText: true), findsOneWidget);
     });
 
     testWidgets('1:1, own message under 6 h, not ticked: hidden for me only', (
@@ -434,7 +446,7 @@ void main() {
   });
 
   group('placeholder text', () {
-    Message deleted(String by) => Message(
+    Message deleted(String by, {bool admin = false}) => Message(
       id: 'm1',
       conversationId: 'c1',
       senderId: bob.userId,
@@ -442,6 +454,7 @@ void main() {
       createdAt: DateTime.now(),
       deletion: MessageDeletion.placeholder,
       deletedBy: by,
+      deletedByAdmin: admin,
     );
 
     testWidgets('deleted by its sender', (tester) async {
@@ -471,8 +484,31 @@ void main() {
       );
     });
 
-    testWidgets('deleted by somebody else: an admin', (tester) async {
+    // The line follows the server's deleted_by_admin flag alone, not who
+    // deleted it: an admin deleting his OWN message after 6 h is still
+    // "deleted by an admin" (rule 5), so deletedBy cannot tell.
+    testWidgets('deleted by somebody else, flag not set: the plain line', (
+      tester,
+    ) async {
       final chat = ChatFake()..messagesResult = Ok([deleted(me.userId)]);
+      await pump(tester, chat);
+      expect(find.text('This message was deleted'), findsOneWidget);
+      expect(find.text('Deleted by an admin'), findsNothing);
+    });
+
+    testWidgets('admin\'s own message, flag set: "deleted by an admin"', (
+      tester,
+    ) async {
+      final chat = ChatFake()
+        ..messagesResult = Ok([deleted(bob.userId, admin: true)]);
+      await pump(tester, chat);
+      expect(find.text('Deleted by an admin'), findsOneWidget);
+      expect(find.text('This message was deleted'), findsNothing);
+    });
+
+    testWidgets('deleted by somebody else: an admin', (tester) async {
+      final chat = ChatFake()
+        ..messagesResult = Ok([deleted(me.userId, admin: true)]);
       await pump(tester, chat);
       expect(find.text('Deleted by an admin'), findsOneWidget);
       expect(find.text('This message was deleted'), findsNothing);

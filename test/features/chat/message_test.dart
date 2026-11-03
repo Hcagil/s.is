@@ -120,7 +120,9 @@ void main() {
   });
 
   group('deletedByAdmin', () {
-    Message m(String? by) => Message(
+    // The server's deleted_by_admin flag, carried as is: it no longer
+    // derives from deletedBy != senderId.
+    Message m(String? by, {bool admin = false}) => Message(
       id: 'm1',
       conversationId: 'c1',
       senderId: 'u1',
@@ -128,15 +130,25 @@ void main() {
       createdAt: DateTime.utc(2026, 9, 24),
       deletion: by == null ? null : MessageDeletion.placeholder,
       deletedBy: by,
+      deletedByAdmin: admin,
     );
 
-    test('deleted by somebody other than the sender: yes', () {
-      expect(m('admin').deletedByAdmin, isTrue);
+    test('flag set: yes, even on the admin\'s own message', () {
+      expect(m('admin', admin: true).deletedByAdmin, isTrue);
+      expect(m('u1', admin: true).deletedByAdmin, isTrue);
     });
 
-    test('deleted by its sender, or not deleted: no', () {
+    test('flag not set: no, whoever deleted it', () {
+      expect(m('admin').deletedByAdmin, isFalse);
       expect(m('u1').deletedByAdmin, isFalse);
       expect(m(null).deletedByAdmin, isFalse);
+    });
+
+    test('kept by the local copies (stored, preview, plain)', () {
+      final a = m('admin', admin: true);
+      expect(a.stored().deletedByAdmin, isTrue);
+      expect(a.withPreview(null).deletedByAdmin, isTrue);
+      expect(a.withPlain('', null).deletedByAdmin, isTrue);
     });
   });
 

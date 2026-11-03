@@ -52,13 +52,17 @@ List<Message> album(int n, {String group = 'g1'}) => [
   for (var i = 1; i <= n; i++) photo('p$i', group: group),
 ];
 
-Future<ChatFake> pump(WidgetTester tester, List<Message> messages) async {
+Future<ChatFake> pump(
+  WidgetTester tester,
+  List<Message> messages, {
+  bool listed = true,
+}) async {
   final chat =
       ChatFake(self: me.userId, latency: const Duration(milliseconds: 5))
         ..history['c1'] = [...messages]
-        ..conversationsResult = const Ok([
-          Conversation(id: 'c1', title: 'Bob'),
-          Conversation(id: 'c2', title: 'Work'),
+        ..conversationsResult = Ok([
+          if (listed) const Conversation(id: 'c1', title: 'Bob'),
+          const Conversation(id: 'c2', title: 'Work'),
         ]);
   for (final m in messages) {
     if (m.attachmentPath case final path?) chat.store(path);
@@ -252,6 +256,23 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(chat.deleted, [id]);
+    });
+
+    // The viewer passes no chat name (accepted gap): with the chat not on
+    // the list either, the box still names someone, never "for ".
+    testWidgets('chat not on the list: the box never shows an empty name', (
+      tester,
+    ) async {
+      await pump(tester, album(3), listed: false);
+      await openSecond(tester);
+      await tester.tap(find.byKey(const ValueKey('menu-delete-for-me')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Also delete for Member', findRichText: true),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('delete-cancel')));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('forward sends that photo only, as one plain forward', (

@@ -220,12 +220,25 @@ void main() {
   Finder within(String paneId, Finder matching) =>
       find.descendant(of: pane(paneId), matching: matching);
 
-  /// Whether [key] in [paneId] takes visible space: a vanished bubble may
-  /// stay in the tree at zero height (#298), which is gone to the eye.
-  bool visible(String paneId, String key) =>
-      within(paneId, find.byKey(ValueKey(key))).evaluate().any(
+  /// Whether message [id] in [paneId] takes visible space. A vanishing
+  /// bubble is wrapped in `vanish-<id>` (#298), whose SizeTransition shrinks
+  /// to zero height while the inner `message-<id>` keeps its own size; so
+  /// the wrapper is what is measured once it exists.
+  bool visible(String paneId, String id) {
+    final wrapper = within(
+      paneId,
+      find.byKey(ValueKey('vanish-$id'), skipOffstage: false),
+    ).evaluate();
+    if (wrapper.isNotEmpty) {
+      return wrapper.any(
         (e) => ((e.renderObject as RenderBox?)?.size.height ?? 0) >= 1,
       );
+    }
+    return within(
+      paneId,
+      find.byKey(ValueKey('message-$id')),
+    ).evaluate().isNotEmpty;
+  }
 
   testWidgets('A deletes her own message through the sheet; a fresh one '
       'vanishes from B\'s open screen, a backdated one becomes a placeholder', (
@@ -387,7 +400,7 @@ void main() {
     await until(
       t,
       () =>
-          !visible('a', 'message-${recentMessage.id}') &&
+          !visible('a', recentMessage.id) &&
           within(
             'a',
             find.byKey(ValueKey('deleted-${recentMessage.id}')),
@@ -415,12 +428,20 @@ void main() {
     await until(
       t,
       () =>
-          !visible('b', 'message-${recentMessage.id}') &&
+          !visible('b', recentMessage.id) &&
           within(
             'b',
             find.byKey(ValueKey('deleted-${recentMessage.id}')),
           ).evaluate().isEmpty,
       'B\'s screen to drop the vanished recent message',
+      explain: () async {
+        final state = russContainer.read(messagesProvider);
+        final his = state.value
+            ?.where((m) => m.id == recentMessage.id)
+            .firstOrNull;
+        return '  B controller: ${state.runtimeType} '
+            'deletion=${his?.deletion} present=${his != null}\n';
+      },
     );
     final vanishedRow = await t.runAsync(
       () => service
@@ -479,6 +500,28 @@ void main() {
         matching: find.text('This message was deleted'),
       ),
       findsOneWidget,
+    );
+
+    // deleted_by_admin is mapped from the real row: the sender's own delete
+    // leaves it false; set true (as delete_message does for an admin), the
+    // repository must carry it.
+    Message? fetched(Result<List<Message>>? r, String id) => switch (r) {
+      Ok(:final value) => value.where((m) => m.id == id).firstOrNull,
+      _ => null,
+    };
+    final asSent = await t.runAsync(() => opal.messages(conversationId));
+    expect(fetched(asSent, oldMessage.id)?.deletedByAdmin, isFalse);
+    await t.runAsync(
+      () => service
+          .from('messages')
+          .update({'deleted_by_admin': true})
+          .eq('id', oldMessage.id),
+    );
+    final asAdmin = await t.runAsync(() => opal.messages(conversationId));
+    expect(
+      fetched(asAdmin, oldMessage.id)?.deletedByAdmin,
+      isTrue,
+      reason: 'messages.deleted_by_admin must reach Message.deletedByAdmin',
     );
 
     // The server clock decides (rule 2): the phone loaded "late" while it

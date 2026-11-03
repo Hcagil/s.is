@@ -358,7 +358,11 @@ void main() {
         actionLabels(actionsNode(t, bubble('bob'))),
         unorderedEquals(['Reply', 'Forward', 'Delete']),
       );
-      expect(actionsNode(t, find.byKey(const ValueKey('deleted-del'))), isNull);
+      // Rule 1: delete for me works on any stored message, deleted ones too.
+      expect(
+        actionLabels(actionsNode(t, find.byKey(const ValueKey('deleted-del')))),
+        ['Delete'],
+      );
       handle.dispose();
     });
 

@@ -3965,7 +3965,7 @@ abstract class AppLocalizations {
   /// Admin chat reply text
   ///
   /// In en, this message translates to:
-  /// **'Count and list testers'**
+  /// **'Show all testers'**
   String get adminHelpList;
 
   /// Admin chat reply text
@@ -4447,6 +4447,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Type / for commands'**
   String get podHint;
+
+  /// Admin chat field hint
+  ///
+  /// In en, this message translates to:
+  /// **'Type / for commands'**
+  String get adminHint;
+
+  /// Command list row meaning
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on /podium'**
+  String get cmdPodOnMeaning;
+
+  /// Command list row meaning
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off /podium'**
+  String get cmdPodOffMeaning;
+
+  /// Command list row meaning
+  ///
+  /// In en, this message translates to:
+  /// **'Show total money from Vega'**
+  String get cmdPodMeaning;
+
+  /// Command list argument hint
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get cmdArgEmail;
+
+  /// Screen reader label of one command row
+  ///
+  /// In en, this message translates to:
+  /// **'{command}, {meaning}'**
+  String cmdRowLabel(String command, String meaning);
 
   /// Bacanaks Ozel command chat
   ///

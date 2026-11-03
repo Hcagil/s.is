@@ -116,6 +116,18 @@ class _ComposerState extends ConsumerState<_Composer>
     super.dispose();
   }
 
+  /// Puts [text] ("/name ") into the field, cursor at the end, keyboard up;
+  /// nothing is sent. The draft saves as for typed text.
+  void _pickCommand(String text) {
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    final id = _conversationId;
+    if (id != null) ref.read(draftsProvider.notifier).setText(id, text);
+    _focus.requestFocus();
+  }
+
   void _send() {
     final body = _controller.text;
     final editing = ref.read(editingProvider);
@@ -392,6 +404,16 @@ class _ComposerState extends ConsumerState<_Composer>
     }
     final replying = ref.watch(replyingToProvider);
     final editing = ref.watch(editingProvider);
+    final isAdminChat = (ref.watch(conversationListProvider).value ?? const [])
+        .any((c) => c.id == id && c.isAdminChat);
+    // Commands for the "/" list: none while editing; Bacanaks has its own.
+    final commands = editing != null
+        ? const <BotCommand>[]
+        : bacanaks
+        ? bacanaksCommands
+        : isAdminChat
+        ? adminCommands
+        : const <BotCommand>[];
     ref.listen(editingProvider, (previous, next) {
       if (next != null && previous?.id != next.id) {
         _controller.text = next.body;
@@ -462,13 +484,11 @@ class _ComposerState extends ConsumerState<_Composer>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (bacanaks)
-              PodiumSlashPanel(
+            if (commands.isNotEmpty)
+              CommandListPanel(
                 controller: _controller,
-                onPick: () {
-                  _controller.text = '/podium';
-                  _send();
-                },
+                commands: commands,
+                onPick: _pickCommand,
               ),
             if (editing == null) const LinkStrip(),
             if (editing != null)
@@ -547,6 +567,8 @@ class _ComposerState extends ConsumerState<_Composer>
                                       decoration: InputDecoration(
                                         hintText: bacanaks
                                             ? l.podHint
+                                            : isAdminChat
+                                            ? l.adminHint
                                             : l.commonMessage,
                                         counterText: '',
                                         suffixIcon: IconButton(

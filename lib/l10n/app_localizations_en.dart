@@ -2258,7 +2258,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminHelpRm => 'Remove a tester';
 
   @override
-  String get adminHelpList => 'Count and list testers';
+  String get adminHelpList => 'Show all testers';
 
   @override
   String adminIosOk(String email) {
@@ -2540,6 +2540,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get podHint => 'Type / for commands';
+
+  @override
+  String get adminHint => 'Type / for commands';
+
+  @override
+  String get cmdPodOnMeaning => 'Turn on /podium';
+
+  @override
+  String get cmdPodOffMeaning => 'Turn off /podium';
+
+  @override
+  String get cmdPodMeaning => 'Show total money from Vega';
+
+  @override
+  String get cmdArgEmail => 'Email';
+
+  @override
+  String cmdRowLabel(String command, String meaning) {
+    return '$command, $meaning';
+  }
 
   @override
   String get podNotEnc => 'Not end-to-end encrypted';

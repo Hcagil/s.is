@@ -130,7 +130,7 @@ void main() {
       expect(
         find.descendant(
           of: k('preview-c1'),
-          matching: find.text('\u{1F464} Contact: Ann Lee'),
+          matching: find.text('Contact: Ann Lee'),
           matchRoot: true,
         ),
         findsOneWidget,
@@ -146,7 +146,7 @@ void main() {
       expect(
         find.descendant(
           of: k('preview-c1'),
-          matching: find.text('\u{1F464} Kişi: Ann Lee'),
+          matching: find.text('Kişi: Ann Lee'),
           matchRoot: true,
         ),
         findsOneWidget,

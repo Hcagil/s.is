@@ -387,8 +387,16 @@ def distribute(bundle_identifier, build_number, groups, note):
     for g in matched:
         name = g["attributes"]["name"]
         # Counts only, never tester details.
-        resp = call("GET", "/betaGroups/%s/betaTesters?limit=200" % g["id"], ok_missing=True)
-        count = " testers=%d" % len(resp["data"]) if resp and resp.get("data") is not None else " testers=?"
+        try:
+            resp = call("GET", "/betaGroups/%s/betaTesters?limit=200" % g["id"], ok_missing=True)
+        except SystemExit:
+            resp = None
+        total = None
+        if resp is not None:
+            total = resp.get("meta", {}).get("paging", {}).get("total")
+            if total is None and isinstance(resp.get("data"), list):
+                total = len(resp["data"])
+        count = " testers=%d" % total if total is not None else " testers=?"
         if g["attributes"]["isInternalGroup"]:
             print("group %s: internal, added=auto%s" % (name, count), flush=True)
             continue

@@ -28,6 +28,7 @@ import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
 import '../application/group_controller.dart';
 import '../application/link_preview_controller.dart';
+import '../domain/bot_command.dart';
 import '../domain/conversation.dart';
 import '../domain/delivery.dart';
 import '../domain/emoji.dart';
@@ -83,6 +84,7 @@ import 'readers_card.dart';
 import 'day_chip.dart';
 import 'seen_time.dart';
 import 'bacanaks_widgets.dart';
+import 'command_list_panel.dart';
 
 part 'message_bubble.dart';
 part 'reaction_chips.dart';

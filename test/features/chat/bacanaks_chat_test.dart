@@ -1,9 +1,9 @@
 // The Bacanaks Ozel command chat in the app, from the contract:
 // - header: the name "Bacanaks Özel", subtitle "Not end-to-end encrypted"
 //   (TR "Uçtan uca şifreli değil"), its own avatar; a normal chat has none.
-// - composer: hint "Type / for commands"; typing "/" opens the command panel
-//   with /podium and "Total money from Vega"; a tap sends /podium through the
-//   chat repository at once. A normal chat has no panel.
+// - composer: hint "Type / for commands"; typing "/" opens the command list
+//   with /podium and its meaning; a tap fills "/podium " and sends nothing.
+//   A normal chat has no list.
 // - reply bubble: pod / podPrev show the title, the amount as given, and
 //   "From Vega, fetched at HH:MM" in the phone's local time; no "Unchecked"
 //   tag. podFail / podOff show their fixed text. EN and TR.
@@ -189,54 +189,38 @@ void main() {
         expect(find.text(l.podHint), findsNothing);
         await t.enterText(field, '/');
         await t.pumpAndSettle();
-        expect(
-          find.text(l.podCmdDesc),
-          findsNothing,
-          reason: 'no command panel',
-        );
+        expect(byKey('command-list-panel'), findsNothing);
       },
     );
 
     testWidgets(
-      '[$lang] composer hint, then "/" opens the panel and a tap sends /podium',
+      '[$lang] composer hint, then "/" opens the list and a tap fills /podium without sending',
       (t) async {
         final chat = await pumpChat(t, bacanaks: true, locale: locale);
         expect(find.text(l.podHint), findsOneWidget);
-        expect(
-          find.text(l.podCmdDesc),
-          findsNothing,
-          reason: 'no panel before "/"',
-        );
+        expect(byKey('command-list-panel'), findsNothing);
         await t.enterText(field, '/');
         await t.pumpAndSettle();
-        expect(find.text(l.podCmdDesc), findsOneWidget);
+        expect(byKey('command-list-panel'), findsOneWidget);
+        expect(find.text(l.cmdPodMeaning), findsOneWidget);
         expect(find.text('/podium'), findsOneWidget);
-        expect(
-          chat.sent,
-          isEmpty,
-          reason: 'nothing is sent by opening the panel',
-        );
+        expect(chat.sent, isEmpty, reason: 'opening the list sends nothing');
         await t.tap(find.text('/podium'));
         await t.pumpAndSettle();
-        expect(chat.sent.map((s) => (s.conversationId, s.body)).toList(), [
-          ('c1', '/podium'),
-        ]);
-        expect(
-          find.text(l.podCmdDesc),
-          findsNothing,
-          reason: 'the panel closes after sending',
-        );
+        expect(chat.sent, isEmpty, reason: 'a pick never sends');
+        expect(t.widget<EditableText>(field).controller.text, '/podium ');
+        expect(byKey('command-list-panel'), findsNothing);
       },
     );
 
-    testWidgets('[$lang] "/po" keeps the panel; "/x" closes it', (t) async {
+    testWidgets('[$lang] "/po" keeps the list; "/x" closes it', (t) async {
       await pumpChat(t, bacanaks: true, locale: locale);
       await t.enterText(field, '/po');
       await t.pumpAndSettle();
-      expect(find.text(l.podCmdDesc), findsOneWidget);
+      expect(byKey('command-list-panel'), findsOneWidget);
       await t.enterText(field, '/x');
       await t.pumpAndSettle();
-      expect(find.text(l.podCmdDesc), findsNothing);
+      expect(byKey('command-list-panel'), findsNothing);
     });
 
     testWidgets(

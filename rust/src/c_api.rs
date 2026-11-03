@@ -81,7 +81,13 @@ fn envelope_emoji(plaintext: &[u8], message_id: &str, reactor_id: &str) -> Optio
     let ok = json.get("v").and_then(|v| v.as_i64()) == Some(1) && json.get("k").and_then(|k| k.as_str()) == Some("r") && json.get("i").and_then(|i| i.as_str()) == Some(message_id) && json.get("u").and_then(|u| u.as_str()) == Some(reactor_id);
     let text = if ok {
         match json.get_mut("e").map(std::mem::take) {
-            Some(serde_json::Value::String(s)) => Some(s),
+            // Same rule as Dart decodeReactionEnvelope: non-empty and at most 64 UTF-8 bytes; a refused emoji is wiped.
+            Some(serde_json::Value::String(s)) if !s.is_empty() && s.len() <= 64 => Some(s),
+            Some(serde_json::Value::String(s)) => {
+                let mut bytes = s.into_bytes();
+                wipe(&mut bytes);
+                None
+            }
             _ => None,
         }
     } else {

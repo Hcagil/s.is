@@ -74,16 +74,7 @@ Future<World> pumpList(WidgetTester t, {bool tr = false}) async {
   }
   final chat = ChatFake()..conversationsResult = Ok(rows());
   final del = ChatDeleteFake(chat: chat);
-  final groups = GroupSettingsFake(
-    onDeleted: (id) {
-      if (chat.conversationsResult case Ok(value: final all)) {
-        chat.conversationsResult = Ok([
-          for (final c in all)
-            if (c.id != id) c,
-        ]);
-      }
-    },
-  );
+  final groups = GroupSettingsFake();
   await t.pumpWidget(
     ProviderScope(
       overrides: [
@@ -364,15 +355,19 @@ void main() {
     expect(find.text('You left the group'), findsOneWidget);
   });
 
-  testWidgets('10. Dialog D ticked', (t) async {
+  testWidgets('10. Admin group: no for-everyone box, it is only left', (
+    t,
+  ) async {
     final w = await pumpList(t);
     await openDelete(t, ['g2']);
     expect(find.text('Leave group?'), findsWidgets);
-    expect(find.text('Delete the group for all members'), findsOneWidget);
-    await confirm(t, tick: true);
-    expect(find.text('Group deleted'), findsOneWidget);
+    expect(find.text('Delete the group for all members'), findsNothing);
+    expect(byKey('delete-chat-check'), findsNothing);
+    await confirm(t);
+    expect(find.text('Group deleted'), findsNothing);
+    expect(find.text('You left the group'), findsOneWidget);
     await runOut(t);
-    expect(w.groups.calls, contains('delete:g2'));
+    expect(w.groups.calls.where((c) => c.startsWith('delete')), isEmpty);
   });
 
   testWidgets('11. Dialog D unticked', (t) async {
@@ -459,9 +454,11 @@ void main() {
     await t.pumpAndSettle();
     await openDelete(t, ['g2']);
     expect(find.text('Gruptan ayrılmak ister misiniz?'), findsWidgets);
-    expect(find.text('Grubu tüm üyeler için sil'), findsOneWidget);
-    await confirm(t, tick: true);
-    expect(find.text('Grup silindi'), findsOneWidget);
+    expect(find.text('Grubu tüm üyeler için sil'), findsNothing);
+    expect(byKey('delete-chat-check'), findsNothing);
+    await confirm(t);
+    expect(find.text('Grup silindi'), findsNothing);
+    expect(byKey('chat-undo-bar'), findsOneWidget);
   });
 
   testWidgets('17. Turkish 360 wide layout', (t) async {
@@ -493,7 +490,7 @@ void main() {
     await t.pumpAndSettle();
     await openDelete(t, ['g2']);
     expect(t.takeException(), isNull);
-    await confirm(t, tick: true);
+    await confirm(t);
     expect(t.takeException(), isNull);
     expect(byKey('chat-undo-bar'), findsOneWidget);
   });

@@ -87,20 +87,11 @@ Future<W> start(
       const GroupMember(member: bob, isAdmin: false),
     ];
   }
-  void drop(String id) {
-    if (chat.conversationsResult case Ok(value: final all)) {
-      chat.conversationsResult = Ok([
-        for (final c in all)
-          if (c.id != id) c,
-      ]);
-    }
-  }
-
   final del = ChatDeleteFake(
     chat: chat,
     journal: journal ? chat.groupWrites : null,
   );
-  final groups = GroupSettingsFake(onDeleted: drop);
+  final groups = GroupSettingsFake();
   final c = ProviderContainer.test(
     overrides: [
       ...videoOverrides(),
@@ -184,7 +175,7 @@ void main() {
       ('one 1:1 for both', [d1], true, ChatDeleteNotice.chat),
       ('two chats', [d1, d2], false, ChatDeleteNotice.chats),
       ('a group, not admin', [g1], false, ChatDeleteNotice.groupLeft),
-      ('an admin group, ticked', [admin], true, ChatDeleteNotice.groupDeleted),
+      ('an admin group, ticked', [admin], true, ChatDeleteNotice.groupLeft),
       ('an admin group, unticked', [admin], false, ChatDeleteNotice.groupLeft),
     ]) {
       testWidgets('notice for $name is ${notice.name}', (t) async {
@@ -228,7 +219,7 @@ void main() {
     for (final (name, chats, also, expected) in [
       ('a 1:1, ticked', [d1], true, ['deleteDirect:d1']),
       ('a 1:1, unticked', [d1], false, ['hide:d1']),
-      ('the one admin group, ticked', [admin], true, ['delete:ga']),
+      ('the one admin group, ticked', [admin], true, ['hide:ga', 'leave:ga']),
       (
         'the one admin group, unticked',
         [admin],

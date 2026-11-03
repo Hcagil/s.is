@@ -102,17 +102,17 @@ class StoreSyncController {
   /// chats.
   Future<void> _write(MessageStore store, List<Message> rows) async {
     final keep = <Message>[];
-    final gone = <String>[];
+    final gone = <Message>[];
     for (final m in rows) {
       if (m.deletion == MessageDeletion.vanished) {
-        gone.add(m.id);
+        gone.add(m);
       } else {
         keep.add(m);
       }
     }
-    for (final id in gone) {
-      _ref.read(messageOpenerProvider).forget(id);
-      await store.remove(id);
+    for (final m in gone) {
+      _ref.read(messageOpenerProvider).forget(m.id);
+      await _removeVanished(store, m);
     }
     if (keep.isNotEmpty) await store.upsertAll(keep);
   }

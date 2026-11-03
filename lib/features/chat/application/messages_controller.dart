@@ -418,7 +418,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     final keep = <Message>[];
     for (final m in list) {
       if (m.deletion == MessageDeletion.vanished) {
-        storeWrite(store.remove(m.id));
+        storeWrite(_removeVanished(store, m));
       } else {
         keep.add(m);
       }

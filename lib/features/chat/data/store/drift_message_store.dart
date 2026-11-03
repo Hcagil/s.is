@@ -13,12 +13,14 @@ import '../../domain/encrypted_message_repository.dart';
 import '../../domain/message.dart';
 import '../../domain/message_store.dart';
 import '../../domain/push_inbox_store.dart';
+import '../../domain/vanished_store.dart';
 import 'message_row_mapper.dart';
 import 'store_database.dart';
 import 'store_location.dart' show deleteOrphanStores;
 
 /// The on-phone message store, one encrypted SQLite file; every method best-effort, never throws.
-final class DriftMessageStore implements MessageStore, PushInboxStore {
+final class DriftMessageStore
+    implements MessageStore, PushInboxStore, VanishedStore {
   DriftMessageStore({
     required this.ownerId,
     required this._file,
@@ -534,8 +536,41 @@ final class DriftMessageStore implements MessageStore, PushInboxStore {
       await (db.delete(
         db.pushInbox,
       )..where((t) => t.conversationId.equals(conversationId))).go();
+      await (db.delete(
+            db.meta,
+          )..where((t) => t.key.like('${vanishedMetaPrefix(conversationId)}%')))
+          .go();
     }),
   );
+
+  @override
+  Future<void> markVanished(String messageId, String conversationId) => _write(
+    (db) => db.transaction(() async {
+      await (db.delete(db.messages)..where((t) => t.id.equals(messageId))).go();
+      await (db.delete(
+        db.pushInbox,
+      )..where((t) => t.messageId.equals(messageId))).go();
+      // Only the ids are kept: the chat id and the message id in the key, nothing in the value.
+      await db
+          .into(db.meta)
+          .insertOnConflictUpdate(
+            MetaCompanion.insert(
+              key: '${vanishedMetaPrefix(conversationId)}$messageId',
+              value: '',
+            ),
+          );
+    }),
+  );
+
+  @override
+  Future<Set<String>> vanishedIds(String conversationId) =>
+      _run<Set<String>>(const {}, (db) async {
+        final prefix = vanishedMetaPrefix(conversationId);
+        final rows = await (db.select(
+          db.meta,
+        )..where((t) => t.key.like('$prefix%'))).get();
+        return {for (final r in rows) r.key.substring(prefix.length)};
+      });
 
   @override
   Future<List<Message>> search(
@@ -708,6 +743,9 @@ final class _OtherOwner implements Exception {
 /// Drift's background isolate may wrap the SqliteException, so look through the wrappers.
 /// The meta key of the time a chat first held a locked text.
 String heldMetaKey(String conversationId) => 'held:$conversationId';
+
+/// The meta key prefix of the vanished-message tombstones of a chat (key = prefix + message id).
+String vanishedMetaPrefix(String conversationId) => 'vanished:$conversationId:';
 
 bool _unusable(Object e) {
   if (e is _OtherOwner) return true;

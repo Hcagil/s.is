@@ -570,6 +570,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     );
     final conversationId = ref.watch(openConversationProvider);
     listenGroupGone(context, ref, conversationId);
+    // Replies that quote a vanished message say it was deleted.
+    final vanishedIds = conversationId == null
+        ? const <String>{}
+        : ref.watch(vanishedIdsProvider(conversationId)).value ??
+              const <String>{};
     // Not given by the caller (a tapped notification opens this screen before
     // the list is known): taken from the list as soon as it has the chat.
     final listed = ref.watch(
@@ -882,8 +887,22 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                 final quoted = message.replyTo == null
                                     ? null
                                     : value
-                                          .where((m) => m.id == message.replyTo)
-                                          .firstOrNull;
+                                              .where(
+                                                (m) => m.id == message.replyTo,
+                                              )
+                                              .firstOrNull ??
+                                          (vanishedIds.contains(message.replyTo)
+                                              ? Message(
+                                                  id: message.replyTo!,
+                                                  conversationId:
+                                                      message.conversationId,
+                                                  senderId: '',
+                                                  body: '',
+                                                  createdAt: message.createdAt,
+                                                  deletion: MessageDeletion
+                                                      .placeholder,
+                                                )
+                                              : null);
                                 final allowedActions = allowedMessageActions(
                                   message,
                                   me: me,

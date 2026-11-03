@@ -333,7 +333,7 @@ jobs:
     # only to read the What's new note; nothing waits on it, and its failure
     # is a red job beside a green Play release. Safe to re-run alone.
     # Repository variable TESTFLIGHT_GROUPS (comma-separated names) picks the
-    # groups; unset means `bacanaks`.
+    # groups; unset means `*`, every group of the app (internal and external).
     needs: [scope, ios, publish]
     if: ${{ !cancelled() && needs.ios.result == 'success' }}
     runs-on: ubuntu-24.04
@@ -384,7 +384,7 @@ jobs:
           TF_GROUPS: ${{ vars.TESTFLIGHT_GROUPS }}
         run: |
           note=$(printf '%s' "$NOTE_B64" | base64 -d)
-          python3 tool/asc_signing.py distribute com.esd.sis "$BUILD" "${TF_GROUPS:-bacanaks}" "$note"
+          python3 tool/asc_signing.py distribute com.esd.sis "$BUILD" "${TF_GROUPS:-*}" "$note"
       - name: Remove the App Store Connect key
         if: always()
         run: rm -rf "$RUNNER_TEMP/asc"

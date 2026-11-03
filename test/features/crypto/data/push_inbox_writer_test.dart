@@ -287,6 +287,15 @@ void main() {
     });
   });
 
+  test('a vanished (tombstoned) id => inbox_skip, no inbox row; another '
+      'message id is saved', () async {
+    await app.markVanished('n1', 'c1');
+    await app.close();
+    expect(write(), 'inbox_skip');
+    expect(rawRows(), isEmpty);
+    expect(write(id: 'n2'), 'saved');
+  });
+
   group('Android WAL (slice 1)', () {
     void toWal() {
       final db = sql.sqlite3.open(h.file.path);

@@ -126,15 +126,49 @@ void main() {
     expect(await _meta(s), isEmpty);
   });
 
-  // FINDING (reported to the manager): the QA interface says a later live
-  // upsert "stays refused/irrelevant"; the store actually keeps it (the row
-  // comes back with its content). Pinned here as the contract allows: the
-  // tombstone itself survives, so a quote still reads "deleted".
-  test('a later upsert of the same id leaves the tombstone in place', () async {
-    await s.upsertAll([msg('m1', body: 'zebrafish', t: 1)]);
-    await v().markVanished('m1', 'c1');
-    await s.upsertAll([msg('m1', body: 'zebrafish', t: 1)]);
-    expect(await v().vanishedIds('c1'), {'m1'});
-    expect(await _meta(s), [('vanished:c1:m1', '')]);
+  // Manager decision: a vanished id is final on the phone. All three insert
+  // paths refuse a live row with a tombstoned id in the SAME chat only.
+  group('a tombstoned id is never written again', () {
+    Future<void> expectNothing(DriftMessageStore s) async {
+      expect(ids(await s.newest('c1')).contains('m1'), isFalse);
+      expect(ids(await s.older('c1', at(100))).contains('m1'), isFalse);
+      expect(await s.search('zebrafish'), isEmpty);
+      expect(await v().vanishedIds('c1'), {'m1'});
+    }
+
+    setUp(() async {
+      await s.upsertAll([msg('keep', t: 50)]);
+      await v().markVanished('m1', 'c1');
+    });
+
+    test('upsertAll', () async {
+      await s.upsertAll([msg('m1', body: 'zebrafish', t: 1)]);
+      await expectNothing(s);
+    });
+
+    test('reconcilePage', () async {
+      await s.reconcilePage('c1', [
+        msg('m1', body: 'zebrafish', t: 1),
+        msg('keep', t: 50),
+      ], reachedStart: true);
+      await expectNothing(s);
+      expect(ids(await s.newest('c1')), ['keep']);
+    });
+
+    test('extendOlder', () async {
+      await s.reconcilePage('c1', [msg('keep', t: 50)], reachedStart: false);
+      await s.extendOlder('c1', [
+        msg('m1', body: 'zebrafish', t: 1),
+        msg('m0', t: 2),
+      ], reachedStart: true);
+      await expectNothing(s);
+      expect(ids(await s.newest('c1')), containsAll(['keep', 'm0']));
+    });
+
+    test('the same id in ANOTHER chat is still written', () async {
+      await s.upsertAll([msg('m1', conv: 'c2', body: 'zebrafish', t: 1)]);
+      expect(ids(await s.newest('c2')), ['m1']);
+      expect(await s.search('zebrafish'), hasLength(1));
+    });
   });
 }

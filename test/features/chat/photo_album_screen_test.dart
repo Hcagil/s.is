@@ -296,4 +296,44 @@ void main() {
       await tester.pumpAndSettle();
     });
   });
+  // The chat's own long-press card on an album (not the viewer's single-photo
+  // menu): the delete box asks about "these messages"; one photo asks as before.
+  group('delete box question', () {
+    Future<void> openBox(WidgetTester tester, Finder target) async {
+      await tester.longPressAt(
+        tester.getTopLeft(target) + const Offset(20, 20),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('menu-delete-for-me')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('delete-card')), findsOneWidget);
+    }
+
+    testWidgets('an album of 2: "these messages"', (tester) async {
+      tester.view
+        ..physicalSize = const Size(800, 2400)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await pump(tester, album(2));
+      await openBox(tester, albumOf('p1'));
+      expect(
+        find.text('Are you sure you want to delete these messages?'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('delete-cancel')));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('one photo: the single-message question', (tester) async {
+      await pump(tester, [photo('p1')]);
+      await openBox(tester, find.byKey(const ValueKey('message-p1')));
+      expect(
+        find.text('Are you sure you want to delete this message?'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('these messages'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('delete-cancel')));
+      await tester.pumpAndSettle();
+    });
+  });
 }

@@ -852,6 +852,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
         now: DateTime.now(),
       ),
       deletedBy: _me,
+      deletedByAdmin: message.senderId != _me,
     );
     _deleted(placeholder);
     final result = await ref

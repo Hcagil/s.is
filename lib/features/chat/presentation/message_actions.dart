@@ -13,8 +13,11 @@ import '../application/group_controller.dart';
 import '../application/pin_controller.dart';
 import '../domain/group_member.dart';
 import '../domain/message.dart';
+import '../domain/conversation.dart';
 import '../domain/timeline.dart';
 import 'forward_page.dart';
+import 'member_name.dart';
+import 'message_delete_box.dart';
 import 'message_menu_card.dart';
 import 'sticker_albums.dart';
 import 'swipeable_message.dart';
@@ -37,6 +40,8 @@ Future<bool> runMessageAction(
   Message message,
   MessageAction action, {
   bool singlePhoto = false,
+  String? chatName,
+  bool chatIsGroup = false,
 }) async {
   switch (action) {
     case MessageAction.reply:
@@ -109,12 +114,28 @@ Future<bool> runMessageAction(
       await addStickerToAlbumFlow(context, ref, message.stickerId!);
       return false;
     case MessageAction.deleteForMe:
-    case MessageAction.deleteForEveryone:
       break;
   }
   if (!context.mounted) return false;
 
-  final forEveryone = action == MessageAction.deleteForEveryone;
+  final l = AppLocalizations.of(context);
+  final me = switch (ref.read(sessionControllerProvider).value) {
+    Allowed(:final member) => member.userId,
+    _ => null,
+  };
+  final roster =
+      ref.read(groupRosterProvider(message.conversationId)).value ??
+      const <GroupMember>[];
+  final admin =
+      me != null &&
+      roster.any((m) => m.member.userId == me && m.isAdmin && !m.hasLeft);
+  final chat =
+      (ref.read(conversationListProvider).value ?? const <Conversation>[])
+          .where((c) => c.id == message.conversationId)
+          .firstOrNull;
+  final canAll =
+      me != null &&
+      message.canDeleteForEveryone(me, now: DateTime.now(), admin: admin);
   final photos = singlePhoto
       ? [message]
       : [
@@ -124,91 +145,39 @@ Future<bool> runMessageAction(
           ))
             if (!m.isPending) m,
         ];
-  final confirmed = await _confirmDelete(
+  final choice = await showMessageDeleteBox(
     context,
-    forEveryone: forEveryone,
-    album: photos.length > 1,
+    checkLabel: !canAll
+        ? null
+        : (chatIsGroup || (chat?.isGroup ?? false))
+        ? l.messageDeleteForAllMembers
+        : l.messageDeleteAlsoFor(
+            nameOrMember(
+              l,
+              chatName ?? (chat == null ? '' : conversationLabel(l, chat)),
+            ),
+          ),
+    mediaNote: canAll && (message.hasAttachment || message.file != null),
   );
-  if (confirmed != true || !context.mounted) return false;
+  if (choice == DeleteChoice.cancel || !context.mounted) return false;
 
   final notifier = ref.read(messagesProvider.notifier);
   for (final photo in photos) {
-    final r = await (forEveryone
+    final r = await (choice == DeleteChoice.forAll
         ? notifier.deleteForEveryone(photo)
         : notifier.hideForMe(photo));
     if (r case Err(:final failure) when context.mounted) {
-      showSisNotice(context, failure.message, isError: true);
+      showSisNotice(
+        context,
+        choice == DeleteChoice.forAll && failure is DeniedFailure
+            ? l.messageDeleteTooLate(deleteForEveryoneWindow.inHours)
+            : failure.message,
+        isError: true,
+      );
       break;
     }
   }
   return true;
-}
-
-/// The floating confirmation for a delete: true to go ahead, false or null
-/// to leave the message alone.
-Future<bool?> _confirmDelete(
-  BuildContext context, {
-  required bool forEveryone,
-  bool album = false,
-}) {
-  final anchor = Rect.fromCenter(
-    center: MediaQuery.sizeOf(context).center(Offset.zero),
-    width: 0,
-    height: 0,
-  );
-  return showFloatingCard<bool>(
-    context,
-    anchor: anchor,
-    highlightAnchor: false,
-    cardKey: const ValueKey('delete-card'),
-    child: Builder(
-      builder: (card) {
-        final l = AppLocalizations.of(card);
-        final scheme = Theme.of(card).colorScheme;
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                album ? l.messageDeleteAlbumTitle : l.messageDeleteTitle,
-                style: Theme.of(card).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                forEveryone
-                    ? l.messageDeleteForEveryoneBody
-                    : l.messageDeleteForMeBody,
-              ),
-              const SizedBox(height: 16),
-              _Sheen(
-                child: FilledButton(
-                  key: const ValueKey('delete-confirm'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: scheme.error,
-                    foregroundColor: scheme.onError,
-                  ),
-                  onPressed: () => Navigator.of(card).pop(true),
-                  child: Text(
-                    forEveryone
-                        ? l.messageActionDeleteForEveryone
-                        : l.messageActionDeleteForMe,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                key: const ValueKey('delete-cancel'),
-                onPressed: () => Navigator.of(card).pop(false),
-                child: Text(l.messageDeleteCancel),
-              ),
-            ],
-          ),
-        );
-      },
-    ),
-  );
 }
 
 String _pollFailureText(BuildContext context, Failure failure) =>
@@ -309,6 +278,8 @@ Future<bool> showMessageMenu(
   Rect? anchor,
   bool alignEnd = false,
   bool photoViewer = false,
+  String? chatName,
+  bool chatIsGroup = false,
 }) async {
   final me = switch (ref.read(sessionControllerProvider).value) {
     Allowed(:final member) => member.userId,
@@ -342,8 +313,7 @@ Future<bool> showMessageMenu(
       if (!photoViewer ||
           a == MessageAction.reply ||
           a == MessageAction.forward ||
-          a == MessageAction.deleteForMe ||
-          a == MessageAction.deleteForEveryone)
+          a == MessageAction.deleteForMe)
         a,
   ];
   if (actions.isEmpty) return false;
@@ -374,12 +344,10 @@ Future<bool> showMessageMenu(
           label:
               photoViewer &&
                   message.photoGroup != null &&
-                  a == MessageAction.deleteForEveryone
+                  a == MessageAction.deleteForMe
               ? AppLocalizations.of(context).messageActionDeletePhoto
               : swipeActionLabel(AppLocalizations.of(context), a),
-          destructive:
-              a == MessageAction.deleteForMe ||
-              a == MessageAction.deleteForEveryone,
+          destructive: a == MessageAction.deleteForMe,
         ),
     ],
   );
@@ -390,5 +358,7 @@ Future<bool> showMessageMenu(
     message,
     action,
     singlePhoto: photoViewer,
+    chatName: chatName,
+    chatIsGroup: chatIsGroup,
   );
 }

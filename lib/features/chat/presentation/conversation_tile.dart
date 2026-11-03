@@ -47,6 +47,8 @@ String chatPreviewLine(AppLocalizations l, String text) =>
     ? l.stickerPreviewLine
     : text == stickerAlbumPreviewText
     ? l.stickerAlbumPreviewLine
+    : text == deletedPreviewText
+    ? l.quoteDeleted
     : isLockedPlaceholder(text)
     ? l.chatLockedMessage
     : text;

@@ -8,7 +8,7 @@
 //    caption page then opens with it still closed (owner report, reverses
 //    0.30.10);
 //  * a photo, a link or a quote keeps its own tap;
-//  * the photo viewer's `viewer-menu` offers Reply, Forward and both deletes
+//  * the photo viewer's `viewer-menu` offers Reply, Forward and one Delete
 //    exists only when the viewer was given onMenu, and closes the viewer when
 //    onMenu says so.
 import 'package:flutter/material.dart';
@@ -186,7 +186,6 @@ void main() {
         'edit',
         'pin',
         'delete-for-me',
-        'delete-for-everyone',
       ]);
       // Pin is a real row now; the grey placeholder is gone.
       expect(find.byKey(const ValueKey('menu-pin')), findsOneWidget);
@@ -398,19 +397,14 @@ void main() {
       expect(find.byType(PhotoViewer), findsOneWidget);
     }
 
-    testWidgets('offers reply, forward and both deletes only', (tester) async {
+    testWidgets('offers reply, forward and one Delete only', (tester) async {
       await pump(tester, [msg('p1', body: 'caption', attachment: 'c1/1.png')]);
       await openViewer(tester);
       await tester.tap(find.byKey(const ValueKey('viewer-menu')));
       await tester.pumpAndSettle();
 
       expect(menu, findsOneWidget);
-      expect(menuTiles(tester), [
-        'reply',
-        'forward',
-        'delete-for-me',
-        'delete-for-everyone',
-      ]);
+      expect(menuTiles(tester), ['reply', 'forward', 'delete-for-me']);
     });
 
     testWidgets('reply closes the viewer and starts the reply', (tester) async {
@@ -506,13 +500,8 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('viewer-menu')));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      // Your own photo: the viewer offers reply, forward and both deletes.
-      expect(menuTiles(tester), [
-        'reply',
-        'forward',
-        'delete-for-me',
-        'delete-for-everyone',
-      ]);
+      // Your own photo: the viewer offers reply, forward and one Delete.
+      expect(menuTiles(tester), ['reply', 'forward', 'delete-for-me']);
       return chat;
     }
 
@@ -545,9 +534,11 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('delete for everyone deletes it', (tester) async {
+    testWidgets('Delete, box ticked, deletes it for everyone', (tester) async {
       final chat = await openThenUnmount(tester);
-      await tester.tap(find.byKey(const ValueKey('menu-delete-for-everyone')));
+      await tester.tap(find.byKey(const ValueKey('menu-delete-for-me')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('delete-also')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('delete-confirm')));
       await tester.pumpAndSettle();

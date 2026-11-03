@@ -3937,6 +3937,7 @@ Message withoutPreview(Message m) => Message(
   localImage: m.localImage,
   deletion: m.deletion,
   deletedBy: m.deletedBy,
+  deletedByAdmin: m.deletedByAdmin,
   editedAt: m.editedAt,
   replyTo: m.replyTo,
   forwarded: m.forwarded,

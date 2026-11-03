@@ -2551,4 +2551,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get podNotEnc => 'Not end-to-end encrypted';
+
+  @override
+  String get messageDeleteQuestion =>
+      'Are you sure you want to delete this message?';
+
+  @override
+  String messageDeleteAlsoFor(String name) {
+    return 'Also delete for $name';
+  }
+
+  @override
+  String get messageDeleteConfirm => 'Delete';
+
+  @override
+  String get messageDeleteForAllMembers => 'Delete for all members';
+
+  @override
+  String get messageDeleteMediaNote =>
+      'Forwarded copies and copies saved outside SIS won\'t be deleted.';
+
+  @override
+  String messageDeleteTooLate(int hours) {
+    return 'Too late: $hours hours have passed';
+  }
 }

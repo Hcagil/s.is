@@ -448,6 +448,8 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       message,
       anchor: anchor,
       alignEnd: mine,
+      chatName: widget.title,
+      chatIsGroup: widget.group,
     );
   }
 
@@ -902,6 +904,8 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                     ref,
                                     message,
                                     action,
+                                    chatName: title,
+                                    chatIsGroup: isGroup,
                                   ),
                                   // A tap shows the "Seen by" pill and the reactions bar; a long press opens the action card. The system chat takes neither.
                                   onTap: isSystem

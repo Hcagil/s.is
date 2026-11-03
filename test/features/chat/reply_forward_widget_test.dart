@@ -119,7 +119,8 @@ void main() {
       expect(find.byKey(const ValueKey('menu-delete-for-me')), findsOneWidget);
       expect(
         find.byKey(const ValueKey('menu-delete-for-everyone')),
-        findsOneWidget,
+        findsNothing,
+        reason: 'one Delete; the box offers "for everyone"',
       );
     });
 

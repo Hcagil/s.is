@@ -1034,7 +1034,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get membersRemovedBadge => 'Çıkarıldı';
 
   @override
-  String get bubbleDeletedByAdmin => 'Yönetici tarafından silindi';
+  String get bubbleDeletedByAdmin => 'Bir yönetici tarafından silindi';
 
   @override
   String get chatLockedMessage => '🔒 Bu mesaj açılamıyor';
@@ -2523,4 +2523,28 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get podNotEnc => 'Uçtan uca şifreli değil';
+
+  @override
+  String get messageDeleteQuestion =>
+      'Bu mesajı silmek istediğinizden emin misiniz?';
+
+  @override
+  String messageDeleteAlsoFor(String name) {
+    return '$name için de sil';
+  }
+
+  @override
+  String get messageDeleteConfirm => 'Sil';
+
+  @override
+  String get messageDeleteForAllMembers => 'Tüm üyelerden sil';
+
+  @override
+  String get messageDeleteMediaNote =>
+      'İletilen ve SIS dışına kaydedilen kopyalar silinmez.';
+
+  @override
+  String messageDeleteTooLate(int hours) {
+    return 'Çok geç: $hours saat geçti';
+  }
 }

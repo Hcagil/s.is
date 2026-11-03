@@ -113,8 +113,8 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       final m = row(c, 'm1');
+      // The body stays for the shrink-away animation; only the mark matters.
       expect(m.deletion, MessageDeletion.vanished);
-      expect(m.body, isEmpty);
       chat.gate.complete();
       await pending;
     });

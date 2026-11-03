@@ -379,12 +379,11 @@ class _ComposerState extends ConsumerState<_Composer>
                 ?.isSystem ==
             true;
     if (hasLeft || isSystem) {
-      // A closed group: the roster rows carry closed_by (the closing admin).
+      // A closed group: its 'closed' event names the closing admin.
       final roster = hasLeft ? ref.watch(groupRosterProvider(id)).value : null;
-      final closerId = roster
-          ?.map((m) => m.closedBy)
-          .whereType<String>()
-          .firstOrNull;
+      final closerId = hasLeft
+          ? ref.watch(groupCloseEventsProvider(id)).value?.firstOrNull?.actorId
+          : null;
       final closer = roster
           ?.where((m) => m.member.userId == closerId)
           .firstOrNull

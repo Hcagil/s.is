@@ -212,7 +212,12 @@ class _MembersTab extends ConsumerWidget {
           for (final m in roster)
             if (m.hasLeft) m,
         ];
-        final closed = roster.any((m) => m.closedBy != null);
+        final closed =
+            ref
+                .watch(groupCloseEventsProvider(conversationId))
+                .value
+                ?.isNotEmpty ??
+            false;
         final amAdmin =
             current.where((m) => m.member.userId == me).firstOrNull?.isAdmin ??
             false;

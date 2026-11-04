@@ -144,8 +144,8 @@ void main() {
       'device_token': 'apns-backed-token-1',
       'device_platform': 'ios',
       'shows_itself': false,
-      // A1: no reaction pushes until the iPhone build that draws them (I5).
-      'reaction_push': false,
+      // I5: the iPhone build draws reaction pushes itself, so it asks for them.
+      'reaction_push': true,
     });
   });
 
@@ -156,7 +156,7 @@ void main() {
         'device_token': 'fcm-token-1234',
         'device_platform': 'android',
         'shows_itself': true,
-        // A1: reaction_push follows device_platform == 'android'.
+        // I5: every platform asks for reaction pushes.
         'reaction_push': true,
       });
     });

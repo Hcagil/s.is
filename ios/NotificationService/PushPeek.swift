@@ -96,6 +96,36 @@ enum PushPeek {
     return (opened?.text, data.peerName)
   }
 
+  /// Title (nil = keep the push's) and body of a reaction push (kind "reaction"); nil when the push is not a reaction.
+  /// - reactor_id == user_id: generic text (an extension cannot cancel a notification).
+  /// - private chat (encrypted == "true"): the real text only when PeekCore.reaction opens it from this phone's own store; title = the phone's own copy of the partner name; otherwise generic. Never a sender prefix (a private chat is 1:1).
+  /// - plain chat: built from e/q/qk; in a group (push has "sender") prefixed "Sender: ".
+  /// Saves nothing.
+  static func reactionContent(for userInfo: [AnyHashable: Any], decryptor: PeekDecryptor = RustPeekDecryptor(), turkish: Bool = Locale.preferredLanguages.first?.hasPrefix("tr") ?? false) -> (title: String?, body: String)? {
+    guard (userInfo["kind"] as? String) == "reaction" else { return nil }
+    let generic = PeekCore.reactionText(emoji: nil, quote: nil, quoteKind: nil, turkish: turkish)
+    if let reactor = userInfo["reactor_id"] as? String, reactor == (userInfo["user_id"] as? String) { return (nil, generic) }
+    if (userInfo["encrypted"] as? String) == "true" {
+      guard let rp = PeekReactionPush(userInfo: userInfo),
+            let store = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?.appendingPathComponent(storeFileName),
+            FileManager.default.fileExists(atPath: store.path),
+            let group = PeekKeychain.cryptoGroup(),
+            let storeKeyHex = PeekKeychain.value(account: "sis.store.key", group: group),
+            let pickleHex = PeekKeychain.value(account: "sis.olm.pickle.key", group: group),
+            isHex64(storeKeyHex), isHex64(pickleHex) else { return (nil, generic) }
+      var pickleKey = bytes(fromHex: pickleHex)
+      defer { pickleKey.withUnsafeMutableBytes { _ = memset_s($0.baseAddress, $0.count, 0, $0.count) } }
+      guard let data = PeekStoreReader.read(path: store.path, keyHex: storeKeyHex, conversationId: rp.push.conversationId, messageId: rp.push.messageId, senderKey: nil, senderId: nil) else { return (nil, generic) }
+      guard let r = PeekCore.reaction(push: rp, data: data, pickleKey: pickleKey, decryptor: decryptor) else { return (data.peerName, generic) }
+      return (data.peerName, PeekCore.reactionText(emoji: r.emoji, quote: r.quote, quoteKind: nil, turkish: turkish))
+    }
+    let emoji = userInfo["e"] as? String
+    let text = PeekCore.reactionText(emoji: emoji, quote: userInfo["q"] as? String, quoteKind: userInfo["qk"] as? String, turkish: turkish)
+    // Same rule as reactionText: only a non-empty emoji makes a real text; the generic text gets no sender name.
+    if let sender = userInfo["sender"] as? String, !sender.isEmpty, PeekCore.reactionNamesSender(emoji: emoji) { return (nil, shownBody(text: text, sender: sender)) }
+    return (nil, text)
+  }
+
   /// Formats the shown body of a notification.
   static func shownBody(text: String, sender: String?) -> String {
     let body = (sender?.isEmpty == false) ? "\(sender!): \(text)" : text

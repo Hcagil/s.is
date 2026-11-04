@@ -60,6 +60,9 @@ class MessageNoticeController extends Notifier<MessageNoticeData?> {
   @override
   MessageNoticeData? build() => null;
 
+  // Counts every card decision; a slow reaction push drops itself if it moved.
+  int _gen = 0;
+
   /// Shows a card for [message] when the member is inside another chat and the
   /// chat is not muted or archived.
   void consider(Conversation conversation, Message message) {
@@ -85,6 +88,7 @@ class MessageNoticeController extends Notifier<MessageNoticeData?> {
     final count = old != null && old.conversationId == message.conversationId
         ? old.count + 1
         : 1;
+    _gen++;
     state = MessageNoticeData(
       conversationId: message.conversationId,
       senderId: message.senderId,
@@ -102,6 +106,7 @@ class MessageNoticeController extends Notifier<MessageNoticeData?> {
   Future<void> onReactionPush(ReactionPush push) async {
     // Own reaction: the server never sends it; a second layer here.
     if (push.reactorId == push.userId || !_stillMine(push)) return;
+    final gen = ++_gen;
     var line = (emoji: push.emoji, quote: push.quote, kind: push.quoteKind);
     if (push.ciphertext != null) {
       OpenedReaction? opened;
@@ -114,8 +119,8 @@ class MessageNoticeController extends Notifier<MessageNoticeData?> {
         opened = null;
       }
       line = (emoji: opened?.emoji, quote: opened?.quote, kind: null);
-      // The member may have moved, or the session changed, while it was opened.
-      if (!_stillMine(push)) return;
+      // The member may have moved, the session changed, or a newer card came while it was opened.
+      if (gen != _gen || !_stillMine(push)) return;
     }
     state = MessageNoticeData(
       conversationId: push.conversationId,

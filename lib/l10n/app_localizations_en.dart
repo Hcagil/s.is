@@ -2500,6 +2500,44 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noticeNewMessage => 'New message';
 
   @override
+  String get noticeReactionGeneric => 'New reaction to your message';
+
+  @override
+  String noticeReactionToMessage(String emoji) {
+    return 'Reacted $emoji to your message';
+  }
+
+  @override
+  String noticeReactionToQuote(String emoji, String quote) {
+    return 'Reacted $emoji to: \"$quote\"';
+  }
+
+  @override
+  String noticeReactionToPhoto(String emoji) {
+    return 'Reacted $emoji to your photo';
+  }
+
+  @override
+  String noticeReactionToVideo(String emoji) {
+    return 'Reacted $emoji to your video';
+  }
+
+  @override
+  String noticeReactionToSticker(String emoji) {
+    return 'Reacted $emoji to your sticker';
+  }
+
+  @override
+  String noticeReactionToVoice(String emoji) {
+    return 'Reacted $emoji to your voice message';
+  }
+
+  @override
+  String noticeReactionToFile(String emoji) {
+    return 'Reacted $emoji to your file';
+  }
+
+  @override
   String get podTitle => 'Total money';
 
   @override

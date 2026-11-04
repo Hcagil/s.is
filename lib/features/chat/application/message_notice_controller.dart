@@ -1,7 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../auth/application/session_controller.dart';
+import '../../auth/domain/session_state.dart';
 import '../../notifications/application/notification_settings_controller.dart';
+import '../../notifications/application/push_controller.dart';
 import '../../notifications/domain/notification_settings.dart';
+import '../../notifications/domain/reaction_push.dart';
 import '../domain/conversation.dart';
 import '../domain/encrypted_message_repository.dart';
 import '../domain/message.dart';
@@ -17,6 +23,7 @@ class MessageNoticeData {
     required this.locked,
     required this.textHidden,
     required this.count,
+    this.reaction,
   });
 
   /// The chat the card opens when tapped.
@@ -36,6 +43,9 @@ class MessageNoticeData {
 
   /// How many messages of this chat the card stands for.
   final int count;
+
+  /// Set for a reaction card: the card words it itself (null for a message).
+  final ReactionLine? reaction;
 }
 
 /// The card now on screen, or null.
@@ -87,4 +97,46 @@ class MessageNoticeController extends Notifier<MessageNoticeData?> {
 
   /// Closes the card.
   void dismiss() => state = null;
+
+  /// Shows a card for a reaction push when the member is inside another chat. The server already applied every rule (author, mute, on/off, preview); this adds none. Never on the chat list, never in the same chat.
+  Future<void> onReactionPush(ReactionPush push) async {
+    final me = switch (ref.read(sessionControllerProvider).value) {
+      Allowed(:final member) => member.userId,
+      _ => null,
+    };
+    if (me != push.userId || !_otherChatOpen(push.conversationId)) return;
+    var line = (emoji: push.emoji, quote: push.quote, kind: push.quoteKind);
+    if (push.ciphertext != null) {
+      final opened = await ref.read(reactionPushOpenerProvider)(push);
+      line = (emoji: opened?.emoji, quote: opened?.quote, kind: null);
+      // The member may have moved while the message was being opened.
+      if (!_otherChatOpen(push.conversationId)) return;
+    }
+    state = MessageNoticeData(
+      conversationId: push.conversationId,
+      senderId: push.reactorId,
+      preview: '',
+      locked: false,
+      textHidden: false,
+      count: 1,
+      reaction: line,
+    );
+  }
+
+  bool _otherChatOpen(String conversationId) {
+    final open = ref.read(openConversationProvider);
+    return open != null && open != conversationId;
+  }
 }
+
+/// Turns each foreground reaction push into a card. Watched once from the app shell.
+final reactionCardProvider = Provider<void>((ref) {
+  final sub = ref
+      .watch(foregroundReactionProvider)
+      .listen(
+        (p) => unawaited(
+          ref.read(messageNoticeProvider.notifier).onReactionPush(p),
+        ),
+      );
+  ref.onDispose(() => unawaited(sub.cancel()));
+});

@@ -18,9 +18,11 @@ import '../../support/l10n.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 
-class _SignedIn extends SessionController {
+/// A session the test can change while an opener is still running.
+class _Switchable extends SessionController {
   @override
   Future<SessionState> build() async => const Allowed(me);
+  void become(SessionState s) => state = AsyncData(s);
 }
 
 ReactionPush push({
@@ -49,7 +51,7 @@ Future<ProviderContainer> scope({
 }) async {
   final c = ProviderContainer.test(
     overrides: [
-      sessionControllerProvider.overrideWith(_SignedIn.new),
+      sessionControllerProvider.overrideWith(_Switchable.new),
       if (opener != null) reactionPushOpenerProvider.overrideWithValue(opener),
     ],
   );
@@ -162,6 +164,85 @@ void main() {
       await react(c, push());
       expect(calls, 0);
       expect(card(c), isNotNull);
+    });
+  });
+
+  group('own reaction and the user re-check', () {
+    test('own reaction (reactor is the addressee): no card', () async {
+      final c = await scope();
+      await react(c, push(reactor: 'u1'));
+      expect(card(c), isNull);
+    });
+
+    test(
+      'own private reaction: no card and the opener is not called',
+      () async {
+        var calls = 0;
+        final c = await scope(
+          opener: (_) async {
+            calls++;
+            return (emoji: '👍', quote: null);
+          },
+        );
+        await react(c, push(reactor: 'u1', ct: 'x'));
+        expect(calls, 0);
+        expect(card(c), isNull);
+      },
+    );
+
+    for (final (name, next) in <(String, SessionState)>[
+      ('signs out', const SignedOut()),
+      ('is denied', const Denied()),
+      (
+        'is another member',
+        const Allowed(Member(userId: 'u9', displayName: 'Zed')),
+      ),
+    ]) {
+      test('session $name during a slow opener: no card', () async {
+        final gate = Completer<OpenedReaction?>();
+        final c = await scope(opener: (_) => gate.future);
+        final f = react(c, push(ct: 'x'));
+        (c.read(sessionControllerProvider.notifier) as _Switchable).become(
+          next,
+        );
+        gate.complete((emoji: '👍', quote: null));
+        await f;
+        expect(card(c), isNull);
+      });
+    }
+
+    test(
+      'before the opener: wrong chat or wrong user never calls it',
+      () async {
+        var calls = 0;
+        final c = await scope(
+          opener: (_) async {
+            calls++;
+            return null;
+          },
+        );
+        await react(c, push(ct: 'x', chat: 'cA')); // already in that chat
+        await react(c, push(ct: 'x', user: 'u9')); // not this member's push
+        c.read(openConversationProvider.notifier).close();
+        await react(c, push(ct: 'x')); // chat list
+        (c.read(sessionControllerProvider.notifier) as _Switchable).become(
+          const SignedOut(),
+        );
+        c.read(openConversationProvider.notifier).open('cA');
+        await react(c, push(ct: 'x')); // signed out
+        expect(calls, 0);
+        expect(card(c), isNull);
+      },
+    );
+
+    testWidgets('opener never completes: generic card after 3 s', (t) async {
+      final c = await scope(opener: (_) => Completer<OpenedReaction?>().future);
+      final f = react(c, push(ct: 'x', e: 'plain'));
+      await t.pump(const Duration(milliseconds: 2900));
+      expect(card(c), isNull, reason: 'still waiting before 3 s');
+      await t.pump(const Duration(milliseconds: 200));
+      await f;
+      expect(card(c)!.reaction, (emoji: null, quote: null, kind: null));
     });
   });
 

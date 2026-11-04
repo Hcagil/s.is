@@ -338,7 +338,7 @@ void main() {
       final alone = _ok(await chat.conversations());
       expect(
         [for (final r in wire.rest) r.shape],
-        ['POST /rest/v1/rpc/chat_list?'],
+        ['GET /rest/v1/rpc/chat_list?'],
       );
 
       wire
@@ -347,7 +347,7 @@ void main() {
       final again = _ok(await chat.conversations());
       expect(
         [for (final r in wire.rest) r.shape],
-        ['POST /rest/v1/rpc/chat_list?'],
+        ['GET /rest/v1/rpc/chat_list?'],
       );
       expect(
         [for (final c in again) _row(c)],

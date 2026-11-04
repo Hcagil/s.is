@@ -10,10 +10,15 @@ import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/application/message_notice_controller.dart';
+import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/notifications/application/notification_settings_controller.dart';
+import 'package:sis/features/notifications/domain/notification_settings.dart';
 import 'package:sis/features/chat/presentation/message_notice.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/notifications/domain/reaction_push.dart';
 
+import '../../support/fakes.dart';
 import '../../support/l10n.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
@@ -60,6 +65,57 @@ Future<ProviderContainer> scope({
   if (open != null) c.read(openConversationProvider.notifier).open(open);
   return c;
 }
+
+/// [scope] with settings and mutes loaded, as a screen keeps them, so a
+/// message can show its own card through [MessageNoticeController.consider].
+Future<ProviderContainer> messageScope({
+  Future<OpenedReaction?> Function(ReactionPush)? opener,
+  NotificationSettings settings = const NotificationSettings(),
+  List<Mute> mutes = const [],
+}) async {
+  final c = ProviderContainer.test(
+    overrides: [
+      sessionControllerProvider.overrideWith(_Switchable.new),
+      notificationSettingsRepositoryProvider.overrideWithValue(
+        NotificationSettingsFake(
+          settings: settings,
+          mutes: mutes,
+          latency: const Duration(milliseconds: 30),
+        ),
+      ),
+      if (opener != null) reactionPushOpenerProvider.overrideWithValue(opener),
+    ],
+  );
+  await c.read(sessionControllerProvider.future);
+  c.listen(messageNoticeProvider, (_, _) {});
+  c.listen(mutesProvider, (_, _) {});
+  c.listen(notificationSettingsProvider, (_, _) {});
+  await c.read(mutesProvider.future);
+  await c.read(notificationSettingsProvider.future);
+  c.read(openConversationProvider.notifier).open('cA');
+  return c;
+}
+
+Conversation convOf(String id, {bool archived = false}) => Conversation(
+  id: id,
+  other: const Member(userId: 'u3', displayName: 'Cem'),
+  lastMessage: 'hey',
+  lastMessageAt: DateTime.utc(2026, 9, 22, 12, 30),
+  lastSenderId: 'u3',
+  archived: archived,
+);
+
+Message msgIn(String chat) => Message(
+  id: '$chat-m',
+  conversationId: chat,
+  senderId: 'u3',
+  body: 'hey',
+  createdAt: DateTime.utc(2026, 9, 22, 12, 30),
+);
+
+void consider(ProviderContainer c, String chat, {bool archived = false}) => c
+    .read(messageNoticeProvider.notifier)
+    .consider(convOf(chat, archived: archived), msgIn(chat));
 
 Future<void> react(ProviderContainer c, ReactionPush p) =>
     c.read(messageNoticeProvider.notifier).onReactionPush(p);
@@ -244,6 +300,85 @@ void main() {
       await f;
       expect(card(c)!.reaction, (emoji: null, quote: null, kind: null));
     });
+  });
+
+  group('a reaction card never covers a newer card', () {
+    test('message card shown while the opener is pending stays', () async {
+      final gate = Completer<OpenedReaction?>();
+      final c = await messageScope(opener: (_) => gate.future);
+      final f = react(c, push(ct: 'x', chat: 'cB'));
+      consider(c, 'cC');
+      expect(card(c)!.conversationId, 'cC');
+      gate.complete((emoji: '👍', quote: null));
+      await f;
+      expect(card(c)!.conversationId, 'cC');
+      expect(card(c)!.reaction, isNull, reason: 'no reaction card');
+    });
+
+    test('a second reaction that starts later wins, the first drops', () async {
+      final gates = <String, Completer<OpenedReaction?>>{
+        'cB': Completer(),
+        'cC': Completer(),
+      };
+      final c = await scope(opener: (p) => gates[p.conversationId]!.future);
+      final f1 = react(c, push(ct: 'x', chat: 'cB'));
+      final f2 = react(c, push(ct: 'x', chat: 'cC', reactor: 'u3'));
+      gates['cC']!.complete((emoji: '😂', quote: null));
+      await f2;
+      gates['cB']!.complete((emoji: '👍', quote: null));
+      await f1;
+      expect(card(c)!.conversationId, 'cC');
+      expect(card(c)!.reaction!.emoji, '😂');
+    });
+
+    test('nothing newer: the reaction card still shows', () async {
+      final gate = Completer<OpenedReaction?>();
+      final c = await messageScope(opener: (_) => gate.future);
+      final f = react(c, push(ct: 'x', chat: 'cB'));
+      gate.complete((emoji: '👍', quote: null));
+      await f;
+      expect(card(c)!.conversationId, 'cB');
+      expect(card(c)!.reaction!.emoji, '👍');
+    });
+
+    for (final (name, mutes, settings, archived, chat)
+        in <(String, List<Mute>, NotificationSettings, bool, String)>[
+          (
+            'muted chat',
+            const [Mute(kind: MuteKind.conversation, target: 'cC')],
+            const NotificationSettings(),
+            false,
+            'cC',
+          ),
+          ('archived chat', const [], const NotificationSettings(), true, 'cC'),
+          ('same chat', const [], const NotificationSettings(), false, 'cA'),
+          (
+            'settings off',
+            const [],
+            const NotificationSettings(enabled: false),
+            false,
+            'cC',
+          ),
+        ]) {
+      test(
+        'a message with no card ($name) keeps the pending reaction',
+        () async {
+          final gate = Completer<OpenedReaction?>();
+          final c = await messageScope(
+            opener: (_) => gate.future,
+            mutes: mutes,
+            settings: settings,
+          );
+          final f = react(c, push(ct: 'x', chat: 'cB'));
+          consider(c, chat, archived: archived);
+          expect(card(c), isNull, reason: 'the message made no card');
+          gate.complete((emoji: '👍', quote: null));
+          await f;
+          expect(card(c)!.conversationId, 'cB');
+          expect(card(c)!.reaction!.emoji, '👍');
+        },
+      );
+    }
   });
 
   group('reactionCardText', () {

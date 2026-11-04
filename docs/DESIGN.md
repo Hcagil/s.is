@@ -18,8 +18,8 @@ rules the code is held to. Decisions and their dates are in
   decision.
 
 Out of scope until explicitly scheduled: web, analytics, monetisation,
-public sign-up. End-to-end encryption covers private one-to-one chats only
-(text and reactions; see `docs/SECURITY.md`).
+public sign-up. End-to-end encryption covers the text and reactions of
+one-to-one chats between people (not bots); see `docs/SECURITY.md`.
 
 ## 2. System shape
 

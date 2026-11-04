@@ -277,7 +277,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not find your position. Check that location is on.';
 
   @override
-  String get locationPreviewLine => '📍 Location';
+  String get locationPreviewLine => 'Location';
 
   @override
   String get locationOpenTitle => 'Open in Maps?';
@@ -752,9 +752,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get messageActionDeletePhoto => 'Delete this photo';
 
   @override
-  String get messageDeleteAlbumTitle => 'Delete this album?';
-
-  @override
   String get listNoMessages => 'No messages yet';
 
   @override
@@ -1030,7 +1027,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bubbleDeletedByAdmin => 'Deleted by an admin';
 
   @override
-  String get chatLockedMessage => '🔒 This message can\'t be opened';
+  String get chatLockedMessage => 'This message could not be opened.';
+
+  @override
+  String get chatOpeningMessage => 'Opening message…';
+
+  @override
+  String filePreviewLine(String name) {
+    return 'File: $name';
+  }
 
   @override
   String bubbleEdited(String time) {
@@ -1657,7 +1662,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String contactPreviewLine(String name) {
-    return '👤 Contact: $name';
+    return 'Contact: $name';
   }
 
   @override
@@ -2524,9 +2529,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get podSwOff => '/podium is turned off.';
-
-  @override
-  String get podCmdDesc => 'Total money from Vega';
 
   @override
   String get podHint => 'Type / for commands';

@@ -599,7 +599,7 @@ abstract class AppLocalizations {
   /// Chat list preview of a location message
   ///
   /// In en, this message translates to:
-  /// **'📍 Location'**
+  /// **'Location'**
   String get locationPreviewLine;
 
   /// Title of the confirmation before the maps app opens
@@ -1466,12 +1466,6 @@ abstract class AppLocalizations {
   /// **'Delete this photo'**
   String get messageActionDeletePhoto;
 
-  /// Delete confirm card title for a whole photo album
-  ///
-  /// In en, this message translates to:
-  /// **'Delete this album?'**
-  String get messageDeleteAlbumTitle;
-
   /// Preview line of a conversation with no messages
   ///
   /// In en, this message translates to:
@@ -1889,8 +1883,20 @@ abstract class AppLocalizations {
   /// Shown in place of a message that this phone cannot open (bubble and chat-list preview)
   ///
   /// In en, this message translates to:
-  /// **'🔒 This message can\'t be opened'**
+  /// **'This message could not be opened.'**
   String get chatLockedMessage;
+
+  /// Shown in place of a locked message this phone is still opening (bubble and chat-list preview)
+  ///
+  /// In en, this message translates to:
+  /// **'Opening message…'**
+  String get chatOpeningMessage;
+
+  /// Chat list preview of a file message
+  ///
+  /// In en, this message translates to:
+  /// **'File: {name}'**
+  String filePreviewLine(String name);
 
   /// Mark on an edited message
   ///
@@ -2927,7 +2933,7 @@ abstract class AppLocalizations {
   /// Chat list preview of a contact message
   ///
   /// In en, this message translates to:
-  /// **'👤 Contact: {name}'**
+  /// **'Contact: {name}'**
   String contactPreviewLine(String name);
 
   /// Note under the Send contact button: when the contacts permission is asked
@@ -4417,12 +4423,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'/podium is turned off.'**
   String get podSwOff;
-
-  /// Bacanaks Ozel command chat
-  ///
-  /// In en, this message translates to:
-  /// **'Total money from Vega'**
-  String get podCmdDesc;
 
   /// Bacanaks Ozel command chat
   ///

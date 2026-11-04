@@ -56,7 +56,7 @@ class PinnedBar extends ConsumerWidget {
                           message.body.isNotEmpty
                               ? message.body
                               : message.stickerId != null
-                              ? previewText(message)
+                              ? l.stickerPreviewLine
                               : l.pinnedBarPhoto,
                           key: const ValueKey('pinned-bar-text'),
                           maxLines: 1,

@@ -144,7 +144,9 @@ String fileTypeLabel(String name) {
 }
 
 /// Returns the one-line preview of a file message in the chat list.
-String filePreview(String name) => '\u{1F4CE} $name';
+const String filePreviewPrefix = '\u{1F4CE} ';
+
+String filePreview(String name) => '$filePreviewPrefix$name';
 
 /// Unicode direction marks and zero-width characters (U+200B-U+200F,
 /// U+202A-U+202E, U+2066-U+2069). They can disguise a file's real type

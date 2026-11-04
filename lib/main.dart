@@ -109,12 +109,14 @@ import 'features/notifications/data/deferred_push_source.dart';
 import 'features/notifications/data/firebase_push_source.dart';
 import 'features/notifications/data/local_push_display.dart';
 import 'features/notifications/data/platform_app_badge.dart';
+import 'features/notifications/data/reaction_opener.dart';
 import 'features/notifications/data/shared_prefs_alert_store.dart';
 import 'features/notifications/data/shared_prefs_notification_explainer_store.dart';
 import 'features/notifications/data/supabase_notification_settings_repository.dart';
 import 'features/notifications/data/supabase_push_receipts.dart';
 import 'features/notifications/data/supabase_push_registry.dart';
 import 'features/notifications/domain/push.dart';
+import 'features/notifications/domain/reaction_push.dart';
 import 'features/presence/application/presence_controllers.dart';
 import 'features/presence/data/supabase_presence_repository.dart';
 import 'features/profile/application/profile_controller.dart';
@@ -249,6 +251,7 @@ Future<void> main() async {
     // Realtime re-joins and foreground pushes reach the app through these (LiveCatchUp).
     final rejoined = StreamController<void>.broadcast();
     final foregroundPush = StreamController<String>.broadcast();
+    final foregroundReaction = StreamController<ReactionPush>.broadcast();
     final pushReady = Completer<PushSource>();
     // A failed setup is logged by _setUpPush and surfaces in each waiting call.
     pushReady.future.ignore();
@@ -287,6 +290,12 @@ Future<void> main() async {
           ...platformOverrides(defaultTargetPlatform, client, config),
           realtimeRejoinedProvider.overrideWithValue(rejoined.stream),
           foregroundPushProvider.overrideWithValue(foregroundPush.stream),
+          foregroundReactionProvider.overrideWithValue(
+            foregroundReaction.stream,
+          ),
+          reactionPushOpenerProvider.overrideWithValue(
+            reactionOpener(keychainGroup),
+          ),
           chatRepositoryProvider.overrideWith(
             (ref) => SupabaseChatRepository(
               client,
@@ -525,7 +534,11 @@ Future<void> main() async {
     unawaited(
       WidgetsBinding.instance.waitUntilFirstFrameRasterized.then((_) {
         StartupMarks.mark('first-frame');
-        return _setUpPush(pushReady, foregroundPush.add);
+        return _setUpPush(
+          pushReady,
+          foregroundPush.add,
+          foregroundReaction.add,
+        );
       }),
     );
   } catch (e) {
@@ -551,6 +564,7 @@ Future<void> main() async {
 Future<void> _setUpPush(
   Completer<PushSource> ready,
   void Function(String) onForeground,
+  void Function(ReactionPush) onReaction,
 ) async {
   try {
     // Reads android/app/google-services.json (Android) or
@@ -562,6 +576,7 @@ Future<void> _setUpPush(
       FirebasePushSource(
         FirebaseMessaging.instance,
         onForeground: onForeground,
+        onReaction: onReaction,
       ),
     );
     // Drops the pre-0.26 'messages' channel and any combination now unused.

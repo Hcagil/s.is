@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
 
 import '../domain/push.dart';
+import '../domain/reaction_push.dart';
 import 'local_push_display.dart';
 import 'push_receipt_log.dart';
 
@@ -89,7 +90,7 @@ Future<String> _deliver(
 /// on a device. While the app is open nothing is shown: the chat list already
 /// says what is new.
 final class FirebasePushSource implements PushSource {
-  FirebasePushSource(this._messaging, {this.onForeground}) {
+  FirebasePushSource(this._messaging, {this.onForeground, this.onReaction}) {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       // While the app is open nothing is shown, as on Android: pin the system
       // alert off so an iPhone shows nothing on top of the app.
@@ -106,6 +107,9 @@ final class FirebasePushSource implements PushSource {
     FirebaseMessaging.onMessage.listen((m) {
       final id = _conversationOf(m);
       if (id != null) onForeground?.call(id);
+      // A reaction also goes to the top card (a separate path from the message one).
+      final reaction = parseReactionPush(m.data);
+      if (reaction != null) onReaction?.call(reaction);
     });
   }
 
@@ -113,6 +117,9 @@ final class FirebasePushSource implements PushSource {
 
   /// Told the conversation of each push received while the app is in the foreground.
   final void Function(String conversationId)? onForeground;
+
+  /// Told each reaction push received while the app is in the foreground (ids already UUID-shaped).
+  final void Function(ReactionPush push)? onReaction;
 
   static final _taps = StreamController<String>.broadcast();
 

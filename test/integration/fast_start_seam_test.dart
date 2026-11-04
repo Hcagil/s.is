@@ -2,6 +2,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' show max;
 
@@ -44,11 +45,10 @@ import '../support/video_fakes.dart';
 /// request -- the phone-to-server round trip the change is about -- and
 /// records when each request started and finished.
 ///
-/// The unit tests prove the order of calls against fakes. Only this proves
-/// that `conversations()` really sends its eight reads as two groups, that
-/// running them together returns what running them one by one returns, and
-/// that with a slow connection opening the app costs the longer of the
-/// profile and the list, not both added up.
+/// Only this proves that `conversations()` really sends ONE request (rpc
+/// chat_list), that it returns what the old eight reads returned, and that
+/// with a slow connection opening the app costs the longer of the profile and
+/// the list, not both added up.
 ///
 /// Requires a running local Supabase and the warmup probe; run with
 /// --concurrency=1. Accounts bram/dora/eli/finn are this suite's own
@@ -158,6 +158,16 @@ class _Wire extends http.BaseClient {
 
   @override
   void close() => _inner.close();
+}
+
+/// A wire that is down: every request fails, and is recorded.
+class _Down extends http.BaseClient {
+  final sent = <Uri>[];
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    sent.add(request.url);
+    throw const SocketException('network down');
+  }
 }
 
 Future<SupabaseClient> _signedIn(String email, [_Wire? wire]) async {
@@ -322,112 +332,133 @@ void main() {
       );
     });
 
-    test('together returns exactly what one by one returns, from the same '
-        'requests, even when the answers come back in reverse order', () async {
+    test('sends exactly one request, rpc chat_list, and returns the same '
+        'list whether sent alone or with others in flight', () async {
       wire.oneAtATime = true;
-      final oneByOne = _ok(await chat.conversations());
-      final sequential = [for (final r in wire.rest) r.shape]..sort();
-      expect(wire.maxInFlight, 1, reason: 'the reference was not sequential');
+      final alone = _ok(await chat.conversations());
+      expect(
+        [for (final r in wire.rest) r.shape],
+        ['POST /rest/v1/rpc/chat_list?'],
+      );
 
       wire
         ..oneAtATime = false
-        ..reset()
-        ..lastAsked = true;
-      final together = _ok(await chat.conversations());
-      final concurrent = [for (final r in wire.rest) r.shape]..sort();
-
+        ..reset();
+      final again = _ok(await chat.conversations());
       expect(
-        [for (final c in together) _row(c)],
-        [for (final c in oneByOne) _row(c)],
+        [for (final r in wire.rest) r.shape],
+        ['POST /rest/v1/rpc/chat_list?'],
       );
-      expect(concurrent, sequential);
-      final asked = [for (final r in wire.rest) r.table];
-      final answered = [
-        for (final r in [
-          ...wire.rest,
-        ]..sort((a, b) => a.end!.compareTo(b.end!)))
-          r.table,
-      ];
-      expect(answered, isNot(asked), reason: 'the answers were not reordered');
+      expect(
+        [for (final c in again) _row(c)],
+        [for (final c in alone) _row(c)],
+      );
     });
 
-    test('sends its eight reads as two groups: members, conversations, archives, pins and hides, then names, previews and unread counts', () async {
+    test('costs one round trip, not two', () async {
       const delay = Duration(milliseconds: 300);
       wire.delay = delay;
       final clock = Stopwatch()..start();
       final list = _ok(await chat.conversations());
       final took = clock.elapsed;
       expect(list, isNotEmpty);
-
-      final reqs = wire.rest;
-      expect([for (final r in reqs) r.table]..sort(), [
-        'chat_archives',
-        'chat_hides',
-        'chat_pins',
-        'conversation_members',
-        'conversation_previews',
-        'conversations',
-        'profiles_public',
-        'unread_counts',
-      ], reason: 'not the same eight reads');
-      _Req one(String t) => reqs.singleWhere((r) => r.table == t);
-      final first = [
-        one('conversation_members'),
-        one('conversations'),
-        one('chat_archives'),
-        one('chat_pins'),
-        one('chat_hides'),
-      ];
-      final second = [
-        one('profiles_public'),
-        one('conversation_previews'),
-        one('unread_counts'),
-      ];
-      for (final a in first) {
-        for (final b in first) {
-          if (a != b) {
-            expect(
-              a.overlaps(b),
-              isTrue,
-              reason: 'first group not together: $reqs',
-            );
-          }
-        }
-      }
-      for (final a in second) {
-        for (final b in second) {
-          if (a != b) {
-            expect(a.overlaps(b), isTrue, reason: 'not together: $reqs');
-          }
-        }
-        for (final f in first) {
-          expect(
-            a.start >= f.end!,
-            isTrue,
-            reason: '${a.table} did not wait for ${f.table}: $reqs',
-          );
-        }
-      }
-      expect(wire.maxInFlight, 5);
-      expect(took, greaterThanOrEqualTo(delay * 2));
+      expect([for (final r in wire.rest) r.table], ['chat_list']);
+      expect(wire.maxInFlight, 1);
+      expect(took, greaterThanOrEqualTo(delay));
       expect(
         took,
-        lessThan(delay * 3),
-        reason: 'two round trips expected, took $took: $reqs',
+        lessThan(delay * 2),
+        reason: 'one round trip expected, took $took: ${wire.rest}',
       );
     });
 
-    test('with no conversations it stops after the first group', () async {
-      finnWire.reset();
-      final list = _ok(await SupabaseChatRepository(finn).conversations());
-      expect(list, isEmpty);
-      expect([for (final r in finnWire.rest) r.table]..sort(), [
-        'chat_archives',
-        'chat_hides',
-        'chat_pins',
-        'conversation_members',
+    test('chat_list holds what the eight old reads held', () async {
+      final raw = Map<String, dynamic>.from(await bram.rpc('chat_list') as Map);
+      expect(raw.keys.toSet(), {
+        'members',
         'conversations',
-      ]);
+        'archives',
+        'pins',
+        'hides',
+        'profiles',
+        'previews',
+        'unread',
+      });
+      List<String> ids(Object? rows, String col) =>
+          [for (final r in rows as List) (r as Map)[col] as String]..sort();
+      final members = await bram
+          .from('conversation_members')
+          .select('conversation_id,user_id');
+      expect(
+        [
+          for (final r in raw['members'] as List)
+            '${(r as Map)['conversation_id']}|${r['user_id']}',
+        ]..sort(),
+        [for (final r in members) '${r['conversation_id']}|${r['user_id']}']
+          ..sort(),
+      );
+      expect(
+        ids(raw['conversations'], 'id'),
+        ids(await bram.from('conversations').select('id'), 'id'),
+      );
+      expect(
+        ids(raw['previews'], 'conversation_id'),
+        ids(
+          await bram.from('conversation_previews').select('conversation_id'),
+          'conversation_id',
+        ),
+      );
+      final unread = await bram.rpc('unread_counts') as List;
+      expect(
+        [
+          for (final r in raw['unread'] as List)
+            '${(r as Map)['conversation_id']}|${r['unread']}',
+        ]..sort(),
+        [
+          for (final r in unread)
+            '${(r as Map)['conversation_id']}|${r['unread']}',
+        ]..sort(),
+      );
+      final profiles = ids(raw['profiles'], 'user_id');
+      expect(profiles, isNot(contains(bramId)), reason: 'own profile');
+      expect(profiles, containsAll([doraId, eliId]));
+    });
+
+    test(
+      'with no conversations it is still one request and an empty list',
+      () async {
+        finnWire.reset();
+        final list = _ok(await SupabaseChatRepository(finn).conversations());
+        expect(list, isEmpty);
+        expect([for (final r in finnWire.rest) r.table], ['chat_list']);
+      },
+    );
+
+    test('without a signed-in user it is denied before any request', () async {
+      final w = _Wire();
+      final anon = SupabaseClient(_url, _key, httpClient: w);
+      addTearDown(anon.dispose);
+      final r = await SupabaseChatRepository(anon).conversations();
+      expect(r, isA<Err<List<Conversation>>>());
+      expect((r as Err<List<Conversation>>).failure, isA<DeniedFailure>());
+      expect(w.log, isEmpty, reason: 'a request went out: ${w.log}');
+    });
+
+    test('a network error comes back as Err after one retry', () async {
+      final w = _Down();
+      final c = SupabaseClient(_url, _key, httpClient: w);
+      addTearDown(c.dispose);
+      // Sign-in cannot run on a dead wire; give the client a session by hand.
+      final live = bram.auth.currentSession!;
+      await c.auth
+          .recoverSession(jsonEncode(live.toJson()))
+          .catchError((_) => AuthResponse());
+      w.sent.clear();
+      expect(c.auth.currentUser, isNotNull, reason: 'no session to test with');
+      final r = await SupabaseChatRepository(c).conversations();
+      expect(r, isA<Err<List<Conversation>>>());
+      final rpcs = w.sent.where((u) => u.path.endsWith('/rpc/chat_list'));
+      expect(rpcs, hasLength(2), reason: 'one try plus one retry: ${w.sent}');
     });
   });
 
@@ -490,21 +521,21 @@ void main() {
 
     final readyAt = wire.now;
     final reqs = wire.rest;
-    final members = reqs.firstWhere((r) => r.table == 'conversation_members');
-    // A profiles read that overlaps the list's first group can only be the
-    // member's own profile: the other members' names wait for that group.
+    final members = reqs.firstWhere((r) => r.table == 'chat_list');
+    // A profiles read that overlaps the list's request can only be the
+    // member's own profile.
     expect(
       reqs.any((r) => r.table == 'own_profile' && r.overlaps(members)),
       isTrue,
       reason: 'the profile and the list were read one after the other: $reqs',
     );
-    // Profile: one round trip. List: two. One after the other: three.
+    // Profile: one round trip. List: one. One after the other: two.
     // Counted as round trips, not wall-clock time: on a loaded CI runner the
     // server's own time stretches every request (a 500 ms delay measured
     // 787 ms), so a bound in seconds fails with the requests still perfectly
     // overlapped. A request's stage is 1 + the deepest stage that had
     // finished before it started; nothing the app waited on before the list
-    // showed may sit deeper than the list's own second group.
+    // showed may sit deeper than the list's one round trip.
     final stage = <_Req, int>{};
     for (final r in [...reqs]..sort((a, b) => a.start.compareTo(b.start))) {
       stage[r] =
@@ -514,24 +545,23 @@ void main() {
               if (p.end != null && p.end! <= r.start) stage[p]!,
           ].fold(0, max);
     }
-    for (final table in [
-      'profiles_public',
-      'conversation_previews',
-      'unread_counts',
-    ]) {
-      expect(
-        stage[reqs.firstWhere((r) => r.table == table)],
-        2,
-        reason: '$table is not the second round trip: $reqs',
-      );
-    }
+    expect(
+      reqs.where((r) => r.table == 'chat_list'),
+      hasLength(1),
+      reason: 'the list is one request: $reqs',
+    );
+    expect(
+      stage[reqs.firstWhere((r) => r.table == 'chat_list')],
+      1,
+      reason: 'the list waited for another request: $reqs',
+    );
     final waited = [
       for (final r in reqs)
         if (r.end != null && r.end! <= readyAt) stage[r]!,
     ];
     expect(
       waited.fold(0, max),
-      2,
+      1,
       reason:
           'ready after ${readyAt - reqs.first.start}, behind more round '
           'trips than the list needs: $reqs',
@@ -666,7 +696,7 @@ void main() {
       expect(last, isNot(contains('@integration.test')), reason: 'an email');
 
       // Next start, over a slow connection: the stored list is on screen
-      // before the server has answered the list's reads.
+      // before the server has answered the list's request.
       wire
         ..delay = const Duration(milliseconds: 1500)
         ..reset();
@@ -678,7 +708,7 @@ void main() {
       expect(
         [
           for (final r in wire.rest)
-            if (r.table == 'conversation_previews' && r.end != null) r,
+            if (r.table == 'chat_list' && r.end != null) r,
         ],
         isEmpty,
         reason: 'the list waited for the server: ${wire.rest}',
@@ -690,7 +720,7 @@ void main() {
       // The server's answer then replaces it quietly: still on screen.
       await pumpUntil(
         t,
-        () => wire.rest.any((r) => r.table == 'unread_counts' && r.end != null),
+        () => wire.rest.any((r) => r.table == 'chat_list' && r.end != null),
         "the server's list",
       );
       await t.pump(const Duration(milliseconds: 200));

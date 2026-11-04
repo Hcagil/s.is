@@ -7,6 +7,7 @@
 // the on-phone memory (security_code_fakes.dart) and the key server and
 // signature check (key_directory_fakes.dart).
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderContainer;
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
@@ -248,6 +249,54 @@ void main() {
         await go(t);
         expect(find.byType(SecurityCodePage), findsNothing);
       });
+
+      testWidgets('subtitle literal words', (t) async {
+        await pumpRow(t, Rig(), locale: locale);
+        expect(
+          find.text(
+            lang == 'tr'
+                ? 'Yazılı mesajlar uçtan uca şifrelidir. Doğrulamak için dokunun.'
+                : 'Text messages are end-to-end encrypted. Tap to verify.',
+          ),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('no published keys, no session: the row is gone', (t) async {
+        final r = Rig()
+          ..store.sessions.clear()
+          ..dir.identityAnswer = const Ok(null);
+        await pumpRow(t, r, locale: locale);
+        expect(find.text(l.encryptionRowTitle), findsNothing);
+        expect(find.byKey(const ValueKey('person-encryption')), findsNothing);
+      });
+
+      testWidgets('no published keys, a stale session: the row is gone', (
+        t,
+      ) async {
+        final r = Rig()..dir.identityAnswer = const Ok(null);
+        await pumpRow(t, r, locale: locale);
+        expect(find.text(l.encryptionRowTitle), findsNothing);
+      });
+
+      testWidgets('keys but no session: the row stays', (t) async {
+        final r = Rig()..store.sessions.clear();
+        await pumpRow(t, r, locale: locale);
+        expect(find.text(l.encryptionRowTitle), findsOneWidget);
+      });
+
+      testWidgets('key mismatch: the row stays', (t) async {
+        final r = Rig()..dir.identityAnswer = Ok(dirKeys(cSeq));
+        await pumpRow(t, r, locale: locale);
+        expect(find.text(l.encryptionRowTitle), findsOneWidget);
+      });
+
+      testWidgets('lookup error: the row stays', (t) async {
+        final r = Rig()
+          ..dir.identityAnswer = const Err(NetworkFailure('offline'));
+        await pumpRow(t, r, locale: locale);
+        expect(find.text(l.encryptionRowTitle), findsOneWidget);
+      });
     });
 
     group('[$lang] security code changed line', () {
@@ -289,6 +338,52 @@ void main() {
       });
     });
   }
+
+  group('security code controller gaps', () {
+    Future<SecurityCodeState?> stateOf(Rig r) async {
+      final c = ProviderContainer(overrides: r.overrides);
+      addTearDown(c.dispose);
+      c.listen(securityCodeProvider(peerId), (_, _) {});
+      return c.read(securityCodeProvider(peerId).future);
+    }
+
+    void expectGap(SecurityCodeState? s, SecurityCodeGap gap) {
+      expect(s, isA<SecurityCodeUnavailable>());
+      expect((s! as SecurityCodeUnavailable).gap, gap);
+    }
+
+    test('no keys wins with no session', () async {
+      final r = Rig()
+        ..store.sessions.clear()
+        ..dir.identityAnswer = const Ok(null);
+      expectGap(await stateOf(r), SecurityCodeGap.noKeys);
+    });
+
+    test('no keys with a session is still noKeys', () async {
+      final r = Rig()..dir.identityAnswer = const Ok(null);
+      expectGap(await stateOf(r), SecurityCodeGap.noKeys);
+    });
+
+    test('keys, no session: noSecureChat', () async {
+      final r = Rig()..store.sessions.clear();
+      expectGap(await stateOf(r), SecurityCodeGap.noSecureChat);
+    });
+
+    test('server key differs: keyMismatch', () async {
+      final r = Rig()..dir.identityAnswer = Ok(dirKeys(cSeq));
+      expectGap(await stateOf(r), SecurityCodeGap.keyMismatch);
+    });
+
+    test('lookup error is not noKeys', () async {
+      final r = Rig()
+        ..dir.identityAnswer = const Err(NetworkFailure('offline'));
+      final s = await stateOf(r);
+      expect(
+        s is SecurityCodeUnavailable && s.gap == SecurityCodeGap.noKeys,
+        isFalse,
+      );
+    });
+  });
 
   group('seam: page, row and chat line over one memory', () {
     const peer = Member(userId: peerId, displayName: 'Bob');

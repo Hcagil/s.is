@@ -138,45 +138,26 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
     final me = _uid;
     if (me == null) return const Err(DeniedFailure());
     try {
-      // Neither of these depends on the other's result, so they run
-      // together instead of one after the other.
-      final firstStage = await Future.wait<List<Map<String, dynamic>>>([
-        // RLS returns membership rows only for conversations this member
-        // belongs to, so this is already scoped — including the other
-        // side's row.
-        _client
-            .from('conversation_members')
-            .select('conversation_id, user_id, left_at, color_slot, role')
-            .retriedOnce(),
-        // Titles distinguish a group from a 1:1; RLS scopes this to the
-        // caller's own conversations, same as the membership rows.
-        _client
-            .from('conversations')
-            .select(
-              'id, title, avatar_path, system, admin_chat, bacanaks_chat, debug_chat, members_can_set_avatar, '
-              'members_can_add, new_members_see_history, '
-              'members_can_pin, pinned_message_id',
-            )
-            .retriedOnce(),
-        // The chats this member archived (row-level security scopes it to
-        // their own rows).
-        _client.from('chat_archives').select('conversation_id').retriedOnce(),
-        // The chats this member pinned (own rows only, same scoping).
-        _client.from('chat_pins').select('conversation_id').retriedOnce(),
-        // The chats this member deleted for themselves (own rows only). A hidden chat with nothing readable left is not listed.
-        _client.from('chat_hides').select('conversation_id').retriedOnce(),
-      ]);
-      final memberRows = firstStage[0];
-      final conversationRows = firstStage[1];
+      // One database call (RLS scopes every part to the caller) returns
+      // members, titles, archive/pin/hide marks, names, previews and unread.
+      // GET (read-only STABLE function) so a network error retries once.
+      final data = Map<String, dynamic>.from(
+        await _client.rpc('chat_list', params: {}, get: true).retriedOnce()
+            as Map,
+      );
+      List<Map<String, dynamic>> rows(String key) =>
+          (data[key] as List).cast<Map<String, dynamic>>();
+      final memberRows = rows('members');
+      final conversationRows = rows('conversations');
       final archivedIds = {
-        for (final row in firstStage[2]) row['conversation_id'] as String,
+        for (final row in rows('archives')) row['conversation_id'] as String,
       };
       final pinnedIds = {
-        for (final row in firstStage[3]) row['conversation_id'] as String,
+        for (final row in rows('pins')) row['conversation_id'] as String,
       };
 
       final hiddenIds = {
-        for (final row in firstStage[4]) row['conversation_id'] as String,
+        for (final row in rows('hides')) row['conversation_id'] as String,
       };
       final titleById = {
         for (final row in conversationRows)
@@ -256,35 +237,12 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
       final conversationIds = {...titleById.keys, ...otherByConversation.keys};
       if (conversationIds.isEmpty) return const Ok([]);
 
-      final others = otherIds.toList();
-      // None of these three depends on either of the other two, so they
-      // also run together rather than one after the other.
-      final secondStage = await Future.wait<Object?>([
-        others.isEmpty
-            ? Future.value(const <Map<String, dynamic>>[])
-            : _client
-                  .rpc('profiles_public', params: const {}, get: true)
-                  .inFilter('user_id', others)
-                  .select('user_id, display_name, avatar_path')
-                  .retriedOnce(),
-        // Newest first, so the first row seen for a conversation is its
-        // preview. One row per conversation, from a view that does the
-        // DISTINCT ON in the database. A bounded scan across all
-        // conversations used to lose the preview of a quiet one as soon as
-        // enough newer messages existed elsewhere, which rendered as "No
-        // messages yet" on a conversation that had messages.
-        _client
-            .from('conversation_previews')
-            .select(
-              'conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name, attachment_duration_ms, location_lat, attachment_mime, sticker_id, sticker_album, admin_msg',
-            )
-            .retriedOnce(),
-        // Only conversations with something unread come back.
-        _client.rpc('unread_counts'),
-      ]);
-      final profileRows = secondStage[0]! as List<Map<String, dynamic>>;
-      final recent = secondStage[1]! as List<Map<String, dynamic>>;
-      final unreadRows = secondStage[2]! as List<dynamic>;
+      final profileRows = rows('profiles');
+      // One preview row per conversation, from a view that does the DISTINCT
+      // ON in the database (a bounded scan lost quiet chats' previews).
+      final recent = rows('previews');
+      // Only conversations with something unread come back.
+      final unreadRows = rows('unread');
       final nameByUser = {
         for (final row in profileRows)
           row['user_id'] as String: row['display_name'] as String,
@@ -335,7 +293,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
           ),
       };
       final unreadBy = {
-        for (final row in unreadRows.cast<Map<String, dynamic>>())
+        for (final row in unreadRows)
           row['conversation_id'] as String: row['unread'] as int,
       };
 

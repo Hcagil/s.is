@@ -9,6 +9,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/application/message_opener.dart';
 import 'package:sis/features/chat/domain/encrypted_message_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/conversation_tile.dart';
@@ -21,8 +22,17 @@ import '../../support/l10n.dart';
 import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
-const enLocked = "🔒 This message can't be opened";
-const trLocked = '🔒 Bu mesaj açılamıyor';
+const enLocked = 'This message could not be opened.';
+const trLocked = 'Bu mesaj açılamadı.';
+const enOpening = 'Opening message…';
+const trOpening = 'Mesaj açılıyor…';
+
+class _Opening extends OpeningMessages {
+  _Opening(this.rows);
+  final List<Message> rows;
+  @override
+  List<Message> build() => rows;
+}
 
 class _SignedIn extends SessionController {
   @override
@@ -39,7 +49,12 @@ Message msg(String id, String body, {int minute = 0}) => Message(
   createdAt: t0.add(Duration(minutes: minute)),
 );
 
-Future<void> pump(WidgetTester t, List<Message> history, Locale locale) async {
+Future<void> pump(
+  WidgetTester t,
+  List<Message> history,
+  Locale locale, {
+  List<Message> opening = const [],
+}) async {
   t.view
     ..physicalSize = const Size(800, 2400)
     ..devicePixelRatio = 1;
@@ -55,6 +70,7 @@ Future<void> pump(WidgetTester t, List<Message> history, Locale locale) async {
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
         sessionControllerProvider.overrideWith(_SignedIn.new),
+        openingMessagesProvider.overrideWith(() => _Opening(opening)),
       ],
     ),
   );
@@ -85,6 +101,8 @@ void main() {
   test('the strings', () {
     expect(l10nEn.chatLockedMessage, enLocked);
     expect(l10nTr.chatLockedMessage, trLocked);
+    expect(l10nEn.chatOpeningMessage, enOpening);
+    expect(l10nTr.chatOpeningMessage, trOpening);
   });
 
   group('chatPreviewLine', () {
@@ -122,6 +140,26 @@ void main() {
         findsNothing,
       );
       expect(inBubble('p', 'merhaba'), findsOneWidget);
+    });
+  }
+
+  for (final (locale, opening, failed) in [
+    (const Locale('en'), enOpening, enLocked),
+    (const Locale('tr'), trOpening, trLocked),
+  ]) {
+    testWidgets('bubble: a waiting locked row says "$opening", another locked '
+        'row "$failed"', (t) async {
+      final waiting = msg('w', lockedBodyPlaceholder);
+      await pump(
+        t,
+        [waiting, msg('f', lockedBodyPlaceholder, minute: 1)],
+        locale,
+        opening: [waiting],
+      );
+      expect(inBubble('w', opening), findsOneWidget);
+      expect(inBubble('w', failed), findsNothing);
+      expect(inBubble('f', failed), findsOneWidget);
+      expect(inBubble('f', opening), findsNothing);
     });
   }
 }

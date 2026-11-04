@@ -272,7 +272,7 @@ class AppLocalizationsTr extends AppLocalizations {
       'Konumunuz bulunamadı. Konumunuzun açık olduğundan emin olun.';
 
   @override
-  String get locationPreviewLine => '📍 Konum';
+  String get locationPreviewLine => 'Konum';
 
   @override
   String get locationOpenTitle => 'Haritalar\'da açılsın mı?';
@@ -748,9 +748,6 @@ class AppLocalizationsTr extends AppLocalizations {
   String get messageActionDeletePhoto => 'Bu fotoğrafı sil';
 
   @override
-  String get messageDeleteAlbumTitle => 'Bu albüm silinsin mi?';
-
-  @override
   String get listNoMessages => 'Henüz mesaj yok';
 
   @override
@@ -1025,7 +1022,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get bubbleDeletedByAdmin => 'Bir yönetici tarafından silindi';
 
   @override
-  String get chatLockedMessage => '🔒 Bu mesaj açılamıyor';
+  String get chatLockedMessage => 'Bu mesaj açılamadı.';
+
+  @override
+  String get chatOpeningMessage => 'Mesaj açılıyor…';
+
+  @override
+  String filePreviewLine(String name) {
+    return 'Dosya: $name';
+  }
 
   @override
   String bubbleEdited(String time) {
@@ -1632,7 +1637,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String contactPreviewLine(String name) {
-    return '👤 Kişi: $name';
+    return 'Kişi: $name';
   }
 
   @override
@@ -2496,9 +2501,6 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get podSwOff => '/podium kapatıldı.';
-
-  @override
-  String get podCmdDesc => 'Vega\'dan toplam para';
 
   @override
   String get podHint => 'Komutlar için / yazın';

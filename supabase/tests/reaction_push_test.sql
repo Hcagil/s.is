@@ -1,5 +1,5 @@
 begin;
-select plan(177);
+select plan(181);
 
 -- Reaction notifications, server side (20261107120000_reaction_notifications.sql).
 --
@@ -218,7 +218,7 @@ select is((select string_agg(user_id::text || ':' || token || ':' || platform ||
           u('ava')::text || ':rp-tok-ava:android:' || g('G')::text,
           'AC-1: ben reacts to ava''s message: exactly one row, ava''s current device, in that chat (not ben, not cyd)');
 select is((select string_agg(body, ',') from app_private.reaction_push_targets_for(mid('G1'), u('ben'))),
-          'New reaction to your message', 'the body is always the generic English line');
+          'Mesajınıza yeni tepki', 'null receiver language: the body is the Turkish generic line');
 select react(mid('G1'), 'ava', '🎉');
 select is(n(mid('G1'), 'ava'), 0::bigint, 'R3: ava reacting to her own message gets no row');
 select react(mid('G1'), 'cyd', '🎉');
@@ -331,8 +331,21 @@ delete from public.notification_settings;
 create temp table _ben_profile as select * from public.profiles where user_id = u('ben');
 delete from public.profiles where user_id = u('ben');
 select is((select title from app_private.reaction_push_targets_for(mid('G1'), u('ben'))),
-          'Someone @ rp-group', 'a reactor without a display name is ''Someone''');
+          'Biri @ rp-group', 'null receiver language: a reactor without a display name is ''Biri''');
+update public.profiles set app_language = 'en' where user_id = u('ava');
+select is((select title from app_private.reaction_push_targets_for(mid('G1'), u('ben'))),
+          'Someone @ rp-group', 'en receiver: a reactor without a display name is ''Someone''');
+update public.profiles set app_language = 'tr' where user_id = u('ava');
+select is((select title from app_private.reaction_push_targets_for(mid('G1'), u('ben'))),
+          'Biri @ rp-group', 'tr receiver: a reactor without a display name is ''Biri''');
 insert into public.profiles select * from _ben_profile;
+update public.profiles set app_language = 'en' where user_id = u('ava');
+select is((select string_agg(body, ',') from app_private.reaction_push_targets_for(mid('G1'), u('ben'))),
+          'New reaction to your message', 'en receiver: the English body');
+update public.profiles set app_language = 'tr' where user_id = u('ava');
+select is((select string_agg(body, ',') from app_private.reaction_push_targets_for(mid('G1'), u('ben'))),
+          'Mesajınıza yeni tepki', 'tr receiver: the Turkish body');
+update public.profiles set app_language = null where user_id = u('ava');
 
 -- the quote: btrim, cut at 60 characters + '…', null when the body is empty
 insert into public.messages(id, conversation_id, sender_id, body) values

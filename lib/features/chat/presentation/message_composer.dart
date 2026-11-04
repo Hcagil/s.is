@@ -801,7 +801,7 @@ String quoteText(AppLocalizations l, Message? message, {int albumCount = 0}) =>
         file.isVoice
             ? l.voicePreviewLine
             : file.isVideo
-            ? videoPreview
+            ? l.attachVideo
             : file.name,
       Message(stickerId: final _?) => l.stickerPreviewLine,
       Message(albumCard: true) => l.stickerAlbumPreviewLine,

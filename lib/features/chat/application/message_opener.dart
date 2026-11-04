@@ -20,6 +20,17 @@ import 'open_queue.dart';
 import 'peer_key_cache.dart';
 import 'security_code_controller.dart';
 
+/// The locked rows this phone is still trying to open (waiting for a session). A locked row not in this list could not be opened for good; the screens say "opening" or "could not be opened" by it.
+final openingMessagesProvider =
+    NotifierProvider<OpeningMessages, List<Message>>(OpeningMessages.new);
+
+class OpeningMessages extends Notifier<List<Message>> {
+  @override
+  List<Message> build() => const [];
+
+  void set(List<Message> rows) => state = rows;
+}
+
 /// The one step that opens locked texts read from the server; main gives it to the chat repository.
 final messageOpenerProvider = Provider<MessageOpener>((ref) {
   final opener = StoreMessageOpener(
@@ -37,6 +48,7 @@ final messageOpenerProvider = Provider<MessageOpener>((ref) {
     memory: () => ref.read(cipherChatMemoryProvider),
     queue: ref.read(openQueueProvider),
     cache: ref.read(peerKeyCacheProvider),
+    onOpening: (rows) => ref.read(openingMessagesProvider.notifier).set(rows),
   );
   ref.onDispose(opener.dispose);
   ref.listen(currentUserIdProvider, (_, _) => opener.reset());
@@ -55,6 +67,7 @@ class StoreMessageOpener implements MessageOpener {
     CipherChatMemory? Function()? memory,
     OpenQueue? queue,
     this._cache,
+    this._onOpening,
   }) : _memory = memory ?? _noMemory,
        _queue = queue ?? OpenQueue();
 
@@ -65,6 +78,7 @@ class StoreMessageOpener implements MessageOpener {
   final CipherChatMemory? Function() _memory;
   final OpenQueue _queue;
   final PeerKeyCache? _cache;
+  final void Function(List<Message>)? _onOpening;
 
   final _reopened = StreamController<Message>.broadcast();
   final Map<String, Message> _done = {};
@@ -90,6 +104,13 @@ class StoreMessageOpener implements MessageOpener {
   void forget(String id) {
     _forgotten.add(id);
     _pending.remove(id);
+    _publish();
+  }
+
+  /// Tells the screens which rows are still being opened.
+  void _publish() {
+    if (_disposed) return;
+    _onOpening?.call(List.of(_pending.values));
   }
 
   /// Closes the [reopened] stream.
@@ -105,6 +126,7 @@ class StoreMessageOpener implements MessageOpener {
     _timer = null;
     _tries = 0;
     _pending.clear();
+    _publish();
     _done.clear();
     _forgotten.clear();
     _cache?.clear();
@@ -322,6 +344,7 @@ class StoreMessageOpener implements MessageOpener {
         if (_forgotten.contains(m.id)) return fallback;
         final plain = m.withPlain(env.text, env.card, sealed: hash);
         _pending.remove(m.id);
+        _publish();
         _remember(slot, plain);
         // The ratchet moved, so this message can never be opened again: saved before it is shown, kept in memory even if the write fails.
         try {
@@ -356,6 +379,7 @@ class StoreMessageOpener implements MessageOpener {
       _pending.remove(_pending.keys.first);
     }
     _pending[m.id] = m;
+    _publish();
     _schedule();
   }
 
@@ -413,5 +437,6 @@ class StoreMessageOpener implements MessageOpener {
         }
       }
     }
+    _publish();
   }
 }

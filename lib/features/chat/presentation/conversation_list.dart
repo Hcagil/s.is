@@ -13,6 +13,7 @@ import '../domain/message.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_delete_controller.dart';
 import '../application/chat_selection_controller.dart';
+import '../application/message_opener.dart';
 import '../domain/conversation.dart';
 import '../domain/highlight.dart';
 import 'member_name.dart';
@@ -340,6 +341,7 @@ class _SearchResults extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l = AppLocalizations.of(context);
     final state = ref.watch(chatListSearchProvider);
+    final opening = ref.watch(openingMessagesProvider);
     final conversations = {
       for (final c in ref.watch(conversationListProvider).value ?? const [])
         c.id: c,
@@ -377,7 +379,11 @@ class _SearchResults extends ConsumerWidget {
           subtitle: Text.rich(
             TextSpan(
               children: _highlighted(
-                previewText(message),
+                chatPreviewLine(
+                  l,
+                  previewText(message),
+                  opening: opening.any((m) => m.id == message.id),
+                ),
                 state.query,
                 context,
               ),

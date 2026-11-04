@@ -419,7 +419,7 @@ void main() {
       expect(
         find.descendant(
           of: k('preview-c1'),
-          matching: find.text('📍 Location'),
+          matching: find.text('Location'),
           matchRoot: true,
         ),
         findsOneWidget,
@@ -433,7 +433,7 @@ void main() {
       expect(
         find.descendant(
           of: k('preview-c1'),
-          matching: find.text('📍 Konum'),
+          matching: find.text('Konum'),
           matchRoot: true,
         ),
         findsOneWidget,

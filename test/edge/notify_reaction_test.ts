@@ -134,7 +134,7 @@ const b64 = async (alg: string, s: string) =>
 const collapse = async (m: string, u: string) =>
   Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${m}:${u}`))))
     .map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
-const GENERIC = 'New reaction to your message';
+const GENERIC = 'Mesajınıza yeni tepki'; // a receiver with no app_language gets Turkish
 
 type Person = { id: string; session: string; email: string; name: string; token: string };
 const run = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -278,6 +278,17 @@ test('preview none: SIS, generic, no sender, chat, emoji or quote', async () => 
     user_id: nia.id, conversation_id: conv, message_id: m, kind: 'reaction', reactor_id: ben.id, title: 'SIS', body: GENERIC,
   }, attempts[0].raw);
   assert(!attempts[0].raw.includes('hidden words') && !attempts[0].raw.includes('👍'));
+});
+
+test('an English receiver (app_language en) gets the English line', async () => {
+  const eli = await person('eli', { platform: 'ios' });
+  await sql`update public.profiles set app_language = 'en' where user_id = ${eli.id}`;
+  const conv = await direct(eli, ben);
+  const m = await say(eli, conv, 'english words');
+  await setReaction(ben, m, '👍');
+  await react(m, ben);
+  assertEquals(attempts.length, 1);
+  assertEquals(attempts[0].message.notification, { title: ben.name, body: 'New reaction to your message' }, attempts[0].raw);
 });
 
 test('a media message: qk carries the kind', async () => {

@@ -9,7 +9,6 @@ import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
 import '../domain/message.dart';
-import '../domain/video.dart';
 import 'member_name.dart';
 import 'new_chat_page.dart';
 import 'person_avatar.dart';
@@ -208,7 +207,7 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
             ? (message.file!.isVoice
                   ? l.voicePreviewLine
                   : message.file!.isVideo
-                  ? videoPreview
+                  ? l.attachVideo
                   : message.file!.name)
             : message.hasAttachment
             ? l.attachPhoto

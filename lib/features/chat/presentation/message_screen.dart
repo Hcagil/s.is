@@ -28,6 +28,7 @@ import '../application/chat_controllers.dart';
 import '../application/chat_drafts.dart';
 import '../application/group_controller.dart';
 import '../application/link_preview_controller.dart';
+import '../application/message_opener.dart';
 import '../domain/bot_command.dart';
 import '../domain/conversation.dart';
 import '../domain/delivery.dart';
@@ -961,11 +962,23 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                               ),
                                             )
                                           : null;
+                                      final opening = ref.watch(
+                                        openingMessagesProvider.select(
+                                          (rows) => rows.any(
+                                            (m) => m.id == message.id,
+                                          ),
+                                        ),
+                                      );
                                       final bubble = _Bubble(
                                         isLockedPlaceholder(message.body)
                                             ? message.withPlain(
-                                                AppLocalizations.of(context)
-                                                    .chatLockedMessage,
+                                                opening
+                                                    ? AppLocalizations.of(
+                                                        context,
+                                                      ).chatOpeningMessage
+                                                    : AppLocalizations.of(
+                                                        context,
+                                                      ).chatLockedMessage,
                                                 null,
                                               )
                                             : message,

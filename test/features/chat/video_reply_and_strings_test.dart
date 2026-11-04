@@ -38,27 +38,50 @@ void main() {
       (w as RichText).text.toPlainText(),
   ];
 
+  group('forward a video', () {
+    testWidgets('the forward page names it Video, without the emoji', (
+      t,
+    ) async {
+      await pumpVideoChat(t, world()..messagesResult = Ok([video]));
+      await t.longPress(byKey('message-v1'));
+      await frames(t);
+      await t.tap(byKey('menu-forward'));
+      await frames(t);
+      expect(byKey('forward-page'), findsOneWidget);
+      final inPage = find.descendant(
+        of: byKey('forward-page'),
+        matching: find.text('Forwarding: Video', findRichText: true),
+      );
+      expect(
+        inPage,
+        findsOneWidget,
+        reason: '${words(t, byKey('forward-page'))}',
+      );
+      expect(find.textContaining('🎥'), findsNothing);
+    });
+  });
+
   group('reply to a video', () {
-    testWidgets('the reply bar quotes a video as 🎥 Video, not its name', (
+    testWidgets('the reply bar quotes a video as Video, not its name', (
       t,
     ) async {
       await pumpVideoChat(t, world()..messagesResult = Ok([video]));
       await replyTo(t, 'v1');
       expect(
-        inBar(videoPreview),
+        inBar('Video'),
         findsOneWidget,
         reason: 'bar shows ${words(t, byKey('reply-bar'))}',
       );
       expect(inBar('Beach day'), findsNothing);
     });
 
-    testWidgets('control: replying to a pdf shows no 🎥 Video', (t) async {
+    testWidgets('control: replying to a pdf shows no Video', (t) async {
       await pumpVideoChat(t, world()..messagesResult = Ok([fileMessage('f1')]));
       await replyTo(t, 'f1');
-      expect(inBar(videoPreview), findsNothing);
+      expect(inBar('Video'), findsNothing);
     });
 
-    testWidgets('a reply bubble quotes the video as 🎥 Video', (t) async {
+    testWidgets('a reply bubble quotes the video as its preview', (t) async {
       await pumpVideoChat(
         t,
         world()
@@ -77,7 +100,7 @@ void main() {
       final r1 = byKey('message-r1');
       expect(r1, findsOneWidget);
       expect(
-        find.descendant(of: r1, matching: find.textContaining(videoPreview)),
+        find.descendant(of: r1, matching: find.textContaining('Video')),
         findsOneWidget,
         reason: 'bubble shows ${words(t, r1)}',
       );

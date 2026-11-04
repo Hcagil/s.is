@@ -364,7 +364,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get encryptionRowSubtitle =>
-      'Messages are end-to-end encrypted. Tap to verify.';
+      'Text messages are end-to-end encrypted. Tap to verify.';
 
   @override
   String get securityCodeTitle => 'Verify security code';

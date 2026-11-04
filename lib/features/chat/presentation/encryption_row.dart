@@ -21,6 +21,12 @@ class EncryptionRow extends ConsumerWidget {
     final verified = state is SecurityCodeReady && state.verified;
     final ready = state is SecurityCodeReady;
 
+    // No published keys (a bot, no live phone): nothing to verify and the chat is not end-to-end encrypted.
+    if (state is SecurityCodeUnavailable &&
+        state.gap == SecurityCodeGap.noKeys) {
+      return const SizedBox.shrink();
+    }
+
     return SisSettingsRow(
       key: const ValueKey('person-encryption'),
       icon: verified ? Icons.verified_user_rounded : Icons.lock_outline_rounded,

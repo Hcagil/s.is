@@ -110,7 +110,7 @@
   "chatPinLimit": "En fazla 5 sohbet sabitleyebilirsiniz.",
   "eventPinned": "{name} bir mesajı sabitledi",
   "encryptionRowTitle": "Şifreleme",
-  "encryptionRowSubtitle": "Mesajlar uçtan uca şifrelidir. Doğrulamak için dokunun.",
+  "encryptionRowSubtitle": "Yazılı mesajlar uçtan uca şifrelidir. Doğrulamak için dokunun.",
   "securityCodeTitle": "Güvenlik kodunu doğrula",
   "securityCodeIntro": "Bu kodu {name} adlı kişinin telefonundaki kodla yüz yüze veya arayarak karşılaştırın. Aynıysa Eşleşiyor'a dokunun. Seçiminiz yalnızca bu telefonda saklanır.",
   "securityCodeChanged": "{name} ile güvenlik kodunuz değişti. Doğrulamak için dokunun.",

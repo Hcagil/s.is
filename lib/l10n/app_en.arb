@@ -413,7 +413,7 @@
   "@encryptionRowTitle": {
     "description": "Profile row title, opens the security code page"
   },
-  "encryptionRowSubtitle": "Messages are end-to-end encrypted. Tap to verify.",
+  "encryptionRowSubtitle": "Text messages are end-to-end encrypted. Tap to verify.",
   "@encryptionRowSubtitle": {
     "description": "Profile row subtitle under Encryption"
   },

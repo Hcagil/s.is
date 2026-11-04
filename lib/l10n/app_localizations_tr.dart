@@ -359,7 +359,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get encryptionRowSubtitle =>
-      'Mesajlar uçtan uca şifrelidir. Doğrulamak için dokunun.';
+      'Yazılı mesajlar uçtan uca şifrelidir. Doğrulamak için dokunun.';
 
   @override
   String get securityCodeTitle => 'Güvenlik kodunu doğrula';

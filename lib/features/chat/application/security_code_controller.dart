@@ -14,7 +14,8 @@ final securityCodeStoreProvider = Provider<SecurityCodeStore?>((_) => null);
 final cipherChatMemoryProvider = Provider<CipherChatMemory?>((_) => null);
 
 /// Why no code can be shown.
-enum SecurityCodeGap { noSecureChat, keyMismatch }
+/// noKeys = the contact has no published keys (a bot or no live phone), so chat with them is not end-to-end encrypted.
+enum SecurityCodeGap { noSecureChat, keyMismatch, noKeys }
 
 /// What the security code page can show for one contact.
 sealed class SecurityCodeState {
@@ -52,11 +53,6 @@ Future<SecurityCodeState> _load(Ref ref, String peerUserId) async {
     return const SecurityCodeUnavailable(SecurityCodeGap.noSecureChat);
   }
   final own = await store.ownKeys();
-  // The peer's Curve25519 key comes from the stored session, never from the server.
-  final peerCurve = await store.sessionPeerKey(peerUserId);
-  if (own == null || peerCurve == null) {
-    return const SecurityCodeUnavailable(SecurityCodeGap.noSecureChat);
-  }
   final looked = await ref
       .read(keyDirectoryControllerProvider.notifier)
       .identityVerified(peerUserId);
@@ -64,7 +60,12 @@ Future<SecurityCodeState> _load(Ref ref, String peerUserId) async {
     Ok(:final value) => value,
     _ => null,
   };
-  if (keys == null) {
+  if (looked is Ok && keys == null) {
+    return const SecurityCodeUnavailable(SecurityCodeGap.noKeys);
+  }
+  // The peer's Curve25519 key comes from the stored session, never from the server.
+  final peerCurve = await store.sessionPeerKey(peerUserId);
+  if (own == null || peerCurve == null || keys == null) {
     return const SecurityCodeUnavailable(SecurityCodeGap.noSecureChat);
   }
   if (keys.identityKey != peerCurve) {

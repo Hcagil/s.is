@@ -6,6 +6,7 @@ import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../domain/push.dart';
+import '../domain/reaction_push.dart';
 
 /// The device's push channel (Firebase Messaging in data/).
 final pushSourceProvider = Provider<PushSource>(
@@ -155,6 +156,18 @@ class NotificationExplainer extends Notifier<void> {
 final foregroundPushProvider = Provider<Stream<String>>(
   (_) => const Stream<String>.empty(),
 );
+
+/// Each reaction push that arrives while the app is in the foreground; main overrides it. Empty in tests.
+final foregroundReactionProvider = Provider<Stream<ReactionPush>>(
+  (_) => const Stream<ReactionPush>.empty(),
+);
+
+/// Opens a private chat's reaction push on this phone (main wires the data layer); null when it cannot be read. Always null in tests.
+final reactionPushOpenerProvider =
+    Provider<Future<OpenedReaction?> Function(ReactionPush push)>(
+      (_) =>
+          (_) async => null,
+    );
 
 /// Conversations the member opened by tapping a notification -- the one that
 /// launched the app, then each later tap.

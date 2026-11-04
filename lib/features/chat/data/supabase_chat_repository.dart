@@ -140,8 +140,10 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
     try {
       // One database call (RLS scopes every part to the caller) returns
       // members, titles, archive/pin/hide marks, names, previews and unread.
+      // GET (read-only STABLE function) so a network error retries once.
       final data = Map<String, dynamic>.from(
-        await _client.rpc('chat_list').retriedOnce() as Map,
+        await _client.rpc('chat_list', params: {}, get: true).retriedOnce()
+            as Map,
       );
       List<Map<String, dynamic>> rows(String key) =>
           (data[key] as List).cast<Map<String, dynamic>>();

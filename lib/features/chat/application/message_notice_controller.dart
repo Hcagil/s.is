@@ -100,17 +100,22 @@ class MessageNoticeController extends Notifier<MessageNoticeData?> {
 
   /// Shows a card for a reaction push when the member is inside another chat. The server already applied every rule (author, mute, on/off, preview); this adds none. Never on the chat list, never in the same chat.
   Future<void> onReactionPush(ReactionPush push) async {
-    final me = switch (ref.read(sessionControllerProvider).value) {
-      Allowed(:final member) => member.userId,
-      _ => null,
-    };
-    if (me != push.userId || !_otherChatOpen(push.conversationId)) return;
+    // Own reaction: the server never sends it; a second layer here.
+    if (push.reactorId == push.userId || !_stillMine(push)) return;
     var line = (emoji: push.emoji, quote: push.quote, kind: push.quoteKind);
     if (push.ciphertext != null) {
-      final opened = await ref.read(reactionPushOpenerProvider)(push);
+      OpenedReaction? opened;
+      try {
+        // Opening must never hold the card for long: 3 s, then the generic text.
+        opened = await ref
+            .read(reactionPushOpenerProvider)(push)
+            .timeout(const Duration(seconds: 3));
+      } catch (_) {
+        opened = null;
+      }
       line = (emoji: opened?.emoji, quote: opened?.quote, kind: null);
-      // The member may have moved while the message was being opened.
-      if (!_otherChatOpen(push.conversationId)) return;
+      // The member may have moved, or the session changed, while it was opened.
+      if (!_stillMine(push)) return;
     }
     state = MessageNoticeData(
       conversationId: push.conversationId,
@@ -121,6 +126,15 @@ class MessageNoticeController extends Notifier<MessageNoticeData?> {
       count: 1,
       reaction: line,
     );
+  }
+
+  /// The signed-in member is the push's addressee and is inside another chat.
+  bool _stillMine(ReactionPush push) {
+    final me = switch (ref.read(sessionControllerProvider).value) {
+      Allowed(:final member) => member.userId,
+      _ => null,
+    };
+    return me == push.userId && _otherChatOpen(push.conversationId);
   }
 
   bool _otherChatOpen(String conversationId) {

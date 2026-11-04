@@ -4370,6 +4370,54 @@ abstract class AppLocalizations {
   /// **'New message'**
   String get noticeNewMessage;
 
+  /// Top card for a reaction when the emoji is not known (same text as the reaction_generic notification)
+  ///
+  /// In en, this message translates to:
+  /// **'New reaction to your message'**
+  String get noticeReactionGeneric;
+
+  /// Top card for a reaction to a message with no quote and no media kind (same as reaction_to_message)
+  ///
+  /// In en, this message translates to:
+  /// **'Reacted {emoji} to your message'**
+  String noticeReactionToMessage(String emoji);
+
+  /// Top card for a reaction; quote is the start of the reacted message as the user typed it (same as reaction_to_quote)
+  ///
+  /// In en, this message translates to:
+  /// **'Reacted {emoji} to: \"{quote}\"'**
+  String noticeReactionToQuote(String emoji, String quote);
+
+  /// Top card for a reaction to a photo with no caption (same as reaction_to_photo)
+  ///
+  /// In en, this message translates to:
+  /// **'Reacted {emoji} to your photo'**
+  String noticeReactionToPhoto(String emoji);
+
+  /// Top card for a reaction to a video with no caption (same as reaction_to_video)
+  ///
+  /// In en, this message translates to:
+  /// **'Reacted {emoji} to your video'**
+  String noticeReactionToVideo(String emoji);
+
+  /// Top card for a reaction to a sticker (same as reaction_to_sticker)
+  ///
+  /// In en, this message translates to:
+  /// **'Reacted {emoji} to your sticker'**
+  String noticeReactionToSticker(String emoji);
+
+  /// Top card for a reaction to a voice message (same as reaction_to_voice)
+  ///
+  /// In en, this message translates to:
+  /// **'Reacted {emoji} to your voice message'**
+  String noticeReactionToVoice(String emoji);
+
+  /// Top card for a reaction to a file (same as reaction_to_file)
+  ///
+  /// In en, this message translates to:
+  /// **'Reacted {emoji} to your file'**
+  String noticeReactionToFile(String emoji);
+
   /// Bacanaks Ozel command chat
   ///
   /// In en, this message translates to:

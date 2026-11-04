@@ -20,6 +20,7 @@ import '../features/chat/application/chat_controllers.dart';
 import '../features/chat/application/chat_drafts.dart';
 import '../features/chat/application/encrypted_reply_controller.dart';
 import '../features/chat/application/group_controller.dart';
+import '../features/chat/application/message_notice_controller.dart';
 import '../features/chat/application/share_controller.dart';
 import '../features/chat/presentation/message_notice_host.dart';
 import '../features/chat/presentation/share_page.dart';
@@ -244,6 +245,8 @@ class _SessionGateState extends ConsumerState<SessionGate> {
     ref.watch(encryptedReplySenderProvider);
     // A Realtime re-join or a push while the app is open fetches what was missed at once.
     ref.watch(liveCatchUpProvider);
+    // A reaction push while the app is open shows the top card in another chat.
+    ref.watch(reactionCardProvider);
     // A session that ends -- signed out, or Denied (revoked, replaced, found
     // out only after the stored list was shown) -- leaves no page open: a chat
     // opened from a notification in the unconfirmed window must not stay on

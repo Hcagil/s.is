@@ -2472,6 +2472,44 @@ class AppLocalizationsTr extends AppLocalizations {
   String get noticeNewMessage => 'Yeni mesaj';
 
   @override
+  String get noticeReactionGeneric => 'Mesajınıza yeni tepki';
+
+  @override
+  String noticeReactionToMessage(String emoji) {
+    return 'Mesajınıza $emoji tepkisini verdi';
+  }
+
+  @override
+  String noticeReactionToQuote(String emoji, String quote) {
+    return '\"$quote\" mesajınıza $emoji tepkisini verdi';
+  }
+
+  @override
+  String noticeReactionToPhoto(String emoji) {
+    return 'Fotoğrafınıza $emoji tepkisini verdi';
+  }
+
+  @override
+  String noticeReactionToVideo(String emoji) {
+    return 'Videonuza $emoji tepkisini verdi';
+  }
+
+  @override
+  String noticeReactionToSticker(String emoji) {
+    return 'Çıkartmanıza $emoji tepkisini verdi';
+  }
+
+  @override
+  String noticeReactionToVoice(String emoji) {
+    return 'Sesli mesajınıza $emoji tepkisini verdi';
+  }
+
+  @override
+  String noticeReactionToFile(String emoji) {
+    return 'Dosyanıza $emoji tepkisini verdi';
+  }
+
+  @override
   String get podTitle => 'Toplam para';
 
   @override

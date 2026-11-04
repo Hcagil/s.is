@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../notifications/domain/reaction_push.dart';
 import '../application/chat_controllers.dart';
 import '../application/message_notice_controller.dart';
 import 'conversation_tile.dart';
@@ -34,7 +35,10 @@ class MessageNoticeCard extends ConsumerWidget {
     // Chat data unavailable: show nothing.
     if (c == null) return const SizedBox.shrink();
     final title = conversationLabel(l, c);
-    final text = data.textHidden
+    final reaction = data.reaction;
+    final text = reaction != null
+        ? reactionCardText(l, reaction)
+        : data.textHidden
         ? l.noticeNewMessage
         : chatPreviewLine(l, data.preview);
     final voice = c.isGroup && !c.isSystem && !data.textHidden
@@ -144,4 +148,20 @@ class MessageNoticeCard extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The card line for a reaction, in the order the phones use: no emoji is the generic text; a quote wins (even for media); else the media kind; else "your message".
+String reactionCardText(AppLocalizations l, ReactionLine r) {
+  final e = r.emoji;
+  if (e == null || e.isEmpty) return l.noticeReactionGeneric;
+  final q = r.quote;
+  if (q != null && q.isNotEmpty) return l.noticeReactionToQuote(e, q);
+  return switch (r.kind) {
+    'photo' => l.noticeReactionToPhoto(e),
+    'video' => l.noticeReactionToVideo(e),
+    'sticker' => l.noticeReactionToSticker(e),
+    'voice' => l.noticeReactionToVoice(e),
+    'file' => l.noticeReactionToFile(e),
+    _ => l.noticeReactionToMessage(e),
+  };
 }

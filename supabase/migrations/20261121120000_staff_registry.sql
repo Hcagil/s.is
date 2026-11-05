@@ -88,25 +88,6 @@ begin
     raise exception 'staff_load: bad input';
   end if;
 
-  select array_agg(x.key) into v_chat_keys
-    from jsonb_to_recordset(p->'chats') as x(key text);
-
-  -- Only known chat keys; staff_chats rows are never created or deleted here.
-  if exists (
-    select 1 from unnest(v_chat_keys) as k
-    where not exists (select 1 from app_private.staff_chats s where s.key = k)
-  ) then
-    raise exception 'staff_load: bad input';
-  end if;
-
-  select array_agg(y.chat_key) into v_cmd_keys
-    from jsonb_to_recordset(p->'commands') as y(chat_key text);
-
-  -- Every command belongs to a chat listed in the same input.
-  if exists (select 1 from unnest(v_cmd_keys) as k where k is null or k <> all(v_chat_keys)) then
-    raise exception 'staff_load: bad input';
-  end if;
-
   -- Every value is checked here, with the table limits, so a bad value never reaches a constraint (its error would print the row).
   if exists (
     select 1 from jsonb_array_elements(p->'chats') e
@@ -136,6 +117,25 @@ begin
     select count(*) <> count(distinct (e->>'chat_key') || ' ' || (e->>'word'))
     from jsonb_array_elements(p->'commands') e
   ) then
+    raise exception 'staff_load: bad input';
+  end if;
+
+  select array_agg(x.key) into v_chat_keys
+    from jsonb_to_recordset(p->'chats') as x(key text);
+
+  -- Only known chat keys; staff_chats rows are never created or deleted here.
+  if exists (
+    select 1 from unnest(v_chat_keys) as k
+    where not exists (select 1 from app_private.staff_chats s where s.key = k)
+  ) then
+    raise exception 'staff_load: bad input';
+  end if;
+
+  select array_agg(y.chat_key) into v_cmd_keys
+    from jsonb_to_recordset(p->'commands') as y(chat_key text);
+
+  -- Every command belongs to a chat listed in the same input.
+  if exists (select 1 from unnest(v_cmd_keys) as k where k is null or k <> all(v_chat_keys)) then
     raise exception 'staff_load: bad input';
   end if;
 

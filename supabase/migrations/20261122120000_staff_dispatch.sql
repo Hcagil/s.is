@@ -128,8 +128,8 @@ grant execute on function public.sales_job_finish(uuid, text, text) to service_r
 create or replace function app_private.sales_jobs_dispatch() returns trigger language plpgsql security definer set search_path = '' as $$
 declare url text; secret text;
 begin
-  select decrypted_secret into url from vault.decrypted_secrets where name = 'sales_url';
-  select decrypted_secret into secret from vault.decrypted_secrets where name = 'sales_secret';
+  select decrypted_secret into url from vault.decrypted_secrets where name = 'job_url';
+  select decrypted_secret into secret from vault.decrypted_secrets where name = 'job_secret';
   if url is not null and secret is not null then
     perform net.http_post(url := url, body := jsonb_build_object('job_id', new.id), headers := jsonb_build_object('content-type','application/json','x-job-secret', secret), timeout_milliseconds := 5000);
   end if;

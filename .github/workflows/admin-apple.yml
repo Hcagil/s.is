@@ -43,7 +43,8 @@ jobs:
           set -eu -o pipefail
           # Group names are private: required, and masked before anything can print one.
           [ -n "${TF_GROUPS:-}" ] || { echo 'TF_GROUPS is not set' >&2; exit 1; }
-          IFS=','; for g in $TF_GROUPS; do [ -n "$g" ] && echo "::add-mask::$g"; done; unset IFS
+          set -f
+          IFS=','; for g in $TF_GROUPS; do [ -n "$g" ] && echo "::add-mask::$g"; done; unset IFS; set +f
           printf '%s' "$JOB_ID" | grep -Eqi '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' || { echo 'job_id is not a uuid' >&2; exit 1; }
 
           # Called as a plain statement before every report call: inside $(...) the

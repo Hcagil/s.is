@@ -16,13 +16,20 @@ class SupabaseStaffRegistryRepository implements StaffRegistryRepository {
 
   final SupabaseClient _client;
 
-  static const _key = 'sis.staff.registry';
+  static const _prefix = 'sis.staff.registry';
+
+  // One copy per account, so a second sign-in on the phone never reads the first one's registry.
+  String? get _key {
+    final id = _client.auth.currentUser?.id;
+    return id == null || id.isEmpty ? null : '$_prefix.$id';
+  }
 
   @override
   Future<StaffRegistry?> cached() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final stored = prefs.getString(_key);
+      final key = _key;
+      final stored = key == null ? null : prefs.getString(key);
       if (stored == null) return null;
       final decoded = jsonDecode(stored);
       return decoded is Map<String, dynamic>
@@ -47,7 +54,10 @@ class SupabaseStaffRegistryRepository implements StaffRegistryRepository {
       ]);
       try {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_key, jsonEncode(registry.toJson()));
+        final key = _key;
+        if (key != null) {
+          await prefs.setString(key, jsonEncode(registry.toJson()));
+        }
       } catch (e) {
         log(
           'Storing the staff registry failed: ${e.runtimeType}',
@@ -68,7 +78,10 @@ class SupabaseStaffRegistryRepository implements StaffRegistryRepository {
   Future<void> clear() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_key);
+      // Every account's copy goes, even when the user is already signed out.
+      for (final k in prefs.getKeys().where((k) => k.startsWith(_prefix))) {
+        await prefs.remove(k);
+      }
     } catch (e) {
       log(
         'Clearing the staff registry failed: ${e.runtimeType}',

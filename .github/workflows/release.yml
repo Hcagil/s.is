@@ -407,7 +407,8 @@ jobs:
           TF_GROUPS: ${{ secrets.TF_GROUPS }}
         run: |
           # Group names are private: mask each before anything can print one.
-          IFS=','; for g in $TF_GROUPS; do [ -n "$g" ] && echo "::add-mask::$g"; done; unset IFS
+          set -f
+          IFS=','; for g in $TF_GROUPS; do [ -n "$g" ] && echo "::add-mask::$g"; done; unset IFS; set +f
           note=$(printf '%s' "$NOTE_B64" | base64 -d)
           python3 tool/asc_signing.py distribute com.esd.sis "$BUILD" "${TF_GROUPS:-*}" "$note"
       - name: Remove the App Store Connect key

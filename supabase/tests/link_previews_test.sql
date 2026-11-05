@@ -12,7 +12,7 @@
 -- valid card with exactly one field broken, sent by a member on a plain text
 -- message, so only the rule under test can refuse it.
 begin;
-select plan(105);
+select plan(118);
 
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
   ('00000000-0000-0000-0000-0000000a1f01', 'lp-ann@example.com', now(), '{"full_name":"Ann"}'),
@@ -427,6 +427,35 @@ select throws_ok($$select lp_send(lp_card(), 'see https://example.com/ab')$$, 'L
                  'whole link: a longer path after the stored url is refused');
 select throws_ok($$select lp_send(lp_card(), 'see https://example.com/a/more')$$, 'LNKP1', 'invalid link preview',
                  'whole link: a deeper path after the stored url is refused');
+-- Regex symbols in the url match only themselves. Each control proves the card
+-- itself is valid, so its refusal below is the whole-link rule alone.
+select lives_ok($$select lp_send(lp_card('{"url":"https://example.com/a?b=1&c=2"}'))$$,
+                'whole link: a url with ? = & accepted when the body has it exactly');
+select lives_ok($$select lp_send(lp_card('{"url":"https://example.com/a+b"}'))$$,
+                'whole link: a url with + accepted when the body has it exactly');
+select lives_ok($$select lp_send(lp_card('{"url":"https://example.com/(a)"}'))$$,
+                'whole link: a url with ( ) accepted when the body has it exactly');
+select throws_ok($$select lp_send(lp_card('{"url":"https://example.com/a?b=1"}'), 'see https://example.com/aXb=1')$$,
+                 'LNKP1', 'invalid link preview', 'whole link: the ? is literal (aXb=1) is refused');
+select throws_ok($$select lp_send(lp_card('{"url":"https://example.com/a?b=1"}'), 'see https://example.com/b=1')$$,
+                 'LNKP1', 'invalid link preview', 'whole link: the ? does not make the letter before it optional');
+select throws_ok($$select lp_send(lp_card('{"url":"https://example.com/a+b"}'), 'see https://example.com/aab')$$,
+                 'LNKP1', 'invalid link preview', 'whole link: the + is literal (aab) is refused');
+select throws_ok($$select lp_send(lp_card('{"url":"https://example.com/(a)"}'), 'see https://example.com/a')$$,
+                 'LNKP1', 'invalid link preview', 'whole link: the brackets are literal (/a) is refused');
+select throws_ok($$select lp_send(lp_card('{"url":"https://example.com/a?b=1"}'), 'see https://example.com/a?bX1')$$,
+                 'LNKP1', 'invalid link preview', 'whole link: the = is literal (bX1) is refused');
+select throws_ok($$select lp_send(lp_card('{"url":"https://example.com/a?b=1&c=2"}'), 'see https://example.com/a?b=1Xc=2')$$,
+                 'LNKP1', 'invalid link preview', 'whole link: the & is literal (1Xc) is refused');
+-- What the guard does today at the edges (recorded, not a rule).
+select lives_ok($$select lp_send(lp_card(), 'see "https://example.com/a"')$$,
+                'whole link (today): the url right after a quote is accepted');
+select lives_ok($$select lp_send(lp_card(), 'see <https://example.com/a>')$$,
+                'whole link (today): the url right after < is accepted');
+select lives_ok($$select lp_send(lp_card(), 'see http://example.com/a')$$,
+                'whole link (today): an http body for an https card is accepted');
+select lives_ok($$select lp_send(lp_card(), 'see https://example.com/A')$$,
+                'whole link (today): a path in other letter case is accepted');
 reset role;
 
 select * from finish();

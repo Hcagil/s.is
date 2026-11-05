@@ -35,6 +35,7 @@ final class PeekRows {
     this.keyPeers = const [],
     this.peerName,
     this.storedSenderId,
+    this.storedSpecial = false,
     this.older = const {},
   });
 
@@ -52,6 +53,9 @@ final class PeekRows {
 
   /// messages.sender_id of that same row; null when no row or deleted.
   final String? storedSenderId;
+
+  /// True when the stored row is a poll, a contact or a shared place: its body carries more than text (phone number, address), so no alert quotes it.
+  final bool storedSpecial;
 
   /// Text of the chat's OLDER messages (message id -> body) already in the store: push_inbox first, else a readable messages body sent by the peer. Empty unless olderIds was given.
   final Map<String, String> older;
@@ -142,7 +146,7 @@ PeekRows? _readPeekRows(
         }
 
         final msg = db.select(
-          'SELECT body, deleted, sender_id FROM messages WHERE id = ? AND conversation_id = ?;',
+          'SELECT body, deleted, sender_id, poll, contact, extra FROM messages WHERE id = ? AND conversation_id = ?;',
           [messageId, conversationId],
         );
         final storedBody = msg.isNotEmpty && msg.first['deleted'] == null
@@ -151,6 +155,13 @@ PeekRows? _readPeekRows(
         final storedSenderId = msg.isNotEmpty && msg.first['deleted'] == null
             ? msg.first['sender_id'] as String
             : null;
+        final storedSpecial =
+            msg.isNotEmpty &&
+            msg.first['deleted'] == null &&
+            (msg.first['poll'] == 1 ||
+                msg.first['contact'] == 1 ||
+                (msg.first['extra'] is String &&
+                    (msg.first['extra'] as String).contains('"lat"')));
 
         final lookupPeer = peerUserId ?? senderId;
         final sessions = lookupPeer == null
@@ -219,6 +230,7 @@ PeekRows? _readPeekRows(
           peerName: peerName,
           storedBody: storedBody,
           storedSenderId: storedSenderId,
+          storedSpecial: storedSpecial,
           account: meta('olm_account'),
           sessions: sessions,
           keyPeers: keyPeers,

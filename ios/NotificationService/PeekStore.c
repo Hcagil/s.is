@@ -30,6 +30,7 @@ void sis_peek_free(SisPeekRows *rows) {
   wipe_free(rows->peer_name);
   wipe_free(rows->stored_body);
   wipe_free(rows->stored_sender);
+  wipe_free(rows->stored_special);
   wipe_free(rows->account);
   wipe_free(rows->key_elsewhere);
   memset(rows, 0, sizeof *rows);
@@ -144,6 +145,7 @@ static int read_all(sqlite3 *db, const char *conversation_id, const char *messag
   if (rc == SQLITE_OK) rc = query_text(db, "SELECT json_extract(json, '$.other.name') FROM conversations WHERE id = ?1", conversation_id, NULL, &out->peer_name);
   if (rc == SQLITE_OK) rc = query_text(db, "SELECT body FROM messages WHERE id = ?1 AND conversation_id = ?2 AND deleted IS NULL", message_id, conversation_id, &out->stored_body);
   if (rc == SQLITE_OK) rc = query_text(db, "SELECT sender_id FROM messages WHERE id = ?1 AND conversation_id = ?2 AND deleted IS NULL", message_id, conversation_id, &out->stored_sender);
+  if (rc == SQLITE_OK) rc = query_text(db, "SELECT '1' FROM messages WHERE id = ?1 AND conversation_id = ?2 AND deleted IS NULL AND (poll <> 0 OR contact <> 0 OR json_extract(extra, '$.lat') IS NOT NULL)", message_id, conversation_id, &out->stored_special);
   const char *peer = out->peer_user_id != NULL ? out->peer_user_id : sender_id;
   if (rc == SQLITE_OK && peer != NULL) rc = read_sessions(db, peer, out);
   if (rc == SQLITE_OK && sender_key != NULL && sender_id != NULL) rc = query_text(db, "SELECT '1' WHERE EXISTS (SELECT 1 FROM olm_sessions WHERE peer_identity_key = ?1 AND peer_user_id <> ?2)", sender_key, sender_id, &out->key_elsewhere);

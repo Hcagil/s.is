@@ -15,6 +15,7 @@ typedef struct {
   char **session_identity_keys;
   char **session_pickles;
   char *stored_sender;  /* messages.sender_id of that stored_body row, or NULL */
+  char *stored_special; /* "1" when that stored row is a poll, a contact or a shared place (its body holds a phone number or address), else NULL */
 } SisPeekRows;
 
 /* 0 ok; 1 not readable (missing file, not a database, wrong key, no cipher build); 2 still busy after about 1 second; 3 any other error. Opens read-only and never writes. Sessions are read for peer_user_id, or for sender_id when the chat has no known peer; sender_key and sender_id may be NULL. */

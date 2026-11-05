@@ -32,11 +32,14 @@ case "$cmd" in read|send|start|status|revoke|edit|delete|attachments) ;;
   *) die 2 "usage: tool/sis_bot.sh read [--since ISO] | send [--image <file>] <conversation_id> [text|-] | start <user_id|@tag> [text|-] | status | revoke | edit <message_id> <text|-> | delete <message_id> | attachments <message_id>" ;;
 esac
 
+# A first bot message gets an AI line (up to 84 chars) added by the server; 4000 - 84.
+NEW_MAX=3916
+
 # Body text from the first remaining argument or stdin ('-' or missing).
 body_arg() {
-  local t=${1:--}
+  local t=${1:--} max=${2:-4000}
   [ "$t" = "-" ] && t=$(cat)
-  [ -n "$t" ] && [ "${#t}" -le 4000 ] || die 2 "the message must be 1 to 4000 characters"
+  [ -n "$t" ] && [ "${#t}" -le "$max" ] || die 2 "the message must be 1 to $max characters"
   printf '%s' "$t"
 }
 
@@ -58,9 +61,9 @@ if [ "$cmd" = send ] && [ "${1:-}" = "--image" ]; then
 fi
 case "$cmd" in
   send) [ $# -ge 1 ] || die 2 "send needs a conversation id"
-        if [ -n "$IMG" ]; then TEXT=${2:-}; [ "${#TEXT}" -le 4000 ] || die 2 "the caption must be at most 4000 characters"; else TEXT=$(body_arg "${2:--}"); fi ;;
+        if [ -n "$IMG" ]; then TEXT=${2:-}; [ "${#TEXT}" -le "$NEW_MAX" ] || die 2 "the caption must be at most $NEW_MAX characters"; else TEXT=$(body_arg "${2:--}" "$NEW_MAX"); fi ;;
   start) [ $# -ge 1 ] || die 2 "start needs a user id or @tag"
-         if [ $# -ge 2 ]; then TEXT=$(body_arg "$2"); fi ;;
+         if [ $# -ge 2 ]; then TEXT=$(body_arg "$2" "$NEW_MAX"); fi ;;
   edit) [ $# -ge 2 ] && [ -n "$2" ] || die 2 "edit needs a message id and the new text (or - for stdin)"; TEXT=$(body_arg "$2") ;;
   delete) [ $# -ge 1 ] || die 2 "delete needs a message id" ;;
   attachments) [ $# -ge 1 ] || die 2 "attachments needs a message id" ;;

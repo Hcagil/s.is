@@ -383,6 +383,15 @@ a9() {
   [ "$(cat "$d/rc")" = 0 ] && grep -q 'argv=tool/asc_signing.py tester remove crew' "$d/tool" || return 1
   rm -rf "$d"
 }
+a14() {
+  # The job runs in $d, which holds the file "calls": unless globbing is off, c*ll? would be masked as "calls".
+  local d o; d=$(mktemp -d); A8_GROUPS='crew,c*ll?' job_run "$d" "0"
+  [ -e "$d/calls" ] || { echo "A14: no file for the pattern to match" >&2; return 1; }
+  o=$(head -2 "$d/out")
+  [ "$o" = "::add-mask::crew"$'\n'"::add-mask::c*ll?" ] || { echo "A14 masks: $o" >&2; return 1; }
+  ! grep -qxF '::add-mask::calls' "$d/out" || return 1
+  rm -rf "$d"
+}
 b1() { grep -qE '^\s+environment:\s*apple-signing\s*$' "$B" ||
   { grep -qE '^\s+environment:\s*$' "$B" && grep -qE '^\s+name:\s*apple-signing\s*$' "$B"; }; }
 
@@ -399,6 +408,7 @@ check "A10 admin-apple: claim token fetch fails: the job stops, nothing reported
 check "A11 admin-apple: progress token fetch fails: ignored, retries and finish go on" a11
 check "A12 admin-apple: finish token fetch fails: swallowed, tool's exit code kept, no false reason" a12
 check "A13 admin-apple: TF_GROUPS empty: the job fails first, nothing called, nothing printed" a13
+check "A14 admin-apple: a group name with * or ? is masked as written, never glob-expanded" a14
 check "R1 release: workflow_run on CI, daily schedule and dispatch, no tip-of-main check left" r1
 check "R1c release publish/distribute + ios-ipa ipa (upload true): first step is the release guard; a re-run never deploys a commit older than the last release" r1c
 check "R1d ios-ipa: CI's call (upload false) skips the release guard" r1d

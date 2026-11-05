@@ -469,8 +469,8 @@ select vega('7770006', null);
 
 insert into audit_log select c::text from app_private.sales_commands c; delete from app_private.sales_commands;
 -- dispatch: a job sends only its id and the shared secret header, to the Vault URL ---------------------
-select isnt(vault.create_secret('https://bd-test.local/sales', 'sales_url'), null, 'fixture: the sales URL is configured');
-select isnt(vault.create_secret('bd-shared-value', 'sales_secret'), null, 'fixture: the shared secret is configured');
+select isnt(vault.create_secret('https://bd-test.local/sales', 'job_url'), null, 'fixture: the sales URL is configured');
+select isnt(vault.create_secret('bd-shared-value', 'job_secret'), null, 'fixture: the shared secret is configured');
 create table q1 as select coalesce(max(id), 0) as n from net.http_request_queue;
 update app_private.sales_state set fetched_at = now() - interval '31 seconds';
 select from (select say('own', bc('own'), '/sales')) x;

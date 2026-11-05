@@ -880,6 +880,12 @@ RUN_WF=$release run "Distribute the build to the TestFlight groups" BUILD=4242 T
 grep -qxF '::add-mask::crew' "$tmp/out" && grep -qxF '::add-mask::Friends Club' "$tmp/out" \
   || fail "distribute must mask every group name: $(cat "$tmp/out")"
 [ "$(grep -n '::add-mask::' "$tmp/out" | head -1 | cut -d: -f1)" = 1 ] || fail "the masks must come before any other output"
+# A name with * or ? is masked as written: the checkout holds ios/ and tool/, which i?s and to* would match if globbed.
+fresh
+RUN_WF=$release run "Distribute the build to the TestFlight groups" BUILD=4242 TF_GROUPS='crew,i?s,to*' NOTE_B64= >/dev/null || true
+[ -d "$tmp/job/ios" ] && [ -d "$tmp/job/tool" ] || fail "the glob test has nothing to match"
+[ "$(grep '^::add-mask::' "$tmp/out" | paste -sd'|')" = '::add-mask::crew|::add-mask::i?s|::add-mask::to*' ] \
+  || fail "group names with * or ? must be masked as written: $(grep '::add-mask::' "$tmp/out")"
 [ -z "$(dnote)" ] || fail "an empty note_b64 must pass an empty note (the tool supplies the default): [$(dnote)]"
 # A failing distribute fails the job, revokes nothing and still removes the key.
 fresh

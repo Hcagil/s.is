@@ -25,6 +25,7 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 const _seedPw = 'integration-password';
+const _prefix = 'sis.staff.registry.';
 
 Future<SupabaseClient> _signIn(String email) async {
   final c = SupabaseClient(
@@ -70,7 +71,7 @@ void main() {
   });
 
   test(
-    'the stored copy is read back by a new repository, without the network',
+    'the stored copy is read back by a new repository of the same account',
     () async {
       expect(
         await SupabaseStaffRegistryRepository(member).cached(),
@@ -78,19 +79,80 @@ void main() {
         reason: 'nothing is stored before the first answer',
       );
       await SupabaseStaffRegistryRepository(member).refresh();
-      await member.auth.signOut(scope: SignOutScope.local);
-      try {
-        // A fresh repository on a signed-out client: only local storage can answer.
-        final back = await SupabaseStaffRegistryRepository(member).cached();
-        expect(back, isNotNull);
-        expect(back!.chats.keys, ['staff_b']);
-        expect(back.wordFor('staff_b', 'sales_total'), '/sales');
-        expect(back.titleFor('staff_b', 'tr'), 'Ekip B');
-      } finally {
-        member = await _signIn('staffreg-member@sis.test');
-      }
+      final back = await SupabaseStaffRegistryRepository(member).cached();
+      expect(back, isNotNull);
+      expect(back!.chats.keys, ['staff_b']);
+      expect(back.wordFor('staff_b', 'sales_total'), '/sales');
+      expect(back.titleFor('staff_b', 'tr'), 'Ekip B');
     },
   );
+
+  test('the copy is stored under the signed-in account\'s own key', () async {
+    await SupabaseStaffRegistryRepository(member).refresh();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    expect(prefs.getKeys().where((k) => k.startsWith(_prefix)), [
+      '$_prefix${member.auth.currentUser!.id}',
+    ]);
+  });
+
+  test('account B never sees account A\'s stored copy', () async {
+    await SupabaseStaffRegistryRepository(member).refresh();
+    expect(await SupabaseStaffRegistryRepository(member).cached(), isNotNull);
+    expect(await SupabaseStaffRegistryRepository(outsider).cached(), isNull);
+  });
+
+  test('signed out, nothing is read or written', () async {
+    await SupabaseStaffRegistryRepository(member).refresh();
+    // A real copy also sits under the keys a missing user id could produce.
+    final prefs0 = await SharedPreferences.getInstance();
+    final copy = prefs0.getString('$_prefix${member.auth.currentUser!.id}');
+    expect(copy, isNotNull);
+    for (final k in ['sis.staff.registry', _prefix, '${_prefix}null']) {
+      await prefs0.setString(k, copy!);
+    }
+    await member.auth.signOut(scope: SignOutScope.local);
+    try {
+      final repo = SupabaseStaffRegistryRepository(member);
+      expect(
+        await repo.cached(),
+        isNull,
+        reason: 'a signed-out read sees no account\'s copy',
+      );
+      await repo.refresh();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final keys = prefs
+          .getKeys()
+          .where((k) => k.startsWith('sis.staff.registry'))
+          .toList();
+      expect(
+        keys,
+        hasLength(4),
+        reason: 'a signed-out refresh writes no key: $keys',
+      );
+    } finally {
+      member = await _signIn('staffreg-member@sis.test');
+    }
+  });
+
+  test('clear after sign-out still removes every stored copy', () async {
+    await SupabaseStaffRegistryRepository(member).refresh();
+    await SupabaseStaffRegistryRepository(outsider).refresh();
+    final memberId = member.auth.currentUser!.id;
+    await member.auth.signOut(scope: SignOutScope.local);
+    try {
+      await SupabaseStaffRegistryRepository(member).clear();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      expect(prefs.getKeys().where((k) => k.startsWith(_prefix)), isEmpty);
+    } finally {
+      member = await _signIn('staffreg-member@sis.test');
+    }
+    expect(member.auth.currentUser!.id, memberId);
+    expect(await SupabaseStaffRegistryRepository(member).cached(), isNull);
+    expect(await SupabaseStaffRegistryRepository(outsider).cached(), isNull);
+  });
 
   test('a non-member gets an empty registry (no error), and it replaces a stored one', () async {
     await SupabaseStaffRegistryRepository(member).refresh();

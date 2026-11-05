@@ -1,5 +1,5 @@
 begin;
-select plan(96);
+select plan(100);
 
 -- Staff registry and dispatch. Written from the contract, not the migrations:
 -- 1. app_private.staff_chats / staff_commands: RLS on, no policy, no grant.
@@ -231,7 +231,16 @@ insert into bad2 values
   ('word too long', rows_std(jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/' || repeat('a', 33),'handler','tester_list')))),
   ('help too long', rows_std(jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/xx','handler','tester_list','help_en',repeat('h', 201))))),
   ('title too long', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a','title_en',repeat('t', 201))),
-     'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/list','handler','tester_list'))));
+     'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/list','handler','tester_list')))),
+  ('a number among the commands', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a','title_en','Changed')),
+     'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/zz','handler','tester_list'), 5))),
+  ('a string among the chats', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a','title_en','Changed'), 'staff_b'),
+     'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/zz','handler','tester_list')))),
+  ('an array among the commands', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a','title_en','Changed')),
+     'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/zz','handler','tester_list'), '[1]'::jsonb))),
+  ('a null among the chats', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a','title_en','Changed'), 'null'::jsonb),
+     'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/zz','handler','tester_list'))));
+-- (the non-object cases each carry one valid, changing element: a partial write shows in the unchanged checks below)
 select is(loadx(p), 'P0001:staff_load: bad input||', 'staff_load aborts with the fixed error, no detail: ' || name) from bad2 order by name;
 select is((select string_agg(chat_key || ':' || word || ':' || handler, ',' order by chat_key, word) from app_private.staff_commands),
           'staff_a:/addandroid:tester_add_android,staff_a:/addios:tester_add_ios,staff_a:/list:tester_list,staff_a:/remove:tester_remove,'

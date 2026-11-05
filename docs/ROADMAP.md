@@ -51,7 +51,7 @@ Version names are `<yy>.<month>.<change count>` (ADR 2026-10-17), set on release
 | Batch | Delivers |
 |---|---|
 | Instant Open (top priority, in progress) | the app opens from a notification or its icon with every new message already there; normal chats saved from the push too; faster first frame |
-| Bacanaks Özel | an admin-only command chat; `/podium` shows the day's total from Vega |
+| Staff command chat | an admin-only command chat; its sales command shows the day's total from Vega (names live in the server registry, details in the private notes) |
 | Notifications | lock screen follows the phone's own privacy setting, no lock words in notification text; a notification when someone reacts to your message; badge sync across devices; Mark as read on iPhone confirmed |
 | Texts and Language | every text in the app reviewed for wording, capitals and one set of terms in English and Turkish; no text speaks of two kinds of chat |
 | Gestures and Avatars | swipe right to reply, swipe left for the message menu; the sender's small picture beside the last bubble of a run in groups |

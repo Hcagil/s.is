@@ -604,7 +604,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     final isSystem = listed?.isSystem ?? false;
     final isAdminChat = listed?.isAdminChat ?? false;
     final salesWord = registry.wordFor(listed?.staffKey, 'sales_total');
-    final isBacanaks = salesWord != null;
+    final isSales = salesWord != null;
     final otherUserId = widget.otherUserId ?? listed?.other?.userId;
     final status = _status(ref, AppLocalizations.of(context), otherUserId);
     // The group's own roster names every sender, current or departed --
@@ -727,7 +727,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                     padding: const EdgeInsets.all(4),
                     child: Row(
                       children: [
-                        isBacanaks
+                        isSales
                             ? const SalesAvatar()
                             : PersonAvatar(
                                 label:
@@ -754,7 +754,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              if (status == null && isBacanaks)
+                              if (status == null && isSales)
                                 Text(
                                   AppLocalizations.of(context).podNotEnc,
                                   style: Theme.of(context).textTheme.bodySmall

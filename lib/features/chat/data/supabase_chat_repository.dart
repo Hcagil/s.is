@@ -284,7 +284,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
                       ? (row['body'] as String).split('\n').first
                       : adminPreviewPrefix +
                             jsonEncode(
-                              // a podium reply never puts its amount in the list
+                              // a sales reply never puts its amount in the list
                               '${row['admin_msg']['k']}'.startsWith('pod')
                                   ? {'k': row['admin_msg']['k']}
                                   : row['admin_msg'],

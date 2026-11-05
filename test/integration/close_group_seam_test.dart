@@ -159,6 +159,29 @@ void main() {
     }
   });
 
+  test('isClosed: the real chat_list() marks a closed group closed, an open '
+      'one open, for the admin and for a removed member', () async {
+    final open = await newGroup();
+    final shut = await newGroup();
+    await hello(open);
+    await hello(shut);
+    Future<Map<String, bool>> closedFlags(SupabaseClient c) async {
+      final list = _ok(await SupabaseChatRepository(c).conversations());
+      return {for (final x in list) x.id: x.isClosed};
+    }
+
+    var flags = await closedFlags(boss);
+    expect(flags[open], isFalse);
+    expect(flags[shut], isFalse, reason: 'not closed yet');
+
+    _ok(await SupabaseGroupSettingsRepository(boss).closeGroup(shut), 'close');
+    for (final c in [boss, mate]) {
+      flags = await closedFlags(c);
+      expect(flags[shut], isTrue, reason: 'closed group, ${idOf(c)}');
+      expect(flags[open], isFalse, reason: 'the other group stays open');
+    }
+  });
+
   test('debugChat: true for the Debug group, false for a normal one, as the '
       'conversation list reads it', () async {
     final debug = await newGroup();

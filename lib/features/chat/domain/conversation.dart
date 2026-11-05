@@ -20,6 +20,7 @@ final class Conversation {
     this.unread = 0,
     this.avatarPath,
     this.hasLeft = false,
+    this.isClosed = false,
     this.isSystem = false,
     this.isAdminChat = false,
     this.isBacanaks = false,
@@ -55,6 +56,9 @@ final class Conversation {
   /// True once the signed-in member has left or been removed from a group;
   /// the conversation stays in the list, read-only. Always false for a 1:1.
   final bool hasLeft;
+
+  /// True when an admin closed this group for everyone (server closed_at is set); the bar says "group closed", not "you left".
+  final bool isClosed;
 
   /// True for the read-only SIS system chat that carries What's-new notes;
   /// nobody can write into it or leave it.
@@ -100,6 +104,7 @@ final class Conversation {
         unread: counts ? unread + 1 : unread,
         avatarPath: avatarPath,
         hasLeft: hasLeft,
+        isClosed: isClosed,
         isSystem: isSystem,
         isAdminChat: isAdminChat,
         isBacanaks: isBacanaks,
@@ -121,6 +126,7 @@ final class Conversation {
     lastSenderId: lastSenderId,
     avatarPath: avatarPath,
     hasLeft: hasLeft,
+    isClosed: isClosed,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
     isBacanaks: isBacanaks,
@@ -143,6 +149,7 @@ final class Conversation {
     unread: unread,
     avatarPath: avatarPath,
     hasLeft: hasLeft,
+    isClosed: isClosed,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
     isBacanaks: isBacanaks,
@@ -165,6 +172,7 @@ final class Conversation {
     unread: unread,
     avatarPath: avatarPath,
     hasLeft: hasLeft,
+    isClosed: isClosed,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
     isBacanaks: isBacanaks,
@@ -187,6 +195,7 @@ final class Conversation {
     unread: unread,
     avatarPath: avatarPath,
     hasLeft: hasLeft,
+    isClosed: isClosed,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
     isBacanaks: isBacanaks,
@@ -209,6 +218,7 @@ final class Conversation {
     unread: unread,
     avatarPath: avatarPath,
     hasLeft: hasLeft,
+    isClosed: isClosed,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
     isBacanaks: isBacanaks,
@@ -231,6 +241,7 @@ final class Conversation {
     unread: unread,
     avatarPath: avatarPath,
     hasLeft: hasLeft,
+    isClosed: isClosed,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
     isBacanaks: isBacanaks,
@@ -253,6 +264,7 @@ final class Conversation {
     'unread': unread,
     'avatarPath': avatarPath,
     'hasLeft': hasLeft,
+    if (isClosed) 'isClosed': true,
     'isSystem': isSystem,
     if (isAdminChat) 'isAdminChat': true,
     if (isBacanaks) 'isBacanaks': true,
@@ -280,6 +292,7 @@ final class Conversation {
     unread: json['unread'] as int? ?? 0,
     avatarPath: json['avatarPath'] as String?,
     hasLeft: json['hasLeft'] as bool? ?? false,
+    isClosed: json['isClosed'] as bool? ?? false,
     isSystem: json['isSystem'] as bool? ?? false,
     isAdminChat: json['isAdminChat'] as bool? ?? false,
     isBacanaks: json['isBacanaks'] as bool? ?? false,

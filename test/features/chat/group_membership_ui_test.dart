@@ -4,6 +4,7 @@
 // server-like group roster. Written from docs/DECISIONS.md (2026-09-29) and
 // the UI keys the feature publishes, never from the widgets' code.
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -56,6 +57,24 @@ Message m(String id, String from, int minute, String body) => Message(
   createdAt: t0.add(Duration(minutes: minute)),
 );
 
+/// A close-event read the test controls: never answers, answers an error, or
+/// answers when [release] is called, as a slow or failing network does.
+class _CloseEvents extends GroupSettingsFake {
+  _CloseEvents({this.fail = false}) : super(latency: Duration.zero);
+  final bool fail;
+  final gate = Completer<void>();
+  List<GroupEvent> events = const [];
+
+  @override
+  Future<Result<List<GroupEvent>>> closeEvents(String conversationId) async {
+    calls.add('closeEvents:$conversationId');
+    await gate.future;
+    return fail
+        ? const Err(NetworkFailure('No connection', retryable: true))
+        : Ok(events);
+  }
+}
+
 class World {
   World({bool admin = true, GroupSettings settings = const GroupSettings()}) {
     chat
@@ -96,7 +115,7 @@ class World {
   }
 
   final chat = ChatFake(latency: const Duration(milliseconds: 2), self: 'u1');
-  final groups = GroupSettingsFake(latency: Duration.zero);
+  GroupSettingsFake groups = GroupSettingsFake(latency: Duration.zero);
 
   Widget app() => ProviderScope(
     overrides: [
@@ -746,6 +765,153 @@ void main() {
       expect(find.textContaining('You left the group'), findsNothing);
       await t.pump(const Duration(seconds: 30));
       await settle(t);
+      await drain(t);
+    });
+  });
+
+  group('closed group bar from the first frame', () {
+    Conversation closed({bool hasLeft = true}) => Conversation(
+      id: 'g1',
+      title: 'Club',
+      lastMessage: 'yo',
+      hasLeft: hasLeft,
+      isClosed: true,
+    );
+
+    /// Opens the chat and pumps only the route transition, never past the
+    /// held close-event read.
+    Future<void> openHeld(WidgetTester t, World w) async {
+      await t.pumpWidget(w.app());
+      await settle(t);
+      await t.tap(byKey('conversation-g1'));
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 400));
+      expect(find.byType(MessageScreen), findsOneWidget);
+    }
+
+    void expectNoNameBar() {
+      expect(byKey('composer-closed'), findsOneWidget);
+      expect(byKey('composer-left'), findsNothing);
+      expect(byKey('composer-field'), findsNothing);
+      expect(
+        find.descendant(
+          of: byKey('composer-closed'),
+          matching: find.text('This group was closed'),
+        ),
+        findsOneWidget,
+      );
+    }
+
+    testWidgets('close event never loads: closed bar, no name, not left', (
+      t,
+    ) async {
+      final w = World();
+      final g = _CloseEvents();
+      w.groups = g;
+      w.chat.conversationsResult = Ok([closed()]);
+      await openHeld(t, w);
+      expect(g.calls, contains('closeEvents:g1'), reason: 'read is in flight');
+      expectNoNameBar();
+      await settle(t);
+      expectNoNameBar();
+      await drain(t);
+    });
+
+    testWidgets('close event read fails: the closed bar stays, no name', (
+      t,
+    ) async {
+      final w = World();
+      final g = _CloseEvents(fail: true);
+      w.groups = g;
+      w.chat.conversationsResult = Ok([closed()]);
+      await openHeld(t, w);
+      expectNoNameBar();
+      g.gate.complete();
+      await settle(t);
+      expectNoNameBar();
+      await drain(t);
+    });
+
+    testWidgets('close event loads later: the name appears', (t) async {
+      final w = World();
+      final g = _CloseEvents()
+        ..events = [
+          GroupEvent(
+            id: 'ce',
+            conversationId: 'g1',
+            kind: GroupEventKind.closed,
+            subjectId: 'ub',
+            actorId: 'ub',
+            createdAt: t0,
+          ),
+        ];
+      w.groups = g;
+      w.chat.conversationsResult = Ok([closed()]);
+      w.chat.groupRosters['g1'] = [
+        const GroupMember(
+          member: me,
+          isAdmin: false,
+          leftReason: LeftReason.removed,
+        ),
+        const GroupMember(
+          member: bob,
+          isAdmin: true,
+          leftReason: LeftReason.removed,
+        ),
+      ];
+      await openHeld(t, w);
+      expectNoNameBar();
+      g.gate.complete();
+      await settle(t);
+      expect(
+        find.descendant(
+          of: byKey('composer-closed'),
+          matching: find.text('This group was closed by ${bob.displayName}'),
+        ),
+        findsOneWidget,
+      );
+      expect(byKey('composer-left'), findsNothing);
+      await drain(t);
+    });
+
+    testWidgets('from a stored snapshot JSON with isClosed: closed bar', (
+      t,
+    ) async {
+      final w = World();
+      final g = _CloseEvents();
+      w.groups = g;
+      final stored =
+          jsonDecode(jsonEncode(closed().toJson())) as Map<String, dynamic>;
+      expect(stored['isClosed'], isTrue, reason: 'fixture');
+      w.chat.conversationsResult = Ok([Conversation.fromJson(stored)]);
+      await openHeld(t, w);
+      expectNoNameBar();
+      await drain(t);
+    });
+
+    testWidgets('left but open group keeps the left bar', (t) async {
+      final w = World();
+      final g = _CloseEvents();
+      w.groups = g;
+      w.chat.conversationsResult = const Ok([
+        Conversation(id: 'g1', title: 'Club', lastMessage: 'yo', hasLeft: true),
+      ]);
+      await openHeld(t, w);
+      expect(byKey('composer-left'), findsOneWidget);
+      expect(byKey('composer-closed'), findsNothing);
+      g.gate.complete();
+      await settle(t);
+      expect(byKey('composer-left'), findsOneWidget);
+      expect(byKey('composer-closed'), findsNothing);
+      await drain(t);
+    });
+
+    testWidgets('open group in it: the write box, no bar', (t) async {
+      final w = World();
+      await openClub(t, w);
+      expect(byKey('composer-field'), findsOneWidget);
+      expect(byKey('composer-closed'), findsNothing);
+      expect(byKey('composer-left'), findsNothing);
       await drain(t);
     });
   });

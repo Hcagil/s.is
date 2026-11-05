@@ -17,13 +17,16 @@ import 'package:sis/features/chat/data/store/drift_chat_list_snapshot_store.dart
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/encrypted_message_repository.dart';
-import 'package:sis/features/chat/domain/message.dart' show MessageDeletion;
+import 'package:sis/features/chat/domain/message.dart'
+    show Message, MessageDeletion;
 import 'package:sis/features/chat/domain/message_envelope.dart';
+import 'package:sis/features/chat/domain/shared_location.dart';
 import 'package:sis/features/chat/domain/reaction_envelope.dart';
 import 'package:sis/features/crypto/data/drift_olm_pickle_store.dart';
 import 'package:sis/features/crypto/data/drift_session_engine.dart';
 import 'package:sis/features/crypto/data/olm_key_engine.dart';
 import 'package:sis/features/crypto/data/olm_peek.dart';
+import 'package:sis/features/crypto/data/olm_peek_store.dart';
 import 'package:sis/features/crypto/domain/key_directory.dart';
 import 'package:sis/features/crypto/domain/session_engine.dart';
 import 'package:sis/features/notifications/data/push_peek_entry.dart';
@@ -226,6 +229,131 @@ void main() {
       db.close();
     }
   }
+
+  // A poll, a shared contact and a shared place are stored as plain body
+  // (question, "name\nphone", address): a reaction alert never quotes them.
+  group('stored special rows are never quoted', () {
+    Message special({
+      String body = 'Ayse\n+90 555 0100',
+      bool poll = false,
+      bool contact = false,
+      SharedLocation? location,
+      String? attachmentPath,
+      MessageDeletion? deletion,
+    }) => Message(
+      id: mine,
+      conversationId: conv,
+      senderId: aliceId,
+      body: body,
+      createdAt: DateTime.utc(2026, 3, 1),
+      poll: poll,
+      contact: contact,
+      location: location,
+      attachmentPath: attachmentPath,
+      deletion: deletion,
+    );
+
+    Future<({PeekedReaction? got, PeekRows? rows})> run(Message m) async {
+      await sessionsBothWays();
+      await alice.store.upsertAll([m]);
+      final r = await bobReacts();
+      await alice.store.close();
+      final rows = readPeekRows(
+        path: alice.h.file.path,
+        keyHex: alice.keyHex,
+        conversationId: conv,
+        messageId: mine,
+      );
+      return (got: await peek(r), rows: rows);
+    }
+
+    final cases = <String, Message>{
+      'poll': special(poll: true),
+      'contact': special(contact: true),
+      'place': special(
+        location: const SharedLocation(lat: 41.0, lng: 29.0, name: 'Cafe'),
+      ),
+    };
+    for (final e in cases.entries) {
+      test('a ${e.key} row: storedSpecial, emoji, no quote', () async {
+        final o = await run(e.value);
+        expect(o.rows?.storedSpecial, isTrue);
+        expect(o.got?.emoji, thumb);
+        expect(o.got?.quote, isNull);
+      });
+    }
+
+    test(
+      'extra without lat (an attachment): not special, quote kept',
+      () async {
+        final o = await run(special(attachmentPath: 'a/b.jpg'));
+        expect(o.rows?.storedSpecial, isFalse);
+        expect(o.got?.quote, 'Ayse\n+90 555 0100');
+      },
+    );
+
+    test('a plain text row: not special, quote unchanged and cut', () async {
+      final o = await run(special(body: 'x' * 70));
+      expect(o.rows?.storedSpecial, isFalse);
+      expect(o.got?.quote, '${'x' * 60}…');
+    });
+
+    // The extra column is written raw so odd JSON the app never writes is
+    // still decided by the same rule: a top-level, non-null "lat" in a map.
+    Future<({PeekedReaction? got, PeekRows? rows})> runExtra(
+      String? extra,
+    ) async {
+      await sessionsBothWays();
+      await alice.store.upsertAll([special()]);
+      final r = await bobReacts();
+      await alice.store.close();
+      final db = sqlite3.open(alice.h.file.path);
+      try {
+        db.execute("PRAGMA key = \"x'${alice.keyHex}'\";");
+        db.execute('UPDATE messages SET extra = ? WHERE id = ?', [extra, mine]);
+      } finally {
+        db.close();
+      }
+      final rows = readPeekRows(
+        path: alice.h.file.path,
+        keyHex: alice.keyHex,
+        conversationId: conv,
+        messageId: mine,
+      );
+      return (got: await peek(r), rows: rows);
+    }
+
+    test('extra {"lat":1.2,"lng":3.4}: special, no quote', () async {
+      final o = await runExtra('{"lat":1.2,"lng":3.4}');
+      expect(o.rows?.storedSpecial, isTrue);
+      expect(o.got?.quote, isNull);
+    });
+
+    final notSpecial = <String, String?>{
+      'lat inside a value': '{"f":{"name":"template.png"}}',
+      'lat as a substring of a value': '{"ap":"x","n":"\\"lat\\""}',
+      'unrelated key': '{"ap":"x"}',
+      'null lat': '{"lat":null}',
+      'nested lat': '{"a":{"lat":1}}',
+      'a list': '[1]',
+      'invalid JSON text': 'not json lat',
+      'NULL': null,
+    };
+    for (final e in notSpecial.entries) {
+      test('extra ${e.key}: not special, quote kept', () async {
+        final o = await runExtra(e.value);
+        expect(o.rows?.storedSpecial, isFalse);
+        expect(o.got?.quote, 'Ayse\n+90 555 0100');
+      });
+    }
+
+    test('a deleted row is not special', () async {
+      final o = await run(
+        special(poll: true, deletion: MessageDeletion.values.first),
+      );
+      expect(o.rows?.storedSpecial, isFalse);
+    });
+  });
 
   group('AC-11 opened with a stored session', () {
     test('my own stored message: the real emoji and its quote', () async {

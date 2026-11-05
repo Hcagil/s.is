@@ -314,7 +314,7 @@ Future<String?> peekReactionEmoji({
   }
 }
 
-/// Reads the peek rows of the reacted message and opens the reaction (see [peekReactionEmoji]). Writes nothing (no push_inbox, no session). The quote is the reacted message's stored body only when it is my own message ([ownerId] sent it), not deleted, not the locked placeholder and not blank; cut to 60 characters plus an ellipsis.
+/// Reads the peek rows of the reacted message and opens the reaction (see [peekReactionEmoji]). Writes nothing (no push_inbox, no session). The quote is the reacted message's stored body only when it is my own message ([ownerId] sent it), not deleted, not a poll, contact or shared place (their body holds a phone number or address), not the locked placeholder and not blank; cut to 60 characters plus an ellipsis.
 Future<PeekedReaction?> peekReaction({
   required String storePath,
   required String storeKeyHex,
@@ -357,7 +357,8 @@ Future<PeekedReaction?> peekReaction({
     if (emoji == null) return null;
     final body = rows.storedBody;
     String? quote;
-    if (rows.storedSenderId == ownerId &&
+    if (!rows.storedSpecial &&
+        rows.storedSenderId == ownerId &&
         body != null &&
         !isLockedPlaceholder(body) &&
         body.trim().isNotEmpty) {

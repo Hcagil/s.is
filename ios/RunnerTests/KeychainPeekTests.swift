@@ -1009,9 +1009,9 @@ final class PeekReactionTests: XCTestCase {
 
   func data(
     owner: String? = "me", peer: String?? = nil, body: String? = "Günaydın",
-    sessions: [PeekSessionRow] = [], sender: String? = "me"
+    sessions: [PeekSessionRow] = [], sender: String? = "me", special: Bool = false
   ) -> PeekData {
-    PeekData(ownerId: owner, peerUserId: peer ?? reactor, storedBody: body, account: "ACC", sessions: sessions, storedSenderId: sender)
+    PeekData(ownerId: owner, peerUserId: peer ?? reactor, storedBody: body, account: "ACC", sessions: sessions, storedSenderId: sender, storedSpecial: special)
   }
 
   func reaction(_ p: PeekReactionPush, _ d: PeekData, _ dec: FakeDecryptor) -> (emoji: String, quote: String?)? {
@@ -1160,6 +1160,20 @@ final class PeekReactionTests: XCTestCase {
     for sender in [reactor, intruder, nil] as [String?] {
       XCTAssertNil(quote(body: "Günaydın", sender: sender), "sender \(sender ?? "nil")")
     }
+  }
+
+  // A poll, a contact ("name\nphone") or a place (address) is stored as plain body: never quoted.
+  // Red if PeekCore.reaction ignores PeekData.storedSpecial.
+  func testAStoredPollContactOrPlaceIsNeverQuoted() {
+    let r = reaction(push(), data(body: "Ayse\n+90 555 0100", sessions: [row("s1")], special: true), opening())
+    XCTAssertEqual(r?.emoji, "👍")
+    XCTAssertNil(r?.quote)
+  }
+
+  func testStoredSpecialDefaultsToFalseAndAPlainRowKeepsItsQuote() {
+    XCTAssertFalse(data().storedSpecial)
+    let r = reaction(push(), data(body: "Günaydın", sessions: [row("s1")], special: false), opening())
+    XCTAssertEqual(r?.quote, "Günaydın")
   }
 
   func testThePlaceholderNoBodyOrABlankBodyIsNotQuoted() {

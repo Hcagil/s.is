@@ -76,6 +76,8 @@ struct PeekData: Equatable {
   var peerName: String? = nil
   /// messages.sender_id of the stored row (storedBody), or nil.
   var storedSenderId: String? = nil
+  /// True when the stored row is a poll, a contact or a shared place: its body holds a phone number or address, so a reaction alert never quotes it.
+  var storedSpecial = false
 }
 
 /// A text a push opened, and whether it may be saved into push_inbox: opened by a stored session, or by an inbound session built with a stored peer key or with the push's own sender key after the shape, peer and key checks (first contact). Only an already stored body never qualifies.
@@ -188,7 +190,7 @@ enum PeekCore {
   /// 1. data.ownerId == push.push.userId, else nil.
   /// 2. data.peerUserId (the phone's own copy) must be non-nil and equal push.reactorId, else nil.
   /// 3. Only sessions with peerUserId == the peer: olmType 1 tries each, first non-nil wins; olmType 0 uses only the stored session whose sessionId == decryptor.prekeySessionId(ct) (no inbound session ever).
-  /// 4. quote = data.storedBody only when data.storedSenderId == data.ownerId, it is not lockedPlaceholder and not blank; cut to 60 characters plus "…".
+  /// 4. quote = data.storedBody only when not data.storedSpecial, data.storedSenderId == data.ownerId, it is not lockedPlaceholder and not blank; cut to 60 characters plus "…".
   static func reaction(push: PeekReactionPush, data: PeekData, pickleKey: [UInt8], decryptor: PeekDecryptor) -> (emoji: String, quote: String?)? {
     let p = push.push
     guard data.ownerId == p.userId, let peer = data.peerUserId, peer == push.reactorId else { return nil }
@@ -202,7 +204,7 @@ enum PeekCore {
     }
     guard let shown = emoji, !shown.isEmpty else { return nil }
     var quote: String? = nil
-    if let body = data.storedBody, data.storedSenderId == data.ownerId, body != lockedPlaceholder, !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+    if !data.storedSpecial, let body = data.storedBody, data.storedSenderId == data.ownerId, body != lockedPlaceholder, !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
       quote = body.count > 60 ? String(body.prefix(60)) + "…" : body
     }
     return (shown, quote)

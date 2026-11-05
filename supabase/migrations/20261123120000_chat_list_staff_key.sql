@@ -15,8 +15,8 @@ SELECT jsonb_build_object(
     ) x
   ), '[]'::jsonb),
   'conversations', coalesce((
-    -- Every column the app reads, now including staff_key; the four it never reads stay out.
-    select jsonb_agg(to_jsonb(c) - 'direct_key' - 'created_at' - 'encrypted_at' - 'closed_by')
+    -- Every column the app reads, now including staff_key; the four it never reads stay out, and the old per-chat flag is no longer sent (the app uses staff_key).
+    select jsonb_agg(to_jsonb(c) - 'direct_key' - 'created_at' - 'encrypted_at' - 'closed_by' - 'bacanaks_chat')
     from public.conversations c
   ), '[]'::jsonb),
   'archives', coalesce((

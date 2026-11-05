@@ -14,9 +14,7 @@ Contract (the staff chat rows live only in the STAFF_ROWS_JSON secret):
   exact query the step builds runs against the real staff_load, inside a
   rolled-back transaction.
 """
-import base64, json, os, pathlib, re, shlex, subprocess, sys, tempfile, unittest
-
-import yaml
+import base64, json, os, pathlib, re, subprocess, tempfile, unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 WF = pathlib.Path(os.environ.get("RELEASE_YML", ROOT / ".github/workflows/release.yml"))
@@ -27,11 +25,47 @@ ROWS = {
 }
 
 
+def parse_steps(text):
+    """The steps of each job, read by indentation (no PyYAML: the CI runner is not known to have it).
+    A step is a `      - ` item; keys at +2; env children at +4; run blocks are dedented."""
+    jobs, steps, cur, key = [], None, None, None
+    lines = text.splitlines()
+    k = 0
+    while k < len(lines):
+        line = lines[k]
+        if re.match(r"^  [A-Za-z0-9_-]+:\s*$", line):
+            steps = []
+            jobs.append(steps)
+        elif steps is not None and line.startswith("      - "):
+            cur = {}
+            steps.append(cur)
+            line = "        " + line[8:]
+        if cur is not None and steps is not None:
+            m = re.match(r"^        ([A-Za-z-]+):\s*(.*)$", line)
+            if m:
+                key, val = m.groups()
+                if key == "run" and val.startswith("|"):
+                    body = []
+                    while k + 1 < len(lines) and (not lines[k + 1].strip() or lines[k + 1].startswith("          ")):
+                        k += 1
+                        body.append(lines[k][10:])
+                    cur["run"] = "\n".join(body).rstrip("\n") + "\n"
+                elif key == "env" and not val:
+                    cur["env"] = {}
+                else:
+                    cur[key] = val
+            else:
+                m = re.match(r"^          ([A-Z_][A-Z0-9_]*):\s*(.*)$", line)
+                if m and key == "env":
+                    cur["env"][m.group(1)] = m.group(2)
+        k += 1
+    return jobs
+
+
 def steps():
-    for job in yaml.safe_load(WF.read_text())["jobs"].values():
-        names = [s.get("name") for s in job.get("steps", [])]
-        if "Load the staff rows" in names:
-            return job["steps"]
+    for job in parse_steps(WF.read_text()):
+        if "Load the staff rows" in [s.get("name") for s in job]:
+            return job
     raise AssertionError("no job has a 'Load the staff rows' step")
 
 

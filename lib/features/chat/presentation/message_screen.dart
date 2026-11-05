@@ -19,6 +19,7 @@ import '../domain/encrypted_message_repository.dart';
 import '../../appearance/presentation/chat_text_scale.dart';
 import '../../appearance/presentation/chat_wallpaper.dart';
 import '../../auth/application/session_controller.dart';
+import '../application/staff_registry_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../../notifications/application/push_controller.dart';
 import '../../presence/application/presence_controllers.dart';
@@ -29,7 +30,7 @@ import '../application/chat_drafts.dart';
 import '../application/group_controller.dart';
 import '../application/link_preview_controller.dart';
 import '../application/message_opener.dart';
-import '../domain/bot_command.dart';
+import '../domain/staff_registry.dart';
 import '../domain/conversation.dart';
 import '../domain/delivery.dart';
 import '../domain/emoji.dart';
@@ -84,7 +85,7 @@ import 'profile_pages.dart';
 import 'readers_card.dart';
 import 'day_chip.dart';
 import 'seen_time.dart';
-import 'bacanaks_widgets.dart';
+import 'staff_widgets.dart';
 import 'command_list_panel.dart';
 
 part 'message_bubble.dart';
@@ -587,15 +588,23 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
             .firstOrNull,
       ),
     );
+    final registry = ref.watch(staffRegistryProvider);
     final title =
         widget.title ??
         (listed == null
             ? null
+            : listed.staffKey != null
+            ? registry.titleFor(
+                    listed.staffKey,
+                    Localizations.localeOf(context).languageCode,
+                  ) ??
+                  AppLocalizations.of(context).staffChatTitle
             : conversationLabel(AppLocalizations.of(context), listed));
     final isGroup = widget.group || (listed?.isGroup ?? false);
     final isSystem = listed?.isSystem ?? false;
     final isAdminChat = listed?.isAdminChat ?? false;
-    final isBacanaks = listed?.isBacanaks ?? false;
+    final salesWord = registry.wordFor(listed?.staffKey, 'sales_total');
+    final isBacanaks = salesWord != null;
     final otherUserId = widget.otherUserId ?? listed?.other?.userId;
     final status = _status(ref, AppLocalizations.of(context), otherUserId);
     // The group's own roster names every sender, current or departed --
@@ -719,7 +728,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                     child: Row(
                       children: [
                         isBacanaks
-                            ? const BacanaksAvatar()
+                            ? const SalesAvatar()
                             : PersonAvatar(
                                 label:
                                     title ??
@@ -1092,7 +1101,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                       ?.lastOrNull
                       ?.body,
                 ),
-              if (isBacanaks) const PodiumWaiting(),
+              if (salesWord != null) SalesWaiting(word: salesWord),
               const _Composer(),
             ],
           ),

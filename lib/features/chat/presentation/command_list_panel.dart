@@ -3,10 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../app/theme.dart';
-import '../domain/bot_command.dart';
+import '../domain/staff_registry.dart';
 import 'command_list_row.dart';
 
-/// A panel that displays a list of bot commands filtered by the current input.
+/// A panel that displays a list of staff commands filtered by the current input.
 ///
 /// This widget listens to the provided [controller] and updates the displayed
 /// commands based on the text value. It supports animated appearance and
@@ -23,8 +23,8 @@ class CommandListPanel extends StatelessWidget {
   /// The text editing controller used to observe the current input text.
   final TextEditingController controller;
 
-  /// The full list of available bot commands to filter.
-  final List<BotCommand> commands;
+  /// The full list of available staff commands to filter.
+  final List<StaffCommand> commands;
 
   /// Callback invoked when a command is picked, passing the command name
   /// followed by a space.
@@ -52,7 +52,7 @@ class CommandListPanel extends StatelessWidget {
 class _Card extends StatelessWidget {
   const _Card({required this.matches, required this.onPick});
 
-  final List<BotCommand> matches;
+  final List<StaffCommand> matches;
   final ValueChanged<String> onPick;
 
   @override

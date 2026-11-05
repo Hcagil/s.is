@@ -8,10 +8,18 @@ import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/chat_controllers.dart';
+import '../application/staff_registry_controller.dart';
 import '../domain/message.dart';
+import '../domain/staff_registry.dart';
 
 /// The words of an admin chat reply in the app's language, from its machine-readable form; null for a key this build does not know (the caller shows the English body).
-String? adminReplyText(AppLocalizations l, Map<String, dynamic> m) {
+String? adminReplyText(
+  AppLocalizations l,
+  Map<String, dynamic> m, {
+  List<StaffCommand> commands = const [],
+  String lang = 'en',
+}) {
+  final cmd = m['c'] as String?;
   final e = m['e'] as String? ?? '';
   final r = switch (m['r']) {
     'timeout' => l.adminReasonTimeout,
@@ -43,18 +51,16 @@ String? adminReplyText(AppLocalizations l, Map<String, dynamic> m) {
     'nolink' => l.adminNoLink,
     'podFail' => l.podFail,
     'podOff' => l.podOff,
-    'podUnk' => l.podUnk,
+    'podUnk' => cmd == null ? l.adminUnk : l.podUnk(cmd),
     'podRate' => l.podRate,
-    'podSwOn' => l.podSwOn,
-    'podSwOff' => l.podSwOff,
+    'podSwOn' => cmd == null ? null : l.podSwOn(cmd),
+    'podSwOff' => cmd == null ? null : l.podSwOff(cmd),
     _ => null,
   };
   if (text == null || m['help'] != true) return text;
+  if (commands.isEmpty) return text;
   return '$text\n\n${l.adminHelpHeader}\n'
-      '/addiostester ayla@mail.test - ${l.adminHelpIos}\n'
-      '/addandroidtester can@mail.test - ${l.adminHelpAnd}\n'
-      '/removetester deniz@mail.test - ${l.adminHelpRm}\n'
-      '/listtesters - ${l.adminHelpList}';
+      '${commands.map((c) => '${c.name}${c.takesEmail ? ' ${l.cmdArgEmail}' : ''} - ${c.help(lang)}').join('\n')}';
 }
 
 /// The one-line chat-list preview of an admin reply in the reader's language.
@@ -241,7 +247,17 @@ class _AdminReplyBubbleState extends ConsumerState<AdminReplyBubble> {
           ],
         );
       default:
-        content = Text(adminReplyText(l, m) ?? widget.message.body);
+        content = Text(
+          adminReplyText(
+                l,
+                m,
+                commands: ref.watch(
+                  staffCommandsProvider(widget.message.conversationId),
+                ),
+                lang: Localizations.localeOf(context).languageCode,
+              ) ??
+              widget.message.body,
+        );
     }
     return Align(
       alignment: Alignment.centerLeft,

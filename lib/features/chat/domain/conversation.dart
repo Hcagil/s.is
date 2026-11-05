@@ -23,7 +23,7 @@ final class Conversation {
     this.isClosed = false,
     this.isSystem = false,
     this.isAdminChat = false,
-    this.isBacanaks = false,
+    this.staffKey,
     this.senders = const {},
     this.settings = const GroupSettings(),
     this.archived = false,
@@ -64,12 +64,12 @@ final class Conversation {
   /// nobody can write into it or leave it.
   final bool isSystem;
 
-  /// True for the owner's admin chat (SIS Admin): a system chat the owner may
-  /// type commands into. Also [isSystem].
+  /// True for a staff chat: a system chat whose members may type commands
+  /// into it. Also [isSystem].
   final bool isAdminChat;
 
-  /// True for the Bacanaks Ozel command chat (also [isAdminChat]).
-  final bool isBacanaks;
+  /// The neutral key of the staff chat (looked up in the staff registry), or null.
+  final String? staffKey;
 
   /// For a group: each other member's name and colour slot by user id, so the
   /// list can name and colour the sender of the preview. Empty for a 1:1.
@@ -107,7 +107,7 @@ final class Conversation {
         isClosed: isClosed,
         isSystem: isSystem,
         isAdminChat: isAdminChat,
-        isBacanaks: isBacanaks,
+        staffKey: staffKey,
         senders: senders,
         settings: settings,
         archived: archived,
@@ -129,7 +129,7 @@ final class Conversation {
     isClosed: isClosed,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
-    isBacanaks: isBacanaks,
+    staffKey: staffKey,
     senders: senders,
     settings: settings,
     archived: archived,
@@ -152,7 +152,7 @@ final class Conversation {
     isClosed: isClosed,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
-    isBacanaks: isBacanaks,
+    staffKey: staffKey,
     senders: senders,
     settings: settings,
     archived: archived,
@@ -175,7 +175,7 @@ final class Conversation {
     isClosed: isClosed,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
-    isBacanaks: isBacanaks,
+    staffKey: staffKey,
     senders: senders,
     settings: next,
     archived: archived,
@@ -198,7 +198,7 @@ final class Conversation {
     isClosed: isClosed,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
-    isBacanaks: isBacanaks,
+    staffKey: staffKey,
     senders: senders,
     settings: settings,
     archived: value,
@@ -221,7 +221,7 @@ final class Conversation {
     isClosed: isClosed,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
-    isBacanaks: isBacanaks,
+    staffKey: staffKey,
     senders: senders,
     settings: settings,
     archived: archived,
@@ -244,7 +244,7 @@ final class Conversation {
     isClosed: isClosed,
     isSystem: isSystem,
     isAdminChat: isAdminChat,
-    isBacanaks: isBacanaks,
+    staffKey: staffKey,
     senders: senders,
     settings: settings,
     archived: archived,
@@ -267,7 +267,7 @@ final class Conversation {
     if (isClosed) 'isClosed': true,
     'isSystem': isSystem,
     if (isAdminChat) 'isAdminChat': true,
-    if (isBacanaks) 'isBacanaks': true,
+    if (staffKey != null) 'staffKey': staffKey,
     'senders': {for (final e in senders.entries) e.key: e.value.toJson()},
     'settings': settings.toJson(),
     // Written only when true: the saved list the native side reads keeps its
@@ -295,7 +295,7 @@ final class Conversation {
     isClosed: json['isClosed'] as bool? ?? false,
     isSystem: json['isSystem'] as bool? ?? false,
     isAdminChat: json['isAdminChat'] as bool? ?? false,
-    isBacanaks: json['isBacanaks'] as bool? ?? false,
+    staffKey: json['staffKey'] as String?,
     senders: {
       for (final e
           in ((json['senders'] as Map<String, Object?>?) ??
@@ -316,10 +316,8 @@ final class Conversation {
 
   /// The group's title, or who you are talking to. Empty when the partner's
   /// name is unknown; presentation localises that via conversationLabel.
-  String get label => isBacanaks
-      ? 'Bacanaks Özel'
-      : isAdminChat
-      ? 'SIS Admin'
+  String get label => isAdminChat
+      ? ''
       : isSystem
       ? 'SIS'
       : title ?? other?.displayName ?? '';

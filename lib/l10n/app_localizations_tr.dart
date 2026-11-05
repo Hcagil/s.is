@@ -2212,19 +2212,10 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminBad => 'E-posta adresi doğru görünmüyor.';
 
   @override
+  String get staffChatTitle => 'Ekip sohbeti';
+
+  @override
   String get adminHelpHeader => 'Komutlar:';
-
-  @override
-  String get adminHelpIos => 'iPhone test kullanıcısı ekle';
-
-  @override
-  String get adminHelpAnd => 'Android test kullanıcısı ekle';
-
-  @override
-  String get adminHelpRm => 'Test kullanıcısını çıkar';
-
-  @override
-  String get adminHelpList => 'Tüm test kullanıcılarını göster';
 
   @override
   String adminIosOk(String email) {
@@ -2247,7 +2238,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String adminAndOk(String email) {
-    return '$email izin listesine eklendi. Elle yapılacak bir adım var: bu e-postayı Play Console > Internal testing > Testers > Bacanaks kısmına ekleyin.';
+    return '$email izin listesine eklendi. Elle yapılacak bir adım var: bu e-postayı Play Console’daki iç test kullanıcıları listesine ekleyin.';
   }
 
   @override
@@ -2289,7 +2280,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String adminRmOk(String email) {
-    return '$email izin listesinden kaldırıldı. Şimdi Play’de elle kaldırın: Play Console > Internal testing > Testers > Bacanaks > bu e-postayı silin.';
+    return '$email izin listesinden kaldırıldı. Şimdi Play’de elle kaldırın: Play Console > Internal testing > Testers: bu e-postayı iç test kullanıcıları listesinden silin.';
   }
 
   @override
@@ -2529,31 +2520,28 @@ class AppLocalizationsTr extends AppLocalizations {
   String get podOff => 'Bu komut kapalı.';
 
   @override
-  String get podUnk => 'Bilinmeyen komut. /podium yazın.';
+  String podUnk(String cmd) {
+    return 'Bilinmeyen komut. $cmd yazın.';
+  }
 
   @override
   String get podRate => 'Çok fazla komut. Bir dakika bekleyip tekrar deneyin.';
 
   @override
-  String get podSwOn => '/podium açıldı.';
+  String podSwOn(String cmd) {
+    return '$cmd açıldı.';
+  }
 
   @override
-  String get podSwOff => '/podium kapatıldı.';
+  String podSwOff(String cmd) {
+    return '$cmd kapatıldı.';
+  }
 
   @override
   String get podHint => 'Komutlar için / yazın';
 
   @override
   String get adminHint => 'Komutlar için / yazın';
-
-  @override
-  String get cmdPodOnMeaning => '/podium komutunu aç';
-
-  @override
-  String get cmdPodOffMeaning => '/podium komutunu kapat';
-
-  @override
-  String get cmdPodMeaning => 'Vega\'daki toplam parayı göster';
 
   @override
   String get cmdArgEmail => 'E-posta';

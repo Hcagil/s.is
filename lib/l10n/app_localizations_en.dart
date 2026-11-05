@@ -2241,19 +2241,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminBad => 'That email address doesn\'t look right.';
 
   @override
+  String get staffChatTitle => 'Staff chat';
+
+  @override
   String get adminHelpHeader => 'Commands:';
-
-  @override
-  String get adminHelpIos => 'Add an iPhone tester';
-
-  @override
-  String get adminHelpAnd => 'Add an Android tester';
-
-  @override
-  String get adminHelpRm => 'Remove a tester';
-
-  @override
-  String get adminHelpList => 'Show all testers';
 
   @override
   String adminIosOk(String email) {
@@ -2276,7 +2267,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String adminAndOk(String email) {
-    return 'Added $email to the allowlist. One step by hand: add this email to Play Console > Internal testing > Testers > Bacanaks.';
+    return 'Added $email to the allowlist. One step by hand: add this email to the internal testers list in Play Console.';
   }
 
   @override
@@ -2318,7 +2309,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String adminRmOk(String email) {
-    return 'Removed $email from the allowlist. Now remove it by hand in Play: Play Console > Internal testing > Testers > Bacanaks > delete this email.';
+    return 'Removed $email from the allowlist. Now remove it by hand in Play: Play Console > Internal testing > Testers: delete this email from the internal testers list.';
   }
 
   @override
@@ -2557,31 +2548,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get podOff => 'This command is turned off.';
 
   @override
-  String get podUnk => 'Unknown command. Try /podium.';
+  String podUnk(String cmd) {
+    return 'Unknown command. Try $cmd.';
+  }
 
   @override
   String get podRate => 'Too many commands. Wait a minute and try again.';
 
   @override
-  String get podSwOn => '/podium is turned on.';
+  String podSwOn(String cmd) {
+    return '$cmd is turned on.';
+  }
 
   @override
-  String get podSwOff => '/podium is turned off.';
+  String podSwOff(String cmd) {
+    return '$cmd is turned off.';
+  }
 
   @override
   String get podHint => 'Type / for commands';
 
   @override
   String get adminHint => 'Type / for commands';
-
-  @override
-  String get cmdPodOnMeaning => 'Turn on /podium';
-
-  @override
-  String get cmdPodOffMeaning => 'Turn off /podium';
-
-  @override
-  String get cmdPodMeaning => 'Show total money from Vega';
 
   @override
   String get cmdArgEmail => 'Email';

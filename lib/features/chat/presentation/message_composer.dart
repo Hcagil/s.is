@@ -359,8 +359,10 @@ class _ComposerState extends ConsumerState<_Composer>
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final id = _conversationId;
-    final bacanaks = (ref.watch(conversationListProvider).value ?? const [])
-        .any((c) => c.id == id && c.isBacanaks);
+    final staffCommands = id == null
+        ? const <StaffCommand>[]
+        : ref.watch(staffCommandsProvider(id));
+    final salesChat = staffCommands.any((c) => c.handler == 'sales_total');
     // A group left or been removed from: read-only, nothing more to write.
     // Checked before the listeners below register at all -- there is
     // nothing left for any of them to restore into a box that cannot send.
@@ -432,14 +434,8 @@ class _ComposerState extends ConsumerState<_Composer>
     final editing = ref.watch(editingProvider);
     final isAdminChat = (ref.watch(conversationListProvider).value ?? const [])
         .any((c) => c.id == id && c.isAdminChat);
-    // Commands for the "/" list: none while editing; Bacanaks has its own.
-    final commands = editing != null
-        ? const <BotCommand>[]
-        : bacanaks
-        ? bacanaksCommands
-        : isAdminChat
-        ? adminCommands
-        : const <BotCommand>[];
+    // Commands for the "/" list: none while editing; otherwise what the server lists for this chat.
+    final commands = editing != null ? const <StaffCommand>[] : staffCommands;
     ref.listen(editingProvider, (previous, next) {
       if (next != null && previous?.id != next.id) {
         _controller.text = next.body;
@@ -591,7 +587,7 @@ class _ComposerState extends ConsumerState<_Composer>
                                             .setText(id, text);
                                       },
                                       decoration: InputDecoration(
-                                        hintText: bacanaks
+                                        hintText: salesChat
                                             ? l.podHint
                                             : isAdminChat
                                             ? l.adminHint

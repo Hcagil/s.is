@@ -298,6 +298,55 @@ void main() {
       expect(o.got?.quote, '${'x' * 60}…');
     });
 
+    // The extra column is written raw so odd JSON the app never writes is
+    // still decided by the same rule: a top-level, non-null "lat" in a map.
+    Future<({PeekedReaction? got, PeekRows? rows})> runExtra(
+      String? extra,
+    ) async {
+      await sessionsBothWays();
+      await alice.store.upsertAll([special()]);
+      final r = await bobReacts();
+      await alice.store.close();
+      final db = sqlite3.open(alice.h.file.path);
+      try {
+        db.execute("PRAGMA key = \"x'${alice.keyHex}'\";");
+        db.execute('UPDATE messages SET extra = ? WHERE id = ?', [extra, mine]);
+      } finally {
+        db.close();
+      }
+      final rows = readPeekRows(
+        path: alice.h.file.path,
+        keyHex: alice.keyHex,
+        conversationId: conv,
+        messageId: mine,
+      );
+      return (got: await peek(r), rows: rows);
+    }
+
+    test('extra {"lat":1.2,"lng":3.4}: special, no quote', () async {
+      final o = await runExtra('{"lat":1.2,"lng":3.4}');
+      expect(o.rows?.storedSpecial, isTrue);
+      expect(o.got?.quote, isNull);
+    });
+
+    final notSpecial = <String, String?>{
+      'lat inside a value': '{"f":{"name":"template.png"}}',
+      'lat as a substring of a value': '{"ap":"x","n":"\\"lat\\""}',
+      'unrelated key': '{"ap":"x"}',
+      'null lat': '{"lat":null}',
+      'nested lat': '{"a":{"lat":1}}',
+      'a list': '[1]',
+      'invalid JSON text': 'not json lat',
+      'NULL': null,
+    };
+    for (final e in notSpecial.entries) {
+      test('extra ${e.key}: not special, quote kept', () async {
+        final o = await runExtra(e.value);
+        expect(o.rows?.storedSpecial, isFalse);
+        expect(o.got?.quote, 'Ayse\n+90 555 0100');
+      });
+    }
+
     test('a deleted row is not special', () async {
       final o = await run(
         special(poll: true, deletion: MessageDeletion.values.first),

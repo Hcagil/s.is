@@ -259,13 +259,14 @@ dneeds=$(key "$tmp/distribute" needs | tr -d '[] ' | tr , '\n' | sort | paste -s
   || fail "distribute permissions must be exactly contents: read"
 grep -qE '^ *persist-credentials: false$' "$tmp/distribute" || fail "distribute checkout must not persist the token"
 dsecrets=$(grep -oE 'secrets\.[A-Z_]+' "$tmp/distribute" | sort -u | paste -sd,)
-[ "$dsecrets" = secrets.APP_STORE_CONNECT_API_KEY,secrets.APP_STORE_CONNECT_ISSUER_ID,secrets.APP_STORE_CONNECT_KEY_ID ] \
-  || fail "distribute must see exactly the three App Store Connect secrets, got [$dsecrets]"
+[ "$dsecrets" = secrets.APP_STORE_CONNECT_API_KEY,secrets.APP_STORE_CONNECT_ISSUER_ID,secrets.APP_STORE_CONNECT_KEY_ID,secrets.TF_GROUPS ] \
+  || fail "distribute must see exactly the three App Store Connect secrets and the TF_GROUPS secret, got [$dsecrets]"
 [ "$(grep -c 'secrets.APP_STORE_CONNECT_API_KEY' "$tmp/distribute")" -eq 1 ] || fail "distribute reads the API key secret more than once"
 awk '/^ *run:/ { r = 1; match($0, /^ */); ind = RLENGTH; print; next }
      r { match($0, /^ */); if (RLENGTH > ind || $0 ~ /^ *$/) { print; next } r = 0 }' "$tmp/distribute" > "$tmp/druntext"
 grep -n '\${{' "$tmp/druntext" && fail "a distribute run block pastes an expression into its script"
-grep -qE '^ *TF_GROUPS: \$\{\{ vars\.TESTFLIGHT_GROUPS \}\}$' "$tmp/distribute" || fail "groups must come from vars.TESTFLIGHT_GROUPS via env TF_GROUPS"
+grep -qE '^ *TF_GROUPS: \$\{\{ secrets\.TF_GROUPS \}\}$' "$tmp/distribute" || fail "groups must come from secrets.TF_GROUPS via env TF_GROUPS (names are private)"
+grep -q 'vars\.' "$tmp/distribute" && fail "distribute must not read a repo variable (group names are private)"
 grep -qE '^ *NOTE_B64: \$\{\{ needs\.publish\.outputs\.note_b64 \}\}$' "$tmp/distribute" || fail "the note must come from publish's note_b64"
 grep -qE '^ *BUILD: \$\{\{ needs\.scope\.outputs\.code \}\}$' "$tmp/distribute" || fail "the build number must be scope's code"
 mapfile -t dsteps < <(sed -n 's/^      - name: //p' "$tmp/distribute")
@@ -868,11 +869,17 @@ grep -qxF 'asc distribute com.esd.sis 4242 *' "$tmp/calls" || fail "empty TESTFL
 [ ! -e "$tmp/rt/asc" ] || fail "distribute left the key behind"
 # Groups from the variable, as data: never run as shell.
 fresh
-run_dist TF_GROUPS=' bacanaks, Friends $(touch pwned)' NOTE_B64=
+run_dist TF_GROUPS=' crew, Friends $(touch pwned)' NOTE_B64=
 [ -z "$failed_step" ] || fail "distribute failed at '$failed_step'"
-grep -qxF 'asc distribute com.esd.sis 4242  bacanaks, Friends $(touch pwned)' "$tmp/calls" \
+grep -qxF 'asc distribute com.esd.sis 4242  crew, Friends $(touch pwned)' "$tmp/calls" \
   || fail "TESTFLIGHT_GROUPS did not reach distribute verbatim: $(grep '^asc' "$tmp/calls")"
 [ ! -e "$tmp/job/pwned" ] || fail "TESTFLIGHT_GROUPS was run as shell"
+# Group names are private: each one is masked before the tool can print it.
+fresh
+RUN_WF=$release run "Distribute the build to the TestFlight groups" BUILD=4242 TF_GROUPS='crew,Friends Club' NOTE_B64= >/dev/null || true
+grep -qxF '::add-mask::crew' "$tmp/out" && grep -qxF '::add-mask::Friends Club' "$tmp/out" \
+  || fail "distribute must mask every group name: $(cat "$tmp/out")"
+[ "$(grep -n '::add-mask::' "$tmp/out" | head -1 | cut -d: -f1)" = 1 ] || fail "the masks must come before any other output"
 [ -z "$(dnote)" ] || fail "an empty note_b64 must pass an empty note (the tool supplies the default): [$(dnote)]"
 # A failing distribute fails the job, revokes nothing and still removes the key.
 fresh

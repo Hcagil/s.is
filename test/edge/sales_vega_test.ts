@@ -1,4 +1,4 @@
-// The Vega reader (supabase/functions/podium/vega.ts) against a fake Vega HTTP
+// The Vega reader (supabase/functions/sales-total/vega.ts) against a fake Vega HTTP
 // server on 127.0.0.1. Never calls the real Vega address. No database needed.
 //
 // Contract: fetchVegaTotal(day, prev). Env VEGA_BASE_URL (trailing slashes
@@ -14,9 +14,9 @@
 // logged; no error holds the password, cookie, page or amount.
 //
 // Run: docker run --rm -v "$PWD":/w -w /w denoland/deno:2.9.7 \
-//   test --no-check --no-lock --allow-all test/edge/podium_vega_test.ts
+//   test --no-check --no-lock --allow-all test/edge/sales_vega_test.ts
 import { assert, assertEquals } from 'jsr:@std/assert@1';
-import { fetchVegaTotal, VegaError } from '../../supabase/functions/podium/vega.ts';
+import { fetchVegaTotal, VegaError } from '../../supabase/functions/sales-total/vega.ts';
 
 const password = 'qa-vega-pw-' + crypto.randomUUID();
 const cookieVal = 'qa-cookie-' + crypto.randomUUID();
@@ -50,7 +50,7 @@ function page(total: string, pad = ''): string {
     <a class="tarihLink dash-stat-value" href="/CiroRaporlar/List">${total}</a></div>
   <div class="dash-stat"><div class="dash-stat-label">Adisyon Ort.</div>
     <a class="tarihLink dash-stat-value" href="/x">46,37</a></div>
-  <span>&#8378;37.652,00</span> COFFEE GATE---PODIUM</body></html>`;
+  <span>&#8378;37.652,00</span> COFFEE GATE---SALES</body></html>`;
 }
 
 const server = Deno.serve({ hostname: '127.0.0.1', port: 0, onListen: () => {} }, async (req) => {

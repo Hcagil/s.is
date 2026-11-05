@@ -1,11 +1,11 @@
-// podium against the real local stack (podium_job_claim / podium_job_finish run
+// sales-total against the real local stack (sales_job_claim / sales_job_finish run
 // for real). Vega is faked by running the function's own index.ts from a temp
 // copy whose ./vega.ts is a scripted fake: it can answer an amount, throw
 // VegaError('login' | 'timeout' | 'shape' | 'config'), throw a plain Error, or
 // answer junk. A second copy runs with the real vega.ts against a fake Vega
-// HTTP server (podium_vega_test.ts covers the reader itself).
+// HTTP server (sales_vega_test.ts covers the reader itself).
 //
-// Contract: POST {job_id} + header x-podium-secret. 405 not POST; 401 secret
+// Contract (slug sales-total): POST {job_id} + header x-job-secret. 405 not POST; 401 secret
 // missing or wrong (checked before the body is read); 400 bad body; 200
 // {ok, ran:false} if the job is unknown or already taken; 200 {ok, ran:true,
 // result:'ok'|'failed'}. Never logs or returns the amount, the password or
@@ -14,7 +14,7 @@
 // Run (the local stack must be up):
 //   docker run --rm --add-host host.docker.internal:host-gateway \
 //     -v "$PWD":/w -w /w -e SUPABASE_TEST_SERVICE_KEY="<SECRET_KEY>" \
-//     denoland/deno:2.9.7 test --no-check --no-lock --allow-all test/edge/podium_test.ts
+//     denoland/deno:2.9.7 test --no-check --no-lock --allow-all test/edge/sales_test.ts
 import postgres from 'npm:postgres@3.4.5';
 import { assert, assertEquals } from 'jsr:@std/assert@1';
 
@@ -23,11 +23,11 @@ const dbUrl = Deno.env.get('SUPABASE_TEST_DB_URL') ??
   'postgresql://postgres:postgres@host.docker.internal:54322/postgres';
 const serviceKey = Deno.env.get('SUPABASE_TEST_SERVICE_KEY') ?? '';
 if (!serviceKey) throw new Error('SUPABASE_TEST_SERVICE_KEY is not set (the stack\'s SECRET_KEY)');
-const secret = 'qa-podium-' + crypto.randomUUID();
+const secret = 'qa-sales-' + crypto.randomUUID();
 const vegaPassword = 'qa-vega-pw-' + crypto.randomUUID();
 Deno.env.set('SUPABASE_URL', apiUrl);
 Deno.env.set('SUPABASE_SERVICE_ROLE_KEY', serviceKey);
-Deno.env.set('PODIUM_SHARED_SECRET', secret);
+Deno.env.set('JOB_SHARED_SECRET', secret);
 
 // Everything the function prints, to search for secrets and amounts.
 const logged: string[] = [];
@@ -54,8 +54,8 @@ globalThis.fetch = (input: Request | URL | string, init?: RequestInit) => {
 type Script = { amount: string } | { code: string } | { plain: string };
 const vega: { script: Script; calls: { day: string; prev: boolean }[] } = { script: { amount: '1' }, calls: [] };
 (globalThis as Record<string, unknown>).__vega = vega;
-const dir = await Deno.makeTempDir({ prefix: 'podium-qa-' });
-await Deno.copyFile(new URL('../../supabase/functions/podium/index.ts', import.meta.url), `${dir}/index.ts`);
+const dir = await Deno.makeTempDir({ prefix: 'sales-qa-' });
+await Deno.copyFile(new URL('../../supabase/functions/sales-total/index.ts', import.meta.url), `${dir}/index.ts`);
 await Deno.writeTextFile(`${dir}/vega.ts`, `
 export type VegaErrorCode = 'login' | 'timeout' | 'shape' | 'config';
 export class VegaError extends Error { constructor(readonly code: VegaErrorCode) { super(code); } }
@@ -82,35 +82,35 @@ Object.defineProperty(Deno, 'serve', {
 });
 await import(`file://${dir}/index.ts`);
 const fake = handlers.at(-1)!;
-await import('../../supabase/functions/podium/index.ts');
+await import('../../supabase/functions/sales-total/index.ts');
 const real = handlers.at(-1)!;
 assert(fake !== real, 'two handlers registered');
 
 const sql = postgres(dbUrl, { max: 1, onnotice: () => {} });
-const [saved] = await sql`select amount, day, fetched_at, fail_count, off from app_private.podium_state`;
-const [{ id: conv }] = await sql`insert into public.conversations(system, admin_chat, bacanaks_chat)
-  values (true, true, true) returning id::text`;
+const [saved] = await sql`select amount, day, fetched_at, fail_count, off from app_private.sales_state`;
+const [{ id: conv }] = await sql`insert into public.conversations(system, admin_chat, staff_key)
+  values (true, true, 'staff_b') returning id::text`;
 
 async function job(prev = false, day = '2026-03-04'): Promise<string> {
-  const [{ id }] = await sql`insert into app_private.podium_jobs(conversation_id, prev, day)
+  const [{ id }] = await sql`insert into app_private.sales_jobs(conversation_id, prev, day)
     values (${conv}, ${prev}, ${day}) returning id::text`;
   return id;
 }
-const jobState = async (id: string) => (await sql`select state from app_private.podium_jobs where id = ${id}`)[0]?.state;
-const state = async () => (await sql`select amount, fail_count, off from app_private.podium_state`)[0];
+const jobState = async (id: string) => (await sql`select state from app_private.sales_jobs where id = ${id}`)[0]?.state;
+const state = async () => (await sql`select amount, fail_count, off from app_private.sales_state`)[0];
 const lastReply = async () =>
   (await sql`select body, admin_msg from public.messages where conversation_id = ${conv}
               order by created_at desc limit 1`)[0];
 async function resetState() {
-  await sql`update app_private.podium_state set amount = null, day = null, fetched_at = null, fail_count = 0, off = false`;
+  await sql`update app_private.sales_state set amount = null, day = null, fetched_at = null, fail_count = 0, off = false`;
 }
 
 async function call(h: typeof fake, opts: { method?: string; body?: string | null; secret?: string | null } = {}) {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   const s = opts.secret === undefined ? secret : opts.secret;
-  if (s !== null) headers['x-podium-secret'] = s;
+  if (s !== null) headers['x-job-secret'] = s;
   const method = opts.method ?? 'POST';
-  const res = await h(new Request(`${apiUrl}/functions/v1/podium`, {
+  const res = await h(new Request(`${apiUrl}/functions/v1/sales-total`, {
     method, headers, body: method === 'POST' ? (opts.body ?? null) : undefined,
   }));
   return { status: res.status, text: await res.text() };
@@ -145,15 +145,38 @@ Deno.test({ ...opts, name: 'no secret header, or a wrong one -> 401, nothing cla
   assertEquals(vega.calls.length, 0);
 } });
 
+Deno.test({ ...opts, name: 'only the x-job-secret header counts: the right secret under another header name -> 401', fn: async () => {
+  reset({ amount: '5' });
+  const id = await job();
+  for (const name of ['x-secret', 'x-shared-secret', 'x-job-token', 'authorization']) {
+    const res = await fake(new Request(`${apiUrl}/functions/v1/sales-total`, {
+      method: 'POST', headers: { 'content-type': 'application/json', [name]: name === 'authorization' ? `Bearer ${secret}` : secret },
+      body: JSON.stringify({ job_id: id }),
+    }));
+    assertEquals(res.status, 401, name);
+    await res.body?.cancel();
+  }
+  assertEquals(await jobState(id), 'pending');
+  assertEquals(vega.calls.length, 0);
+} });
+
+Deno.test({ ...opts, name: 'slug: release deploys the sales-total function and points the job URL at the same slug', fn: async () => {
+  const wf = await Deno.readTextFile(new URL('../../.github/workflows/release.yml', import.meta.url));
+  assert(/supabase functions deploy sales-total /.test(wf), 'release deploys sales-total');
+  assert(wf.includes('/functions/v1/sales-total'), 'the job URL in the vault ends in the sales-total slug');
+  assert(wf.includes("'job_url'") && wf.includes("'job_secret'"), 'the vault pair is job_url / job_secret');
+  assert(wf.includes('JOB_SHARED_SECRET='), 'the function secret is JOB_SHARED_SECRET');
+} });
+
 Deno.test({ ...opts, name: 'the secret is checked first: a bad body without the secret -> 401, not 400', fn: async () => {
   assertEquals((await call(fake, { body: 'not json', secret: null })).status, 401);
   assertEquals((await call(fake, { body: JSON.stringify({ job_id: 'nope' }), secret: 'wrong' })).status, 401);
 } });
 
-Deno.test({ ...opts, name: 'no PODIUM_SHARED_SECRET configured -> every call refused, even without a header', fn: async () => {
+Deno.test({ ...opts, name: 'no JOB_SHARED_SECRET configured -> every call refused, even without a header', fn: async () => {
   reset({ amount: '5' });
   const id = await job();
-  Deno.env.delete('PODIUM_SHARED_SECRET');
+  Deno.env.delete('JOB_SHARED_SECRET');
   try {
     assertEquals((await post(fake, id, null)).status, 401);
     assertEquals((await post(fake, id, '')).status, 401);
@@ -161,7 +184,7 @@ Deno.test({ ...opts, name: 'no PODIUM_SHARED_SECRET configured -> every call ref
     assertEquals(await jobState(id), 'pending');
     assertEquals(vega.calls.length, 0);
   } finally {
-    Deno.env.set('PODIUM_SHARED_SECRET', secret);
+    Deno.env.set('JOB_SHARED_SECRET', secret);
   }
 } });
 
@@ -373,7 +396,7 @@ Deno.test({ ...opts, name: 'the real reader: a whole-number total ("7", "12345")
 Deno.test({ ...opts, name: 'teardown', fn: async () => {
   try {
     await sql`delete from public.conversations where id = ${conv}`;
-    await sql`update app_private.podium_state set amount = ${saved.amount}, day = ${saved.day}, fetched_at = ${saved.fetched_at},
+    await sql`update app_private.sales_state set amount = ${saved.amount}, day = ${saved.day}, fetched_at = ${saved.fetched_at},
                 fail_count = ${saved.fail_count}, off = ${saved.off}`;
   } catch (e) {
     console.error('teardown:', (e as Error).message);

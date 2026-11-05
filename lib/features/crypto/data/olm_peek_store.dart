@@ -9,6 +9,17 @@ final _uuidShape = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
 );
 
+/// True when [extra] (messages.extra JSON) is a map with a top-level, non-null 'lat': a shared place. Bad JSON or no lat is false. Same rule as json_extract(extra, '$.lat') IS NOT NULL on the iPhone.
+bool _extraHasLat(Object? extra) {
+  if (extra is! String) return false;
+  try {
+    final x = jsonDecode(extra);
+    return x is Map && x['lat'] != null;
+  } on FormatException {
+    return false;
+  }
+}
+
 /// One stored Olm session row (pickle is still encrypted with the pickle key).
 final class PeekSession {
   const PeekSession({
@@ -158,10 +169,9 @@ PeekRows? _readPeekRows(
         final storedSpecial =
             msg.isNotEmpty &&
             msg.first['deleted'] == null &&
-            (msg.first['poll'] == 1 ||
-                msg.first['contact'] == 1 ||
-                (msg.first['extra'] is String &&
-                    (msg.first['extra'] as String).contains('"lat"')));
+            ((msg.first['poll'] is int && msg.first['poll'] != 0) ||
+                (msg.first['contact'] is int && msg.first['contact'] != 0) ||
+                _extraHasLat(msg.first['extra']));
 
         final lookupPeer = peerUserId ?? senderId;
         final sessions = lookupPeer == null

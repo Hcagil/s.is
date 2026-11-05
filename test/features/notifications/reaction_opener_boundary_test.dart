@@ -166,7 +166,7 @@ void main() {
         ..execute("PRAGMA key = \"x'${alice.keyHex}'\";")
         ..execute('PRAGMA locking_mode = EXCLUSIVE;')
         ..execute('BEGIN EXCLUSIVE;');
-      addTearDown(lock.dispose);
+      addTearDown(lock.close);
       final clock = Stopwatch()..start();
       var last = 0;
       var worstGapMs = 0;

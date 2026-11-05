@@ -15,8 +15,10 @@
 # Each job stops at its first failing step; both jobs always run.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-# Create the bind-mounted caches as the user, before any docker call, so Docker never makes them root-owned.
-mkdir -p .ci-cache/pub .ci-cache/gradle .ci-cache/m2
+# Gradle keys cached artifacts by repository, so a fresh per-worktree cache re-downloads from Maven Central (HTTP 429). Share gradle and m2 across worktrees through one host dir; pub stays per worktree. Created as the user before any docker call so Docker never makes them root-owned.
+shared="${SIS_CI_CACHE:-$HOME/.cache/sis-ci}"
+mkdir -p .ci-cache/pub "$shared/gradle" "$shared/m2"
+for d in gradle m2; do [ -e ".ci-cache/$d" ] || ln -s "$shared/$d" ".ci-cache/$d"; done
 
 # Fresh worktrees lack the git-ignored Firebase config: take the owner's copy from the main checkout.
 if [ ! -f android/app/google-services.json ]; then

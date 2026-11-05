@@ -3,10 +3,13 @@
 // peekReaction. Only the platform side is faked: the secure-storage channel
 // (store key, pickle key) and the path_provider channel (where the file is).
 // Written from the contract, never from the implementation.
+import 'dart:async';
+
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqlite3/sqlite3.dart' show sqlite3;
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/data/store/drift_chat_list_snapshot_store.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
@@ -152,5 +155,52 @@ void main() {
       pickleKeyName: hex(alice.pk),
     });
     expect(await reactionOpener(null)(p), isNull);
+  });
+
+  test(
+    'a locked store does not freeze the main isolate (peek runs off it)',
+    () async {
+      final p = await bobReacts();
+      // Another connection holds the whole store, as a running app can.
+      final lock = sqlite3.open(alice.h.file.path)
+        ..execute("PRAGMA key = \"x'${alice.keyHex}'\";")
+        ..execute('PRAGMA locking_mode = EXCLUSIVE;')
+        ..execute('BEGIN EXCLUSIVE;');
+      addTearDown(lock.dispose);
+      final clock = Stopwatch()..start();
+      var last = 0;
+      var worstGapMs = 0;
+      var ticks = 0;
+      final ticker = Timer.periodic(const Duration(milliseconds: 20), (_) {
+        ticks++;
+        final now = clock.elapsedMilliseconds;
+        if (now - last > worstGapMs) worstGapMs = now - last;
+        last = now;
+      });
+      final got = await reactionOpener(null)(p);
+      ticker.cancel();
+      expect(got, isNull, reason: 'a locked store gives no text');
+      expect(
+        clock.elapsedMilliseconds,
+        lessThan(3000),
+        reason: 'the caller caps at 3 s; the opener must answer sooner',
+      );
+      expect(ticks, greaterThan(10), reason: 'main timers kept firing');
+      expect(
+        worstGapMs,
+        lessThan(300),
+        reason: 'main isolate was blocked for ${worstGapMs}ms',
+      );
+    },
+  );
+
+  test('a failure while reading the keys surfaces as a thrown error', () async {
+    final p = await bobReacts();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (call) async => throw PlatformException(code: 'boom'),
+        );
+    await expectLater(reactionOpener(null)(p), throwsA(anything));
   });
 }

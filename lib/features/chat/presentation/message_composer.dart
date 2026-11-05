@@ -378,12 +378,20 @@ class _ComposerState extends ConsumerState<_Composer>
                 .firstOrNull
                 ?.isSystem ==
             true;
+    final isClosed =
+        id != null &&
+        (ref.watch(conversationListProvider).value ?? const [])
+                .where((c) => c.id == id)
+                .firstOrNull
+                ?.isClosed ==
+            true;
     if (hasLeft || isSystem) {
       // A closed group: its 'closed' event names the closing admin.
       final roster = hasLeft ? ref.watch(groupRosterProvider(id)).value : null;
       final closerId = hasLeft
           ? ref.watch(groupCloseEventsProvider(id)).value?.firstOrNull?.actorId
           : null;
+      final closed = isClosed || closerId != null;
       final closer = roster
           ?.where((m) => m.member.userId == closerId)
           .firstOrNull
@@ -393,7 +401,7 @@ class _ComposerState extends ConsumerState<_Composer>
         key: ValueKey(
           isSystem
               ? 'composer-system'
-              : (closerId != null ? 'composer-closed' : 'composer-left'),
+              : (closed ? 'composer-closed' : 'composer-left'),
         ),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
@@ -408,7 +416,7 @@ class _ComposerState extends ConsumerState<_Composer>
           16 + _composerBottomInset(context),
         ),
         child: Text(
-          closerId != null
+          closed
               ? (closer != null && closer.isNotEmpty
                     ? l.composerGroupClosed(nameOrMember(l, closer))
                     : l.composerGroupClosedNoName)

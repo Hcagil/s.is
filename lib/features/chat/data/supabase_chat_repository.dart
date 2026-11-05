@@ -183,6 +183,10 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
         for (final row in conversationRows)
           row['id'] as String: row['bacanaks_chat'] == true,
       };
+      final closedById = {
+        for (final row in conversationRows)
+          row['id'] as String: row['closed_at'] != null,
+      };
       final settingsById = {
         for (final row in conversationRows)
           row['id'] as String: GroupSettings(
@@ -315,6 +319,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
             unread: unreadBy[id] ?? 0,
             avatarPath: avatarPathById[id],
             hasLeft: myLeftAtByConversation[id] != null,
+            isClosed: closedById[id] ?? false,
             isSystem: systemById[id] ?? false,
             isAdminChat: adminChatById[id] ?? false,
             isBacanaks: bacanaksById[id] ?? false,

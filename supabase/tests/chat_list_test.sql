@@ -1,5 +1,5 @@
 begin;
-select plan(27);
+select plan(34);
 
 -- public.chat_list(): the whole chat list in one call, for the caller only
 -- (security invoker, so RLS decides every row).
@@ -184,6 +184,47 @@ select is((select (e->>'unread')::int from _r, jsonb_array_elements(j->'unread')
 select is((select array(select e->>'user_id' from _r, jsonb_array_elements(j->'profiles') e where who='uma' order by 1)),
   array['00000000-0000-0000-0000-00000000cc02','00000000-0000-0000-0000-00000000cc03'],
   'uma gets vic and wes only: not herself, xan or ada');
+
+-- closed_at: null while open, set once the admin closes the group -------------
+-- K: uma (admin) with vic and wes; a message so the empty-group cleanup keeps it.
+select test_as('00000000-0000-0000-0000-00000000cc01', 'c1000000-0000-0000-0000-00000000cc01');
+insert into _c select 'K', public.start_group_conversation('closing group', array[
+  '00000000-0000-0000-0000-00000000cc02', '00000000-0000-0000-0000-00000000cc03']::uuid[]);
+reset role;
+insert into public.messages(conversation_id, sender_id, body)
+  values ((select id from _c where k='K'), '00000000-0000-0000-0000-00000000cc02', 'k hello');
+select test_as('00000000-0000-0000-0000-00000000cc01', 'c1000000-0000-0000-0000-00000000cc01');
+insert into _r select 'uma-open', public.chat_list();
+select public.close_group((select id from _c where k='K'));
+set constraints all immediate; set constraints all deferred;
+insert into _r select 'uma-closed', public.chat_list();
+reset role;
+select test_as('00000000-0000-0000-0000-00000000cc04', 'c1000000-0000-0000-0000-00000000cc04');
+insert into _r select 'xan-closed', public.chat_list();
+reset role;
+
+select is((select count(*)::int from _r, jsonb_array_elements(j->'conversations') e
+            where who='uma' and not (e ? 'closed_at')), 0,
+  'every conversations row carries a closed_at key');
+select is((select count(*)::int from _r, jsonb_array_elements(j->'conversations') e
+            where who='uma-open' and e->'closed_at' <> 'null'::jsonb), 0,
+  'open groups and chats: closed_at is null');
+select is((select count(*)::int from _r, jsonb_array_elements(j->'conversations') e
+            where who='uma-open' and (e->>'id')::uuid = (select id from _c where k='K')), 1,
+  'K is listed before the close');
+select is((select jsonb_typeof(e->'closed_at') from _r, jsonb_array_elements(j->'conversations') e
+            where who='uma-closed' and (e->>'id')::uuid = (select id from _c where k='K')), 'string',
+  'K carries a closed_at timestamp once closed');
+select is((select e->>'closed_at' from _r, jsonb_array_elements(j->'conversations') e
+            where who='uma-closed' and (e->>'id')::uuid = (select id from _c where k='K'))::timestamptz,
+  (select closed_at from public.conversations where id = (select id from _c where k='K')),
+  'the value is the conversations.closed_at of K');
+select is((select count(*)::int from _r, jsonb_array_elements(j->'conversations') e
+            where who='uma-closed' and (e->>'id')::uuid <> (select id from _c where k='K')
+              and e->'closed_at' <> 'null'::jsonb), 0,
+  'closing K leaves the other chats open in the list');
+select is((select count(*)::int from _r, jsonb_array_elements(j->'conversations') e
+            where who='xan-closed'), 0, 'a non-member sees no conversations row, closed or not');
 
 select * from finish();
 rollback;

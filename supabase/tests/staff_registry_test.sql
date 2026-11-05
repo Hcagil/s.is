@@ -1,5 +1,5 @@
 begin;
-select plan(93);
+select plan(96);
 
 -- Staff registry and dispatch. Written from the contract, not the migrations:
 -- 1. app_private.staff_chats / staff_commands: RLS on, no policy, no grant.
@@ -93,6 +93,17 @@ begin
   return 'ok';
 exception when others then
   return sqlstate || ':' || sqlerrm;
+end $$;
+
+-- the same, plus the error DETAIL and HINT (both must stay empty: no echo of the input)
+create function loadx(p jsonb) returns text language plpgsql as $$
+declare d text; h text;
+begin
+  perform app_private.staff_load(p);
+  return 'ok';
+exception when others then
+  get stacked diagnostics d = pg_exception_detail, h = pg_exception_hint;
+  return sqlstate || ':' || sqlerrm || '|' || coalesce(d, '') || '|' || coalesce(h, '');
 end $$;
 
 -- the canonical neutral rows
@@ -211,7 +222,8 @@ insert into bad values
   ('command without chat key', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a')),
      'commands', jsonb_build_array(jsonb_build_object('word','/xx','handler','tester_list'))));
 select is(load(p), 'P0001:staff_load: bad input', 'staff_load aborts with the fixed error: ' || name) from bad order by name;
--- bad or too long values: the table checks abort the load
+select ok((select bool_and(loadx(p) = 'P0001:staff_load: bad input||') from bad), 'bad-shape errors carry no detail and no hint');
+-- bad or too long values: the loader's own checks abort with the same fixed error, no detail, no echo
 create table bad2(name text, p jsonb);
 insert into bad2 values
   ('handler outside the seven', rows_std(jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/xx','handler','drop_all')))),
@@ -220,7 +232,7 @@ insert into bad2 values
   ('help too long', rows_std(jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/xx','handler','tester_list','help_en',repeat('h', 201))))),
   ('title too long', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a','title_en',repeat('t', 201))),
      'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/list','handler','tester_list'))));
-select matches(load(p), '^23514:', 'staff_load aborts (check violation): ' || name) from bad2 order by name;
+select is(loadx(p), 'P0001:staff_load: bad input||', 'staff_load aborts with the fixed error, no detail: ' || name) from bad2 order by name;
 select is((select string_agg(chat_key || ':' || word || ':' || handler, ',' order by chat_key, word) from app_private.staff_commands),
           'staff_a:/addandroid:tester_add_android,staff_a:/addios:tester_add_ios,staff_a:/list:tester_list,staff_a:/remove:tester_remove,'
           'staff_a:/salesoff:sales_off,staff_a:/saleson:sales_on,staff_b:/sales:sales_total',
@@ -348,6 +360,13 @@ select throws_ok(format($$update public.conversations set staff_key = 'staff_b' 
                  'the owner cannot change the staff_key of their own staff chat');
 select is((select e->>'staff_key' from jsonb_array_elements(public.chat_list()->'conversations') e where (e->>'id')::uuid = ca()),
           'staff_a', 'chat_list returns staff_key');
+-- the old per-chat flag (a *_chat column still on the table) is not sent; admin_chat and debug_chat are the only *_chat keys allowed
+select ok(exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conversations'
+                   and column_name like '%\_chat' and column_name not in ('admin_chat', 'debug_chat')),
+          'fixture: conversations still has a third *_chat column');
+select is((select count(*) from jsonb_array_elements(public.chat_list()->'conversations') e, jsonb_object_keys(e) k
+            where k like '%\_chat' and k not in ('admin_chat', 'debug_chat')), 0::bigint,
+          'chat_list rows carry no *_chat key other than admin_chat and debug_chat');
 reset role;
 select is((select staff_key from public.conversations where id = ca()), 'staff_a', 'staff_key unchanged');
 

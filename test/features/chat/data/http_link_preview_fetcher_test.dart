@@ -632,6 +632,30 @@ void main() {
       });
     }
 
+    for (final addr in ['::', '::5', '::1.2.3.4']) {
+      test(
+        'a name resolving to $addr (zero-prefixed IPv6) is refused',
+        () async {
+          dns.records['zero.example.com'] = [InternetAddress(addr)];
+          web.page('https://zero.example.com/', _og(title: 'Z'));
+          expect(
+            await fetcher().fetch(Uri.parse('https://zero.example.com/')),
+            isNull,
+          );
+          expect(web.asked, isEmpty);
+        },
+      );
+    }
+
+    test('a public IPv4-mapped address (::ffff:8.8.8.8) is read', () async {
+      dns.records['mapped.example.com'] = [InternetAddress('::ffff:8.8.8.8')];
+      web.page('https://mapped.example.com/', _og(title: 'M'));
+      final draft = await fetcher().fetch(
+        Uri.parse('https://mapped.example.com/'),
+      );
+      expect(draft?.preview.title, 'M');
+    });
+
     test('an IPv4-compatible literal is refused without asking it', () async {
       web.page('http://[::7f00:1]/', _og(title: 'C'));
       expect(await fetcher().fetch(Uri.parse('http://[::7f00:1]/')), isNull);

@@ -1,5 +1,5 @@
 begin;
-select plan(181);
+select plan(201);
 
 -- Reaction notifications, server side (20261107120000_reaction_notifications.sql).
 --
@@ -392,6 +392,55 @@ select is((select count(*) from unnest(array[mid('Mphoto'), mid('Mvoice'), mid('
             where emoji is not null or quote is not null or quote_kind is not null),
           0::bigint, 'preview sender: no emoji, quote or kind for any message type');
 delete from public.notification_settings;
+
+-- the quote by kind: place, contact, poll (receiver language en, anything else tr)
+insert into public.messages(id, conversation_id, sender_id, body, contact) values
+  (mid('Kc'), g('G'), u('ava'), E'Ayşe Demir\n+905551230000', true),
+  (mid('Kclong'), g('G'), u('ava'), repeat('n', 70) || E'\n+905551230000', true);
+insert into public.messages(id, conversation_id, sender_id, body, location_lat, location_lng) values
+  (mid('Kl'), g('G'), u('ava'), E'Atatürk Caddesi 12, Ankara', 39.9, 32.8);
+-- the body check lets an empty body through only with an attachment, so the empty-body place carries one
+insert into public.messages(id, conversation_id, sender_id, body, location_lat, location_lng, attachment_path) values
+  (mid('Kl0'), g('G'), u('ava'), '', 39.9, 32.8, 'rp/loc.jpg');
+insert into public.messages(id, conversation_id, sender_id, body, poll) values
+  (mid('Kp'), g('G'), u('ava'), 'Pizza or pasta?', true),
+  (mid('Kplong'), g('G'), u('ava'), repeat('q', 61), true);
+select react(m, 'ben', '👍') from unnest(array[mid('Kc'), mid('Kclong'), mid('Kl'), mid('Kl0'), mid('Kp'), mid('Kplong')]) m;
+create function qk(m uuid) returns text language sql as $$
+  select coalesce(quote, '-') || '|' || coalesce(quote_kind, '-') from app_private.reaction_push_targets_for(m, u('ben')) $$;
+-- receiver language null (= Turkish)
+select is(qk(mid('Kc')), 'Kişi: Ayşe Demir|-', 'tr contact: label and name, no phone, no kind');
+select is(qk(mid('Kl')), 'Konum|-', 'tr place: Konum, never the address');
+select is((select quote from app_private.reaction_push_targets_for(mid('Kl0'), u('ben'))), 'Konum', 'tr place with an empty body: Konum');
+select is(qk(mid('Kp')), 'Anket: Pizza or pasta?|-', 'tr poll: label and question');
+select is(qk(mid('Kclong')), 'Kişi: ' || repeat('n', 60) || '|-', 'a long contact name is capped at 60 characters');
+select is(qk(mid('Kplong')), 'Anket: ' || repeat('q', 60) || '…|-', 'a long poll question is cut at 60 plus …');
+select ok(position('5551230000' in qk(mid('Kc'))) = 0, 'contact: the phone number never appears');
+select ok(position('5551230000' in qk(mid('Kclong'))) = 0, 'long contact: the phone number never appears');
+select ok(position('Atat' in qk(mid('Kl'))) = 0, 'place: the address never appears');
+update public.profiles set app_language = 'tr' where user_id = u('ava');
+select is(qk(mid('Kc')), 'Kişi: Ayşe Demir|-', 'tr receiver reads Turkish (contact)');
+select is(qk(mid('Kl')), 'Konum|-', 'tr receiver reads Turkish (place)');
+update public.profiles set app_language = 'en' where user_id = u('ava');
+select is(qk(mid('Kc')), 'Contact: Ayşe Demir|-', 'en contact');
+select is(qk(mid('Kl')), 'Location|-', 'en place');
+select is((select quote from app_private.reaction_push_targets_for(mid('Kl0'), u('ben'))), 'Location', 'en place with an empty body');
+select is(qk(mid('Kp')), 'Poll: Pizza or pasta?|-', 'en poll');
+select is(qk(mid('Kclong')), 'Contact: ' || repeat('n', 60) || '|-', 'en long contact capped');
+select is(qk(mid('Q61')), repeat('x', 59) || 'y…|-', 'en: a plain text quote is unchanged');
+select is(qk(mid('Mphoto')), '-|photo', 'en: a photo is unchanged');
+select preview('sender');
+select is((select count(*) from unnest(array[mid('Kc'), mid('Kl'), mid('Kl0'), mid('Kp')]) m,
+                  app_private.reaction_push_targets_for(m, u('ben')) t
+            where quote is not null or quote_kind is not null or emoji is not null),
+          0::bigint, 'preview sender: contact, place and poll give no quote');
+select preview('none');
+select is((select count(*) from unnest(array[mid('Kc'), mid('Kl'), mid('Kp')]) m,
+                  app_private.reaction_push_targets_for(m, u('ben')) t
+            where quote is not null),
+          0::bigint, 'preview none: contact, place and poll give no quote');
+delete from public.notification_settings;
+update public.profiles set app_language = null where user_id = u('ava');
 
 -- R12: a private chat never gets emoji, quote or quote_kind, for any preview.
 -- Three separate causes in ava's 1:1 with ben; each is checked alone, with a
